@@ -274,8 +274,9 @@ class ArgParser {
   }
 
   static void parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc) {
-    static const std::vector<std::string> bool_flags = {"harmonic-only", "percussive-only",
-                                                        "with-residual", "hard-mask", "triads-only"};
+    static const std::vector<std::string> bool_flags = {
+        "harmonic-only", "percussive-only", "with-residual", "hard-mask",
+        "triads-only",   "no-hpss",         "with-seventh"};
 
     bool is_flag =
         std::find(bool_flags.begin(), bool_flags.end(), key) != bool_flags.end() ||
@@ -324,19 +325,75 @@ struct Stats {
 };
 
 // ============================================================================
+// ANSI Color Codes (for bpm-detector style output)
+// ============================================================================
+
+namespace color {
+constexpr const char* reset = "\033[0m";
+constexpr const char* bold = "\033[1m";
+constexpr const char* cyan = "\033[36m";
+constexpr const char* green = "\033[32m";
+constexpr const char* magenta = "\033[35m";
+constexpr const char* yellow = "\033[33m";
+constexpr const char* blue = "\033[34m";
+constexpr const char* red = "\033[31m";
+}  // namespace color
+
+// ============================================================================
 // Output Helpers
 // ============================================================================
 
-void progress_callback(float progress, const char* stage) {
-  std::cerr << "\r" << stage << ": " << static_cast<int>(progress * 100) << "%   " << std::flush;
+/// @brief Stage info for progress display.
+struct StageInfo {
+  int number;
+  int total;
+  const char* description;
+};
+
+/// @brief Get stage info from stage name.
+StageInfo get_stage_info(const char* stage) {
+  static const std::map<std::string, StageInfo> stages = {
+      {"bpm", {1, 8, "Detecting BPM"}},
+      {"key", {2, 8, "Detecting key"}},
+      {"beats", {3, 8, "Detecting beats"}},
+      {"chords", {4, 8, "Analyzing chords"}},
+      {"sections", {5, 8, "Analyzing sections"}},
+      {"timbre", {6, 8, "Analyzing timbre"}},
+      {"dynamics", {7, 8, "Analyzing dynamics"}},
+      {"rhythm", {8, 8, "Analyzing rhythm"}},
+      {"complete", {8, 8, "Complete"}},
+  };
+  auto it = stages.find(stage);
+  if (it != stages.end()) {
+    return it->second;
+  }
+  return {0, 0, stage};
 }
 
-void clear_progress() { std::cerr << "\r                              \r"; }
+void progress_callback(float /*progress*/, const char* stage) {
+  StageInfo info = get_stage_info(stage);
+  if (info.number > 0) {
+    std::cerr << "\r" << color::blue << "[" << info.number << "/" << info.total << "] "
+              << info.description << "..." << color::reset << "                    " << std::flush;
+  } else {
+    std::cerr << "\r" << color::blue << stage << "..." << color::reset << "          " << std::flush;
+  }
+}
+
+void clear_progress() {
+  std::cerr << "\r                                                              \r" << std::flush;
+}
 
 std::string describe_level(float value, const char* low, const char* mid, const char* high) {
   if (value < 0.33f) return low;
   if (value < 0.67f) return mid;
   return high;
+}
+
+/// @brief Extract basename from a path.
+std::string basename(const std::string& path) {
+  size_t pos = path.find_last_of("/\\");
+  return (pos == std::string::npos) ? path : path.substr(pos + 1);
 }
 
 // ============================================================================
@@ -383,14 +440,18 @@ int cmd_info(const CliArgs& args, const Audio& audio) {
         .print();
   } else {
     int mins = static_cast<int>(audio.duration()) / 60;
-    float secs = audio.duration() - mins * 60;
-    std::cout << "Audio File: " << args.input_file << "\n";
-    std::cout << "  Duration:    " << mins << ":" << std::fixed << std::setprecision(1) << secs
-              << " (" << audio.duration() << "s)\n";
-    std::cout << "  Sample Rate: " << audio.sample_rate() << " Hz\n";
-    std::cout << "  Samples:     " << audio.size() << "\n";
-    std::cout << "  Peak Level:  " << std::fixed << std::setprecision(1) << peak_db << " dB\n";
-    std::cout << "  RMS Level:   " << rms_db << " dB\n";
+    int secs = static_cast<int>(audio.duration()) % 60;
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::yellow << "> Duration: " << mins << ":" << std::setfill('0')
+              << std::setw(2) << secs << " (" << std::fixed << std::setprecision(1)
+              << audio.duration() << "s)" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Sample Rate: " << audio.sample_rate() << " Hz"
+              << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Samples: " << audio.size() << color::reset << "\n";
+    std::cout << "  " << color::green << "> Peak Level: " << std::fixed << std::setprecision(1)
+              << peak_db << " dB" << color::reset << "\n";
+    std::cout << "  " << color::green << "> RMS Level: " << rms_db << " dB" << color::reset
+              << "\n\n";
   }
   return 0;
 }
@@ -401,7 +462,9 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
   if (args.json_output) {
     JsonBuilder().begin_object().kv("bpm", bpm).end_object().print();
   } else {
-    std::cout << "BPM: " << bpm << "\n";
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::green << color::bold << "> Estimated BPM : " << std::fixed
+              << std::setprecision(2) << bpm << " BPM" << color::reset << "\n\n";
   }
   return 0;
 }
@@ -419,7 +482,10 @@ int cmd_key(const CliArgs& args, const Audio& audio) {
         .end_object()
         .print();
   } else {
-    std::cout << "Key: " << key.to_string() << " (confidence: " << key.confidence << ")\n";
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::magenta << color::bold << "> Estimated Key : " << key.to_string()
+              << "  (conf " << std::fixed << std::setprecision(1) << (key.confidence * 100.0f)
+              << "%)" << color::reset << "\n\n";
   }
   return 0;
 }
@@ -430,13 +496,15 @@ int cmd_beats(const CliArgs& args, const Audio& audio) {
   if (args.json_output) {
     JsonBuilder().float_array(beats).print();
   } else {
-    std::cout << "Beat times (" << beats.size() << " beats):\n";
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::green << "> Detected " << beats.size() << " beats" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Beat times:" << color::reset << "\n    ";
     for (size_t i = 0; i < beats.size(); ++i) {
-      std::cout << beats[i];
+      printf("%.2f", beats[i]);
       if (i < beats.size() - 1) std::cout << ", ";
-      if ((i + 1) % 10 == 0) std::cout << "\n";
+      if ((i + 1) % 10 == 0) std::cout << "\n    ";
     }
-    std::cout << "\n";
+    std::cout << "\n\n";
   }
   return 0;
 }
@@ -447,13 +515,15 @@ int cmd_onsets(const CliArgs& args, const Audio& audio) {
   if (args.json_output) {
     JsonBuilder().float_array(onsets).print();
   } else {
-    std::cout << "Onset times (" << onsets.size() << " onsets):\n";
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::green << "> Detected " << onsets.size() << " onsets" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Onset times:" << color::reset << "\n    ";
     for (size_t i = 0; i < onsets.size(); ++i) {
-      std::cout << onsets[i];
+      printf("%.2f", onsets[i]);
       if (i < onsets.size() - 1) std::cout << ", ";
-      if ((i + 1) % 10 == 0) std::cout << "\n";
+      if ((i + 1) % 10 == 0) std::cout << "\n    ";
     }
-    std::cout << "\n";
+    std::cout << "\n\n";
   }
   return 0;
 }
@@ -487,12 +557,18 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
     }
     json.end_array().end_object().print();
   } else {
-    std::cout << "Chord progression: " << analyzer.progression_pattern() << "\n";
-    std::cout << "Duration: " << audio.duration() << "s, " << chords.size() << " chord changes\n\n";
-    std::cout << "Time      Chord    Confidence\n";
-    for (const auto& c : chords) {
-      printf("%.2fs     %-8s %.2f\n", c.start, c.to_string().c_str(), c.confidence);
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::yellow << "> Duration: " << std::fixed << std::setprecision(1)
+              << audio.duration() << "s, " << chords.size() << " chord changes" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Chord Progression: " << analyzer.progression_pattern()
+              << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Chord Details:" << color::reset << "\n";
+    for (size_t i = 0; i < chords.size(); ++i) {
+      const auto& c = chords[i];
+      printf("    %zu. %-8s (%.2fs - %.2fs, conf %.0f%%)\n", i + 1, c.to_string().c_str(), c.start,
+             c.end, c.confidence * 100.0f);
     }
+    std::cout << "\n";
   }
   return 0;
 }
@@ -525,13 +601,24 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
     }
     json.end_array().end_object().print();
   } else {
-    std::cout << "Form: " << analyzer.form() << "\n";
-    std::cout << "Duration: " << audio.duration() << "s, " << sections.size() << " sections\n\n";
-    std::cout << "Section   Type         Start    End      Energy\n";
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::yellow << "> Duration: " << std::fixed << std::setprecision(1)
+              << audio.duration() << "s" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Structure: " << analyzer.form() << " (" << sections.size()
+              << " sections)" << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Section Details:" << color::reset << "\n";
     for (size_t i = 0; i < sections.size(); ++i) {
-      printf("%-9zu %-12s %.2fs   %.2fs   %.2f\n", i + 1, sections[i].type_string().c_str(),
-             sections[i].start, sections[i].end, sections[i].energy_level);
+      const auto& s = sections[i];
+      int start_mm = static_cast<int>(s.start) / 60;
+      int start_ss = static_cast<int>(s.start) % 60;
+      float duration = s.end - s.start;
+      std::string energy_sym = (s.energy_level < 0.33f)   ? "low E"
+                               : (s.energy_level < 0.67f) ? "mid E"
+                                                          : "high E";
+      printf("    %zu. %s (%02d:%02d, %.1fs, %s)\n", i + 1, s.type_string().c_str(), start_mm,
+             start_ss, duration, energy_sym.c_str());
     }
+    std::cout << "\n";
   }
   return 0;
 }
@@ -556,17 +643,19 @@ int cmd_timbre(const CliArgs& args, const Audio& audio) {
         .end_object()
         .print();
   } else {
-    std::cout << "Timbre Analysis:\n";
-    printf("  Brightness:  %.2f (%s)\n", t.brightness,
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::magenta << "> Timbre Analysis:" << color::reset << "\n";
+    printf("    Brightness: %.2f (%s)\n", t.brightness,
            describe_level(t.brightness, "dark", "neutral", "bright").c_str());
-    printf("  Warmth:      %.2f (%s)\n", t.warmth,
+    printf("    Warmth:     %.2f (%s)\n", t.warmth,
            describe_level(t.warmth, "thin", "neutral", "warm").c_str());
-    printf("  Density:     %.2f (%s)\n", t.density,
+    printf("    Density:    %.2f (%s)\n", t.density,
            describe_level(t.density, "sparse", "moderate", "rich").c_str());
-    printf("  Roughness:   %.2f (%s)\n", t.roughness,
+    printf("    Roughness:  %.2f (%s)\n", t.roughness,
            describe_level(t.roughness, "smooth", "moderate", "rough").c_str());
-    printf("  Complexity:  %.2f (%s)\n", t.complexity,
+    printf("    Complexity: %.2f (%s)\n", t.complexity,
            describe_level(t.complexity, "simple", "moderate", "complex").c_str());
+    std::cout << "\n";
   }
   return 0;
 }
@@ -591,13 +680,15 @@ int cmd_dynamics(const CliArgs& args, const Audio& audio) {
         .end_object()
         .print();
   } else {
-    std::cout << "Dynamics Analysis:\n";
-    printf("  Peak Level:       %.1f dB\n", d.peak_db);
-    printf("  RMS Level:        %.1f dB\n", d.rms_db);
-    printf("  Dynamic Range:    %.1f dB\n", d.dynamic_range_db);
-    printf("  Crest Factor:     %.1f dB\n", d.crest_factor);
-    printf("  Loudness Range:   %.1f LU\n", d.loudness_range_db);
-    printf("  Compression:      %s\n", d.is_compressed ? "Yes (compressed)" : "No (natural)");
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::yellow << "> Dynamics Analysis:" << color::reset << "\n";
+    printf("    Peak Level:     %.1f dB\n", d.peak_db);
+    printf("    RMS Level:      %.1f dB\n", d.rms_db);
+    printf("    Dynamic Range:  %.1f dB\n", d.dynamic_range_db);
+    printf("    Crest Factor:   %.1f dB\n", d.crest_factor);
+    printf("    Loudness Range: %.1f LU\n", d.loudness_range_db);
+    std::cout << "    Compression:    " << (d.is_compressed ? "Yes (compressed)" : "No (natural)")
+              << "\n\n";
   }
   return 0;
 }
@@ -630,17 +721,20 @@ int cmd_rhythm(const CliArgs& args, const Audio& audio) {
         .end_object()
         .print();
   } else {
-    std::cout << "Rhythm Analysis:\n";
-    printf("  Time Signature:    %d/%d (confidence: %.2f)\n", r.time_signature.numerator,
-           r.time_signature.denominator, r.time_signature.confidence);
-    printf("  BPM:               %.1f\n", analyzer.bpm());
-    printf("  Groove Type:       %s\n", r.groove_type.c_str());
-    printf("  Syncopation:       %.2f (%s)\n", r.syncopation,
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Rhythm Analysis:" << color::reset << "\n";
+    std::cout << "  " << color::green << color::bold << "> Estimated BPM : " << std::fixed
+              << std::setprecision(2) << analyzer.bpm() << " BPM" << color::reset << "\n";
+    printf("    Time Signature:    %d/%d (conf %.0f%%)\n", r.time_signature.numerator,
+           r.time_signature.denominator, r.time_signature.confidence * 100.0f);
+    printf("    Groove Type:       %s\n", r.groove_type.c_str());
+    printf("    Syncopation:       %.2f (%s)\n", r.syncopation,
            r.syncopation < 0.3f ? "low" : (r.syncopation < 0.7f ? "moderate" : "high"));
-    printf("  Pattern Regularity: %.2f (%s)\n", r.pattern_regularity,
+    printf("    Pattern Regularity: %.2f (%s)\n", r.pattern_regularity,
            r.pattern_regularity > 0.7f ? "regular" : "irregular");
-    printf("  Tempo Stability:   %.2f (%s)\n", r.tempo_stability,
+    printf("    Tempo Stability:   %.2f (%s)\n", r.tempo_stability,
            r.tempo_stability > 0.8f ? "stable" : "variable");
+    std::cout << "\n";
   }
   return 0;
 }
@@ -667,13 +761,15 @@ int cmd_melody(const CliArgs& args, const Audio& audio) {
         .end_object()
         .print();
   } else {
-    std::cout << "Melody Analysis:\n";
-    printf("  Has Melody:      %s\n", analyzer.has_melody() ? "Yes" : "No");
-    printf("  Pitch Range:     %.2f octaves\n", c.pitch_range_octaves);
-    printf("  Mean Frequency:  %.1f Hz\n", c.mean_frequency);
-    printf("  Pitch Stability: %.2f\n", c.pitch_stability);
-    printf("  Vibrato Rate:    %.1f Hz\n", c.vibrato_rate);
-    printf("  Pitch Points:    %zu\n", c.pitches.size());
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::cyan << "> Melody Analysis:" << color::reset << "\n";
+    std::cout << "    Has Melody:      " << (analyzer.has_melody() ? "Yes" : "No") << "\n";
+    printf("    Pitch Range:     %.2f octaves\n", c.pitch_range_octaves);
+    printf("    Mean Frequency:  %.1f Hz\n", c.mean_frequency);
+    printf("    Pitch Stability: %.2f\n", c.pitch_stability);
+    printf("    Vibrato Rate:    %.1f Hz\n", c.vibrato_rate);
+    printf("    Pitch Points:    %zu\n", c.pitches.size());
+    std::cout << "\n";
   }
   return 0;
 }
@@ -701,17 +797,29 @@ int cmd_boundaries(const CliArgs& args, const Audio& audio) {
     }
     json.end_array().end_object().print();
   } else {
-    std::cout << "Structural Boundaries (" << bounds.size() << " detected):\n";
-    std::cout << "Time      Strength\n";
-    for (const auto& b : bounds) {
-      printf("%.2fs     %.2f\n", b.time, b.strength);
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Structural Boundaries (" << bounds.size() << " detected):"
+              << color::reset << "\n";
+    for (size_t i = 0; i < bounds.size(); ++i) {
+      const auto& b = bounds[i];
+      int mm = static_cast<int>(b.time) / 60;
+      int ss = static_cast<int>(b.time) % 60;
+      printf("    %zu. %02d:%02d (strength %.2f)\n", i + 1, mm, ss, b.strength);
     }
+    std::cout << "\n";
   }
   return 0;
 }
 
 int cmd_analyze(const CliArgs& args, const Audio& audio) {
-  MusicAnalyzer analyzer(audio);
+  MusicAnalyzerConfig config;
+  config.use_triads_only = !args.has("with-seventh");
+  config.use_hpss = !args.has("no-hpss");
+  if (args.has("chroma-highpass")) {
+    config.chroma_highpass_hz = args.get_float("chroma-highpass", 200.0f);
+  }
+
+  MusicAnalyzer analyzer(audio, config);
   if (!args.quiet && !args.json_output) {
     analyzer.set_progress_callback(progress_callback);
   }
@@ -788,21 +896,71 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
         .end_object()
         .print();
   } else {
-    std::cout << "BPM: " << r.bpm << " (confidence: " << r.bpm_confidence << ")\n";
-    std::cout << "Key: " << r.key.to_string() << " (confidence: " << r.key.confidence << ")\n";
-    std::cout << "Time Signature: " << r.time_signature.numerator << "/"
-              << r.time_signature.denominator << "\n";
-    std::cout << "Beats: " << r.beats.size() << "\n";
-    if (!r.sections.empty()) {
-      std::cout << "Sections: ";
-      for (size_t i = 0; i < r.sections.size(); ++i) {
-        if (i > 0) std::cout << ", ";
-        std::cout << r.sections[i].type_string() << " (" << r.sections[i].start << "-"
-                  << r.sections[i].end << "s)";
+    // bpm-detector style output
+    std::cout << "\n" << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+
+    // Summary line
+    std::cout << "  " << color::yellow << "> Duration: " << std::fixed << std::setprecision(1)
+              << audio.duration() << "s, BPM: " << r.bpm << ", Key: " << r.key.to_string()
+              << color::reset << "\n";
+
+    // Chord progression (if available)
+    if (!r.chords.empty()) {
+      std::cout << "  " << color::blue << "> Chord Progression: ";
+      size_t max_chords = std::min(r.chords.size(), static_cast<size_t>(4));
+      for (size_t i = 0; i < max_chords; ++i) {
+        if (i > 0) std::cout << " -> ";
+        std::cout << r.chords[i].to_string();
       }
-      std::cout << "\n";
+      std::cout << color::reset << "\n";
     }
-    std::cout << "Form: " << r.form << "\n";
+
+    // Structure
+    if (!r.sections.empty()) {
+      std::cout << "  " << color::blue << "> Structure: " << r.form << " (" << r.sections.size()
+                << " sections)" << color::reset << "\n";
+
+      // Section details
+      std::cout << "  " << color::blue << "> Section Details (" << r.sections.size()
+                << " sections):" << color::reset << "\n";
+
+      for (size_t i = 0; i < r.sections.size(); ++i) {
+        const auto& s = r.sections[i];
+        int start_mm = static_cast<int>(s.start) / 60;
+        int start_ss = static_cast<int>(s.start) % 60;
+        float duration = s.end - s.start;
+        int bars = static_cast<int>(std::round(duration / (4.0f * 60.0f / r.bpm)));
+
+        std::string energy_sym = (s.energy_level < 0.33f)   ? "low E"
+                                 : (s.energy_level < 0.67f) ? "mid E"
+                                                            : "high E";
+
+        printf("    %zu. %s (%02d:%02d, %dbars, %s)\n", i + 1, s.type_string().c_str(), start_mm,
+               start_ss, bars, energy_sym.c_str());
+      }
+    }
+
+    // Rhythm
+    std::cout << "  " << color::blue << "> Rhythm: " << r.time_signature.numerator << "/"
+              << r.time_signature.denominator << " time, " << r.rhythm.groove_type << " groove"
+              << color::reset << "\n";
+
+    // Timbre
+    std::cout << "  " << color::magenta << "> Timbre: Brightness " << std::fixed
+              << std::setprecision(1) << r.timbre.brightness << ", Warmth " << r.timbre.warmth
+              << color::reset << "\n";
+
+    // Dynamics
+    std::cout << "  " << color::yellow << "> Dynamics: " << std::fixed << std::setprecision(1)
+              << r.dynamics.dynamic_range_db << "dB range" << color::reset << "\n";
+
+    // Final BPM and Key results
+    std::cout << "  " << color::green << color::bold << "> Estimated BPM : " << std::fixed
+              << std::setprecision(2) << r.bpm << " BPM  (conf " << std::setprecision(1)
+              << (r.bpm_confidence * 100.0f) << "%)" << color::reset << "\n";
+    std::cout << "  " << color::magenta << color::bold << "> Estimated Key : " << r.key.to_string()
+              << "  (conf " << std::fixed << std::setprecision(1) << (r.key.confidence * 100.0f)
+              << "%)" << color::reset << "\n\n";
   }
   return 0;
 }
@@ -813,23 +971,28 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
 
 int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
-    std::cerr << "Error: pitch-shift requires output file (-o)\n";
+    std::cerr << color::red << "Error: pitch-shift requires output file (-o)" << color::reset << "\n";
     return 1;
   }
   if (!args.has("semitones")) {
-    std::cerr << "Error: --semitones required\n";
+    std::cerr << color::red << "Error: --semitones required" << color::reset << "\n";
     return 1;
   }
 
   float semitones = args.get_float("semitones", 0.0f);
   PitchShiftConfig config{args.n_fft, args.hop_length};
 
-  if (!args.quiet) std::cerr << "Pitch shifting by " << semitones << " semitones...\n";
+  if (!args.quiet) {
+    std::cerr << color::blue << "Pitch shifting by " << semitones << " semitones..."
+              << color::reset << "\n";
+  }
 
   Audio result = pitch_shift(audio, semitones, config);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
-  if (!args.quiet) std::cerr << "Saved to " << args.output_file << "\n";
+  if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
 
   if (args.json_output) {
     JsonBuilder()
@@ -845,23 +1008,27 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
 
 int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
-    std::cerr << "Error: time-stretch requires output file (-o)\n";
+    std::cerr << color::red << "Error: time-stretch requires output file (-o)" << color::reset << "\n";
     return 1;
   }
   if (!args.has("rate")) {
-    std::cerr << "Error: --rate required\n";
+    std::cerr << color::red << "Error: --rate required" << color::reset << "\n";
     return 1;
   }
 
   float rate = args.get_float("rate", 1.0f);
   TimeStretchConfig config{args.n_fft, args.hop_length};
 
-  if (!args.quiet) std::cerr << "Time stretching with rate " << rate << "...\n";
+  if (!args.quiet) {
+    std::cerr << color::blue << "Time stretching with rate " << rate << "..." << color::reset << "\n";
+  }
 
   Audio result = time_stretch(audio, rate, config);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
-  if (!args.quiet) std::cerr << "Saved to " << args.output_file << "\n";
+  if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
 
   if (args.json_output) {
     JsonBuilder()
@@ -877,7 +1044,7 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
 
 int cmd_hpss(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
-    std::cerr << "Error: hpss requires output prefix (-o)\n";
+    std::cerr << color::red << "Error: hpss requires output prefix (-o)" << color::reset << "\n";
     return 1;
   }
 
@@ -888,7 +1055,9 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
 
   StftConfig stft{args.n_fft, args.hop_length};
 
-  if (!args.quiet) std::cerr << "Performing harmonic-percussive separation...\n";
+  if (!args.quiet) {
+    std::cerr << color::blue << "Performing harmonic-percussive separation..." << color::reset << "\n";
+  }
 
   std::string base = args.output_file;
   if (base.size() > 4 && base.substr(base.size() - 4) == ".wav") {
@@ -902,12 +1071,16 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   if (args.has("harmonic-only")) {
     std::string path = base + ".wav";
     save_audio(path, harmonic(audio, config, stft));
-    if (!args.quiet) std::cerr << "Saved harmonic to " << path << "\n";
+    if (!args.quiet) {
+      std::cerr << color::green << "Saved harmonic to " << path << color::reset << "\n";
+    }
     if (args.json_output) JsonBuilder().begin_object().kv("harmonic", path).end_object().print();
   } else if (args.has("percussive-only")) {
     std::string path = base + ".wav";
     save_audio(path, percussive(audio, config, stft));
-    if (!args.quiet) std::cerr << "Saved percussive to " << path << "\n";
+    if (!args.quiet) {
+      std::cerr << color::green << "Saved percussive to " << path << color::reset << "\n";
+    }
     if (args.json_output) JsonBuilder().begin_object().kv("percussive", path).end_object().print();
   } else if (args.has("with-residual")) {
     auto r = hpss_with_residual(audio, config, stft);
@@ -916,7 +1089,9 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
     save_audio(h, r.harmonic);
     save_audio(p, r.percussive);
     save_audio(res, r.residual);
-    if (!args.quiet) std::cerr << "Saved: " << h << ", " << p << ", " << res << "\n";
+    if (!args.quiet) {
+      std::cerr << color::green << "Saved: " << h << ", " << p << ", " << res << color::reset << "\n";
+    }
     if (args.json_output)
       JsonBuilder()
           .begin_object()
@@ -930,7 +1105,9 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
     std::string h = base + "_harmonic.wav", p = base + "_percussive.wav";
     save_audio(h, r.harmonic);
     save_audio(p, r.percussive);
-    if (!args.quiet) std::cerr << "Saved: " << h << ", " << p << "\n";
+    if (!args.quiet) {
+      std::cerr << color::green << "Saved: " << h << ", " << p << color::reset << "\n";
+    }
     if (args.json_output)
       JsonBuilder().begin_object().kv("harmonic", h).kv("percussive", p).end_object().print();
   }
@@ -1285,7 +1462,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (args.command.empty()) {
-    std::cerr << "Error: No command specified\n\n";
+    std::cerr << color::red << "Error: No command specified" << color::reset << "\n\n";
     print_usage(argv[0]);
     return 1;
   }
@@ -1298,39 +1475,42 @@ int main(int argc, char* argv[]) {
   // Find command
   const CommandInfo* cmd = find_command(args.command);
   if (!cmd) {
-    std::cerr << "Error: Unknown command '" << args.command << "'\n\n";
+    std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset << "\n\n";
     print_usage(argv[0]);
     return 1;
   }
 
   // Check for audio file
   if (cmd->requires_audio && args.input_file.empty()) {
-    std::cerr << "Error: Missing audio file\n\n";
+    std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n\n";
     print_usage(argv[0]);
     return 1;
   }
 
   try {
     if (!args.quiet && !args.json_output) {
-      std::cerr << "Loading " << args.input_file << "...\n";
+      std::cerr << color::blue << "Loading " << basename(args.input_file) << "..."
+                << color::reset << std::flush;
     }
 
     auto [samples, sample_rate] = load_audio(args.input_file);
     if (samples.empty()) {
-      std::cerr << "Error: Failed to load audio file\n";
+      std::cerr << "\n" << color::red << "Error: Failed to load audio file" << color::reset << "\n";
       return 1;
     }
 
     Audio audio = Audio::from_vector(std::move(samples), sample_rate);
 
     if (!args.quiet && !args.json_output) {
-      std::cerr << "Loaded " << audio.duration() << "s @ " << sample_rate << "Hz\n";
+      std::cerr << "\r" << color::green << "Loaded " << std::fixed << std::setprecision(1)
+                << audio.duration() << "s @ " << sample_rate << "Hz" << color::reset
+                << "                    \n";
     }
 
     return cmd->handler(args, audio);
 
   } catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << "\n";
+    std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
     return 1;
   }
 }

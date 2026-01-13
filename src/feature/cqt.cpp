@@ -1,7 +1,10 @@
 #include "feature/cqt.h"
 
+#include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
+#include <unordered_map>
 
 #include "core/fft.h"
 #include "core/window.h"
@@ -10,6 +13,73 @@
 namespace sonare {
 
 namespace {
+
+/// @brief Cache key for CQT kernel
+struct CqtKernelCacheKey {
+  int sample_rate;
+  int hop_length;
+  float fmin;
+  int n_bins;
+  int bins_per_octave;
+
+  bool operator==(const CqtKernelCacheKey& other) const {
+    return sample_rate == other.sample_rate && hop_length == other.hop_length &&
+           std::abs(fmin - other.fmin) < 0.01f && n_bins == other.n_bins &&
+           bins_per_octave == other.bins_per_octave;
+  }
+};
+
+struct CqtKernelCacheKeyHash {
+  size_t operator()(const CqtKernelCacheKey& k) const {
+    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
+           (std::hash<int>()(k.bins_per_octave) << 2);
+  }
+};
+
+/// @brief Eigen matrix type for CQT kernel
+using EigenKernelMatrix =
+    Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
+/// @brief Cached kernel with Eigen matrix
+struct CachedCqtKernel {
+  std::shared_ptr<CqtKernel> kernel;
+  std::shared_ptr<EigenKernelMatrix> eigen_matrix;
+};
+
+/// @brief Global CQT kernel cache
+std::mutex g_kernel_cache_mutex;
+std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> g_kernel_cache;
+
+/// @brief Get or create cached CQT kernel with Eigen matrix
+CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
+  CqtKernelCacheKey key{sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave};
+
+  std::lock_guard<std::mutex> lock(g_kernel_cache_mutex);
+  auto it = g_kernel_cache.find(key);
+  if (it != g_kernel_cache.end()) {
+    return it->second;
+  }
+
+  // Create kernel
+  auto kernel = std::shared_ptr<CqtKernel>(CqtKernel::create(sr, config).release());
+
+  // Pre-compute Eigen matrix
+  int fft_length = kernel->fft_length();
+  int n_bins = kernel->n_bins();
+  int fft_bins = fft_length / 2 + 1;
+  const auto& freq_kernels = kernel->kernel();
+
+  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_bins);
+  for (int k = 0; k < n_bins; ++k) {
+    for (int i = 0; i < fft_bins; ++i) {
+      (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
+    }
+  }
+
+  CachedCqtKernel cached{kernel, eigen_matrix};
+  g_kernel_cache[key] = cached;
+  return cached;
+}
 
 /// @brief Finds smallest power of 2 >= n.
 int next_power_of_2(int n) {
@@ -176,35 +246,41 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   int sr = audio.sample_rate();
   int n_samples = static_cast<int>(audio.size());
 
-  // Create CQT kernel
-  auto kernel = CqtKernel::create(sr, config);
+  // Get cached CQT kernel with pre-computed Eigen matrix
+  auto cached = get_cached_kernel(sr, config);
+  auto& kernel = cached.kernel;
+  auto& kernel_matrix = *cached.eigen_matrix;
+
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
+  int fft_bins = fft_length / 2 + 1;
 
   // Calculate number of frames
   int n_frames = 1 + (n_samples - fft_length) / config.hop_length;
   if (n_frames <= 0) {
-    // Audio too short, pad and compute single frame
     n_frames = 1;
   }
 
-  // Allocate output
+  using VectorXcf = Eigen::Matrix<std::complex<float>, Eigen::Dynamic, 1>;
+
+  // Pre-allocate output
   std::vector<std::complex<float>> output(n_bins * n_frames);
 
   // Create FFT processor
   FFT fft(fft_length);
 
-  // Temporary buffers
+  // Pre-allocate temporary buffers
   std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> frame_fft(fft_length / 2 + 1);
+  std::vector<std::complex<float>> frame_fft(fft_bins);
+  VectorXcf result(n_bins);
 
   const float* data = audio.data();
-  const auto& freq_kernels = kernel->kernel();
+  float norm_factor = 1.0f / static_cast<float>(fft_length);
 
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
 
-  // Process each frame
+  // Process each frame with Eigen SIMD optimization
   for (int t = 0; t < n_frames; ++t) {
     int start = t * config.hop_length;
 
@@ -218,17 +294,13 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
     // FFT of frame
     fft.forward(frame.data(), frame_fft.data());
 
-    // Multiply with each kernel and sum (correlation)
+    // Compute all correlations at once using cached Eigen matrix
+    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_bins);
+    result.noalias() = kernel_matrix * frame_vec * norm_factor;
+
+    // Copy to output
     for (int k = 0; k < n_bins; ++k) {
-      std::complex<float> sum(0.0f, 0.0f);
-
-      // Correlation in frequency domain
-      for (int i = 0; i < fft_length / 2 + 1; ++i) {
-        sum += frame_fft[i] * freq_kernels[k * fft_length + i];
-      }
-
-      // Normalize by FFT length
-      output[k * n_frames + t] = sum / static_cast<float>(fft_length);
+      output[k * n_frames + t] = result(k);
     }
 
     // Report progress

@@ -63,35 +63,35 @@ TEST_CASE("get_minor_profile rotation", "[key_profiles]") {
 
 TEST_CASE("get_boosted_major_profile", "[key_profiles]") {
   KeyProfileBoosts boosts;
-  boosts.tonic = 1.0f;
-  boosts.fifth = 0.5f;
+  boosts.tonic = 1.5f;   // Multiplicative: 1.5x boost
+  boosts.fifth = 1.2f;   // Multiplicative: 1.2x boost
 
   auto c_major = get_major_profile(PitchClass::C);
   auto boosted = get_boosted_major_profile(PitchClass::C, boosts);
 
-  // Tonic should be boosted by 1.0
-  REQUIRE_THAT(boosted[0], WithinAbs(c_major[0] + 1.0f, 0.001f));
+  // Tonic should be multiplied by 1.5
+  REQUIRE_THAT(boosted[0], WithinAbs(c_major[0] * 1.5f, 0.001f));
 
-  // Fifth should be boosted by 0.5
-  REQUIRE_THAT(boosted[7], WithinAbs(c_major[7] + 0.5f, 0.001f));
+  // Fifth should be multiplied by 1.2
+  REQUIRE_THAT(boosted[7], WithinAbs(c_major[7] * 1.2f, 0.001f));
 
-  // Other notes should be unchanged
+  // Other notes should be unchanged (default boost = 1.0)
   REQUIRE_THAT(boosted[1], WithinAbs(c_major[1], 0.001f));
 }
 
 TEST_CASE("get_boosted_minor_profile", "[key_profiles]") {
   KeyProfileBoosts boosts;
-  boosts.tonic = 1.0f;
-  boosts.third = 0.5f;  // Minor third
+  boosts.tonic = 1.1f;   // Multiplicative: 1.1x boost
+  boosts.third = 1.3f;   // Multiplicative: 1.3x boost (minor third)
 
   auto a_minor = get_minor_profile(PitchClass::A);
   auto boosted = get_boosted_minor_profile(PitchClass::A, boosts);
 
-  // Tonic (A=9) should be boosted
-  REQUIRE_THAT(boosted[9], WithinAbs(a_minor[9] + 1.0f, 0.001f));
+  // Tonic (A=9) should be multiplied by 1.1
+  REQUIRE_THAT(boosted[9], WithinAbs(a_minor[9] * 1.1f, 0.001f));
 
-  // Minor third (C=0, which is 3 semitones above A) should be boosted
-  REQUIRE_THAT(boosted[0], WithinAbs(a_minor[0] + 0.5f, 0.001f));
+  // Minor third (C=0, which is 3 semitones above A) should be multiplied by 1.3
+  REQUIRE_THAT(boosted[0], WithinAbs(a_minor[0] * 1.3f, 0.001f));
 }
 
 TEST_CASE("normalize_profile", "[key_profiles]") {

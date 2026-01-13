@@ -28,6 +28,9 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   beats_ = beat_analyzer.beats();
   bpm_ = beat_analyzer.bpm();
 
+  // Detect onsets from onset strength envelope
+  detect_onsets(beat_analyzer.onset_strength());
+
   analyze();
 }
 
@@ -38,7 +41,117 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
       hop_length_(beat_analyzer.hop_length()) {
   beats_ = beat_analyzer.beats();
 
+  // Detect onsets from onset strength envelope
+  detect_onsets(beat_analyzer.onset_strength());
+
   analyze();
+}
+
+void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength) {
+  onset_times_.clear();
+  if (onset_strength.size() < 3) {
+    return;
+  }
+
+  // Find local maxima in onset strength as onset times
+  float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
+
+  // Calculate threshold (mean + std of onset strength)
+  float mean = 0.0f;
+  for (float s : onset_strength) {
+    mean += s;
+  }
+  mean /= static_cast<float>(onset_strength.size());
+
+  float variance = 0.0f;
+  for (float s : onset_strength) {
+    float diff = s - mean;
+    variance += diff * diff;
+  }
+  variance /= static_cast<float>(onset_strength.size());
+  float std_dev = std::sqrt(variance);
+  float threshold = mean + 0.5f * std_dev;
+
+  // Find peaks above threshold
+  for (size_t i = 1; i + 1 < onset_strength.size(); ++i) {
+    if (onset_strength[i] > onset_strength[i - 1] && onset_strength[i] > onset_strength[i + 1] &&
+        onset_strength[i] > threshold) {
+      onset_times_.push_back(static_cast<float>(i) * hop_duration);
+    }
+  }
+}
+
+float RhythmAnalyzer::calculate_swing_ratio() const {
+  if (onset_times_.size() < 4 || beats_.size() < 4) {
+    return 0.5f;  // Default to straight
+  }
+
+  // Get beat times
+  std::vector<float> beat_times;
+  beat_times.reserve(beats_.size());
+  for (const auto& beat : beats_) {
+    beat_times.push_back(beat.time);
+  }
+
+  // Calculate onset positions within each beat (0-1)
+  std::vector<float> eighth_note_positions;
+
+  for (size_t i = 0; i + 1 < beat_times.size(); ++i) {
+    float beat_start = beat_times[i];
+    float beat_end = beat_times[i + 1];
+    float beat_duration = beat_end - beat_start;
+
+    if (beat_duration <= 0.0f) continue;
+
+    // Find onsets within this beat
+    for (float onset : onset_times_) {
+      if (onset >= beat_start && onset < beat_end) {
+        float position = (onset - beat_start) / beat_duration;
+        eighth_note_positions.push_back(position);
+      }
+    }
+  }
+
+  if (eighth_note_positions.size() < 4) {
+    return 0.5f;
+  }
+
+  // Count onsets near swing vs straight positions
+  int swing_count = 0;
+  int straight_count = 0;
+
+  for (float pos : eighth_note_positions) {
+    // Check swing positions [0.33, 0.67]
+    bool matched_swing = false;
+    for (float swing_pos : rhythm_constants::kSwingPositions) {
+      if (std::abs(pos - swing_pos) < rhythm_constants::kSwingTolerance) {
+        swing_count++;
+        matched_swing = true;
+        break;
+      }
+    }
+
+    if (!matched_swing) {
+      // Check straight positions [0.25, 0.5, 0.75]
+      for (float straight_pos : rhythm_constants::kStraightPositions) {
+        if (std::abs(pos - straight_pos) < rhythm_constants::kSwingTolerance) {
+          straight_count++;
+          break;
+        }
+      }
+    }
+  }
+
+  int total_count = swing_count + straight_count;
+  if (total_count == 0) {
+    return 0.5f;
+  }
+
+  // Calculate swing ratio: 0.5 + (swing - straight) / (2 * total)
+  float swing_ratio =
+      0.5f + static_cast<float>(swing_count - straight_count) / (2.0f * static_cast<float>(total_count));
+
+  return std::max(0.0f, std::min(1.0f, swing_ratio));
 }
 
 void RhythmAnalyzer::analyze() {
@@ -122,60 +235,19 @@ void RhythmAnalyzer::detect_time_signature() {
 void RhythmAnalyzer::detect_groove_type() {
   features_.groove_type = "straight";
 
-  if (beat_intervals_.size() < 4) {
+  if (beats_.size() < 4) {
     return;
   }
 
-  // Analyze ratio between consecutive beat intervals
-  // Shuffle/swing typically has alternating long-short pattern
-  std::vector<float> ratios;
-  ratios.reserve(beat_intervals_.size() - 1);
+  // Use position-based swing ratio calculation
+  float swing_ratio = calculate_swing_ratio();
 
-  for (size_t i = 1; i < beat_intervals_.size(); ++i) {
-    if (beat_intervals_[i] > 1e-6f) {
-      float ratio = beat_intervals_[i - 1] / beat_intervals_[i];
-      ratios.push_back(ratio);
-    }
-  }
-
-  if (ratios.empty()) {
-    return;
-  }
-
-  // Check for swing pattern (alternating 2:1 or 1:2 ratios)
-  int swing_count = 0;
-
-  for (size_t i = 0; i < ratios.size(); ++i) {
-    float ratio = ratios[i];
-    // Swing ratio is typically around 2:1 or 1:2
-    if ((ratio > 1.5f && ratio < 2.5f) || (ratio > 0.4f && ratio < 0.67f)) {
-      swing_count++;
-    }
-  }
-
-  float swing_score = (ratios.size() > 0) ? static_cast<float>(swing_count) / ratios.size() : 0.0f;
-
-  // Check for shuffle (specific long-short-long-short pattern in triplet feel)
-  float shuffle_evidence = 0.0f;
-
-  // In shuffle, the ratio is typically around 2:1 (triplet swing)
-  for (size_t i = 0; i + 1 < ratios.size(); i += 2) {
-    float r1 = ratios[i];
-    float r2 = (i + 1 < ratios.size()) ? ratios[i + 1] : 1.0f;
-
-    // Shuffle: first interval longer, second shorter, alternating
-    if (r1 > 1.3f && r1 < 2.5f && r2 > 0.4f && r2 < 0.8f) {
-      shuffle_evidence += 1.0f;
-    }
-  }
-
-  shuffle_evidence /= std::max(1.0f, static_cast<float>(ratios.size() / 2));
-
-  // Determine groove type
-  if (shuffle_evidence > config_.swing_threshold && shuffle_evidence > swing_score) {
-    features_.groove_type = "shuffle";
-  } else if (swing_score > config_.swing_threshold) {
+  // Determine groove type based on swing ratio
+  // (matches bpm-detector Python implementation)
+  if (swing_ratio > rhythm_constants::kSwingThreshold) {
     features_.groove_type = "swing";
+  } else if (swing_ratio > rhythm_constants::kShuffleThreshold) {
+    features_.groove_type = "shuffle";
   } else {
     features_.groove_type = "straight";
   }

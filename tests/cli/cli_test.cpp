@@ -115,9 +115,9 @@ TEST_CASE("CLI info command", "[cli]") {
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " info " + TEST_WAV + " -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("Audio File"));
     REQUIRE_THAT(output, ContainsSubstring("Duration"));
     REQUIRE_THAT(output, ContainsSubstring("Sample Rate"));
+    REQUIRE_THAT(output, ContainsSubstring("Samples"));
   }
 
   SECTION("json output") {
@@ -216,7 +216,7 @@ TEST_CASE("CLI sections command", "[cli]") {
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " sections " + TEST_WAV + " -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("Form"));
+    REQUIRE_THAT(output, ContainsSubstring("Structure"));
   }
 
   SECTION("json output") {

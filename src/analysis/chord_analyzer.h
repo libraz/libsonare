@@ -13,6 +13,22 @@
 
 namespace sonare {
 
+/// @brief Constants for chord analysis algorithm.
+/// @details Parameters match bpm-detector Python implementation.
+namespace chord_constants {
+/// @brief Default smoothing window in seconds (2-second moving average).
+constexpr float kSmoothingWindowSec = 2.0f;
+
+/// @brief Threshold for preferring tetrad over triad (0.15 higher correlation required).
+constexpr float kTetradThreshold = 0.15f;
+
+/// @brief Minimum duration for chord segments in seconds.
+constexpr float kMinDurationSec = 0.3f;
+
+/// @brief Default correlation threshold for chord detection.
+constexpr float kCorrelationThreshold = 0.5f;
+}  // namespace chord_constants
+
 /// @brief Detected chord with timing information.
 struct Chord {
   PitchClass root;       ///< Root pitch class
@@ -30,12 +46,13 @@ struct Chord {
 
 /// @brief Configuration for chord analysis.
 struct ChordConfig {
-  float min_duration = 0.3f;      ///< Minimum chord duration in seconds
-  float smoothing_window = 0.2f;  ///< Smoothing window for chroma
-  float threshold = 0.5f;         ///< Minimum correlation for chord detection
+  float min_duration = chord_constants::kMinDurationSec;        ///< Minimum chord duration in seconds
+  float smoothing_window = chord_constants::kSmoothingWindowSec;  ///< Smoothing window (2.0s default)
+  float threshold = chord_constants::kCorrelationThreshold;       ///< Minimum correlation for detection
   bool use_triads_only = false;   ///< Use only triads (no 7th chords)
   int n_fft = 2048;               ///< FFT size for STFT
   int hop_length = 512;           ///< Hop length for STFT
+  bool use_beat_sync = true;      ///< Use beat-synchronized chord detection
 };
 
 /// @brief Chord analyzer for detecting chords from audio.
@@ -51,6 +68,13 @@ class ChordAnalyzer {
   /// @param chroma Chromagram
   /// @param config Chord configuration
   ChordAnalyzer(const Chroma& chroma, const ChordConfig& config = ChordConfig());
+
+  /// @brief Constructs chord analyzer with beat synchronization.
+  /// @param chroma Chromagram
+  /// @param beat_times Beat times in seconds
+  /// @param config Chord configuration
+  ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
+                const ChordConfig& config = ChordConfig());
 
   /// @brief Returns detected chords with timing.
   const std::vector<Chord>& chords() const { return chords_; }
@@ -83,6 +107,7 @@ class ChordAnalyzer {
 
  private:
   void analyze_chords();
+  void analyze_chords_beat_sync(const std::vector<float>& beat_times);
   void merge_short_segments();
   int find_best_chord(const float* chroma) const;
   std::string chord_to_roman_numeral(const Chord& chord, PitchClass key_root, Mode mode) const;

@@ -3,6 +3,7 @@
 /// @file rhythm_analyzer.h
 /// @brief Rhythm analysis including time signature and groove detection.
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,25 @@
 #include "core/audio.h"
 
 namespace sonare {
+
+/// @brief Constants for rhythm analysis algorithm.
+/// @details Parameters match bpm-detector Python implementation.
+namespace rhythm_constants {
+/// @brief Tolerance for matching onset positions to grid (10%).
+constexpr float kSwingTolerance = 0.1f;
+
+/// @brief Swing eighth note positions (triplet feel: 1/3 and 2/3 of beat).
+constexpr std::array<float, 2> kSwingPositions = {0.33f, 0.67f};
+
+/// @brief Straight eighth note positions (even subdivisions).
+constexpr std::array<float, 3> kStraightPositions = {0.25f, 0.5f, 0.75f};
+
+/// @brief Threshold for detecting shuffle groove (swing_ratio > 0.55).
+constexpr float kShuffleThreshold = 0.55f;
+
+/// @brief Threshold for detecting swing groove (swing_ratio > 0.6).
+constexpr float kSwingThreshold = 0.6f;
+}  // namespace rhythm_constants
 
 /// @brief Rhythm characteristics extracted from audio.
 struct RhythmFeatures {
@@ -76,10 +96,13 @@ class RhythmAnalyzer {
   void detect_groove_type();
   void compute_syncopation();
   void compute_regularity();
+  void detect_onsets(const std::vector<float>& onset_strength);
+  float calculate_swing_ratio() const;
 
   RhythmFeatures features_;
   std::vector<Beat> beats_;
   std::vector<float> beat_intervals_;
+  std::vector<float> onset_times_;  ///< Detected onset times in seconds
   float bpm_;
   RhythmConfig config_;
   int sr_;

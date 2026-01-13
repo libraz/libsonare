@@ -48,11 +48,16 @@ struct AnalysisResult {
 
 /// @brief Configuration for music analysis.
 struct MusicAnalyzerConfig {
-  int n_fft = 2048;          ///< FFT size
-  int hop_length = 512;      ///< Hop length
-  float bpm_min = 60.0f;     ///< Minimum BPM
-  float bpm_max = 200.0f;    ///< Maximum BPM
-  float start_bpm = 120.0f;  ///< Prior BPM estimate
+  int n_fft = 2048;              ///< FFT size
+  int hop_length = 512;          ///< Hop length
+  float bpm_min = 60.0f;         ///< Minimum BPM
+  float bpm_max = 200.0f;        ///< Maximum BPM
+  float start_bpm = 120.0f;      ///< Prior BPM estimate
+  bool use_triads_only = true;   ///< Use only triads for chord detection (no 7th chords)
+  bool use_hpss = true;          ///< Use HPSS for harmonic-only chroma in chord/key detection
+  float chroma_highpass_hz = 80.0f;   ///< High-pass filter cutoff for chroma (0 = disabled)
+  bool use_bass_weighted = true;      ///< Use bass-weighted chroma combination (bpm-detector compatible)
+  int chroma_hop_multiplier = 4;      ///< Hop length multiplier for chroma (larger = faster)
 };
 
 /// @brief Unified music analysis facade.
@@ -163,12 +168,16 @@ class MusicAnalyzer {
   // Cached features
   std::unique_ptr<Spectrogram> spectrogram_;
   std::unique_ptr<Chroma> chroma_;
+  std::unique_ptr<Chroma> harmonic_chroma_;  ///< Chroma from harmonic-only audio (HPSS)
   std::unique_ptr<MelSpectrogram> mel_spectrogram_;
   std::vector<float> onset_strength_;
   bool onset_strength_computed_ = false;
 
   /// @brief Returns cached onset strength, computing if needed.
   const std::vector<float>& onset_strength();
+
+  /// @brief Returns harmonic-only chroma for chord/key detection.
+  const Chroma& harmonic_chroma();
 };
 
 }  // namespace sonare

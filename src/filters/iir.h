@@ -65,4 +65,37 @@ std::vector<float> apply_biquad(const std::vector<float>& input, const BiquadCoe
 std::vector<float> apply_biquad_filtfilt(const float* input, size_t size,
                                          const BiquadCoeffs& coeffs);
 
+/// @brief Cascaded biquad sections for higher-order filters.
+struct CascadedBiquad {
+  std::vector<BiquadCoeffs> sections;
+};
+
+/// @brief Creates 4th order Butterworth highpass filter coefficients.
+/// @param cutoff_hz Cutoff frequency in Hz
+/// @param sr Sample rate in Hz
+/// @return Cascaded biquad sections (2 sections for 4th order)
+CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr);
+
+/// @brief Creates 4th order Butterworth lowpass filter coefficients.
+/// @param cutoff_hz Cutoff frequency in Hz
+/// @param sr Sample rate in Hz
+/// @return Cascaded biquad sections (2 sections for 4th order)
+CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr);
+
+/// @brief Applies cascaded biquad filter forward and backward (zero-phase filtering).
+/// @param input Input signal
+/// @param size Signal length
+/// @param cascade Cascaded biquad sections
+/// @return Filtered signal (no phase distortion)
+std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
+                                          const CascadedBiquad& cascade);
+
+/// @brief Applies pre-emphasis filter to audio signal.
+/// @details Enhances high frequencies: y[n] = x[n] - coeff * x[n-1]
+/// @param input Input signal
+/// @param size Signal length
+/// @param coeff Pre-emphasis coefficient (default 0.97)
+/// @return Filtered signal
+std::vector<float> preemphasis(const float* input, size_t size, float coeff = 0.97f);
+
 }  // namespace sonare

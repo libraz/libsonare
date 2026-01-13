@@ -37,11 +37,11 @@ std::array<float, 12> get_boosted_major_profile(PitchClass root, const KeyProfil
 
   int root_idx = static_cast<int>(root);
 
-  // Apply boosts at the appropriate intervals
-  profile[root_idx] += boosts.tonic;                // Tonic
-  profile[(root_idx + 4) % 12] += boosts.third;     // Major third
-  profile[(root_idx + 7) % 12] += boosts.fifth;     // Perfect fifth
-  profile[(root_idx + 11) % 12] += boosts.seventh;  // Major seventh
+  // Apply multiplicative boosts at the appropriate intervals
+  profile[root_idx] *= boosts.tonic;                // Tonic
+  profile[(root_idx + 4) % 12] *= boosts.third;     // Major third
+  profile[(root_idx + 7) % 12] *= boosts.fifth;     // Perfect fifth
+  profile[(root_idx + 11) % 12] *= boosts.seventh;  // Major seventh
 
   return profile;
 }
@@ -52,11 +52,11 @@ std::array<float, 12> get_boosted_minor_profile(PitchClass root, const KeyProfil
 
   int root_idx = static_cast<int>(root);
 
-  // Apply boosts at the appropriate intervals
-  profile[root_idx] += boosts.tonic;                // Tonic
-  profile[(root_idx + 3) % 12] += boosts.third;     // Minor third
-  profile[(root_idx + 7) % 12] += boosts.fifth;     // Perfect fifth
-  profile[(root_idx + 10) % 12] += boosts.seventh;  // Minor seventh
+  // Apply multiplicative boosts at the appropriate intervals
+  profile[root_idx] *= boosts.tonic;                // Tonic
+  profile[(root_idx + 3) % 12] *= boosts.third;     // Minor third
+  profile[(root_idx + 7) % 12] *= boosts.fifth;     // Perfect fifth
+  profile[(root_idx + 10) % 12] *= boosts.seventh;  // Minor seventh
 
   return profile;
 }

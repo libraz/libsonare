@@ -1,54 +1,47 @@
 #pragma once
 
 /// @file bpm_analyzer.h
-/// @brief BPM (tempo) detection.
+/// @brief BPM (tempo) detection with harmonic clustering.
 
-#include <cmath>
-#include <functional>
+#include <array>
+#include <map>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
 
 namespace sonare {
 
-/// @brief Prior distribution function type for tempo estimation.
-/// @details Maps BPM value to weight [0, 1]. Higher weight = more likely.
-using TempoPrior = std::function<float(float bpm)>;
+/// @brief Constants for BPM detection algorithm.
+/// @details Parameters match bpm-detector Python implementation for consistency.
+namespace bpm_constants {
+/// @brief BPM histogram bin width (0.5 BPM resolution).
+constexpr float kBinWidth = 0.5f;
+
+/// @brief Tolerance for harmonic ratio matching (5%).
+constexpr float kHarmonicTolerance = 0.05f;
+
+/// @brief Threshold for preferring higher BPM clusters (15% of total votes).
+constexpr float kThreshHigher = 0.15f;
+
+/// @brief Number of top histogram bins to consider for clustering.
+constexpr int kTopBins = 10;
+
+/// @brief Harmonic ratios for BPM clustering.
+/// @details Includes common tempo relationships: half, 2/3, 3/4, same, 4/3, 3/2, double, triple,
+/// quadruple.
+constexpr std::array<float, 9> kHarmonicRatios = {0.5f, 2.0f / 3.0f, 0.75f, 1.0f, 4.0f / 3.0f,
+                                                   1.5f, 2.0f,       3.0f,  4.0f};
+}  // namespace bpm_constants
 
 /// @brief Configuration for BPM analysis.
 /// @details Default values match librosa.
 struct BpmConfig {
   float bpm_min = 30.0f;     ///< Minimum BPM to consider
   float bpm_max = 300.0f;    ///< Maximum BPM to consider
-  float start_bpm = 120.0f;  ///< Prior estimate for BPM (used when prior is null)
+  float start_bpm = 120.0f;  ///< Initial BPM estimate (used as fallback)
   int n_fft = 2048;          ///< FFT size for onset detection
   int hop_length = 512;      ///< Hop length for onset detection
-
-  /// @brief Custom prior distribution for tempo estimation.
-  /// @details If null, uses default gaussian prior around start_bpm.
-  TempoPrior prior = nullptr;
-
-  /// @brief Creates a uniform prior over a BPM range.
-  /// @param min_bpm Minimum BPM (weight = 1.0)
-  /// @param max_bpm Maximum BPM (weight = 1.0)
-  /// @param falloff Weight for BPM outside range (default 0.1)
-  /// @return Prior function
-  static TempoPrior uniform_prior(float min_bpm, float max_bpm, float falloff = 0.1f) {
-    return [=](float bpm) { return (bpm >= min_bpm && bpm <= max_bpm) ? 1.0f : falloff; };
-  }
-
-  /// @brief Creates a log-normal prior centered at a BPM (librosa-compatible).
-  /// @param center_bpm Center BPM value
-  /// @param sigma Standard deviation in log-space (default 1.0)
-  /// @return Prior function
-  /// @details Equivalent to scipy.stats.lognorm with loc=log(center_bpm).
-  static TempoPrior lognorm_prior(float center_bpm, float sigma = 1.0f) {
-    return [=](float bpm) {
-      if (bpm <= 0.0f) return 0.0f;
-      float log_ratio = std::log(bpm / center_bpm);
-      return std::exp(-0.5f * (log_ratio * log_ratio) / (sigma * sigma));
-    };
-  }
 };
 
 /// @brief BPM candidate with confidence score.
@@ -57,7 +50,42 @@ struct BpmCandidate {
   float confidence;  ///< Confidence score [0, 1]
 };
 
-/// @brief BPM analyzer using autocorrelation of onset strength.
+/// @brief BPM histogram bin with vote count.
+struct BpmHistogramBin {
+  float bpm_center;  ///< Center BPM of the bin
+  int votes;         ///< Number of votes (tempo candidates in this bin)
+};
+
+/// @brief Harmonic cluster of related BPM candidates.
+/// @details Key is the base BPM, value is list of (bpm, votes) pairs in the cluster.
+using HarmonicClusterMap = std::map<float, std::vector<std::pair<float, int>>>;
+
+/// @brief Builds BPM histogram from tempo candidates.
+/// @param candidates BPM candidates from tempo estimation
+/// @param bpm_min Minimum BPM
+/// @param bpm_max Maximum BPM
+/// @param bin_width Histogram bin width (default: 0.5 BPM)
+/// @return Vector of histogram bins sorted by vote count (descending)
+std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
+                                                  float bpm_min, float bpm_max,
+                                                  float bin_width = bpm_constants::kBinWidth);
+
+/// @brief Groups BPM candidates into harmonic clusters.
+/// @details Groups BPMs that are harmonically related (half, double, triplet, etc.).
+///          Uses kHarmonicTolerance (5%) for ratio matching.
+/// @param top_bins Top histogram bins sorted by votes
+/// @return Map of base_bpm -> [(bpm, votes), ...] clusters
+HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins);
+
+/// @brief Selects best BPM from harmonic clusters using smart selection.
+/// @details Prefers higher BPM clusters if they have >= 15% of total votes,
+///          otherwise selects the most voted BPM in the largest cluster.
+/// @param clusters Harmonic clusters from harmonic_cluster()
+/// @param total_votes Total number of votes across all bins
+/// @return Pair of (best_bpm, confidence_percentage)
+std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes);
+
+/// @brief BPM analyzer using autocorrelation with harmonic clustering.
 class BpmAnalyzer {
  public:
   /// @brief Constructs BPM analyzer from audio.

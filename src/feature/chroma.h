@@ -101,8 +101,15 @@ class Chroma {
   /// @brief Access value at (chroma, frame).
   float at(int chroma, int frame) const;
 
- private:
+  /// @brief Constructs Chroma from pre-computed features.
+  /// @param features Chroma features [n_chroma * n_frames]
+  /// @param n_chroma Number of chroma bins (typically 12)
+  /// @param n_frames Number of time frames
+  /// @param sample_rate Sample rate in Hz
+  /// @param hop_length Hop length used for computation
   Chroma(std::vector<float> features, int n_chroma, int n_frames, int sample_rate, int hop_length);
+
+ private:
 
   std::vector<float> features_;  ///< Chromagram [n_chroma * n_frames]
   int n_chroma_;

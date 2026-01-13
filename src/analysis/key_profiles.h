@@ -52,12 +52,33 @@ constexpr std::array<float, 12> TEMPERLEY_MAJOR_PROFILE = {5.0f, 2.0f, 3.5f, 2.0
 constexpr std::array<float, 12> TEMPERLEY_MINOR_PROFILE = {5.0f, 2.0f, 3.5f, 4.5f, 2.0f, 4.0f,
                                                            2.0f, 4.5f, 3.5f, 2.0f, 1.5f, 4.0f};
 
-/// @brief Boosts for customizing key profiles.
+/// @brief Constants for key profile enhancement.
+/// @details Multiplicative boost factors matching bpm-detector Python implementation.
+namespace key_constants {
+/// @brief Major profile: tonic boost factor.
+constexpr float kMajorTonicBoost = 1.5f;
+/// @brief Major profile: major third boost factor.
+constexpr float kMajorThirdBoost = 1.3f;
+/// @brief Major profile: perfect fifth boost factor.
+constexpr float kMajorFifthBoost = 1.2f;
+
+/// @brief Minor profile: tonic boost factor.
+constexpr float kMinorTonicBoost = 1.1f;
+/// @brief Minor profile: minor third boost factor.
+constexpr float kMinorThirdBoost = 1.3f;
+/// @brief Minor profile: perfect fifth boost factor.
+constexpr float kMinorFifthBoost = 1.2f;
+/// @brief Minor profile: minor seventh boost factor.
+constexpr float kMinorSeventhBoost = 1.2f;
+}  // namespace key_constants
+
+/// @brief Multiplicative boosts for customizing key profiles.
+/// @details Factors are multiplied with profile values (1.0 = no change).
 struct KeyProfileBoosts {
-  float tonic = 0.0f;    ///< Boost for tonic (root note)
-  float third = 0.0f;    ///< Boost for third (major or minor)
-  float fifth = 0.0f;    ///< Boost for fifth
-  float seventh = 0.0f;  ///< Boost for seventh
+  float tonic = 1.0f;    ///< Boost for tonic (root note)
+  float third = 1.0f;    ///< Boost for third (major or minor)
+  float fifth = 1.0f;    ///< Boost for fifth
+  float seventh = 1.0f;  ///< Boost for seventh
 };
 
 /// @brief Key profile type selection.

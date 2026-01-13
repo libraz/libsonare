@@ -148,4 +148,121 @@ std::vector<float> apply_biquad_filtfilt(const float* input, size_t size,
   return backward;
 }
 
+CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
+  SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+
+  // 4th order Butterworth = cascade of two 2nd order sections
+  // Each section uses different Q values for proper Butterworth response
+  // Q1 = 1/(2*cos(pi/8)) ≈ 0.541
+  // Q2 = 1/(2*cos(3*pi/8)) ≈ 1.307
+  constexpr float kQ1 = 0.5411961f;  // 1/(2*cos(pi/8))
+  constexpr float kQ2 = 1.3065630f;  // 1/(2*cos(3*pi/8))
+
+  float omega = 2.0f * kPi * cutoff_hz / sr;
+  float cos_omega = std::cos(omega);
+  float sin_omega = std::sin(omega);
+
+  CascadedBiquad cascade;
+  cascade.sections.resize(2);
+
+  // Section 1 (Q = Q1)
+  {
+    float alpha = sin_omega / (2.0f * kQ1);
+    float a0 = 1.0f + alpha;
+    BiquadCoeffs& c = cascade.sections[0];
+    c.b0 = (1.0f + cos_omega) / 2.0f / a0;
+    c.b1 = -(1.0f + cos_omega) / a0;
+    c.b2 = (1.0f + cos_omega) / 2.0f / a0;
+    c.a1 = -2.0f * cos_omega / a0;
+    c.a2 = (1.0f - alpha) / a0;
+  }
+
+  // Section 2 (Q = Q2)
+  {
+    float alpha = sin_omega / (2.0f * kQ2);
+    float a0 = 1.0f + alpha;
+    BiquadCoeffs& c = cascade.sections[1];
+    c.b0 = (1.0f + cos_omega) / 2.0f / a0;
+    c.b1 = -(1.0f + cos_omega) / a0;
+    c.b2 = (1.0f + cos_omega) / 2.0f / a0;
+    c.a1 = -2.0f * cos_omega / a0;
+    c.a2 = (1.0f - alpha) / a0;
+  }
+
+  return cascade;
+}
+
+CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
+  SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+
+  constexpr float kQ1 = 0.5411961f;
+  constexpr float kQ2 = 1.3065630f;
+
+  float omega = 2.0f * kPi * cutoff_hz / sr;
+  float cos_omega = std::cos(omega);
+  float sin_omega = std::sin(omega);
+
+  CascadedBiquad cascade;
+  cascade.sections.resize(2);
+
+  // Section 1 (Q = Q1)
+  {
+    float alpha = sin_omega / (2.0f * kQ1);
+    float a0 = 1.0f + alpha;
+    BiquadCoeffs& c = cascade.sections[0];
+    c.b0 = (1.0f - cos_omega) / 2.0f / a0;
+    c.b1 = (1.0f - cos_omega) / a0;
+    c.b2 = (1.0f - cos_omega) / 2.0f / a0;
+    c.a1 = -2.0f * cos_omega / a0;
+    c.a2 = (1.0f - alpha) / a0;
+  }
+
+  // Section 2 (Q = Q2)
+  {
+    float alpha = sin_omega / (2.0f * kQ2);
+    float a0 = 1.0f + alpha;
+    BiquadCoeffs& c = cascade.sections[1];
+    c.b0 = (1.0f - cos_omega) / 2.0f / a0;
+    c.b1 = (1.0f - cos_omega) / a0;
+    c.b2 = (1.0f - cos_omega) / 2.0f / a0;
+    c.a1 = -2.0f * cos_omega / a0;
+    c.a2 = (1.0f - alpha) / a0;
+  }
+
+  return cascade;
+}
+
+std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
+                                          const CascadedBiquad& cascade) {
+  SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(!cascade.sections.empty(), ErrorCode::InvalidParameter);
+
+  // Apply each section's filtfilt in sequence
+  std::vector<float> result(input, input + size);
+
+  for (const auto& section : cascade.sections) {
+    result = apply_biquad_filtfilt(result.data(), result.size(), section);
+  }
+
+  return result;
+}
+
+std::vector<float> preemphasis(const float* input, size_t size, float coeff) {
+  if (size == 0) {
+    return {};
+  }
+  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
+
+  std::vector<float> output(size);
+  output[0] = input[0];
+
+  for (size_t i = 1; i < size; ++i) {
+    output[i] = input[i] - coeff * input[i - 1];
+  }
+
+  return output;
+}
+
 }  // namespace sonare

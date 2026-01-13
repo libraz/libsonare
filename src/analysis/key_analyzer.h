@@ -13,6 +13,9 @@
 
 namespace sonare {
 
+// Forward declaration
+struct Chord;
+
 /// @brief Detected musical key.
 struct Key {
   PitchClass root;   ///< Root pitch class
@@ -96,5 +99,19 @@ class KeyAnalyzer {
 /// @param config Key configuration
 /// @return Detected key
 Key detect_key(const Audio& audio, const KeyConfig& config = KeyConfig());
+
+/// @brief Estimates key from chord progression.
+/// @details Uses diatonic chord analysis to determine the most likely key.
+/// For progressions like C-G-Am-F, this correctly identifies C major.
+/// @param chords Detected chord sequence
+/// @return Estimated key with confidence
+Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
+
+/// @brief Refines key estimate using chord progression.
+/// @details Combines chroma-based key detection with chord progression analysis.
+/// @param chroma_key Key from chroma analysis
+/// @param chords Detected chords
+/// @return Refined key estimate
+Key refine_key_with_chords(const Key& chroma_key, const std::vector<struct Chord>& chords);
 
 }  // namespace sonare
