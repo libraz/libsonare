@@ -1,5 +1,6 @@
 #include "feature/mel_spectrogram.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 
@@ -107,22 +108,25 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
     log_mel[i] = std::max(log_mel[i], threshold_db);
   }
 
-  // Apply DCT-II to each frame
+  // Apply DCT-II to each frame using Eigen matrix multiplication
   std::vector<float> mfcc_out(n_mfcc * n_frames_);
 
-  // Create DCT matrix
-  std::vector<float> dct_matrix = create_dct_matrix(n_mfcc, n_mels_);
+  // Get cached DCT matrix [n_mfcc x n_mels]
+  const std::vector<float>& dct_matrix = get_dct_matrix_cached(n_mfcc, n_mels_);
 
-  // For each frame: mfcc = dct_matrix @ log_mel_frame
-  for (int t = 0; t < n_frames_; ++t) {
-    for (int k = 0; k < n_mfcc; ++k) {
-      float sum = 0.0f;
-      for (int m = 0; m < n_mels_; ++m) {
-        sum += dct_matrix[k * n_mels_ + m] * log_mel[m * n_frames_ + t];
-      }
-      mfcc_out[k * n_frames_ + t] = sum;
-    }
-  }
+  // Use Eigen for optimized matrix multiplication
+  // dct_matrix: [n_mfcc x n_mels] (row-major)
+  // log_mel: [n_mels x n_frames] (row-major)
+  // result: [n_mfcc x n_frames] (row-major)
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> dct_map(
+      dct_matrix.data(), n_mfcc, n_mels_);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      log_mel_map(log_mel.data(), n_mels_, n_frames_);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mfcc_map(
+      mfcc_out.data(), n_mfcc, n_frames_);
+
+  // BLAS-optimized matrix multiplication
+  mfcc_map.noalias() = dct_map * log_mel_map;
 
   // Apply liftering if requested
   if (lifter > 0.0f) {

@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
+#include "feature/mel_spectrogram.h"
 
 namespace sonare {
 
@@ -36,6 +38,13 @@ class TimbreAnalyzer {
   /// @param audio Input audio
   /// @param config Timbre analysis configuration
   explicit TimbreAnalyzer(const Audio& audio, const TimbreConfig& config = TimbreConfig());
+
+  /// @brief Constructs timbre analyzer from pre-computed features.
+  /// @param spec Spectrogram
+  /// @param mel_spec Mel spectrogram
+  /// @param config Timbre analysis configuration
+  TimbreAnalyzer(const Spectrogram& spec, const MelSpectrogram& mel_spec,
+                 const TimbreConfig& config = TimbreConfig());
 
   /// @brief Returns overall timbre characteristics.
   const Timbre& timbre() const { return timbre_; }
@@ -69,6 +78,7 @@ class TimbreAnalyzer {
   const std::vector<float>& spectral_rolloff() const { return spectral_rolloff_; }
 
  private:
+  void init_from_features(const Spectrogram& spec, const MelSpectrogram& mel_spec);
   void analyze();
   void compute_overall_timbre();
   Timbre compute_window_timbre(int start_frame, int end_frame) const;

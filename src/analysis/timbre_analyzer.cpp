@@ -22,6 +22,26 @@ TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
   stft_config.hop_length = config.hop_length;
 
   Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  // Compute mel spectrogram
+  MelConfig mel_config;
+  mel_config.n_fft = config.n_fft;
+  mel_config.hop_length = config.hop_length;
+  mel_config.n_mels = config.n_mels;
+
+  MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
+
+  // Delegate to shared implementation
+  init_from_features(spec, mel);
+}
+
+TimbreAnalyzer::TimbreAnalyzer(const Spectrogram& spec, const MelSpectrogram& mel_spec,
+                               const TimbreConfig& config)
+    : n_frames_(0), sr_(spec.sample_rate()), config_(config) {
+  init_from_features(spec, mel_spec);
+}
+
+void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectrogram& mel_spec) {
   n_frames_ = spec.n_frames();
 
   if (n_frames_ == 0) {
@@ -36,19 +56,13 @@ TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
   spectral_flux_ = sonare::spectral_flux(spec);
 
   // Compute MFCC for complexity analysis
-  MelConfig mel_config;
-  mel_config.n_fft = config.n_fft;
-  mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = config.n_mels;
-
-  MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
-  auto mfcc = mel.mfcc(config.n_mfcc);
+  auto mfcc = mel_spec.mfcc(config_.n_mfcc);
 
   // Compute MFCC variance for complexity
-  mfcc_variance_.resize(config.n_mfcc, 0.0f);
-  int mfcc_frames = mel.n_frames();
+  mfcc_variance_.resize(config_.n_mfcc, 0.0f);
+  int mfcc_frames = mel_spec.n_frames();
 
-  for (int c = 0; c < config.n_mfcc; ++c) {
+  for (int c = 0; c < config_.n_mfcc; ++c) {
     float mean = 0.0f;
     for (int f = 0; f < mfcc_frames; ++f) {
       mean += mfcc[c * mfcc_frames + f];

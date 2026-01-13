@@ -4,12 +4,17 @@
 #include "core/window.h"
 
 #include <cmath>
+#include <map>
+#include <utility>
 
 namespace sonare {
 
 namespace {
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kTwoPi = 2.0f * kPi;
+
+/// @brief Thread-local cache for window functions.
+thread_local std::map<std::pair<WindowType, int>, std::vector<float>> g_window_cache;
 }  // namespace
 
 std::vector<float> create_window(WindowType type, int length) {
@@ -24,6 +29,18 @@ std::vector<float> create_window(WindowType type, int length) {
       return rectangular_window(length);
   }
   return hann_window(length);  // default
+}
+
+const std::vector<float>& get_window_cached(WindowType type, int length) {
+  auto key = std::make_pair(type, length);
+  auto it = g_window_cache.find(key);
+  if (it != g_window_cache.end()) {
+    return it->second;
+  }
+
+  // Create and cache the window
+  auto result = g_window_cache.emplace(key, create_window(type, length));
+  return result.first->second;
 }
 
 std::vector<float> hann_window(int length) {

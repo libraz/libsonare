@@ -20,6 +20,9 @@
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
+#include "core/spectrum.h"
+#include "feature/chroma.h"
+#include "feature/mel_spectrogram.h"
 
 namespace sonare {
 
@@ -134,6 +137,16 @@ class MusicAnalyzer {
   MusicAnalyzerConfig config_;
   ProgressCallback progress_callback_;
 
+  // Shared feature caches (lazy-initialized)
+  /// @brief Returns cached spectrogram, computing if needed.
+  const Spectrogram& spectrogram();
+
+  /// @brief Returns cached chroma, computing if needed.
+  const Chroma& chroma();
+
+  /// @brief Returns cached mel spectrogram, computing if needed.
+  const MelSpectrogram& mel_spectrogram();
+
   // Lazy-initialized analyzers
   std::unique_ptr<BpmAnalyzer> bpm_analyzer_;
   std::unique_ptr<KeyAnalyzer> key_analyzer_;
@@ -146,6 +159,16 @@ class MusicAnalyzer {
   std::unique_ptr<MelodyAnalyzer> melody_analyzer_;
   std::unique_ptr<SectionAnalyzer> section_analyzer_;
   std::unique_ptr<BoundaryDetector> boundary_detector_;
+
+  // Cached features
+  std::unique_ptr<Spectrogram> spectrogram_;
+  std::unique_ptr<Chroma> chroma_;
+  std::unique_ptr<MelSpectrogram> mel_spectrogram_;
+  std::vector<float> onset_strength_;
+  bool onset_strength_computed_ = false;
+
+  /// @brief Returns cached onset strength, computing if needed.
+  const std::vector<float>& onset_strength();
 };
 
 }  // namespace sonare

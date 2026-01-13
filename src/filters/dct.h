@@ -14,6 +14,14 @@ namespace sonare {
 /// @details Implements DCT-II with orthonormal normalization (scipy 'ortho' mode).
 std::vector<float> create_dct_matrix(int n_output, int n_input);
 
+/// @brief Returns cached DCT-II matrix (thread-local cache).
+/// @param n_output Number of output coefficients (rows)
+/// @param n_input Number of input values (columns)
+/// @return Const reference to cached DCT matrix [n_output x n_input]
+/// @details Returns a reference to a cached matrix. More efficient for repeated calls
+///          with the same dimensions. The cache is thread-local for thread safety.
+const std::vector<float>& get_dct_matrix_cached(int n_output, int n_input);
+
 /// @brief Applies DCT-II to input vector.
 /// @param input Input values
 /// @param n_input Number of input values

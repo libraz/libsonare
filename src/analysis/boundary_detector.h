@@ -9,6 +9,10 @@
 
 namespace sonare {
 
+// Forward declarations
+class MelSpectrogram;
+class Chroma;
+
 /// @brief Configuration for boundary detection.
 struct BoundaryConfig {
   int n_fft = 2048;            ///< FFT size
@@ -38,6 +42,14 @@ class BoundaryDetector {
   /// @param audio Input audio
   /// @param config Boundary detection configuration
   explicit BoundaryDetector(const Audio& audio, const BoundaryConfig& config = BoundaryConfig());
+
+  /// @brief Constructs boundary detector from pre-computed features.
+  /// @param mel Pre-computed mel spectrogram
+  /// @param chroma Pre-computed chroma
+  /// @param sr Sample rate
+  /// @param config Boundary detection configuration
+  BoundaryDetector(const MelSpectrogram& mel, const Chroma& chroma, int sr,
+                   const BoundaryConfig& config = BoundaryConfig());
 
   /// @brief Returns detected boundaries with timing.
   const std::vector<Boundary>& boundaries() const { return boundaries_; }

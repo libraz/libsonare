@@ -1,5 +1,6 @@
 #include "analysis/boundary_detector.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 
@@ -12,25 +13,6 @@
 namespace sonare {
 
 namespace {
-
-/// @brief Computes cosine similarity between two feature vectors.
-float feature_similarity(const float* a, const float* b, int n) {
-  float dot = 0.0f;
-  float norm_a = 0.0f;
-  float norm_b = 0.0f;
-
-  for (int i = 0; i < n; ++i) {
-    dot += a[i] * b[i];
-    norm_a += a[i] * a[i];
-    norm_b += b[i] * b[i];
-  }
-
-  if (norm_a < 1e-10f || norm_b < 1e-10f) {
-    return 0.0f;
-  }
-
-  return dot / (std::sqrt(norm_a) * std::sqrt(norm_b));
-}
 
 /// @brief Normalizes a feature vector (L2 normalization).
 void normalize_feature(float* feature, int n) {
@@ -59,6 +41,84 @@ BoundaryDetector::BoundaryDetector(const Audio& audio, const BoundaryConfig& con
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   compute_features();
+  compute_self_similarity();
+  compute_novelty_curve();
+  detect_boundaries();
+}
+
+BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chroma, int sr,
+                                   const BoundaryConfig& config)
+    : n_frames_(0), n_features_(0), sr_(sr), hop_length_(config.hop_length), config_(config) {
+  // Extract features from pre-computed mel spectrogram and chroma
+  std::vector<float> mfcc_features;
+  int mfcc_frames = 0;
+
+  if (config_.use_mfcc) {
+    auto mfcc = mel.mfcc(config_.n_mfcc);
+    mfcc_frames = mel.n_frames();
+
+    // Flatten MFCC matrix
+    mfcc_features.resize(config_.n_mfcc * mfcc_frames);
+    for (int f = 0; f < mfcc_frames; ++f) {
+      for (int c = 0; c < config_.n_mfcc; ++c) {
+        mfcc_features[f * config_.n_mfcc + c] = mfcc[c * mfcc_frames + f];
+      }
+    }
+  }
+
+  // Extract chroma features
+  std::vector<float> chroma_features;
+  int chroma_frames = 0;
+
+  if (config_.use_chroma) {
+    chroma_frames = chroma.n_frames();
+
+    // Flatten chroma matrix
+    chroma_features.resize(config_.n_chroma * chroma_frames);
+    for (int f = 0; f < chroma_frames; ++f) {
+      for (int c = 0; c < config_.n_chroma; ++c) {
+        chroma_features[f * config_.n_chroma + c] = chroma.at(c, f);
+      }
+    }
+  }
+
+  // Combine features
+  if (config_.use_mfcc && config_.use_chroma) {
+    n_frames_ = std::min(mfcc_frames, chroma_frames);
+    n_features_ = config_.n_mfcc + config_.n_chroma;
+
+    features_.resize(n_frames_ * n_features_);
+
+    for (int f = 0; f < n_frames_; ++f) {
+      // Copy MFCC
+      for (int c = 0; c < config_.n_mfcc; ++c) {
+        features_[f * n_features_ + c] = mfcc_features[f * config_.n_mfcc + c];
+      }
+      // Copy chroma
+      for (int c = 0; c < config_.n_chroma; ++c) {
+        features_[f * n_features_ + config_.n_mfcc + c] = chroma_features[f * config_.n_chroma + c];
+      }
+      // Normalize combined feature
+      normalize_feature(&features_[f * n_features_], n_features_);
+    }
+  } else if (config_.use_mfcc) {
+    n_frames_ = mfcc_frames;
+    n_features_ = config_.n_mfcc;
+    features_ = std::move(mfcc_features);
+
+    for (int f = 0; f < n_frames_; ++f) {
+      normalize_feature(&features_[f * n_features_], n_features_);
+    }
+  } else if (config_.use_chroma) {
+    n_frames_ = chroma_frames;
+    n_features_ = config_.n_chroma;
+    features_ = std::move(chroma_features);
+
+    for (int f = 0; f < n_frames_; ++f) {
+      normalize_feature(&features_[f * n_features_], n_features_);
+    }
+  }
+
   compute_self_similarity();
   compute_novelty_curve();
   detect_boundaries();
@@ -153,13 +213,17 @@ void BoundaryDetector::compute_self_similarity() {
 
   ssm_.resize(n_frames_ * n_frames_);
 
-  for (int i = 0; i < n_frames_; ++i) {
-    for (int j = 0; j < n_frames_; ++j) {
-      float sim =
-          feature_similarity(&features_[i * n_features_], &features_[j * n_features_], n_features_);
-      ssm_[i * n_frames_ + j] = sim;
-    }
-  }
+  // Features are already L2-normalized, so cosine similarity = dot product
+  // SSM = features @ features^T
+  // features: [n_frames x n_features] (row-major)
+  // result: [n_frames x n_frames] (row-major)
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      features_map(features_.data(), n_frames_, n_features_);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> ssm_map(
+      ssm_.data(), n_frames_, n_frames_);
+
+  // BLAS-optimized: SSM = features * features^T
+  ssm_map.noalias() = features_map * features_map.transpose();
 }
 
 float BoundaryDetector::compute_checkerboard_kernel(int center) const {

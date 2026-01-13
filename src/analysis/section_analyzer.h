@@ -46,6 +46,13 @@ class SectionAnalyzer {
   /// @param config Section analysis configuration
   explicit SectionAnalyzer(const Audio& audio, const SectionConfig& config = SectionConfig());
 
+  /// @brief Constructs section analyzer from pre-computed boundaries.
+  /// @param audio Input audio for energy analysis
+  /// @param boundaries Pre-computed boundary times in seconds
+  /// @param config Section analysis configuration
+  SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
+                  const SectionConfig& config = SectionConfig());
+
   /// @brief Returns detected sections.
   const std::vector<Section>& sections() const { return sections_; }
 

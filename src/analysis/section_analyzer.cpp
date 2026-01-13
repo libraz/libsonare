@@ -62,6 +62,49 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const SectionConfig& config
   analyze();
 }
 
+SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
+                                 const SectionConfig& config)
+    : boundaries_(boundaries),
+      audio_(audio),
+      config_(config),
+      sr_(audio.sample_rate()),
+      hop_length_(config.hop_length) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+
+  // Compute RMS energy curve
+  energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
+
+  // Create sections from pre-computed boundaries
+  float audio_duration = audio_.duration();
+
+  // Add start and end as implicit boundaries
+  std::vector<float> all_boundaries;
+  all_boundaries.push_back(0.0f);
+  for (float b : boundaries_) {
+    all_boundaries.push_back(b);
+  }
+  all_boundaries.push_back(audio_duration);
+
+  // Create sections
+  sections_.clear();
+  for (size_t i = 0; i + 1 < all_boundaries.size(); ++i) {
+    Section section;
+    section.start = all_boundaries[i];
+    section.end = all_boundaries[i + 1];
+    section.energy_level = compute_section_energy(section.start, section.end);
+    section.confidence = 0.5f;          // Will be updated by classification
+    section.type = SectionType::Verse;  // Default, will be classified later
+
+    // Only add if section is long enough
+    if (section.duration() >= config_.min_section_sec * 0.5f) {
+      sections_.push_back(section);
+    }
+  }
+
+  // Classify sections
+  classify_sections();
+}
+
 void SectionAnalyzer::analyze() {
   // Compute RMS energy curve
   energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);

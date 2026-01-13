@@ -11,19 +11,20 @@ namespace sonare {
 
 namespace {
 
-/// @brief Computes median of a vector.
-float compute_median(std::vector<float>& values) {
-  if (values.empty()) return 0.0f;
+/// @brief Computes median of values in a buffer.
+/// @details Optimized for odd-sized arrays which is the common case
+///          since kernel_size is always odd.
+float compute_median(float* values, size_t n) {
+  if (n == 0) return 0.0f;
 
-  size_t n = values.size();
   size_t mid = n / 2;
-
-  std::nth_element(values.begin(), values.begin() + mid, values.end());
+  std::nth_element(values, values + mid, values + n);
 
   if (n % 2 == 0) {
+    // For even-sized arrays, find max of lower half
     float median_high = values[mid];
-    std::nth_element(values.begin(), values.begin() + mid - 1, values.end());
-    return (values[mid - 1] + median_high) / 2.0f;
+    float median_low = *std::max_element(values, values + mid);
+    return (median_low + median_high) / 2.0f;
   }
   return values[mid];
 }
@@ -37,22 +38,36 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
 
   int half = kernel_size / 2;
   std::vector<float> result(n_bins * n_frames);
-  std::vector<float> window;
-  window.reserve(kernel_size);
+
+  // Pre-allocate buffer for window values
+  std::vector<float> window(kernel_size);
 
   for (int k = 0; k < n_bins; ++k) {
-    for (int t = 0; t < n_frames; ++t) {
-      window.clear();
+    const float* row = magnitude + k * n_frames;
+    float* out_row = result.data() + k * n_frames;
 
-      // Collect values in horizontal window
-      for (int dt = -half; dt <= half; ++dt) {
-        int tt = t + dt;
-        if (tt >= 0 && tt < n_frames) {
-          window.push_back(magnitude[k * n_frames + tt]);
-        }
-      }
+    // Left boundary region (partial window)
+    for (int t = 0; t < std::min(half, n_frames); ++t) {
+      int start = 0;
+      int end = std::min(t + half + 1, n_frames);
+      int count = end - start;
+      std::copy(row + start, row + end, window.data());
+      out_row[t] = compute_median(window.data(), count);
+    }
 
-      result[k * n_frames + t] = compute_median(window);
+    // Middle region (full window, no boundary checks)
+    for (int t = half; t < n_frames - half; ++t) {
+      std::copy(row + t - half, row + t + half + 1, window.data());
+      out_row[t] = compute_median(window.data(), kernel_size);
+    }
+
+    // Right boundary region (partial window)
+    for (int t = std::max(half, n_frames - half); t < n_frames; ++t) {
+      int start = std::max(0, t - half);
+      int end = n_frames;
+      int count = end - start;
+      std::copy(row + start, row + end, window.data());
+      out_row[t] = compute_median(window.data(), count);
     }
   }
 
@@ -66,22 +81,39 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
 
   int half = kernel_size / 2;
   std::vector<float> result(n_bins * n_frames);
-  std::vector<float> window;
-  window.reserve(kernel_size);
+
+  // Pre-allocate buffer for window values
+  std::vector<float> window(kernel_size);
 
   for (int t = 0; t < n_frames; ++t) {
-    for (int k = 0; k < n_bins; ++k) {
-      window.clear();
-
-      // Collect values in vertical window
-      for (int dk = -half; dk <= half; ++dk) {
-        int kk = k + dk;
-        if (kk >= 0 && kk < n_bins) {
-          window.push_back(magnitude[kk * n_frames + t]);
-        }
+    // Top boundary region (partial window)
+    for (int k = 0; k < std::min(half, n_bins); ++k) {
+      int start = 0;
+      int end = std::min(k + half + 1, n_bins);
+      int count = 0;
+      for (int kk = start; kk < end; ++kk) {
+        window[count++] = magnitude[kk * n_frames + t];
       }
+      result[k * n_frames + t] = compute_median(window.data(), count);
+    }
 
-      result[k * n_frames + t] = compute_median(window);
+    // Middle region (full window, no boundary checks)
+    for (int k = half; k < n_bins - half; ++k) {
+      for (int i = 0; i < kernel_size; ++i) {
+        window[i] = magnitude[(k - half + i) * n_frames + t];
+      }
+      result[k * n_frames + t] = compute_median(window.data(), kernel_size);
+    }
+
+    // Bottom boundary region (partial window)
+    for (int k = std::max(half, n_bins - half); k < n_bins; ++k) {
+      int start = std::max(0, k - half);
+      int end = n_bins;
+      int count = 0;
+      for (int kk = start; kk < end; ++kk) {
+        window[count++] = magnitude[kk * n_frames + t];
+      }
+      result[k * n_frames + t] = compute_median(window.data(), count);
     }
   }
 

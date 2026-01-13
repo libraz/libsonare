@@ -1,6 +1,8 @@
 #include "filters/dct.h"
 
 #include <cmath>
+#include <map>
+#include <utility>
 
 #include "util/exception.h"
 
@@ -8,7 +10,10 @@ namespace sonare {
 
 namespace {
 constexpr float kPi = 3.14159265358979323846f;
-}
+
+/// @brief Thread-local cache for DCT matrices.
+thread_local std::map<std::pair<int, int>, std::vector<float>> g_dct_cache;
+}  // namespace
 
 std::vector<float> create_dct_matrix(int n_output, int n_input) {
   SONARE_CHECK(n_output > 0 && n_input > 0, ErrorCode::InvalidParameter);
@@ -30,6 +35,18 @@ std::vector<float> create_dct_matrix(int n_output, int n_input) {
   }
 
   return matrix;
+}
+
+const std::vector<float>& get_dct_matrix_cached(int n_output, int n_input) {
+  auto key = std::make_pair(n_output, n_input);
+  auto it = g_dct_cache.find(key);
+  if (it != g_dct_cache.end()) {
+    return it->second;
+  }
+
+  // Create and cache the matrix
+  auto result = g_dct_cache.emplace(key, create_dct_matrix(n_output, n_input));
+  return result.first->second;
 }
 
 std::vector<float> dct_ii(const float* input, int n_input, int n_output) {

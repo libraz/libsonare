@@ -51,8 +51,8 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
-  // Create window
-  std::vector<float> window = create_window(config.window, win_length);
+  // Get cached window
+  const std::vector<float>& window = get_window_cached(config.window, win_length);
 
   // Pad window to n_fft if necessary
   std::vector<float> padded_window(n_fft, 0.0f);
@@ -96,14 +96,24 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   for (int t = 0; t < n_frames; ++t) {
     int start = t * hop_length;
 
-    // Extract and window frame
-    for (int i = 0; i < n_fft; ++i) {
-      int idx = start + i;
-      if (idx < static_cast<int>(signal_length)) {
-        frame[i] = signal[idx] * padded_window[i];
-      } else {
-        frame[i] = 0.0f;
+    // Extract and window frame - optimized by moving boundary check outside loop
+    int valid_samples = std::min(n_fft, static_cast<int>(signal_length) - start);
+
+    if (valid_samples >= n_fft) {
+      // Fast path: no boundary handling needed (most common case)
+      for (int i = 0; i < n_fft; ++i) {
+        frame[i] = signal[start + i] * padded_window[i];
       }
+    } else if (valid_samples > 0) {
+      // Copy valid samples with windowing
+      for (int i = 0; i < valid_samples; ++i) {
+        frame[i] = signal[start + i] * padded_window[i];
+      }
+      // Zero-fill remainder
+      std::fill(frame.begin() + valid_samples, frame.end(), 0.0f);
+    } else {
+      // All zeros (shouldn't happen with proper padding)
+      std::fill(frame.begin(), frame.end(), 0.0f);
     }
 
     // Compute FFT
@@ -186,8 +196,8 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     return Audio();
   }
 
-  // Create synthesis window
-  std::vector<float> window = create_window(window_type, n_fft_);
+  // Get cached synthesis window
+  const std::vector<float>& window = get_window_cached(window_type, n_fft_);
 
   // Calculate full reconstruction length (before trimming)
   int full_length = (n_frames_ - 1) * hop_length_ + n_fft_;
@@ -278,9 +288,10 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   stft_config.hop_length = hop_length;
   stft_config.center = true;
 
-  // FFT processor
+  // FFT processor (window not directly used in current implementation,
+  // but kept for potential future optimization)
   FFT fft(n_fft);
-  std::vector<float> window = create_window(WindowType::Hann, n_fft);
+  (void)fft;  // Suppress unused warning - used by Spectrogram methods internally
 
   // Iterate
   for (int iter = 0; iter < config.n_iter; ++iter) {

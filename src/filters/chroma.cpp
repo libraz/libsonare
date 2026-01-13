@@ -1,5 +1,6 @@
 #include "filters/chroma.h"
 
+#include <Eigen/Core>
 #include <cmath>
 
 #include "core/convert.h"
@@ -100,18 +101,21 @@ std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n
   SONARE_CHECK(filterbank != nullptr, ErrorCode::InvalidParameter);
 
   // Output: [n_chroma x n_frames]
-  std::vector<float> chromagram(n_chroma * n_frames, 0.0f);
+  std::vector<float> chromagram(n_chroma * n_frames);
 
-  // Matrix multiply: chromagram = filterbank @ power
-  for (int c = 0; c < n_chroma; ++c) {
-    for (int t = 0; t < n_frames; ++t) {
-      float sum = 0.0f;
-      for (int k = 0; k < n_bins; ++k) {
-        sum += filterbank[c * n_bins + k] * power[k * n_frames + t];
-      }
-      chromagram[c * n_frames + t] = sum;
-    }
-  }
+  // Use Eigen for optimized matrix multiplication
+  // filterbank: [n_chroma x n_bins] (row-major)
+  // power: [n_bins x n_frames] (row-major)
+  // result: [n_chroma x n_frames] (row-major)
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
+      filterbank, n_chroma, n_bins);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      power_map(power, n_bins, n_frames);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> result_map(
+      chromagram.data(), n_chroma, n_frames);
+
+  // BLAS-optimized matrix multiplication
+  result_map.noalias() = fb_map * power_map;
 
   return chromagram;
 }

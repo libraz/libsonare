@@ -1,5 +1,6 @@
 #include "filters/mel.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 
@@ -93,21 +94,21 @@ std::vector<float> apply_mel_filterbank(const float* power, int n_bins, int n_fr
   SONARE_CHECK(filterbank != nullptr, ErrorCode::InvalidParameter);
 
   // Output: [n_mels x n_frames]
-  std::vector<float> mel_spec(n_mels * n_frames, 0.0f);
+  std::vector<float> mel_spec(n_mels * n_frames);
 
-  // Matrix multiply: mel_spec = filterbank @ power
-  // filterbank: [n_mels x n_bins]
-  // power: [n_bins x n_frames]
-  // result: [n_mels x n_frames]
-  for (int m = 0; m < n_mels; ++m) {
-    for (int t = 0; t < n_frames; ++t) {
-      float sum = 0.0f;
-      for (int k = 0; k < n_bins; ++k) {
-        sum += filterbank[m * n_bins + k] * power[k * n_frames + t];
-      }
-      mel_spec[m * n_frames + t] = sum;
-    }
-  }
+  // Use Eigen for optimized matrix multiplication
+  // filterbank: [n_mels x n_bins] (row-major)
+  // power: [n_bins x n_frames] (row-major)
+  // result: [n_mels x n_frames] (row-major)
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
+      filterbank, n_mels, n_bins);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      power_map(power, n_bins, n_frames);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> result_map(
+      mel_spec.data(), n_mels, n_frames);
+
+  // BLAS-optimized matrix multiplication
+  result_map.noalias() = fb_map * power_map;
 
   return mel_spec;
 }
