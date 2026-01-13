@@ -1,0 +1,92 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+dist/
+*.o
+*.a
+*.so
+*.dylib
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+# macOS
+.DS_Store
+
+# Claude Code configuration
+.claude/
+CLAUDE.md
+
+# Design documents (internal)
+backup/
+
+# Cache
+.cache/
+
+# Generated files
+*.log
+*.out
+*.mid
+*.midi
+*.wave
+*.wav
+*.flac
+*.mp3
+*.ogg
+
+# Test outputs (CMake CTest output directory)
+/Testing/
+*.gcov
+*.gcda
+*.gcno
+
+output.json
+output.mid
+analysis.json
+
+# Binaries (in build directory only)
+/build
+*.exe
+
+# Compiled dictionaries
+*.dic
+
+# Dictionary cleanup artifacts
+data
+
+# Dependencies
+third_party/*
+!third_party/CMakeLists.txt
+
+# Node.js
+node_modules/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Coverage reports
+coverage/
+coverage-report/
+*.info
+
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info
+.venv/

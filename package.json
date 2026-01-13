@@ -1,0 +1,78 @@
+{
+  "name": "@libraz/sonare",
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "yarn@4.12.0",
+  "description": "Audio analysis library for music information retrieval",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "preinstall": "npx only-allow yarn",
+    "postinstall": "simple-git-hooks",
+    "prepare": "simple-git-hooks",
+    "build": "yarn build:wasm && yarn build:js",
+    "build:wasm": "emcmake cmake -B build-wasm -DBUILD_WASM=ON && cmake --build build-wasm",
+    "build:js": "tsc",
+    "clean": "rm -rf dist",
+    "lint": "biome check js/ tests/wasm/",
+    "lint:fix": "biome check --write js/ tests/wasm/",
+    "format": "biome format --write js/ tests/wasm/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "yarn lint && yarn build"
+  },
+  "keywords": [
+    "audio",
+    "music",
+    "analysis",
+    "mir",
+    "bpm",
+    "key",
+    "tempo",
+    "wasm",
+    "webassembly"
+  ],
+  "author": "libraz <libraz@libraz.net>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/libraz/libsonare.git"
+  },
+  "bugs": {
+    "url": "https://github.com/libraz/libsonare/issues"
+  },
+  "homepage": "https://github.com/libraz/libsonare#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.10",
+    "lint-staged": "^16.2.7",
+    "simple-git-hooks": "^2.13.1",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.16"
+  },
+  "volta": {
+    "node": "22.21.1",
+    "yarn": "4.12.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "yarn lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "biome check --write"
+    ]
+  }
+}

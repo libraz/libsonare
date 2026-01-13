@@ -1,0 +1,302 @@
+#include "effects/hpss.h"
+
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <vector>
+
+#include "util/exception.h"
+
+namespace sonare {
+
+namespace {
+
+/// @brief Computes median of a vector.
+float compute_median(std::vector<float>& values) {
+  if (values.empty()) return 0.0f;
+
+  size_t n = values.size();
+  size_t mid = n / 2;
+
+  std::nth_element(values.begin(), values.begin() + mid, values.end());
+
+  if (n % 2 == 0) {
+    float median_high = values[mid];
+    std::nth_element(values.begin(), values.begin() + mid - 1, values.end());
+    return (values[mid - 1] + median_high) / 2.0f;
+  }
+  return values[mid];
+}
+
+}  // namespace
+
+std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, int n_frames,
+                                            int kernel_size) {
+  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
+
+  int half = kernel_size / 2;
+  std::vector<float> result(n_bins * n_frames);
+  std::vector<float> window;
+  window.reserve(kernel_size);
+
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      window.clear();
+
+      // Collect values in horizontal window
+      for (int dt = -half; dt <= half; ++dt) {
+        int tt = t + dt;
+        if (tt >= 0 && tt < n_frames) {
+          window.push_back(magnitude[k * n_frames + tt]);
+        }
+      }
+
+      result[k * n_frames + t] = compute_median(window);
+    }
+  }
+
+  return result;
+}
+
+std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, int n_frames,
+                                          int kernel_size) {
+  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
+
+  int half = kernel_size / 2;
+  std::vector<float> result(n_bins * n_frames);
+  std::vector<float> window;
+  window.reserve(kernel_size);
+
+  for (int t = 0; t < n_frames; ++t) {
+    for (int k = 0; k < n_bins; ++k) {
+      window.clear();
+
+      // Collect values in vertical window
+      for (int dk = -half; dk <= half; ++dk) {
+        int kk = k + dk;
+        if (kk >= 0 && kk < n_bins) {
+          window.push_back(magnitude[kk * n_frames + t]);
+        }
+      }
+
+      result[k * n_frames + t] = compute_median(window);
+    }
+  }
+
+  return result;
+}
+
+HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
+  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+
+  int n_bins = spec.n_bins();
+  int n_frames = spec.n_frames();
+
+  // Get magnitude spectrum
+  const std::vector<float>& magnitude = spec.magnitude();
+
+  // Apply median filters
+  std::vector<float> harmonic_enhanced =
+      median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
+  std::vector<float> percussive_enhanced =
+      median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
+
+  // Compute masks
+  std::vector<float> harmonic_mask(n_bins * n_frames);
+  std::vector<float> percussive_mask(n_bins * n_frames);
+
+  float eps = 1e-10f;
+
+  for (int i = 0; i < n_bins * n_frames; ++i) {
+    float h = std::pow(harmonic_enhanced[i], config.power);
+    float p = std::pow(percussive_enhanced[i], config.power);
+
+    if (config.use_soft_mask) {
+      // Soft mask with margins
+      float h_margin = h * config.margin_harmonic;
+      float p_margin = p * config.margin_percussive;
+      float total = h_margin + p_margin + eps;
+
+      harmonic_mask[i] = h_margin / total;
+      percussive_mask[i] = p_margin / total;
+    } else {
+      // Hard mask
+      if (h >= p) {
+        harmonic_mask[i] = 1.0f;
+        percussive_mask[i] = 0.0f;
+      } else {
+        harmonic_mask[i] = 0.0f;
+        percussive_mask[i] = 1.0f;
+      }
+    }
+  }
+
+  // Apply masks to complex spectrum
+  const std::complex<float>* complex_data = spec.complex_data();
+
+  std::vector<std::complex<float>> harmonic_complex(n_bins * n_frames);
+  std::vector<std::complex<float>> percussive_complex(n_bins * n_frames);
+
+  for (int i = 0; i < n_bins * n_frames; ++i) {
+    harmonic_complex[i] = complex_data[i] * harmonic_mask[i];
+    percussive_complex[i] = complex_data[i] * percussive_mask[i];
+  }
+
+  // Create result spectrograms
+  HpssSpectrogramResult result;
+  result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
+                                              spec.n_fft(), spec.hop_length(), spec.sample_rate());
+  result.percussive =
+      Spectrogram::from_complex(percussive_complex.data(), n_bins, n_frames, spec.n_fft(),
+                                spec.hop_length(), spec.sample_rate());
+
+  return result;
+}
+
+HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+
+  // Compute STFT
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  // Apply HPSS
+  HpssSpectrogramResult spec_result = hpss(spec, config);
+
+  // Convert back to audio
+  HpssAudioResult result;
+  result.harmonic = spec_result.harmonic.to_audio(static_cast<int>(audio.size()));
+  result.percussive = spec_result.percussive.to_audio(static_cast<int>(audio.size()));
+
+  return result;
+}
+
+Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+  HpssAudioResult result = hpss(audio, config, stft_config);
+  return result.harmonic;
+}
+
+Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+  HpssAudioResult result = hpss(audio, config, stft_config);
+  return result.percussive;
+}
+
+HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
+                                                     const HpssConfig& config) {
+  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+
+  int n_bins = spec.n_bins();
+  int n_frames = spec.n_frames();
+
+  // Get magnitude spectrum
+  const std::vector<float>& magnitude = spec.magnitude();
+
+  // Apply median filters
+  std::vector<float> harmonic_enhanced =
+      median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
+  std::vector<float> percussive_enhanced =
+      median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
+
+  // Compute masks for three-way split
+  std::vector<float> harmonic_mask(n_bins * n_frames);
+  std::vector<float> percussive_mask(n_bins * n_frames);
+  std::vector<float> residual_mask(n_bins * n_frames);
+
+  float eps = 1e-10f;
+
+  for (int i = 0; i < n_bins * n_frames; ++i) {
+    float h = std::pow(harmonic_enhanced[i], config.power);
+    float p = std::pow(percussive_enhanced[i], config.power);
+
+    // Soft masks with margins
+    float h_margin = h * config.margin_harmonic;
+    float p_margin = p * config.margin_percussive;
+
+    if (config.use_soft_mask) {
+      float total = h_margin + p_margin + eps;
+      harmonic_mask[i] = h_margin / total;
+      percussive_mask[i] = p_margin / total;
+
+      // Residual is 1 - sum when margins < 1
+      float sum = harmonic_mask[i] + percussive_mask[i];
+      if (sum < 1.0f) {
+        residual_mask[i] = 1.0f - sum;
+        // Renormalize
+        float total_all = sum + residual_mask[i];
+        harmonic_mask[i] /= total_all;
+        percussive_mask[i] /= total_all;
+        residual_mask[i] /= total_all;
+      } else {
+        residual_mask[i] = 0.0f;
+      }
+    } else {
+      // Hard mask: residual is where neither dominates clearly
+      float ratio = (h + eps) / (p + eps);
+      if (ratio > 2.0f) {
+        harmonic_mask[i] = 1.0f;
+        percussive_mask[i] = 0.0f;
+        residual_mask[i] = 0.0f;
+      } else if (ratio < 0.5f) {
+        harmonic_mask[i] = 0.0f;
+        percussive_mask[i] = 1.0f;
+        residual_mask[i] = 0.0f;
+      } else {
+        harmonic_mask[i] = 0.0f;
+        percussive_mask[i] = 0.0f;
+        residual_mask[i] = 1.0f;
+      }
+    }
+  }
+
+  // Apply masks to complex spectrum
+  const std::complex<float>* complex_data = spec.complex_data();
+
+  std::vector<std::complex<float>> harmonic_complex(n_bins * n_frames);
+  std::vector<std::complex<float>> percussive_complex(n_bins * n_frames);
+  std::vector<std::complex<float>> residual_complex(n_bins * n_frames);
+
+  for (int i = 0; i < n_bins * n_frames; ++i) {
+    harmonic_complex[i] = complex_data[i] * harmonic_mask[i];
+    percussive_complex[i] = complex_data[i] * percussive_mask[i];
+    residual_complex[i] = complex_data[i] * residual_mask[i];
+  }
+
+  // Create result spectrograms
+  HpssSpectrogramResultWithResidual result;
+  result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
+                                              spec.n_fft(), spec.hop_length(), spec.sample_rate());
+  result.percussive =
+      Spectrogram::from_complex(percussive_complex.data(), n_bins, n_frames, spec.n_fft(),
+                                spec.hop_length(), spec.sample_rate());
+  result.residual = Spectrogram::from_complex(residual_complex.data(), n_bins, n_frames,
+                                              spec.n_fft(), spec.hop_length(), spec.sample_rate());
+
+  return result;
+}
+
+HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssConfig& config,
+                                               const StftConfig& stft_config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+
+  // Compute STFT
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  // Apply HPSS with residual
+  HpssSpectrogramResultWithResidual spec_result = hpss_with_residual(spec, config);
+
+  // Convert back to audio
+  HpssAudioResultWithResidual result;
+  result.harmonic = spec_result.harmonic.to_audio(static_cast<int>(audio.size()));
+  result.percussive = spec_result.percussive.to_audio(static_cast<int>(audio.size()));
+  result.residual = spec_result.residual.to_audio(static_cast<int>(audio.size()));
+
+  return result;
+}
+
+Audio residual(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
+  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+  return result.residual;
+}
+
+}  // namespace sonare

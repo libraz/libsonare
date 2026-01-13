@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.3.5"
+  },
+  "data": [
+    {
+      "signal": "impulse_train",
+      "sr": 22050,
+      "hop_length": 256,
+      "shape": [
+        87
+      ],
+      "max": 10.893948860174056,
+      "mean": 0.891297790459135,
+      "nonzero_count": 18
+    },
+    {
+      "signal": "impulse_train",
+      "sr": 22050,
+      "hop_length": 512,
+      "shape": [
+        44
+      ],
+      "max": 13.50393130012298,
+      "mean": 1.7402610855550973,
+      "nonzero_count": 11
+    }
+  ]
+}

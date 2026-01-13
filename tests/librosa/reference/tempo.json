@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.3.5"
+  },
+  "data": [
+    {
+      "true_tempo": 60,
+      "detected_tempo": 60.09265988372093,
+      "tolerance_percent": 5.0
+    },
+    {
+      "true_tempo": 90,
+      "detected_tempo": 89.10290948275862,
+      "tolerance_percent": 5.0
+    },
+    {
+      "true_tempo": 120,
+      "detected_tempo": 117.45383522727273,
+      "tolerance_percent": 5.0
+    },
+    {
+      "true_tempo": 150,
+      "detected_tempo": 151.99908088235293,
+      "tolerance_percent": 5.0
+    },
+    {
+      "true_tempo": 180,
+      "detected_tempo": 89.10290948275862,
+      "tolerance_percent": 5.0
+    }
+  ]
+}
