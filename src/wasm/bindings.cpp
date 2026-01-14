@@ -19,15 +19,50 @@
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
+#include "core/convert.h"
+#include "core/resample.h"
+#include "core/spectrum.h"
+#include "effects/hpss.h"
+#include "effects/normalize.h"
+#include "effects/pitch_shift.h"
+#include "effects/time_stretch.h"
+#include "feature/chroma.h"
+#include "feature/mel_spectrogram.h"
+#include "feature/pitch.h"
+#include "feature/spectral.h"
 #include "quick.h"
 
 using namespace emscripten;
 using namespace sonare;
 
-// Helper to convert std::vector<float> to JavaScript array
-val vectorToArray(const std::vector<float>& vec) { return val::array(vec); }
+// ============================================================================
+// Helper functions
+// ============================================================================
 
-// Wrapper functions for quick API
+val vectorToFloat32Array(const std::vector<float>& vec) {
+  val result = val::global("Float32Array").new_(vec.size());
+  for (size_t i = 0; i < vec.size(); ++i) {
+    result.set(i, vec[i]);
+  }
+  return result;
+}
+
+val vectorToIntArray(const std::vector<int>& vec) {
+  val result = val::array();
+  for (size_t i = 0; i < vec.size(); ++i) {
+    result.call<void>("push", vec[i]);
+  }
+  return result;
+}
+
+std::vector<float> float32ArrayToVector(val arr) {
+  return vecFromJSArray<float>(arr);
+}
+
+// ============================================================================
+// Quick API (high-level)
+// ============================================================================
+
 float js_detect_bpm(val samples, int sample_rate) {
   std::vector<float> data = vecFromJSArray<float>(samples);
   return quick::detect_bpm(data.data(), data.size(), sample_rate);
@@ -49,13 +84,13 @@ val js_detect_key(val samples, int sample_rate) {
 val js_detect_onsets(val samples, int sample_rate) {
   std::vector<float> data = vecFromJSArray<float>(samples);
   std::vector<float> onsets = quick::detect_onsets(data.data(), data.size(), sample_rate);
-  return vectorToArray(onsets);
+  return vectorToFloat32Array(onsets);
 }
 
 val js_detect_beats(val samples, int sample_rate) {
   std::vector<float> data = vecFromJSArray<float>(samples);
   std::vector<float> beats = quick::detect_beats(data.data(), data.size(), sample_rate);
-  return vectorToArray(beats);
+  return vectorToFloat32Array(beats);
 }
 
 val js_analyze(val samples, int sample_rate) {
@@ -258,8 +293,402 @@ val js_analyze_with_progress(val samples, int sample_rate, val progress_callback
   return out;
 }
 
-// Version function
+// ============================================================================
+// Effects
+// ============================================================================
+
+// HPSS - Harmonic/Percussive Source Separation
+val js_hpss(val samples, int sample_rate, int kernel_harmonic, int kernel_percussive) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  HpssConfig config;
+  config.kernel_size_harmonic = kernel_harmonic;
+  config.kernel_size_percussive = kernel_percussive;
+
+  HpssAudioResult result = hpss(audio, config);
+
+  val out = val::object();
+
+  // Harmonic audio
+  std::vector<float> harmonic_vec(result.harmonic.data(),
+                                  result.harmonic.data() + result.harmonic.size());
+  out.set("harmonic", vectorToFloat32Array(harmonic_vec));
+
+  // Percussive audio
+  std::vector<float> percussive_vec(result.percussive.data(),
+                                    result.percussive.data() + result.percussive.size());
+  out.set("percussive", vectorToFloat32Array(percussive_vec));
+
+  out.set("sampleRate", result.harmonic.sample_rate());
+
+  return out;
+}
+
+// Get harmonic component only
+val js_harmonic(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio result = harmonic(audio);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// Get percussive component only
+val js_percussive(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio result = percussive(audio);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// Time stretch
+val js_time_stretch(val samples, int sample_rate, float rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio result = time_stretch(audio, rate);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// Pitch shift
+val js_pitch_shift(val samples, int sample_rate, float semitones) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio result = pitch_shift(audio, semitones);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// Normalize
+val js_normalize(val samples, int sample_rate, float target_db) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio result = normalize(audio, target_db);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// Trim silence
+val js_trim(val samples, int sample_rate, float threshold_db) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio result = trim(audio, threshold_db);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// ============================================================================
+// Features - Spectrogram
+// ============================================================================
+
+val js_stft(val samples, int sample_rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  val out = val::object();
+  out.set("nBins", spec.n_bins());
+  out.set("nFrames", spec.n_frames());
+  out.set("nFft", spec.n_fft());
+  out.set("hopLength", spec.hop_length());
+  out.set("sampleRate", spec.sample_rate());
+  out.set("magnitude", vectorToFloat32Array(spec.magnitude()));
+  out.set("power", vectorToFloat32Array(spec.power()));
+
+  return out;
+}
+
+val js_stft_db(val samples, int sample_rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  val out = val::object();
+  out.set("nBins", spec.n_bins());
+  out.set("nFrames", spec.n_frames());
+  out.set("db", vectorToFloat32Array(spec.to_db()));
+
+  return out;
+}
+
+// ============================================================================
+// Features - Mel Spectrogram
+// ============================================================================
+
+val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, int n_mels) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  MelConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_mels = n_mels;
+
+  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+
+  val out = val::object();
+  out.set("nMels", mel.n_mels());
+  out.set("nFrames", mel.n_frames());
+  out.set("sampleRate", mel.sample_rate());
+  out.set("hopLength", mel.hop_length());
+
+  // Power values
+  std::vector<float> power_vec(mel.power_data(), mel.power_data() + mel.n_mels() * mel.n_frames());
+  out.set("power", vectorToFloat32Array(power_vec));
+
+  // dB values
+  out.set("db", vectorToFloat32Array(mel.to_db()));
+
+  return out;
+}
+
+val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels, int n_mfcc) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  MelConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_mels = n_mels;
+
+  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  std::vector<float> mfcc = mel.mfcc(n_mfcc);
+
+  val out = val::object();
+  out.set("nMfcc", n_mfcc);
+  out.set("nFrames", mel.n_frames());
+  out.set("coefficients", vectorToFloat32Array(mfcc));
+
+  return out;
+}
+
+// ============================================================================
+// Features - Chroma
+// ============================================================================
+
+val js_chroma(val samples, int sample_rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  ChromaConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Chroma chroma = Chroma::compute(audio, config);
+
+  val out = val::object();
+  out.set("nChroma", chroma.n_chroma());
+  out.set("nFrames", chroma.n_frames());
+  out.set("sampleRate", chroma.sample_rate());
+  out.set("hopLength", chroma.hop_length());
+
+  std::vector<float> features_vec(chroma.data(),
+                                  chroma.data() + chroma.n_chroma() * chroma.n_frames());
+  out.set("features", vectorToFloat32Array(features_vec));
+
+  // Mean energy per pitch class
+  auto mean = chroma.mean_energy();
+  val mean_arr = val::array();
+  for (int i = 0; i < 12; ++i) {
+    mean_arr.call<void>("push", mean[i]);
+  }
+  out.set("meanEnergy", mean_arr);
+
+  return out;
+}
+
+// ============================================================================
+// Features - Spectral
+// ============================================================================
+
+val js_spectral_centroid(val samples, int sample_rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> centroid = spectral_centroid(spec, sample_rate);
+
+  return vectorToFloat32Array(centroid);
+}
+
+val js_spectral_bandwidth(val samples, int sample_rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> bandwidth = spectral_bandwidth(spec, sample_rate);
+
+  return vectorToFloat32Array(bandwidth);
+}
+
+val js_spectral_rolloff(val samples, int sample_rate, int n_fft, int hop_length,
+                        float roll_percent) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> rolloff = spectral_rolloff(spec, sample_rate, roll_percent);
+
+  return vectorToFloat32Array(rolloff);
+}
+
+val js_spectral_flatness(val samples, int sample_rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> flatness = spectral_flatness(spec);
+
+  return vectorToFloat32Array(flatness);
+}
+
+val js_zero_crossing_rate(val samples, int sample_rate, int frame_length, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  std::vector<float> zcr = zero_crossing_rate(audio, frame_length, hop_length);
+  return vectorToFloat32Array(zcr);
+}
+
+val js_rms_energy(val samples, int sample_rate, int frame_length, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  std::vector<float> rms = rms_energy(audio, frame_length, hop_length);
+  return vectorToFloat32Array(rms);
+}
+
+// ============================================================================
+// Features - Pitch
+// ============================================================================
+
+val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
+                 float fmax, float threshold) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  PitchConfig config;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.threshold = threshold;
+
+  PitchResult result = yin_track(audio, config);
+
+  val out = val::object();
+  out.set("f0", vectorToFloat32Array(result.f0));
+
+  // Convert voiced_prob to Float32Array
+  out.set("voicedProb", vectorToFloat32Array(result.voiced_prob));
+
+  // Convert voiced_flag to array of bools
+  val voiced_arr = val::array();
+  for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
+    voiced_arr.call<void>("push", result.voiced_flag[i]);
+  }
+  out.set("voicedFlag", voiced_arr);
+
+  out.set("nFrames", result.n_frames());
+  out.set("medianF0", result.median_f0());
+  out.set("meanF0", result.mean_f0());
+
+  return out;
+}
+
+val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
+                  float fmax, float threshold) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  PitchConfig config;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.threshold = threshold;
+
+  PitchResult result = pyin(audio, config);
+
+  val out = val::object();
+  out.set("f0", vectorToFloat32Array(result.f0));
+  out.set("voicedProb", vectorToFloat32Array(result.voiced_prob));
+
+  val voiced_arr = val::array();
+  for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
+    voiced_arr.call<void>("push", result.voiced_flag[i]);
+  }
+  out.set("voicedFlag", voiced_arr);
+
+  out.set("nFrames", result.n_frames());
+  out.set("medianF0", result.median_f0());
+  out.set("meanF0", result.mean_f0());
+
+  return out;
+}
+
+// ============================================================================
+// Core - Conversion
+// ============================================================================
+
+float js_hz_to_mel(float hz) { return hz_to_mel(hz); }
+float js_mel_to_hz(float mel) { return mel_to_hz(mel); }
+float js_hz_to_midi(float hz) { return hz_to_midi(hz); }
+float js_midi_to_hz(float midi) { return midi_to_hz(midi); }
+std::string js_hz_to_note(float hz) { return hz_to_note(hz); }
+float js_note_to_hz(const std::string& note) { return note_to_hz(note); }
+float js_frames_to_time(int frames, int sr, int hop_length) {
+  return frames_to_time(frames, sr, hop_length);
+}
+int js_time_to_frames(float time, int sr, int hop_length) {
+  return time_to_frames(time, sr, hop_length);
+}
+
+// ============================================================================
+// Core - Resample
+// ============================================================================
+
+val js_resample(val samples, int src_sr, int target_sr) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> result = resample(data.data(), data.size(), src_sr, target_sr);
+  return vectorToFloat32Array(result);
+}
+
+// ============================================================================
+// Version
+// ============================================================================
+
 std::string js_version() { return "1.0.0"; }
+
+// ============================================================================
+// Embind Registrations
+// ============================================================================
 
 EMSCRIPTEN_BINDINGS(sonare) {
   // Enums
@@ -299,7 +728,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("Instrumental", SectionType::Instrumental)
       .value("Outro", SectionType::Outro);
 
-  // Quick API functions
+  // Quick API (high-level)
   function("detectBpm", &js_detect_bpm);
   function("detectKey", &js_detect_key);
   function("detectOnsets", &js_detect_onsets);
@@ -307,6 +736,51 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("analyze", &js_analyze);
   function("analyzeWithProgress", &js_analyze_with_progress);
   function("version", &js_version);
+
+  // Effects
+  function("hpss", &js_hpss);
+  function("harmonic", &js_harmonic);
+  function("percussive", &js_percussive);
+  function("timeStretch", &js_time_stretch);
+  function("pitchShift", &js_pitch_shift);
+  function("normalize", &js_normalize);
+  function("trim", &js_trim);
+
+  // Features - Spectrogram
+  function("stft", &js_stft);
+  function("stftDb", &js_stft_db);
+
+  // Features - Mel Spectrogram
+  function("melSpectrogram", &js_mel_spectrogram);
+  function("mfcc", &js_mfcc);
+
+  // Features - Chroma
+  function("chroma", &js_chroma);
+
+  // Features - Spectral
+  function("spectralCentroid", &js_spectral_centroid);
+  function("spectralBandwidth", &js_spectral_bandwidth);
+  function("spectralRolloff", &js_spectral_rolloff);
+  function("spectralFlatness", &js_spectral_flatness);
+  function("zeroCrossingRate", &js_zero_crossing_rate);
+  function("rmsEnergy", &js_rms_energy);
+
+  // Features - Pitch
+  function("pitchYin", &js_pitch_yin);
+  function("pitchPyin", &js_pitch_pyin);
+
+  // Core - Conversion
+  function("hzToMel", &js_hz_to_mel);
+  function("melToHz", &js_mel_to_hz);
+  function("hzToMidi", &js_hz_to_midi);
+  function("midiToHz", &js_midi_to_hz);
+  function("hzToNote", &js_hz_to_note);
+  function("noteToHz", &js_note_to_hz);
+  function("framesToTime", &js_frames_to_time);
+  function("timeToFrames", &js_time_to_frames);
+
+  // Core - Resample
+  function("resample", &js_resample);
 }
 
 #endif  // __EMSCRIPTEN__

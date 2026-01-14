@@ -1,5 +1,6 @@
 #include "analysis/music_analyzer.h"
 
+#include "core/resample.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
 #include "feature/chroma.h"
@@ -204,8 +205,19 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     int sr = audio_.sample_rate();
     int chroma_hop = config_.hop_length * config_.chroma_hop_multiplier;
 
+    // Downsample to 22050Hz for HPSS if sample rate is higher (significant speedup)
+    constexpr int kTargetSampleRate = 22050;
+    Audio analysis_audio = audio_;
+    int analysis_sr = sr;
+    if (sr > kTargetSampleRate) {
+      analysis_audio = resample(audio_, kTargetSampleRate);
+      analysis_sr = kTargetSampleRate;
+      // Adjust hop length proportionally
+      chroma_hop = chroma_hop * kTargetSampleRate / sr;
+    }
+
     // Step 1: Apply HPSS once with margin=3.0 to extract harmonic content
-    Audio harmonic_audio = audio_;
+    Audio harmonic_audio = analysis_audio;
     if (config_.use_hpss) {
       HpssConfig hpss_config;
       hpss_config.margin_harmonic = 3.0f;
@@ -215,15 +227,15 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       stft_config.n_fft = config_.n_fft;
       stft_config.hop_length = config_.hop_length;
 
-      harmonic_audio = harmonic(audio_, hpss_config, stft_config);
+      harmonic_audio = harmonic(analysis_audio, hpss_config, stft_config);
     }
 
     // Step 2: Apply 4th order Butterworth high-pass filter
     Audio filtered_audio = harmonic_audio;
     if (config_.chroma_highpass_hz > 0) {
-      auto cascade = highpass_coeffs_4th(config_.chroma_highpass_hz, sr);
+      auto cascade = highpass_coeffs_4th(config_.chroma_highpass_hz, analysis_sr);
       auto filtered = apply_cascade_filtfilt(harmonic_audio.data(), harmonic_audio.size(), cascade);
-      filtered_audio = Audio::from_vector(std::move(filtered), sr);
+      filtered_audio = Audio::from_vector(std::move(filtered), analysis_sr);
     }
 
     // Step 3: Compute CQT-based chroma with larger hop for speed
@@ -267,7 +279,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     }
 
     harmonic_chroma_ =
-        std::make_unique<Chroma>(Chroma(std::move(chroma_features), 12, n_frames, sr, chroma_hop));
+        std::make_unique<Chroma>(Chroma(std::move(chroma_features), 12, n_frames, analysis_sr, chroma_hop));
   }
   return *harmonic_chroma_;
 }

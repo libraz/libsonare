@@ -76,6 +76,9 @@ if(BUILD_WASM)
   target_link_options(sonare PRIVATE
     -sEXPORT_NAME='Sonare'
     -sEXPORTED_RUNTIME_METHODS=['UTF8ToString']
+    -sMODULARIZE=1
+    -sEXPORT_ES6=1
+    -sALLOW_MEMORY_GROWTH=1
     --bind
   )
 
