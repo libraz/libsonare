@@ -41,7 +41,7 @@ const std::vector<float>& get_window_cached(WindowType type, int length) {
     return it->second;
   }
 
-  // Clear cache if it exceeds the size limit
+  /// Clear cache if it exceeds the size limit
   if (g_window_cache.size() >= kMaxWindowCacheSize) {
     g_window_cache.clear();
   }

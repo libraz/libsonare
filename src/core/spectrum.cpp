@@ -55,12 +55,12 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   // Get cached window
   const std::vector<float>& window = get_window_cached(config.window, win_length);
 
-  // Pad window to n_fft if necessary
+  /// Pad window to n_fft if necessary
   std::vector<float> padded_window(n_fft, 0.0f);
   int win_offset = (n_fft - win_length) / 2;
   std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
 
-  // Prepare input signal
+  /// Prepare input signal
   const float* signal = audio.data();
   size_t signal_length = audio.size();
 
@@ -72,7 +72,7 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
     signal_length = padded_signal.size();
   }
 
-  // Calculate number of frames
+  /// Calculate number of frames
   int n_frames = 1 + static_cast<int>((signal_length - n_fft) / hop_length);
   if (n_frames <= 0) {
     n_frames = 1;
@@ -80,24 +80,24 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
   int n_bins = n_fft / 2 + 1;
 
-  // Allocate output
+  /// Allocate output
   std::vector<std::complex<float>> spectrum(n_bins * n_frames);
 
-  // Create FFT processor
+  /// Create FFT processor
   FFT fft(n_fft);
 
-  // Temporary buffer for windowed frame
+  /// Temporary buffer for windowed frame
   std::vector<float> frame(n_fft);
   std::vector<std::complex<float>> frame_spectrum(n_bins);
 
-  // Progress reporting interval (every 5% or at least every 100 frames)
+  /// Progress reporting interval (every 5% or at least every 100 frames)
   int progress_interval = std::max(1, std::min(n_frames / 20, 100));
 
-  // Process each frame
+  /// Process each frame
   for (int t = 0; t < n_frames; ++t) {
     int start = t * hop_length;
 
-    // Extract and window frame - optimized by moving boundary check outside loop
+    /// Extract and window frame - optimized by moving boundary check outside loop
     int valid_samples = std::min(n_fft, static_cast<int>(signal_length) - start);
 
     if (valid_samples >= n_fft) {

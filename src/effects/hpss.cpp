@@ -60,8 +60,9 @@ class SlidingMedian {
   }
 
  private:
+  /// @brief Rebalances the two multisets to maintain median property.
+  /// @details Ensures lo_.size() >= hi_.size() and lo_.size() <= hi_.size() + 1.
   void rebalance() {
-    // Keep lo_.size() >= hi_.size() and lo_.size() <= hi_.size() + 1
     while (lo_.size() > hi_.size() + 1) {
       auto it = lo_.end();
       --it;
@@ -75,8 +76,8 @@ class SlidingMedian {
     }
   }
 
-  std::multiset<float> lo_;  // Lower half (max at end)
-  std::multiset<float> hi_;  // Upper half (min at begin)
+  std::multiset<float> lo_;  ///< Lower half (max at end)
+  std::multiset<float> hi_;  ///< Upper half (min at begin)
 };
 
 /// @brief Computes median of values in a buffer.
@@ -93,7 +94,7 @@ float compute_median(float* values, size_t n) {
   std::nth_element(values, values + mid, values + n);
 
   if (n % 2 == 0) {
-    // For even-sized arrays, find max of lower half
+    /// For even-sized arrays, find max of lower half
     float median_high = values[mid];
     float median_low = *std::max_element(values, values + mid);
     return (median_low + median_high) / 2.0f;
@@ -111,17 +112,17 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
   int half = kernel_size / 2;
   std::vector<float> result(n_bins * n_frames);
 
-  // Pre-allocate buffer for window values (boundary regions only)
+  /// Pre-allocate buffer for window values (boundary regions only)
   std::vector<float> window(kernel_size);
 
-  // Reuse SlidingMedian across rows to reduce allocation overhead
+  /// Reuse SlidingMedian across rows to reduce allocation overhead
   SlidingMedian sm;
 
   for (int k = 0; k < n_bins; ++k) {
     const float* row = magnitude + k * n_frames;
     float* out_row = result.data() + k * n_frames;
 
-    // Left boundary region (partial window) - use nth_element
+    /// Left boundary region (partial window) - use nth_element
     for (int t = 0; t < std::min(half, n_frames); ++t) {
       int start = 0;
       int end = std::min(t + half + 1, n_frames);
@@ -130,17 +131,17 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
       out_row[t] = compute_median(window.data(), count);
     }
 
-    // Middle region - use sliding window median O(n log k)
+    /// Middle region - use sliding window median O(n log k)
     if (n_frames > 2 * half) {
       sm.clear();
 
-      // Initialize window with first kernel_size elements
+      /// Initialize window with first kernel_size elements
       for (int i = 0; i < kernel_size; ++i) {
         sm.insert(row[i]);
       }
       out_row[half] = sm.median();
 
-      // Slide window
+      /// Slide window
       for (int t = half + 1; t < n_frames - half; ++t) {
         sm.erase(row[t - half - 1]);
         sm.insert(row[t + half]);
@@ -148,7 +149,7 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
       }
     }
 
-    // Right boundary region (partial window) - use nth_element
+    /// Right boundary region (partial window) - use nth_element
     for (int t = std::max(half, n_frames - half); t < n_frames; ++t) {
       int start = std::max(0, t - half);
       int end = n_frames;
@@ -169,14 +170,14 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   int half = kernel_size / 2;
   std::vector<float> result(n_bins * n_frames);
 
-  // Pre-allocate buffer for window values (boundary regions only)
+  /// Pre-allocate buffer for window values (boundary regions only)
   std::vector<float> window(kernel_size);
 
-  // Reuse SlidingMedian across columns to reduce allocation overhead
+  /// Reuse SlidingMedian across columns to reduce allocation overhead
   SlidingMedian sm;
 
   for (int t = 0; t < n_frames; ++t) {
-    // Top boundary region (partial window) - use nth_element
+    /// Top boundary region (partial window) - use nth_element
     for (int k = 0; k < std::min(half, n_bins); ++k) {
       int start = 0;
       int end = std::min(k + half + 1, n_bins);
@@ -187,17 +188,17 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
       result[k * n_frames + t] = compute_median(window.data(), count);
     }
 
-    // Middle region - use sliding window median O(n log k)
+    /// Middle region - use sliding window median O(n log k)
     if (n_bins > 2 * half) {
       sm.clear();
 
-      // Initialize window with first kernel_size elements
+      /// Initialize window with first kernel_size elements
       for (int i = 0; i < kernel_size; ++i) {
         sm.insert(magnitude[i * n_frames + t]);
       }
       result[half * n_frames + t] = sm.median();
 
-      // Slide window
+      /// Slide window
       for (int k = half + 1; k < n_bins - half; ++k) {
         sm.erase(magnitude[(k - half - 1) * n_frames + t]);
         sm.insert(magnitude[(k + half) * n_frames + t]);
@@ -205,7 +206,7 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
       }
     }
 
-    // Bottom boundary region (partial window) - use nth_element
+    /// Bottom boundary region (partial window) - use nth_element
     for (int k = std::max(half, n_bins - half); k < n_bins; ++k) {
       int start = std::max(0, k - half);
       int end = n_bins;
@@ -226,27 +227,27 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
 
-  // Get magnitude spectrum
+  /// Get magnitude spectrum
   const std::vector<float>& magnitude = spec.magnitude();
 
-  // Apply median filters
+  /// Apply median filters
   std::vector<float> harmonic_enhanced =
       median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
   std::vector<float> percussive_enhanced =
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  // Compute masks using Eigen for vectorized power and division
+  /// Compute masks using Eigen for vectorized power and division
   int total_size = n_bins * n_frames;
   std::vector<float> harmonic_mask(total_size);
   std::vector<float> percussive_mask(total_size);
 
   constexpr float kEps = 1e-10f;
 
-  // Map enhanced arrays to Eigen
+  /// Map enhanced arrays to Eigen
   Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
   Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
 
-  // Compute power using Eigen
+  /// Compute power using Eigen
   Eigen::ArrayXf h_pow = h_enh.pow(config.power);
   Eigen::ArrayXf p_pow = p_enh.pow(config.power);
 
@@ -254,7 +255,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
 
   if (config.use_soft_mask) {
-    // Soft mask with margins
+    /// Soft mask with margins
     Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
     Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
     Eigen::ArrayXf total = h_margin + p_margin + kEps;
@@ -262,12 +263,12 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
     h_mask = h_margin / total;
     p_mask = p_margin / total;
   } else {
-    // Hard mask: h >= p -> harmonic=1, else percussive=1
+    /// Hard mask: h >= p -> harmonic=1, else percussive=1
     h_mask = (h_pow >= p_pow).cast<float>();
     p_mask = 1.0f - h_mask;
   }
 
-  // Apply masks to complex spectrum using Eigen
+  /// Apply masks to complex spectrum using Eigen
   const std::complex<float>* complex_data = spec.complex_data();
 
   std::vector<std::complex<float>> harmonic_complex(total_size);
@@ -280,7 +281,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   harm_out = complex_map * h_mask;
   perc_out = complex_map * p_mask;
 
-  // Create result spectrograms
+  /// Create result spectrograms
   HpssSpectrogramResult result;
   result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
                                               spec.n_fft(), spec.hop_length(), spec.sample_rate());
@@ -294,13 +295,13 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
 HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute STFT
+  /// Compute STFT
   Spectrogram spec = Spectrogram::compute(audio, stft_config);
 
-  // Apply HPSS
+  /// Apply HPSS
   HpssSpectrogramResult spec_result = hpss(spec, config);
 
-  // Convert back to audio
+  /// Convert back to audio
   HpssAudioResult result;
   result.harmonic = spec_result.harmonic.to_audio(static_cast<int>(audio.size()));
   result.percussive = spec_result.percussive.to_audio(static_cast<int>(audio.size()));
@@ -325,16 +326,16 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
 
-  // Get magnitude spectrum
+  /// Get magnitude spectrum
   const std::vector<float>& magnitude = spec.magnitude();
 
-  // Apply median filters
+  /// Apply median filters
   std::vector<float> harmonic_enhanced =
       median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
   std::vector<float> percussive_enhanced =
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  // Compute masks for three-way split using Eigen
+  /// Compute masks for three-way split using Eigen
   int total_size = n_bins * n_frames;
   std::vector<float> harmonic_mask(total_size);
   std::vector<float> percussive_mask(total_size);
@@ -342,11 +343,11 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 
   constexpr float kEps = 1e-10f;
 
-  // Map enhanced arrays to Eigen
+  /// Map enhanced arrays to Eigen
   Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
   Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
 
-  // Compute power using Eigen
+  /// Compute power using Eigen
   Eigen::ArrayXf h_pow = h_enh.pow(config.power);
   Eigen::ArrayXf p_pow = p_enh.pow(config.power);
 
@@ -355,7 +356,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   Eigen::Map<Eigen::ArrayXf> r_mask(residual_mask.data(), total_size);
 
   if (config.use_soft_mask) {
-    // Soft masks with margins
+    /// Soft masks with margins
     Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
     Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
     Eigen::ArrayXf total = h_margin + p_margin + kEps;
@@ -363,28 +364,28 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
     h_mask = h_margin / total;
     p_mask = p_margin / total;
 
-    // Residual is 1 - sum when margins < 1
+    /// Residual is 1 - sum when margins < 1
     Eigen::ArrayXf mask_sum = h_mask + p_mask;
     r_mask = (1.0f - mask_sum).max(0.0f);
 
-    // Renormalize where residual > 0
+    /// Renormalize where residual > 0
     Eigen::ArrayXf total_all = mask_sum + r_mask;
     h_mask /= total_all;
     p_mask /= total_all;
     r_mask /= total_all;
   } else {
-    // Hard mask: residual is where neither dominates clearly
+    /// Hard mask: residual is where neither dominates clearly
     Eigen::ArrayXf ratio = (h_pow + kEps) / (p_pow + kEps);
 
-    // ratio > 2.0 -> harmonic only
-    // ratio < 0.5 -> percussive only
-    // else -> residual
+    /// ratio > 2.0 -> harmonic only
+    /// ratio < 0.5 -> percussive only
+    /// else -> residual
     h_mask = (ratio > 2.0f).cast<float>();
     p_mask = (ratio < 0.5f).cast<float>();
     r_mask = 1.0f - h_mask - p_mask;
   }
 
-  // Apply masks to complex spectrum using Eigen
+  /// Apply masks to complex spectrum using Eigen
   const std::complex<float>* complex_data = spec.complex_data();
 
   std::vector<std::complex<float>> harmonic_complex(total_size);
@@ -400,7 +401,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   perc_out = complex_map * p_mask;
   res_out = complex_map * r_mask;
 
-  // Create result spectrograms
+  /// Create result spectrograms
   HpssSpectrogramResultWithResidual result;
   result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
                                               spec.n_fft(), spec.hop_length(), spec.sample_rate());
@@ -417,13 +418,13 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssCon
                                                const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute STFT
+  /// Compute STFT
   Spectrogram spec = Spectrogram::compute(audio, stft_config);
 
-  // Apply HPSS with residual
+  /// Apply HPSS with residual
   HpssSpectrogramResultWithResidual spec_result = hpss_with_residual(spec, config);
 
-  // Convert back to audio
+  /// Convert back to audio
   HpssAudioResultWithResidual result;
   result.harmonic = spec_result.harmonic.to_audio(static_cast<int>(audio.size()));
   result.percussive = spec_result.percussive.to_audio(static_cast<int>(audio.size()));

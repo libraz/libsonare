@@ -47,6 +47,7 @@ add_executable(sonare_tests
   analysis/melody_analyzer_test.cpp
   analysis/section_analyzer_test.cpp
   analysis/music_analyzer_test.cpp
+  streaming/stream_analyzer_test.cpp
   api/quick_test.cpp
   api/sonare_c_test.cpp
   librosa/convert_test.cpp

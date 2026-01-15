@@ -13,11 +13,11 @@ std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk)
   SONARE_CHECK(n_mels > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(fmax > fmin, ErrorCode::InvalidParameter);
 
-  // Convert frequency range to Mel scale
+  /// Convert frequency range to Mel scale
   float mel_min = htk ? hz_to_mel_htk(fmin) : hz_to_mel(fmin);
   float mel_max = htk ? hz_to_mel_htk(fmax) : hz_to_mel(fmax);
 
-  // Create n_mels+2 points equally spaced in Mel scale
+  /// Create n_mels+2 points equally spaced in Mel scale
   int n_points = n_mels + 2;
   std::vector<float> freqs(n_points);
 
@@ -41,17 +41,17 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
   SONARE_CHECK(fmax > fmin, ErrorCode::InvalidParameter);
   SONARE_CHECK(fmax <= static_cast<float>(sr) / 2.0f, ErrorCode::InvalidParameter);
 
-  // Get Mel frequency points
+  /// Get Mel frequency points
   std::vector<float> mel_freqs = mel_frequencies(config.n_mels, fmin, fmax, config.htk);
 
-  // Convert frequencies to FFT bin indices (can be fractional)
+  /// Convert frequencies to FFT bin indices (can be fractional)
   std::vector<float> bin_freqs(mel_freqs.size());
   float bin_width = static_cast<float>(sr) / n_fft;
   for (size_t i = 0; i < mel_freqs.size(); ++i) {
     bin_freqs[i] = mel_freqs[i] / bin_width;
   }
 
-  // Create filterbank matrix [n_mels x n_bins]
+  /// Create filterbank matrix [n_mels x n_bins]
   std::vector<float> filterbank(config.n_mels * n_bins, 0.0f);
 
   for (int m = 0; m < config.n_mels; ++m) {
@@ -59,24 +59,24 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
     float center = bin_freqs[m + 1];
     float right = bin_freqs[m + 2];
 
-    // Create triangular filter
+    /// Create triangular filter
     for (int k = 0; k < n_bins; ++k) {
       float bin = static_cast<float>(k);
 
       if (bin >= left && bin <= center) {
-        // Rising edge
+        /// Rising edge
         if (center > left) {
           filterbank[m * n_bins + k] = (bin - left) / (center - left);
         }
       } else if (bin > center && bin <= right) {
-        // Falling edge
+        /// Falling edge
         if (right > center) {
           filterbank[m * n_bins + k] = (right - bin) / (right - center);
         }
       }
     }
 
-    // Apply Slaney normalization (area normalization)
+    /// Apply Slaney normalization (area normalization)
     if (config.norm == MelNorm::Slaney) {
       float enorm = 2.0f / (mel_freqs[m + 2] - mel_freqs[m]);
       for (int k = 0; k < n_bins; ++k) {

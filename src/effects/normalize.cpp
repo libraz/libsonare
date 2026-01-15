@@ -52,7 +52,7 @@ Audio apply_gain(const Audio& audio, float gain_db) {
 
   for (size_t i = 0; i < audio.size(); ++i) {
     samples[i] = data[i] * gain_linear;
-    // Clip to [-1, 1]
+    /// Clip to [-1, 1]
     samples[i] = std::max(-1.0f, std::min(1.0f, samples[i]));
   }
 
@@ -65,7 +65,7 @@ Audio normalize(const Audio& audio, float target_db) {
   float current_peak = peak_db(audio);
 
   if (std::isinf(current_peak)) {
-    return audio;  // Silent audio, nothing to normalize
+    return audio;  ///< Silent audio, nothing to normalize
   }
 
   float gain = target_db - current_peak;
@@ -78,7 +78,7 @@ Audio normalize_rms(const Audio& audio, float target_db) {
   float current_rms = rms_db(audio);
 
   if (std::isinf(current_rms)) {
-    return audio;  // Silent audio
+    return audio;  ///< Silent audio
   }
 
   float gain = target_db - current_rms;
@@ -93,7 +93,7 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
   const float* data = audio.data();
   size_t n_samples = audio.size();
 
-  // Find start (first frame above threshold)
+  /// Find start (first frame above threshold)
   size_t start = 0;
   for (size_t pos = 0; pos + frame_length <= n_samples; pos += hop_length) {
     float rms = 0.0f;
@@ -108,7 +108,7 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
     }
   }
 
-  // Find end (last frame above threshold)
+  /// Find end (last frame above threshold)
   size_t end = n_samples;
   for (size_t pos = n_samples - frame_length; pos > 0; pos -= hop_length) {
     float rms = 0.0f;
@@ -126,7 +126,7 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
   }
 
   if (start >= end) {
-    return {0, n_samples};  // All silent or invalid, return original bounds
+    return {0, n_samples};  ///< All silent or invalid, return original bounds
   }
 
   return {start, end};
@@ -138,7 +138,7 @@ Audio trim(const Audio& audio, float threshold_db, int frame_length, int hop_len
   auto [start, end] = detect_silence_boundaries(audio, threshold_db, frame_length, hop_length);
 
   if (start == 0 && end == audio.size()) {
-    return audio;  // No trimming needed
+    return audio;  ///< No trimming needed
   }
 
   return audio.slice_samples(start, end);
@@ -156,7 +156,7 @@ Audio fade_in(const Audio& audio, float duration_sec) {
   for (size_t i = 0; i < audio.size(); ++i) {
     float gain = 1.0f;
     if (i < fade_samples) {
-      // Cosine fade for smooth transition
+      /// Cosine fade for smooth transition
       float t = static_cast<float>(i) / static_cast<float>(fade_samples);
       gain = 0.5f * (1.0f - std::cos(M_PI * t));
     }

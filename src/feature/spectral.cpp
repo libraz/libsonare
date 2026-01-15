@@ -38,20 +38,20 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
                                      int n_fft) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
 
-  // Create frequency vector
+  /// Create frequency vector
   Eigen::VectorXf freqs = bin_frequencies_eigen(n_bins, sr, n_fft);
 
-  // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
+  /// Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
       mag_map(magnitude, n_bins, n_frames);
 
-  // Compute weighted sum: freqs^T * mag (produces row vector of length n_frames)
+  /// Compute weighted sum: freqs^T * mag (produces row vector of length n_frames)
   Eigen::RowVectorXf sum_weighted = freqs.transpose() * mag_map;
 
-  // Compute magnitude sum per frame
+  /// Compute magnitude sum per frame
   Eigen::RowVectorXf sum_mag = mag_map.colwise().sum();
 
-  // Compute centroid with division safety
+  /// Compute centroid with division safety
   std::vector<float> centroid(n_frames);
   Eigen::Map<Eigen::RowVectorXf> result_map(centroid.data(), n_frames);
   result_map = sum_weighted.array() / (sum_mag.array() + 1e-10f);

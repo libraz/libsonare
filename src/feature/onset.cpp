@@ -18,17 +18,17 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
   int n_frames = mel_spec.n_frames();
   const float* power = mel_spec.power_data();
 
-  // Map power data to Eigen matrix [n_mels x n_frames] (row-major)
+  /// Map power data to Eigen matrix [n_mels x n_frames] (row-major)
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
       power_map(power, n_mels, n_frames);
 
-  // Compute log power using Eigen (vectorized)
+  /// Compute log power using Eigen (vectorized)
   constexpr float kAmin = 1e-10f;
   Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
       power_map.array().max(kAmin).log();
 
-  // Compute first-order difference and half-wave rectification
-  // diff = log_power[:, lag:] - log_power[:, :-lag]
+  /// @details Compute first-order difference and half-wave rectification.
+  /// diff = log_power[:, lag:] - log_power[:, :-lag]
   std::vector<float> onset_env(n_frames, 0.0f);
 
   if (n_frames > config.lag) {
@@ -43,13 +43,13 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
     env_map = diff.array().max(0.0f).colwise().sum();
   }
 
-  // Detrend: remove mean
+  /// Detrend: remove mean
   if (config.detrend && n_frames > 0) {
     Eigen::Map<Eigen::ArrayXf> env_array(onset_env.data(), n_frames);
     env_array -= env_array.mean();
   }
 
-  // Center: normalize by standard deviation
+  /// Center: normalize by standard deviation
   if (config.center && n_frames > 1) {
     Eigen::Map<Eigen::ArrayXf> env_array(onset_env.data(), n_frames);
     float mean = env_array.mean();

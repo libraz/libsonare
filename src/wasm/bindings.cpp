@@ -31,6 +31,7 @@
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "quick.h"
+#include "streaming/stream_analyzer.h"
 
 using namespace emscripten;
 using namespace sonare;
@@ -599,6 +600,145 @@ val js_resample(val samples, int src_sr, int target_sr) {
 }
 
 // ============================================================================
+// Streaming - StreamAnalyzer
+// ============================================================================
+
+/// @brief Helper to convert uint8 vector to Uint8Array.
+val vectorToUint8Array(const std::vector<uint8_t>& vec) {
+  val result = val::global("Uint8Array").new_(vec.size());
+  for (size_t i = 0; i < vec.size(); ++i) {
+    result.set(i, vec[i]);
+  }
+  return result;
+}
+
+/// @brief Helper to convert int16 vector to Int16Array.
+val vectorToInt16Array(const std::vector<int16_t>& vec) {
+  val result = val::global("Int16Array").new_(vec.size());
+  for (size_t i = 0; i < vec.size(); ++i) {
+    result.set(i, vec[i]);
+  }
+  return result;
+}
+
+/// @brief JavaScript wrapper for StreamAnalyzer.
+class StreamAnalyzerWrapper {
+ public:
+  StreamAnalyzerWrapper(int sample_rate, int n_fft, int hop_length, int n_mels,
+                        bool compute_mel, bool compute_chroma, bool compute_onset,
+                        int emit_every_n_frames) {
+    StreamConfig config;
+    config.sample_rate = sample_rate;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    config.n_mels = n_mels;
+    config.compute_mel = compute_mel;
+    config.compute_chroma = compute_chroma;
+    config.compute_onset = compute_onset;
+    config.emit_every_n_frames = emit_every_n_frames;
+    analyzer_ = std::make_unique<StreamAnalyzer>(config);
+  }
+
+  void process(val samples) {
+    std::vector<float> data = vecFromJSArray<float>(samples);
+    analyzer_->process(data.data(), data.size());
+  }
+
+  void processWithOffset(val samples, size_t sample_offset) {
+    std::vector<float> data = vecFromJSArray<float>(samples);
+    analyzer_->process(data.data(), data.size(), sample_offset);
+  }
+
+  size_t availableFrames() const { return analyzer_->available_frames(); }
+
+  /// @brief Reads frames in Float32 SOA format.
+  val readFramesSoa(size_t max_frames) {
+    FrameBuffer buffer;
+    analyzer_->read_frames_soa(max_frames, buffer);
+
+    val out = val::object();
+    out.set("nFrames", buffer.n_frames);
+    out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
+    out.set("mel", vectorToFloat32Array(buffer.mel));
+    out.set("chroma", vectorToFloat32Array(buffer.chroma));
+    out.set("onsetStrength", vectorToFloat32Array(buffer.onset_strength));
+    out.set("rmsEnergy", vectorToFloat32Array(buffer.rms_energy));
+    out.set("spectralCentroid", vectorToFloat32Array(buffer.spectral_centroid));
+    out.set("spectralFlatness", vectorToFloat32Array(buffer.spectral_flatness));
+    return out;
+  }
+
+  /// @brief Reads frames in quantized Uint8 format (4x bandwidth reduction).
+  val readFramesU8(size_t max_frames) {
+    QuantizedFrameBufferU8 buffer;
+    QuantizeConfig qconfig;
+    analyzer_->read_frames_quantized_u8(max_frames, buffer, qconfig);
+
+    val out = val::object();
+    out.set("nFrames", buffer.n_frames);
+    out.set("nMels", buffer.n_mels);
+    out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
+    out.set("mel", vectorToUint8Array(buffer.mel));
+    out.set("chroma", vectorToUint8Array(buffer.chroma));
+    out.set("onsetStrength", vectorToUint8Array(buffer.onset_strength));
+    out.set("rmsEnergy", vectorToUint8Array(buffer.rms_energy));
+    out.set("spectralCentroid", vectorToUint8Array(buffer.spectral_centroid));
+    out.set("spectralFlatness", vectorToUint8Array(buffer.spectral_flatness));
+    return out;
+  }
+
+  /// @brief Reads frames in quantized Int16 format (2x bandwidth reduction).
+  val readFramesI16(size_t max_frames) {
+    QuantizedFrameBufferI16 buffer;
+    QuantizeConfig qconfig;
+    analyzer_->read_frames_quantized_i16(max_frames, buffer, qconfig);
+
+    val out = val::object();
+    out.set("nFrames", buffer.n_frames);
+    out.set("nMels", buffer.n_mels);
+    out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
+    out.set("mel", vectorToInt16Array(buffer.mel));
+    out.set("chroma", vectorToInt16Array(buffer.chroma));
+    out.set("onsetStrength", vectorToInt16Array(buffer.onset_strength));
+    out.set("rmsEnergy", vectorToInt16Array(buffer.rms_energy));
+    out.set("spectralCentroid", vectorToInt16Array(buffer.spectral_centroid));
+    out.set("spectralFlatness", vectorToInt16Array(buffer.spectral_flatness));
+    return out;
+  }
+
+  void reset(size_t base_sample_offset) { analyzer_->reset(base_sample_offset); }
+
+  val stats() {
+    AnalyzerStats s = analyzer_->stats();
+
+    val out = val::object();
+    out.set("totalFrames", s.total_frames);
+    out.set("totalSamples", static_cast<int>(s.total_samples));
+    out.set("durationSeconds", s.duration_seconds);
+
+    val estimate = val::object();
+    estimate.set("bpm", s.estimate.bpm);
+    estimate.set("bpmConfidence", s.estimate.bpm_confidence);
+    estimate.set("bpmCandidateCount", s.estimate.bpm_candidate_count);
+    estimate.set("key", s.estimate.key);
+    estimate.set("keyMinor", s.estimate.key_minor);
+    estimate.set("keyConfidence", s.estimate.key_confidence);
+    estimate.set("accumulatedSeconds", s.estimate.accumulated_seconds);
+    estimate.set("usedFrames", s.estimate.used_frames);
+    estimate.set("updated", s.estimate.updated);
+    out.set("estimate", estimate);
+
+    return out;
+  }
+
+  int frameCount() const { return analyzer_->frame_count(); }
+  float currentTime() const { return analyzer_->current_time(); }
+
+ private:
+  std::unique_ptr<StreamAnalyzer> analyzer_;
+};
+
+// ============================================================================
 // Version
 // ============================================================================
 
@@ -699,6 +839,20 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   // Core - Resample
   function("resample", &js_resample);
+
+  // Streaming - StreamAnalyzer
+  class_<StreamAnalyzerWrapper>("StreamAnalyzer")
+      .constructor<int, int, int, int, bool, bool, bool, int>()
+      .function("process", &StreamAnalyzerWrapper::process)
+      .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
+      .function("availableFrames", &StreamAnalyzerWrapper::availableFrames)
+      .function("readFramesSoa", &StreamAnalyzerWrapper::readFramesSoa)
+      .function("readFramesU8", &StreamAnalyzerWrapper::readFramesU8)
+      .function("readFramesI16", &StreamAnalyzerWrapper::readFramesI16)
+      .function("reset", &StreamAnalyzerWrapper::reset)
+      .function("stats", &StreamAnalyzerWrapper::stats)
+      .function("frameCount", &StreamAnalyzerWrapper::frameCount)
+      .function("currentTime", &StreamAnalyzerWrapper::currentTime);
 }
 
 #endif  // __EMSCRIPTEN__

@@ -52,6 +52,7 @@ set(SONARE_SOURCES
   analysis/melody_analyzer.cpp
   analysis/section_analyzer.cpp
   analysis/music_analyzer.cpp
+  streaming/stream_analyzer.cpp
   quick.cpp
   sonare_c.cpp
 )

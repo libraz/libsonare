@@ -1,0 +1,765 @@
+#include "streaming/stream_analyzer.h"
+
+#include <algorithm>
+#include <cmath>
+#include <numeric>
+
+#include "core/fft.h"
+#include "core/window.h"
+#include "filters/chroma.h"
+#include "filters/mel.h"
+#include "util/math_utils.h"
+
+namespace sonare {
+
+namespace {
+
+constexpr float kEpsilon = 1e-10f;
+constexpr float kLogAmin = 1e-10f;
+
+/// @brief Computes bin frequencies.
+std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft) {
+  std::vector<float> freqs(n_bins);
+  float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
+  for (int i = 0; i < n_bins; ++i) {
+    freqs[i] = static_cast<float>(i) * bin_width;
+  }
+  return freqs;
+}
+
+/// @brief Computes spectral centroid for a single frame.
+float compute_centroid_frame(const float* magnitude, int n_bins, const float* frequencies) {
+  float sum_weighted = 0.0f;
+  float sum_mag = 0.0f;
+  for (int k = 0; k < n_bins; ++k) {
+    sum_weighted += frequencies[k] * magnitude[k];
+    sum_mag += magnitude[k];
+  }
+  return sum_mag > kEpsilon ? sum_weighted / sum_mag : 0.0f;
+}
+
+/// @brief Computes spectral flatness for a single frame.
+/// @details Flatness = geometric_mean / arithmetic_mean.
+float compute_flatness_frame(const float* magnitude, int n_bins) {
+  float sum = 0.0f;
+  float log_sum = 0.0f;
+  int count = 0;
+
+  for (int k = 0; k < n_bins; ++k) {
+    float val = magnitude[k];
+    if (val > kEpsilon) {
+      sum += val;
+      log_sum += std::log(val);
+      ++count;
+    }
+  }
+
+  if (count == 0 || sum < kEpsilon) {
+    return 0.0f;
+  }
+
+  float arithmetic_mean = sum / static_cast<float>(count);
+  float geometric_mean = std::exp(log_sum / static_cast<float>(count));
+
+  return geometric_mean / arithmetic_mean;
+}
+
+/// @brief Computes RMS for a single frame.
+float compute_rms_frame(const float* samples, int n_fft) {
+  float sum_sq = 0.0f;
+  for (int i = 0; i < n_fft; ++i) {
+    sum_sq += samples[i] * samples[i];
+  }
+  return std::sqrt(sum_sq / static_cast<float>(n_fft));
+}
+
+/// @brief BPM detection constants for streaming.
+constexpr float kBpmMin = 60.0f;
+constexpr float kBpmMax = 200.0f;
+constexpr int kMinOnsetFrames = 100;  ///< Minimum frames for BPM estimation (~2-3 seconds)
+
+/// @brief Converts lag (in frames) to BPM.
+/// @param lag Lag in frames
+/// @param sr Sample rate
+/// @param hop_length Hop length
+/// @return BPM value
+float lag_to_bpm(int lag, int sr, int hop_length) {
+  if (lag <= 0) return 0.0f;
+  float seconds_per_beat = static_cast<float>(lag * hop_length) / static_cast<float>(sr);
+  return 60.0f / seconds_per_beat;
+}
+
+/// @brief Converts BPM to lag (in frames).
+/// @param bpm BPM value
+/// @param sr Sample rate
+/// @param hop_length Hop length
+/// @return Lag in frames
+int bpm_to_lag(float bpm, int sr, int hop_length) {
+  if (bpm <= 0.0f) return 0;
+  float seconds_per_beat = 60.0f / bpm;
+  return static_cast<int>(seconds_per_beat * static_cast<float>(sr) /
+                          static_cast<float>(hop_length));
+}
+
+/// @brief Computes autocorrelation using FFT (Wiener-Khinchin theorem).
+/// @param signal Input signal
+/// @param max_lag Maximum lag to compute
+/// @return Normalized autocorrelation values [0, max_lag)
+std::vector<float> compute_autocorrelation_streaming(const std::vector<float>& signal, int max_lag) {
+  int n = static_cast<int>(signal.size());
+  std::vector<float> autocorr(max_lag, 0.0f);
+
+  if (n == 0 || max_lag <= 0) {
+    return autocorr;
+  }
+
+  // Compute mean
+  float mean_val = 0.0f;
+  for (float val : signal) {
+    mean_val += val;
+  }
+  mean_val /= static_cast<float>(n);
+
+  // Compute variance
+  float var = 0.0f;
+  for (float val : signal) {
+    float diff = val - mean_val;
+    var += diff * diff;
+  }
+
+  if (var < kEpsilon) {
+    return autocorr;
+  }
+
+  // Zero-pad to at least 2*n to avoid circular correlation artifacts
+  int fft_size = next_power_of_2(2 * n);
+
+  // Prepare zero-mean, zero-padded signal
+  std::vector<float> padded(fft_size, 0.0f);
+  for (int i = 0; i < n; ++i) {
+    padded[i] = signal[i] - mean_val;
+  }
+
+  // FFT-based autocorrelation
+  FFT fft(fft_size);
+  int n_bins = fft.n_bins();
+
+  std::vector<std::complex<float>> spectrum(n_bins);
+  fft.forward(padded.data(), spectrum.data());
+
+  // Compute power spectrum (|FFT(x)|^2)
+  for (int i = 0; i < n_bins; ++i) {
+    float re = spectrum[i].real();
+    float im = spectrum[i].imag();
+    spectrum[i] = std::complex<float>(re * re + im * im, 0.0f);
+  }
+
+  // Inverse FFT to get autocorrelation
+  std::vector<float> raw_autocorr(fft_size);
+  fft.inverse(spectrum.data(), raw_autocorr.data());
+
+  // Normalize by variance and extract relevant lags
+  float norm_factor = var * static_cast<float>(n);
+  for (int lag = 0; lag < max_lag && lag < n; ++lag) {
+    autocorr[lag] = raw_autocorr[lag] / norm_factor;
+  }
+
+  return autocorr;
+}
+
+/// @brief Finds the best tempo peak in autocorrelation.
+/// @param autocorr Autocorrelation values
+/// @param sr Sample rate
+/// @param hop_length Hop length
+/// @param bpm_min Minimum BPM
+/// @param bpm_max Maximum BPM
+/// @return Pair of (bpm, confidence)
+std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int sr,
+                                         int hop_length, float bpm_min, float bpm_max) {
+  int lag_min = bpm_to_lag(bpm_max, sr, hop_length);
+  int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
+
+  lag_min = std::max(1, lag_min);
+  lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
+
+  if (lag_min >= lag_max) {
+    return {120.0f, 0.0f};  // Default
+  }
+
+  // Find all local maxima and their weights
+  std::vector<std::pair<float, float>> candidates;  // (bpm, weight)
+
+  for (int lag = lag_min + 1; lag < lag_max - 1; ++lag) {
+    if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1] &&
+        autocorr[lag] > 0.0f) {
+      float bpm = lag_to_bpm(lag, sr, hop_length);
+      if (bpm >= bpm_min && bpm <= bpm_max) {
+        candidates.emplace_back(bpm, autocorr[lag]);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    return {120.0f, 0.0f};
+  }
+
+  // Find maximum weight
+  float max_weight = 0.0f;
+  for (const auto& c : candidates) {
+    max_weight = std::max(max_weight, c.second);
+  }
+
+  // Prefer BPM in common range (80-180) with reasonable weight
+  constexpr float kCommonBpmMin = 80.0f;
+  constexpr float kCommonBpmMax = 180.0f;
+  constexpr float kWeightThreshold = 0.3f;
+
+  float best_bpm = 0.0f;
+  float best_weight = 0.0f;
+
+  // First, look for candidates in common range
+  for (const auto& [bpm, weight] : candidates) {
+    if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax &&
+        weight >= kWeightThreshold * max_weight) {
+      if (weight > best_weight) {
+        best_bpm = bpm;
+        best_weight = weight;
+      }
+    }
+  }
+
+  // If no good candidate in common range, take the best overall
+  if (best_bpm == 0.0f) {
+    for (const auto& [bpm, weight] : candidates) {
+      if (weight > best_weight) {
+        best_bpm = bpm;
+        best_weight = weight;
+      }
+    }
+  }
+
+  // Confidence is the relative weight
+  float confidence = (max_weight > 0.0f) ? best_weight / max_weight : 0.0f;
+
+  return {best_bpm, confidence};
+}
+
+/// @brief Quantizes a float value to uint8 (0-255).
+/// @param value Input value
+/// @param min_val Minimum expected value (maps to 0)
+/// @param max_val Maximum expected value (maps to 255)
+/// @return Quantized value
+inline uint8_t quantize_to_u8(float value, float min_val, float max_val) {
+  float normalized = (value - min_val) / (max_val - min_val);
+  normalized = std::max(0.0f, std::min(1.0f, normalized));
+  return static_cast<uint8_t>(normalized * 255.0f + 0.5f);
+}
+
+/// @brief Quantizes a float value to int16 (-32768 to 32767).
+/// @param value Input value
+/// @param min_val Minimum expected value (maps to -32768)
+/// @param max_val Maximum expected value (maps to 32767)
+/// @return Quantized value
+inline int16_t quantize_to_i16(float value, float min_val, float max_val) {
+  float normalized = (value - min_val) / (max_val - min_val);
+  normalized = std::max(0.0f, std::min(1.0f, normalized));
+  return static_cast<int16_t>(normalized * 65535.0f - 32768.0f + 0.5f);
+}
+
+/// @brief Converts mel power to dB scale.
+/// @param power Mel power value
+/// @param ref Reference value (typically 1.0)
+/// @param amin Minimum amplitude for clipping
+/// @return dB value
+inline float power_to_db(float power, float ref = 1.0f, float amin = 1e-10f) {
+  return 10.0f * std::log10(std::max(power, amin) / ref);
+}
+
+}  // namespace
+
+StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
+  int n_bins = config_.n_bins();
+
+  /// Initialize FFT
+  fft_ = std::make_unique<FFT>(config_.n_fft);
+
+  /// Cache window function
+  window_ = get_window_cached(config_.window, config_.n_fft);
+
+  /// Pre-compute mel filterbank
+  if (config_.compute_mel) {
+    MelFilterConfig mel_config;
+    mel_config.n_mels = config_.n_mels;
+    mel_config.fmin = config_.fmin;
+    mel_config.fmax = config_.effective_fmax();
+    mel_filterbank_ = create_mel_filterbank(config_.sample_rate, config_.n_fft, mel_config);
+  }
+
+  /// Pre-compute chroma filterbank
+  if (config_.compute_chroma) {
+    ChromaFilterConfig chroma_config;
+    chroma_config.n_chroma = 12;
+    chroma_config.tuning = 0.0f;  ///< @todo Use tuning_ref_hz
+    chroma_filterbank_ = create_chroma_filterbank(config_.sample_rate, config_.n_fft, chroma_config);
+  }
+
+  /// Pre-compute frequencies for spectral features
+  if (config_.compute_spectral) {
+    frequencies_ = compute_bin_frequencies(n_bins, config_.sample_rate, config_.n_fft);
+  }
+
+  /// Allocate working buffers
+  frame_buffer_.resize(config_.n_fft);
+  spectrum_.resize(n_bins);
+  magnitude_.resize(n_bins);
+  power_.resize(n_bins);
+
+  if (config_.compute_mel) {
+    mel_buffer_.resize(config_.n_mels);
+    mel_log_.resize(config_.n_mels);
+    prev_mel_log_.resize(config_.n_mels, 0.0f);
+  }
+
+  if (config_.compute_chroma) {
+    chroma_buffer_.resize(12);
+    chroma_sum_.fill(0.0f);
+  }
+
+  /// Reserve overlap buffer capacity
+  overlap_buffer_.reserve(config_.overlap());
+}
+
+StreamAnalyzer::~StreamAnalyzer() = default;
+
+StreamAnalyzer::StreamAnalyzer(StreamAnalyzer&&) noexcept = default;
+StreamAnalyzer& StreamAnalyzer::operator=(StreamAnalyzer&&) noexcept = default;
+
+void StreamAnalyzer::process(const float* samples, size_t n_samples) {
+  process_internal(samples, n_samples);
+}
+
+void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t sample_offset) {
+  /// Sync cumulative samples with external offset
+  cumulative_samples_ = sample_offset;
+  process_internal(samples, n_samples);
+}
+
+void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
+  if (samples == nullptr || n_samples == 0) {
+    return;
+  }
+
+  /// Append new samples to overlap buffer
+  size_t prev_size = overlap_buffer_.size();
+  overlap_buffer_.resize(prev_size + n_samples);
+  std::copy(samples, samples + n_samples, overlap_buffer_.begin() + prev_size);
+
+  /// Process complete frames
+  int n_fft = config_.n_fft;
+  int hop_length = config_.hop_length;
+
+  while (overlap_buffer_.size() >= static_cast<size_t>(n_fft)) {
+    /// Calculate sample offset for this frame
+    size_t frame_sample_offset = cumulative_samples_;
+
+    /// Process single frame
+    StreamFrame frame = process_single_frame(overlap_buffer_.data(), frame_sample_offset);
+
+    /// Check emit_every_n_frames
+    ++emitted_frame_count_;
+    if (emitted_frame_count_ >= config_.emit_every_n_frames) {
+      emitted_frame_count_ = 0;
+      output_buffer_.push_back(std::move(frame));
+    }
+
+    /// Slide buffer by hop_length
+    overlap_buffer_.erase(overlap_buffer_.begin(), overlap_buffer_.begin() + hop_length);
+    cumulative_samples_ += hop_length;
+    ++frame_count_;
+
+    /// Update progressive estimate if needed
+    float current_time_sec = static_cast<float>(cumulative_samples_) / config_.sample_rate;
+    update_progressive_estimate(current_time_sec);
+  }
+}
+
+StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_t sample_offset) {
+  StreamFrame frame;
+
+  /// Calculate timestamp
+  frame.timestamp = static_cast<float>(sample_offset) / static_cast<float>(config_.sample_rate);
+  frame.frame_index = frame_count_;
+
+  /// Compute STFT
+  compute_stft(frame_start);
+
+  /// Copy magnitude if requested
+  if (config_.compute_magnitude) {
+    int downsample = config_.magnitude_downsample;
+    int output_bins = config_.n_bins() / downsample;
+    frame.magnitude.resize(output_bins);
+    for (int i = 0; i < output_bins; ++i) {
+      frame.magnitude[i] = magnitude_[i * downsample];
+    }
+  }
+
+  /// Compute mel spectrogram
+  if (config_.compute_mel) {
+    compute_mel();
+    frame.mel = mel_buffer_;
+  }
+
+  /// Compute chroma
+  if (config_.compute_chroma) {
+    compute_chroma();
+    frame.chroma = chroma_buffer_;
+
+    /// Accumulate for key estimation
+    for (int i = 0; i < 12; ++i) {
+      chroma_sum_[i] += chroma_buffer_[i];
+    }
+    ++chroma_frame_count_;
+  }
+
+  /// Compute onset strength
+  if (config_.compute_onset) {
+    /// Save state before compute_onset() modifies it
+    bool had_prev_frame = has_prev_frame_;
+    frame.onset_strength = compute_onset();
+    frame.onset_valid = had_prev_frame;
+
+    /// Accumulate for BPM estimation
+    if (frame.onset_valid) {
+      onset_accumulator_.push_back(frame.onset_strength);
+    }
+  }
+
+  /// Compute spectral features
+  if (config_.compute_spectral) {
+    compute_spectral_features(frame);
+  }
+
+  /// Compute RMS energy (from time-domain)
+  frame.rms_energy = compute_rms_frame(frame_start, config_.n_fft);
+
+  return frame;
+}
+
+void StreamAnalyzer::compute_stft(const float* frame_start) {
+  /// Apply window
+  for (int i = 0; i < config_.n_fft; ++i) {
+    frame_buffer_[i] = frame_start[i] * window_[i];
+  }
+
+  /// Forward FFT
+  fft_->forward(frame_buffer_.data(), spectrum_.data());
+
+  /// Compute magnitude and power
+  int n_bins = config_.n_bins();
+  for (int k = 0; k < n_bins; ++k) {
+    float re = spectrum_[k].real();
+    float im = spectrum_[k].imag();
+    magnitude_[k] = std::sqrt(re * re + im * im);
+    power_[k] = re * re + im * im;
+  }
+}
+
+void StreamAnalyzer::compute_mel() {
+  /// Apply mel filterbank: mel = filterbank @ power
+  int n_mels = config_.n_mels;
+  int n_bins = config_.n_bins();
+
+  for (int m = 0; m < n_mels; ++m) {
+    float sum = 0.0f;
+    const float* filter_row = mel_filterbank_.data() + m * n_bins;
+    for (int k = 0; k < n_bins; ++k) {
+      sum += filter_row[k] * power_[k];
+    }
+    mel_buffer_[m] = sum;
+    mel_log_[m] = std::log(std::max(sum, kLogAmin));
+  }
+}
+
+void StreamAnalyzer::compute_chroma() {
+  /// Apply chroma filterbank: chroma = filterbank @ power
+  int n_bins = config_.n_bins();
+
+  for (int c = 0; c < 12; ++c) {
+    float sum = 0.0f;
+    const float* filter_row = chroma_filterbank_.data() + c * n_bins;
+    for (int k = 0; k < n_bins; ++k) {
+      sum += filter_row[k] * power_[k];
+    }
+    chroma_buffer_[c] = sum;
+  }
+
+  /// Normalize chroma
+  float max_val = *std::max_element(chroma_buffer_.begin(), chroma_buffer_.end());
+  if (max_val > kEpsilon) {
+    for (int c = 0; c < 12; ++c) {
+      chroma_buffer_[c] /= max_val;
+    }
+  }
+}
+
+float StreamAnalyzer::compute_onset() {
+  if (!config_.compute_mel) {
+    return 0.0f;
+  }
+
+  float onset = 0.0f;
+
+  if (has_prev_frame_) {
+    /// Onset = sum of positive differences in log mel
+    for (int m = 0; m < config_.n_mels; ++m) {
+      float diff = mel_log_[m] - prev_mel_log_[m];
+      if (diff > 0.0f) {
+        onset += diff;
+      }
+    }
+  }
+
+  /// Store current mel_log for next frame
+  prev_mel_log_ = mel_log_;
+  has_prev_frame_ = true;
+
+  return onset;
+}
+
+void StreamAnalyzer::compute_spectral_features(StreamFrame& frame) {
+  int n_bins = config_.n_bins();
+
+  /// Spectral centroid
+  frame.spectral_centroid = compute_centroid_frame(magnitude_.data(), n_bins, frequencies_.data());
+
+  /// Spectral flatness
+  frame.spectral_flatness = compute_flatness_frame(magnitude_.data(), n_bins);
+}
+
+void StreamAnalyzer::update_progressive_estimate(float current_time) {
+  current_estimate_.accumulated_seconds = current_time;
+  current_estimate_.used_frames = frame_count_;
+  current_estimate_.updated = false;
+
+  /// Update key estimate
+  if (config_.compute_chroma && chroma_frame_count_ > 0) {
+    float time_since_key_update = current_time - last_key_update_time_;
+    if (time_since_key_update >= config_.key_update_interval_sec) {
+      /// Simple key detection: find dominant pitch class
+      int max_idx = 0;
+      float max_val = 0.0f;
+      for (int c = 0; c < 12; ++c) {
+        if (chroma_sum_[c] > max_val) {
+          max_val = chroma_sum_[c];
+          max_idx = c;
+        }
+      }
+
+      current_estimate_.key = max_idx;
+      /// @todo Detect major/minor
+
+      /// Confidence increases with time
+      float confidence = std::min(1.0f, current_time / 30.0f);
+      current_estimate_.key_confidence = confidence;
+
+      last_key_update_time_ = current_time;
+      current_estimate_.updated = true;
+    }
+  }
+
+  /// Update BPM estimate
+  if (config_.compute_onset) {
+    int n_onset = static_cast<int>(onset_accumulator_.size());
+    current_estimate_.bpm_candidate_count = n_onset;
+
+    float time_since_bpm_update = current_time - last_bpm_update_time_;
+    if (time_since_bpm_update >= config_.bpm_update_interval_sec && n_onset >= kMinOnsetFrames) {
+      /// Compute max lag based on minimum BPM
+      int max_lag = bpm_to_lag(kBpmMin, config_.sample_rate, config_.hop_length);
+      max_lag = std::min(max_lag, n_onset - 1);
+
+      if (max_lag > 2) {
+        /// Compute autocorrelation
+        auto autocorr = compute_autocorrelation_streaming(onset_accumulator_, max_lag);
+
+        /// Find best tempo
+        auto [bpm, rel_confidence] = find_best_tempo(autocorr, config_.sample_rate,
+                                                      config_.hop_length, kBpmMin, kBpmMax);
+
+        current_estimate_.bpm = bpm;
+
+        /// Combine relative confidence with time-based confidence
+        /// Time factor: confidence increases as we get more data (up to 30 seconds)
+        float time_factor = std::min(1.0f, current_time / 30.0f);
+        current_estimate_.bpm_confidence = rel_confidence * time_factor;
+
+        last_bpm_update_time_ = current_time;
+        current_estimate_.updated = true;
+      }
+    }
+  }
+}
+
+size_t StreamAnalyzer::available_frames() const { return output_buffer_.size(); }
+
+std::vector<StreamFrame> StreamAnalyzer::read_frames(size_t max_frames) {
+  size_t count = std::min(max_frames, output_buffer_.size());
+  std::vector<StreamFrame> result;
+  result.reserve(count);
+
+  for (size_t i = 0; i < count; ++i) {
+    result.push_back(std::move(output_buffer_.front()));
+    output_buffer_.pop_front();
+  }
+
+  return result;
+}
+
+void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
+  buffer.clear();
+
+  size_t count = std::min(max_frames, output_buffer_.size());
+  buffer.n_frames = count;
+
+  if (count == 0) {
+    return;
+  }
+
+  buffer.reserve(count, config_.n_mels);
+
+  for (size_t i = 0; i < count; ++i) {
+    StreamFrame& frame = output_buffer_.front();
+
+    buffer.timestamps.push_back(frame.timestamp);
+    buffer.onset_strength.push_back(frame.onset_strength);
+    buffer.rms_energy.push_back(frame.rms_energy);
+    buffer.spectral_centroid.push_back(frame.spectral_centroid);
+    buffer.spectral_flatness.push_back(frame.spectral_flatness);
+
+    // Append mel (row-major)
+    buffer.mel.insert(buffer.mel.end(), frame.mel.begin(), frame.mel.end());
+
+    // Append chroma (row-major)
+    buffer.chroma.insert(buffer.chroma.end(), frame.chroma.begin(), frame.chroma.end());
+
+    output_buffer_.pop_front();
+  }
+}
+
+void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameBufferU8& buffer,
+                                               const QuantizeConfig& qconfig) {
+  buffer.clear();
+
+  size_t count = std::min(max_frames, output_buffer_.size());
+  buffer.n_frames = count;
+
+  if (count == 0) {
+    return;
+  }
+
+  buffer.reserve(count, config_.n_mels);
+
+  for (size_t i = 0; i < count; ++i) {
+    StreamFrame& frame = output_buffer_.front();
+
+    buffer.timestamps.push_back(frame.timestamp);
+
+    // Quantize mel (convert to dB first)
+    for (float mel_power : frame.mel) {
+      float db = power_to_db(mel_power);
+      buffer.mel.push_back(quantize_to_u8(db, qconfig.mel_db_min, qconfig.mel_db_max));
+    }
+
+    // Quantize chroma (already 0-1)
+    for (float c : frame.chroma) {
+      buffer.chroma.push_back(quantize_to_u8(c, 0.0f, 1.0f));
+    }
+
+    // Quantize scalar features
+    buffer.onset_strength.push_back(quantize_to_u8(frame.onset_strength, 0.0f, qconfig.onset_max));
+    buffer.rms_energy.push_back(quantize_to_u8(frame.rms_energy, 0.0f, qconfig.rms_max));
+    buffer.spectral_centroid.push_back(
+        quantize_to_u8(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
+    buffer.spectral_flatness.push_back(quantize_to_u8(frame.spectral_flatness, 0.0f, 1.0f));
+
+    output_buffer_.pop_front();
+  }
+}
+
+void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
+                                                const QuantizeConfig& qconfig) {
+  buffer.clear();
+
+  size_t count = std::min(max_frames, output_buffer_.size());
+  buffer.n_frames = count;
+
+  if (count == 0) {
+    return;
+  }
+
+  buffer.reserve(count, config_.n_mels);
+
+  for (size_t i = 0; i < count; ++i) {
+    StreamFrame& frame = output_buffer_.front();
+
+    buffer.timestamps.push_back(frame.timestamp);
+
+    // Quantize mel (convert to dB first)
+    for (float mel_power : frame.mel) {
+      float db = power_to_db(mel_power);
+      buffer.mel.push_back(quantize_to_i16(db, qconfig.mel_db_min, qconfig.mel_db_max));
+    }
+
+    // Quantize chroma (already 0-1)
+    for (float c : frame.chroma) {
+      buffer.chroma.push_back(quantize_to_i16(c, 0.0f, 1.0f));
+    }
+
+    // Quantize scalar features
+    buffer.onset_strength.push_back(quantize_to_i16(frame.onset_strength, 0.0f, qconfig.onset_max));
+    buffer.rms_energy.push_back(quantize_to_i16(frame.rms_energy, 0.0f, qconfig.rms_max));
+    buffer.spectral_centroid.push_back(
+        quantize_to_i16(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
+    buffer.spectral_flatness.push_back(quantize_to_i16(frame.spectral_flatness, 0.0f, 1.0f));
+
+    output_buffer_.pop_front();
+  }
+}
+
+void StreamAnalyzer::reset(size_t base_sample_offset) {
+  cumulative_samples_ = base_sample_offset;
+  frame_count_ = 0;
+  emitted_frame_count_ = 0;
+
+  overlap_buffer_.clear();
+  output_buffer_.clear();
+
+  /// Reset mel state
+  if (config_.compute_mel) {
+    std::fill(prev_mel_log_.begin(), prev_mel_log_.end(), 0.0f);
+  }
+  has_prev_frame_ = false;
+
+  /// Reset progressive estimation
+  onset_accumulator_.clear();
+  chroma_sum_.fill(0.0f);
+  chroma_frame_count_ = 0;
+  last_key_update_time_ = 0.0f;
+  last_bpm_update_time_ = 0.0f;
+  current_estimate_ = ProgressiveEstimate();
+}
+
+AnalyzerStats StreamAnalyzer::stats() const {
+  AnalyzerStats stats;
+  stats.total_frames = frame_count_;
+  stats.total_samples = cumulative_samples_;
+  stats.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
+  stats.estimate = current_estimate_;
+  return stats;
+}
+
+float StreamAnalyzer::current_time() const {
+  return static_cast<float>(cumulative_samples_) / static_cast<float>(config_.sample_rate);
+}
+
+}  // namespace sonare

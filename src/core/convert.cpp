@@ -11,8 +11,8 @@
 namespace sonare {
 
 namespace {
-// Slaney mel scale constants (librosa default)
-// Uses exact runtime calculation for precision matching with librosa
+/// @brief Slaney mel scale constants (librosa default).
+/// @details Uses exact runtime calculation for precision matching with librosa.
 constexpr float kMelFMin = 0.0f;
 constexpr float kMelFSp = 200.0f / 3.0f;  // 66.67 Hz
 constexpr float kMinLogHz = 1000.0f;
@@ -68,7 +68,7 @@ std::string hz_to_note(float hz) {
 float note_to_hz(const std::string& note) {
   if (note.empty()) return 0.0f;
 
-  // Note offsets from C
+  /// Note offsets from C
   static const int note_offsets[] = {
       0,   // C
       2,   // D

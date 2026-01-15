@@ -19,10 +19,10 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
     return {};
   }
 
-  // Calculate number of bins
+  /// Calculate number of bins
   int n_bins = static_cast<int>((bpm_max - bpm_min) / bin_width) + 1;
 
-  // Build histogram
+  /// Build histogram
   std::vector<int> hist(n_bins, 0);
   for (float bpm : candidates) {
     if (bpm >= bpm_min && bpm <= bpm_max) {
@@ -32,7 +32,7 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
     }
   }
 
-  // Convert to BpmHistogramBin and sort by votes descending
+  /// Convert to BpmHistogramBin and sort by votes descending
   std::vector<BpmHistogramBin> result;
   result.reserve(n_bins);
   for (int i = 0; i < n_bins; ++i) {
@@ -50,19 +50,19 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
 HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins) {
   HarmonicClusterMap clusters;
 
-  // Process bins in order of votes (descending, already sorted)
+  /// Process bins in order of votes (descending, already sorted)
   for (const auto& bin : top_bins) {
     float bpm = bin.bpm_center;
     int votes = bin.votes;
 
-    // Try to find an existing cluster this BPM belongs to
+    /// Try to find an existing cluster this BPM belongs to
     bool found_cluster = false;
     for (auto& [base, members] : clusters) {
       float ratio = bpm / base;
 
-      // Check if ratio matches any harmonic relationship
+      /// Check if ratio matches any harmonic relationship
       for (float k : bpm_constants::kHarmonicRatios) {
-        // Check both ratio == k and ratio == 1/k
+        /// Check both ratio == k and ratio == 1/k
         if (std::abs(ratio - k) < bpm_constants::kHarmonicTolerance ||
             std::abs(ratio - 1.0f / k) < bpm_constants::kHarmonicTolerance) {
           members.emplace_back(bpm, votes);
@@ -73,7 +73,7 @@ HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins
       if (found_cluster) break;
     }
 
-    // Create new cluster if no match found
+    /// Create new cluster if no match found
     if (!found_cluster) {
       clusters[bpm] = {{bpm, votes}};
     }
@@ -83,15 +83,15 @@ HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins
 }
 
 std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes) {
-  // Handle edge cases
+  /// Handle edge cases
   if (clusters.empty()) {
-    return {120.0f, 0.0f};  // Default BPM with zero confidence
+    return {120.0f, 0.0f};  ///< Default BPM with zero confidence
   }
   if (total_votes <= 0) {
     return {120.0f, 0.0f};
   }
 
-  // Find the base cluster with largest total votes
+  /// Find the base cluster with largest total votes
   float best_base = 0.0f;
   int best_base_votes = 0;
   for (const auto& [base, members] : clusters) {
@@ -105,7 +105,7 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     }
   }
 
-  // Find higher BPM clusters and their votes
+  /// Find higher BPM clusters and their votes
   std::vector<std::pair<float, int>> higher_clusters;
   for (const auto& [base, members] : clusters) {
     if (base > best_base) {
@@ -117,11 +117,11 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     }
   }
 
-  // Sort higher clusters by votes descending
+  /// Sort higher clusters by votes descending
   std::sort(higher_clusters.begin(), higher_clusters.end(),
             [](const auto& a, const auto& b) { return a.second > b.second; });
 
-  // Check if strongest higher cluster has enough votes (>= 15% of total)
+  /// Check if strongest higher cluster has enough votes (>= 15% of total)
   if (!higher_clusters.empty() &&
       static_cast<float>(higher_clusters[0].second) / static_cast<float>(total_votes) >=
           bpm_constants::kThreshHigher) {
@@ -131,22 +131,22 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     return {rep_bpm, confidence};
   }
 
-  // Select from the base cluster
+  /// Select from the base cluster
   const auto& base_members = clusters.at(best_base);
   if (base_members.empty()) {
     return {120.0f, 0.0f};
   }
 
-  // Musical tempo preference: prefer BPMs in common range (80-180) over extremes
-  // This helps avoid octave errors (e.g., detecting 60 instead of 120)
+  /// @details Musical tempo preference: prefer BPMs in common range (80-180) over extremes.
+  /// This helps avoid octave errors (e.g., detecting 60 instead of 120).
   constexpr float kCommonBpmMin = 80.0f;
   constexpr float kCommonBpmMax = 180.0f;
   constexpr float kAcceptableBpmMin = 60.0f;
   constexpr float kAcceptableBpmMax = 200.0f;
 
-  // Categorize candidates
-  std::vector<std::pair<float, int>> common_range;    // 80-180 BPM
-  std::vector<std::pair<float, int>> acceptable_range; // 60-200 BPM
+  /// Categorize candidates
+  std::vector<std::pair<float, int>> common_range;     ///< 80-180 BPM
+  std::vector<std::pair<float, int>> acceptable_range;  ///< 60-200 BPM
   int max_votes_in_cluster = 0;
 
   for (const auto& [bpm, v] : base_members) {
@@ -160,11 +160,11 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
 
   float rep_bpm = 0.0f;
 
-  // First priority: candidates in common range (80-180) with >= 30% of max votes
+  /// First priority: candidates in common range (80-180) with >= 30% of max votes
   if (!common_range.empty()) {
     for (const auto& [bpm, v] : common_range) {
       if (static_cast<float>(v) >= 0.3f * static_cast<float>(max_votes_in_cluster)) {
-        // Among candidates meeting threshold, prefer higher BPM (avoid octave-down)
+        /// Among candidates meeting threshold, prefer higher BPM (avoid octave-down)
         if (rep_bpm == 0.0f || bpm > rep_bpm) {
           rep_bpm = bpm;
         }
@@ -172,7 +172,7 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     }
   }
 
-  // Second priority: candidates in acceptable range (60-200) with >= 50% of max votes
+  /// Second priority: candidates in acceptable range (60-200) with >= 50% of max votes
   if (rep_bpm == 0.0f && !acceptable_range.empty()) {
     for (const auto& [bpm, v] : acceptable_range) {
       if (static_cast<float>(v) >= 0.5f * static_cast<float>(max_votes_in_cluster)) {
@@ -183,7 +183,7 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     }
   }
 
-  // Fall back to highest voted member if no preferred candidate found
+  /// Fall back to highest voted member if no preferred candidate found
   if (rep_bpm == 0.0f) {
     auto best_member =
         std::max_element(base_members.begin(), base_members.end(),
@@ -291,7 +291,7 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
   lag_min = std::max(1, lag_min);
   lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
 
-  // Find local maxima
+  /// Find local maxima
   for (int lag = lag_min + 1; lag < lag_max - 1; ++lag) {
     if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1]) {
       float bpm = lag_to_bpm(lag, sr, hop_length);
@@ -301,7 +301,7 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
     }
   }
 
-  // Sort by confidence (descending)
+  /// Sort by confidence (descending)
   std::sort(candidates.begin(), candidates.end(), [](const BpmCandidate& a, const BpmCandidate& b) {
     return a.confidence > b.confidence;
   });
@@ -314,7 +314,7 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
 BpmAnalyzer::BpmAnalyzer(const Audio& audio, const BpmConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute onset strength
+  /// Compute onset strength
   MelConfig mel_config;
   mel_config.n_fft = config.n_fft;
   mel_config.hop_length = config.hop_length;
@@ -343,7 +343,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     return;
   }
 
-  // Compute max lag based on minimum BPM
+  /// Compute max lag based on minimum BPM
   int max_lag = bpm_to_lag(config_.bpm_min, sr, hop_length);
   max_lag = std::min(max_lag, static_cast<int>(onset_strength.size()) - 1);
 
@@ -353,10 +353,10 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     return;
   }
 
-  // Compute autocorrelation
+  /// Compute autocorrelation
   autocorr_ = compute_autocorrelation(onset_strength, max_lag);
 
-  // Find all tempo peaks
+  /// Find all tempo peaks
   candidates_ = find_tempo_peaks(autocorr_, sr, hop_length, config_.bpm_min, config_.bpm_max);
 
   if (candidates_.empty()) {
@@ -366,9 +366,9 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     return;
   }
 
-  // Use harmonic clustering for octave error handling
+  /// Use harmonic clustering for octave error handling
 
-  // Generate tempo candidates from all local maxima, weighted by autocorrelation
+  /// Generate tempo candidates from all local maxima, weighted by autocorrelation
   std::vector<float> tempo_candidates;
   int lag_min = bpm_to_lag(config_.bpm_max, sr, hop_length);
   int lag_max_inner = bpm_to_lag(config_.bpm_min, sr, hop_length);
@@ -380,7 +380,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
         autocorr_[lag] > 0.0f) {
       float bpm = lag_to_bpm(lag, sr, hop_length);
       if (bpm >= config_.bpm_min && bpm <= config_.bpm_max) {
-        // Add candidate multiple times based on autocorrelation strength
+        /// Add candidate multiple times based on autocorrelation strength
         int weight = std::max(1, static_cast<int>(autocorr_[lag] * 100.0f));
         for (int w = 0; w < weight; ++w) {
           tempo_candidates.push_back(bpm);
@@ -390,35 +390,35 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   }
 
   if (tempo_candidates.empty()) {
-    // Fall back to highest confidence candidate
+    /// Fall back to highest confidence candidate
     bpm_ = candidates_[0].bpm;
     confidence_ = candidates_[0].confidence;
   } else {
-    // Build histogram with 0.5 BPM resolution
+    /// Build histogram with 0.5 BPM resolution
     auto histogram = build_bpm_histogram(tempo_candidates, config_.bpm_min, config_.bpm_max,
                                          bpm_constants::kBinWidth);
 
-    // Take top bins for clustering
+    /// Take top bins for clustering
     std::vector<BpmHistogramBin> top_bins;
     int n_top = std::min(bpm_constants::kTopBins, static_cast<int>(histogram.size()));
     top_bins.assign(histogram.begin(), histogram.begin() + n_top);
 
-    // Apply harmonic clustering
+    /// Apply harmonic clustering
     auto clusters = harmonic_cluster(top_bins);
 
-    // Calculate total votes
+    /// Calculate total votes
     int total_votes = 0;
     for (const auto& bin : histogram) {
       total_votes += bin.votes;
     }
 
-    // Smart choice selection
+    /// Smart choice selection
     auto [rep_bpm, conf_percent] = smart_choice(clusters, total_votes);
 
     bpm_ = rep_bpm;
-    confidence_ = conf_percent / 100.0f;  // Convert percentage to [0, 1]
+    confidence_ = conf_percent / 100.0f;  ///< Convert percentage to [0, 1]
 
-    // Update candidates_ for API compatibility
+    /// Update candidates_ for API compatibility
     candidates_.clear();
     for (const auto& bin : top_bins) {
       float bin_conf =
@@ -428,7 +428,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     }
   }
 
-  // Simple tempogram (just store autocorrelation for now)
+  /// Simple tempogram (just store autocorrelation for now)
   tempogram_ = autocorr_;
 }
 
