@@ -144,8 +144,9 @@ inline const char* error_message(ErrorCode code) {
       return "Out of memory";
     case ErrorCode::NotImplemented:
       return "Not implemented";
+    default:
+      return "Unknown error";
   }
-  return "Unknown error";
 }
 
 }  // namespace sonare

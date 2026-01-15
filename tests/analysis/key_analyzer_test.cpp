@@ -91,6 +91,33 @@ TEST_CASE("Key to_short_string", "[key_analyzer]") {
   REQUIRE(fs_minor.to_short_string() == "F#m");
 }
 
+TEST_CASE("Key to_string all pitch classes", "[key_analyzer]") {
+  // Test all 12 pitch classes with both modes
+  const std::vector<std::pair<PitchClass, std::string>> pitch_classes = {
+      {PitchClass::C, "C"},   {PitchClass::Cs, "C#"}, {PitchClass::D, "D"},
+      {PitchClass::Ds, "D#"}, {PitchClass::E, "E"},   {PitchClass::F, "F"},
+      {PitchClass::Fs, "F#"}, {PitchClass::G, "G"},   {PitchClass::Gs, "G#"},
+      {PitchClass::A, "A"},   {PitchClass::As, "A#"}, {PitchClass::B, "B"}};
+
+  for (const auto& pc : pitch_classes) {
+    Key major_key;
+    major_key.root = pc.first;
+    major_key.mode = Mode::Major;
+    major_key.confidence = 0.9f;
+
+    REQUIRE(major_key.to_string() == pc.second + " major");
+    REQUIRE(major_key.to_short_string() == pc.second);
+
+    Key minor_key;
+    minor_key.root = pc.first;
+    minor_key.mode = Mode::Minor;
+    minor_key.confidence = 0.9f;
+
+    REQUIRE(minor_key.to_string() == pc.second + " minor");
+    REQUIRE(minor_key.to_short_string() == pc.second + "m");
+  }
+}
+
 TEST_CASE("KeyAnalyzer from chroma", "[key_analyzer]") {
   // C major chroma: strong C, E, G
   std::array<float, 12> c_major_chroma = {1.0f, 0.1f, 0.3f, 0.1f, 0.8f, 0.3f,

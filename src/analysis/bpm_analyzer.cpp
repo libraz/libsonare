@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <numeric>
 
+#include "core/fft.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/exception.h"
@@ -196,10 +198,25 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
 
 namespace {
 
-/// @brief Computes autocorrelation of a signal.
+/// @brief Returns next power of 2 >= n.
+int next_power_of_2(int n) {
+  int power = 1;
+  while (power < n) {
+    power *= 2;
+  }
+  return power;
+}
+
+/// @brief Computes autocorrelation of a signal using FFT (O(n log n)).
+/// @details Uses the Wiener-Khinchin theorem: autocorr(x) = IFFT(|FFT(x)|^2)
+///          Zero-pads to avoid circular correlation artifacts.
 std::vector<float> compute_autocorrelation(const std::vector<float>& signal, int max_lag) {
   int n = static_cast<int>(signal.size());
   std::vector<float> autocorr(max_lag, 0.0f);
+
+  if (n == 0 || max_lag <= 0) {
+    return autocorr;
+  }
 
   // Compute mean
   float mean = 0.0f;
@@ -219,13 +236,38 @@ std::vector<float> compute_autocorrelation(const std::vector<float>& signal, int
     return autocorr;
   }
 
-  // Compute autocorrelation for each lag
-  for (int lag = 0; lag < max_lag; ++lag) {
-    float sum = 0.0f;
-    for (int i = 0; i < n - lag; ++i) {
-      sum += (signal[i] - mean) * (signal[i + lag] - mean);
-    }
-    autocorr[lag] = sum / var;
+  // Zero-pad to at least 2*n to avoid circular correlation artifacts
+  int fft_size = next_power_of_2(2 * n);
+
+  // Prepare zero-mean, zero-padded signal
+  std::vector<float> padded(fft_size, 0.0f);
+  for (int i = 0; i < n; ++i) {
+    padded[i] = signal[i] - mean;
+  }
+
+  // FFT-based autocorrelation
+  FFT fft(fft_size);
+  int n_bins = fft.n_bins();
+
+  std::vector<std::complex<float>> spectrum(n_bins);
+  fft.forward(padded.data(), spectrum.data());
+
+  // Compute power spectrum (|FFT(x)|^2)
+  for (int i = 0; i < n_bins; ++i) {
+    float re = spectrum[i].real();
+    float im = spectrum[i].imag();
+    spectrum[i] = std::complex<float>(re * re + im * im, 0.0f);
+  }
+
+  // Inverse FFT to get autocorrelation
+  std::vector<float> raw_autocorr(fft_size);
+  fft.inverse(spectrum.data(), raw_autocorr.data());
+
+  // Normalize by variance and extract relevant lags
+  // raw_autocorr[0] should equal var after normalization
+  float norm_factor = var * static_cast<float>(n);
+  for (int lag = 0; lag < max_lag && lag < n; ++lag) {
+    autocorr[lag] = raw_autocorr[lag] / norm_factor;
   }
 
   return autocorr;

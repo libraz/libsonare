@@ -11,10 +11,13 @@ namespace sonare {
 namespace {
 
 /// @brief Wraps phase to [-pi, pi].
+/// @details Uses std::remainder for O(1) computation without loops.
+///          Returns 0 for NaN/Inf inputs to prevent undefined behavior.
 float wrap_phase(float phase) {
-  while (phase > M_PI) phase -= 2.0f * M_PI;
-  while (phase < -M_PI) phase += 2.0f * M_PI;
-  return phase;
+  if (!std::isfinite(phase)) {
+    return 0.0f;
+  }
+  return std::remainder(phase, 2.0f * static_cast<float>(M_PI));
 }
 
 }  // namespace

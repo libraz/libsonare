@@ -105,7 +105,7 @@ bool is_triad(ChordQuality quality) {
 
 }  // namespace
 
-int ChordAnalyzer::find_best_chord(const float* chroma) const {
+ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(const float* chroma) const {
   // Find best triad and best tetrad separately
   float best_triad_corr = -1.0f;
   int best_triad_idx = 0;
@@ -129,10 +129,19 @@ int ChordAnalyzer::find_best_chord(const float* chroma) const {
   }
 
   // Prefer triad unless tetrad has significantly higher correlation
+  ChordMatch result;
   if (best_tetrad_corr > best_triad_corr + chord_constants::kTetradThreshold) {
-    return best_tetrad_idx;
+    result.index = best_tetrad_idx;
+    result.confidence = best_tetrad_corr;
+  } else {
+    result.index = best_triad_idx;
+    result.confidence = best_triad_corr;
   }
-  return best_triad_idx;
+  return result;
+}
+
+int ChordAnalyzer::find_best_chord(const float* chroma) const {
+  return find_best_chord_with_confidence(chroma).index;
 }
 
 void ChordAnalyzer::analyze_chords() {
@@ -169,40 +178,10 @@ void ChordAnalyzer::analyze_chords() {
       smoothed[c] /= static_cast<float>(count);
     }
 
-    // Find best chord with triad priority
-    float best_triad_corr = -1.0f;
-    int best_triad_idx = 0;
-    float best_tetrad_corr = -1.0f;
-    int best_tetrad_idx = 0;
-
-    for (size_t i = 0; i < templates_.size(); ++i) {
-      float corr = templates_[i].correlate(smoothed.data());
-      if (is_triad(templates_[i].quality)) {
-        if (corr > best_triad_corr) {
-          best_triad_corr = corr;
-          best_triad_idx = static_cast<int>(i);
-        }
-      } else {
-        if (corr > best_tetrad_corr) {
-          best_tetrad_corr = corr;
-          best_tetrad_idx = static_cast<int>(i);
-        }
-      }
-    }
-
-    // Prefer triad unless tetrad has significantly higher correlation
-    int best_idx;
-    float best_corr;
-    if (best_tetrad_corr > best_triad_corr + chord_constants::kTetradThreshold) {
-      best_idx = best_tetrad_idx;
-      best_corr = best_tetrad_corr;
-    } else {
-      best_idx = best_triad_idx;
-      best_corr = best_triad_corr;
-    }
-
-    frame_chords_[f] = best_idx;
-    confidences[f] = best_corr;
+    // Find best chord using shared logic
+    ChordMatch match = find_best_chord_with_confidence(smoothed.data());
+    frame_chords_[f] = match.index;
+    confidences[f] = match.confidence;
   }
 
   // Convert frame-level to segment-level chords
@@ -283,40 +262,10 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
       beat_chroma[c] /= static_cast<float>(count);
     }
 
-    // Find best chord with triad priority
-    float best_triad_corr = -1.0f;
-    int best_triad_idx = 0;
-    float best_tetrad_corr = -1.0f;
-    int best_tetrad_idx = 0;
-
-    for (size_t i = 0; i < templates_.size(); ++i) {
-      float corr = templates_[i].correlate(beat_chroma.data());
-      if (is_triad(templates_[i].quality)) {
-        if (corr > best_triad_corr) {
-          best_triad_corr = corr;
-          best_triad_idx = static_cast<int>(i);
-        }
-      } else {
-        if (corr > best_tetrad_corr) {
-          best_tetrad_corr = corr;
-          best_tetrad_idx = static_cast<int>(i);
-        }
-      }
-    }
-
-    // Prefer triad unless tetrad has significantly higher correlation
-    int best_idx;
-    float best_corr;
-    if (best_tetrad_corr > best_triad_corr + chord_constants::kTetradThreshold) {
-      best_idx = best_tetrad_idx;
-      best_corr = best_tetrad_corr;
-    } else {
-      best_idx = best_triad_idx;
-      best_corr = best_triad_corr;
-    }
-
-    beat_chords.push_back(best_idx);
-    beat_confidences.push_back(best_corr);
+    // Find best chord using shared logic
+    ChordMatch match = find_best_chord_with_confidence(beat_chroma.data());
+    beat_chords.push_back(match.index);
+    beat_confidences.push_back(match.confidence);
   }
 
   // Convert beat-level chords to time segments

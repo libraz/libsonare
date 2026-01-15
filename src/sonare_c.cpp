@@ -24,9 +24,22 @@ struct SonareAudio {
 
 // Audio functions
 
+/// @brief Minimum valid sample rate (8kHz - telephone quality)
+constexpr int kMinSampleRate = 8000;
+/// @brief Maximum valid sample rate (384kHz - high-res audio)
+constexpr int kMaxSampleRate = 384000;
+/// @brief Maximum buffer size (2GB / sizeof(float) = ~500M samples, ~6 hours at 22050Hz)
+constexpr size_t kMaxBufferSize = 500000000;
+
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out) {
   if (data == nullptr || out == nullptr || length == 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (length > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -127,6 +140,12 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
   if (samples == nullptr || out_bpm == nullptr || length == 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (length > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   try {
     *out_bpm = quick::detect_bpm(samples, length, sample_rate);
@@ -139,6 +158,12 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key) {
   if (samples == nullptr || out_key == nullptr || length == 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (length > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -156,6 +181,12 @@ SonareError sonare_detect_key(const float* samples, size_t length, int sample_ra
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate,
                                 float** out_times, size_t* out_count) {
   if (samples == nullptr || out_times == nullptr || out_count == nullptr || length == 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (length > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -181,6 +212,12 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
   if (samples == nullptr || out_times == nullptr || out_count == nullptr || length == 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (length > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   try {
     std::vector<float> onsets = quick::detect_onsets(samples, length, sample_rate);
@@ -204,6 +241,12 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out) {
   if (samples == nullptr || out == nullptr || length == 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (length > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

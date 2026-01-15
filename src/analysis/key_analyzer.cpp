@@ -11,91 +11,11 @@
 namespace sonare {
 
 std::string Key::to_string() const {
-  std::string root_name;
-  switch (root) {
-    case PitchClass::C:
-      root_name = "C";
-      break;
-    case PitchClass::Cs:
-      root_name = "C#";
-      break;
-    case PitchClass::D:
-      root_name = "D";
-      break;
-    case PitchClass::Ds:
-      root_name = "D#";
-      break;
-    case PitchClass::E:
-      root_name = "E";
-      break;
-    case PitchClass::F:
-      root_name = "F";
-      break;
-    case PitchClass::Fs:
-      root_name = "F#";
-      break;
-    case PitchClass::G:
-      root_name = "G";
-      break;
-    case PitchClass::Gs:
-      root_name = "G#";
-      break;
-    case PitchClass::A:
-      root_name = "A";
-      break;
-    case PitchClass::As:
-      root_name = "A#";
-      break;
-    case PitchClass::B:
-      root_name = "B";
-      break;
-  }
-
-  return root_name + (mode == Mode::Major ? " major" : " minor");
+  return std::string(pitch_class_name(root)) + " " + mode_name(mode);
 }
 
 std::string Key::to_short_string() const {
-  std::string root_name;
-  switch (root) {
-    case PitchClass::C:
-      root_name = "C";
-      break;
-    case PitchClass::Cs:
-      root_name = "C#";
-      break;
-    case PitchClass::D:
-      root_name = "D";
-      break;
-    case PitchClass::Ds:
-      root_name = "D#";
-      break;
-    case PitchClass::E:
-      root_name = "E";
-      break;
-    case PitchClass::F:
-      root_name = "F";
-      break;
-    case PitchClass::Fs:
-      root_name = "F#";
-      break;
-    case PitchClass::G:
-      root_name = "G";
-      break;
-    case PitchClass::Gs:
-      root_name = "G#";
-      break;
-    case PitchClass::A:
-      root_name = "A";
-      break;
-    case PitchClass::As:
-      root_name = "A#";
-      break;
-    case PitchClass::B:
-      root_name = "B";
-      break;
-  }
-
-  return root_name + (mode == Mode::Minor ? "m" : "");
+  return std::string(pitch_class_name(root)) + (mode == Mode::Minor ? "m" : "");
 }
 
 KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(config) {

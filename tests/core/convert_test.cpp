@@ -57,3 +57,37 @@ TEST_CASE("frames_to_time / time_to_frames", "[convert]") {
   // Round-trip test uses computed time value
   REQUIRE(time_to_frames(time, sr, hop) == 100);
 }
+
+TEST_CASE("time_to_frames floor behavior", "[convert]") {
+  // Test that time_to_frames uses floor (librosa compatible)
+  int sr = 22050;
+  int hop = 512;
+
+  SECTION("exact frame boundaries") {
+    // Exactly at frame 10 boundary
+    float time_exact = 10.0f * static_cast<float>(hop) / static_cast<float>(sr);
+    REQUIRE(time_to_frames(time_exact, sr, hop) == 10);
+  }
+
+  SECTION("just before frame boundary") {
+    // Slightly before frame 11 boundary should give frame 10
+    float time_before = 10.999f * static_cast<float>(hop) / static_cast<float>(sr);
+    REQUIRE(time_to_frames(time_before, sr, hop) == 10);
+  }
+
+  SECTION("just after frame boundary") {
+    // Slightly after frame 10 boundary should give frame 10
+    float time_after = 10.001f * static_cast<float>(hop) / static_cast<float>(sr);
+    REQUIRE(time_to_frames(time_after, sr, hop) == 10);
+  }
+
+  SECTION("zero time") {
+    REQUIRE(time_to_frames(0.0f, sr, hop) == 0);
+  }
+
+  SECTION("very small time") {
+    // Less than one hop should give frame 0
+    float tiny_time = 0.001f;  // ~22 samples at 22050 Hz, less than 512 hop
+    REQUIRE(time_to_frames(tiny_time, sr, hop) == 0);
+  }
+}

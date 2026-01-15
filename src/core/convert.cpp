@@ -12,25 +12,31 @@ namespace sonare {
 
 namespace {
 // Slaney mel scale constants (librosa default)
+// Uses exact runtime calculation for precision matching with librosa
 constexpr float kMelFMin = 0.0f;
 constexpr float kMelFSp = 200.0f / 3.0f;  // 66.67 Hz
 constexpr float kMinLogHz = 1000.0f;
 constexpr float kMinLogMel = (kMinLogHz - kMelFMin) / kMelFSp;  // 15.0
-constexpr float kLogStep = 0.068751777f;                        // log(6.4) / 27.0
+// Runtime calculation matches librosa's np.log(6.4) / 27.0 = 0.06875177742094912
+// Using inline function to avoid static initialization order issues
+inline float log_step() {
+  static const float value = std::log(6.4f) / 27.0f;
+  return value;
+}
 }  // namespace
 
 float hz_to_mel(float hz) {
   if (hz < kMinLogHz) {
     return (hz - kMelFMin) / kMelFSp;
   }
-  return kMinLogMel + std::log(hz / kMinLogHz) / kLogStep;
+  return kMinLogMel + std::log(hz / kMinLogHz) / log_step();
 }
 
 float mel_to_hz(float mel) {
   if (mel < kMinLogMel) {
     return kMelFMin + kMelFSp * mel;
   }
-  return kMinLogHz * std::exp(kLogStep * (mel - kMinLogMel));
+  return kMinLogHz * std::exp(log_step() * (mel - kMinLogMel));
 }
 
 float hz_to_mel_htk(float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f); }
@@ -91,7 +97,16 @@ float note_to_hz(const std::string& note) {
 
   int octave = 4;  // default
   if (idx < note.size()) {
-    octave = std::stoi(note.substr(idx));
+    try {
+      size_t pos = 0;
+      octave = std::stoi(note.substr(idx), &pos);
+      // Validate entire remaining string was consumed
+      if (pos != note.size() - idx) {
+        return 0.0f;  // Invalid note format
+      }
+    } catch (const std::exception&) {
+      return 0.0f;  // Invalid note format
+    }
   }
 
   int midi = (octave + 1) * 12 + offset;
@@ -103,7 +118,8 @@ float frames_to_time(int frames, int sr, int hop_length) {
 }
 
 int time_to_frames(float time, int sr, int hop_length) {
-  return static_cast<int>(time * sr / hop_length);
+  // Use floor for librosa compatibility (np.floor in librosa.core.time_to_frames)
+  return static_cast<int>(std::floor(time * static_cast<float>(sr) / static_cast<float>(hop_length)));
 }
 
 float samples_to_time(int samples, int sr) { return static_cast<float>(samples) / sr; }

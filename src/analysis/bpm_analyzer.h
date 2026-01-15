@@ -2,6 +2,38 @@
 
 /// @file bpm_analyzer.h
 /// @brief BPM (tempo) detection with harmonic clustering.
+///
+/// @section bpm_algorithm Algorithm Overview
+///
+/// libsonare uses a harmonic clustering approach for BPM detection that differs
+/// from librosa's implementation:
+///
+/// **librosa approach:**
+/// - Uses tempogram (autocorrelation-based tempo salience)
+/// - Aggregates tempogram across time to find dominant tempo
+/// - Prior weighting based on start_bpm parameter
+/// - Returns tempo from peak in aggregated tempogram
+///
+/// **libsonare approach:**
+/// - Computes onset strength envelope and autocorrelation
+/// - Builds BPM histogram from local maxima (0.5 BPM bins)
+/// - Groups candidates into harmonic clusters (half, double, triplet, etc.)
+/// - Uses smart selection: prefers musically common tempos (80-180 BPM)
+/// - Avoids octave errors by preferring higher BPM in harmonic relationships
+///
+/// @section bpm_differences Key Differences from librosa
+///
+/// | Aspect              | librosa                  | libsonare              |
+/// |---------------------|--------------------------|------------------------|
+/// | Octave handling     | Prior weighting          | Harmonic clustering    |
+/// | BPM selection       | Max peak                 | Smart musical choice   |
+/// | Multi-tempo support | aggregate='median'       | Top 10 bins clustering |
+/// | Confidence metric   | Not provided             | Vote-based [0,1]       |
+///
+/// Results may differ from librosa, especially for:
+/// - Tracks with ambiguous tempo (multiple valid BPMs)
+/// - Very slow (<60 BPM) or very fast (>200 BPM) tracks
+/// - Tracks with strong half-time or double-time feels
 
 #include <array>
 #include <map>

@@ -59,6 +59,100 @@ std::vector<float> float32ArrayToVector(val arr) {
   return vecFromJSArray<float>(arr);
 }
 
+/// @brief Converts AnalysisResult to JavaScript object.
+/// @param result Analysis result
+/// @return JavaScript object with all analysis data
+val analysisResultToVal(const AnalysisResult& result) {
+  val out = val::object();
+
+  // BPM
+  out.set("bpm", result.bpm);
+  out.set("bpmConfidence", result.bpm_confidence);
+
+  // Key
+  val key = val::object();
+  key.set("root", static_cast<int>(result.key.root));
+  key.set("mode", static_cast<int>(result.key.mode));
+  key.set("confidence", result.key.confidence);
+  key.set("name", result.key.to_string());
+  key.set("shortName", result.key.to_short_string());
+  out.set("key", key);
+
+  // Time signature
+  val timeSig = val::object();
+  timeSig.set("numerator", result.time_signature.numerator);
+  timeSig.set("denominator", result.time_signature.denominator);
+  timeSig.set("confidence", result.time_signature.confidence);
+  out.set("timeSignature", timeSig);
+
+  // Beats
+  val beats = val::array();
+  for (size_t i = 0; i < result.beats.size(); ++i) {
+    val beat = val::object();
+    beat.set("time", result.beats[i].time);
+    beat.set("strength", result.beats[i].strength);
+    beats.call<void>("push", beat);
+  }
+  out.set("beats", beats);
+
+  // Chords
+  val chords = val::array();
+  for (size_t i = 0; i < result.chords.size(); ++i) {
+    val chord = val::object();
+    chord.set("root", static_cast<int>(result.chords[i].root));
+    chord.set("quality", static_cast<int>(result.chords[i].quality));
+    chord.set("start", result.chords[i].start);
+    chord.set("end", result.chords[i].end);
+    chord.set("confidence", result.chords[i].confidence);
+    chord.set("name", result.chords[i].to_string());
+    chords.call<void>("push", chord);
+  }
+  out.set("chords", chords);
+
+  // Sections
+  val sections = val::array();
+  for (size_t i = 0; i < result.sections.size(); ++i) {
+    val section = val::object();
+    section.set("type", static_cast<int>(result.sections[i].type));
+    section.set("start", result.sections[i].start);
+    section.set("end", result.sections[i].end);
+    section.set("energyLevel", result.sections[i].energy_level);
+    section.set("confidence", result.sections[i].confidence);
+    section.set("name", result.sections[i].type_string());
+    sections.call<void>("push", section);
+  }
+  out.set("sections", sections);
+
+  // Timbre
+  val timbre = val::object();
+  timbre.set("brightness", result.timbre.brightness);
+  timbre.set("warmth", result.timbre.warmth);
+  timbre.set("density", result.timbre.density);
+  timbre.set("roughness", result.timbre.roughness);
+  timbre.set("complexity", result.timbre.complexity);
+  out.set("timbre", timbre);
+
+  // Dynamics
+  val dynamics = val::object();
+  dynamics.set("dynamicRangeDb", result.dynamics.dynamic_range_db);
+  dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
+  dynamics.set("crestFactor", result.dynamics.crest_factor);
+  dynamics.set("isCompressed", result.dynamics.is_compressed);
+  out.set("dynamics", dynamics);
+
+  // Rhythm
+  val rhythm = val::object();
+  rhythm.set("syncopation", result.rhythm.syncopation);
+  rhythm.set("grooveType", result.rhythm.groove_type);
+  rhythm.set("patternRegularity", result.rhythm.pattern_regularity);
+  out.set("rhythm", rhythm);
+
+  // Form
+  out.set("form", result.form);
+
+  return out;
+}
+
 // ============================================================================
 // Quick API (high-level)
 // ============================================================================
@@ -96,95 +190,7 @@ val js_detect_beats(val samples, int sample_rate) {
 val js_analyze(val samples, int sample_rate) {
   std::vector<float> data = vecFromJSArray<float>(samples);
   AnalysisResult result = quick::analyze(data.data(), data.size(), sample_rate);
-
-  val out = val::object();
-
-  // BPM
-  out.set("bpm", result.bpm);
-  out.set("bpmConfidence", result.bpm_confidence);
-
-  // Key
-  val key = val::object();
-  key.set("root", static_cast<int>(result.key.root));
-  key.set("mode", static_cast<int>(result.key.mode));
-  key.set("confidence", result.key.confidence);
-  key.set("name", result.key.to_string());
-  key.set("shortName", result.key.to_short_string());
-  out.set("key", key);
-
-  // Time signature
-  val timeSig = val::object();
-  timeSig.set("numerator", result.time_signature.numerator);
-  timeSig.set("denominator", result.time_signature.denominator);
-  timeSig.set("confidence", result.time_signature.confidence);
-  out.set("timeSignature", timeSig);
-
-  // Beats
-  val beats = val::array();
-  for (size_t i = 0; i < result.beats.size(); ++i) {
-    val beat = val::object();
-    beat.set("time", result.beats[i].time);
-    beat.set("strength", result.beats[i].strength);
-    beats.call<void>("push", beat);
-  }
-  out.set("beats", beats);
-
-  // Chords
-  val chords = val::array();
-  for (size_t i = 0; i < result.chords.size(); ++i) {
-    val chord = val::object();
-    chord.set("root", static_cast<int>(result.chords[i].root));
-    chord.set("quality", static_cast<int>(result.chords[i].quality));
-    chord.set("start", result.chords[i].start);
-    chord.set("end", result.chords[i].end);
-    chord.set("confidence", result.chords[i].confidence);
-    chord.set("name", result.chords[i].to_string());
-    chords.call<void>("push", chord);
-  }
-  out.set("chords", chords);
-
-  // Sections
-  val sections = val::array();
-  for (size_t i = 0; i < result.sections.size(); ++i) {
-    val section = val::object();
-    section.set("type", static_cast<int>(result.sections[i].type));
-    section.set("start", result.sections[i].start);
-    section.set("end", result.sections[i].end);
-    section.set("energyLevel", result.sections[i].energy_level);
-    section.set("confidence", result.sections[i].confidence);
-    section.set("name", result.sections[i].type_string());
-    sections.call<void>("push", section);
-  }
-  out.set("sections", sections);
-
-  // Timbre
-  val timbre = val::object();
-  timbre.set("brightness", result.timbre.brightness);
-  timbre.set("warmth", result.timbre.warmth);
-  timbre.set("density", result.timbre.density);
-  timbre.set("roughness", result.timbre.roughness);
-  timbre.set("complexity", result.timbre.complexity);
-  out.set("timbre", timbre);
-
-  // Dynamics
-  val dynamics = val::object();
-  dynamics.set("dynamicRangeDb", result.dynamics.dynamic_range_db);
-  dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
-  dynamics.set("crestFactor", result.dynamics.crest_factor);
-  dynamics.set("isCompressed", result.dynamics.is_compressed);
-  out.set("dynamics", dynamics);
-
-  // Rhythm
-  val rhythm = val::object();
-  rhythm.set("syncopation", result.rhythm.syncopation);
-  rhythm.set("grooveType", result.rhythm.groove_type);
-  rhythm.set("patternRegularity", result.rhythm.pattern_regularity);
-  out.set("rhythm", rhythm);
-
-  // Form
-  out.set("form", result.form);
-
-  return out;
+  return analysisResultToVal(result);
 }
 
 // Analyze with progress callback
@@ -202,95 +208,7 @@ val js_analyze_with_progress(val samples, int sample_rate, val progress_callback
   }
 
   AnalysisResult result = analyzer.analyze();
-
-  val out = val::object();
-
-  // BPM
-  out.set("bpm", result.bpm);
-  out.set("bpmConfidence", result.bpm_confidence);
-
-  // Key
-  val key = val::object();
-  key.set("root", static_cast<int>(result.key.root));
-  key.set("mode", static_cast<int>(result.key.mode));
-  key.set("confidence", result.key.confidence);
-  key.set("name", result.key.to_string());
-  key.set("shortName", result.key.to_short_string());
-  out.set("key", key);
-
-  // Time signature
-  val timeSig = val::object();
-  timeSig.set("numerator", result.time_signature.numerator);
-  timeSig.set("denominator", result.time_signature.denominator);
-  timeSig.set("confidence", result.time_signature.confidence);
-  out.set("timeSignature", timeSig);
-
-  // Beats
-  val beats = val::array();
-  for (size_t i = 0; i < result.beats.size(); ++i) {
-    val beat = val::object();
-    beat.set("time", result.beats[i].time);
-    beat.set("strength", result.beats[i].strength);
-    beats.call<void>("push", beat);
-  }
-  out.set("beats", beats);
-
-  // Chords
-  val chords = val::array();
-  for (size_t i = 0; i < result.chords.size(); ++i) {
-    val chord = val::object();
-    chord.set("root", static_cast<int>(result.chords[i].root));
-    chord.set("quality", static_cast<int>(result.chords[i].quality));
-    chord.set("start", result.chords[i].start);
-    chord.set("end", result.chords[i].end);
-    chord.set("confidence", result.chords[i].confidence);
-    chord.set("name", result.chords[i].to_string());
-    chords.call<void>("push", chord);
-  }
-  out.set("chords", chords);
-
-  // Sections
-  val sections = val::array();
-  for (size_t i = 0; i < result.sections.size(); ++i) {
-    val section = val::object();
-    section.set("type", static_cast<int>(result.sections[i].type));
-    section.set("start", result.sections[i].start);
-    section.set("end", result.sections[i].end);
-    section.set("energyLevel", result.sections[i].energy_level);
-    section.set("confidence", result.sections[i].confidence);
-    section.set("name", result.sections[i].type_string());
-    sections.call<void>("push", section);
-  }
-  out.set("sections", sections);
-
-  // Timbre
-  val timbre = val::object();
-  timbre.set("brightness", result.timbre.brightness);
-  timbre.set("warmth", result.timbre.warmth);
-  timbre.set("density", result.timbre.density);
-  timbre.set("roughness", result.timbre.roughness);
-  timbre.set("complexity", result.timbre.complexity);
-  out.set("timbre", timbre);
-
-  // Dynamics
-  val dynamics = val::object();
-  dynamics.set("dynamicRangeDb", result.dynamics.dynamic_range_db);
-  dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
-  dynamics.set("crestFactor", result.dynamics.crest_factor);
-  dynamics.set("isCompressed", result.dynamics.is_compressed);
-  out.set("dynamics", dynamics);
-
-  // Rhythm
-  val rhythm = val::object();
-  rhythm.set("syncopation", result.rhythm.syncopation);
-  rhythm.set("grooveType", result.rhythm.groove_type);
-  rhythm.set("patternRegularity", result.rhythm.pattern_regularity);
-  out.set("rhythm", rhythm);
-
-  // Form
-  out.set("form", result.form);
-
-  return out;
+  return analysisResultToVal(result);
 }
 
 // ============================================================================

@@ -106,10 +106,17 @@ class ChordAnalyzer {
   const std::vector<ChordTemplate>& templates() const { return templates_; }
 
  private:
+  /// @brief Result from chord matching.
+  struct ChordMatch {
+    int index;        ///< Template index
+    float confidence; ///< Correlation score
+  };
+
   void analyze_chords();
   void analyze_chords_beat_sync(const std::vector<float>& beat_times);
   void merge_short_segments();
   int find_best_chord(const float* chroma) const;
+  ChordMatch find_best_chord_with_confidence(const float* chroma) const;
   std::string chord_to_roman_numeral(const Chord& chord, PitchClass key_root, Mode mode) const;
 
   std::vector<Chord> chords_;

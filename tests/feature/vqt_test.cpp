@@ -229,3 +229,138 @@ TEST_CASE("vqt different gamma values", "[vqt]") {
     REQUIRE(result.n_bins() == 24);
   }
 }
+
+// =============================================================================
+// Librosa Compatibility Tests
+// =============================================================================
+
+TEST_CASE("vqt frequencies match librosa formula", "[vqt][librosa]") {
+  // librosa.vqt_frequencies: f_k = fmin * 2^(k / bins_per_octave)
+  float fmin = 32.7f;  // C1
+  int n_bins = 84;     // 7 octaves
+  int bins_per_octave = 12;
+
+  auto freqs = vqt_frequencies(fmin, n_bins, bins_per_octave);
+
+  REQUIRE(freqs.size() == 84);
+
+  // Check each frequency matches librosa formula
+  for (int k = 0; k < n_bins; ++k) {
+    float expected = fmin * std::pow(2.0f, static_cast<float>(k) / bins_per_octave);
+    REQUIRE_THAT(freqs[k], WithinRel(expected, 1e-5f));
+  }
+
+  // Check specific musical notes (C1 to C8)
+  // C1 = 32.70 Hz, C2 = 65.41 Hz, ..., C8 = 4186.01 Hz
+  REQUIRE_THAT(freqs[0], WithinRel(32.7f, 0.01f));    // C1
+  REQUIRE_THAT(freqs[12], WithinRel(65.41f, 0.01f));  // C2
+  REQUIRE_THAT(freqs[24], WithinRel(130.81f, 0.01f)); // C3
+  REQUIRE_THAT(freqs[36], WithinRel(261.63f, 0.01f)); // C4 (middle C)
+  REQUIRE_THAT(freqs[48], WithinRel(523.25f, 0.01f)); // C5
+}
+
+TEST_CASE("vqt bandwidth formula matches librosa", "[vqt][librosa]") {
+  // librosa.variable_bandwidth: bw = alpha * f + gamma
+  // where alpha = 2^(1/bins_per_octave) - 1
+  int bins_per_octave = 12;
+  float alpha = std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f;
+
+  // Standard CQT bandwidth (gamma=0)
+  SECTION("gamma=0 (standard CQT)") {
+    std::vector<float> freqs = {100.0f, 200.0f, 400.0f, 800.0f};
+    auto bw = vqt_bandwidths(freqs, bins_per_octave, 0.0f);
+
+    for (size_t i = 0; i < freqs.size(); ++i) {
+      float expected = alpha * freqs[i];
+      REQUIRE_THAT(bw[i], WithinRel(expected, 1e-5f));
+    }
+  }
+
+  // VQT bandwidth (gamma=24, librosa default)
+  SECTION("gamma=24 (librosa default)") {
+    float gamma = 24.0f;
+    std::vector<float> freqs = {100.0f, 200.0f, 400.0f, 800.0f};
+    auto bw = vqt_bandwidths(freqs, bins_per_octave, gamma);
+
+    for (size_t i = 0; i < freqs.size(); ++i) {
+      float expected = alpha * freqs[i] + gamma;
+      REQUIRE_THAT(bw[i], WithinRel(expected, 1e-5f));
+    }
+
+    // Lower frequencies should have proportionally more gamma influence
+    // bw[0] = 5.95 + 24 = 29.95 (gamma is 80% of bandwidth)
+    // bw[3] = 47.6 + 24 = 71.6 (gamma is 34% of bandwidth)
+    float gamma_ratio_low = gamma / bw[0];
+    float gamma_ratio_high = gamma / bw[3];
+    REQUIRE(gamma_ratio_low > gamma_ratio_high);
+  }
+}
+
+TEST_CASE("vqt output dimensions match librosa", "[vqt][librosa]") {
+  // librosa.vqt returns shape (n_bins, n_frames)
+  // n_frames depends on audio length and hop_length
+  Audio audio = generate_sine(440.0f, 1.0f, 22050);
+
+  VqtConfig config;
+  config.hop_length = 512;
+  config.fmin = 32.7f;
+  config.n_bins = 84;
+  config.bins_per_octave = 12;
+  config.gamma = 24.0f;
+
+  VqtResult result = vqt(audio, config);
+
+  REQUIRE(result.n_bins() == 84);
+
+  // VQT frame count depends on implementation details (centering, filter length)
+  // Check that frame count is reasonable for the given audio length
+  // With hop_length=512 and 22050 samples, expect roughly 40-45 frames
+  REQUIRE(result.n_frames() >= 40);
+  REQUIRE(result.n_frames() <= 50);
+
+  // Verify frequencies are stored
+  REQUIRE(result.frequencies().size() == 84);
+}
+
+TEST_CASE("vqt energy concentration for pure tone", "[vqt][librosa]") {
+  // For a pure tone, VQT should concentrate energy in bins near the tone frequency
+  // This behavior should match librosa
+  float test_freq = 261.63f;  // C4
+  Audio audio = generate_sine(test_freq, 1.0f, 22050);
+
+  VqtConfig config;
+  config.fmin = 32.7f;   // C1
+  config.n_bins = 60;    // 5 octaves
+  config.gamma = 24.0f;  // Standard VQT
+
+  VqtResult result = vqt(audio, config);
+
+  // Find bin closest to test frequency
+  int target_bin = -1;
+  float min_diff = std::numeric_limits<float>::max();
+  for (int k = 0; k < result.n_bins(); ++k) {
+    float diff = std::abs(result.frequencies()[k] - test_freq);
+    if (diff < min_diff) {
+      min_diff = diff;
+      target_bin = k;
+    }
+  }
+
+  REQUIRE(target_bin >= 0);
+
+  // Calculate energy in each bin
+  const auto& mag = result.magnitude();
+  std::vector<float> bin_energy(result.n_bins(), 0.0f);
+  for (int k = 0; k < result.n_bins(); ++k) {
+    for (int t = 0; t < result.n_frames(); ++t) {
+      bin_energy[k] += mag[k * result.n_frames() + t];
+    }
+  }
+
+  // Target bin should have more energy than bins 2+ semitones away
+  for (int k = 0; k < result.n_bins(); ++k) {
+    if (std::abs(k - target_bin) >= 2) {
+      REQUIRE(bin_energy[target_bin] > bin_energy[k]);
+    }
+  }
+}

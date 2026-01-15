@@ -44,6 +44,15 @@ struct GriffinLimConfig {
 
 /// @brief Spectrogram computed from audio via STFT.
 /// @details Stores complex spectrum and provides views for magnitude, power, and dB.
+///
+/// Memory Layout:
+/// - Data is stored as [n_bins x n_frames] in row-major order
+/// - Access pattern: data[bin * n_frames + frame]
+/// - bin index: 0 to n_bins-1 (frequency bins, n_bins = n_fft/2 + 1)
+/// - frame index: 0 to n_frames-1 (time frames)
+///
+/// This layout is optimized for frequency-domain processing where
+/// operations typically iterate over all frames for a given bin.
 class Spectrogram {
  public:
   /// @brief Default constructor creates empty spectrogram.

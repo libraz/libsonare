@@ -61,7 +61,8 @@ float frames_to_time(int frames, int sr, int hop_length);
 /// @param time Time in seconds
 /// @param sr Sample rate
 /// @param hop_length Hop length in samples
-/// @return Frame index
+/// @return Frame index (floor of time * sr / hop_length, librosa compatible)
+/// @note Uses floor for consistency with librosa.core.time_to_frames.
 int time_to_frames(float time, int sr, int hop_length);
 
 /// @brief Converts sample count to time in seconds.

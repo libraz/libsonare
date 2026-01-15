@@ -16,16 +16,16 @@ struct Onset {
 };
 
 /// @brief Configuration for onset detection.
-/// @details Default values match librosa (sr=22050, hop=512).
+/// @details Default values match librosa.onset.onset_detect (sr=22050, hop=512).
 struct OnsetDetectConfig {
   int n_fft = 2048;          ///< FFT size
   int hop_length = 512;      ///< Hop length
   float threshold = 0.0f;    ///< Minimum onset strength (0 = adaptive)
   int pre_max = 1;           ///< Frames before peak for local max (~30ms)
   int post_max = 1;          ///< Frames after peak for local max
-  int pre_avg = 4;           ///< Frames for pre-onset average (~100ms)
-  int post_avg = 5;          ///< Frames for post-onset average (~100ms)
-  float delta = 0.07f;       ///< Offset for adaptive threshold
+  int pre_avg = 3;           ///< Frames for pre-onset average (librosa default: 3)
+  int post_avg = 4;          ///< Frames for post-onset average (librosa default: 4)
+  float delta = 0.06f;       ///< Offset for adaptive threshold (librosa default: 0.06)
   int wait = 1;              ///< Minimum frames between consecutive onsets (~30ms)
   bool backtrack = false;    ///< Backtrack to nearest local minimum
   int backtrack_range = 10;  ///< Maximum backtrack range in frames

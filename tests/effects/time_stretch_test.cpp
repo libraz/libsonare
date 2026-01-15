@@ -142,3 +142,41 @@ TEST_CASE("time_stretch preserves sample rate", "[time_stretch]") {
 
   REQUIRE(stretched.sample_rate() == audio.sample_rate());
 }
+
+TEST_CASE("phase_vocoder handles edge cases", "[time_stretch]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.5f);
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  PhaseVocoderConfig pv_config;
+  pv_config.hop_length = 256;
+
+  SECTION("very slow rate") {
+    // Rate 0.1 = 10x slower (should not hang or produce NaN)
+    Spectrogram stretched = phase_vocoder(spec, 0.1f, pv_config);
+    REQUIRE(!stretched.empty());
+    REQUIRE(stretched.n_frames() > spec.n_frames());
+
+    // Check no NaN in output
+    const auto& mag = stretched.magnitude();
+    for (size_t i = 0; i < mag.size(); ++i) {
+      REQUIRE(std::isfinite(mag[i]));
+    }
+  }
+
+  SECTION("very fast rate") {
+    // Rate 10.0 = 10x faster
+    Spectrogram stretched = phase_vocoder(spec, 10.0f, pv_config);
+    REQUIRE(!stretched.empty());
+    REQUIRE(stretched.n_frames() >= 1);
+
+    const auto& mag = stretched.magnitude();
+    for (size_t i = 0; i < mag.size(); ++i) {
+      REQUIRE(std::isfinite(mag[i]));
+    }
+  }
+}
