@@ -4,6 +4,8 @@
 #include <cmath>
 #include <numeric>
 
+#include "analysis/chord_templates.h"
+#include "analysis/key_profiles.h"
 #include "core/fft.h"
 #include "core/window.h"
 #include "filters/chroma.h"
@@ -323,6 +325,8 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   if (config_.compute_chroma) {
     chroma_buffer_.resize(12);
     chroma_sum_.fill(0.0f);
+    /// Initialize chord templates for chord detection
+    chord_templates_ = generate_triad_templates();
   }
 
   /// Reserve overlap buffer capacity
@@ -541,29 +545,105 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
   current_estimate_.used_frames = frame_count_;
   current_estimate_.updated = false;
 
-  /// Update key estimate
+  /// Update key estimate using Krumhansl-Schmuckler correlation
   if (config_.compute_chroma && chroma_frame_count_ > 0) {
     float time_since_key_update = current_time - last_key_update_time_;
     if (time_since_key_update >= config_.key_update_interval_sec) {
-      /// Simple key detection: find dominant pitch class
-      int max_idx = 0;
-      float max_val = 0.0f;
+      /// Normalize chroma_sum for key detection
+      std::array<float, 12> mean_chroma;
+      float sum = 0.0f;
       for (int c = 0; c < 12; ++c) {
-        if (chroma_sum_[c] > max_val) {
-          max_val = chroma_sum_[c];
-          max_idx = c;
+        mean_chroma[c] = chroma_sum_[c] / chroma_frame_count_;
+        sum += mean_chroma[c];
+      }
+      if (sum > kEpsilon) {
+        for (int c = 0; c < 12; ++c) {
+          mean_chroma[c] /= sum;
         }
       }
 
-      current_estimate_.key = max_idx;
-      /// @todo Detect major/minor
+      /// Find best matching key using profile correlation
+      int best_key = 0;
+      bool best_minor = false;
+      float best_corr = -2.0f;
 
-      /// Confidence increases with time
-      float confidence = std::min(1.0f, current_time / 30.0f);
-      current_estimate_.key_confidence = confidence;
+      for (int root = 0; root < 12; ++root) {
+        PitchClass pc = static_cast<PitchClass>(root);
+
+        /// Check major key
+        auto major_profile = normalize_profile(get_major_profile(pc));
+        float major_corr = profile_correlation(mean_chroma, major_profile);
+        if (major_corr > best_corr) {
+          best_corr = major_corr;
+          best_key = root;
+          best_minor = false;
+        }
+
+        /// Check minor key
+        auto minor_profile = normalize_profile(get_minor_profile(pc));
+        float minor_corr = profile_correlation(mean_chroma, minor_profile);
+        if (minor_corr > best_corr) {
+          best_corr = minor_corr;
+          best_key = root;
+          best_minor = true;
+        }
+      }
+
+      current_estimate_.key = best_key;
+      current_estimate_.key_minor = best_minor;
+
+      /// Confidence based on correlation strength and time
+      float time_factor = std::min(1.0f, current_time / 30.0f);
+      float corr_factor = (best_corr + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
+      current_estimate_.key_confidence = corr_factor * time_factor;
 
       last_key_update_time_ = current_time;
       current_estimate_.updated = true;
+    }
+
+    /// Update chord estimate (every frame, using current chroma)
+    if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {
+      auto [best_chord, chord_corr] =
+          find_best_chord(chroma_buffer_.data(), chord_templates_);
+      int new_root = static_cast<int>(best_chord.root);
+      int new_quality = static_cast<int>(best_chord.quality);
+      float new_confidence = std::max(0.0f, chord_corr);
+
+      current_estimate_.chord_root = new_root;
+      current_estimate_.chord_quality = new_quality;
+      current_estimate_.chord_confidence = new_confidence;
+
+      /// Track chord progression
+      float frame_duration =
+          static_cast<float>(config_.hop_length) / static_cast<float>(config_.sample_rate);
+
+      if (new_root == prev_chord_root_ && new_quality == prev_chord_quality_) {
+        /// Same chord - accumulate stable time
+        chord_stable_time_ += frame_duration;
+      } else {
+        /// Chord changed - check if previous chord was stable long enough
+        if (prev_chord_root_ >= 0 && chord_stable_time_ >= kChordMinDuration) {
+          /// Find the start time of the previous chord
+          float chord_start = current_time - chord_stable_time_;
+
+          /// Only add if it's a new chord or first chord
+          if (current_estimate_.chord_progression.empty() ||
+              current_estimate_.chord_progression.back().root != prev_chord_root_ ||
+              current_estimate_.chord_progression.back().quality != prev_chord_quality_) {
+            ChordChange change;
+            change.root = prev_chord_root_;
+            change.quality = prev_chord_quality_;
+            change.start_time = chord_start;
+            change.confidence = new_confidence;
+            current_estimate_.chord_progression.push_back(change);
+          }
+        }
+
+        /// Reset for new chord
+        prev_chord_root_ = new_root;
+        prev_chord_quality_ = new_quality;
+        chord_stable_time_ = frame_duration;
+      }
     }
   }
 
@@ -747,6 +827,11 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   last_key_update_time_ = 0.0f;
   last_bpm_update_time_ = 0.0f;
   current_estimate_ = ProgressiveEstimate();
+
+  /// Reset chord progression tracking
+  prev_chord_root_ = -1;
+  prev_chord_quality_ = -1;
+  chord_stable_time_ = 0.0f;
 }
 
 AnalyzerStats StreamAnalyzer::stats() const {

@@ -156,6 +156,62 @@ interface WasmPitchResult {
   meanF0: number;
 }
 
+// Streaming types
+interface WasmChordChange {
+  root: number;
+  quality: number;
+  startTime: number;
+  confidence: number;
+}
+
+interface WasmProgressiveEstimate {
+  bpm: number;
+  bpmConfidence: number;
+  bpmCandidateCount: number;
+  key: number;
+  keyMinor: boolean;
+  keyConfidence: number;
+  chordRoot: number;
+  chordQuality: number;
+  chordConfidence: number;
+  chordProgression: WasmChordChange[];
+  accumulatedSeconds: number;
+  usedFrames: number;
+  updated: boolean;
+}
+
+interface WasmAnalyzerStats {
+  totalFrames: number;
+  totalSamples: number;
+  durationSeconds: number;
+  estimate: WasmProgressiveEstimate;
+}
+
+interface WasmFrameBuffer {
+  nFrames: number;
+  timestamps: Float32Array;
+  mel: Float32Array;
+  chroma: Float32Array;
+  onsetStrength: Float32Array;
+  rmsEnergy: Float32Array;
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+}
+
+interface WasmStreamAnalyzer {
+  process: (samples: Float32Array) => void;
+  processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
+  availableFrames: () => number;
+  readFramesSoa: (maxFrames: number) => WasmFrameBuffer;
+  readFramesU8: (maxFrames: number) => unknown;
+  readFramesI16: (maxFrames: number) => unknown;
+  reset: (baseSampleOffset?: number) => void;
+  stats: () => WasmAnalyzerStats;
+  frameCount: () => number;
+  currentTime: () => number;
+  delete: () => void;
+}
+
 // Types for Emscripten module with embind exports
 interface SonareModule {
   // Quick API
@@ -295,6 +351,18 @@ interface SonareModule {
 
   // Core - Resample
   resample: (samples: Float32Array, srcSr: number, targetSr: number) => Float32Array;
+
+  // Streaming - StreamAnalyzer class
+  StreamAnalyzer: new (
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nMels: number,
+    computeMel: boolean,
+    computeChroma: boolean,
+    computeOnset: boolean,
+    emitEveryNFrames: number,
+  ) => WasmStreamAnalyzer;
 }
 
 // ============================================================================
@@ -1281,6 +1349,227 @@ export function resample(samples: Float32Array, srcSr: number, targetSr: number)
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.resample(samples, srcSr, targetSr);
+}
+
+// ============================================================================
+// Streaming Types
+// ============================================================================
+
+/**
+ * A detected chord change in the progression
+ */
+export interface ChordChange {
+  root: PitchClass;
+  quality: ChordQuality;
+  startTime: number;
+  confidence: number;
+}
+
+/**
+ * Progressive estimation results for BPM, Key, and Chord
+ */
+export interface ProgressiveEstimate {
+  bpm: number;
+  bpmConfidence: number;
+  bpmCandidateCount: number;
+  key: PitchClass;
+  keyMinor: boolean;
+  keyConfidence: number;
+  chordRoot: PitchClass;
+  chordQuality: ChordQuality;
+  chordConfidence: number;
+  chordProgression: ChordChange[];
+  accumulatedSeconds: number;
+  usedFrames: number;
+  updated: boolean;
+}
+
+/**
+ * Statistics and current state of the analyzer
+ */
+export interface AnalyzerStats {
+  totalFrames: number;
+  totalSamples: number;
+  durationSeconds: number;
+  estimate: ProgressiveEstimate;
+}
+
+/**
+ * Frame buffer with analysis results
+ */
+export interface FrameBuffer {
+  nFrames: number;
+  timestamps: Float32Array;
+  mel: Float32Array;
+  chroma: Float32Array;
+  onsetStrength: Float32Array;
+  rmsEnergy: Float32Array;
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+}
+
+/**
+ * Configuration for StreamAnalyzer
+ */
+export interface StreamConfig {
+  sampleRate: number;
+  nFft?: number;
+  hopLength?: number;
+  nMels?: number;
+  computeMel?: boolean;
+  computeChroma?: boolean;
+  computeOnset?: boolean;
+  emitEveryNFrames?: number;
+}
+
+// ============================================================================
+// StreamAnalyzer Class
+// ============================================================================
+
+/**
+ * Real-time streaming audio analyzer.
+ *
+ * @example
+ * ```typescript
+ * import { init, StreamAnalyzer } from '@libraz/sonare';
+ *
+ * await init();
+ *
+ * const analyzer = new StreamAnalyzer({ sampleRate: 44100 });
+ *
+ * // In audio processing callback
+ * analyzer.process(samples);
+ *
+ * // Get current analysis state
+ * const stats = analyzer.stats();
+ * console.log('BPM:', stats.estimate.bpm);
+ * console.log('Key:', stats.estimate.key);
+ * console.log('Chord progression:', stats.estimate.chordProgression);
+ * ```
+ */
+export class StreamAnalyzer {
+  private analyzer: WasmStreamAnalyzer;
+
+  /**
+   * Create a new StreamAnalyzer.
+   *
+   * @param config - Configuration options
+   */
+  constructor(config: StreamConfig) {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    this.analyzer = new module.StreamAnalyzer(
+      config.sampleRate,
+      config.nFft ?? 2048,
+      config.hopLength ?? 512,
+      config.nMels ?? 128,
+      config.computeMel ?? true,
+      config.computeChroma ?? true,
+      config.computeOnset ?? true,
+      config.emitEveryNFrames ?? 1,
+    );
+  }
+
+  /**
+   * Process audio samples.
+   *
+   * @param samples - Audio samples (mono, float32)
+   */
+  process(samples: Float32Array): void {
+    this.analyzer.process(samples);
+  }
+
+  /**
+   * Process audio samples with explicit sample offset.
+   *
+   * @param samples - Audio samples (mono, float32)
+   * @param sampleOffset - Cumulative sample count at start of this chunk
+   */
+  processWithOffset(samples: Float32Array, sampleOffset: number): void {
+    this.analyzer.processWithOffset(samples, sampleOffset);
+  }
+
+  /**
+   * Get the number of frames available to read.
+   */
+  availableFrames(): number {
+    return this.analyzer.availableFrames();
+  }
+
+  /**
+   * Read processed frames as Structure of Arrays.
+   *
+   * @param maxFrames - Maximum number of frames to read
+   * @returns Frame buffer with analysis results
+   */
+  readFrames(maxFrames: number): FrameBuffer {
+    return this.analyzer.readFramesSoa(maxFrames);
+  }
+
+  /**
+   * Reset the analyzer state.
+   *
+   * @param baseSampleOffset - Starting sample offset (default 0)
+   */
+  reset(baseSampleOffset = 0): void {
+    this.analyzer.reset(baseSampleOffset);
+  }
+
+  /**
+   * Get current statistics and progressive estimates.
+   *
+   * @returns Analyzer statistics including BPM, key, and chord progression
+   */
+  stats(): AnalyzerStats {
+    const s = this.analyzer.stats();
+    return {
+      totalFrames: s.totalFrames,
+      totalSamples: s.totalSamples,
+      durationSeconds: s.durationSeconds,
+      estimate: {
+        bpm: s.estimate.bpm,
+        bpmConfidence: s.estimate.bpmConfidence,
+        bpmCandidateCount: s.estimate.bpmCandidateCount,
+        key: s.estimate.key as PitchClass,
+        keyMinor: s.estimate.keyMinor,
+        keyConfidence: s.estimate.keyConfidence,
+        chordRoot: s.estimate.chordRoot as PitchClass,
+        chordQuality: s.estimate.chordQuality as ChordQuality,
+        chordConfidence: s.estimate.chordConfidence,
+        chordProgression: s.estimate.chordProgression.map((c) => ({
+          root: c.root as PitchClass,
+          quality: c.quality as ChordQuality,
+          startTime: c.startTime,
+          confidence: c.confidence,
+        })),
+        accumulatedSeconds: s.estimate.accumulatedSeconds,
+        usedFrames: s.estimate.usedFrames,
+        updated: s.estimate.updated,
+      },
+    };
+  }
+
+  /**
+   * Get total frames processed.
+   */
+  frameCount(): number {
+    return this.analyzer.frameCount();
+  }
+
+  /**
+   * Get current time position in seconds.
+   */
+  currentTime(): number {
+    return this.analyzer.currentTime();
+  }
+
+  /**
+   * Release resources. Call when done using the analyzer.
+   */
+  dispose(): void {
+    this.analyzer.delete();
+  }
 }
 
 // ============================================================================

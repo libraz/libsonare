@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 
+#include "analysis/chord_templates.h"
 #include "streaming/stream_config.h"
 #include "streaming/stream_frame.h"
 
@@ -136,6 +137,9 @@ class StreamAnalyzer {
   std::vector<float> mel_filterbank_;     // [n_mels x n_bins]
   std::vector<float> chroma_filterbank_;  // [12 x n_bins]
 
+  // Chord templates for chord detection
+  std::vector<ChordTemplate> chord_templates_;
+
   // Frequency array for spectral features
   std::vector<float> frequencies_;
 
@@ -159,6 +163,12 @@ class StreamAnalyzer {
   float last_key_update_time_ = 0.0f;
   float last_bpm_update_time_ = 0.0f;
   ProgressiveEstimate current_estimate_;
+
+  // Chord progression tracking
+  int prev_chord_root_ = -1;
+  int prev_chord_quality_ = -1;
+  float chord_stable_time_ = 0.0f;        ///< Time chord has been stable
+  static constexpr float kChordMinDuration = 0.2f;  ///< Min duration to register change
 
   // Internal methods
   void process_internal(const float* samples, size_t n_samples);

@@ -80,6 +80,7 @@ if(BUILD_WASM)
     -sMODULARIZE=1
     -sEXPORT_ES6=1
     -sALLOW_MEMORY_GROWTH=1
+    -sSTACK_SIZE=8388608
     --bind
   )
 

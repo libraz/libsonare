@@ -317,6 +317,74 @@ interface SonareModule {
     Instrumental: { value: 5 };
     Outro: { value: 6 };
   };
+
+  // Streaming - StreamAnalyzer
+  StreamAnalyzer: new (
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nMels: number,
+    computeMel: boolean,
+    computeChroma: boolean,
+    computeOnset: boolean,
+    emitEveryNFrames: number,
+  ) => WasmStreamAnalyzer;
+}
+
+// Streaming types for StreamAnalyzer
+interface WasmChordChange {
+  root: number;
+  quality: number;
+  startTime: number;
+  confidence: number;
+}
+
+interface WasmProgressiveEstimate {
+  bpm: number;
+  bpmConfidence: number;
+  bpmCandidateCount: number;
+  key: number;
+  keyMinor: boolean;
+  keyConfidence: number;
+  chordRoot: number;
+  chordQuality: number;
+  chordConfidence: number;
+  chordProgression: WasmChordChange[];
+  accumulatedSeconds: number;
+  usedFrames: number;
+  updated: boolean;
+}
+
+interface WasmAnalyzerStats {
+  totalFrames: number;
+  totalSamples: number;
+  durationSeconds: number;
+  estimate: WasmProgressiveEstimate;
+}
+
+interface WasmFrameBuffer {
+  nFrames: number;
+  timestamps: Float32Array;
+  mel: Float32Array;
+  chroma: Float32Array;
+  onsetStrength: Float32Array;
+  rmsEnergy: Float32Array;
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+}
+
+interface WasmStreamAnalyzer {
+  process: (samples: Float32Array) => void;
+  processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
+  availableFrames: () => number;
+  readFramesSoa: (maxFrames: number) => WasmFrameBuffer;
+  readFramesU8: (maxFrames: number) => unknown;
+  readFramesI16: (maxFrames: number) => unknown;
+  reset: (baseSampleOffset?: number) => void;
+  stats: () => WasmAnalyzerStats;
+  frameCount: () => number;
+  currentTime: () => number;
+  delete: () => void;
 }
 
 declare function createModule(options?: SonareModuleOptions): Promise<SonareModule>;

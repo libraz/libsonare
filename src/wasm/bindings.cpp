@@ -723,6 +723,22 @@ class StreamAnalyzerWrapper {
     estimate.set("key", s.estimate.key);
     estimate.set("keyMinor", s.estimate.key_minor);
     estimate.set("keyConfidence", s.estimate.key_confidence);
+    estimate.set("chordRoot", s.estimate.chord_root);
+    estimate.set("chordQuality", s.estimate.chord_quality);
+    estimate.set("chordConfidence", s.estimate.chord_confidence);
+
+    // Chord progression
+    val chordProgression = val::array();
+    for (const auto& chord : s.estimate.chord_progression) {
+      val c = val::object();
+      c.set("root", chord.root);
+      c.set("quality", chord.quality);
+      c.set("startTime", chord.start_time);
+      c.set("confidence", chord.confidence);
+      chordProgression.call<void>("push", c);
+    }
+    estimate.set("chordProgression", chordProgression);
+
     estimate.set("accumulatedSeconds", s.estimate.accumulated_seconds);
     estimate.set("usedFrames", s.estimate.used_frames);
     estimate.set("updated", s.estimate.updated);

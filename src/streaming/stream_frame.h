@@ -10,6 +10,14 @@
 
 namespace sonare {
 
+/// @brief A detected chord change in the progression.
+struct ChordChange {
+  int root = -1;              ///< Chord root (0-11 for C-B, -1 = unknown)
+  int quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float start_time = 0.0f;    ///< Start time in seconds
+  float confidence = 0.0f;    ///< Detection confidence (0-1)
+};
+
 /// @brief A single frame of analysis results.
 /// @details Contains all computed features for one STFT frame.
 /// The timestamp represents stream time (input sample position),
@@ -38,7 +46,7 @@ struct StreamFrame {
   bool onset_valid = false;         ///< False for frame_index == 0 (no previous frame)
 };
 
-/// @brief Progressive estimation results for BPM and Key.
+/// @brief Progressive estimation results for BPM, Key, and Chord.
 /// @details Updated periodically based on accumulated data.
 /// Confidence increases as more data is processed.
 struct ProgressiveEstimate {
@@ -51,6 +59,14 @@ struct ProgressiveEstimate {
   int key = -1;                     ///< Estimated key (0-11 for C-B, -1 = unknown)
   bool key_minor = false;           ///< True if minor mode
   float key_confidence = 0.0f;      ///< Confidence (0-1, increases over time)
+
+  // Chord estimation (current chord, updated per frame)
+  int chord_root = -1;              ///< Current chord root (0-11 for C-B, -1 = unknown)
+  int chord_quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float chord_confidence = 0.0f;    ///< Chord detection confidence (0-1)
+
+  // Chord progression (accumulated over time)
+  std::vector<ChordChange> chord_progression;  ///< Detected chord changes
 
   // Objective statistics (for UI display)
   float accumulated_seconds = 0.0f; ///< Total audio processed
