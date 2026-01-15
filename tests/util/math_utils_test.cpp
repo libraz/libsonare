@@ -61,3 +61,27 @@ TEST_CASE("percentile", "[math_utils]") {
   REQUIRE_THAT(percentile(data.data(), data.size(), 50.0f), WithinAbs(3.0f, 1e-6f));
   REQUIRE_THAT(percentile(data.data(), data.size(), 100.0f), WithinAbs(5.0f, 1e-6f));
 }
+
+TEST_CASE("next_power_of_2", "[math_utils]") {
+  SECTION("powers of 2") {
+    REQUIRE(next_power_of_2(1) == 1);
+    REQUIRE(next_power_of_2(2) == 2);
+    REQUIRE(next_power_of_2(4) == 4);
+    REQUIRE(next_power_of_2(1024) == 1024);
+  }
+
+  SECTION("non-powers of 2") {
+    REQUIRE(next_power_of_2(3) == 4);
+    REQUIRE(next_power_of_2(5) == 8);
+    REQUIRE(next_power_of_2(7) == 8);
+    REQUIRE(next_power_of_2(100) == 128);
+    REQUIRE(next_power_of_2(1000) == 1024);
+    REQUIRE(next_power_of_2(2000) == 2048);
+  }
+
+  SECTION("edge cases") {
+    REQUIRE(next_power_of_2(0) == 1);
+    REQUIRE(next_power_of_2(-1) == 1);
+    REQUIRE(next_power_of_2(-100) == 1);
+  }
+}

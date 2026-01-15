@@ -37,9 +37,12 @@ struct StftConfig {
 };
 
 /// @brief Configuration for Griffin-Lim algorithm.
+/// @details Griffin-Lim iteratively estimates phase from magnitude spectrogram.
+///          Momentum accelerates convergence but may cause instability if too high.
 struct GriffinLimConfig {
-  int n_iter = 32;         ///< Number of iterations
-  float momentum = 0.99f;  ///< Momentum for faster convergence
+  int n_iter = 32;         ///< Number of iterations (typically 16-64)
+  float momentum = 0.99f;  ///< Momentum factor [0.0, 1.0). 0 disables, 0.99 is typical.
+                           ///< Higher values converge faster but may oscillate.
 };
 
 /// @brief Spectrogram computed from audio via STFT.
@@ -53,6 +56,11 @@ struct GriffinLimConfig {
 ///
 /// This layout is optimized for frequency-domain processing where
 /// operations typically iterate over all frames for a given bin.
+///
+/// @note Thread safety: A single Spectrogram instance is NOT thread-safe for
+///       concurrent access to magnitude()/power() methods due to lazy caching.
+///       Each thread should have its own Spectrogram instance, or external
+///       synchronization is required. Spectrogram::compute() itself is thread-safe.
 class Spectrogram {
  public:
   /// @brief Default constructor creates empty spectrogram.

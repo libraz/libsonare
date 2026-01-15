@@ -51,6 +51,7 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
 
 Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocoderConfig& config) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
   SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
 
   int n_bins = spec.n_bins();

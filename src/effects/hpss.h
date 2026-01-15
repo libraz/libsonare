@@ -11,13 +11,18 @@
 namespace sonare {
 
 /// @brief Configuration for HPSS algorithm.
+/// @details HPSS separates audio into harmonic (tonal) and percussive (transient)
+///          components using median filtering. Horizontal filtering enhances
+///          harmonics, vertical filtering enhances percussives.
 struct HpssConfig {
-  int kernel_size_harmonic = 31;    ///< Horizontal median filter size (harmonic)
-  int kernel_size_percussive = 31;  ///< Vertical median filter size (percussive)
-  float power = 2.0f;               ///< Power for soft mask computation
-  float margin_harmonic = 1.0f;     ///< Margin for harmonic mask
-  float margin_percussive = 1.0f;   ///< Margin for percussive mask
-  bool use_soft_mask = true;        ///< Use soft masks (false = hard masks)
+  int kernel_size_harmonic = 31;    ///< Horizontal median filter size (must be odd, >= 3)
+  int kernel_size_percussive = 31;  ///< Vertical median filter size (must be odd, >= 3)
+  float power = 2.0f;               ///< Exponent for mask computation (typically 1.0-2.0)
+  float margin_harmonic = 1.0f;     ///< Weight for harmonic mask (> 1.0 favors harmonic)
+  float margin_percussive = 1.0f;   ///< Weight for percussive mask (> 1.0 favors percussive)
+                                    ///< Soft mask formula: H / (H*margin_h + P*margin_p)
+  bool use_soft_mask = true;        ///< true = soft masks (smooth blend),
+                                    ///< false = hard masks (binary assignment)
 };
 
 /// @brief Result of HPSS on spectrogram.

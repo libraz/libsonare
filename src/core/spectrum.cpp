@@ -1,5 +1,6 @@
 #include "core/spectrum.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -165,10 +166,10 @@ const std::vector<float>& Spectrogram::magnitude() const {
 const std::vector<float>& Spectrogram::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     power_cache_.resize(data_.size());
-    for (size_t i = 0; i < data_.size(); ++i) {
-      float mag = std::abs(data_[i]);
-      power_cache_[i] = mag * mag;
-    }
+    // Use Eigen abs2() to compute re² + im² without sqrt
+    Eigen::Map<const Eigen::ArrayXcf> data_map(data_.data(), data_.size());
+    Eigen::Map<Eigen::ArrayXf> power_map(power_cache_.data(), data_.size());
+    power_map = data_map.abs2();
   }
   return power_cache_;
 }
@@ -312,13 +313,17 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
         std::complex<float> new_val = new_spec.at(f, t);
         float new_angle = std::arg(new_val);
 
-        // Apply momentum
+        // Apply momentum (exponential moving average of phase)
+        // momentum = 0.99 means 99% of previous angle, 1% of new angle
         if (iter > 0 && config.momentum > 0.0f) {
           float angle_diff = new_angle - prev_angles[idx];
           // Wrap angle difference to [-pi, pi]
           while (angle_diff > 3.14159265f) angle_diff -= 2.0f * 3.14159265f;
           while (angle_diff < -3.14159265f) angle_diff += 2.0f * 3.14159265f;
           new_angle = prev_angles[idx] + angle_diff * (1.0f - config.momentum);
+          // Wrap result to [-pi, pi]
+          while (new_angle > 3.14159265f) new_angle -= 2.0f * 3.14159265f;
+          while (new_angle < -3.14159265f) new_angle += 2.0f * 3.14159265f;
         }
 
         prev_angles[idx] = new_angle;

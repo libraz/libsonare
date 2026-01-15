@@ -77,6 +77,7 @@ class VqtKernel {
 /// @param config VQT configuration
 /// @param progress_callback Optional progress callback
 /// @return VQT result
+/// @note Thread-safe. Uses mutex-protected kernel cache internally.
 VqtResult vqt(const Audio& audio, const VqtConfig& config = VqtConfig(),
               VqtProgressCallback progress_callback = nullptr);
 
@@ -84,6 +85,11 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config = VqtConfig(),
 /// @param vqt_result VQT coefficients
 /// @param length Target output length in samples (0 = auto)
 /// @return Reconstructed audio
+/// @warning This is a simplified reconstruction and may not produce high-quality
+///          results. Consider using Griffin-Lim with VQT magnitude for better quality.
+/// @deprecated Prefer using phase vocoder or Griffin-Lim based methods for
+///             high-quality audio reconstruction.
+[[deprecated("Use Griffin-Lim or phase vocoder for better reconstruction quality")]]
 Audio ivqt(const VqtResult& vqt_result, int length = 0);
 
 /// @brief Computes VQT frequencies for given configuration.

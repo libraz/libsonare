@@ -13,6 +13,9 @@ namespace {
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kTwoPi = 2.0f * kPi;
 
+/// @brief Maximum number of cached windows per thread.
+constexpr size_t kMaxWindowCacheSize = 16;
+
 /// @brief Thread-local cache for window functions.
 thread_local std::map<std::pair<WindowType, int>, std::vector<float>> g_window_cache;
 }  // namespace
@@ -38,12 +41,20 @@ const std::vector<float>& get_window_cached(WindowType type, int length) {
     return it->second;
   }
 
+  // Clear cache if it exceeds the size limit
+  if (g_window_cache.size() >= kMaxWindowCacheSize) {
+    g_window_cache.clear();
+  }
+
   // Create and cache the window
   auto result = g_window_cache.emplace(key, create_window(type, length));
   return result.first->second;
 }
 
 std::vector<float> hann_window(int length) {
+  if (length <= 1) {
+    return std::vector<float>(length, 1.0f);
+  }
   std::vector<float> window(length);
   for (int i = 0; i < length; ++i) {
     window[i] = 0.5f * (1.0f - std::cos(kTwoPi * i / (length - 1)));
@@ -52,6 +63,9 @@ std::vector<float> hann_window(int length) {
 }
 
 std::vector<float> hamming_window(int length) {
+  if (length <= 1) {
+    return std::vector<float>(length, 1.0f);
+  }
   std::vector<float> window(length);
   for (int i = 0; i < length; ++i) {
     window[i] = 0.54f - 0.46f * std::cos(kTwoPi * i / (length - 1));
@@ -60,6 +74,9 @@ std::vector<float> hamming_window(int length) {
 }
 
 std::vector<float> blackman_window(int length) {
+  if (length <= 1) {
+    return std::vector<float>(length, 1.0f);
+  }
   std::vector<float> window(length);
   constexpr float a0 = 0.42f;
   constexpr float a1 = 0.5f;

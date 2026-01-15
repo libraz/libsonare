@@ -16,10 +16,19 @@ struct PhaseVocoderConfig {
 
 /// @brief Performs phase vocoder time-stretching on a spectrogram.
 /// @details Resamples the spectrogram in time while maintaining phase coherence.
-/// @param spec Input spectrogram
+///          Uses linear magnitude interpolation and phase accumulation with
+///          instantaneous frequency estimation.
+///
+///          Boundary handling:
+///          - At the start: uses first frame without interpolation
+///          - At the end: clamps to last two frames, using frame[-2] and frame[-1]
+///          - For very short spectrograms (< 2 frames), behavior may be undefined
+///
+/// @param spec Input spectrogram (must have at least 2 frames)
 /// @param rate Time stretch rate (< 1.0 = slower, > 1.0 = faster)
 /// @param config Phase vocoder configuration
 /// @return Time-stretched spectrogram
+/// @throws SonareException if spec is empty or rate <= 0
 Spectrogram phase_vocoder(const Spectrogram& spec, float rate,
                           const PhaseVocoderConfig& config = PhaseVocoderConfig());
 

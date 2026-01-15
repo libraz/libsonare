@@ -21,6 +21,16 @@ enum class AudioFormat {
 /// @brief Result of audio loading: samples and sample rate.
 using AudioLoadResult = std::tuple<std::vector<float>, int>;
 
+/// @brief Options for audio loading.
+struct AudioLoadOptions {
+  /// @brief Maximum file size in bytes (0 = no limit).
+  /// @details Default is 500MB. Set to 0 to disable size checking.
+  size_t max_file_size = 500 * 1024 * 1024;
+};
+
+/// @brief Default audio load options.
+inline const AudioLoadOptions kDefaultLoadOptions{};
+
 /// @brief Detects audio format from buffer header.
 /// @param data Pointer to audio data
 /// @param size Size of data in bytes
@@ -55,9 +65,11 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size);
 
 /// @brief Loads audio file (auto-detect format).
 /// @param path Path to audio file
+/// @param options Loading options (max file size, etc.)
 /// @return Tuple of (mono samples normalized to [-1,1], sample rate)
-/// @throws SonareException on file not found, unknown format, or decode error
-AudioLoadResult load_audio(const std::string& path);
+/// @throws SonareException on file not found, unknown format, file too large, or decode error
+AudioLoadResult load_audio(const std::string& path,
+                           const AudioLoadOptions& options = kDefaultLoadOptions);
 
 /// @brief Loads audio from memory buffer (auto-detect format).
 /// @param data Pointer to audio data

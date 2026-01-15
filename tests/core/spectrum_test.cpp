@@ -77,9 +77,14 @@ TEST_CASE("Spectrogram magnitude and power", "[spectrum]") {
   REQUIRE(mag.size() == static_cast<size_t>(spec.n_bins() * spec.n_frames()));
   REQUIRE(pwr.size() == mag.size());
 
-  // Power should be magnitude squared
+  // Power should be magnitude squared (use relative tolerance for larger values)
   for (size_t i = 0; i < mag.size(); ++i) {
-    REQUIRE_THAT(pwr[i], WithinAbs(mag[i] * mag[i], 1e-6f));
+    float expected = mag[i] * mag[i];
+    if (expected > 1.0f) {
+      REQUIRE_THAT(pwr[i], WithinRel(expected, 1e-5f));
+    } else {
+      REQUIRE_THAT(pwr[i], WithinAbs(expected, 1e-6f));
+    }
   }
 }
 

@@ -19,6 +19,17 @@ namespace sonare {
 
 namespace {
 
+/// @brief RAII guard for MP3 decode buffer.
+/// @details Ensures mp3dec_file_info_t.buffer is freed even on exception.
+struct Mp3BufferGuard {
+  mp3d_sample_t* ptr = nullptr;
+  ~Mp3BufferGuard() {
+    if (ptr) {
+      free(ptr);
+    }
+  }
+};
+
 /// @brief Converts interleaved stereo to mono by averaging channels.
 std::vector<float> stereo_to_mono(const float* data, size_t total_samples, int channels) {
   size_t frame_count = total_samples / static_cast<size_t>(channels);
@@ -109,6 +120,11 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   mp3dec_init(&mp3d);
   int result = mp3dec_load_buf(&mp3d, data, size, &info, nullptr, nullptr);
   SONARE_CHECK_MSG(result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
+
+  // Use RAII guard to ensure buffer is freed even on exception
+  Mp3BufferGuard buffer_guard;
+  buffer_guard.ptr = info.buffer;
+
   SONARE_CHECK_MSG(info.samples > 0, ErrorCode::DecodeFailed, "No audio samples in MP3 data");
 
   int sample_rate = info.hz;
@@ -139,7 +155,7 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
     }
   }
 
-  free(info.buffer);
+  // buffer_guard will free info.buffer on destruction
   return {std::move(mono), sample_rate};
 }
 
@@ -166,7 +182,17 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
   }
 }
 
-AudioLoadResult load_audio(const std::string& path) {
+AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& options) {
+  // Check file size before loading
+  if (options.max_file_size > 0) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    SONARE_CHECK_MSG(file.is_open(), ErrorCode::FileNotFound, "Cannot open file: " + path);
+    auto size = file.tellg();
+    SONARE_CHECK_MSG(static_cast<size_t>(size) <= options.max_file_size, ErrorCode::InvalidParameter,
+                     "File too large: " + std::to_string(size) + " bytes (max: " +
+                         std::to_string(options.max_file_size) + " bytes)");
+  }
+
   std::vector<uint8_t> data = read_file(path);
   return load_buffer(data.data(), data.size());
 }

@@ -253,6 +253,12 @@ TEST_CASE("cqt with progress callback", "[cqt]") {
   REQUIRE(progress_values.back() >= 0.99f);  // Should reach ~100%
 }
 
+// Suppress deprecated warning for icqt test (testing deprecated function)
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 TEST_CASE("icqt reconstruction", "[cqt]") {
   Audio original = generate_sine(440.0f, 0.5f, 22050);
 
@@ -269,6 +275,10 @@ TEST_CASE("icqt reconstruction", "[cqt]") {
   // Note: Perfect reconstruction is not guaranteed with this simple iCQT
   // Just verify it doesn't crash and produces reasonable output
 }
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 TEST_CASE("cqt empty audio throws", "[cqt]") {
   Audio empty_audio;

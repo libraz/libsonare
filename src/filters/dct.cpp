@@ -11,6 +11,9 @@ namespace sonare {
 namespace {
 constexpr float kPi = 3.14159265358979323846f;
 
+/// @brief Maximum number of cached DCT matrices per thread.
+constexpr size_t kMaxDctCacheSize = 8;
+
 /// @brief Thread-local cache for DCT matrices.
 thread_local std::map<std::pair<int, int>, std::vector<float>> g_dct_cache;
 }  // namespace
@@ -42,6 +45,11 @@ const std::vector<float>& get_dct_matrix_cached(int n_output, int n_input) {
   auto it = g_dct_cache.find(key);
   if (it != g_dct_cache.end()) {
     return it->second;
+  }
+
+  // Clear cache if it exceeds the size limit
+  if (g_dct_cache.size() >= kMaxDctCacheSize) {
+    g_dct_cache.clear();
   }
 
   // Create and cache the matrix

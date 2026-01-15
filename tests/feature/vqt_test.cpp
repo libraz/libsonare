@@ -194,6 +194,12 @@ TEST_CASE("vqt with progress callback", "[vqt]") {
   REQUIRE(progress_values.back() >= 0.99f);
 }
 
+// Suppress deprecated warning for ivqt test (testing deprecated function)
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 TEST_CASE("ivqt reconstruction", "[vqt]") {
   Audio original = generate_sine(440.0f, 0.5f, 22050);
 
@@ -207,6 +213,10 @@ TEST_CASE("ivqt reconstruction", "[vqt]") {
   REQUIRE(reconstructed.sample_rate() == original.sample_rate());
   REQUIRE(!reconstructed.empty());
 }
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 TEST_CASE("vqt empty audio throws", "[vqt]") {
   Audio empty_audio;

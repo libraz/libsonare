@@ -21,7 +21,7 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   // Pitch shifting = time stretch + resample
   // To raise pitch by ratio R:
   // 1. Time stretch by factor R (makes it R times shorter)
-  // 2. Resample to original sample rate (stretches it back)
+  // 2. Resample to restore original duration
 
   // Time stretch configuration
   TimeStretchConfig ts_config;
@@ -31,23 +31,23 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   // Step 1: Time stretch (rate = ratio means shorter duration)
   Audio stretched = time_stretch(audio, ratio, ts_config);
 
-  // Step 2: Resample back to original length
-  // After time stretch by ratio, we have 1/ratio of original samples
-  // We need to resample to get back to original length
-  // target_sr = original_sr / ratio would give us the right number of samples
-  // But we want to keep the sample rate, so we resample then adjust
-
+  // Step 2: Resample back to original length in a single step
+  // After time stretch by ratio, we have ~1/ratio of original samples.
+  // To restore original duration, we treat stretched audio as if it has
+  // an effective sample rate of (original_sr * ratio), then resample to original_sr.
+  // This achieves the same result as two resamples but in one pass.
   int original_sr = audio.sample_rate();
-  int target_sr = static_cast<int>(std::round(static_cast<float>(original_sr) / ratio));
+  int effective_sr = static_cast<int>(std::round(static_cast<float>(original_sr) * ratio));
 
-  if (target_sr < 1000) target_sr = 1000;      // Minimum sample rate
-  if (target_sr > 192000) target_sr = 192000;  // Maximum sample rate
+  // Clamp effective sample rate to reasonable bounds
+  if (effective_sr < 1000) effective_sr = 1000;
+  if (effective_sr > 192000) effective_sr = 192000;
 
-  // Resample from stretched (at original_sr) to target_sr, then back to original_sr
-  Audio resampled = resample(stretched, target_sr);
-  Audio result = resample(resampled, original_sr);
+  // Single resample from effective rate to original rate
+  std::vector<float> result_samples =
+      resample(stretched.data(), stretched.size(), effective_sr, original_sr);
 
-  return result;
+  return Audio::from_vector(std::move(result_samples), original_sr);
 }
 
 }  // namespace sonare

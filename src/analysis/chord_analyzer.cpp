@@ -356,19 +356,27 @@ std::string ChordAnalyzer::progression_pattern() const {
 }
 
 std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass key_root,
-                                                  Mode /* mode */) const {
+                                                  Mode mode) const {
   // Calculate interval from key root
   int interval = (static_cast<int>(chord.root) - static_cast<int>(key_root) + 12) % 12;
 
-  // Scale degree names (major scale intervals)
+  // Scale degree names
+  // Major scale intervals: 0, 2, 4, 5, 7, 9, 11 (I, II, III, IV, V, VI, VII)
+  // Natural minor intervals: 0, 2, 3, 5, 7, 8, 10 (i, ii, bIII, iv, v, bVI, bVII)
   static const std::vector<std::pair<int, std::string>> major_degrees = {
       {0, "I"}, {2, "II"}, {4, "III"}, {5, "IV"}, {7, "V"}, {9, "VI"}, {11, "VII"}};
+
+  static const std::vector<std::pair<int, std::string>> minor_degrees = {
+      {0, "I"}, {2, "II"}, {3, "III"}, {5, "IV"}, {7, "V"}, {8, "VI"}, {10, "VII"}};
+
+  // Select scale based on mode
+  const auto& scale_degrees = (mode == Mode::Minor) ? minor_degrees : major_degrees;
 
   // Find closest scale degree
   std::string numeral;
   bool is_chromatic = true;
 
-  for (const auto& deg : major_degrees) {
+  for (const auto& deg : scale_degrees) {
     if (deg.first == interval) {
       numeral = deg.second;
       is_chromatic = false;
@@ -376,17 +384,32 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     }
   }
 
-  // Handle chromatic chords (flat/sharp)
+  // Handle chromatic chords (flat/sharp relative to the current scale)
   if (is_chromatic) {
-    for (const auto& deg : major_degrees) {
+    // For minor mode, check if the chord is on a major scale degree (raised)
+    // For major mode, check if the chord is on a minor scale degree (lowered)
+    const auto& other_degrees = (mode == Mode::Minor) ? major_degrees : minor_degrees;
+
+    for (const auto& deg : scale_degrees) {
       if ((deg.first + 1) % 12 == interval) {
-        numeral = "b" + deg.second;
+        numeral = "#" + deg.second;
         break;
       }
       if ((deg.first - 1 + 12) % 12 == interval) {
-        numeral = "#" + std::string(deg.second.begin(), deg.second.end() - 1) +
-                  std::string(1, deg.second.back());
+        numeral = "b" + deg.second;
         break;
+      }
+    }
+
+    // If still not found, try the other scale for borrowed chords
+    if (numeral.empty()) {
+      for (const auto& deg : other_degrees) {
+        if (deg.first == interval) {
+          // Borrowed chord from parallel mode
+          numeral = (mode == Mode::Minor) ? deg.second : deg.second;
+          is_chromatic = false;
+          break;
+        }
       }
     }
   }
@@ -396,10 +419,11 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
   }
 
   // Adjust case based on chord quality
-  bool is_minor = (chord.quality == ChordQuality::Minor || chord.quality == ChordQuality::Minor7 ||
-                   chord.quality == ChordQuality::Diminished);
+  bool is_minor_chord =
+      (chord.quality == ChordQuality::Minor || chord.quality == ChordQuality::Minor7 ||
+       chord.quality == ChordQuality::Diminished);
 
-  if (is_minor) {
+  if (is_minor_chord) {
     // Convert to lowercase
     for (char& c : numeral) {
       if (c >= 'A' && c <= 'Z') {

@@ -1,23 +1,104 @@
 #include "feature/vqt.h"
 
+#include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <list>
+#include <mutex>
+#include <unordered_map>
 
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
 namespace {
 
-/// @brief Finds smallest power of 2 >= n.
-int next_power_of_2(int n) {
-  int power = 1;
-  while (power < n) {
-    power *= 2;
+/// @brief Cache key for VQT kernel
+struct VqtKernelCacheKey {
+  int sample_rate;
+  int hop_length;
+  float fmin;
+  int n_bins;
+  int bins_per_octave;
+  float gamma;
+
+  bool operator==(const VqtKernelCacheKey& other) const {
+    return sample_rate == other.sample_rate && hop_length == other.hop_length &&
+           std::abs(fmin - other.fmin) < 0.01f && n_bins == other.n_bins &&
+           bins_per_octave == other.bins_per_octave && std::abs(gamma - other.gamma) < 0.01f;
   }
-  return power;
+};
+
+struct VqtKernelCacheKeyHash {
+  size_t operator()(const VqtKernelCacheKey& k) const {
+    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
+           (std::hash<int>()(k.bins_per_octave) << 2) ^
+           (std::hash<float>()(k.gamma) << 3);
+  }
+};
+
+/// @brief Eigen matrix type for VQT kernel
+using EigenKernelMatrix =
+    Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
+/// @brief Cached kernel with Eigen matrix
+struct CachedVqtKernel {
+  std::shared_ptr<VqtKernel> kernel;
+  std::shared_ptr<EigenKernelMatrix> eigen_matrix;
+};
+
+/// @brief Maximum number of cached VQT kernels
+constexpr size_t kMaxVqtCacheSize = 8;
+
+/// @brief Global VQT kernel cache with LRU eviction
+std::mutex g_vqt_cache_mutex;
+std::unordered_map<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> g_vqt_cache;
+std::list<VqtKernelCacheKey> g_vqt_cache_lru;
+
+/// @brief Get or create cached VQT kernel with Eigen matrix
+CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
+  VqtKernelCacheKey key{sr, config.hop_length, config.fmin, config.n_bins,
+                        config.bins_per_octave, config.gamma};
+
+  std::lock_guard<std::mutex> lock(g_vqt_cache_mutex);
+  auto it = g_vqt_cache.find(key);
+  if (it != g_vqt_cache.end()) {
+    // Move to front of LRU list (most recently used)
+    g_vqt_cache_lru.remove(key);
+    g_vqt_cache_lru.push_front(key);
+    return it->second;
+  }
+
+  // Create kernel
+  auto kernel = VqtKernel::create(sr, config);
+
+  // Pre-compute Eigen matrix
+  int fft_length = kernel->fft_length();
+  int n_bins = kernel->n_bins();
+  int fft_bins = fft_length / 2 + 1;
+  const auto& freq_kernels = kernel->kernel();
+
+  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_bins);
+  for (int k = 0; k < n_bins; ++k) {
+    for (int i = 0; i < fft_bins; ++i) {
+      (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
+    }
+  }
+
+  // Evict oldest entry if cache is full
+  while (g_vqt_cache.size() >= kMaxVqtCacheSize && !g_vqt_cache_lru.empty()) {
+    auto oldest_key = g_vqt_cache_lru.back();
+    g_vqt_cache_lru.pop_back();
+    g_vqt_cache.erase(oldest_key);
+  }
+
+  CachedVqtKernel cached{std::shared_ptr<VqtKernel>(kernel.release()), eigen_matrix};
+  g_vqt_cache[key] = cached;
+  g_vqt_cache_lru.push_front(key);
+  return cached;
 }
 
 }  // namespace
@@ -135,16 +216,22 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   int sr = audio.sample_rate();
   int n_samples = static_cast<int>(audio.size());
 
-  // Create VQT kernel
-  auto kernel = VqtKernel::create(sr, config);
+  // Get cached VQT kernel with pre-computed Eigen matrix
+  auto cached = get_cached_vqt_kernel(sr, config);
+  auto& kernel = cached.kernel;
+  auto& kernel_matrix = *cached.eigen_matrix;
+
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
+  int fft_bins = fft_length / 2 + 1;
 
   // Calculate number of frames
   int n_frames = 1 + (n_samples - fft_length) / config.hop_length;
   if (n_frames <= 0) {
     n_frames = 1;
   }
+
+  using VectorXcf = Eigen::Matrix<std::complex<float>, Eigen::Dynamic, 1>;
 
   // Allocate output
   std::vector<std::complex<float>> output(n_bins * n_frames);
@@ -154,15 +241,16 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
   // Temporary buffers
   std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> frame_fft(fft_length / 2 + 1);
+  std::vector<std::complex<float>> frame_fft(fft_bins);
+  VectorXcf result(n_bins);
 
   const float* data = audio.data();
-  const auto& freq_kernels = kernel->kernel();
+  float norm_factor = 1.0f / static_cast<float>(fft_length);
 
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
 
-  // Process each frame
+  // Process each frame with Eigen SIMD optimization
   for (int t = 0; t < n_frames; ++t) {
     int start = t * config.hop_length;
 
@@ -176,15 +264,13 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
     // FFT of frame
     fft.forward(frame.data(), frame_fft.data());
 
-    // Multiply with each kernel and sum (correlation)
+    // Compute all correlations at once using cached Eigen matrix
+    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_bins);
+    result.noalias() = kernel_matrix * frame_vec * norm_factor;
+
+    // Copy to output
     for (int k = 0; k < n_bins; ++k) {
-      std::complex<float> sum(0.0f, 0.0f);
-
-      for (int i = 0; i < fft_length / 2 + 1; ++i) {
-        sum += frame_fft[i] * freq_kernels[k * fft_length + i];
-      }
-
-      output[k * n_frames + t] = sum / static_cast<float>(fft_length);
+      output[k * n_frames + t] = result(k);
     }
 
     // Report progress
@@ -199,7 +285,15 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
 Audio ivqt(const VqtResult& vqt_result, int length) {
   // VQT inverse is similar to CQT inverse
+  // Suppress deprecation warning for internal call to icqt
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
   return icqt(vqt_result, length);
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 }  // namespace sonare

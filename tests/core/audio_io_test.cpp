@@ -173,3 +173,14 @@ TEST_CASE("load_buffer auto-detect WAV", "[audio_io]") {
   REQUIRE(loaded_sr == sr);
   REQUIRE(loaded.size() == samples);
 }
+
+TEST_CASE("AudioLoadOptions defaults", "[audio_io]") {
+  SECTION("default max_file_size is 500MB") {
+    AudioLoadOptions opts;
+    REQUIRE(opts.max_file_size == 500 * 1024 * 1024);
+  }
+
+  SECTION("kDefaultLoadOptions uses defaults") {
+    REQUIRE(kDefaultLoadOptions.max_file_size == 500 * 1024 * 1024);
+  }
+}

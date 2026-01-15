@@ -28,6 +28,10 @@ struct CqtConfig {
 };
 
 /// @brief CQT result container.
+/// @note Thread safety: A single CqtResult instance is NOT thread-safe for
+///       concurrent access to magnitude()/power() methods due to lazy caching.
+///       Each thread should have its own CqtResult instance, or external
+///       synchronization is required. The cqt() function itself is thread-safe.
 class CqtResult {
  public:
   /// @brief Default constructor creates empty result.
@@ -126,6 +130,7 @@ class CqtKernel {
 /// @param config CQT configuration
 /// @param progress_callback Optional progress callback
 /// @return CQT result
+/// @note Thread-safe. Uses mutex-protected kernel cache internally.
 CqtResult cqt(const Audio& audio, const CqtConfig& config = CqtConfig(),
               CqtProgressCallback progress_callback = nullptr);
 
@@ -133,6 +138,11 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config = CqtConfig(),
 /// @param cqt_result CQT coefficients
 /// @param length Target output length in samples (0 = auto)
 /// @return Reconstructed audio
+/// @warning This is a simplified reconstruction and may not produce high-quality
+///          results. Consider using Griffin-Lim with CQT magnitude for better quality.
+/// @deprecated Prefer using phase vocoder or Griffin-Lim based methods for
+///             high-quality audio reconstruction.
+[[deprecated("Use Griffin-Lim or phase vocoder for better reconstruction quality")]]
 Audio icqt(const CqtResult& cqt_result, int length = 0);
 
 /// @brief Computes CQT frequencies for given configuration.

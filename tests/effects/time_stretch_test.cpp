@@ -180,3 +180,36 @@ TEST_CASE("phase_vocoder handles edge cases", "[time_stretch]") {
     }
   }
 }
+
+TEST_CASE("phase_vocoder validation", "[time_stretch]") {
+  SECTION("throws on empty spectrogram") {
+    Spectrogram empty_spec;
+    REQUIRE_THROWS(phase_vocoder(empty_spec, 1.0f));
+  }
+
+  SECTION("throws on single frame spectrogram") {
+    // Create spectrogram with only 1 frame (< 2 required)
+    Audio short_audio = create_test_audio(440.0f, 22050, 0.01f);  // 10ms
+
+    StftConfig stft_config;
+    stft_config.n_fft = 4096;    // Large FFT
+    stft_config.hop_length = 512;
+    stft_config.center = false;  // No center padding to get minimal frames
+
+    Spectrogram spec = Spectrogram::compute(short_audio, stft_config);
+
+    // Skip test if we got >= 2 frames (depends on audio length/FFT size)
+    if (spec.n_frames() < 2) {
+      REQUIRE_THROWS(phase_vocoder(spec, 1.0f));
+    }
+  }
+
+  SECTION("throws on invalid rate") {
+    Audio audio = create_test_audio(440.0f, 22050, 0.5f);
+    StftConfig stft_config;
+    Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+    REQUIRE_THROWS(phase_vocoder(spec, 0.0f));
+    REQUIRE_THROWS(phase_vocoder(spec, -1.0f));
+  }
+}

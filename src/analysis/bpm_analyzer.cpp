@@ -9,6 +9,7 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -197,15 +198,6 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
 }
 
 namespace {
-
-/// @brief Returns next power of 2 >= n.
-int next_power_of_2(int n) {
-  int power = 1;
-  while (power < n) {
-    power *= 2;
-  }
-  return power;
-}
 
 /// @brief Computes autocorrelation of a signal using FFT (O(n log n)).
 /// @details Uses the Wiener-Khinchin theorem: autocorr(x) = IFFT(|FFT(x)|^2)

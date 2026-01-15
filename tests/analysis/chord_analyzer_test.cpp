@@ -164,6 +164,56 @@ TEST_CASE("ChordAnalyzer functional analysis", "[chord_analyzer]") {
   REQUIRE(roman[0] == "I");
 }
 
+TEST_CASE("ChordAnalyzer functional analysis minor mode", "[chord_analyzer]") {
+  SECTION("chord in relative minor key") {
+    Audio audio = create_a_minor(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    // Analyze A minor chord in key of A minor
+    auto roman = analyzer.functional_analysis(PitchClass::A, Mode::Minor);
+
+    REQUIRE(!roman.empty());
+    // A minor in key of A minor should be "i"
+    REQUIRE(roman[0] == "i");
+  }
+
+  SECTION("major chord in minor key") {
+    Audio audio = create_c_major(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    // Analyze C major chord in key of A minor
+    auto roman = analyzer.functional_analysis(PitchClass::A, Mode::Minor);
+
+    REQUIRE(!roman.empty());
+    // C major in key of A minor should be "III" (bIII in major, but III in minor)
+    REQUIRE(roman[0] == "III");
+  }
+
+  SECTION("G major in A minor key") {
+    Audio audio = create_g_major(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    // Analyze G major chord in key of A minor
+    auto roman = analyzer.functional_analysis(PitchClass::A, Mode::Minor);
+
+    REQUIRE(!roman.empty());
+    // G major in key of A minor should be "VII" (bVII in minor scale)
+    REQUIRE(roman[0] == "VII");
+  }
+}
+
 TEST_CASE("ChordAnalyzer chord_at", "[chord_analyzer]") {
   Audio audio = create_c_major(22050, 2.0f);
 

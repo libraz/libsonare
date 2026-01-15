@@ -1,5 +1,6 @@
 #include "effects/hpss.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -113,6 +114,9 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
   // Pre-allocate buffer for window values (boundary regions only)
   std::vector<float> window(kernel_size);
 
+  // Reuse SlidingMedian across rows to reduce allocation overhead
+  SlidingMedian sm;
+
   for (int k = 0; k < n_bins; ++k) {
     const float* row = magnitude + k * n_frames;
     float* out_row = result.data() + k * n_frames;
@@ -128,7 +132,7 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
 
     // Middle region - use sliding window median O(n log k)
     if (n_frames > 2 * half) {
-      SlidingMedian sm;
+      sm.clear();
 
       // Initialize window with first kernel_size elements
       for (int i = 0; i < kernel_size; ++i) {
@@ -168,6 +172,9 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   // Pre-allocate buffer for window values (boundary regions only)
   std::vector<float> window(kernel_size);
 
+  // Reuse SlidingMedian across columns to reduce allocation overhead
+  SlidingMedian sm;
+
   for (int t = 0; t < n_frames; ++t) {
     // Top boundary region (partial window) - use nth_element
     for (int k = 0; k < std::min(half, n_bins); ++k) {
@@ -182,7 +189,7 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
 
     // Middle region - use sliding window median O(n log k)
     if (n_bins > 2 * half) {
-      SlidingMedian sm;
+      sm.clear();
 
       // Initialize window with first kernel_size elements
       for (int i = 0; i < kernel_size; ++i) {
@@ -228,46 +235,50 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   std::vector<float> percussive_enhanced =
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  // Compute masks
-  std::vector<float> harmonic_mask(n_bins * n_frames);
-  std::vector<float> percussive_mask(n_bins * n_frames);
+  // Compute masks using Eigen for vectorized power and division
+  int total_size = n_bins * n_frames;
+  std::vector<float> harmonic_mask(total_size);
+  std::vector<float> percussive_mask(total_size);
 
-  float eps = 1e-10f;
+  constexpr float kEps = 1e-10f;
 
-  for (int i = 0; i < n_bins * n_frames; ++i) {
-    float h = std::pow(harmonic_enhanced[i], config.power);
-    float p = std::pow(percussive_enhanced[i], config.power);
+  // Map enhanced arrays to Eigen
+  Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
+  Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
 
-    if (config.use_soft_mask) {
-      // Soft mask with margins
-      float h_margin = h * config.margin_harmonic;
-      float p_margin = p * config.margin_percussive;
-      float total = h_margin + p_margin + eps;
+  // Compute power using Eigen
+  Eigen::ArrayXf h_pow = h_enh.pow(config.power);
+  Eigen::ArrayXf p_pow = p_enh.pow(config.power);
 
-      harmonic_mask[i] = h_margin / total;
-      percussive_mask[i] = p_margin / total;
-    } else {
-      // Hard mask
-      if (h >= p) {
-        harmonic_mask[i] = 1.0f;
-        percussive_mask[i] = 0.0f;
-      } else {
-        harmonic_mask[i] = 0.0f;
-        percussive_mask[i] = 1.0f;
-      }
-    }
+  Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
+  Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
+
+  if (config.use_soft_mask) {
+    // Soft mask with margins
+    Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
+    Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
+    Eigen::ArrayXf total = h_margin + p_margin + kEps;
+
+    h_mask = h_margin / total;
+    p_mask = p_margin / total;
+  } else {
+    // Hard mask: h >= p -> harmonic=1, else percussive=1
+    h_mask = (h_pow >= p_pow).cast<float>();
+    p_mask = 1.0f - h_mask;
   }
 
-  // Apply masks to complex spectrum
+  // Apply masks to complex spectrum using Eigen
   const std::complex<float>* complex_data = spec.complex_data();
 
-  std::vector<std::complex<float>> harmonic_complex(n_bins * n_frames);
-  std::vector<std::complex<float>> percussive_complex(n_bins * n_frames);
+  std::vector<std::complex<float>> harmonic_complex(total_size);
+  std::vector<std::complex<float>> percussive_complex(total_size);
 
-  for (int i = 0; i < n_bins * n_frames; ++i) {
-    harmonic_complex[i] = complex_data[i] * harmonic_mask[i];
-    percussive_complex[i] = complex_data[i] * percussive_mask[i];
-  }
+  Eigen::Map<const Eigen::ArrayXcf> complex_map(complex_data, total_size);
+  Eigen::Map<Eigen::ArrayXcf> harm_out(harmonic_complex.data(), total_size);
+  Eigen::Map<Eigen::ArrayXcf> perc_out(percussive_complex.data(), total_size);
+
+  harm_out = complex_map * h_mask;
+  perc_out = complex_map * p_mask;
 
   // Create result spectrograms
   HpssSpectrogramResult result;
@@ -323,69 +334,71 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   std::vector<float> percussive_enhanced =
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  // Compute masks for three-way split
-  std::vector<float> harmonic_mask(n_bins * n_frames);
-  std::vector<float> percussive_mask(n_bins * n_frames);
-  std::vector<float> residual_mask(n_bins * n_frames);
+  // Compute masks for three-way split using Eigen
+  int total_size = n_bins * n_frames;
+  std::vector<float> harmonic_mask(total_size);
+  std::vector<float> percussive_mask(total_size);
+  std::vector<float> residual_mask(total_size);
 
-  float eps = 1e-10f;
+  constexpr float kEps = 1e-10f;
 
-  for (int i = 0; i < n_bins * n_frames; ++i) {
-    float h = std::pow(harmonic_enhanced[i], config.power);
-    float p = std::pow(percussive_enhanced[i], config.power);
+  // Map enhanced arrays to Eigen
+  Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
+  Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
 
+  // Compute power using Eigen
+  Eigen::ArrayXf h_pow = h_enh.pow(config.power);
+  Eigen::ArrayXf p_pow = p_enh.pow(config.power);
+
+  Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
+  Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
+  Eigen::Map<Eigen::ArrayXf> r_mask(residual_mask.data(), total_size);
+
+  if (config.use_soft_mask) {
     // Soft masks with margins
-    float h_margin = h * config.margin_harmonic;
-    float p_margin = p * config.margin_percussive;
+    Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
+    Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
+    Eigen::ArrayXf total = h_margin + p_margin + kEps;
 
-    if (config.use_soft_mask) {
-      float total = h_margin + p_margin + eps;
-      harmonic_mask[i] = h_margin / total;
-      percussive_mask[i] = p_margin / total;
+    h_mask = h_margin / total;
+    p_mask = p_margin / total;
 
-      // Residual is 1 - sum when margins < 1
-      float sum = harmonic_mask[i] + percussive_mask[i];
-      if (sum < 1.0f) {
-        residual_mask[i] = 1.0f - sum;
-        // Renormalize
-        float total_all = sum + residual_mask[i];
-        harmonic_mask[i] /= total_all;
-        percussive_mask[i] /= total_all;
-        residual_mask[i] /= total_all;
-      } else {
-        residual_mask[i] = 0.0f;
-      }
-    } else {
-      // Hard mask: residual is where neither dominates clearly
-      float ratio = (h + eps) / (p + eps);
-      if (ratio > 2.0f) {
-        harmonic_mask[i] = 1.0f;
-        percussive_mask[i] = 0.0f;
-        residual_mask[i] = 0.0f;
-      } else if (ratio < 0.5f) {
-        harmonic_mask[i] = 0.0f;
-        percussive_mask[i] = 1.0f;
-        residual_mask[i] = 0.0f;
-      } else {
-        harmonic_mask[i] = 0.0f;
-        percussive_mask[i] = 0.0f;
-        residual_mask[i] = 1.0f;
-      }
-    }
+    // Residual is 1 - sum when margins < 1
+    Eigen::ArrayXf mask_sum = h_mask + p_mask;
+    r_mask = (1.0f - mask_sum).max(0.0f);
+
+    // Renormalize where residual > 0
+    Eigen::ArrayXf total_all = mask_sum + r_mask;
+    h_mask /= total_all;
+    p_mask /= total_all;
+    r_mask /= total_all;
+  } else {
+    // Hard mask: residual is where neither dominates clearly
+    Eigen::ArrayXf ratio = (h_pow + kEps) / (p_pow + kEps);
+
+    // ratio > 2.0 -> harmonic only
+    // ratio < 0.5 -> percussive only
+    // else -> residual
+    h_mask = (ratio > 2.0f).cast<float>();
+    p_mask = (ratio < 0.5f).cast<float>();
+    r_mask = 1.0f - h_mask - p_mask;
   }
 
-  // Apply masks to complex spectrum
+  // Apply masks to complex spectrum using Eigen
   const std::complex<float>* complex_data = spec.complex_data();
 
-  std::vector<std::complex<float>> harmonic_complex(n_bins * n_frames);
-  std::vector<std::complex<float>> percussive_complex(n_bins * n_frames);
-  std::vector<std::complex<float>> residual_complex(n_bins * n_frames);
+  std::vector<std::complex<float>> harmonic_complex(total_size);
+  std::vector<std::complex<float>> percussive_complex(total_size);
+  std::vector<std::complex<float>> residual_complex(total_size);
 
-  for (int i = 0; i < n_bins * n_frames; ++i) {
-    harmonic_complex[i] = complex_data[i] * harmonic_mask[i];
-    percussive_complex[i] = complex_data[i] * percussive_mask[i];
-    residual_complex[i] = complex_data[i] * residual_mask[i];
-  }
+  Eigen::Map<const Eigen::ArrayXcf> complex_map(complex_data, total_size);
+  Eigen::Map<Eigen::ArrayXcf> harm_out(harmonic_complex.data(), total_size);
+  Eigen::Map<Eigen::ArrayXcf> perc_out(percussive_complex.data(), total_size);
+  Eigen::Map<Eigen::ArrayXcf> res_out(residual_complex.data(), total_size);
+
+  harm_out = complex_map * h_mask;
+  perc_out = complex_map * p_mask;
+  res_out = complex_map * r_mask;
 
   // Create result spectrograms
   HpssSpectrogramResultWithResidual result;

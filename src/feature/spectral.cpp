@@ -1,5 +1,6 @@
 #include "feature/spectral.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -9,6 +10,12 @@
 namespace sonare {
 
 namespace {
+
+/// @brief Computes frequency for each FFT bin using Eigen.
+Eigen::VectorXf bin_frequencies_eigen(int n_bins, int sr, int n_fft) {
+  float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
+  return Eigen::VectorXf::LinSpaced(n_bins, 0.0f, (n_bins - 1) * bin_width);
+}
 
 /// @brief Computes frequency for each FFT bin.
 std::vector<float> bin_frequencies(int n_bins, int sr, int n_fft) {
@@ -31,25 +38,23 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
                                      int n_fft) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
 
-  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+  // Create frequency vector
+  Eigen::VectorXf freqs = bin_frequencies_eigen(n_bins, sr, n_fft);
+
+  // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      mag_map(magnitude, n_bins, n_frames);
+
+  // Compute weighted sum: freqs^T * mag (produces row vector of length n_frames)
+  Eigen::RowVectorXf sum_weighted = freqs.transpose() * mag_map;
+
+  // Compute magnitude sum per frame
+  Eigen::RowVectorXf sum_mag = mag_map.colwise().sum();
+
+  // Compute centroid with division safety
   std::vector<float> centroid(n_frames);
-
-  for (int t = 0; t < n_frames; ++t) {
-    float sum_weighted = 0.0f;
-    float sum_magnitude = 0.0f;
-
-    for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
-      sum_weighted += freqs[k] * mag;
-      sum_magnitude += mag;
-    }
-
-    if (sum_magnitude > 1e-10f) {
-      centroid[t] = sum_weighted / sum_magnitude;
-    } else {
-      centroid[t] = 0.0f;
-    }
-  }
+  Eigen::Map<Eigen::RowVectorXf> result_map(centroid.data(), n_frames);
+  result_map = sum_weighted.array() / (sum_mag.array() + 1e-10f);
 
   return centroid;
 }
@@ -137,30 +142,31 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
 
+  constexpr float kAmin = 1e-10f;
+
+  // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      mag_map(magnitude, n_bins, n_frames);
+
+  // Compute log sum per frame (for geometric mean)
+  Eigen::RowVectorXf sum_log = mag_map.array().max(kAmin).log().colwise().sum();
+
+  // Compute linear sum per frame (for arithmetic mean)
+  Eigen::RowVectorXf sum_linear = mag_map.colwise().sum();
+
+  // Compute flatness: geometric_mean / arithmetic_mean
+  // geometric_mean = exp(sum_log / n_bins)
+  // arithmetic_mean = sum_linear / n_bins
+  // flatness = exp(sum_log / n_bins) / (sum_linear / n_bins + eps)
+  //          = exp(sum_log / n_bins) * n_bins / (sum_linear + eps * n_bins)
   std::vector<float> flatness(n_frames);
-  float amin = 1e-10f;
+  Eigen::Map<Eigen::RowVectorXf> result_map(flatness.data(), n_frames);
 
-  for (int t = 0; t < n_frames; ++t) {
-    float sum_log = 0.0f;
-    float sum_linear = 0.0f;
+  float n_bins_f = static_cast<float>(n_bins);
+  Eigen::ArrayXf geometric_mean = (sum_log.array() / n_bins_f).exp();
+  Eigen::ArrayXf arithmetic_mean = sum_linear.array() / n_bins_f;
 
-    for (int k = 0; k < n_bins; ++k) {
-      float mag = std::max(magnitude[k * n_frames + t], amin);
-      sum_log += std::log(mag);
-      sum_linear += mag;
-    }
-
-    // Geometric mean = exp(mean(log(x)))
-    float geometric_mean = std::exp(sum_log / static_cast<float>(n_bins));
-    // Arithmetic mean
-    float arithmetic_mean = sum_linear / static_cast<float>(n_bins);
-
-    if (arithmetic_mean > amin) {
-      flatness[t] = geometric_mean / arithmetic_mean;
-    } else {
-      flatness[t] = 0.0f;
-    }
-  }
+  result_map = geometric_mean / (arithmetic_mean + kAmin);
 
   return flatness;
 }

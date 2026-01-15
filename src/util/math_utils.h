@@ -127,4 +127,16 @@ float median(const float* data, size_t size);
 /// @return Percentile value (0 if empty)
 float percentile(const float* data, size_t size, float p);
 
+/// @brief Returns the smallest power of 2 greater than or equal to n.
+/// @param n Input value
+/// @return Smallest power of 2 >= n (returns 1 if n <= 0)
+inline int next_power_of_2(int n) {
+  if (n <= 0) return 1;
+  int power = 1;
+  while (power < n) {
+    power *= 2;
+  }
+  return power;
+}
+
 }  // namespace sonare

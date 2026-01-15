@@ -3,12 +3,14 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <list>
 #include <mutex>
 #include <unordered_map>
 
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -46,9 +48,13 @@ struct CachedCqtKernel {
   std::shared_ptr<EigenKernelMatrix> eigen_matrix;
 };
 
-/// @brief Global CQT kernel cache
+/// @brief Maximum number of cached CQT kernels
+constexpr size_t kMaxCqtCacheSize = 8;
+
+/// @brief Global CQT kernel cache with LRU eviction
 std::mutex g_kernel_cache_mutex;
 std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> g_kernel_cache;
+std::list<CqtKernelCacheKey> g_kernel_cache_lru;
 
 /// @brief Get or create cached CQT kernel with Eigen matrix
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
@@ -57,6 +63,9 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   std::lock_guard<std::mutex> lock(g_kernel_cache_mutex);
   auto it = g_kernel_cache.find(key);
   if (it != g_kernel_cache.end()) {
+    // Move to front of LRU list (most recently used)
+    g_kernel_cache_lru.remove(key);
+    g_kernel_cache_lru.push_front(key);
     return it->second;
   }
 
@@ -76,18 +85,17 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
     }
   }
 
+  // Evict oldest entry if cache is full
+  while (g_kernel_cache.size() >= kMaxCqtCacheSize && !g_kernel_cache_lru.empty()) {
+    auto oldest_key = g_kernel_cache_lru.back();
+    g_kernel_cache_lru.pop_back();
+    g_kernel_cache.erase(oldest_key);
+  }
+
   CachedCqtKernel cached{kernel, eigen_matrix};
   g_kernel_cache[key] = cached;
+  g_kernel_cache_lru.push_front(key);
   return cached;
-}
-
-/// @brief Finds smallest power of 2 >= n.
-int next_power_of_2(int n) {
-  int power = 1;
-  while (power < n) {
-    power *= 2;
-  }
-  return power;
 }
 
 /// @brief Computes Q factor for CQT.
@@ -133,10 +141,10 @@ const std::vector<float>& CqtResult::magnitude() const {
 const std::vector<float>& CqtResult::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     power_cache_.resize(data_.size());
-    for (size_t i = 0; i < data_.size(); ++i) {
-      float mag = std::abs(data_[i]);
-      power_cache_[i] = mag * mag;
-    }
+    // Use Eigen abs2() to compute re² + im² without sqrt
+    Eigen::Map<const Eigen::ArrayXcf> data_map(data_.data(), data_.size());
+    Eigen::Map<Eigen::ArrayXf> power_map(power_cache_.data(), data_.size());
+    power_map = data_map.abs2();
   }
   return power_cache_;
 }
