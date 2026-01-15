@@ -302,6 +302,304 @@ describe('StreamAnalyzer', () => {
 
       analyzer.dispose();
     });
+
+    it('should detect correct bar chords with C-G-Am-F progression', () => {
+      const sampleRate = 22050;
+      const duration = 30; // Need enough time for BPM stabilization and bar detection
+      const samples = new Float32Array(sampleRate * duration);
+
+      // Generate rhythmic signal at 120 BPM with C-G-Am-F progression
+      const bpm = 120;
+      const beatDuration = 60 / bpm; // 0.5 seconds per beat
+      const barDuration = beatDuration * 4; // 2 seconds per bar
+
+      // Chord frequencies
+      const chordFreqs: Record<string, number[]> = {
+        C: [261.63, 329.63, 392.0], // C-E-G
+        G: [196.0, 246.94, 392.0], // G-B-D (lower octave G)
+        Am: [220.0, 261.63, 329.63], // A-C-E
+        F: [174.61, 220.0, 261.63], // F-A-C
+      };
+
+      const progression = ['C', 'G', 'Am', 'F'];
+
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / sampleRate;
+        const barIndex = Math.floor(t / barDuration);
+        const chordName = progression[barIndex % 4];
+        const freqs = chordFreqs[chordName];
+
+        // Add chord tones
+        for (const freq of freqs) {
+          samples[i] += Math.sin(2 * Math.PI * freq * t) / freqs.length;
+        }
+
+        // Add strong rhythmic impulse at beat positions for BPM detection
+        const beatPhase = (t % beatDuration) / beatDuration;
+        if (beatPhase < 0.02) {
+          samples[i] += 0.8 * (1 - beatPhase / 0.02);
+        }
+
+        samples[i] *= 0.3;
+      }
+
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      // Process in chunks
+      const chunkSize = 4096;
+      for (let i = 0; i < samples.length; i += chunkSize) {
+        const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
+        analyzer.process(chunk);
+      }
+
+      const stats = analyzer.stats();
+
+      // Verify BPM is detected and bar tracking started
+      if (stats.estimate.bpmConfidence >= 0.3 && stats.estimate.barChordProgression.length >= 4) {
+        // Root values: C=0, G=7, Am=9, F=5
+        const expectedRoots = [0, 7, 9, 5];
+
+        // Check that bar chords contain the expected progression
+        // Note: Bar tracking starts late (after BPM stabilizes), so we check pattern
+        const detectedRoots = stats.estimate.barChordProgression.map((c) => c.root);
+
+        // Find where in the cycle we are by looking for pattern match
+        let patternFound = false;
+        for (let offset = 0; offset < 4; offset++) {
+          let matchCount = 0;
+          for (let i = 0; i < Math.min(4, detectedRoots.length); i++) {
+            if (detectedRoots[i] === expectedRoots[(i + offset) % 4]) {
+              matchCount++;
+            }
+          }
+          if (matchCount >= 3) {
+            patternFound = true;
+            break;
+          }
+        }
+
+        expect(patternFound).toBe(true);
+
+        // Verify Am is detected as minor (quality=1)
+        const amChords = stats.estimate.barChordProgression.filter((c) => c.root === 9);
+        if (amChords.length > 0) {
+          expect(amChords[0].quality).toBe(1); // Minor
+        }
+      }
+
+      analyzer.dispose();
+    });
+  });
+
+  describe('pattern detection', () => {
+    it('should have voted pattern structure', () => {
+      const sampleRate = 22050;
+      const duration = 30;
+      const samples = new Float32Array(sampleRate * duration);
+
+      // Generate rhythmic signal at 120 BPM with C-G-Am-F progression
+      const bpm = 120;
+      const beatDuration = 60 / bpm;
+      const barDuration = beatDuration * 4;
+
+      const chordFreqs: Record<string, number[]> = {
+        C: [261.63, 329.63, 392.0],
+        G: [196.0, 246.94, 392.0],
+        Am: [220.0, 261.63, 329.63],
+        F: [174.61, 220.0, 261.63],
+      };
+
+      const progression = ['C', 'G', 'Am', 'F'];
+
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / sampleRate;
+        const barIndex = Math.floor(t / barDuration);
+        const chordName = progression[barIndex % 4];
+        const freqs = chordFreqs[chordName];
+
+        for (const freq of freqs) {
+          samples[i] += Math.sin(2 * Math.PI * freq * t) / freqs.length;
+        }
+
+        const beatPhase = (t % beatDuration) / beatDuration;
+        if (beatPhase < 0.02) {
+          samples[i] += 0.8 * (1 - beatPhase / 0.02);
+        }
+
+        samples[i] *= 0.3;
+      }
+
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      const chunkSize = 4096;
+      for (let i = 0; i < samples.length; i += chunkSize) {
+        const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
+        analyzer.process(chunk);
+      }
+
+      const stats = analyzer.stats();
+
+      // Verify voted pattern structure
+      expect(stats.estimate.votedPattern).toBeDefined();
+      expect(Array.isArray(stats.estimate.votedPattern)).toBe(true);
+      expect(stats.estimate.patternLength).toBeGreaterThan(0);
+
+      if (stats.estimate.votedPattern.length > 0) {
+        for (const chord of stats.estimate.votedPattern) {
+          expect(chord.barIndex).toBeGreaterThanOrEqual(0);
+          expect(chord.root).toBeGreaterThanOrEqual(0);
+          expect(chord.root).toBeLessThanOrEqual(11);
+          expect(chord.quality).toBeGreaterThanOrEqual(0);
+          expect(chord.confidence).toBeGreaterThanOrEqual(0);
+          expect(chord.confidence).toBeLessThanOrEqual(1);
+        }
+      }
+
+      analyzer.dispose();
+    });
+
+    it('should detect pattern name and score', () => {
+      const sampleRate = 22050;
+      const duration = 30;
+      const samples = new Float32Array(sampleRate * duration);
+
+      // Generate "Royal Road" progression (I-V-VIm-IV)
+      const bpm = 120;
+      const beatDuration = 60 / bpm;
+      const barDuration = beatDuration * 4;
+
+      const chordFreqs: Record<string, number[]> = {
+        C: [261.63, 329.63, 392.0],
+        G: [196.0, 246.94, 392.0],
+        Am: [220.0, 261.63, 329.63],
+        F: [174.61, 220.0, 261.63],
+      };
+
+      const progression = ['C', 'G', 'Am', 'F'];
+
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / sampleRate;
+        const barIndex = Math.floor(t / barDuration);
+        const chordName = progression[barIndex % 4];
+        const freqs = chordFreqs[chordName];
+
+        for (const freq of freqs) {
+          samples[i] += Math.sin(2 * Math.PI * freq * t) / freqs.length;
+        }
+
+        const beatPhase = (t % beatDuration) / beatDuration;
+        if (beatPhase < 0.02) {
+          samples[i] += 0.8 * (1 - beatPhase / 0.02);
+        }
+
+        samples[i] *= 0.3;
+      }
+
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      const chunkSize = 4096;
+      for (let i = 0; i < samples.length; i += chunkSize) {
+        const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
+        analyzer.process(chunk);
+      }
+
+      const stats = analyzer.stats();
+
+      // Verify pattern detection fields
+      expect(stats.estimate.detectedPatternName).toBeDefined();
+      expect(typeof stats.estimate.detectedPatternName).toBe('string');
+      expect(stats.estimate.detectedPatternScore).toBeGreaterThanOrEqual(0);
+      expect(stats.estimate.detectedPatternScore).toBeLessThanOrEqual(1);
+
+      analyzer.dispose();
+    });
+
+    it('should return all pattern scores', () => {
+      const sampleRate = 22050;
+      const duration = 30;
+      const samples = new Float32Array(sampleRate * duration);
+
+      // Generate simple chord progression
+      const bpm = 120;
+      const beatDuration = 60 / bpm;
+
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / sampleRate;
+
+        // C major chord
+        samples[i] = Math.sin(2 * Math.PI * 261.63 * t) * 0.3;
+        samples[i] += Math.sin(2 * Math.PI * 329.63 * t) * 0.3;
+        samples[i] += Math.sin(2 * Math.PI * 392.0 * t) * 0.3;
+
+        const beatPhase = (t % beatDuration) / beatDuration;
+        if (beatPhase < 0.02) {
+          samples[i] += 0.8 * (1 - beatPhase / 0.02);
+        }
+
+        samples[i] *= 0.3;
+      }
+
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      const chunkSize = 4096;
+      for (let i = 0; i < samples.length; i += chunkSize) {
+        const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
+        analyzer.process(chunk);
+      }
+
+      const stats = analyzer.stats();
+
+      // Verify allPatternScores structure
+      expect(stats.estimate.allPatternScores).toBeDefined();
+      expect(Array.isArray(stats.estimate.allPatternScores)).toBe(true);
+
+      if (stats.estimate.allPatternScores.length > 0) {
+        for (const ps of stats.estimate.allPatternScores) {
+          expect(ps.name).toBeDefined();
+          expect(typeof ps.name).toBe('string');
+          expect(ps.score).toBeGreaterThanOrEqual(0);
+          expect(ps.score).toBeLessThanOrEqual(1);
+        }
+
+        // Scores should be sorted descending
+        for (let i = 1; i < stats.estimate.allPatternScores.length; i++) {
+          expect(stats.estimate.allPatternScores[i - 1].score).toBeGreaterThanOrEqual(
+            stats.estimate.allPatternScores[i].score,
+          );
+        }
+      }
+
+      analyzer.dispose();
+    });
+
+    it('should reset pattern detection on reset', () => {
+      const sampleRate = 22050;
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      // Process some audio
+      const samples = new Float32Array(sampleRate * 10);
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / sampleRate;
+        samples[i] = Math.sin(2 * Math.PI * 440 * t) * 0.3;
+        const beatPhase = (t % 0.5) / 0.5;
+        if (beatPhase < 0.05) {
+          samples[i] += 0.5;
+        }
+      }
+
+      analyzer.process(samples);
+      analyzer.reset();
+
+      const stats = analyzer.stats();
+
+      // Pattern detection should be reset
+      expect(stats.estimate.votedPattern.length).toBe(0);
+      expect(stats.estimate.detectedPatternName).toBe('');
+      expect(stats.estimate.detectedPatternScore).toBe(0);
+      expect(stats.estimate.allPatternScores.length).toBe(0);
+
+      analyzer.dispose();
+    });
   });
 
   describe('state management', () => {

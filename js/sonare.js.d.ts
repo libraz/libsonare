@@ -347,6 +347,11 @@ interface WasmBarChord {
   confidence: number;
 }
 
+interface WasmPatternScore {
+  name: string;
+  score: number;
+}
+
 interface WasmProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
@@ -361,6 +366,11 @@ interface WasmProgressiveEstimate {
   barChordProgression: WasmBarChord[];
   currentBar: number;
   barDuration: number;
+  votedPattern: WasmBarChord[];
+  patternLength: number;
+  detectedPatternName: string;
+  detectedPatternScore: number;
+  allPatternScores: WasmPatternScore[];
   accumulatedSeconds: number;
   usedFrames: number;
   updated: boolean;
@@ -398,6 +408,7 @@ interface WasmStreamAnalyzer {
   stats: () => WasmAnalyzerStats;
   frameCount: () => number;
   currentTime: () => number;
+  sampleRate: () => number;
   delete: () => void;
 }
 

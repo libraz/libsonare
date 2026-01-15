@@ -644,8 +644,12 @@ class StreamAnalyzerWrapper {
     config.compute_chroma = compute_chroma;
     config.compute_onset = compute_onset;
     config.emit_every_n_frames = emit_every_n_frames;
+    config_ = config;
     analyzer_ = std::make_unique<StreamAnalyzer>(config);
   }
+
+  /// @brief Returns the sample rate.
+  int sampleRate() const { return config_.sample_rate; }
 
   void process(val samples) {
     std::vector<float> data = vecFromJSArray<float>(samples);
@@ -765,6 +769,33 @@ class StreamAnalyzerWrapper {
     estimate.set("currentBar", s.estimate.current_bar);
     estimate.set("barDuration", s.estimate.bar_duration);
 
+    // Voted chord pattern (computed from repetitions)
+    val votedPattern = val::array();
+    for (const auto& chord : s.estimate.voted_pattern) {
+      val c = val::object();
+      c.set("barIndex", chord.bar_index);
+      c.set("root", chord.root);
+      c.set("quality", chord.quality);
+      c.set("confidence", chord.confidence);
+      votedPattern.call<void>("push", c);
+    }
+    estimate.set("votedPattern", votedPattern);
+    estimate.set("patternLength", s.estimate.pattern_length);
+
+    // Best matching progression pattern
+    estimate.set("detectedPatternName", val(s.estimate.detected_pattern_name));
+    estimate.set("detectedPatternScore", val(s.estimate.detected_pattern_score));
+
+    // All pattern scores
+    val allPatternScores = val::array();
+    for (const auto& ps_pair : s.estimate.all_pattern_scores) {
+      val ps = val::object();
+      ps.set("name", ps_pair.first);
+      ps.set("score", ps_pair.second);
+      allPatternScores.call<void>("push", ps);
+    }
+    estimate.set("allPatternScores", allPatternScores);
+
     estimate.set("accumulatedSeconds", s.estimate.accumulated_seconds);
     estimate.set("usedFrames", s.estimate.used_frames);
     estimate.set("updated", s.estimate.updated);
@@ -777,6 +808,7 @@ class StreamAnalyzerWrapper {
   float currentTime() const { return analyzer_->current_time(); }
 
  private:
+  StreamConfig config_;
   std::unique_ptr<StreamAnalyzer> analyzer_;
 };
 
@@ -894,7 +926,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("reset", &StreamAnalyzerWrapper::reset)
       .function("stats", &StreamAnalyzerWrapper::stats)
       .function("frameCount", &StreamAnalyzerWrapper::frameCount)
-      .function("currentTime", &StreamAnalyzerWrapper::currentTime);
+      .function("currentTime", &StreamAnalyzerWrapper::currentTime)
+      .function("sampleRate", &StreamAnalyzerWrapper::sampleRate);
 }
 
 #endif  // __EMSCRIPTEN__

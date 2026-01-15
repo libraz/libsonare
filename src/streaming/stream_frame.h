@@ -88,6 +88,15 @@ struct ProgressiveEstimate {
   int current_bar = -1;         ///< Current bar index (-1 if BPM not stable)
   float bar_duration = 0.0f;    ///< Duration of one bar in seconds (0 if BPM not stable)
 
+  // Voted chord pattern (computed from repetitions across all bars)
+  int pattern_length = 4;       ///< Length of the repeating pattern (default: 4 bars)
+  std::vector<BarChord> voted_pattern;  ///< Voted chord for each pattern position
+
+  // Best matching progression pattern
+  std::string detected_pattern_name;  ///< Name of best matching pattern (e.g., "royalRoad")
+  float detected_pattern_score = 0.0f;  ///< Match score (0-1)
+  std::vector<std::pair<std::string, float>> all_pattern_scores;  ///< All pattern scores
+
   // Objective statistics (for UI display)
   float accumulated_seconds = 0.0f; ///< Total audio processed
   int used_frames = 0;              ///< Number of frames used for estimation

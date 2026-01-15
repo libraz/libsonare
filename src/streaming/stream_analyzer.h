@@ -102,7 +102,7 @@ class StreamAnalyzer {
   void reset(size_t base_sample_offset = 0);
 
   /// @brief Returns current statistics and progressive estimate.
-  AnalyzerStats stats() const;
+  AnalyzerStats stats();
 
   /// @brief Returns configuration.
   const StreamConfig& config() const { return config_; }
@@ -154,7 +154,8 @@ class StreamAnalyzer {
   std::vector<float> power_;                     // [n_bins]
   std::vector<float> mel_buffer_;                // [n_mels]
   std::vector<float> mel_log_;                   // [n_mels]
-  std::vector<float> chroma_buffer_;             // [12]
+  std::vector<float> chroma_buffer_;             // [12] - L2 normalized
+  std::array<float, 12> chroma_raw_;             // [12] - raw (unnormalized) for accumulation
 
   // Progressive estimation accumulators
   std::vector<float> onset_accumulator_;
@@ -188,7 +189,26 @@ class StreamAnalyzer {
   std::array<float, 12> bar_chroma_sum_;  ///< Accumulated chroma within current bar
   int bar_chroma_count_ = 0;              ///< Number of frames accumulated in current bar
 
+  // Chord voting within bar (alternative to chroma averaging)
+  std::array<int, 48> bar_chord_votes_;   ///< Vote counts per chord (12 roots × 4 qualities)
+  int bar_vote_count_ = 0;                ///< Total votes in current bar
+
+  // Full chroma history for retroactive bar chord detection
+  static constexpr size_t kMaxChromaHistoryFrames = 3000;  ///< ~35s at default settings
+  std::vector<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
+
+  // Known chord progression patterns (degree, quality pairs)
+  // degree: 0=I, 2=II, 4=III, 5=IV, 7=V, 9=VI, 11=VII
+  struct ProgressionPattern {
+    std::string name;
+    std::vector<std::pair<int, int>> chords;  ///< (degree, quality) pairs
+  };
+  static const std::vector<ProgressionPattern>& get_known_patterns();
+
   // Internal methods
+  void compute_retroactive_bar_chords();
+  void compute_voted_pattern(int pattern_length = 4);
+  void detect_progression_pattern();
   void process_internal(const float* samples, size_t n_samples);
   StreamFrame process_single_frame(const float* frame_start, size_t sample_offset);
   void compute_stft(const float* frame_start);

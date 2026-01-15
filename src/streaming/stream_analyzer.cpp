@@ -326,8 +326,10 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
 
   if (config_.compute_chroma) {
     chroma_buffer_.resize(12);
+    chroma_raw_.fill(0.0f);
     chroma_sum_.fill(0.0f);
     bar_chroma_sum_.fill(0.0f);
+    bar_chord_votes_.fill(0);
     /// Initialize chord templates for chord detection
     chord_templates_ = generate_triad_templates();
   }
@@ -445,6 +447,11 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
         chroma_history_.pop_front();
       }
 
+      /// Store to full chroma history for retroactive bar detection
+      if (full_chroma_history_.size() < kMaxChromaHistoryFrames) {
+        full_chroma_history_.push_back(current_chroma);
+      }
+
       /// Compute smoothed chroma (average over history)
       std::array<float, 12> smoothed_chroma = {};
       for (const auto& hist : chroma_history_) {
@@ -545,6 +552,7 @@ void StreamAnalyzer::compute_chroma() {
       sum += filter_row[k] * power_[k];
     }
     chroma_buffer_[c] = sum;
+    chroma_raw_[c] = sum;  // Store raw (unnormalized) for accumulation
   }
 
   /// Normalize chroma using L2 norm (more robust than max)
@@ -811,15 +819,23 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     if (current_estimate_.bpm_confidence >= kBpmConfidenceThreshold && current_estimate_.bpm > 0.0f) {
       /// Start bar tracking
       bar_tracking_active_ = true;
+
       bar_duration_ = static_cast<float>(kBeatsPerBar) * 60.0f / current_estimate_.bpm;
       current_bar_index_ = 0;
       bar_start_time_ = current_time;
+
+      /// Compute retroactive bar chords from stored chroma history
+      compute_retroactive_bar_chords();
+
+      /// Reset for live bar tracking (state already set by retroactive computation)
       bar_chroma_sum_.fill(0.0f);
       bar_chroma_count_ = 0;
+      bar_chord_votes_.fill(0);
+      bar_vote_count_ = 0;
 
       /// Update estimate with bar info
       current_estimate_.bar_duration = bar_duration_;
-      current_estimate_.current_bar = 0;
+      current_estimate_.current_bar = current_bar_index_;
     }
     return;
   }
@@ -831,40 +847,70 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     current_estimate_.bar_duration = bar_duration_;
   }
 
-  /// Accumulate chroma for current bar
-  for (int c = 0; c < 12; ++c) {
-    bar_chroma_sum_[c] += chroma_buffer_[c];
+  /// Vote for chord using current frame's smoothed chroma (from chroma_history_)
+  /// This uses the same smoothed detection as per-frame chord output
+  if (!chord_templates_.empty() && !chroma_history_.empty()) {
+    /// Compute smoothed chroma (same as in process_single_frame)
+    std::array<float, 12> smoothed_chroma = {};
+    for (const auto& hist : chroma_history_) {
+      for (int c = 0; c < 12; ++c) {
+        smoothed_chroma[c] += hist[c];
+      }
+    }
+    float inv_count = 1.0f / static_cast<float>(chroma_history_.size());
+    for (int c = 0; c < 12; ++c) {
+      smoothed_chroma[c] *= inv_count;
+    }
+
+    /// Detect chord for this frame
+    auto [frame_chord, frame_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
+
+    /// Only vote if confidence is above threshold
+    if (frame_corr >= kChordConfidenceThreshold) {
+      int root = static_cast<int>(frame_chord.root);
+      int quality = static_cast<int>(frame_chord.quality);
+
+      /// Index: root * 4 + quality (12 roots × 4 qualities = 48)
+      int vote_idx = root * 4 + quality;
+      if (vote_idx >= 0 && vote_idx < 48) {
+        ++bar_chord_votes_[vote_idx];
+        ++bar_vote_count_;
+      }
+    }
   }
   ++bar_chroma_count_;
 
   /// Check if we've crossed a bar boundary
   if (current_time >= bar_start_time_ + bar_duration_) {
-    /// Detect chord for completed bar using accumulated chroma
-    if (bar_chroma_count_ > 0 && !chord_templates_.empty()) {
-      /// Normalize accumulated chroma
-      std::array<float, 12> bar_chroma;
-      float sum = 0.0f;
-      for (int c = 0; c < 12; ++c) {
-        bar_chroma[c] = bar_chroma_sum_[c] / static_cast<float>(bar_chroma_count_);
-        sum += bar_chroma[c];
-      }
-      if (sum > kEpsilon) {
-        for (int c = 0; c < 12; ++c) {
-          bar_chroma[c] /= sum;
+    /// Find chord with most votes
+    if (bar_vote_count_ > 0) {
+      int best_idx = 0;
+      int best_votes = bar_chord_votes_[0];
+      for (int i = 1; i < 48; ++i) {
+        if (bar_chord_votes_[i] > best_votes) {
+          best_votes = bar_chord_votes_[i];
+          best_idx = i;
         }
       }
 
-      /// Find best chord for this bar
-      auto [best_chord, chord_corr] = find_best_chord(bar_chroma.data(), chord_templates_);
+      int best_root = best_idx / 4;
+      int best_quality = best_idx % 4;
+      float confidence = static_cast<float>(best_votes) / static_cast<float>(bar_vote_count_);
 
       /// Add to bar chord progression
       BarChord bar_chord;
       bar_chord.bar_index = current_bar_index_;
-      bar_chord.root = static_cast<int>(best_chord.root);
-      bar_chord.quality = static_cast<int>(best_chord.quality);
+      bar_chord.root = best_root;
+      bar_chord.quality = best_quality;
       bar_chord.start_time = bar_start_time_;
-      bar_chord.confidence = std::max(0.0f, chord_corr);
+      bar_chord.confidence = confidence;
       current_estimate_.bar_chord_progression.push_back(bar_chord);
+
+      /// Update voted pattern and detect progression periodically (every 4 bars)
+      if ((current_bar_index_ + 1) % 4 == 0) {
+        compute_voted_pattern(4);
+        detect_progression_pattern();
+      }
     }
 
     /// Move to next bar
@@ -872,10 +918,290 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     bar_start_time_ = current_time;
     bar_chroma_sum_.fill(0.0f);
     bar_chroma_count_ = 0;
+    bar_chord_votes_.fill(0);
+    bar_vote_count_ = 0;
 
     /// Update estimate
     current_estimate_.current_bar = current_bar_index_;
   }
+}
+
+void StreamAnalyzer::compute_retroactive_bar_chords() {
+  if (full_chroma_history_.empty() || bar_duration_ <= 0.0f) {
+    return;
+  }
+
+  /// Calculate frames per bar
+  float seconds_per_frame = static_cast<float>(config_.hop_length) / config_.sample_rate;
+  int frames_per_bar = static_cast<int>(bar_duration_ / seconds_per_frame + 0.5f);
+
+  if (frames_per_bar <= 0) {
+    return;
+  }
+
+  /// How many complete bars can we detect from full history?
+  int retroactive_frames = static_cast<int>(full_chroma_history_.size());
+  int retroactive_bars = retroactive_frames / frames_per_bar;
+
+  /// Clear existing bar progression and recompute from start
+  current_estimate_.bar_chord_progression.clear();
+
+  for (int bar = 0; bar < retroactive_bars; ++bar) {
+    int start_frame = bar * frames_per_bar;
+    int end_frame = std::min(start_frame + frames_per_bar, retroactive_frames);
+
+    /// Vote for chord using frames in this bar
+    std::array<int, 48> votes = {};
+    int vote_count = 0;
+
+    for (int f = start_frame; f < end_frame; ++f) {
+      /// Average chroma over small window around this frame
+      std::array<float, 12> smoothed = {};
+      int smooth_start = std::max(0, f - kChordSmoothingFrames / 2);
+      int smooth_end = std::min(retroactive_frames, f + kChordSmoothingFrames / 2);
+      int smooth_count = smooth_end - smooth_start;
+
+      for (int sf = smooth_start; sf < smooth_end; ++sf) {
+        for (int c = 0; c < 12; ++c) {
+          smoothed[c] += full_chroma_history_[sf][c];
+        }
+      }
+      if (smooth_count > 0) {
+        float inv = 1.0f / smooth_count;
+        for (int c = 0; c < 12; ++c) {
+          smoothed[c] *= inv;
+        }
+      }
+
+      /// Detect chord
+      auto [chord, corr] = find_best_chord(smoothed.data(), chord_templates_);
+      if (corr >= kChordConfidenceThreshold) {
+        int idx = static_cast<int>(chord.root) * 4 + static_cast<int>(chord.quality);
+        if (idx >= 0 && idx < 48) {
+          ++votes[idx];
+          ++vote_count;
+        }
+      }
+    }
+
+    /// Find best chord
+    int best_idx = 0;
+    int best_votes = votes[0];
+    for (int i = 1; i < 48; ++i) {
+      if (votes[i] > best_votes) {
+        best_votes = votes[i];
+        best_idx = i;
+      }
+    }
+
+    int best_root = best_idx / 4;
+    int best_quality = best_idx % 4;
+    float confidence = (vote_count > 0) ? static_cast<float>(best_votes) / vote_count : 0.0f;
+
+    /// Create bar chord entry
+    BarChord bc;
+    bc.bar_index = bar;
+    bc.root = best_root;
+    bc.quality = best_quality;
+    bc.start_time = bar * bar_duration_;
+    bc.confidence = confidence;
+    current_estimate_.bar_chord_progression.push_back(bc);
+  }
+
+  /// Update bar index to continue from where retroactive detection ended
+  current_bar_index_ = retroactive_bars;
+  bar_start_time_ = retroactive_bars * bar_duration_;
+
+  /// Compute voted pattern from all detected bars
+  compute_voted_pattern(4);
+
+  /// Detect best matching progression pattern
+  detect_progression_pattern();
+}
+
+void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
+  const auto& bars = current_estimate_.bar_chord_progression;
+  if (bars.empty() || pattern_length <= 0) {
+    return;
+  }
+
+  current_estimate_.pattern_length = pattern_length;
+  current_estimate_.voted_pattern.clear();
+  current_estimate_.voted_pattern.resize(pattern_length);
+
+  /// For each position in the pattern, vote across all repetitions
+  for (int pos = 0; pos < pattern_length; ++pos) {
+    /// Collect votes: chord index -> (total confidence, count)
+    std::array<float, 48> confidence_sum = {};
+    std::array<int, 48> vote_count = {};
+
+    /// Go through all bars at this pattern position
+    for (size_t bar_idx = pos; bar_idx < bars.size(); bar_idx += pattern_length) {
+      const auto& bar = bars[bar_idx];
+      int chord_idx = bar.root * 4 + bar.quality;
+      if (chord_idx >= 0 && chord_idx < 48) {
+        confidence_sum[chord_idx] += bar.confidence;
+        ++vote_count[chord_idx];
+      }
+    }
+
+    /// Find chord with highest weighted vote (confidence-weighted)
+    int best_idx = 0;
+    float best_score = 0.0f;
+    int total_votes = 0;
+
+    for (int i = 0; i < 48; ++i) {
+      total_votes += vote_count[i];
+      /// Score = sum of confidences (gives more weight to high-confidence detections)
+      if (confidence_sum[i] > best_score) {
+        best_score = confidence_sum[i];
+        best_idx = i;
+      }
+    }
+
+    /// Create voted pattern entry
+    BarChord& voted = current_estimate_.voted_pattern[pos];
+    voted.bar_index = pos;
+    voted.root = best_idx / 4;
+    voted.quality = best_idx % 4;
+    voted.start_time = 0.0f;  ///< Not meaningful for pattern
+
+    /// Confidence = ratio of votes for this chord
+    int votes_for_best = vote_count[best_idx];
+    voted.confidence = (total_votes > 0)
+                           ? static_cast<float>(votes_for_best) / total_votes
+                           : 0.0f;
+  }
+}
+
+const std::vector<StreamAnalyzer::ProgressionPattern>& StreamAnalyzer::get_known_patterns() {
+  // degree: 0=I, 1=bII, 2=II, 3=bIII, 4=III, 5=IV, 6=bV, 7=V, 8=bVI, 9=VI, 10=bVII, 11=VII
+  // quality: 0=Major, 1=Minor
+  static const std::vector<ProgressionPattern> patterns = {
+      // Royal Road (王道進行): I - V - VIm - IV
+      {"royalRoad", {{0, 0}, {7, 0}, {9, 1}, {5, 0}}},
+
+      // Komuro (小室進行): VIm - IV - V - I
+      {"komuro", {{9, 1}, {5, 0}, {7, 0}, {0, 0}}},
+
+      // Canon (カノン進行): I - V - VIm - IIIm - IV - I - IV - V
+      {"canon",
+       {{0, 0}, {7, 0}, {9, 1}, {4, 1}, {5, 0}, {0, 0}, {5, 0}, {7, 0}}},
+
+      // Just the Two of Us: IVM7 - IIIm7 - VIm
+      {"justTheTwoOfUs", {{5, 0}, {4, 1}, {9, 1}}},
+
+      // I - IV - V - I (Basic)
+      {"basic145", {{0, 0}, {5, 0}, {7, 0}, {0, 0}}},
+
+      // Blues (12-bar): I - I - I - I - IV - IV - I - I - V - IV - I - V
+      {"blues12",
+       {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {5, 0}, {5, 0}, {0, 0}, {0, 0}, {7, 0}, {5, 0}, {0, 0}, {7, 0}}},
+
+      // Axis (VIm - IV - I - V)
+      {"axis", {{9, 1}, {5, 0}, {0, 0}, {7, 0}}},
+
+      // I - VIm - IV - V (50s)
+      {"fifties", {{0, 0}, {9, 1}, {5, 0}, {7, 0}}},
+
+      // I - V - VIm - IIIm (Sensitive)
+      {"sensitive", {{0, 0}, {7, 0}, {9, 1}, {4, 1}}},
+  };
+  return patterns;
+}
+
+void StreamAnalyzer::detect_progression_pattern() {
+  const auto& bars = current_estimate_.bar_chord_progression;
+  if (bars.size() < 4) {
+    return;
+  }
+
+  const auto& patterns = get_known_patterns();
+  int detected_key = current_estimate_.key;
+
+  std::string best_pattern_name;
+  float best_score = 0.0f;
+  current_estimate_.all_pattern_scores.clear();
+
+  for (const auto& pattern : patterns) {
+    int pattern_len = static_cast<int>(pattern.chords.size());
+    if (pattern_len == 0) continue;
+
+    /// Accumulate score across all repetitions of this pattern
+    float total_score = 0.0f;
+    float max_possible = 0.0f;
+
+    for (size_t bar_idx = 0; bar_idx < bars.size(); ++bar_idx) {
+      int pos = bar_idx % pattern_len;
+      const auto& expected = pattern.chords[pos];
+
+      /// Expected chord (relative to detected key)
+      int expected_root = (detected_key + expected.first) % 12;
+      int expected_quality = expected.second;
+
+      /// Get detected bar chord
+      const auto& bar = bars[bar_idx];
+      float bar_conf = bar.confidence;
+
+      /// Calculate similarity score (0.0 to 1.0)
+      float similarity = 0.0f;
+
+      if (bar.root == expected_root && bar.quality == expected_quality) {
+        /// Exact match
+        similarity = 1.0f;
+      } else if (bar.root == expected_root) {
+        /// Same root, different quality (e.g., C vs Cm)
+        similarity = 0.6f;
+      } else {
+        /// Check for related chords
+        int root_diff = std::abs(bar.root - expected_root);
+        if (root_diff > 6) root_diff = 12 - root_diff;  /// Wrap around
+
+        if (root_diff == 0) {
+          similarity = 0.6f;  /// Same root
+        } else if (root_diff == 7 || root_diff == 5) {
+          /// Fifth or fourth relationship (e.g., C and G, or C and F)
+          similarity = 0.3f;
+        } else if (root_diff == 3 || root_diff == 4) {
+          /// Third relationship (relative major/minor)
+          similarity = 0.25f;
+        } else if (root_diff == 2) {
+          /// Second (close neighbor)
+          similarity = 0.15f;
+        } else if (root_diff == 1) {
+          /// Semitone (very close, might be tuning issue)
+          similarity = 0.2f;
+        }
+
+        /// Bonus if quality matches despite root mismatch
+        if (bar.quality == expected_quality) {
+          similarity += 0.1f;
+        }
+      }
+
+      /// Weight by detection confidence
+      total_score += similarity * bar_conf;
+      max_possible += bar_conf;
+    }
+
+    float score = (max_possible > 0.0f) ? total_score / max_possible : 0.0f;
+
+    /// Store all pattern scores
+    current_estimate_.all_pattern_scores.emplace_back(pattern.name, score);
+
+    if (score > best_score) {
+      best_score = score;
+      best_pattern_name = pattern.name;
+    }
+  }
+
+  /// Sort by score descending
+  std::sort(current_estimate_.all_pattern_scores.begin(),
+            current_estimate_.all_pattern_scores.end(),
+            [](const auto& a, const auto& b) { return a.second > b.second; });
+
+  current_estimate_.detected_pattern_name = best_pattern_name;
+  current_estimate_.detected_pattern_score = best_score;
 }
 
 size_t StreamAnalyzer::available_frames() const { return output_buffer_.size(); }
@@ -1044,14 +1370,21 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   bar_start_time_ = 0.0f;
   bar_chroma_sum_.fill(0.0f);
   bar_chroma_count_ = 0;
+  bar_chord_votes_.fill(0);
+  bar_vote_count_ = 0;
 }
 
-AnalyzerStats StreamAnalyzer::stats() const {
+AnalyzerStats StreamAnalyzer::stats() {
+  /// Compute final pattern detection before returning stats
+  compute_voted_pattern(4);
+  detect_progression_pattern();
+
   AnalyzerStats stats;
   stats.total_frames = frame_count_;
   stats.total_samples = cumulative_samples_;
   stats.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
   stats.estimate = current_estimate_;
+
   return stats;
 }
 

@@ -172,6 +172,11 @@ interface WasmBarChord {
   confidence: number;
 }
 
+interface WasmPatternScore {
+  name: string;
+  score: number;
+}
+
 interface WasmProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
@@ -186,6 +191,11 @@ interface WasmProgressiveEstimate {
   barChordProgression: WasmBarChord[];
   currentBar: number;
   barDuration: number;
+  votedPattern: WasmBarChord[];
+  patternLength: number;
+  detectedPatternName: string;
+  detectedPatternScore: number;
+  allPatternScores: WasmPatternScore[];
   accumulatedSeconds: number;
   usedFrames: number;
   updated: boolean;
@@ -223,6 +233,7 @@ interface WasmStreamAnalyzer {
   stats: () => WasmAnalyzerStats;
   frameCount: () => number;
   currentTime: () => number;
+  sampleRate: () => number;
   delete: () => void;
 }
 
@@ -1391,6 +1402,14 @@ export interface BarChord {
 }
 
 /**
+ * Pattern score for known chord progressions
+ */
+export interface PatternScore {
+  name: string;
+  score: number;
+}
+
+/**
  * Progressive estimation results for BPM, Key, and Chord
  */
 export interface ProgressiveEstimate {
@@ -1407,6 +1426,11 @@ export interface ProgressiveEstimate {
   barChordProgression: BarChord[];
   currentBar: number;
   barDuration: number;
+  votedPattern: BarChord[];
+  patternLength: number;
+  detectedPatternName: string;
+  detectedPatternScore: number;
+  allPatternScores: PatternScore[];
   accumulatedSeconds: number;
   usedFrames: number;
   updated: boolean;
@@ -1583,6 +1607,20 @@ export class StreamAnalyzer {
         })),
         currentBar: s.estimate.currentBar,
         barDuration: s.estimate.barDuration,
+        votedPattern: (s.estimate.votedPattern || []).map((c) => ({
+          barIndex: c.barIndex,
+          root: c.root as PitchClass,
+          quality: c.quality as ChordQuality,
+          startTime: c.startTime,
+          confidence: c.confidence,
+        })),
+        patternLength: s.estimate.patternLength,
+        detectedPatternName: s.estimate.detectedPatternName || '',
+        detectedPatternScore: s.estimate.detectedPatternScore || 0,
+        allPatternScores: (s.estimate.allPatternScores || []).map((p) => ({
+          name: p.name,
+          score: p.score,
+        })),
         accumulatedSeconds: s.estimate.accumulatedSeconds,
         usedFrames: s.estimate.usedFrames,
         updated: s.estimate.updated,
@@ -1602,6 +1640,13 @@ export class StreamAnalyzer {
    */
   currentTime(): number {
     return this.analyzer.currentTime();
+  }
+
+  /**
+   * Get the sample rate.
+   */
+  sampleRate(): number {
+    return this.analyzer.sampleRate();
   }
 
   /**
