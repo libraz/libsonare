@@ -18,6 +18,15 @@ struct ChordChange {
   float confidence = 0.0f;    ///< Detection confidence (0-1)
 };
 
+/// @brief A chord detected at bar boundary (beat-synchronized).
+struct BarChord {
+  int bar_index = -1;         ///< Bar number (0-based, -1 = invalid)
+  int root = -1;              ///< Chord root (0-11 for C-B, -1 = unknown)
+  int quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float start_time = 0.0f;    ///< Start time in seconds
+  float confidence = 0.0f;    ///< Detection confidence (0-1)
+};
+
 /// @brief A single frame of analysis results.
 /// @details Contains all computed features for one STFT frame.
 /// The timestamp represents stream time (input sample position),
@@ -44,6 +53,11 @@ struct StreamFrame {
   // Onset detection (1-frame lag)
   float onset_strength = 0.0f;      ///< Onset strength value
   bool onset_valid = false;         ///< False for frame_index == 0 (no previous frame)
+
+  // Chord detection (per-frame)
+  int chord_root = -1;              ///< Detected chord root (0-11 for C-B, -1 = unknown)
+  int chord_quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float chord_confidence = 0.0f;    ///< Chord detection confidence (0-1)
 };
 
 /// @brief Progressive estimation results for BPM, Key, and Chord.
@@ -64,9 +78,15 @@ struct ProgressiveEstimate {
   int chord_root = -1;              ///< Current chord root (0-11 for C-B, -1 = unknown)
   int chord_quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
   float chord_confidence = 0.0f;    ///< Chord detection confidence (0-1)
+  float chord_start_time = 0.0f;    ///< Start time of current chord
 
-  // Chord progression (accumulated over time)
+  // Chord progression (accumulated over time, includes current chord)
   std::vector<ChordChange> chord_progression;  ///< Detected chord changes
+
+  // Bar-synchronized chord progression (updated when BPM is stable)
+  std::vector<BarChord> bar_chord_progression;  ///< Chord per bar (beat-synced)
+  int current_bar = -1;         ///< Current bar index (-1 if BPM not stable)
+  float bar_duration = 0.0f;    ///< Duration of one bar in seconds (0 if BPM not stable)
 
   // Objective statistics (for UI display)
   float accumulated_seconds = 0.0f; ///< Total audio processed
@@ -94,6 +114,9 @@ struct FrameBuffer {
   std::vector<float> rms_energy;    ///< [n_frames]
   std::vector<float> spectral_centroid; ///< [n_frames]
   std::vector<float> spectral_flatness; ///< [n_frames]
+  std::vector<int> chord_root;      ///< [n_frames] chord root per frame
+  std::vector<int> chord_quality;   ///< [n_frames] chord quality per frame
+  std::vector<float> chord_confidence; ///< [n_frames] chord confidence per frame
 
   /// @brief Clears all data.
   void clear() {
@@ -105,6 +128,9 @@ struct FrameBuffer {
     rms_energy.clear();
     spectral_centroid.clear();
     spectral_flatness.clear();
+    chord_root.clear();
+    chord_quality.clear();
+    chord_confidence.clear();
   }
 
   /// @brief Reserves capacity for n frames.
@@ -116,6 +142,9 @@ struct FrameBuffer {
     rms_energy.reserve(n);
     spectral_centroid.reserve(n);
     spectral_flatness.reserve(n);
+    chord_root.reserve(n);
+    chord_quality.reserve(n);
+    chord_confidence.reserve(n);
   }
 };
 

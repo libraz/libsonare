@@ -339,6 +339,14 @@ interface WasmChordChange {
   confidence: number;
 }
 
+interface WasmBarChord {
+  barIndex: number;
+  root: number;
+  quality: number;
+  startTime: number;
+  confidence: number;
+}
+
 interface WasmProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
@@ -350,6 +358,9 @@ interface WasmProgressiveEstimate {
   chordQuality: number;
   chordConfidence: number;
   chordProgression: WasmChordChange[];
+  barChordProgression: WasmBarChord[];
+  currentBar: number;
+  barDuration: number;
   accumulatedSeconds: number;
   usedFrames: number;
   updated: boolean;
@@ -371,6 +382,9 @@ interface WasmFrameBuffer {
   rmsEnergy: Float32Array;
   spectralCentroid: Float32Array;
   spectralFlatness: Float32Array;
+  chordRoot: Int32Array;
+  chordQuality: Int32Array;
+  chordConfidence: Float32Array;
 }
 
 interface WasmStreamAnalyzer {

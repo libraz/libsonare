@@ -56,6 +56,14 @@ val vectorToIntArray(const std::vector<int>& vec) {
   return result;
 }
 
+val vectorToInt32Array(const std::vector<int>& vec) {
+  val result = val::global("Int32Array").new_(vec.size());
+  for (size_t i = 0; i < vec.size(); ++i) {
+    result.set(i, vec[i]);
+  }
+  return result;
+}
+
 std::vector<float> float32ArrayToVector(val arr) {
   return vecFromJSArray<float>(arr);
 }
@@ -665,6 +673,9 @@ class StreamAnalyzerWrapper {
     out.set("rmsEnergy", vectorToFloat32Array(buffer.rms_energy));
     out.set("spectralCentroid", vectorToFloat32Array(buffer.spectral_centroid));
     out.set("spectralFlatness", vectorToFloat32Array(buffer.spectral_flatness));
+    out.set("chordRoot", vectorToInt32Array(buffer.chord_root));
+    out.set("chordQuality", vectorToInt32Array(buffer.chord_quality));
+    out.set("chordConfidence", vectorToFloat32Array(buffer.chord_confidence));
     return out;
   }
 
@@ -727,7 +738,7 @@ class StreamAnalyzerWrapper {
     estimate.set("chordQuality", s.estimate.chord_quality);
     estimate.set("chordConfidence", s.estimate.chord_confidence);
 
-    // Chord progression
+    // Chord progression (time-based)
     val chordProgression = val::array();
     for (const auto& chord : s.estimate.chord_progression) {
       val c = val::object();
@@ -738,6 +749,21 @@ class StreamAnalyzerWrapper {
       chordProgression.call<void>("push", c);
     }
     estimate.set("chordProgression", chordProgression);
+
+    // Bar-synchronized chord progression (requires stable BPM)
+    val barChordProgression = val::array();
+    for (const auto& chord : s.estimate.bar_chord_progression) {
+      val c = val::object();
+      c.set("barIndex", chord.bar_index);
+      c.set("root", chord.root);
+      c.set("quality", chord.quality);
+      c.set("startTime", chord.start_time);
+      c.set("confidence", chord.confidence);
+      barChordProgression.call<void>("push", c);
+    }
+    estimate.set("barChordProgression", barChordProgression);
+    estimate.set("currentBar", s.estimate.current_bar);
+    estimate.set("barDuration", s.estimate.bar_duration);
 
     estimate.set("accumulatedSeconds", s.estimate.accumulated_seconds);
     estimate.set("usedFrames", s.estimate.used_frames);

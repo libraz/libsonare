@@ -325,6 +325,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   if (config_.compute_chroma) {
     chroma_buffer_.resize(12);
     chroma_sum_.fill(0.0f);
+    bar_chroma_sum_.fill(0.0f);
     /// Initialize chord templates for chord detection
     chord_templates_ = generate_triad_templates();
   }
@@ -423,6 +424,15 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
       chroma_sum_[i] += chroma_buffer_[i];
     }
     ++chroma_frame_count_;
+
+    /// Detect chord for this frame
+    if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {
+      auto [best_chord, chord_corr] =
+          find_best_chord(chroma_buffer_.data(), chord_templates_);
+      frame.chord_root = static_cast<int>(best_chord.root);
+      frame.chord_quality = static_cast<int>(best_chord.quality);
+      frame.chord_confidence = std::max(0.0f, chord_corr);
+    }
   }
 
   /// Compute onset strength
@@ -678,6 +688,84 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       }
     }
   }
+
+  /// Update bar-synchronized chord tracking
+  if (config_.compute_chroma) {
+    update_bar_chord_tracking(current_time);
+  }
+}
+
+void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
+  /// Check if BPM is stable enough to start bar tracking
+  if (!bar_tracking_active_) {
+    if (current_estimate_.bpm_confidence >= kBpmConfidenceThreshold && current_estimate_.bpm > 0.0f) {
+      /// Start bar tracking
+      bar_tracking_active_ = true;
+      bar_duration_ = static_cast<float>(kBeatsPerBar) * 60.0f / current_estimate_.bpm;
+      current_bar_index_ = 0;
+      bar_start_time_ = current_time;
+      bar_chroma_sum_.fill(0.0f);
+      bar_chroma_count_ = 0;
+
+      /// Update estimate with bar info
+      current_estimate_.bar_duration = bar_duration_;
+      current_estimate_.current_bar = 0;
+    }
+    return;
+  }
+
+  /// Update bar duration if BPM changed significantly
+  float new_bar_duration = static_cast<float>(kBeatsPerBar) * 60.0f / current_estimate_.bpm;
+  if (std::abs(new_bar_duration - bar_duration_) > 0.1f) {
+    bar_duration_ = new_bar_duration;
+    current_estimate_.bar_duration = bar_duration_;
+  }
+
+  /// Accumulate chroma for current bar
+  for (int c = 0; c < 12; ++c) {
+    bar_chroma_sum_[c] += chroma_buffer_[c];
+  }
+  ++bar_chroma_count_;
+
+  /// Check if we've crossed a bar boundary
+  if (current_time >= bar_start_time_ + bar_duration_) {
+    /// Detect chord for completed bar using accumulated chroma
+    if (bar_chroma_count_ > 0 && !chord_templates_.empty()) {
+      /// Normalize accumulated chroma
+      std::array<float, 12> bar_chroma;
+      float sum = 0.0f;
+      for (int c = 0; c < 12; ++c) {
+        bar_chroma[c] = bar_chroma_sum_[c] / static_cast<float>(bar_chroma_count_);
+        sum += bar_chroma[c];
+      }
+      if (sum > kEpsilon) {
+        for (int c = 0; c < 12; ++c) {
+          bar_chroma[c] /= sum;
+        }
+      }
+
+      /// Find best chord for this bar
+      auto [best_chord, chord_corr] = find_best_chord(bar_chroma.data(), chord_templates_);
+
+      /// Add to bar chord progression
+      BarChord bar_chord;
+      bar_chord.bar_index = current_bar_index_;
+      bar_chord.root = static_cast<int>(best_chord.root);
+      bar_chord.quality = static_cast<int>(best_chord.quality);
+      bar_chord.start_time = bar_start_time_;
+      bar_chord.confidence = std::max(0.0f, chord_corr);
+      current_estimate_.bar_chord_progression.push_back(bar_chord);
+    }
+
+    /// Move to next bar
+    ++current_bar_index_;
+    bar_start_time_ = current_time;
+    bar_chroma_sum_.fill(0.0f);
+    bar_chroma_count_ = 0;
+
+    /// Update estimate
+    current_estimate_.current_bar = current_bar_index_;
+  }
 }
 
 size_t StreamAnalyzer::available_frames() const { return output_buffer_.size(); }
@@ -715,6 +803,9 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
     buffer.rms_energy.push_back(frame.rms_energy);
     buffer.spectral_centroid.push_back(frame.spectral_centroid);
     buffer.spectral_flatness.push_back(frame.spectral_flatness);
+    buffer.chord_root.push_back(frame.chord_root);
+    buffer.chord_quality.push_back(frame.chord_quality);
+    buffer.chord_confidence.push_back(frame.chord_confidence);
 
     // Append mel (row-major)
     buffer.mel.insert(buffer.mel.end(), frame.mel.begin(), frame.mel.end());
@@ -832,6 +923,14 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   prev_chord_root_ = -1;
   prev_chord_quality_ = -1;
   chord_stable_time_ = 0.0f;
+
+  /// Reset bar tracking state
+  bar_tracking_active_ = false;
+  bar_duration_ = 0.0f;
+  current_bar_index_ = -1;
+  bar_start_time_ = 0.0f;
+  bar_chroma_sum_.fill(0.0f);
+  bar_chroma_count_ = 0;
 }
 
 AnalyzerStats StreamAnalyzer::stats() const {

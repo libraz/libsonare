@@ -164,6 +164,14 @@ interface WasmChordChange {
   confidence: number;
 }
 
+interface WasmBarChord {
+  barIndex: number;
+  root: number;
+  quality: number;
+  startTime: number;
+  confidence: number;
+}
+
 interface WasmProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
@@ -175,6 +183,9 @@ interface WasmProgressiveEstimate {
   chordQuality: number;
   chordConfidence: number;
   chordProgression: WasmChordChange[];
+  barChordProgression: WasmBarChord[];
+  currentBar: number;
+  barDuration: number;
   accumulatedSeconds: number;
   usedFrames: number;
   updated: boolean;
@@ -196,6 +207,9 @@ interface WasmFrameBuffer {
   rmsEnergy: Float32Array;
   spectralCentroid: Float32Array;
   spectralFlatness: Float32Array;
+  chordRoot: Int32Array;
+  chordQuality: Int32Array;
+  chordConfidence: Float32Array;
 }
 
 interface WasmStreamAnalyzer {
@@ -1366,6 +1380,17 @@ export interface ChordChange {
 }
 
 /**
+ * A chord detected at bar boundary (beat-synchronized)
+ */
+export interface BarChord {
+  barIndex: number;
+  root: PitchClass;
+  quality: ChordQuality;
+  startTime: number;
+  confidence: number;
+}
+
+/**
  * Progressive estimation results for BPM, Key, and Chord
  */
 export interface ProgressiveEstimate {
@@ -1379,6 +1404,9 @@ export interface ProgressiveEstimate {
   chordQuality: ChordQuality;
   chordConfidence: number;
   chordProgression: ChordChange[];
+  barChordProgression: BarChord[];
+  currentBar: number;
+  barDuration: number;
   accumulatedSeconds: number;
   usedFrames: number;
   updated: boolean;
@@ -1406,6 +1434,9 @@ export interface FrameBuffer {
   rmsEnergy: Float32Array;
   spectralCentroid: Float32Array;
   spectralFlatness: Float32Array;
+  chordRoot: Int32Array;
+  chordQuality: Int32Array;
+  chordConfidence: Float32Array;
 }
 
 /**
@@ -1543,6 +1574,15 @@ export class StreamAnalyzer {
           startTime: c.startTime,
           confidence: c.confidence,
         })),
+        barChordProgression: s.estimate.barChordProgression.map((c) => ({
+          barIndex: c.barIndex,
+          root: c.root as PitchClass,
+          quality: c.quality as ChordQuality,
+          startTime: c.startTime,
+          confidence: c.confidence,
+        })),
+        currentBar: s.estimate.currentBar,
+        barDuration: s.estimate.barDuration,
         accumulatedSeconds: s.estimate.accumulatedSeconds,
         usedFrames: s.estimate.usedFrames,
         updated: s.estimate.updated,

@@ -170,6 +170,16 @@ class StreamAnalyzer {
   float chord_stable_time_ = 0.0f;        ///< Time chord has been stable
   static constexpr float kChordMinDuration = 0.2f;  ///< Min duration to register change
 
+  // Bar-synchronized chord tracking (requires stable BPM)
+  static constexpr float kBpmConfidenceThreshold = 0.3f;  ///< Min BPM confidence for bar sync
+  static constexpr int kBeatsPerBar = 4;  ///< Beats per bar (4/4 time signature)
+  bool bar_tracking_active_ = false;      ///< True when BPM is stable enough
+  float bar_duration_ = 0.0f;             ///< Duration of one bar in seconds
+  int current_bar_index_ = -1;            ///< Current bar index (0-based)
+  float bar_start_time_ = 0.0f;           ///< Start time of current bar
+  std::array<float, 12> bar_chroma_sum_;  ///< Accumulated chroma within current bar
+  int bar_chroma_count_ = 0;              ///< Number of frames accumulated in current bar
+
   // Internal methods
   void process_internal(const float* samples, size_t n_samples);
   StreamFrame process_single_frame(const float* frame_start, size_t sample_offset);
@@ -179,6 +189,7 @@ class StreamAnalyzer {
   float compute_onset();
   void compute_spectral_features(StreamFrame& frame);
   void update_progressive_estimate(float current_time);
+  void update_bar_chord_tracking(float current_time);
 };
 
 }  // namespace sonare
