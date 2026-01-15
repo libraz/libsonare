@@ -4,10 +4,12 @@
 #include <cmath>
 #include <numeric>
 
+#include "analysis/chord_analyzer.h"
 #include "analysis/chord_templates.h"
 #include "analysis/key_profiles.h"
 #include "core/fft.h"
 #include "core/window.h"
+#include "feature/chroma.h"
 #include "filters/chroma.h"
 #include "filters/mel.h"
 #include "util/math_utils.h"
@@ -425,13 +427,51 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
     }
     ++chroma_frame_count_;
 
-    /// Detect chord for this frame
+    /// Accumulate chroma frame for batch-style chord analysis
+    /// Store in column-major order: [chroma_bin][frame] for Chroma class compatibility
+    for (int c = 0; c < 12; ++c) {
+      accumulated_chroma_.push_back(chroma_buffer_[c]);
+    }
+
+    /// Detect chord for this frame using smoothed chroma
     if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {
+      /// Add current chroma to history
+      std::array<float, 12> current_chroma;
+      std::copy(chroma_buffer_.begin(), chroma_buffer_.end(), current_chroma.begin());
+      chroma_history_.push_back(current_chroma);
+
+      /// Keep history limited to smoothing window
+      while (chroma_history_.size() > static_cast<size_t>(kChordSmoothingFrames)) {
+        chroma_history_.pop_front();
+      }
+
+      /// Compute smoothed chroma (average over history)
+      std::array<float, 12> smoothed_chroma = {};
+      for (const auto& hist : chroma_history_) {
+        for (int c = 0; c < 12; ++c) {
+          smoothed_chroma[c] += hist[c];
+        }
+      }
+      float inv_count = 1.0f / static_cast<float>(chroma_history_.size());
+      for (int c = 0; c < 12; ++c) {
+        smoothed_chroma[c] *= inv_count;
+      }
+
+      /// Find best chord using smoothed chroma
       auto [best_chord, chord_corr] =
-          find_best_chord(chroma_buffer_.data(), chord_templates_);
-      frame.chord_root = static_cast<int>(best_chord.root);
-      frame.chord_quality = static_cast<int>(best_chord.quality);
-      frame.chord_confidence = std::max(0.0f, chord_corr);
+          find_best_chord(smoothed_chroma.data(), chord_templates_);
+
+      /// Only report chord if confidence is above threshold
+      if (chord_corr >= kChordConfidenceThreshold) {
+        frame.chord_root = static_cast<int>(best_chord.root);
+        frame.chord_quality = static_cast<int>(best_chord.quality);
+        frame.chord_confidence = chord_corr;
+      } else {
+        /// Low confidence: keep previous chord or default to C major
+        frame.chord_root = (prev_chord_root_ >= 0) ? prev_chord_root_ : 0;
+        frame.chord_quality = (prev_chord_quality_ >= 0) ? prev_chord_quality_ : 0;
+        frame.chord_confidence = std::max(0.0f, chord_corr);
+      }
     }
   }
 
@@ -507,11 +547,15 @@ void StreamAnalyzer::compute_chroma() {
     chroma_buffer_[c] = sum;
   }
 
-  /// Normalize chroma
-  float max_val = *std::max_element(chroma_buffer_.begin(), chroma_buffer_.end());
-  if (max_val > kEpsilon) {
+  /// Normalize chroma using L2 norm (more robust than max)
+  float l2_norm = 0.0f;
+  for (int c = 0; c < 12; ++c) {
+    l2_norm += chroma_buffer_[c] * chroma_buffer_[c];
+  }
+  l2_norm = std::sqrt(l2_norm);
+  if (l2_norm > kEpsilon) {
     for (int c = 0; c < 12; ++c) {
-      chroma_buffer_[c] /= max_val;
+      chroma_buffer_[c] /= l2_norm;
     }
   }
 }
@@ -611,48 +655,68 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       current_estimate_.updated = true;
     }
 
-    /// Update chord estimate (every frame, using current chroma)
-    if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {
+    /// Update chord estimate (every frame, using smoothed chroma)
+    if (!chord_templates_.empty() && !chroma_history_.empty()) {
+      /// Compute smoothed chroma (average over history)
+      std::array<float, 12> smoothed_chroma = {};
+      for (const auto& hist : chroma_history_) {
+        for (int c = 0; c < 12; ++c) {
+          smoothed_chroma[c] += hist[c];
+        }
+      }
+      float inv_count = 1.0f / static_cast<float>(chroma_history_.size());
+      for (int c = 0; c < 12; ++c) {
+        smoothed_chroma[c] *= inv_count;
+      }
+
       auto [best_chord, chord_corr] =
-          find_best_chord(chroma_buffer_.data(), chord_templates_);
+          find_best_chord(smoothed_chroma.data(), chord_templates_);
       int new_root = static_cast<int>(best_chord.root);
       int new_quality = static_cast<int>(best_chord.quality);
       float new_confidence = std::max(0.0f, chord_corr);
 
-      current_estimate_.chord_root = new_root;
-      current_estimate_.chord_quality = new_quality;
-      current_estimate_.chord_confidence = new_confidence;
-
-      /// Track chord progression
-      float frame_duration =
-          static_cast<float>(config_.hop_length) / static_cast<float>(config_.sample_rate);
-
-      if (new_root == prev_chord_root_ && new_quality == prev_chord_quality_) {
-        /// Same chord - accumulate stable time
-        chord_stable_time_ += frame_duration;
+      /// Only update if confidence is above threshold
+      if (new_confidence >= kChordConfidenceThreshold) {
+        current_estimate_.chord_root = new_root;
+        current_estimate_.chord_quality = new_quality;
+        current_estimate_.chord_confidence = new_confidence;
       } else {
-        /// Chord changed - check if previous chord was stable long enough
-        if (prev_chord_root_ >= 0 && chord_stable_time_ >= kChordMinDuration) {
-          /// Find the start time of the previous chord
-          float chord_start = current_time - chord_stable_time_;
+        /// Keep current estimate but update confidence
+        current_estimate_.chord_confidence = new_confidence;
+      }
 
-          /// Only add if it's a new chord or first chord
-          if (current_estimate_.chord_progression.empty() ||
-              current_estimate_.chord_progression.back().root != prev_chord_root_ ||
-              current_estimate_.chord_progression.back().quality != prev_chord_quality_) {
-            ChordChange change;
-            change.root = prev_chord_root_;
-            change.quality = prev_chord_quality_;
-            change.start_time = chord_start;
-            change.confidence = new_confidence;
-            current_estimate_.chord_progression.push_back(change);
+      /// Track chord progression (only when confidence is high enough)
+      if (new_confidence >= kChordConfidenceThreshold) {
+        float frame_duration =
+            static_cast<float>(config_.hop_length) / static_cast<float>(config_.sample_rate);
+
+        if (new_root == prev_chord_root_ && new_quality == prev_chord_quality_) {
+          /// Same chord - accumulate stable time
+          chord_stable_time_ += frame_duration;
+        } else {
+          /// Chord changed - check if previous chord was stable long enough
+          if (prev_chord_root_ >= 0 && chord_stable_time_ >= kChordMinDuration) {
+            /// Find the start time of the previous chord
+            float chord_start = current_time - chord_stable_time_;
+
+            /// Only add if it's a new chord or first chord
+            if (current_estimate_.chord_progression.empty() ||
+                current_estimate_.chord_progression.back().root != prev_chord_root_ ||
+                current_estimate_.chord_progression.back().quality != prev_chord_quality_) {
+              ChordChange change;
+              change.root = prev_chord_root_;
+              change.quality = prev_chord_quality_;
+              change.start_time = chord_start;
+              change.confidence = new_confidence;
+              current_estimate_.chord_progression.push_back(change);
+            }
           }
-        }
 
-        /// Reset for new chord
-        prev_chord_root_ = new_root;
-        prev_chord_quality_ = new_quality;
-        chord_stable_time_ = frame_duration;
+          /// Reset for new chord
+          prev_chord_root_ = new_root;
+          prev_chord_quality_ = new_quality;
+          chord_stable_time_ = frame_duration;
+        }
       }
     }
   }
@@ -686,6 +750,52 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         last_bpm_update_time_ = current_time;
         current_estimate_.updated = true;
       }
+    }
+  }
+
+  /// Update chord progression using batch-style analysis (same as ChordAnalyzer)
+  if (config_.compute_chroma && chroma_frame_count_ > 0) {
+    float time_since_chord_analysis = current_time - last_chord_analysis_time_;
+    constexpr float kChordAnalysisInterval = 2.0f;  // Update every 2 seconds
+    constexpr int kMinFramesForAnalysis = 50;       // ~1 second of audio
+
+    if (time_since_chord_analysis >= kChordAnalysisInterval &&
+        chroma_frame_count_ >= kMinFramesForAnalysis) {
+      /// Transpose accumulated chroma from [frame][chroma] to [chroma][frame]
+      int n_frames = chroma_frame_count_;
+      std::vector<float> transposed_chroma(12 * n_frames);
+      for (int f = 0; f < n_frames; ++f) {
+        for (int c = 0; c < 12; ++c) {
+          transposed_chroma[c * n_frames + f] = accumulated_chroma_[f * 12 + c];
+        }
+      }
+
+      /// Create Chroma object from accumulated data
+      Chroma chroma_obj(std::move(transposed_chroma), 12, n_frames, config_.sample_rate,
+                        config_.hop_length);
+
+      /// Run ChordAnalyzer with same settings as batch analysis
+      ChordConfig chord_config;
+      chord_config.smoothing_window = 2.0f;  // Same as batch
+      chord_config.min_duration = 0.3f;
+      chord_config.use_triads_only = true;
+      chord_config.use_beat_sync = false;  // No beat sync in streaming
+
+      ChordAnalyzer chord_analyzer(chroma_obj, chord_config);
+
+      /// Update chord progression from ChordAnalyzer results
+      current_estimate_.chord_progression.clear();
+      for (const auto& chord : chord_analyzer.chords()) {
+        ChordChange change;
+        change.root = static_cast<int>(chord.root);
+        change.quality = static_cast<int>(chord.quality);
+        change.start_time = chord.start;
+        change.confidence = chord.confidence;
+        current_estimate_.chord_progression.push_back(change);
+      }
+
+      last_chord_analysis_time_ = current_time;
+      current_estimate_.updated = true;
     }
   }
 
@@ -915,14 +1025,17 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   onset_accumulator_.clear();
   chroma_sum_.fill(0.0f);
   chroma_frame_count_ = 0;
+  accumulated_chroma_.clear();
   last_key_update_time_ = 0.0f;
   last_bpm_update_time_ = 0.0f;
+  last_chord_analysis_time_ = 0.0f;
   current_estimate_ = ProgressiveEstimate();
 
   /// Reset chord progression tracking
   prev_chord_root_ = -1;
   prev_chord_quality_ = -1;
   chord_stable_time_ = 0.0f;
+  chroma_history_.clear();
 
   /// Reset bar tracking state
   bar_tracking_active_ = false;

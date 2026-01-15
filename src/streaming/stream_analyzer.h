@@ -162,13 +162,21 @@ class StreamAnalyzer {
   int chroma_frame_count_ = 0;
   float last_key_update_time_ = 0.0f;
   float last_bpm_update_time_ = 0.0f;
+  float last_chord_analysis_time_ = 0.0f;
   ProgressiveEstimate current_estimate_;
+
+  // Accumulated chroma frames for batch-style chord analysis
+  // Stored as [12 * n_frames] (row-major: chroma bins × frames)
+  std::vector<float> accumulated_chroma_;
 
   // Chord progression tracking
   int prev_chord_root_ = -1;
   int prev_chord_quality_ = -1;
   float chord_stable_time_ = 0.0f;        ///< Time chord has been stable
-  static constexpr float kChordMinDuration = 0.2f;  ///< Min duration to register change
+  static constexpr float kChordMinDuration = 0.3f;  ///< Min duration to register change
+  static constexpr int kChordSmoothingFrames = 12;  ///< Number of frames to smooth (~0.25s at default settings)
+  static constexpr float kChordConfidenceThreshold = 0.5f;  ///< Min correlation for chord detection
+  std::deque<std::array<float, 12>> chroma_history_;  ///< History for chord smoothing
 
   // Bar-synchronized chord tracking (requires stable BPM)
   static constexpr float kBpmConfidenceThreshold = 0.3f;  ///< Min BPM confidence for bar sync

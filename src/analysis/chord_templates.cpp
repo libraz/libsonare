@@ -71,34 +71,56 @@ std::string ChordTemplate::to_string() const {
 }
 
 float ChordTemplate::correlate(const float* chroma) const {
-  // Compute Pearson correlation between chroma and pattern
-  float chroma_mean = 0.0f;
-  float pattern_mean = 0.0f;
-  for (int i = 0; i < 12; ++i) {
-    chroma_mean += chroma[i];
-    pattern_mean += pattern[i];
-  }
-  chroma_mean /= 12.0f;
-  pattern_mean /= 12.0f;
+  // Compute weighted correlation between chroma and pattern
+  // Using cosine similarity with root emphasis
 
-  float numerator = 0.0f;
-  float chroma_var = 0.0f;
-  float pattern_var = 0.0f;
+  // First compute basic dot product and norms
+  float dot = 0.0f;
+  float chroma_norm_sq = 0.0f;
+  float pattern_norm_sq = 0.0f;
 
   for (int i = 0; i < 12; ++i) {
-    float cd = chroma[i] - chroma_mean;
-    float pd = pattern[i] - pattern_mean;
-    numerator += cd * pd;
-    chroma_var += cd * cd;
-    pattern_var += pd * pd;
+    dot += chroma[i] * pattern[i];
+    chroma_norm_sq += chroma[i] * chroma[i];
+    pattern_norm_sq += pattern[i] * pattern[i];
   }
 
-  float denominator = std::sqrt(chroma_var * pattern_var);
-  if (denominator < 1e-10f) {
+  float denom = std::sqrt(chroma_norm_sq * pattern_norm_sq);
+  if (denom < 1e-10f) {
     return 0.0f;
   }
 
-  return numerator / denominator;
+  float cosine_sim = dot / denom;
+
+  // Add root note emphasis bonus
+  // If the root note has high energy in chroma, boost the score
+  int root_idx = static_cast<int>(root);
+  float root_weight = chroma[root_idx];
+
+  // Find max chroma value for normalization
+  float max_chroma = 0.0f;
+  for (int i = 0; i < 12; ++i) {
+    if (chroma[i] > max_chroma) {
+      max_chroma = chroma[i];
+    }
+  }
+
+  // Root emphasis: if root is prominent (>50% of max), add bonus
+  float root_bonus = 0.0f;
+  if (max_chroma > 1e-10f) {
+    float root_ratio = root_weight / max_chroma;
+    if (root_ratio >= 0.5f) {
+      root_bonus = 0.1f * root_ratio;  // Up to 0.1 bonus
+    }
+  }
+
+  // Penalize diminished/augmented chords slightly (they're less common)
+  float quality_penalty = 0.0f;
+  if (quality == ChordQuality::Diminished || quality == ChordQuality::Augmented) {
+    quality_penalty = 0.05f;
+  }
+
+  return cosine_sim + root_bonus - quality_penalty;
 }
 
 float ChordTemplate::correlate(const std::array<float, 12>& chroma) const {
