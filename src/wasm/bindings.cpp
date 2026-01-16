@@ -807,6 +807,23 @@ class StreamAnalyzerWrapper {
   int frameCount() const { return analyzer_->frame_count(); }
   float currentTime() const { return analyzer_->current_time(); }
 
+  /// @brief Sets the expected total duration for pattern lock timing.
+  void setExpectedDuration(float duration_seconds) {
+    analyzer_->set_expected_duration(duration_seconds);
+  }
+
+  /// @brief Sets normalization gain for loud audio.
+  void setNormalizationGain(float gain) {
+    analyzer_->set_normalization_gain(gain);
+  }
+
+  /// @brief Sets tuning reference frequency (A4).
+  /// @param ref_hz Reference frequency for A4 (default 440 Hz)
+  /// @details Use 466.16 if audio is 1 semitone sharp, 415.30 if 1 semitone flat.
+  void setTuningRefHz(float ref_hz) {
+    analyzer_->set_tuning_ref_hz(ref_hz);
+  }
+
  private:
   StreamConfig config_;
   std::unique_ptr<StreamAnalyzer> analyzer_;
@@ -927,7 +944,10 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("stats", &StreamAnalyzerWrapper::stats)
       .function("frameCount", &StreamAnalyzerWrapper::frameCount)
       .function("currentTime", &StreamAnalyzerWrapper::currentTime)
-      .function("sampleRate", &StreamAnalyzerWrapper::sampleRate);
+      .function("sampleRate", &StreamAnalyzerWrapper::sampleRate)
+      .function("setExpectedDuration", &StreamAnalyzerWrapper::setExpectedDuration)
+      .function("setNormalizationGain", &StreamAnalyzerWrapper::setNormalizationGain)
+      .function("setTuningRefHz", &StreamAnalyzerWrapper::setTuningRefHz);
 }
 
 #endif  // __EMSCRIPTEN__

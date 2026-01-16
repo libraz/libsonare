@@ -72,7 +72,7 @@ std::string ChordTemplate::to_string() const {
 
 float ChordTemplate::correlate(const float* chroma) const {
   // Compute weighted correlation between chroma and pattern
-  // Using cosine similarity with root emphasis
+  // Using cosine similarity with root and third emphasis
 
   // First compute basic dot product and norms
   float dot = 0.0f;
@@ -92,10 +92,7 @@ float ChordTemplate::correlate(const float* chroma) const {
 
   float cosine_sim = dot / denom;
 
-  // Add root note emphasis bonus
-  // If the root note has high energy in chroma, boost the score
   int root_idx = static_cast<int>(root);
-  float root_weight = chroma[root_idx];
 
   // Find max chroma value for normalization
   float max_chroma = 0.0f;
@@ -105,12 +102,65 @@ float ChordTemplate::correlate(const float* chroma) const {
     }
   }
 
-  // Root emphasis: if root is prominent (>50% of max), add bonus
+  if (max_chroma < 1e-10f) {
+    return cosine_sim;
+  }
+
+  // Root emphasis: if root is prominent, add bonus
+  float root_weight = chroma[root_idx];
+  float root_ratio = root_weight / max_chroma;
   float root_bonus = 0.0f;
-  if (max_chroma > 1e-10f) {
-    float root_ratio = root_weight / max_chroma;
-    if (root_ratio >= 0.5f) {
-      root_bonus = 0.1f * root_ratio;  // Up to 0.1 bonus
+  if (root_ratio >= 0.4f) {
+    root_bonus = 0.1f * root_ratio;  // Up to 0.1 bonus
+  }
+
+  // Third note emphasis - this distinguishes chords that share root/fifth
+  // Major third is at +4 semitones, minor third is at +3 semitones
+  // The third is the most important note for chord quality discrimination
+  float third_bonus = 0.0f;
+  if (quality == ChordQuality::Major || quality == ChordQuality::Dominant7 ||
+      quality == ChordQuality::Major7 || quality == ChordQuality::Augmented) {
+    // Major third at +4
+    int third_idx = (root_idx + 4) % 12;
+    float third_ratio = chroma[third_idx] / max_chroma;
+    if (third_ratio >= 0.3f) {
+      third_bonus = 0.08f * third_ratio;
+    }
+    // Penalize if minor third is stronger than major third
+    int minor_third_idx = (root_idx + 3) % 12;
+    if (chroma[minor_third_idx] > chroma[third_idx] * 1.2f) {
+      third_bonus -= 0.05f;
+    }
+  } else if (quality == ChordQuality::Minor || quality == ChordQuality::Minor7 ||
+             quality == ChordQuality::Diminished) {
+    // Minor third at +3
+    int third_idx = (root_idx + 3) % 12;
+    float third_ratio = chroma[third_idx] / max_chroma;
+    if (third_ratio >= 0.3f) {
+      third_bonus = 0.08f * third_ratio;
+    }
+    // Penalize if major third is stronger than minor third
+    int major_third_idx = (root_idx + 4) % 12;
+    if (chroma[major_third_idx] > chroma[third_idx] * 1.2f) {
+      third_bonus -= 0.05f;
+    }
+  }
+
+  // Fifth note check - perfect fifth at +7 semitones
+  // If fifth is present, it confirms the chord
+  float fifth_bonus = 0.0f;
+  int fifth_idx = (root_idx + 7) % 12;
+  float fifth_ratio = chroma[fifth_idx] / max_chroma;
+  if (fifth_ratio >= 0.25f) {
+    fifth_bonus = 0.03f * fifth_ratio;
+  }
+
+  // Penalize notes that shouldn't be in the chord
+  float penalty = 0.0f;
+  for (int i = 0; i < 12; ++i) {
+    if (pattern[i] < 0.5f && chroma[i] > max_chroma * 0.5f) {
+      // Strong note that's not in the chord pattern
+      penalty += 0.02f;
     }
   }
 
@@ -120,7 +170,7 @@ float ChordTemplate::correlate(const float* chroma) const {
     quality_penalty = 0.05f;
   }
 
-  return cosine_sim + root_bonus - quality_penalty;
+  return cosine_sim + root_bonus + third_bonus + fifth_bonus - penalty - quality_penalty;
 }
 
 float ChordTemplate::correlate(const std::array<float, 12>& chroma) const {

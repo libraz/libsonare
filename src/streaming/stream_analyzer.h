@@ -101,6 +101,27 @@ class StreamAnalyzer {
   /// @param base_sample_offset Starting sample offset (default 0)
   void reset(size_t base_sample_offset = 0);
 
+  /// @brief Sets expected total duration of the audio.
+  /// @param duration_seconds Total duration in seconds
+  /// @details Used to calculate optimal pattern lock timing.
+  ///          If not set, a default threshold is used.
+  void set_expected_duration(float duration_seconds);
+
+  /// @brief Sets normalization gain for loud audio.
+  /// @param gain Gain factor to apply to input samples (e.g., 0.5 for -6dB)
+  /// @details Use this to normalize loud/compressed audio before analysis.
+  ///          Typical usage: compute peak or RMS from AudioBuffer, then set
+  ///          gain = target_level / measured_level.
+  void set_normalization_gain(float gain);
+
+  /// @brief Sets tuning reference frequency and recreates chroma filterbank.
+  /// @param ref_hz Reference frequency for A4 (default 440 Hz)
+  /// @details Use this when the audio has non-standard tuning.
+  ///          For example, if the audio is 1 semitone sharp (A4 = 466.16 Hz),
+  ///          pass ref_hz = 466.16f to correct the chroma analysis.
+  ///          Should be called before processing audio (after reset if needed).
+  void set_tuning_ref_hz(float ref_hz);
+
   /// @brief Returns current statistics and progressive estimate.
   AnalyzerStats stats();
 
@@ -115,6 +136,18 @@ class StreamAnalyzer {
 
  private:
   StreamConfig config_;
+
+  // Internal sample rate for analysis (downsample if input is higher)
+  // Using 44100 Hz internally ensures consistent results regardless of input sample rate
+  static constexpr int kInternalSampleRate = 44100;
+  static constexpr int kMaxDirectSampleRate = 44100;  // Resample anything above 44100 Hz
+  int internal_sample_rate_;  // Actual rate used for analysis
+  bool needs_resampling_ = false;
+  float resample_ratio_ = 1.0f;
+  std::vector<float> resample_buffer_;  // Buffer for resampled audio
+
+  // Normalization
+  float normalization_gain_ = 1.0f;  // Gain factor for loud audio
 
   // Cumulative state
   size_t cumulative_samples_ = 0;
@@ -193,6 +226,10 @@ class StreamAnalyzer {
   std::array<int, 48> bar_chord_votes_;   ///< Vote counts per chord (12 roots × 4 qualities)
   int bar_vote_count_ = 0;                ///< Total votes in current bar
 
+  // Pattern locking (once detected with high confidence, don't change)
+  bool pattern_locked_ = false;           ///< True if pattern is locked
+  float expected_duration_ = 0.0f;        ///< Expected total duration (0 = unknown)
+
   // Full chroma history for retroactive bar chord detection
   static constexpr size_t kMaxChromaHistoryFrames = 3000;  ///< ~35s at default settings
   std::vector<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
@@ -208,6 +245,7 @@ class StreamAnalyzer {
   // Internal methods
   void compute_retroactive_bar_chords();
   void compute_voted_pattern(int pattern_length = 4);
+  void correct_voted_pattern_by_known_patterns();
   void detect_progression_pattern();
   void process_internal(const float* samples, size_t n_samples);
   StreamFrame process_single_frame(const float* frame_start, size_t sample_offset);

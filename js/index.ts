@@ -234,6 +234,9 @@ interface WasmStreamAnalyzer {
   frameCount: () => number;
   currentTime: () => number;
   sampleRate: () => number;
+  setExpectedDuration: (durationSeconds: number) => void;
+  setNormalizationGain: (gain: number) => void;
+  setTuningRefHz: (refHz: number) => void;
   delete: () => void;
 }
 
@@ -1647,6 +1650,38 @@ export class StreamAnalyzer {
    */
   sampleRate(): number {
     return this.analyzer.sampleRate();
+  }
+
+  /**
+   * Set the expected total duration for pattern lock timing.
+   *
+   * @param durationSeconds - Total duration in seconds
+   */
+  setExpectedDuration(durationSeconds: number): void {
+    this.analyzer.setExpectedDuration(durationSeconds);
+  }
+
+  /**
+   * Set normalization gain for loud/compressed audio.
+   *
+   * @param gain - Gain factor to apply (e.g., 0.5 for -6dB reduction)
+   */
+  setNormalizationGain(gain: number): void {
+    this.analyzer.setNormalizationGain(gain);
+  }
+
+  /**
+   * Set tuning reference frequency for non-standard tuning.
+   *
+   * @param refHz - Reference frequency for A4 (default 440 Hz)
+   * @example
+   * // If audio is 1 semitone sharp (A4 = 466.16 Hz)
+   * analyzer.setTuningRefHz(466.16);
+   * // If audio is 1 semitone flat (A4 = 415.30 Hz)
+   * analyzer.setTuningRefHz(415.30);
+   */
+  setTuningRefHz(refHz: number): void {
+    this.analyzer.setTuningRefHz(refHz);
   }
 
   /**

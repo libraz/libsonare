@@ -409,6 +409,9 @@ interface WasmStreamAnalyzer {
   frameCount: () => number;
   currentTime: () => number;
   sampleRate: () => number;
+  setExpectedDuration: (durationSeconds: number) => void;
+  setNormalizationGain: (gain: number) => void;
+  setTuningRefHz: (refHz: number) => void;
   delete: () => void;
 }
 

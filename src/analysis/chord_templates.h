@@ -89,6 +89,17 @@ std::pair<ChordTemplate, float> find_best_chord(const float* chroma,
 std::pair<ChordTemplate, float> find_best_chord(const std::array<float, 12>& chroma,
                                                 const std::vector<ChordTemplate>& templates);
 
+/// @brief Finds the best matching chord with key context bias.
+/// @param chroma Chroma vector [12]
+/// @param templates Vector of templates to search
+/// @param key_root Root note of the detected key (0-11, C=0)
+/// @param key_minor True if the key is minor
+/// @param key_confidence Confidence of key detection (0-1)
+/// @return Pair of (best matching template, correlation score)
+std::pair<ChordTemplate, float> find_best_chord_with_key(
+    const float* chroma, const std::vector<ChordTemplate>& templates,
+    int key_root, bool key_minor, float key_confidence);
+
 /// @brief Converts chord quality to string.
 std::string chord_quality_to_string(ChordQuality quality);
 
