@@ -66,9 +66,13 @@ analysis.json
 # Dictionary cleanup artifacts
 data
 
-# Dependencies
-third_party/*
-!third_party/CMakeLists.txt
+# Dependencies (keep required libraries)
+!third_party/
+third_party/**/build/
+third_party/**/.git/
+third_party/r8brain/bench/
+third_party/r8brain/DLL/
+third_party/r8brain/other/
 
 # Node.js
 node_modules/

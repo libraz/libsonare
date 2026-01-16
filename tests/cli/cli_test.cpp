@@ -39,6 +39,13 @@ void create_test_wav(const std::string& path, float duration = 3.0f, float frequ
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Custom deleter for FILE* using pclose.
+struct PipeDeleter {
+  void operator()(FILE* fp) const {
+    if (fp) pclose(fp);
+  }
+};
+
 /// @brief Executes a shell command and returns output.
 /// @param cmd Command to execute
 /// @return Pair of (exit_code, output)
@@ -48,7 +55,7 @@ std::pair<int, std::string> exec_command(const std::string& cmd) {
 
   // Redirect stderr to stdout
   std::string full_cmd = cmd + " 2>&1";
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(full_cmd.c_str(), "r"), pclose);
+  std::unique_ptr<FILE, PipeDeleter> pipe(popen(full_cmd.c_str(), "r"));
   if (!pipe) {
     return {-1, "popen failed"};
   }
@@ -379,6 +386,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
 
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --json -q");
+    INFO("CLI output: " << output);
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"algorithm\""));
     REQUIRE_THAT(output, ContainsSubstring("\"n_frames\""));

@@ -132,10 +132,10 @@ ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(const f
   ChordMatch result;
   if (best_tetrad_corr > best_triad_corr + chord_constants::kTetradThreshold) {
     result.index = best_tetrad_idx;
-    result.confidence = best_tetrad_corr;
+    result.confidence = std::min(1.0f, std::max(0.0f, best_tetrad_corr));
   } else {
     result.index = best_triad_idx;
-    result.confidence = best_triad_corr;
+    result.confidence = std::min(1.0f, std::max(0.0f, best_triad_corr));
   }
   return result;
 }
