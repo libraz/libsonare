@@ -3,8 +3,22 @@ name: CI
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - 'Makefile'
+      - '.github/workflows/**'
+      - 'third_party/**'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - 'Makefile'
+      - '.github/workflows/**'
+      - 'third_party/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
