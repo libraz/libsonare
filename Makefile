@@ -1,4 +1,5 @@
-.PHONY: all build test clean rebuild format wasm coverage coverage-build coverage-clean
+.PHONY: all build test clean rebuild format wasm coverage coverage-build coverage-clean \
+       build-shared build-node test-python test-node
 
 BUILD_DIR := build
 
@@ -26,6 +27,20 @@ rebuild: clean build
 
 format:
 	find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format -i
+
+# Binding targets
+build-shared:
+	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
+	cmake --build $(BUILD_DIR) -j
+
+build-node:
+	cd bindings/node && yarn install && yarn build
+
+test-python: build-shared
+	cd bindings/python && pip install -e . -q && python -m pytest tests/ -v
+
+test-node: build-node
+	cd bindings/node && yarn test
 
 # Coverage targets
 coverage-build:

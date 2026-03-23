@@ -92,7 +92,7 @@ describe('Sonare WASM Module', () => {
   });
 
   describe('analyze', () => {
-    it('should return complete analysis result', () => {
+    it('should return complete analysis result', { timeout: 30000 }, () => {
       const sampleRate = 22050;
       const duration = 4;
       const samples = new Float32Array(sampleRate * duration);

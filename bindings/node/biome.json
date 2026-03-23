@@ -1,0 +1,6 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+  "organizeImports": { "enabled": true },
+  "formatter": { "lineWidth": 100 },
+  "javascript": { "formatter": { "quoteStyle": "single", "trailingCommas": "all" } }
+}

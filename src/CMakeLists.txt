@@ -70,6 +70,24 @@ target_include_directories(sonare_core PUBLIC
 
 target_link_libraries(sonare_core PUBLIC Eigen3::Eigen kissfft)
 
+# Shared library for language bindings (Python ctypes, etc.)
+if(BUILD_SHARED)
+  add_library(sonare_shared SHARED ${SONARE_SOURCES})
+  set_target_properties(sonare_shared PROPERTIES
+    OUTPUT_NAME sonare
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+  )
+  target_include_directories(sonare_shared PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party/kissfft
+    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
+    ${CMAKE_SOURCE_DIR}/third_party/minimp3
+    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  )
+  target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen kissfft)
+endif()
+
 # WASM build
 if(BUILD_WASM)
   add_executable(sonare wasm/bindings.cpp)
