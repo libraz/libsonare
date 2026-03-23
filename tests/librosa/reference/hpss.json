@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.4.3"
+  },
+  "data": {
+    "signal": "tone_plus_impulses",
+    "sr": 22050,
+    "n_fft": 2048,
+    "hop_length": 512,
+    "shape": [
+      1025,
+      44
+    ],
+    "harmonic_sum": 23080.044921875,
+    "harmonic_max": 253.62965393066406,
+    "percussive_sum": 28259.3046875,
+    "percussive_max": 49.94432830810547,
+    "total_sum": 51339.3515625,
+    "harmonic_energy_ratio": 0.9079640507698059
+  }
+}

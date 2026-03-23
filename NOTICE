@@ -1,0 +1,70 @@
+libsonare
+Copyright 2024 libsonare contributors
+
+This product includes software developed by third parties. Below is the
+attribution for each bundled dependency and the project from which algorithms
+were ported.
+
+================================================================================
+librosa
+================================================================================
+
+  Copyright (c) 2013--2023, librosa development team
+
+  Licensed under the ISC License.
+
+  libsonare ports audio analysis algorithms from librosa, a Python library for
+  music and audio analysis.
+
+  https://github.com/librosa/librosa
+
+================================================================================
+KissFFT
+================================================================================
+
+  Copyright (c) 2003-2010, Mark Borgerding. All rights reserved.
+
+  Licensed under the BSD 3-Clause License (SPDX: BSD-3-Clause).
+
+  https://github.com/mborgerding/kissfft
+
+  Vendored in: third_party/kissfft/
+
+================================================================================
+r8brain-free-src
+================================================================================
+
+  Copyright (c) 2013-2025 Aleksey Vaneev
+
+  Licensed under the MIT License.
+
+  https://github.com/avaneev/r8brain-free-src
+
+  Vendored in: third_party/r8brain/
+
+================================================================================
+dr_libs (dr_wav)
+================================================================================
+
+  Copyright 2023 David Reid
+
+  Available as a choice of Public Domain (Unlicense) or MIT No Attribution
+  (MIT-0).
+
+  https://github.com/mackron/dr_libs
+
+  Vendored in: third_party/dr_libs/
+
+================================================================================
+minimp3
+================================================================================
+
+  To the extent possible under law, the author(s) have dedicated all copyright
+  and related and neighboring rights to this software to the public domain
+  worldwide.
+
+  Licensed under CC0 1.0 Universal (Public Domain Dedication).
+
+  https://github.com/lieff/minimp3
+
+  Vendored in: third_party/minimp3/

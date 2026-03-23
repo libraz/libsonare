@@ -11,6 +11,7 @@
 #include <map>
 #include <numeric>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -267,7 +268,15 @@ class ArgParser {
 
     auto it = global_opts.find(arg);
     if (it != global_opts.end() && i + 1 < argc) {
-      it->second(args, argv[++i]);
+      try {
+        it->second(args, argv[++i]);
+      } catch (const std::invalid_argument&) {
+        std::cerr << "Error: Invalid value for " << arg << ": " << argv[i] << std::endl;
+        std::exit(1);
+      } catch (const std::out_of_range&) {
+        std::cerr << "Error: Value out of range for " << arg << ": " << argv[i] << std::endl;
+        std::exit(1);
+      }
       return true;
     }
     return false;

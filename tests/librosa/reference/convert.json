@@ -1,7 +1,7 @@
 {
   "metadata": {
     "librosa_version": "0.11.0",
-    "numpy_version": "2.3.5"
+    "numpy_version": "2.4.3"
   },
   "data": [
     {

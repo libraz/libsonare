@@ -19,7 +19,6 @@ namespace sonare {
 
 namespace {
 
-constexpr float kEpsilon = 1e-10f;
 constexpr float kLogAmin = 1e-10f;
 
 /// @brief Computes bin frequencies.

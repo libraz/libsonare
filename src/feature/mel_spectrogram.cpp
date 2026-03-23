@@ -65,18 +65,21 @@ MatrixView<float> MelSpectrogram::power() const {
   return MatrixView<float>(power_.data(), n_mels_, n_frames_);
 }
 
-std::vector<float> MelSpectrogram::to_db(float ref, float amin) const {
+std::vector<float> MelSpectrogram::to_db(float ref, float amin, float top_db) const {
   std::vector<float> db(power_.size());
 
-  float ref_power = ref * ref;
-  float log_amin = 10.0f * std::log10(std::max(amin, 1e-20f));
+  float ref_val = std::max(amin, ref * ref);
+  float log_ref = 10.0f * std::log10(ref_val);
 
   for (size_t i = 0; i < power_.size(); ++i) {
-    float val = power_[i] / ref_power;
-    if (val < amin) {
-      db[i] = log_amin;
-    } else {
-      db[i] = 10.0f * std::log10(val);
+    db[i] = 10.0f * std::log10(std::max(amin, power_[i])) - log_ref;
+  }
+
+  // Apply top_db clipping (librosa compatible)
+  if (top_db >= 0.0f) {
+    float max_db = *std::max_element(db.begin(), db.end());
+    for (auto& v : db) {
+      v = std::max(v, max_db - top_db);
     }
   }
 

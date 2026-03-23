@@ -5,11 +5,11 @@
 #include <utility>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
 namespace {
-constexpr float kPi = 3.14159265358979323846f;
 
 /// @brief Maximum number of cached DCT matrices per thread.
 constexpr size_t kMaxDctCacheSize = 8;

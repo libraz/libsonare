@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -241,8 +242,6 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   std::vector<float> harmonic_mask(total_size);
   std::vector<float> percussive_mask(total_size);
 
-  constexpr float kEps = 1e-10f;
-
   /// Map enhanced arrays to Eigen
   Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
   Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
@@ -258,7 +257,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
     /// Soft mask with margins
     Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
     Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
-    Eigen::ArrayXf total = h_margin + p_margin + kEps;
+    Eigen::ArrayXf total = h_margin + p_margin + kEpsilon;
 
     h_mask = h_margin / total;
     p_mask = p_margin / total;
@@ -341,8 +340,6 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   std::vector<float> percussive_mask(total_size);
   std::vector<float> residual_mask(total_size);
 
-  constexpr float kEps = 1e-10f;
-
   /// Map enhanced arrays to Eigen
   Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
   Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
@@ -359,7 +356,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
     /// Soft masks with margins
     Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
     Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
-    Eigen::ArrayXf total = h_margin + p_margin + kEps;
+    Eigen::ArrayXf total = h_margin + p_margin + kEpsilon;
 
     h_mask = h_margin / total;
     p_mask = p_margin / total;
@@ -375,7 +372,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
     r_mask /= total_all;
   } else {
     /// Hard mask: residual is where neither dominates clearly
-    Eigen::ArrayXf ratio = (h_pow + kEps) / (p_pow + kEps);
+    Eigen::ArrayXf ratio = (h_pow + kEpsilon) / (p_pow + kEpsilon);
 
     /// ratio > 2.0 -> harmonic only
     /// ratio < 0.5 -> percussive only

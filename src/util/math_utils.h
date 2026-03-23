@@ -11,6 +11,13 @@
 
 namespace sonare {
 
+/// @brief Pi constant.
+inline constexpr float kPi = 3.14159265358979323846f;
+/// @brief Two pi constant.
+inline constexpr float kTwoPi = 2.0f * kPi;
+/// @brief Default epsilon for near-zero comparisons in audio processing.
+inline constexpr float kEpsilon = 1e-10f;
+
 /// @brief Clamps a value between min and max.
 /// @tparam T Numeric type
 /// @param value Value to clamp
@@ -93,7 +100,7 @@ T norm_l2(const T* data, size_t size) {
 template <typename T>
 void normalize_l2(T* data, size_t size) {
   T n = norm_l2(data, size);
-  if (n > T{1e-10}) {
+  if (n > static_cast<T>(kEpsilon)) {
     for (size_t i = 0; i < size; ++i) {
       data[i] /= n;
     }

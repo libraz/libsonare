@@ -121,8 +121,9 @@ class Spectrogram {
   /// @brief Returns magnitude in decibels [n_bins x n_frames].
   /// @param ref Reference value (default 1.0)
   /// @param amin Minimum amplitude to avoid log(0) (default 1e-10)
+  /// @param top_db Threshold below max dB to clamp (default 80.0, negative to disable)
   /// @return dB values
-  std::vector<float> to_db(float ref = 1.0f, float amin = 1e-10f) const;
+  std::vector<float> to_db(float ref = 1.0f, float amin = 1e-10f, float top_db = 80.0f) const;
 
   /// @brief Reconstructs audio from spectrogram via iSTFT.
   /// @param length Target length in samples (0 = auto)

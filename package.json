@@ -1,22 +1,23 @@
 {
-  "name": "@libraz/sonare",
+  "name": "@libraz/libsonare",
   "version": "1.0.0",
   "type": "module",
   "packageManager": "yarn@4.12.0",
   "description": "Audio analysis library for music information retrieval",
   "main": "dist/index.js",
-  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    }
+      "import": "./dist/index.js"
+    },
+    "./wasm": "./dist/sonare.wasm",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
   ],
+  "sideEffects": false,
   "scripts": {
     "preinstall": "npx only-allow yarn",
     "postinstall": "simple-git-hooks",
@@ -24,13 +25,15 @@
     "build": "yarn build:wasm && yarn build:js",
     "build:wasm": "emcmake cmake -B build-wasm -DBUILD_WASM=ON && cmake --build build-wasm",
     "build:js": "tsc",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist build-wasm",
     "lint": "biome check js/ tests/wasm/",
     "lint:fix": "biome check --write js/ tests/wasm/",
     "format": "biome format --write js/ tests/wasm/",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "yarn lint && yarn build"
+    "prepublishOnly": "yarn clean && yarn build && yarn lint && yarn test",
+    "prepack": "cp README.md .readme-backup && cp README.npm.md README.md",
+    "postpack": "mv .readme-backup README.md"
   },
   "keywords": [
     "audio",
@@ -54,7 +57,7 @@
   },
   "homepage": "https://github.com/libraz/libsonare#readme",
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
@@ -71,7 +74,7 @@
     "pre-commit": "yarn lint-staged"
   },
   "lint-staged": {
-    "*.{ts,js}": [
+    "{js,tests/wasm}/**/*.{ts,js}": [
       "biome check --write"
     ]
   }

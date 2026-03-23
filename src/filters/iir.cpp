@@ -4,12 +4,9 @@
 #include <cmath>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
-
-namespace {
-constexpr float kPi = 3.14159265358979323846f;
-}
 
 BiquadCoeffs highpass_coeffs(float cutoff_hz, int sr) {
   SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);

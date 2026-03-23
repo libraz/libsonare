@@ -149,15 +149,25 @@ const std::vector<float>& CqtResult::power() const {
   return power_cache_;
 }
 
-std::vector<float> CqtResult::to_db(float ref, float amin) const {
+std::vector<float> CqtResult::to_db(float ref, float amin, float top_db) const {
   const std::vector<float>& pwr = power();
   std::vector<float> db(pwr.size());
 
-  float ref_power = ref * ref;
+  float ref_val = std::max(amin, ref * ref);
+  float log_ref = 10.0f * std::log10(ref_val);
+
   for (size_t i = 0; i < pwr.size(); ++i) {
-    float val = std::max(pwr[i], amin * amin);
-    db[i] = 10.0f * std::log10(val / ref_power);
+    db[i] = 10.0f * std::log10(std::max(amin, pwr[i])) - log_ref;
   }
+
+  // Apply top_db clipping (librosa compatible)
+  if (top_db >= 0.0f) {
+    float max_db = *std::max_element(db.begin(), db.end());
+    for (auto& v : db) {
+      v = std::max(v, max_db - top_db);
+    }
+  }
+
   return db;
 }
 
@@ -263,8 +273,16 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   int n_bins = kernel->n_bins();
   int fft_bins = fft_length / 2 + 1;
 
-  // Calculate number of frames
-  int n_frames = 1 + (n_samples - fft_length) / config.hop_length;
+  // Center padding: pad signal by fft_length/2 on each side (matches librosa center=True).
+  // This ensures the first frame is centered at t=0 and produces the expected number of
+  // frames: 1 + n_samples / hop_length (approximately).
+  int pad_length = fft_length / 2;
+  int padded_length = n_samples + 2 * pad_length;
+  std::vector<float> padded_signal(padded_length, 0.0f);
+  std::copy(audio.data(), audio.data() + n_samples, padded_signal.begin() + pad_length);
+
+  // Calculate number of frames from padded signal
+  int n_frames = 1 + (padded_length - fft_length) / config.hop_length;
   if (n_frames <= 0) {
     n_frames = 1;
   }
@@ -282,7 +300,7 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   std::vector<std::complex<float>> frame_fft(fft_bins);
   VectorXcf result(n_bins);
 
-  const float* data = audio.data();
+  const float* data = padded_signal.data();
   float norm_factor = 1.0f / static_cast<float>(fft_length);
 
   // Progress reporting interval
@@ -292,9 +310,9 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   for (int t = 0; t < n_frames; ++t) {
     int start = t * config.hop_length;
 
-    // Extract frame with zero-padding
+    // Extract frame with zero-padding if needed at boundaries
     std::fill(frame.begin(), frame.end(), 0.0f);
-    int copy_length = std::min(fft_length, n_samples - start);
+    int copy_length = std::min(fft_length, padded_length - start);
     if (copy_length > 0) {
       std::copy(data + start, data + start + copy_length, frame.begin());
     }

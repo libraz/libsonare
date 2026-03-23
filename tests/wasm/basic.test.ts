@@ -2,8 +2,16 @@
  * Basic WASM module tests
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { init, isInitialized, version, detectBpm, detectKey, detectBeats, analyze } from '../../js/index';
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  analyze,
+  detectBeats,
+  detectBpm,
+  detectKey,
+  init,
+  isInitialized,
+  version,
+} from '../../js/index';
 
 describe('Sonare WASM Module', () => {
   beforeAll(async () => {

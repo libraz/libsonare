@@ -7,11 +7,11 @@
 #include <map>
 #include <utility>
 
+#include "util/math_utils.h"
+
 namespace sonare {
 
 namespace {
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 2.0f * kPi;
 
 /// @brief Maximum number of cached windows per thread.
 constexpr size_t kMaxWindowCacheSize = 16;

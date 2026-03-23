@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -17,7 +18,7 @@ float peak_db(const Audio& audio) {
     peak = std::max(peak, std::abs(data[i]));
   }
 
-  if (peak < 1e-10f) {
+  if (peak < kEpsilon) {
     return -std::numeric_limits<float>::infinity();
   }
 
@@ -35,7 +36,7 @@ float rms_db(const Audio& audio) {
 
   double rms = std::sqrt(sum_sq / static_cast<double>(audio.size()));
 
-  if (rms < 1e-10) {
+  if (rms < kEpsilon) {
     return -std::numeric_limits<float>::infinity();
   }
 
@@ -144,7 +145,13 @@ Audio trim(const Audio& audio, float threshold_db, int frame_length, int hop_len
   return audio.slice_samples(start, end);
 }
 
-Audio fade_in(const Audio& audio, float duration_sec) {
+namespace {
+
+/// @brief Applies a cosine fade to audio.
+/// @param audio Input audio
+/// @param duration_sec Fade duration in seconds
+/// @param is_fade_in If true, fade in; if false, fade out
+Audio apply_fade(const Audio& audio, float duration_sec, bool is_fade_in) {
   if (audio.empty()) return audio;
 
   size_t fade_samples = static_cast<size_t>(duration_sec * audio.sample_rate());
@@ -153,12 +160,16 @@ Audio fade_in(const Audio& audio, float duration_sec) {
   std::vector<float> samples(audio.size());
   const float* data = audio.data();
 
+  size_t fade_start = is_fade_in ? 0 : audio.size() - fade_samples;
+
   for (size_t i = 0; i < audio.size(); ++i) {
     float gain = 1.0f;
-    if (i < fade_samples) {
-      /// Cosine fade for smooth transition
+    if (is_fade_in && i < fade_samples) {
       float t = static_cast<float>(i) / static_cast<float>(fade_samples);
-      gain = 0.5f * (1.0f - std::cos(M_PI * t));
+      gain = 0.5f * (1.0f - std::cos(kPi * t));
+    } else if (!is_fade_in && i >= fade_start) {
+      float t = static_cast<float>(i - fade_start) / static_cast<float>(fade_samples);
+      gain = 0.5f * (1.0f + std::cos(kPi * t));
     }
     samples[i] = data[i] * gain;
   }
@@ -166,28 +177,14 @@ Audio fade_in(const Audio& audio, float duration_sec) {
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
+}  // namespace
+
+Audio fade_in(const Audio& audio, float duration_sec) {
+  return apply_fade(audio, duration_sec, true);
+}
+
 Audio fade_out(const Audio& audio, float duration_sec) {
-  if (audio.empty()) return audio;
-
-  size_t fade_samples = static_cast<size_t>(duration_sec * audio.sample_rate());
-  fade_samples = std::min(fade_samples, audio.size());
-
-  std::vector<float> samples(audio.size());
-  const float* data = audio.data();
-
-  size_t fade_start = audio.size() - fade_samples;
-
-  for (size_t i = 0; i < audio.size(); ++i) {
-    float gain = 1.0f;
-    if (i >= fade_start) {
-      size_t fade_pos = i - fade_start;
-      float t = static_cast<float>(fade_pos) / static_cast<float>(fade_samples);
-      gain = 0.5f * (1.0f + std::cos(M_PI * t));
-    }
-    samples[i] = data[i] * gain;
-  }
-
-  return Audio::from_vector(std::move(samples), audio.sample_rate());
+  return apply_fade(audio, duration_sec, false);
 }
 
 }  // namespace sonare

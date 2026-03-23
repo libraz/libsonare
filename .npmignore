@@ -1,0 +1,37 @@
+# Source
+src/
+js/
+tests/
+tools/
+third_party/
+
+# Build
+build/
+build-*/
+cmake-build-*/
+CMakeLists.txt
+Makefile
+
+# Config
+biome.json
+tsconfig.json
+vitest.config.ts
+.yarnrc.yml
+CLAUDE.md
+
+# CI/CD
+.github/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# README swap artifacts
+README.npm.md
+.readme-backup
+
+# Misc
+*.log
+*.tgz
+*.tsbuildinfo

@@ -8,6 +8,7 @@
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -174,15 +175,25 @@ const std::vector<float>& Spectrogram::power() const {
   return power_cache_;
 }
 
-std::vector<float> Spectrogram::to_db(float ref, float amin) const {
+std::vector<float> Spectrogram::to_db(float ref, float amin, float top_db) const {
   const std::vector<float>& pwr = power();
   std::vector<float> db(pwr.size());
 
-  float ref_power = ref * ref;
+  float ref_val = std::max(amin, ref * ref);
+  float log_ref = 10.0f * std::log10(ref_val);
+
   for (size_t i = 0; i < pwr.size(); ++i) {
-    float val = std::max(pwr[i], amin * amin);
-    db[i] = 10.0f * std::log10(val / ref_power);
+    db[i] = 10.0f * std::log10(std::max(amin, pwr[i])) - log_ref;
   }
+
+  // Apply top_db clipping (librosa compatible)
+  if (top_db >= 0.0f) {
+    float max_db = *std::max_element(db.begin(), db.end());
+    for (auto& v : db) {
+      v = std::max(v, max_db - top_db);
+    }
+  }
+
   return db;
 }
 
@@ -270,7 +281,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // Initialize with random phase
   std::vector<std::complex<float>> spectrum(n_bins * n_frames);
   std::mt19937 rng(42);  // Fixed seed for reproducibility
-  std::uniform_real_distribution<float> dist(0.0f, 2.0f * 3.14159265358979323846f);
+  std::uniform_real_distribution<float> dist(0.0f, kTwoPi);
 
   for (int f = 0; f < n_bins; ++f) {
     for (int t = 0; t < n_frames; ++t) {
@@ -288,11 +299,6 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   stft_config.n_fft = n_fft;
   stft_config.hop_length = hop_length;
   stft_config.center = true;
-
-  // FFT processor (window not directly used in current implementation,
-  // but kept for potential future optimization)
-  FFT fft(n_fft);
-  (void)fft;  // Suppress unused warning - used by Spectrogram methods internally
 
   // Iterate
   for (int iter = 0; iter < config.n_iter; ++iter) {
@@ -318,12 +324,12 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
         if (iter > 0 && config.momentum > 0.0f) {
           float angle_diff = new_angle - prev_angles[idx];
           // Wrap angle difference to [-pi, pi]
-          while (angle_diff > 3.14159265f) angle_diff -= 2.0f * 3.14159265f;
-          while (angle_diff < -3.14159265f) angle_diff += 2.0f * 3.14159265f;
+          while (angle_diff > kPi) angle_diff -= kTwoPi;
+          while (angle_diff < -kPi) angle_diff += kTwoPi;
           new_angle = prev_angles[idx] + angle_diff * (1.0f - config.momentum);
           // Wrap result to [-pi, pi]
-          while (new_angle > 3.14159265f) new_angle -= 2.0f * 3.14159265f;
-          while (new_angle < -3.14159265f) new_angle += 2.0f * 3.14159265f;
+          while (new_angle > kPi) new_angle -= kTwoPi;
+          while (new_angle < -kPi) new_angle += kTwoPi;
         }
 
         prev_angles[idx] = new_angle;

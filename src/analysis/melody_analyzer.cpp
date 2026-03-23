@@ -129,51 +129,6 @@ float MelodyAnalyzer::yin_pitch(const float* samples, int frame_size, int sr) co
   return frequency;
 }
 
-void MelodyAnalyzer::compute_difference_function(const float* samples, int frame_size,
-                                                 float* diff) const {
-  int tau_max = frame_size / 2;
-
-  for (int tau = 0; tau < tau_max; ++tau) {
-    float sum = 0.0f;
-    for (int j = 0; j < frame_size - tau; ++j) {
-      float delta = samples[j] - samples[j + tau];
-      sum += delta * delta;
-    }
-    diff[tau] = sum;
-  }
-}
-
-void MelodyAnalyzer::cumulative_mean_normalize(float* diff, int size) const {
-  diff[0] = 1.0f;
-  float running_sum = 0.0f;
-
-  for (int tau = 1; tau < size; ++tau) {
-    running_sum += diff[tau];
-    if (running_sum > 1e-10f) {
-      diff[tau] = diff[tau] / (running_sum / tau);
-    } else {
-      diff[tau] = 1.0f;
-    }
-  }
-}
-
-int MelodyAnalyzer::find_threshold_crossing(const float* diff, int size) const {
-  int tau_min = static_cast<int>(sr_ / config_.fmax);
-  tau_min = std::max(1, tau_min);
-
-  for (int tau = tau_min; tau < size - 1; ++tau) {
-    if (diff[tau] < config_.threshold) {
-      // Find local minimum
-      while (tau + 1 < size && diff[tau + 1] < diff[tau]) {
-        ++tau;
-      }
-      return tau;
-    }
-  }
-
-  return -1;  // No pitch found
-}
-
 float MelodyAnalyzer::parabolic_interpolation(const float* diff, int size, int tau) const {
   if (tau <= 0 || tau >= size - 1) {
     return static_cast<float>(tau);

@@ -73,9 +73,6 @@ class MelodyAnalyzer {
  private:
   void analyze();
   float yin_pitch(const float* samples, int frame_size, int sr) const;
-  void compute_difference_function(const float* samples, int frame_size, float* diff) const;
-  void cumulative_mean_normalize(float* diff, int size) const;
-  int find_threshold_crossing(const float* diff, int size) const;
   float parabolic_interpolation(const float* diff, int size, int tau) const;
   void compute_contour_features();
 

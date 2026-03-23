@@ -54,6 +54,35 @@ std::vector<float> stereo_to_mono(const float* data, size_t total_samples, int c
   return mono;
 }
 
+/// @brief Converts interleaved int16 stereo to mono float.
+/// @details Handles int16-to-float conversion and channel mixing in a single pass.
+std::vector<float> int16_stereo_to_mono(const mp3d_sample_t* data, size_t total_samples,
+                                         int channels) {
+  size_t frame_count = total_samples / static_cast<size_t>(channels);
+  std::vector<float> mono(frame_count);
+  constexpr float kInt16Scale = 1.0f / 32768.0f;
+
+  if (channels == 1) {
+    for (size_t i = 0; i < frame_count; ++i) {
+      mono[i] = static_cast<float>(data[i]) * kInt16Scale;
+    }
+  } else if (channels == 2) {
+    for (size_t i = 0; i < frame_count; ++i) {
+      mono[i] = (static_cast<float>(data[i * 2]) + static_cast<float>(data[i * 2 + 1])) *
+                kInt16Scale * 0.5f;
+    }
+  } else {
+    for (size_t i = 0; i < frame_count; ++i) {
+      float sum = 0.0f;
+      for (int ch = 0; ch < channels; ++ch) {
+        sum += static_cast<float>(data[i * channels + ch]);
+      }
+      mono[i] = sum * kInt16Scale / static_cast<float>(channels);
+    }
+  }
+  return mono;
+}
+
 /// @brief Reads entire file into memory.
 std::vector<uint8_t> read_file(const std::string& path) {
   std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -132,28 +161,7 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   size_t total_samples = static_cast<size_t>(info.samples);
 
   // Convert int16 samples to float and mono
-  size_t frame_count = total_samples / static_cast<size_t>(channels);
-  std::vector<float> mono(frame_count);
-
-  if (channels == 1) {
-    for (size_t i = 0; i < frame_count; ++i) {
-      mono[i] = static_cast<float>(info.buffer[i]) / 32768.0f;
-    }
-  } else if (channels == 2) {
-    for (size_t i = 0; i < frame_count; ++i) {
-      float left = static_cast<float>(info.buffer[i * 2]) / 32768.0f;
-      float right = static_cast<float>(info.buffer[i * 2 + 1]) / 32768.0f;
-      mono[i] = (left + right) * 0.5f;
-    }
-  } else {
-    for (size_t i = 0; i < frame_count; ++i) {
-      float sum = 0.0f;
-      for (int ch = 0; ch < channels; ++ch) {
-        sum += static_cast<float>(info.buffer[i * channels + ch]) / 32768.0f;
-      }
-      mono[i] = sum / static_cast<float>(channels);
-    }
-  }
+  std::vector<float> mono = int16_stereo_to_mono(info.buffer, total_samples, channels);
 
   // buffer_guard will free info.buffer on destruction
   return {std::move(mono), sample_rate};
@@ -178,22 +186,20 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
     case AudioFormat::MP3:
       return load_buffer_mp3(data, size);
     default:
-      throw SonareException(ErrorCode::InvalidFormat, "Unknown or unsupported audio format");
+      SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, "Unknown or unsupported audio format");
   }
 }
 
 AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& options) {
-  // Check file size before loading
+  std::vector<uint8_t> data = read_file(path);
+
+  // Check file size after loading
   if (options.max_file_size > 0) {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    SONARE_CHECK_MSG(file.is_open(), ErrorCode::FileNotFound, "Cannot open file: " + path);
-    auto size = file.tellg();
-    SONARE_CHECK_MSG(static_cast<size_t>(size) <= options.max_file_size, ErrorCode::InvalidParameter,
-                     "File too large: " + std::to_string(size) + " bytes (max: " +
+    SONARE_CHECK_MSG(data.size() <= options.max_file_size, ErrorCode::InvalidParameter,
+                     "File too large: " + std::to_string(data.size()) + " bytes (max: " +
                          std::to_string(options.max_file_size) + " bytes)");
   }
 
-  std::vector<uint8_t> data = read_file(path);
   return load_buffer(data.data(), data.size());
 }
 

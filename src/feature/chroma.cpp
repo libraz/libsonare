@@ -83,7 +83,13 @@ std::vector<float> Chroma::normalize(int norm) const {
     float norm_val = 0.0f;
 
     // Compute norm
-    if (norm == 1) {
+    if (norm == 0) {
+      // Max norm (infinity norm) — matches librosa default norm=np.inf
+      for (int c = 0; c < n_chroma_; ++c) {
+        float val = std::abs(features_[c * n_frames_ + t]);
+        if (val > norm_val) norm_val = val;
+      }
+    } else if (norm == 1) {
       // L1 norm
       for (int c = 0; c < n_chroma_; ++c) {
         norm_val += std::abs(features_[c * n_frames_ + t]);

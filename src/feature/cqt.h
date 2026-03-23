@@ -72,7 +72,10 @@ class CqtResult {
   const std::vector<float>& power() const;
 
   /// @brief Returns magnitude in decibels.
-  std::vector<float> to_db(float ref = 1.0f, float amin = 1e-10f) const;
+  /// @param ref Reference value (default 1.0)
+  /// @param amin Minimum amplitude to avoid log(0) (default 1e-10)
+  /// @param top_db Threshold below max dB to clamp (default 80.0, negative to disable)
+  std::vector<float> to_db(float ref = 1.0f, float amin = 1e-10f, float top_db = 80.0f) const;
 
   /// @brief Returns center frequencies for each bin.
   const std::vector<float>& frequencies() const { return frequencies_; }
@@ -130,6 +133,8 @@ class CqtKernel {
 /// @param config CQT configuration
 /// @param progress_callback Optional progress callback
 /// @return CQT result
+/// @note Center padding is applied to match librosa's center=True behavior.
+///       Input is padded with fft_length/2 zeros on each side.
 /// @note Thread-safe. Uses mutex-protected kernel cache internally.
 CqtResult cqt(const Audio& audio, const CqtConfig& config = CqtConfig(),
               CqtProgressCallback progress_callback = nullptr);
