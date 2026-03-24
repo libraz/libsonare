@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <unistd.h>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -85,9 +86,16 @@ std::string get_cli_path() {
   return "./build/bin/sonare";
 }
 
+/// @brief Generates a unique temp file path for this test process.
+std::string unique_temp_path(const std::string& suffix) {
+  static int counter = 0;
+  return "/tmp/sonare_cli_test_" + std::to_string(getpid()) + "_" +
+         std::to_string(counter++) + suffix;
+}
+
 const std::string CLI = get_cli_path();
-const std::string TEST_WAV = "/tmp/sonare_cli_test.wav";
-const std::string TEST_OUT = "/tmp/sonare_cli_out.wav";
+const std::string TEST_WAV = unique_temp_path(".wav");
+const std::string TEST_OUT = unique_temp_path("_out.wav");
 
 }  // namespace
 
@@ -527,7 +535,7 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
 
 TEST_CASE("CLI hpss command", "[cli]") {
   create_test_wav(TEST_WAV);
-  std::string out_base = "/tmp/sonare_hpss";
+  std::string out_base = unique_temp_path("_hpss");
   std::remove((out_base + "_harmonic.wav").c_str());
   std::remove((out_base + "_percussive.wav").c_str());
 
@@ -542,7 +550,7 @@ TEST_CASE("CLI hpss command", "[cli]") {
   }
 
   SECTION("harmonic only") {
-    std::string out = "/tmp/sonare_hpss_h.wav";
+    std::string out = unique_temp_path("_hpss_h.wav");
     std::remove(out.c_str());
     auto [code, output] =
         exec_command(CLI + " hpss --harmonic-only " + TEST_WAV + " -o " + out + " -q");
@@ -553,7 +561,7 @@ TEST_CASE("CLI hpss command", "[cli]") {
   }
 
   SECTION("percussive only") {
-    std::string out = "/tmp/sonare_hpss_p.wav";
+    std::string out = unique_temp_path("_hpss_p.wav");
     std::remove(out.c_str());
     auto [code, output] =
         exec_command(CLI + " hpss --percussive-only " + TEST_WAV + " -o " + out + " -q");
