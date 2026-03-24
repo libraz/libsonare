@@ -5,28 +5,36 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist/", "build/Release/*.node"],
+  "files": [
+    "dist/",
+    "build/Release/*.node"
+  ],
   "scripts": {
     "build:native": "cmake-js compile",
-    "build": "npm run build:native && tsc",
-    "check": "biome check src/ tests/",
-    "check:fix": "biome check --write src/ tests/",
+    "build": "yarn build:native && tsc",
+    "lint": "biome check src/ tests/",
+    "lint:fix": "biome check --write src/ tests/",
+    "format": "biome format --write src/ tests/",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "license": "Apache-2.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "packageManager": "yarn@4.12.0",
-  "volta": { "node": "22.21.1", "yarn": "4.12.0" },
+  "volta": {
+    "node": "22.21.1",
+    "yarn": "4.12.0"
+  },
   "dependencies": {
     "cmake-js": "^7.3.0",
     "node-addon-api": "^8.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
+    "@biomejs/biome": "^2.4.8",
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "2",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.1"
   }
 }

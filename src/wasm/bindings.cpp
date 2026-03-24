@@ -535,10 +535,12 @@ val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length,
   // Convert voiced_prob to Float32Array
   out.set("voicedProb", vectorToFloat32Array(result.voiced_prob));
 
-  // Convert voiced_flag to array of bools
+  // Convert voiced_flag to array of bools.
+  // std::vector<bool>::operator[] returns a __bit_reference proxy that embind
+  // cannot marshal, so we cast to bool explicitly.
   val voiced_arr = val::array();
   for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
-    voiced_arr.call<void>("push", result.voiced_flag[i]);
+    voiced_arr.call<void>("push", static_cast<bool>(result.voiced_flag[i]));
   }
   out.set("voicedFlag", voiced_arr);
 
@@ -569,7 +571,7 @@ val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length
 
   val voiced_arr = val::array();
   for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
-    voiced_arr.call<void>("push", result.voiced_flag[i]);
+    voiced_arr.call<void>("push", static_cast<bool>(result.voiced_flag[i]));
   }
   out.set("voicedFlag", voiced_arr);
 

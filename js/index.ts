@@ -1380,6 +1380,195 @@ export function resample(samples: Float32Array, srcSr: number, targetSr: number)
 }
 
 // ============================================================================
+// Audio Class
+// ============================================================================
+
+/**
+ * Wrapper around audio data that exposes all analysis and feature functions as instance methods.
+ *
+ * @example
+ * ```typescript
+ * import { init, Audio } from '@libraz/sonare';
+ *
+ * await init();
+ *
+ * const audio = Audio.fromBuffer(samples, 44100);
+ * console.log('BPM:', audio.detectBpm());
+ * console.log('Key:', audio.detectKey().name);
+ *
+ * const mel = audio.melSpectrogram();
+ * ```
+ */
+export class Audio {
+  private _samples: Float32Array;
+  private _sampleRate: number;
+
+  private constructor(samples: Float32Array, sampleRate: number) {
+    this._samples = samples;
+    this._sampleRate = sampleRate;
+  }
+
+  /** Create an Audio instance from raw sample data. */
+  static fromBuffer(samples: Float32Array, sampleRate: number): Audio {
+    return new Audio(samples, sampleRate);
+  }
+
+  /** The raw audio samples. */
+  get data(): Float32Array {
+    return this._samples;
+  }
+
+  /** Number of samples. */
+  get length(): number {
+    return this._samples.length;
+  }
+
+  /** Sample rate in Hz. */
+  get sampleRate(): number {
+    return this._sampleRate;
+  }
+
+  /** Duration in seconds. */
+  get duration(): number {
+    return this._samples.length / this._sampleRate;
+  }
+
+  // -- Analysis --
+
+  detectBpm(): number {
+    return detectBpm(this._samples, this._sampleRate);
+  }
+
+  detectKey(): Key {
+    return detectKey(this._samples, this._sampleRate);
+  }
+
+  detectOnsets(): Float32Array {
+    return detectOnsets(this._samples, this._sampleRate);
+  }
+
+  detectBeats(): Float32Array {
+    return detectBeats(this._samples, this._sampleRate);
+  }
+
+  analyze(): AnalysisResult {
+    return analyze(this._samples, this._sampleRate);
+  }
+
+  analyzeWithProgress(onProgress: ProgressCallback): AnalysisResult {
+    return analyzeWithProgress(this._samples, this._sampleRate, onProgress);
+  }
+
+  // -- Effects --
+
+  hpss(kernelHarmonic = 31, kernelPercussive = 31): HpssResult {
+    return hpss(this._samples, this._sampleRate, kernelHarmonic, kernelPercussive);
+  }
+
+  harmonic(): Float32Array {
+    return harmonic(this._samples, this._sampleRate);
+  }
+
+  percussive(): Float32Array {
+    return percussive(this._samples, this._sampleRate);
+  }
+
+  timeStretch(rate: number): Float32Array {
+    return timeStretch(this._samples, this._sampleRate, rate);
+  }
+
+  pitchShift(semitones: number): Float32Array {
+    return pitchShift(this._samples, this._sampleRate, semitones);
+  }
+
+  normalize(targetDb = 0.0): Float32Array {
+    return normalize(this._samples, this._sampleRate, targetDb);
+  }
+
+  trim(thresholdDb = -60.0): Float32Array {
+    return trim(this._samples, this._sampleRate, thresholdDb);
+  }
+
+  // -- Features --
+
+  stft(nFft = 2048, hopLength = 512): StftResult {
+    return stft(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  stftDb(nFft = 2048, hopLength = 512): { nBins: number; nFrames: number; db: Float32Array } {
+    return stftDb(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  melSpectrogram(nFft = 2048, hopLength = 512, nMels = 128): MelSpectrogramResult {
+    return melSpectrogram(this._samples, this._sampleRate, nFft, hopLength, nMels);
+  }
+
+  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 13): MfccResult {
+    return mfcc(this._samples, this._sampleRate, nFft, hopLength, nMels, nMfcc);
+  }
+
+  chroma(nFft = 2048, hopLength = 512): ChromaResult {
+    return chroma(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  spectralCentroid(nFft = 2048, hopLength = 512): Float32Array {
+    return spectralCentroid(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  spectralBandwidth(nFft = 2048, hopLength = 512): Float32Array {
+    return spectralBandwidth(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  spectralRolloff(nFft = 2048, hopLength = 512, rollPercent = 0.85): Float32Array {
+    return spectralRolloff(this._samples, this._sampleRate, nFft, hopLength, rollPercent);
+  }
+
+  spectralFlatness(nFft = 2048, hopLength = 512): Float32Array {
+    return spectralFlatness(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  zeroCrossingRate(frameLength = 2048, hopLength = 512): Float32Array {
+    return zeroCrossingRate(this._samples, this._sampleRate, frameLength, hopLength);
+  }
+
+  rmsEnergy(frameLength = 2048, hopLength = 512): Float32Array {
+    return rmsEnergy(this._samples, this._sampleRate, frameLength, hopLength);
+  }
+
+  pitchYin(
+    frameLength = 2048,
+    hopLength = 512,
+    fmin = 65.0,
+    fmax = 2093.0,
+    threshold = 0.3,
+  ): PitchResult {
+    return pitchYin(this._samples, this._sampleRate, frameLength, hopLength, fmin, fmax, threshold);
+  }
+
+  pitchPyin(
+    frameLength = 2048,
+    hopLength = 512,
+    fmin = 65.0,
+    fmax = 2093.0,
+    threshold = 0.3,
+  ): PitchResult {
+    return pitchPyin(
+      this._samples,
+      this._sampleRate,
+      frameLength,
+      hopLength,
+      fmin,
+      fmax,
+      threshold,
+    );
+  }
+
+  resample(targetSr: number): Float32Array {
+    return resample(this._samples, this._sampleRate, targetSr);
+  }
+}
+
+// ============================================================================
 // Streaming Types
 // ============================================================================
 

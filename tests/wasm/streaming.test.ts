@@ -602,6 +602,105 @@ describe('StreamAnalyzer', () => {
     });
   });
 
+  describe('processWithOffset', () => {
+    it('should process a chunk with explicit sample offset', () => {
+      const sampleRate = 22050;
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      const chunkSize = 4096;
+      const chunk = new Float32Array(chunkSize);
+      for (let i = 0; i < chunkSize; i++) {
+        chunk[i] = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.5;
+      }
+
+      // Process with an explicit offset as if we already processed some audio
+      const offset = sampleRate * 2; // pretend 2 seconds have passed
+      analyzer.processWithOffset(chunk, offset);
+
+      const stats = analyzer.stats();
+      // The analyzer should reflect the offset in timing
+      expect(stats.totalFrames).toBeGreaterThan(0);
+      expect(stats.totalSamples).toBeGreaterThan(0);
+
+      analyzer.dispose();
+    });
+  });
+
+  describe('sampleRate', () => {
+    it('should return the configured sample rate', () => {
+      const analyzer44 = new StreamAnalyzer({ sampleRate: 44100 });
+      expect(analyzer44.sampleRate()).toBe(44100);
+      analyzer44.dispose();
+
+      const analyzer22 = new StreamAnalyzer({ sampleRate: 22050 });
+      expect(analyzer22.sampleRate()).toBe(22050);
+      analyzer22.dispose();
+    });
+  });
+
+  describe('setExpectedDuration', () => {
+    it('should not crash when called', () => {
+      const sampleRate = 22050;
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      // Should not throw
+      analyzer.setExpectedDuration(60.0);
+      analyzer.setExpectedDuration(120.0);
+
+      // Process some audio to verify it still works after setting duration
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.5;
+      }
+      analyzer.process(samples);
+
+      const stats = analyzer.stats();
+      expect(stats.totalFrames).toBeGreaterThan(0);
+
+      analyzer.dispose();
+    });
+  });
+
+  describe('setNormalizationGain', () => {
+    it('should not crash and should process audio after setting gain', () => {
+      const sampleRate = 22050;
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      analyzer.setNormalizationGain(0.5);
+
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.5;
+      }
+      analyzer.process(samples);
+
+      const stats = analyzer.stats();
+      expect(stats.totalFrames).toBeGreaterThan(0);
+
+      analyzer.dispose();
+    });
+  });
+
+  describe('setTuningRefHz', () => {
+    it('should not crash and should process audio after setting tuning', () => {
+      const sampleRate = 22050;
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      analyzer.setTuningRefHz(442.0);
+
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.5;
+      }
+      analyzer.process(samples);
+
+      const stats = analyzer.stats();
+      expect(stats.totalFrames).toBeGreaterThan(0);
+
+      analyzer.dispose();
+    });
+  });
+
   describe('state management', () => {
     it('should reset state correctly', () => {
       const sampleRate = 22050;

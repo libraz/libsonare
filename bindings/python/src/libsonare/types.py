@@ -83,3 +83,71 @@ class AnalysisResult:
     key: Key
     time_signature: TimeSignature
     beat_times: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class StftResult:
+    """Short-time Fourier transform result."""
+
+    n_bins: int
+    n_frames: int
+    n_fft: int
+    hop_length: int
+    sample_rate: int
+    magnitude: list[float]
+    power: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class MelSpectrogramResult:
+    """Mel spectrogram result."""
+
+    n_mels: int
+    n_frames: int
+    sample_rate: int
+    hop_length: int
+    power: list[float]
+    db: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class MfccResult:
+    """MFCC (Mel-frequency cepstral coefficients) result."""
+
+    n_mfcc: int
+    n_frames: int
+    coefficients: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class ChromaResult:
+    """Chroma feature result."""
+
+    n_chroma: int
+    n_frames: int
+    sample_rate: int
+    hop_length: int
+    features: list[float]
+    mean_energy: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class PitchResult:
+    """Pitch detection result."""
+
+    n_frames: int
+    f0: list[float]
+    voiced_prob: list[float]
+    voiced_flag: list[bool]
+    median_f0: float
+    mean_f0: float
+
+
+@dataclass(frozen=True, slots=True)
+class HpssResult:
+    """Harmonic-percussive source separation result."""
+
+    harmonic: list[float]
+    percussive: list[float]
+    length: int
+    sample_rate: int
