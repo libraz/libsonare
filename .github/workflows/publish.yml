@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
+  publish-npm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,3 +59,89 @@ jobs:
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  python-wheels:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            plat_tag: manylinux_2_17_x86_64
+            lib_name: libsonare.so
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            plat_tag: manylinux_2_17_aarch64
+            lib_name: libsonare.so
+          - os: macos-latest
+            arch: arm64
+            plat_tag: macosx_11_0_arm64
+            lib_name: libsonare.dylib
+          - os: macos-13
+            arch: x86_64
+            plat_tag: macosx_10_15_x86_64
+            lib_name: libsonare.dylib
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Eigen3 (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libeigen3-dev
+
+      - name: Install Eigen3 (macOS)
+        if: runner.os == 'macOS'
+        run: brew install eigen
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build shared library
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF
+          cmake --build build --config Release -j
+
+      - name: Copy shared library
+        run: cp build/lib/${{ matrix.lib_name }} bindings/python/src/libsonare/
+
+      - name: Fix dylib install name (macOS)
+        if: runner.os == 'macOS'
+        run: install_name_tool -id @loader_path/libsonare.dylib bindings/python/src/libsonare/libsonare.dylib
+
+      - name: Build wheel
+        run: |
+          cd bindings/python
+          pip install wheel hatchling
+          pip wheel . --no-deps -w dist/
+          python3 -m wheel tags --platform-tag ${{ matrix.plat_tag }} --remove dist/*.whl
+
+      - name: Test wheel
+        run: |
+          pip install bindings/python/dist/*.whl
+          python3 -c "import libsonare; print(f'Version: {libsonare.version()}')"
+          cd bindings/python && python3 -m pytest tests/ -x -q
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.arch }}
+          path: bindings/python/dist/*.whl
+
+  publish-pypi:
+    needs: [publish-npm, python-wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/libsonare
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

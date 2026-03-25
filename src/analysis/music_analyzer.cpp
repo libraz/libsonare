@@ -19,6 +19,16 @@ namespace sonare {
 MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& config)
     : audio_(audio), config_(config), progress_callback_(nullptr) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+
+  // Downsample to 22050 Hz for spectral analysis if sample rate is higher
+  constexpr int kAnalysisSampleRate = 22050;
+  if (audio_.sample_rate() > kAnalysisSampleRate) {
+    analysis_audio_ = resample(audio_, kAnalysisSampleRate);
+    analysis_sr_ = kAnalysisSampleRate;
+  } else {
+    analysis_audio_ = audio_;
+    analysis_sr_ = audio_.sample_rate();
+  }
 }
 
 void MusicAnalyzer::set_progress_callback(ProgressCallback callback) {
@@ -53,7 +63,7 @@ BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
     bpm_config.n_fft = config_.n_fft;
     bpm_config.hop_length = config_.hop_length;
     // Use cached onset strength to avoid recomputation
-    bpm_analyzer_ = std::make_unique<BpmAnalyzer>(onset_strength(), audio_.sample_rate(),
+    bpm_analyzer_ = std::make_unique<BpmAnalyzer>(onset_strength(), analysis_sr_,
                                                   config_.hop_length, bpm_config);
   }
   return *bpm_analyzer_;
@@ -78,7 +88,7 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     beat_config.n_fft = config_.n_fft;
     beat_config.hop_length = config_.hop_length;
     // Use cached onset strength to avoid recomputation
-    beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), audio_.sample_rate(),
+    beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
                                                     config_.hop_length, beat_config);
   }
   return *beat_analyzer_;
@@ -105,7 +115,7 @@ OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
     onset_config.n_fft = config_.n_fft;
     onset_config.hop_length = config_.hop_length;
     // Use cached onset strength to avoid recomputation
-    onset_analyzer_ = std::make_unique<OnsetAnalyzer>(onset_strength(), audio_.sample_rate(),
+    onset_analyzer_ = std::make_unique<OnsetAnalyzer>(onset_strength(), analysis_sr_,
                                                       config_.hop_length, onset_config);
   }
   return *onset_analyzer_;
@@ -174,7 +184,7 @@ BoundaryDetector& MusicAnalyzer::boundary_detector() {
     boundary_config.hop_length = config_.hop_length;
     // Use cached mel_spectrogram and chroma to avoid recomputation
     boundary_detector_ = std::make_unique<BoundaryDetector>(mel_spectrogram(), chroma(),
-                                                            audio_.sample_rate(), boundary_config);
+                                                            analysis_sr_, boundary_config);
   }
   return *boundary_detector_;
 }
@@ -184,14 +194,14 @@ const Spectrogram& MusicAnalyzer::spectrogram() {
     StftConfig stft_config;
     stft_config.n_fft = config_.n_fft;
     stft_config.hop_length = config_.hop_length;
-    spectrogram_ = std::make_unique<Spectrogram>(Spectrogram::compute(audio_, stft_config));
+    spectrogram_ = std::make_unique<Spectrogram>(Spectrogram::compute(analysis_audio_, stft_config));
   }
   return *spectrogram_;
 }
 
 const Chroma& MusicAnalyzer::chroma() {
   if (!chroma_) {
-    chroma_ = std::make_unique<Chroma>(Chroma::from_spectrogram(spectrogram(), audio_.sample_rate()));
+    chroma_ = std::make_unique<Chroma>(Chroma::from_spectrogram(spectrogram(), analysis_sr_));
   }
   return *chroma_;
 }
@@ -209,19 +219,9 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     // - Optional bass-weighted computation (use_bass_weighted)
     // - Reduced CQT bins for bass (36 bins = 3 octaves)
 
-    int sr = audio_.sample_rate();
     int chroma_hop = config_.hop_length * config_.chroma_hop_multiplier;
-
-    // Downsample to 22050Hz for HPSS if sample rate is higher (significant speedup)
-    constexpr int kTargetSampleRate = 22050;
-    Audio analysis_audio = audio_;
-    int analysis_sr = sr;
-    if (sr > kTargetSampleRate) {
-      analysis_audio = resample(audio_, kTargetSampleRate);
-      analysis_sr = kTargetSampleRate;
-      // Adjust hop length proportionally
-      chroma_hop = chroma_hop * kTargetSampleRate / sr;
-    }
+    const Audio& analysis_audio = analysis_audio_;
+    int analysis_sr = analysis_sr_;
 
     // Step 1: Apply HPSS once with margin=3.0 to extract harmonic content
     Audio harmonic_audio = analysis_audio;
@@ -268,7 +268,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       bass_cqt_config.n_bins = 48;  // 4 octaves (bass-focused)
       bass_cqt_config.bins_per_octave = 12;
 
-      Audio preemph_audio = Audio::from_vector(std::move(preemph_samples), sr);
+      Audio preemph_audio = Audio::from_vector(std::move(preemph_samples), analysis_sr);
       CqtResult bass_cqt = cqt(preemph_audio, bass_cqt_config);
       std::vector<float> bass_chroma = cqt_to_chroma(bass_cqt, 12);
 
@@ -296,7 +296,7 @@ const MelSpectrogram& MusicAnalyzer::mel_spectrogram() {
     MelFilterConfig mel_filter_config;
     mel_filter_config.n_mels = 128;
     mel_spectrogram_ = std::make_unique<MelSpectrogram>(
-        MelSpectrogram::from_spectrogram(spectrogram(), audio_.sample_rate(), mel_filter_config));
+        MelSpectrogram::from_spectrogram(spectrogram(), analysis_sr_, mel_filter_config));
   }
   return *mel_spectrogram_;
 }

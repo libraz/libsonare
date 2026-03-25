@@ -4,8 +4,11 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <set>
+#include <cstring>
 #include <vector>
+#ifndef __EMSCRIPTEN__
+#include <thread>
+#endif
 
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -14,71 +17,51 @@ namespace sonare {
 
 namespace {
 
-/// @brief Sliding window median filter using balanced multisets.
-/// @details Uses two multisets to maintain a sliding window median efficiently.
-///          Complexity: O(n log k) where n is input size and k is kernel size.
-///          This is significantly faster than the naive O(n*k) approach for
-///          larger kernel sizes (default kernel_size=31).
+/// @brief Sliding window median filter using a sorted flat array.
+/// @details Uses binary search + memmove for O(log k + k) insert/erase.
+///          Much better cache performance than tree-based approaches for small k.
 class SlidingMedian {
  public:
+  explicit SlidingMedian(int max_size) : sorted_(max_size), size_(0) {}
+
   /// @brief Adds a value to the window.
   void insert(float val) {
-    if (lo_.empty() || val <= *lo_.rbegin()) {
-      lo_.insert(val);
-    } else {
-      hi_.insert(val);
+    auto pos = std::lower_bound(sorted_.begin(), sorted_.begin() + size_, val);
+    int idx = static_cast<int>(pos - sorted_.begin());
+    if (idx < size_) {
+      std::memmove(&sorted_[idx + 1], &sorted_[idx],
+                    static_cast<size_t>(size_ - idx) * sizeof(float));
     }
-    rebalance();
+    sorted_[idx] = val;
+    ++size_;
   }
 
   /// @brief Removes a value from the window.
   void erase(float val) {
-    auto it = lo_.find(val);
-    if (it != lo_.end()) {
-      lo_.erase(it);
-    } else {
-      it = hi_.find(val);
-      if (it != hi_.end()) {
-        hi_.erase(it);
-      }
+    auto pos = std::lower_bound(sorted_.begin(), sorted_.begin() + size_, val);
+    int idx = static_cast<int>(pos - sorted_.begin());
+    --size_;
+    if (idx < size_) {
+      std::memmove(&sorted_[idx], &sorted_[idx + 1],
+                    static_cast<size_t>(size_ - idx) * sizeof(float));
     }
-    rebalance();
   }
 
   /// @brief Returns the current median.
   float median() const {
-    if (lo_.empty()) return 0.0f;
-    if (lo_.size() > hi_.size()) {
-      return *lo_.rbegin();
+    if (size_ == 0) return 0.0f;
+    if (size_ % 2 == 1) {
+      return sorted_[size_ / 2];
     }
-    return (*lo_.rbegin() + *hi_.begin()) / 2.0f;
+    return (sorted_[size_ / 2 - 1] + sorted_[size_ / 2]) / 2.0f;
   }
 
   /// @brief Clears all values.
-  void clear() {
-    lo_.clear();
-    hi_.clear();
-  }
+  void clear() { size_ = 0; }
 
  private:
-  /// @brief Rebalances the two multisets to maintain median property.
-  /// @details Ensures lo_.size() >= hi_.size() and lo_.size() <= hi_.size() + 1.
-  void rebalance() {
-    while (lo_.size() > hi_.size() + 1) {
-      auto it = lo_.end();
-      --it;
-      hi_.insert(*it);
-      lo_.erase(it);
-    }
-    while (hi_.size() > lo_.size()) {
-      auto it = hi_.begin();
-      lo_.insert(*it);
-      hi_.erase(it);
-    }
-  }
-
-  std::multiset<float> lo_;  ///< Lower half (max at end)
-  std::multiset<float> hi_;  ///< Upper half (min at begin)
+  std::vector<float> sorted_;
+  int size_;
 };
 
 /// @brief Computes median of values in a buffer.
@@ -103,6 +86,29 @@ float compute_median(float* values, size_t n) {
   return values[mid];
 }
 
+#ifndef __EMSCRIPTEN__
+/// @brief Executes fn(start, end) in parallel over [0, total).
+template <typename F>
+void parallel_for(int total, F&& fn) {
+  int n_threads = static_cast<int>(std::thread::hardware_concurrency());
+  if (n_threads <= 1 || total <= 1) {
+    fn(0, total);
+    return;
+  }
+  n_threads = std::min(n_threads, total);
+  std::vector<std::thread> threads;
+  threads.reserve(n_threads);
+  int chunk = (total + n_threads - 1) / n_threads;
+  for (int i = 0; i < n_threads; ++i) {
+    int start = i * chunk;
+    int end = std::min(start + chunk, total);
+    if (start >= end) break;
+    threads.emplace_back(std::forward<F>(fn), start, end);
+  }
+  for (auto& t : threads) t.join();
+}
+#endif
+
 }  // namespace
 
 std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, int n_frames,
@@ -113,52 +119,57 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
   int half = kernel_size / 2;
   std::vector<float> result(n_bins * n_frames);
 
-  /// Pre-allocate buffer for window values (boundary regions only)
-  std::vector<float> window(kernel_size);
+  auto process_rows = [&](int row_start, int row_end) {
+    SlidingMedian sm(kernel_size);
+    std::vector<float> window(kernel_size);
 
-  /// Reuse SlidingMedian across rows to reduce allocation overhead
-  SlidingMedian sm;
+    for (int k = row_start; k < row_end; ++k) {
+      const float* row = magnitude + k * n_frames;
+      float* out_row = result.data() + k * n_frames;
 
-  for (int k = 0; k < n_bins; ++k) {
-    const float* row = magnitude + k * n_frames;
-    float* out_row = result.data() + k * n_frames;
-
-    /// Left boundary region (partial window) - use nth_element
-    for (int t = 0; t < std::min(half, n_frames); ++t) {
-      int start = 0;
-      int end = std::min(t + half + 1, n_frames);
-      int count = end - start;
-      std::copy(row + start, row + end, window.data());
-      out_row[t] = compute_median(window.data(), count);
-    }
-
-    /// Middle region - use sliding window median O(n log k)
-    if (n_frames > 2 * half) {
-      sm.clear();
-
-      /// Initialize window with first kernel_size elements
-      for (int i = 0; i < kernel_size; ++i) {
-        sm.insert(row[i]);
+      /// Left boundary region (partial window) - use nth_element
+      for (int t = 0; t < std::min(half, n_frames); ++t) {
+        int start = 0;
+        int end = std::min(t + half + 1, n_frames);
+        int count = end - start;
+        std::copy(row + start, row + end, window.data());
+        out_row[t] = compute_median(window.data(), count);
       }
-      out_row[half] = sm.median();
 
-      /// Slide window
-      for (int t = half + 1; t < n_frames - half; ++t) {
-        sm.erase(row[t - half - 1]);
-        sm.insert(row[t + half]);
-        out_row[t] = sm.median();
+      /// Middle region - use sliding window median
+      if (n_frames > 2 * half) {
+        sm.clear();
+
+        /// Initialize window with first kernel_size elements
+        for (int i = 0; i < kernel_size; ++i) {
+          sm.insert(row[i]);
+        }
+        out_row[half] = sm.median();
+
+        /// Slide window
+        for (int t = half + 1; t < n_frames - half; ++t) {
+          sm.erase(row[t - half - 1]);
+          sm.insert(row[t + half]);
+          out_row[t] = sm.median();
+        }
+      }
+
+      /// Right boundary region (partial window) - use nth_element
+      for (int t = std::max(half, n_frames - half); t < n_frames; ++t) {
+        int start = std::max(0, t - half);
+        int end = n_frames;
+        int count = end - start;
+        std::copy(row + start, row + end, window.data());
+        out_row[t] = compute_median(window.data(), count);
       }
     }
+  };
 
-    /// Right boundary region (partial window) - use nth_element
-    for (int t = std::max(half, n_frames - half); t < n_frames; ++t) {
-      int start = std::max(0, t - half);
-      int end = n_frames;
-      int count = end - start;
-      std::copy(row + start, row + end, window.data());
-      out_row[t] = compute_median(window.data(), count);
-    }
-  }
+#ifndef __EMSCRIPTEN__
+  parallel_for(n_bins, process_rows);
+#else
+  process_rows(0, n_bins);
+#endif
 
   return result;
 }
@@ -171,53 +182,58 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   int half = kernel_size / 2;
   std::vector<float> result(n_bins * n_frames);
 
-  /// Pre-allocate buffer for window values (boundary regions only)
-  std::vector<float> window(kernel_size);
+  auto process_cols = [&](int col_start, int col_end) {
+    SlidingMedian sm(kernel_size);
+    std::vector<float> window(kernel_size);
 
-  /// Reuse SlidingMedian across columns to reduce allocation overhead
-  SlidingMedian sm;
-
-  for (int t = 0; t < n_frames; ++t) {
-    /// Top boundary region (partial window) - use nth_element
-    for (int k = 0; k < std::min(half, n_bins); ++k) {
-      int start = 0;
-      int end = std::min(k + half + 1, n_bins);
-      int count = 0;
-      for (int kk = start; kk < end; ++kk) {
-        window[count++] = magnitude[kk * n_frames + t];
+    for (int t = col_start; t < col_end; ++t) {
+      /// Top boundary region (partial window) - use nth_element
+      for (int k = 0; k < std::min(half, n_bins); ++k) {
+        int start = 0;
+        int end = std::min(k + half + 1, n_bins);
+        int count = 0;
+        for (int kk = start; kk < end; ++kk) {
+          window[count++] = magnitude[kk * n_frames + t];
+        }
+        result[k * n_frames + t] = compute_median(window.data(), count);
       }
-      result[k * n_frames + t] = compute_median(window.data(), count);
+
+      /// Middle region - use sliding window median
+      if (n_bins > 2 * half) {
+        sm.clear();
+
+        /// Initialize window with first kernel_size elements
+        for (int i = 0; i < kernel_size; ++i) {
+          sm.insert(magnitude[i * n_frames + t]);
+        }
+        result[half * n_frames + t] = sm.median();
+
+        /// Slide window
+        for (int k = half + 1; k < n_bins - half; ++k) {
+          sm.erase(magnitude[(k - half - 1) * n_frames + t]);
+          sm.insert(magnitude[(k + half) * n_frames + t]);
+          result[k * n_frames + t] = sm.median();
+        }
+      }
+
+      /// Bottom boundary region (partial window) - use nth_element
+      for (int k = std::max(half, n_bins - half); k < n_bins; ++k) {
+        int start = std::max(0, k - half);
+        int end = n_bins;
+        int count = 0;
+        for (int kk = start; kk < end; ++kk) {
+          window[count++] = magnitude[kk * n_frames + t];
+        }
+        result[k * n_frames + t] = compute_median(window.data(), count);
+      }
     }
+  };
 
-    /// Middle region - use sliding window median O(n log k)
-    if (n_bins > 2 * half) {
-      sm.clear();
-
-      /// Initialize window with first kernel_size elements
-      for (int i = 0; i < kernel_size; ++i) {
-        sm.insert(magnitude[i * n_frames + t]);
-      }
-      result[half * n_frames + t] = sm.median();
-
-      /// Slide window
-      for (int k = half + 1; k < n_bins - half; ++k) {
-        sm.erase(magnitude[(k - half - 1) * n_frames + t]);
-        sm.insert(magnitude[(k + half) * n_frames + t]);
-        result[k * n_frames + t] = sm.median();
-      }
-    }
-
-    /// Bottom boundary region (partial window) - use nth_element
-    for (int k = std::max(half, n_bins - half); k < n_bins; ++k) {
-      int start = std::max(0, k - half);
-      int end = n_bins;
-      int count = 0;
-      for (int kk = start; kk < end; ++kk) {
-        window[count++] = magnitude[kk * n_frames + t];
-      }
-      result[k * n_frames + t] = compute_median(window.data(), count);
-    }
-  }
+#ifndef __EMSCRIPTEN__
+  parallel_for(n_frames, process_cols);
+#else
+  process_cols(0, n_frames);
+#endif
 
   return result;
 }

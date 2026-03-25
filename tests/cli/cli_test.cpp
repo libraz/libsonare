@@ -115,6 +115,23 @@ TEST_CASE("CLI version command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI system-info command", "[cli]") {
+  SECTION("text output") {
+    auto [code, output] = exec_command(CLI + " system-info");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("CPU Cores"));
+    REQUIRE_THAT(output, ContainsSubstring("Memory"));
+    REQUIRE_THAT(output, ContainsSubstring("Parallel"));
+  }
+
+  SECTION("json output") {
+    auto [code, output] = exec_command(CLI + " system-info --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"logical_cores\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"strategy\""));
+  }
+}
+
 TEST_CASE("CLI help command", "[cli]") {
   auto [code, output] = exec_command(CLI + " --help");
   REQUIRE(code == 0);

@@ -1,0 +1,7 @@
+dist/
+*.egg-info/
+__pycache__/
+src/libsonare/*.dylib
+src/libsonare/*.so
+src/libsonare/*.so.*
+src/libsonare/*.dll

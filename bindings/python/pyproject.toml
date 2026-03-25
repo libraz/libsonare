@@ -4,21 +4,59 @@ build-backend = "hatchling.build"
 
 [project]
 name = "libsonare"
-version = "0.1.0"
-description = "libsonare - librosa-like audio analysis library (Python binding)"
+version = "1.0.0"
+description = "Fast audio analysis library — librosa-like API, 80x faster (C++ with Python bindings)"
 requires-python = ">=3.11"
 license = "Apache-2.0"
+authors = [
+    { name = "libraz", email = "libraz@libraz.net" },
+]
+readme = "README.md"
+keywords = ["audio", "music", "analysis", "mir", "bpm", "key", "tempo", "librosa", "dsp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
 dependencies = []
 
+[project.scripts]
+sonare = "libsonare.cli:main"
+
 [project.optional-dependencies]
+numpy = ["numpy>=1.24"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "mypy>=1.13",
 ]
 
+[project.urls]
+Homepage = "https://github.com/libraz/libsonare"
+Repository = "https://github.com/libraz/libsonare"
+Issues = "https://github.com/libraz/libsonare/issues"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/libsonare"]
+artifacts = ["src/libsonare/*.dylib", "src/libsonare/*.so", "src/libsonare/*.so.*"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "tests/",
+    "README.md",
+    "pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

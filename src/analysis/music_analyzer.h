@@ -147,6 +147,8 @@ class MusicAnalyzer {
   void precompute_features();
 
   Audio audio_;
+  Audio analysis_audio_;  ///< Downsampled audio for spectral analysis (22050 Hz)
+  int analysis_sr_;       ///< Sample rate of analysis_audio_
   MusicAnalyzerConfig config_;
   ProgressCallback progress_callback_;
 

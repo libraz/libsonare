@@ -15,6 +15,15 @@
 #include <string>
 #include <vector>
 
+#include <thread>
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#include <mach/mach.h>
+#elif __linux__
+#include <fstream>
+#include <unistd.h>
+#endif
+
 #include "analysis/boundary_detector.h"
 #include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
@@ -349,6 +358,116 @@ constexpr const char* red = "\033[31m";
 }  // namespace color
 
 // ============================================================================
+// System Info
+// ============================================================================
+
+namespace system_info {
+
+/// @brief Returns the number of logical CPU cores.
+int logical_cores() {
+  int n = static_cast<int>(std::thread::hardware_concurrency());
+  return n > 0 ? n : 1;
+}
+
+/// @brief Returns the number of physical CPU cores.
+int physical_cores() {
+#ifdef __APPLE__
+  int cores = 0;
+  size_t len = sizeof(cores);
+  if (sysctlbyname("hw.physicalcpu", &cores, &len, nullptr, 0) == 0 && cores > 0) {
+    return cores;
+  }
+#elif __linux__
+  // Count unique physical core IDs
+  std::ifstream f("/proc/cpuinfo");
+  std::string line;
+  std::vector<int> core_ids;
+  while (std::getline(f, line)) {
+    if (line.find("core id") == 0) {
+      auto pos = line.find(':');
+      if (pos != std::string::npos) {
+        int id = std::stoi(line.substr(pos + 1));
+        if (std::find(core_ids.begin(), core_ids.end(), id) == core_ids.end()) {
+          core_ids.push_back(id);
+        }
+      }
+    }
+  }
+  if (!core_ids.empty()) return static_cast<int>(core_ids.size());
+#endif
+  return logical_cores();
+}
+
+/// @brief Returns total memory in bytes.
+size_t total_memory_bytes() {
+#ifdef __APPLE__
+  int64_t mem = 0;
+  size_t len = sizeof(mem);
+  if (sysctlbyname("hw.memsize", &mem, &len, nullptr, 0) == 0) {
+    return static_cast<size_t>(mem);
+  }
+#elif __linux__
+  std::ifstream f("/proc/meminfo");
+  std::string line;
+  while (std::getline(f, line)) {
+    if (line.find("MemTotal:") == 0) {
+      size_t kb = std::stoull(line.substr(line.find(':') + 1));
+      return kb * 1024;
+    }
+  }
+#endif
+  return 0;
+}
+
+/// @brief Returns available memory in bytes.
+size_t available_memory_bytes() {
+#ifdef __APPLE__
+  mach_port_t host = mach_host_self();
+  vm_statistics64_data_t stats;
+  mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+  if (host_statistics64(host, HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&stats),
+                        &count) == KERN_SUCCESS) {
+    return (stats.free_count + stats.inactive_count) * vm_page_size;
+  }
+#elif __linux__
+  std::ifstream f("/proc/meminfo");
+  std::string line;
+  while (std::getline(f, line)) {
+    if (line.find("MemAvailable:") == 0) {
+      size_t kb = std::stoull(line.substr(line.find(':') + 1));
+      return kb * 1024;
+    }
+  }
+#endif
+  return 0;
+}
+
+/// @brief Returns the parallel strategy description.
+std::string parallel_strategy() {
+  int cores = logical_cores();
+  if (cores >= 8) return "aggressive_parallel";
+  if (cores >= 4) return "balanced_parallel";
+  if (cores >= 2) return "conservative_parallel";
+  return "sequential_only";
+}
+
+/// @brief Returns the number of worker threads for parallel analysis.
+int parallel_workers() {
+  int cores = logical_cores();
+  if (cores >= 8) return cores - 2;
+  if (cores >= 4) return std::min(cores, 8);
+  if (cores >= 2) return std::min(cores, 3);
+  return 1;
+}
+
+/// @brief Returns true if parallel analysis is enabled.
+bool parallel_enabled() {
+  return logical_cores() >= 2;
+}
+
+}  // namespace system_info
+
+// ============================================================================
 // Output Helpers
 // ============================================================================
 
@@ -362,15 +481,16 @@ struct StageInfo {
 /// @brief Get stage info from stage name.
 StageInfo get_stage_info(const char* stage) {
   static const std::map<std::string, StageInfo> stages = {
-      {"bpm", {1, 8, "Detecting BPM"}},
-      {"key", {2, 8, "Detecting key"}},
-      {"beats", {3, 8, "Detecting beats"}},
-      {"chords", {4, 8, "Analyzing chords"}},
-      {"sections", {5, 8, "Analyzing sections"}},
-      {"timbre", {6, 8, "Analyzing timbre"}},
-      {"dynamics", {7, 8, "Analyzing dynamics"}},
-      {"rhythm", {8, 8, "Analyzing rhythm"}},
-      {"complete", {8, 8, "Complete"}},
+      {"features", {1, 9, "Computing features"}},
+      {"bpm", {2, 9, "Detecting BPM"}},
+      {"key", {3, 9, "Detecting key"}},
+      {"beats", {4, 9, "Detecting beats"}},
+      {"chords", {5, 9, "Analyzing chords"}},
+      {"sections", {6, 9, "Analyzing sections"}},
+      {"timbre", {7, 9, "Analyzing timbre"}},
+      {"dynamics", {8, 9, "Analyzing dynamics"}},
+      {"rhythm", {9, 9, "Analyzing rhythm"}},
+      {"complete", {9, 9, "Complete"}},
   };
   auto it = stages.find(stage);
   if (it != stages.end()) {
@@ -379,14 +499,25 @@ StageInfo get_stage_info(const char* stage) {
   return {0, 0, stage};
 }
 
-void progress_callback(float /*progress*/, const char* stage) {
+void progress_callback(float progress, const char* stage) {
   StageInfo info = get_stage_info(stage);
+  int pct = static_cast<int>(progress * 100.0f);
+
+  // Build progress bar
+  constexpr int bar_len = 30;
+  int filled = static_cast<int>(progress * bar_len);
+  std::string bar(filled, '#');
+  bar += std::string(bar_len - filled, '-');
+
   if (info.number > 0) {
-    std::cerr << "\r" << color::blue << "[" << info.number << "/" << info.total << "] "
-              << info.description << "..." << color::reset << "                    " << std::flush;
+    fprintf(stderr, "\r%s[%s] %3d%% [%d/%d] %s...%s                ",
+            color::blue, bar.c_str(), pct, info.number, info.total,
+            info.description, color::reset);
   } else {
-    std::cerr << "\r" << color::blue << stage << "..." << color::reset << "          " << std::flush;
+    fprintf(stderr, "\r%s[%s] %3d%% %s...%s          ",
+            color::blue, bar.c_str(), pct, stage, color::reset);
   }
+  fflush(stderr);
 }
 
 void clear_progress() {
@@ -421,6 +552,52 @@ int cmd_version(const CliArgs& args) {
   } else {
     std::cout << "sonare-cli version 1.0.0\n";
     std::cout << "libsonare version " << version() << "\n";
+  }
+  return 0;
+}
+
+int cmd_system_info(const CliArgs& args) {
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object()
+        .key("cpu")
+        .begin_object()
+        .kv("logical_cores", system_info::logical_cores())
+        .kv("physical_cores", system_info::physical_cores())
+        .end_object()
+        .key("memory")
+        .begin_object()
+        .kv("total_gb",
+            static_cast<float>(system_info::total_memory_bytes()) /
+                (1024.0f * 1024.0f * 1024.0f))
+        .kv("available_gb",
+            static_cast<float>(system_info::available_memory_bytes()) /
+                (1024.0f * 1024.0f * 1024.0f))
+        .end_object()
+        .key("parallel")
+        .begin_object()
+        .kv("enabled", system_info::parallel_enabled())
+        .kv("workers", system_info::parallel_workers())
+        .kv("strategy", system_info::parallel_strategy())
+        .end_object()
+        .end_object()
+        .print();
+  } else {
+    float total_gb =
+        static_cast<float>(system_info::total_memory_bytes()) / (1024.0f * 1024.0f * 1024.0f);
+    float avail_gb =
+        static_cast<float>(system_info::available_memory_bytes()) / (1024.0f * 1024.0f * 1024.0f);
+
+    std::cout << color::cyan << color::bold << "System Information" << color::reset << "\n";
+    std::cout << "  CPU Cores: " << system_info::logical_cores() << " logical, "
+              << system_info::physical_cores() << " physical\n";
+    printf("  Memory: %.1f GB total, %.1f GB available\n", total_gb, avail_gb);
+    std::cout << "\n" << color::green << color::bold << "Parallel Configuration" << color::reset
+              << "\n";
+    std::cout << "  Parallel Enabled: " << (system_info::parallel_enabled() ? "yes" : "no")
+              << "\n";
+    std::cout << "  Workers: " << system_info::parallel_workers() << "\n";
+    std::cout << "  Strategy: " << system_info::parallel_strategy() << "\n";
   }
   return 0;
 }
@@ -826,6 +1003,14 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
   config.use_hpss = !args.has("no-hpss");
   if (args.has("chroma-highpass")) {
     config.chroma_highpass_hz = args.get_float("chroma-highpass", 200.0f);
+  }
+
+  if (!args.quiet && !args.json_output) {
+    int workers = system_info::parallel_workers();
+    if (system_info::parallel_enabled()) {
+      std::cerr << color::green << "Parallel analysis: " << workers << " workers ("
+                << system_info::parallel_strategy() << ")" << color::reset << "\n";
+    }
   }
 
   MusicAnalyzer analyzer(audio, config);
@@ -1439,6 +1624,7 @@ void print_usage(const char* prog) {
     fprintf(stderr, "  %-14s %s\n", cmd.name.c_str(), cmd.description.c_str());
   }
   std::cerr << "  version        Show library version\n";
+  std::cerr << "  system-info    Show system and parallel configuration\n";
 
   std::cerr << "\nGLOBAL OPTIONS:\n"
             << "  --json             Output results in JSON format\n"
@@ -1479,6 +1665,10 @@ int main(int argc, char* argv[]) {
   // Version command (no audio needed)
   if (args.command == "version") {
     return cmd_version(args);
+  }
+
+  if (args.command == "system-info") {
+    return cmd_system_info(args);
   }
 
   // Find command
