@@ -109,65 +109,10 @@ int bpm_to_lag(float bpm, int sr, int hop_length) {
 /// @param signal Input signal
 /// @param max_lag Maximum lag to compute
 /// @return Normalized autocorrelation values [0, max_lag)
-std::vector<float> compute_autocorrelation_streaming(const std::vector<float>& signal, int max_lag) {
-  int n = static_cast<int>(signal.size());
+std::vector<float> compute_autocorrelation_streaming(const std::vector<float>& signal,
+                                                     int max_lag) {
   std::vector<float> autocorr(max_lag, 0.0f);
-
-  if (n == 0 || max_lag <= 0) {
-    return autocorr;
-  }
-
-  // Compute mean
-  float mean_val = 0.0f;
-  for (float val : signal) {
-    mean_val += val;
-  }
-  mean_val /= static_cast<float>(n);
-
-  // Compute variance
-  float var = 0.0f;
-  for (float val : signal) {
-    float diff = val - mean_val;
-    var += diff * diff;
-  }
-
-  if (var < kEpsilon) {
-    return autocorr;
-  }
-
-  // Zero-pad to at least 2*n to avoid circular correlation artifacts
-  int fft_size = next_power_of_2(2 * n);
-
-  // Prepare zero-mean, zero-padded signal
-  std::vector<float> padded(fft_size, 0.0f);
-  for (int i = 0; i < n; ++i) {
-    padded[i] = signal[i] - mean_val;
-  }
-
-  // FFT-based autocorrelation
-  FFT fft(fft_size);
-  int n_bins = fft.n_bins();
-
-  std::vector<std::complex<float>> spectrum(n_bins);
-  fft.forward(padded.data(), spectrum.data());
-
-  // Compute power spectrum (|FFT(x)|^2)
-  for (int i = 0; i < n_bins; ++i) {
-    float re = spectrum[i].real();
-    float im = spectrum[i].imag();
-    spectrum[i] = std::complex<float>(re * re + im * im, 0.0f);
-  }
-
-  // Inverse FFT to get autocorrelation
-  std::vector<float> raw_autocorr(fft_size);
-  fft.inverse(spectrum.data(), raw_autocorr.data());
-
-  // Normalize by variance and extract relevant lags
-  float norm_factor = var * static_cast<float>(n);
-  for (int lag = 0; lag < max_lag && lag < n; ++lag) {
-    autocorr[lag] = raw_autocorr[lag] / norm_factor;
-  }
-
+  compute_autocorrelation(signal.data(), static_cast<int>(signal.size()), max_lag, autocorr.data());
   return autocorr;
 }
 
@@ -178,8 +123,8 @@ std::vector<float> compute_autocorrelation_streaming(const std::vector<float>& s
 /// @param bpm_min Minimum BPM
 /// @param bpm_max Maximum BPM
 /// @return Pair of (bpm, confidence)
-std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int sr,
-                                         int hop_length, float bpm_min, float bpm_max) {
+std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
+                                        float bpm_min, float bpm_max) {
   int lag_min = bpm_to_lag(bpm_max, sr, hop_length);
   int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
 
@@ -223,8 +168,7 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
 
   // First, look for candidates in common range
   for (const auto& [bpm, weight] : candidates) {
-    if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax &&
-        weight >= kWeightThreshold * max_weight) {
+    if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax && weight >= kWeightThreshold * max_weight) {
       if (weight > best_weight) {
         best_bpm = bpm;
         best_weight = weight;
@@ -270,13 +214,15 @@ inline int16_t quantize_to_i16(float value, float min_val, float max_val) {
   return static_cast<int16_t>(normalized * 65535.0f - 32768.0f + 0.5f);
 }
 
-/// @brief Converts mel power to dB scale.
-/// @param power Mel power value
+/// @brief Converts a single mel power value to dB scale.
+/// @param power_val Mel power value
 /// @param ref Reference value (typically 1.0)
 /// @param amin Minimum amplitude for clipping
 /// @return dB value
-inline float power_to_db(float power, float ref = 1.0f, float amin = 1e-10f) {
-  return 10.0f * std::log10(std::max(power, amin) / ref);
+inline float single_power_to_db(float power_val, float ref = 1.0f, float amin = 1e-10f) {
+  float result;
+  power_to_db(&power_val, 1, ref, amin, -1.0f, &result);
+  return result;
 }
 
 /// @brief Counts shared notes between two triads.
@@ -318,8 +264,7 @@ bool are_chords_confusable(int root1, int quality1, int root2, int quality2) {
 ///          This is more robust to outliers than simple averaging.
 /// @param history Deque of chroma arrays [n_frames][12]
 /// @return Median-filtered chroma array [12]
-std::array<float, 12> compute_median_chroma(
-    const std::deque<std::array<float, 12>>& history) {
+std::array<float, 12> compute_median_chroma(const std::deque<std::array<float, 12>>& history) {
   std::array<float, 12> result = {};
   if (history.empty()) {
     return result;
@@ -375,9 +320,9 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     MelFilterConfig mel_config;
     mel_config.n_mels = config_.n_mels;
     mel_config.fmin = config_.fmin;
-    mel_config.fmax = needs_resampling_
-        ? std::min(config_.effective_fmax(), static_cast<float>(internal_sample_rate_ / 2))
-        : config_.effective_fmax();
+    mel_config.fmax = needs_resampling_ ? std::min(config_.effective_fmax(),
+                                                   static_cast<float>(internal_sample_rate_ / 2))
+                                        : config_.effective_fmax();
     mel_filterbank_ = create_mel_filterbank(internal_sample_rate_, config_.n_fft, mel_config);
   }
 
@@ -387,8 +332,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     chroma_config.n_chroma = 12;
     /// Convert tuning_ref_hz to semitone offset: tuning = 12 * log2(ref/440)
     /// Positive tuning means audio is sharp, so we subtract to correct
-    chroma_config.tuning =
-        12.0f * std::log2(config_.tuning_ref_hz / 440.0f);
+    chroma_config.tuning = 12.0f * std::log2(config_.tuning_ref_hz / 440.0f);
     /// Use C3 (~130 Hz) as minimum frequency to skip very low bass
     /// This helps avoid interference from sub-bass and low-frequency noise
     chroma_config.fmin = 65.0f;
@@ -564,8 +508,7 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
       std::array<float, 12> smoothed_chroma = compute_median_chroma(chroma_history_);
 
       /// Find best chord using smoothed chroma
-      auto [best_chord, chord_corr] =
-          find_best_chord(smoothed_chroma.data(), chord_templates_);
+      auto [best_chord, chord_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
 
       /// Only report chord if confidence is above threshold
       if (chord_corr >= kChordConfidenceThreshold) {
@@ -767,8 +710,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       /// Compute median-filtered chroma (more robust to noise than averaging)
       std::array<float, 12> smoothed_chroma = compute_median_chroma(chroma_history_);
 
-      auto [best_chord, chord_corr] =
-          find_best_chord(smoothed_chroma.data(), chord_templates_);
+      auto [best_chord, chord_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
       int new_root = static_cast<int>(best_chord.root);
       int new_quality = static_cast<int>(best_chord.quality);
       float new_confidence = std::max(0.0f, chord_corr);
@@ -835,8 +777,8 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         auto autocorr = compute_autocorrelation_streaming(onset_accumulator_, max_lag);
 
         /// Find best tempo (use internal sample rate)
-        auto [bpm, rel_confidence] = find_best_tempo(autocorr, internal_sample_rate_,
-                                                      config_.hop_length, kBpmMin, kBpmMax);
+        auto [bpm, rel_confidence] =
+            find_best_tempo(autocorr, internal_sample_rate_, config_.hop_length, kBpmMin, kBpmMax);
 
         current_estimate_.bpm = bpm;
 
@@ -906,7 +848,8 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
   /// Check if BPM is stable enough to start bar tracking
   if (!bar_tracking_active_) {
-    if (current_estimate_.bpm_confidence >= kBpmConfidenceThreshold && current_estimate_.bpm > 0.0f) {
+    if (current_estimate_.bpm_confidence >= kBpmConfidenceThreshold &&
+        current_estimate_.bpm > 0.0f) {
       /// Start bar tracking
       bar_tracking_active_ = true;
 
@@ -1199,9 +1142,7 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
 
     /// Confidence = ratio of votes for this chord
     int votes_for_best = vote_count[best_idx];
-    voted.confidence = (total_votes > 0)
-                           ? static_cast<float>(votes_for_best) / total_votes
-                           : 0.0f;
+    voted.confidence = (total_votes > 0) ? static_cast<float>(votes_for_best) / total_votes : 0.0f;
   }
 
   /// Try to correct voted pattern using known progression patterns
@@ -1258,8 +1199,8 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
 
       if (voted_root == expected_root && voted_quality == expected_quality) {
         ++exact_matches;
-      } else if (are_chords_confusable(voted_root, voted_quality,
-                                        expected_root, expected_quality)) {
+      } else if (are_chords_confusable(voted_root, voted_quality, expected_root,
+                                       expected_quality)) {
         ++confusable_matches;
         corrections.emplace_back(pos, expected_root * 4 + expected_quality);
       }
@@ -1309,8 +1250,7 @@ const std::vector<StreamAnalyzer::ProgressionPattern>& StreamAnalyzer::get_known
       {"komuro", {{9, 1}, {5, 0}, {7, 0}, {0, 0}}},
 
       // Canon (カノン進行): I - V - VIm - IIIm - IV - I - IV - V
-      {"canon",
-       {{0, 0}, {7, 0}, {9, 1}, {4, 1}, {5, 0}, {0, 0}, {5, 0}, {7, 0}}},
+      {"canon", {{0, 0}, {7, 0}, {9, 1}, {4, 1}, {5, 0}, {0, 0}, {5, 0}, {7, 0}}},
 
       // Just the Two of Us: IVM7 - IIIm7 - VIm
       {"justTheTwoOfUs", {{5, 0}, {4, 1}, {9, 1}}},
@@ -1320,7 +1260,18 @@ const std::vector<StreamAnalyzer::ProgressionPattern>& StreamAnalyzer::get_known
 
       // Blues (12-bar): I - I - I - I - IV - IV - I - I - V - IV - I - V
       {"blues12",
-       {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {5, 0}, {5, 0}, {0, 0}, {0, 0}, {7, 0}, {5, 0}, {0, 0}, {7, 0}}},
+       {{0, 0},
+        {0, 0},
+        {0, 0},
+        {0, 0},
+        {5, 0},
+        {5, 0},
+        {0, 0},
+        {0, 0},
+        {7, 0},
+        {5, 0},
+        {0, 0},
+        {7, 0}}},
 
       // Axis (VIm - IV - I - V)
       {"axis", {{9, 1}, {5, 0}, {0, 0}, {7, 0}}},
@@ -1491,7 +1442,7 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
 }
 
 void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameBufferU8& buffer,
-                                               const QuantizeConfig& qconfig) {
+                                              const QuantizeConfig& qconfig) {
   buffer.clear();
 
   size_t count = std::min(max_frames, output_buffer_.size());
@@ -1510,7 +1461,7 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
 
     // Quantize mel (convert to dB first)
     for (float mel_power : frame.mel) {
-      float db = power_to_db(mel_power);
+      float db = single_power_to_db(mel_power);
       buffer.mel.push_back(quantize_to_u8(db, qconfig.mel_db_min, qconfig.mel_db_max));
     }
 
@@ -1531,7 +1482,7 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
 }
 
 void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
-                                                const QuantizeConfig& qconfig) {
+                                               const QuantizeConfig& qconfig) {
   buffer.clear();
 
   size_t count = std::min(max_frames, output_buffer_.size());
@@ -1550,7 +1501,7 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
 
     // Quantize mel (convert to dB first)
     for (float mel_power : frame.mel) {
-      float db = power_to_db(mel_power);
+      float db = single_power_to_db(mel_power);
       buffer.mel.push_back(quantize_to_i16(db, qconfig.mel_db_min, qconfig.mel_db_max));
     }
 
@@ -1599,6 +1550,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   prev_chord_quality_ = -1;
   chord_stable_time_ = 0.0f;
   chroma_history_.clear();
+  full_chroma_history_.clear();
 
   /// Reset bar tracking state
   bar_tracking_active_ = false;

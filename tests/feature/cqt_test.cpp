@@ -280,6 +280,65 @@ TEST_CASE("icqt reconstruction", "[cqt]") {
 #pragma GCC diagnostic pop
 #endif
 
+TEST_CASE("CQT phase correctness", "[cqt]") {
+  // Generate a 440Hz sine wave
+  float freq = 440.0f;
+  int sr = 22050;
+  float duration = 1.0f;
+  Audio audio = generate_sine(freq, duration, sr);
+
+  CqtConfig config;
+  config.fmin = 65.4f;
+  config.n_bins = 48;
+  config.hop_length = 512;
+
+  CqtResult result = cqt(audio, config);
+
+  // Find the bin closest to 440Hz
+  int target_bin = find_bin_for_freq(result.frequencies(), freq);
+
+  // Verify that the phase progresses across frames.
+  // For a pure tone, the phase difference between consecutive frames should be
+  // approximately -2*pi*freq*hop_length/sr (modulo 2*pi).
+  float expected_phase_diff = -2.0f * M_PI * freq * config.hop_length / sr;
+
+  // Normalize expected_phase_diff to [-pi, pi]
+  while (expected_phase_diff > M_PI) expected_phase_diff -= 2.0f * M_PI;
+  while (expected_phase_diff < -M_PI) expected_phase_diff += 2.0f * M_PI;
+
+  // Check phase progression in steady-state frames (skip edges where windowing effects dominate)
+  int start_frame = result.n_frames() / 4;
+  int end_frame = 3 * result.n_frames() / 4;
+  int match_count = 0;
+  int total_count = 0;
+
+  for (int t = start_frame; t < end_frame - 1; ++t) {
+    std::complex<float> c0 = result.at(target_bin, t);
+    std::complex<float> c1 = result.at(target_bin, t + 1);
+
+    // Skip frames with very low magnitude (unreliable phase)
+    if (std::abs(c0) < 1e-6f || std::abs(c1) < 1e-6f) continue;
+
+    float phase0 = std::arg(c0);
+    float phase1 = std::arg(c1);
+    float phase_diff = phase1 - phase0;
+
+    // Normalize to [-pi, pi]
+    while (phase_diff > M_PI) phase_diff -= 2.0f * M_PI;
+    while (phase_diff < -M_PI) phase_diff += 2.0f * M_PI;
+
+    // Phase difference should match expected (with tolerance for windowing effects)
+    if (std::abs(phase_diff - expected_phase_diff) < 0.5f) {
+      ++match_count;
+    }
+    ++total_count;
+  }
+
+  // At least 80% of frames should have correct phase progression
+  REQUIRE(total_count > 0);
+  REQUIRE(static_cast<float>(match_count) / total_count >= 0.8f);
+}
+
 TEST_CASE("cqt empty audio throws", "[cqt]") {
   Audio empty_audio;
   REQUIRE_THROWS(cqt(empty_audio, CqtConfig()));

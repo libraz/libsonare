@@ -30,7 +30,7 @@ class SlidingMedian {
     int idx = static_cast<int>(pos - sorted_.begin());
     if (idx < size_) {
       std::memmove(&sorted_[idx + 1], &sorted_[idx],
-                    static_cast<size_t>(size_ - idx) * sizeof(float));
+                   static_cast<size_t>(size_ - idx) * sizeof(float));
     }
     sorted_[idx] = val;
     ++size_;
@@ -43,7 +43,7 @@ class SlidingMedian {
     --size_;
     if (idx < size_) {
       std::memmove(&sorted_[idx], &sorted_[idx + 1],
-                    static_cast<size_t>(size_ - idx) * sizeof(float));
+                   static_cast<size_t>(size_ - idx) * sizeof(float));
     }
   }
 

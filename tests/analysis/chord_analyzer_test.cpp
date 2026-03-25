@@ -82,6 +82,21 @@ Audio concat_audio(const std::vector<Audio>& audios) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates D minor chord (D-F-A).
+Audio create_d_minor(int sr = 22050, float duration = 1.0f) {
+  return create_chord({62.0f, 65.0f, 69.0f}, sr, duration);  // D4, F4, A4
+}
+
+/// @brief Creates E major chord (E-G#-B).
+Audio create_e_major(int sr = 22050, float duration = 1.0f) {
+  return create_chord({64.0f, 68.0f, 71.0f}, sr, duration);  // E4, G#4, B4
+}
+
+/// @brief Creates Bb major chord (Bb-D-F).
+Audio create_bb_major(int sr = 22050, float duration = 1.0f) {
+  return create_chord({58.0f, 62.0f, 65.0f}, sr, duration);  // Bb3, D4, F4
+}
+
 }  // namespace
 
 TEST_CASE("ChordAnalyzer basic", "[chord_analyzer]") {
@@ -337,4 +352,105 @@ TEST_CASE("ChordAnalyzer empty chord_at", "[chord_analyzer]") {
 
   REQUIRE(chord.duration() == 0.0f);
   REQUIRE(chord.confidence == 0.0f);
+}
+
+TEST_CASE("ChordAnalyzer Roman numeral case by quality", "[chord_analyzer]") {
+  SECTION("F major in C major key returns uppercase IV") {
+    Audio audio = create_f_major(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    auto roman = analyzer.functional_analysis(PitchClass::C, Mode::Major);
+
+    REQUIRE(!roman.empty());
+    // F major chord is scale degree IV in C major → uppercase "IV"
+    REQUIRE(roman[0] == "IV");
+  }
+
+  SECTION("D minor in A minor key returns lowercase iv") {
+    Audio audio = create_d_minor(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    auto roman = analyzer.functional_analysis(PitchClass::A, Mode::Minor);
+
+    REQUIRE(!roman.empty());
+    // D minor chord is scale degree iv in A minor → lowercase "iv"
+    REQUIRE(roman[0] == "iv");
+  }
+
+  SECTION("A minor in C major key returns lowercase vi") {
+    Audio audio = create_a_minor(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    auto roman = analyzer.functional_analysis(PitchClass::C, Mode::Major);
+
+    REQUIRE(!roman.empty());
+    // A minor in C major is vi (minor quality → lowercase)
+    REQUIRE(roman[0] == "vi");
+  }
+
+  SECTION("G major in C major key returns uppercase V") {
+    Audio audio = create_g_major(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    auto roman = analyzer.functional_analysis(PitchClass::C, Mode::Major);
+
+    REQUIRE(!roman.empty());
+    // G major in C major → "V"
+    REQUIRE(roman[0] == "V");
+  }
+
+  SECTION("E major in A minor key returns uppercase V") {
+    // E major is not diatonic to natural A minor (which has Em at degree v),
+    // but E natural minor 7th → interval 7 from A = E, which is degree V.
+    // However E major has a raised G# making it the harmonic minor V.
+    // The function only looks at root interval, so E in A minor = degree V.
+    Audio audio = create_e_major(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    auto roman = analyzer.functional_analysis(PitchClass::A, Mode::Minor);
+
+    REQUIRE(!roman.empty());
+    // E major chord, root E is degree V in A minor → uppercase "V"
+    REQUIRE(roman[0] == "V");
+  }
+}
+
+TEST_CASE("ChordAnalyzer borrowed chord Roman numerals", "[chord_analyzer]") {
+  SECTION("Bb major in C major key is chromatic") {
+    // Bb is interval 10 from C. In C major, this is not a diatonic degree.
+    // The algorithm finds it as a raised VI (9+1=10) → "#VI".
+    // Since Bb major is a major chord, the numeral stays uppercase → "#VI".
+    Audio audio = create_bb_major(22050, 2.0f);
+
+    ChordConfig config;
+    config.use_triads_only = true;
+
+    ChordAnalyzer analyzer(audio, config);
+
+    auto roman = analyzer.functional_analysis(PitchClass::C, Mode::Major);
+
+    REQUIRE(!roman.empty());
+    // Bb major in C major → chromatic "#VI" (raised sixth scale degree)
+    REQUIRE(roman[0] == "#VI");
+  }
 }

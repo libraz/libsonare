@@ -63,8 +63,8 @@ TEST_CASE("get_minor_profile rotation", "[key_profiles]") {
 
 TEST_CASE("get_boosted_major_profile", "[key_profiles]") {
   KeyProfileBoosts boosts;
-  boosts.tonic = 1.5f;   // Multiplicative: 1.5x boost
-  boosts.fifth = 1.2f;   // Multiplicative: 1.2x boost
+  boosts.tonic = 1.5f;  // Multiplicative: 1.5x boost
+  boosts.fifth = 1.2f;  // Multiplicative: 1.2x boost
 
   auto c_major = get_major_profile(PitchClass::C);
   auto boosted = get_boosted_major_profile(PitchClass::C, boosts);
@@ -81,8 +81,8 @@ TEST_CASE("get_boosted_major_profile", "[key_profiles]") {
 
 TEST_CASE("get_boosted_minor_profile", "[key_profiles]") {
   KeyProfileBoosts boosts;
-  boosts.tonic = 1.1f;   // Multiplicative: 1.1x boost
-  boosts.third = 1.3f;   // Multiplicative: 1.3x boost (minor third)
+  boosts.tonic = 1.1f;  // Multiplicative: 1.1x boost
+  boosts.third = 1.3f;  // Multiplicative: 1.3x boost (minor third)
 
   auto a_minor = get_minor_profile(PitchClass::A);
   auto boosted = get_boosted_minor_profile(PitchClass::A, boosts);

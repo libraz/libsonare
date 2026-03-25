@@ -105,7 +105,8 @@ bool is_triad(ChordQuality quality) {
 
 }  // namespace
 
-ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(const float* chroma) const {
+ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(
+    const float* chroma) const {
   // Find best triad and best tetrad separately
   float best_triad_corr = -1.0f;
   int best_triad_idx = 0;
@@ -405,8 +406,10 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     if (numeral.empty()) {
       for (const auto& deg : other_degrees) {
         if (deg.first == interval) {
-          // Borrowed chord from parallel mode
-          numeral = (mode == Mode::Minor) ? deg.second : deg.second;
+          // Borrowed chord from parallel mode.
+          // In minor key, borrowed major-scale degrees are raised → use as-is.
+          // In major key, borrowed minor-scale degrees are lowered → prefix with "b".
+          numeral = (mode == Mode::Minor) ? deg.second : "b" + deg.second;
           is_chromatic = false;
           break;
         }

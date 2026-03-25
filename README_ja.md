@@ -1,34 +1,63 @@
 # libsonare
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libsonare/ci.yml?branch=main&label=CI)](https://github.com/libraz/libsonare/actions)
+[![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
+[![PyPI](https://img.shields.io/pypi/v/libsonare)](https://pypi.org/project/libsonare/)
 [![codecov](https://codecov.io/gh/libraz/libsonare/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**librosa互換のオーディオ解析をC++とブラウザで。** 高速・依存なし・どこでも動作。
+**librosa互換のオーディオ解析をC++、Python、ブラウザで。** 高速・依存なし・どこでも動作。
 
-## ユースケース
+librosa/Pythonより数十倍高速。
 
-- **librosaをネイティブ速度で使いたい？** → Eigen3ベクトル化によるC++実装
-- **ブラウザで音声解析したい？** → WebAssemblyビルド (262KB)
-- **音楽アプリを作りたい？** → BPM・キー・コード・ビート・セクションを1ライブラリで
+## インストール
+
+```bash
+npm install @libraz/libsonare   # JavaScript / TypeScript (WASM)
+pip install libsonare            # Python
+```
 
 ## クイックスタート
 
 ### JavaScript / TypeScript
 
-```bash
-npm install @libraz/sonare  # 近日公開予定（現在β版）
+```typescript
+import { init, detectBpm, detectKey, analyze } from '@libraz/libsonare';
+
+await init();
+
+const bpm = detectBpm(samples, sampleRate);
+const key = detectKey(samples, sampleRate);  // { name: "C major", confidence: 0.95 }
+const result = analyze(samples, sampleRate);
 ```
 
-```typescript
-import { Sonare } from '@libraz/sonare';
+### Python
 
-const sonare = await Sonare.create();
-const bpm = sonare.detectBpm(samples, sampleRate);
-const key = sonare.detectKey(samples, sampleRate);  // { root: "C", mode: "Major" }
-const beats = sonare.detectBeats(samples, sampleRate);
+```python
+import libsonare
+
+bpm = libsonare.detect_bpm(samples, sample_rate=22050)
+key = libsonare.detect_key(samples, sample_rate=22050)
+result = libsonare.analyze(samples, sample_rate=22050)
+
+# Audioクラスも使えます
+audio = libsonare.Audio.from_file("song.mp3")
+print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
+```
+
+### Python CLI
+
+```bash
+pip install libsonare
+
+sonare analyze song.mp3
+# > Estimated BPM : 161.00 BPM  (conf 75.0%)
+# > Estimated Key : C major  (conf 100.0%)
+
+sonare bpm song.mp3 --json
+# {"bpm": 161.0}
 ```
 
 ### C++
@@ -37,8 +66,8 @@ const beats = sonare.detectBeats(samples, sampleRate);
 #include <sonare/sonare.h>
 
 auto audio = sonare::Audio::from_file("music.mp3");
-float bpm = sonare::quick::detect_bpm(audio.data(), audio.size(), audio.sample_rate());
-auto key = sonare::quick::detect_key(audio.data(), audio.size(), audio.sample_rate());
+auto result = sonare::MusicAnalyzer(audio).analyze();
+std::cout << "BPM: " << result.bpm << ", Key: " << result.key.to_string() << std::endl;
 ```
 
 ## 機能
@@ -48,42 +77,44 @@ auto key = sonare::quick::detect_key(audio.data(), audio.size(), audio.sample_ra
 | BPM / テンポ | STFT / iSTFT | HPSS |
 | キー検出 | メルスペクトログラム | タイムストレッチ |
 | ビートトラッキング | MFCC | ピッチシフト |
-| コード認識 | クロマ | ノーマライズ |
+| コード認識 | クロマ | ノーマライズ / トリム |
 | セクション検出 | CQT / VQT | |
+| 音色 / ダイナミクス | スペクトル特徴量 | |
+| ピッチ検出 (YIN/pYIN) | オンセット検出 | |
+| リアルタイムストリーミング | リサンプル | |
+
+## パフォーマンス
+
+Pythonベースの代替ライブラリと比較して圧倒的に高速。CPU自動検出による並列解析、マルチスレッドHPSSメディアンフィルタで最適化。
+
+詳細は[ベンチマーク](https://libsonare.libraz.net/ja/docs/benchmarks)を参照。
 
 ## librosa互換性
 
-libsonareはlibrosa互換のアルゴリズムを同一のデフォルトパラメータで実装。移行は簡単です。
+デフォルトパラメータはlibrosaと一致:
+- サンプルレート: 22050 Hz
+- n_fft: 2048, hop_length: 512, n_mels: 128
+- fmin: 0.0, fmax: sr/2
 
-```python
-# librosa
-S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
-```
-
-```cpp
-// libsonare
-auto mel = sonare::MelSpectrogram(sr, 2048, 512, 128, 0, 8000);
-auto S = mel.compute(audio);
-```
-
-詳細は [librosa互換性ガイド](https://libsonare.libraz.net/ja/docs/librosa-compatibility) を参照。
-
-## ビルド
+## ソースからビルド
 
 ```bash
-# ネイティブ
+# ネイティブ（C++ライブラリ + CLI）
 make build && make test
 
-# WebAssembly（要: source /path/to/emsdk/emsdk_env.sh）
+# WebAssembly
 make wasm
+
+# リリースビルド（最適化）
+make release
 ```
 
 ## ドキュメント
 
 - [はじめに](https://libsonare.libraz.net/ja/docs/getting-started)
 - [JavaScript API](https://libsonare.libraz.net/ja/docs/js-api)
+- [Python API](https://libsonare.libraz.net/ja/docs/python-api)
 - [C++ API](https://libsonare.libraz.net/ja/docs/cpp-api)
-- [使用例](https://libsonare.libraz.net/ja/docs/examples)
 - [WebAssemblyガイド](https://libsonare.libraz.net/ja/docs/wasm)
 
 ## ライセンス

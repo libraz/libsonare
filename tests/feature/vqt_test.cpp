@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 using namespace sonare;
@@ -218,6 +219,74 @@ TEST_CASE("ivqt reconstruction", "[vqt]") {
 #pragma GCC diagnostic pop
 #endif
 
+TEST_CASE("VQT phase correctness", "[vqt]") {
+  // Generate a 440Hz sine wave
+  float freq = 440.0f;
+  int sr = 22050;
+  float duration = 1.0f;
+  Audio audio = generate_sine(freq, duration, sr);
+
+  VqtConfig config;
+  config.fmin = 65.4f;
+  config.n_bins = 48;
+  config.hop_length = 512;
+  config.gamma = 20.0f;
+
+  VqtResult result = vqt(audio, config);
+
+  // Find the bin closest to 440Hz
+  int target_bin = -1;
+  float min_diff = std::numeric_limits<float>::max();
+  for (int k = 0; k < result.n_bins(); ++k) {
+    float diff = std::abs(result.frequencies()[k] - freq);
+    if (diff < min_diff) {
+      min_diff = diff;
+      target_bin = k;
+    }
+  }
+  REQUIRE(target_bin >= 0);
+
+  // For a pure tone, the phase difference between consecutive frames should be
+  // approximately -2*pi*freq*hop_length/sr (modulo 2*pi).
+  float expected_phase_diff = -2.0f * M_PI * freq * config.hop_length / sr;
+
+  // Normalize expected_phase_diff to [-pi, pi]
+  while (expected_phase_diff > M_PI) expected_phase_diff -= 2.0f * M_PI;
+  while (expected_phase_diff < -M_PI) expected_phase_diff += 2.0f * M_PI;
+
+  // Check phase progression in steady-state frames
+  int start_frame = result.n_frames() / 4;
+  int end_frame = 3 * result.n_frames() / 4;
+  int match_count = 0;
+  int total_count = 0;
+
+  for (int t = start_frame; t < end_frame - 1; ++t) {
+    std::complex<float> c0 = result.at(target_bin, t);
+    std::complex<float> c1 = result.at(target_bin, t + 1);
+
+    // Skip frames with very low magnitude (unreliable phase)
+    if (std::abs(c0) < 1e-6f || std::abs(c1) < 1e-6f) continue;
+
+    float phase0 = std::arg(c0);
+    float phase1 = std::arg(c1);
+    float phase_diff = phase1 - phase0;
+
+    // Normalize to [-pi, pi]
+    while (phase_diff > M_PI) phase_diff -= 2.0f * M_PI;
+    while (phase_diff < -M_PI) phase_diff += 2.0f * M_PI;
+
+    // Phase difference should match expected (with tolerance for windowing effects)
+    if (std::abs(phase_diff - expected_phase_diff) < 0.5f) {
+      ++match_count;
+    }
+    ++total_count;
+  }
+
+  // At least 80% of frames should have correct phase progression
+  REQUIRE(total_count > 0);
+  REQUIRE(static_cast<float>(match_count) / total_count >= 0.8f);
+}
+
 TEST_CASE("vqt empty audio throws", "[vqt]") {
   Audio empty_audio;
   REQUIRE_THROWS(vqt(empty_audio, VqtConfig()));
@@ -262,11 +331,11 @@ TEST_CASE("vqt frequencies match librosa formula", "[vqt][librosa]") {
 
   // Check specific musical notes (C1 to C8)
   // C1 = 32.70 Hz, C2 = 65.41 Hz, ..., C8 = 4186.01 Hz
-  REQUIRE_THAT(freqs[0], WithinRel(32.7f, 0.01f));    // C1
-  REQUIRE_THAT(freqs[12], WithinRel(65.41f, 0.01f));  // C2
-  REQUIRE_THAT(freqs[24], WithinRel(130.81f, 0.01f)); // C3
-  REQUIRE_THAT(freqs[36], WithinRel(261.63f, 0.01f)); // C4 (middle C)
-  REQUIRE_THAT(freqs[48], WithinRel(523.25f, 0.01f)); // C5
+  REQUIRE_THAT(freqs[0], WithinRel(32.7f, 0.01f));     // C1
+  REQUIRE_THAT(freqs[12], WithinRel(65.41f, 0.01f));   // C2
+  REQUIRE_THAT(freqs[24], WithinRel(130.81f, 0.01f));  // C3
+  REQUIRE_THAT(freqs[36], WithinRel(261.63f, 0.01f));  // C4 (middle C)
+  REQUIRE_THAT(freqs[48], WithinRel(523.25f, 0.01f));  // C5
 }
 
 TEST_CASE("vqt bandwidth formula matches librosa", "[vqt][librosa]") {
@@ -330,6 +399,25 @@ TEST_CASE("vqt output dimensions match librosa", "[vqt][librosa]") {
 
   // Verify frequencies are stored
   REQUIRE(result.frequencies().size() == 84);
+}
+
+TEST_CASE("vqt center padding matches cqt frame count", "[vqt][librosa]") {
+  // CQT (gamma=0) and VQT (gamma=very small) should produce the same number of frames
+  // because both apply center padding.
+  Audio audio = generate_sine(440.0f, 1.0f, 22050);
+
+  VqtConfig vqt_config;
+  vqt_config.fmin = 65.4f;
+  vqt_config.n_bins = 24;
+  vqt_config.gamma = 0.001f;  // Very small gamma to keep VQT path but near-CQT behavior
+
+  CqtConfig cqt_config = vqt_config.to_cqt_config();
+
+  VqtResult vqt_result = vqt(audio, vqt_config);
+  CqtResult cqt_result = cqt(audio, cqt_config);
+
+  // Both should produce the same number of frames due to center padding
+  REQUIRE(vqt_result.n_frames() == cqt_result.n_frames());
 }
 
 TEST_CASE("vqt energy concentration for pure tone", "[vqt][librosa]") {

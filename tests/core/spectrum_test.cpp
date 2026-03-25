@@ -315,3 +315,181 @@ TEST_CASE("Spectrogram from_complex", "[spectrum]") {
   REQUIRE(spec.at(0, 0) == std::complex<float>(1.0f, 1.0f));
   REQUIRE(spec.at(2, 1) == std::complex<float>(3.0f, 2.0f));
 }
+
+TEST_CASE("Griffin-Lim momentum=0.99 produces better SNR than momentum=0.0", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = sr;  // 1 second
+  constexpr int n_fft = 1024;
+  constexpr int hop_length = 256;
+
+  std::vector<float> original = generate_sine(samples, 440.0f, sr);
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  const std::vector<float>& mag = spec.magnitude();
+
+  // Run Griffin-Lim without momentum
+  GriffinLimConfig gl_no_momentum;
+  gl_no_momentum.n_iter = 32;
+  gl_no_momentum.momentum = 0.0f;
+
+  Audio recon_no_mom =
+      griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_no_momentum);
+
+  // Run Griffin-Lim with momentum=0.99
+  GriffinLimConfig gl_momentum;
+  gl_momentum.n_iter = 32;
+  gl_momentum.momentum = 0.99f;
+
+  Audio recon_mom =
+      griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_momentum);
+
+  // Compare SNR over the middle section (skip edges)
+  size_t len_no_mom = std::min(original.size(), recon_no_mom.size());
+  size_t len_mom = std::min(original.size(), recon_mom.size());
+  size_t skip = static_cast<size_t>(n_fft);
+
+  REQUIRE(len_no_mom > 2 * skip);
+  REQUIRE(len_mom > 2 * skip);
+
+  float snr_no_mom =
+      compute_snr(original.data() + skip, recon_no_mom.data() + skip, len_no_mom - 2 * skip);
+  float snr_mom = compute_snr(original.data() + skip, recon_mom.data() + skip, len_mom - 2 * skip);
+
+  // Momentum should accelerate convergence, yielding better (higher) SNR
+  REQUIRE(snr_mom > snr_no_mom);
+}
+
+TEST_CASE("Griffin-Lim momentum=0.0 matches no-momentum baseline", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = sr / 2;
+  constexpr int n_fft = 1024;
+  constexpr int hop_length = 256;
+
+  std::vector<float> original = generate_sine(samples, 660.0f, sr);
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  const std::vector<float>& mag = spec.magnitude();
+
+  // Both runs use momentum=0.0 and the same seed, so results must be identical
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 16;
+  gl_config.momentum = 0.0f;
+
+  Audio recon_a =
+      griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_config);
+  Audio recon_b =
+      griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_config);
+
+  REQUIRE(recon_a.size() == recon_b.size());
+
+  for (size_t i = 0; i < recon_a.size(); ++i) {
+    REQUIRE_THAT(recon_a[i], WithinAbs(static_cast<double>(recon_b[i]), 1e-6));
+  }
+}
+
+TEST_CASE("Griffin-Lim momentum=0.5 converges", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = sr / 2;
+  constexpr int n_fft = 1024;
+  constexpr int hop_length = 256;
+
+  std::vector<float> original = generate_sine(samples, 880.0f, sr);
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  const std::vector<float>& mag = spec.magnitude();
+
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 32;
+  gl_config.momentum = 0.5f;
+
+  Audio reconstructed =
+      griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_config);
+
+  REQUIRE_FALSE(reconstructed.empty());
+
+  // Verify convergence: SNR should be positive (signal stronger than error)
+  size_t len = std::min(original.size(), reconstructed.size());
+  size_t skip = static_cast<size_t>(n_fft);
+  REQUIRE(len > 2 * skip);
+
+  float snr = compute_snr(original.data() + skip, reconstructed.data() + skip, len - 2 * skip);
+  REQUIRE(snr > 0.0f);  // Positive SNR indicates convergence (signal > error)
+}
+
+TEST_CASE("iSTFT with win_length < n_fft", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = sr;  // 1 second
+  std::vector<float> original = generate_sine(samples, 440.0f, sr);
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig config;
+  config.n_fft = 2048;
+  config.win_length = 1024;
+  config.hop_length = 512;
+  config.center = true;
+
+  // Forward STFT with win_length < n_fft
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  REQUIRE(spec.win_length() == 1024);
+  REQUIRE(spec.n_fft() == 2048);
+
+  // Inverse STFT should use matching win_length for synthesis window
+  Audio reconstructed = spec.to_audio(samples);
+
+  REQUIRE_FALSE(reconstructed.empty());
+
+  // Compare middle section (skip edges due to windowing)
+  size_t compare_length = std::min(original.size(), reconstructed.size());
+  size_t skip = static_cast<size_t>(config.n_fft);
+  REQUIRE(compare_length > 2 * skip);
+
+  float snr =
+      compute_snr(original.data() + skip, reconstructed.data() + skip, compare_length - 2 * skip);
+  // Require SNR > 40 dB for proper round-trip with matching windows
+  REQUIRE(snr > 40.0f);
+}
+
+TEST_CASE("Spectrogram win_length defaults to n_fft", "[spectrum]") {
+  constexpr int sr = 22050;
+  std::vector<float> sine = generate_sine(sr / 2, 440.0f, sr);
+  Audio audio = Audio::from_vector(std::move(sine), sr);
+
+  StftConfig config;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  // win_length defaults to 0, which means use n_fft
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  REQUIRE(spec.win_length() == config.n_fft);
+}
+
+TEST_CASE("Spectrogram from_complex defaults win_length to n_fft", "[spectrum]") {
+  constexpr int n_bins = 5;
+  constexpr int n_frames = 3;
+  constexpr int n_fft = 8;
+  constexpr int hop_length = 4;
+  constexpr int sr = 22050;
+
+  std::vector<std::complex<float>> data(n_bins * n_frames, {1.0f, 0.0f});
+  Spectrogram spec =
+      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr);
+
+  // from_complex does not accept win_length, so it should default to n_fft
+  REQUIRE(spec.win_length() == n_fft);
+}

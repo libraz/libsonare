@@ -155,4 +155,3 @@ TEST_CASE("BpmAnalyzer modulated signal", "[bpm_analyzer]") {
   REQUIRE(analyzer.bpm() >= 50.0f);
   REQUIRE(analyzer.bpm() <= 200.0f);
 }
-

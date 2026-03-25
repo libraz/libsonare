@@ -192,3 +192,29 @@ TEST_CASE("fade preserves duration", "[normalize]") {
   REQUIRE(faded_in.duration() == audio.duration());
   REQUIRE(faded_out.duration() == audio.duration());
 }
+
+TEST_CASE("detect_silence_boundaries with all-silent input", "[normalize]") {
+  // All zeros - should not crash (regression: size_t underflow in backward scan)
+  std::vector<float> silent(22050, 0.0f);
+  Audio silent_audio = Audio::from_buffer(silent.data(), silent.size(), 22050);
+  REQUIRE_NOTHROW(detect_silence_boundaries(silent_audio));
+}
+
+TEST_CASE("detect_silence_boundaries with very short input", "[normalize]") {
+  // Shorter than frame_length (2048) and hop_length (512) - should not crash
+  std::vector<float> short_signal(100, 0.5f);
+  Audio short_audio = Audio::from_buffer(short_signal.data(), short_signal.size(), 22050);
+  REQUIRE_NOTHROW(detect_silence_boundaries(short_audio));
+}
+
+TEST_CASE("detect_silence_boundaries with sound only at end", "[normalize]") {
+  // Tests the backward scan edge case (regression: size_t underflow)
+  std::vector<float> signal(22050, 0.0f);
+  // Put sound at the very end
+  for (size_t i = signal.size() - 100; i < signal.size(); ++i) {
+    signal[i] = 0.5f;
+  }
+  Audio audio = Audio::from_buffer(signal.data(), signal.size(), 22050);
+  auto [start, end] = detect_silence_boundaries(audio);
+  REQUIRE(end > start);
+}

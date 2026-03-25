@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -182,8 +184,8 @@ TEST_CASE("FFT energy preservation (Parseval's theorem)", "[fft]") {
 
   float freq_energy = 0.0f;
   // DC and Nyquist bins count once, others count twice (due to symmetry)
-  freq_energy += std::norm(spectrum[0]);                  // DC
-  freq_energy += std::norm(spectrum[fft.n_bins() - 1]);   // Nyquist
+  freq_energy += std::norm(spectrum[0]);                 // DC
+  freq_energy += std::norm(spectrum[fft.n_bins() - 1]);  // Nyquist
   for (int i = 1; i < fft.n_bins() - 1; ++i) {
     freq_energy += 2.0f * std::norm(spectrum[i]);
   }
@@ -199,8 +201,7 @@ TEST_CASE("FFT multiple frequencies detection", "[fft]") {
   // Composite signal with frequencies at bins 10, 25, and 50
   std::vector<float> input(n_fft);
   for (int i = 0; i < n_fft; ++i) {
-    input[i] = 1.0f * std::sin(kTwoPi * 10 * i / n_fft) +
-               0.5f * std::sin(kTwoPi * 25 * i / n_fft) +
+    input[i] = 1.0f * std::sin(kTwoPi * 10 * i / n_fft) + 0.5f * std::sin(kTwoPi * 25 * i / n_fft) +
                0.25f * std::sin(kTwoPi * 50 * i / n_fft);
   }
 
@@ -221,5 +222,33 @@ TEST_CASE("FFT multiple frequencies detection", "[fft]") {
     if (i != 10 && i != 25 && i != 50) {
       REQUIRE(std::abs(spectrum[i]) < mag50 * 0.1f);
     }
+  }
+}
+
+TEST_CASE("FFT input validation", "[fft]") {
+  SECTION("FFT construction with invalid size") { REQUIRE_THROWS_AS(FFT(0), SonareException); }
+
+  SECTION("FFT forward with null input") {
+    FFT fft(1024);
+    std::vector<std::complex<float>> output(513);
+    REQUIRE_THROWS_AS(fft.forward(nullptr, output.data()), SonareException);
+  }
+
+  SECTION("FFT forward with null output") {
+    FFT fft(1024);
+    std::vector<float> input(1024, 0.0f);
+    REQUIRE_THROWS_AS(fft.forward(input.data(), nullptr), SonareException);
+  }
+
+  SECTION("FFT inverse with null input") {
+    FFT fft(1024);
+    std::vector<float> output(1024);
+    REQUIRE_THROWS_AS(fft.inverse(nullptr, output.data()), SonareException);
+  }
+
+  SECTION("FFT inverse with null output") {
+    FFT fft(1024);
+    std::vector<std::complex<float>> input(513);
+    REQUIRE_THROWS_AS(fft.inverse(input.data(), nullptr), SonareException);
   }
 }

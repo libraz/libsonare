@@ -3,9 +3,9 @@
 
 #include "analysis/music_analyzer.h"
 
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <atomic>
 #include <cmath>
 #include <vector>
 

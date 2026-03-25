@@ -6,6 +6,7 @@
 
 #include "filters/dct.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -67,22 +68,7 @@ MatrixView<float> MelSpectrogram::power() const {
 
 std::vector<float> MelSpectrogram::to_db(float ref, float amin, float top_db) const {
   std::vector<float> db(power_.size());
-
-  float ref_val = std::max(amin, ref * ref);
-  float log_ref = 10.0f * std::log10(ref_val);
-
-  for (size_t i = 0; i < power_.size(); ++i) {
-    db[i] = 10.0f * std::log10(std::max(amin, power_[i])) - log_ref;
-  }
-
-  // Apply top_db clipping (librosa compatible)
-  if (top_db >= 0.0f) {
-    float max_db = *std::max_element(db.begin(), db.end());
-    for (auto& v : db) {
-      v = std::max(v, max_db - top_db);
-    }
-  }
-
+  power_to_db(power_.data(), power_.size(), ref, amin, top_db, db.data());
   return db;
 }
 
@@ -134,7 +120,7 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   // Apply liftering if requested
   if (lifter > 0.0f) {
     for (int k = 0; k < n_mfcc; ++k) {
-      float lift = 1.0f + (lifter / 2.0f) * std::sin(M_PI * static_cast<float>(k) / lifter);
+      float lift = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k) / lifter);
       for (int t = 0; t < n_frames_; ++t) {
         mfcc_out[k * n_frames_ + t] *= lift;
       }

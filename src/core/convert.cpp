@@ -59,8 +59,8 @@ std::string hz_to_note(float hz) {
   static const char* note_names[] = {"C",  "C#", "D",  "D#", "E",  "F",
                                      "F#", "G",  "G#", "A",  "A#", "B"};
 
-  int octave = midi_int / 12 - 1;
-  int note = midi_int % 12;
+  int note = ((midi_int % 12) + 12) % 12;
+  int octave = (midi_int - note) / 12 - 1;
 
   return std::string(note_names[note]) + std::to_string(octave);
 }
@@ -79,7 +79,7 @@ float note_to_hz(const std::string& note) {
       11,  // B
   };
 
-  char base = std::toupper(note[0]);
+  char base = static_cast<char>(std::toupper(static_cast<unsigned char>(note[0])));
   if (base < 'A' || base > 'G') return 0.0f;
 
   int offset = note_offsets[(base - 'C' + 7) % 7];
@@ -114,12 +114,13 @@ float note_to_hz(const std::string& note) {
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {
-  return static_cast<float>(frames * hop_length) / sr;
+  return static_cast<float>(frames) * static_cast<float>(hop_length) / static_cast<float>(sr);
 }
 
 int time_to_frames(float time, int sr, int hop_length) {
   // Use floor for librosa compatibility (np.floor in librosa.core.time_to_frames)
-  return static_cast<int>(std::floor(time * static_cast<float>(sr) / static_cast<float>(hop_length)));
+  return static_cast<int>(
+      std::floor(time * static_cast<float>(sr) / static_cast<float>(hop_length)));
 }
 
 float samples_to_time(int samples, int sr) { return static_cast<float>(samples) / sr; }

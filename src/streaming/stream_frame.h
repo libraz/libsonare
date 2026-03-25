@@ -12,19 +12,19 @@ namespace sonare {
 
 /// @brief A detected chord change in the progression.
 struct ChordChange {
-  int root = -1;              ///< Chord root (0-11 for C-B, -1 = unknown)
-  int quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
-  float start_time = 0.0f;    ///< Start time in seconds
-  float confidence = 0.0f;    ///< Detection confidence (0-1)
+  int root = -1;            ///< Chord root (0-11 for C-B, -1 = unknown)
+  int quality = 0;          ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float start_time = 0.0f;  ///< Start time in seconds
+  float confidence = 0.0f;  ///< Detection confidence (0-1)
 };
 
 /// @brief A chord detected at bar boundary (beat-synchronized).
 struct BarChord {
-  int bar_index = -1;         ///< Bar number (0-based, -1 = invalid)
-  int root = -1;              ///< Chord root (0-11 for C-B, -1 = unknown)
-  int quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
-  float start_time = 0.0f;    ///< Start time in seconds
-  float confidence = 0.0f;    ///< Detection confidence (0-1)
+  int bar_index = -1;       ///< Bar number (0-based, -1 = invalid)
+  int root = -1;            ///< Chord root (0-11 for C-B, -1 = unknown)
+  int quality = 0;          ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float start_time = 0.0f;  ///< Start time in seconds
+  float confidence = 0.0f;  ///< Detection confidence (0-1)
 };
 
 /// @brief A single frame of analysis results.
@@ -41,23 +41,23 @@ struct StreamFrame {
   int frame_index = 0;
 
   // Frequency domain features (sizes depend on config)
-  std::vector<float> magnitude;   ///< Magnitude spectrum [n_bins] or downsampled
-  std::vector<float> mel;         ///< Mel spectrogram [n_mels]
-  std::vector<float> chroma;      ///< Chromagram [12]
+  std::vector<float> magnitude;  ///< Magnitude spectrum [n_bins] or downsampled
+  std::vector<float> mel;        ///< Mel spectrogram [n_mels]
+  std::vector<float> chroma;     ///< Chromagram [12]
 
   // Scalar spectral features
-  float spectral_centroid = 0.0f;   ///< Spectral centroid in Hz
-  float spectral_flatness = 0.0f;   ///< Spectral flatness (0-1)
-  float rms_energy = 0.0f;          ///< RMS energy (normalized)
+  float spectral_centroid = 0.0f;  ///< Spectral centroid in Hz
+  float spectral_flatness = 0.0f;  ///< Spectral flatness (0-1)
+  float rms_energy = 0.0f;         ///< RMS energy (normalized)
 
   // Onset detection (1-frame lag)
-  float onset_strength = 0.0f;      ///< Onset strength value
-  bool onset_valid = false;         ///< False for frame_index == 0 (no previous frame)
+  float onset_strength = 0.0f;  ///< Onset strength value
+  bool onset_valid = false;     ///< False for frame_index == 0 (no previous frame)
 
   // Chord detection (per-frame)
-  int chord_root = -1;              ///< Detected chord root (0-11 for C-B, -1 = unknown)
-  int chord_quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
-  float chord_confidence = 0.0f;    ///< Chord detection confidence (0-1)
+  int chord_root = -1;            ///< Detected chord root (0-11 for C-B, -1 = unknown)
+  int chord_quality = 0;          ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float chord_confidence = 0.0f;  ///< Chord detection confidence (0-1)
 };
 
 /// @brief Progressive estimation results for BPM, Key, and Chord.
@@ -65,67 +65,67 @@ struct StreamFrame {
 /// Confidence increases as more data is processed.
 struct ProgressiveEstimate {
   // BPM estimation
-  float bpm = 0.0f;                 ///< Estimated BPM (0 if not yet estimated)
-  float bpm_confidence = 0.0f;      ///< Confidence (0-1, increases over time)
-  int bpm_candidate_count = 0;      ///< Number of BPM candidates considered
+  float bpm = 0.0f;             ///< Estimated BPM (0 if not yet estimated)
+  float bpm_confidence = 0.0f;  ///< Confidence (0-1, increases over time)
+  int bpm_candidate_count = 0;  ///< Number of BPM candidates considered
 
   // Key estimation
-  int key = -1;                     ///< Estimated key (0-11 for C-B, -1 = unknown)
-  bool key_minor = false;           ///< True if minor mode
-  float key_confidence = 0.0f;      ///< Confidence (0-1, increases over time)
+  int key = -1;                 ///< Estimated key (0-11 for C-B, -1 = unknown)
+  bool key_minor = false;       ///< True if minor mode
+  float key_confidence = 0.0f;  ///< Confidence (0-1, increases over time)
 
   // Chord estimation (current chord, updated per frame)
-  int chord_root = -1;              ///< Current chord root (0-11 for C-B, -1 = unknown)
-  int chord_quality = 0;            ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
-  float chord_confidence = 0.0f;    ///< Chord detection confidence (0-1)
-  float chord_start_time = 0.0f;    ///< Start time of current chord
+  int chord_root = -1;            ///< Current chord root (0-11 for C-B, -1 = unknown)
+  int chord_quality = 0;          ///< Chord quality (0=Maj, 1=Min, 2=Dim, etc.)
+  float chord_confidence = 0.0f;  ///< Chord detection confidence (0-1)
+  float chord_start_time = 0.0f;  ///< Start time of current chord
 
   // Chord progression (accumulated over time, includes current chord)
   std::vector<ChordChange> chord_progression;  ///< Detected chord changes
 
   // Bar-synchronized chord progression (updated when BPM is stable)
   std::vector<BarChord> bar_chord_progression;  ///< Chord per bar (beat-synced)
-  int current_bar = -1;         ///< Current bar index (-1 if BPM not stable)
-  float bar_duration = 0.0f;    ///< Duration of one bar in seconds (0 if BPM not stable)
+  int current_bar = -1;                         ///< Current bar index (-1 if BPM not stable)
+  float bar_duration = 0.0f;  ///< Duration of one bar in seconds (0 if BPM not stable)
 
   // Voted chord pattern (computed from repetitions across all bars)
-  int pattern_length = 4;       ///< Length of the repeating pattern (default: 4 bars)
+  int pattern_length = 4;               ///< Length of the repeating pattern (default: 4 bars)
   std::vector<BarChord> voted_pattern;  ///< Voted chord for each pattern position
 
   // Best matching progression pattern
-  std::string detected_pattern_name;  ///< Name of best matching pattern (e.g., "royalRoad")
+  std::string detected_pattern_name;    ///< Name of best matching pattern (e.g., "royalRoad")
   float detected_pattern_score = 0.0f;  ///< Match score (0-1)
   std::vector<std::pair<std::string, float>> all_pattern_scores;  ///< All pattern scores
 
   // Objective statistics (for UI display)
-  float accumulated_seconds = 0.0f; ///< Total audio processed
-  int used_frames = 0;              ///< Number of frames used for estimation
-  bool updated = false;             ///< True if estimate was updated this frame
+  float accumulated_seconds = 0.0f;  ///< Total audio processed
+  int used_frames = 0;               ///< Number of frames used for estimation
+  bool updated = false;              ///< True if estimate was updated this frame
 };
 
 /// @brief Statistics and current state of the analyzer.
 struct AnalyzerStats {
-  int total_frames = 0;             ///< Total frames processed
-  size_t total_samples = 0;         ///< Total samples processed
-  float duration_seconds = 0.0f;    ///< Total duration processed
-  ProgressiveEstimate estimate;     ///< Current progressive estimate
+  int total_frames = 0;           ///< Total frames processed
+  size_t total_samples = 0;       ///< Total samples processed
+  float duration_seconds = 0.0f;  ///< Total duration processed
+  ProgressiveEstimate estimate;   ///< Current progressive estimate
 };
 
 /// @brief Frame buffer in Structure of Arrays format.
 /// @details More efficient for postMessage transfer (contiguous arrays).
 struct FrameBuffer {
-  size_t n_frames = 0;              ///< Number of frames in buffer
+  size_t n_frames = 0;  ///< Number of frames in buffer
 
-  std::vector<float> timestamps;    ///< [n_frames]
-  std::vector<float> mel;           ///< [n_frames * n_mels] (row-major)
-  std::vector<float> chroma;        ///< [n_frames * 12] (row-major)
-  std::vector<float> onset_strength;///< [n_frames]
-  std::vector<float> rms_energy;    ///< [n_frames]
-  std::vector<float> spectral_centroid; ///< [n_frames]
-  std::vector<float> spectral_flatness; ///< [n_frames]
-  std::vector<int> chord_root;      ///< [n_frames] chord root per frame
-  std::vector<int> chord_quality;   ///< [n_frames] chord quality per frame
-  std::vector<float> chord_confidence; ///< [n_frames] chord confidence per frame
+  std::vector<float> timestamps;         ///< [n_frames]
+  std::vector<float> mel;                ///< [n_frames * n_mels] (row-major)
+  std::vector<float> chroma;             ///< [n_frames * 12] (row-major)
+  std::vector<float> onset_strength;     ///< [n_frames]
+  std::vector<float> rms_energy;         ///< [n_frames]
+  std::vector<float> spectral_centroid;  ///< [n_frames]
+  std::vector<float> spectral_flatness;  ///< [n_frames]
+  std::vector<int> chord_root;           ///< [n_frames] chord root per frame
+  std::vector<int> chord_quality;        ///< [n_frames] chord quality per frame
+  std::vector<float> chord_confidence;   ///< [n_frames] chord confidence per frame
 
   /// @brief Clears all data.
   void clear() {
@@ -182,16 +182,16 @@ struct QuantizeConfig {
 /// @details Reduces bandwidth for postMessage transfer.
 /// Mel values are quantized from dB scale, chroma from 0-1.
 struct QuantizedFrameBufferU8 {
-  size_t n_frames = 0;              ///< Number of frames in buffer
-  int n_mels = 0;                   ///< Number of mel bands per frame
+  size_t n_frames = 0;  ///< Number of frames in buffer
+  int n_mels = 0;       ///< Number of mel bands per frame
 
-  std::vector<float> timestamps;    ///< [n_frames] (kept as float for precision)
-  std::vector<uint8_t> mel;         ///< [n_frames * n_mels] quantized mel (dB scaled)
-  std::vector<uint8_t> chroma;      ///< [n_frames * 12] quantized chroma (0-255)
-  std::vector<uint8_t> onset_strength; ///< [n_frames] quantized onset
-  std::vector<uint8_t> rms_energy;  ///< [n_frames] quantized RMS
-  std::vector<uint8_t> spectral_centroid; ///< [n_frames] quantized centroid
-  std::vector<uint8_t> spectral_flatness; ///< [n_frames] quantized flatness
+  std::vector<float> timestamps;           ///< [n_frames] (kept as float for precision)
+  std::vector<uint8_t> mel;                ///< [n_frames * n_mels] quantized mel (dB scaled)
+  std::vector<uint8_t> chroma;             ///< [n_frames * 12] quantized chroma (0-255)
+  std::vector<uint8_t> onset_strength;     ///< [n_frames] quantized onset
+  std::vector<uint8_t> rms_energy;         ///< [n_frames] quantized RMS
+  std::vector<uint8_t> spectral_centroid;  ///< [n_frames] quantized centroid
+  std::vector<uint8_t> spectral_flatness;  ///< [n_frames] quantized flatness
 
   /// @brief Clears all data.
   void clear() {
@@ -222,16 +222,16 @@ struct QuantizedFrameBufferU8 {
 /// @brief Frame buffer with 16-bit quantized data.
 /// @details Higher precision than U8, still reduces bandwidth vs Float32.
 struct QuantizedFrameBufferI16 {
-  size_t n_frames = 0;              ///< Number of frames in buffer
-  int n_mels = 0;                   ///< Number of mel bands per frame
+  size_t n_frames = 0;  ///< Number of frames in buffer
+  int n_mels = 0;       ///< Number of mel bands per frame
 
-  std::vector<float> timestamps;    ///< [n_frames] (kept as float for precision)
-  std::vector<int16_t> mel;         ///< [n_frames * n_mels] quantized mel
-  std::vector<int16_t> chroma;      ///< [n_frames * 12] quantized chroma
-  std::vector<int16_t> onset_strength; ///< [n_frames] quantized onset
-  std::vector<int16_t> rms_energy;  ///< [n_frames] quantized RMS
-  std::vector<int16_t> spectral_centroid; ///< [n_frames] quantized centroid
-  std::vector<int16_t> spectral_flatness; ///< [n_frames] quantized flatness
+  std::vector<float> timestamps;           ///< [n_frames] (kept as float for precision)
+  std::vector<int16_t> mel;                ///< [n_frames * n_mels] quantized mel
+  std::vector<int16_t> chroma;             ///< [n_frames * 12] quantized chroma
+  std::vector<int16_t> onset_strength;     ///< [n_frames] quantized onset
+  std::vector<int16_t> rms_energy;         ///< [n_frames] quantized RMS
+  std::vector<int16_t> spectral_centroid;  ///< [n_frames] quantized centroid
+  std::vector<int16_t> spectral_flatness;  ///< [n_frames] quantized flatness
 
   /// @brief Clears all data.
   void clear() {

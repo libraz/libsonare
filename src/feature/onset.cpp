@@ -19,8 +19,8 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
   const float* power = mel_spec.power_data();
 
   /// Map power data to Eigen matrix [n_mels x n_frames] (row-major)
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      power_map(power, n_mels, n_frames);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> power_map(
+      power, n_mels, n_frames);
 
   /// Compute log power using Eigen (vectorized)
   constexpr float kAmin = 1e-10f;
@@ -35,8 +35,7 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
     int diff_frames = n_frames - config.lag;
 
     // Compute difference matrix
-    Eigen::MatrixXf diff =
-        log_power.rightCols(diff_frames) - log_power.leftCols(diff_frames);
+    Eigen::MatrixXf diff = log_power.rightCols(diff_frames) - log_power.leftCols(diff_frames);
 
     // Half-wave rectification and column sum
     Eigen::Map<Eigen::VectorXf> env_map(onset_env.data() + config.lag, diff_frames);
@@ -81,8 +80,8 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
   const float* power = mel_spec.power_data();
 
   // Map power data to Eigen matrix [n_mels x n_frames] (row-major)
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      power_map(power, n_mels, n_frames);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> power_map(
+      power, n_mels, n_frames);
 
   // Compute log power using Eigen
   constexpr float kAmin = 1e-10f;
@@ -104,9 +103,8 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
       int band_size = mel_end - mel_start;
 
       // Extract band and compute difference
-      Eigen::MatrixXf band_diff =
-          log_power.block(mel_start, config.lag, band_size, diff_frames) -
-          log_power.block(mel_start, 0, band_size, diff_frames);
+      Eigen::MatrixXf band_diff = log_power.block(mel_start, config.lag, band_size, diff_frames) -
+                                  log_power.block(mel_start, 0, band_size, diff_frames);
 
       // Half-wave rectification and column sum
       Eigen::Map<Eigen::VectorXf> out_map(onset_multi.data() + b * n_frames + config.lag,
@@ -116,8 +114,8 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
   }
 
   // Apply detrend and center per band using Eigen
-  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      onset_map(onset_multi.data(), n_bands, n_frames);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> onset_map(
+      onset_multi.data(), n_bands, n_frames);
 
   if (config.detrend && n_frames > 0) {
     Eigen::VectorXf row_means = onset_map.rowwise().mean();
@@ -154,8 +152,8 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
     int diff_frames = n_frames - lag;
 
     // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
-    Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-        mag_map(magnitude.data(), n_bins, n_frames);
+    Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
+        magnitude.data(), n_bins, n_frames);
 
     // Compute difference and absolute sum
     Eigen::MatrixXf diff = mag_map.rightCols(diff_frames) - mag_map.leftCols(diff_frames);

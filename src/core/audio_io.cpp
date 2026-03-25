@@ -57,7 +57,7 @@ std::vector<float> stereo_to_mono(const float* data, size_t total_samples, int c
 /// @brief Converts interleaved int16 stereo to mono float.
 /// @details Handles int16-to-float conversion and channel mixing in a single pass.
 std::vector<float> int16_stereo_to_mono(const mp3d_sample_t* data, size_t total_samples,
-                                         int channels) {
+                                        int channels) {
   size_t frame_count = total_samples / static_cast<size_t>(channels);
   std::vector<float> mono(frame_count);
   constexpr float kInt16Scale = 1.0f / 32768.0f;
@@ -84,11 +84,21 @@ std::vector<float> int16_stereo_to_mono(const mp3d_sample_t* data, size_t total_
 }
 
 /// @brief Reads entire file into memory.
-std::vector<uint8_t> read_file(const std::string& path) {
+/// @param path Path to the file
+/// @param max_size Maximum allowed file size in bytes (0 = no limit)
+std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
   std::ifstream file(path, std::ios::binary | std::ios::ate);
   SONARE_CHECK_MSG(file.is_open(), ErrorCode::FileNotFound, "Cannot open file: " + path);
 
   auto size = file.tellg();
+
+  // Check file size before allocating memory
+  if (max_size > 0) {
+    SONARE_CHECK_MSG(static_cast<size_t>(size) <= max_size, ErrorCode::InvalidParameter,
+                     "File too large: " + std::to_string(static_cast<size_t>(size)) +
+                         " bytes (max: " + std::to_string(max_size) + " bytes)");
+  }
+
   file.seekg(0, std::ios::beg);
 
   std::vector<uint8_t> buffer(static_cast<size_t>(size));
@@ -191,15 +201,7 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
 }
 
 AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& options) {
-  std::vector<uint8_t> data = read_file(path);
-
-  // Check file size after loading
-  if (options.max_file_size > 0) {
-    SONARE_CHECK_MSG(data.size() <= options.max_file_size, ErrorCode::InvalidParameter,
-                     "File too large: " + std::to_string(data.size()) + " bytes (max: " +
-                         std::to_string(options.max_file_size) + " bytes)");
-  }
-
+  std::vector<uint8_t> data = read_file(path, options.max_file_size);
   return load_buffer(data.data(), data.size());
 }
 

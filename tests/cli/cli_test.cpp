@@ -1,6 +1,8 @@
 /// @file cli_test.cpp
 /// @brief Tests for the sonare CLI tool.
 
+#include <unistd.h>
+
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -8,7 +10,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <unistd.h>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -89,8 +90,8 @@ std::string get_cli_path() {
 /// @brief Generates a unique temp file path for this test process.
 std::string unique_temp_path(const std::string& suffix) {
   static int counter = 0;
-  return "/tmp/sonare_cli_test_" + std::to_string(getpid()) + "_" +
-         std::to_string(counter++) + suffix;
+  return "/tmp/sonare_cli_test_" + std::to_string(getpid()) + "_" + std::to_string(counter++) +
+         suffix;
 }
 
 const std::string CLI = get_cli_path();

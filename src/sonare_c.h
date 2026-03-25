@@ -153,9 +153,9 @@ typedef struct {
 // Pitch result
 typedef struct {
   int n_frames;
-  float* f0;          // n_frames
-  float* voiced_prob; // n_frames
-  int* voiced_flag;   // n_frames (0 or 1)
+  float* f0;           // n_frames
+  float* voiced_prob;  // n_frames
+  int* voiced_flag;    // n_frames (0 or 1)
   float median_f0;
   float mean_f0;
 } SonarePitchResult;
@@ -172,46 +172,45 @@ typedef struct {
 // Effects
 // ============================================================================
 
-SonareError sonare_hpss(const float* samples, size_t length, int sample_rate,
-                        int kernel_harmonic, int kernel_percussive, SonareHpssResult* out);
-SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate,
-                            float** out, size_t* out_length);
-SonareError sonare_percussive(const float* samples, size_t length, int sample_rate,
-                              float** out, size_t* out_length);
-SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate,
-                                float rate, float** out, size_t* out_length);
+SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
+                        int kernel_percussive, SonareHpssResult* out);
+SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
+                            size_t* out_length);
+SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
+                              size_t* out_length);
+SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
+                                float** out, size_t* out_length);
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
-SonareError sonare_normalize(const float* samples, size_t length, int sample_rate,
-                             float target_db, float** out, size_t* out_length);
-SonareError sonare_trim(const float* samples, size_t length, int sample_rate,
-                        float threshold_db, float** out, size_t* out_length);
+SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
+                             float** out, size_t* out_length);
+SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
+                        float** out, size_t* out_length);
 
 // ============================================================================
 // Features - Spectrogram
 // ============================================================================
 
-SonareError sonare_stft(const float* samples, size_t length, int sample_rate,
-                        int n_fft, int hop_length, SonareStftResult* out);
-SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
-                           int n_fft, int hop_length,
-                           int* out_n_bins, int* out_n_frames, float** out_db);
+SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
+                        int hop_length, SonareStftResult* out);
+SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate, int n_fft,
+                           int hop_length, int* out_n_bins, int* out_n_frames, float** out_db);
 
 // ============================================================================
 // Features - Mel
 // ============================================================================
 
-SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate,
-                                   int n_fft, int hop_length, int n_mels, SonareMelResult* out);
-SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate,
-                        int n_fft, int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out);
+SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
+                                   int hop_length, int n_mels, SonareMelResult* out);
+SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
+                        int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out);
 
 // ============================================================================
 // Features - Chroma
 // ============================================================================
 
-SonareError sonare_chroma(const float* samples, size_t length, int sample_rate,
-                          int n_fft, int hop_length, SonareChromaResult* out);
+SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
+                          int hop_length, SonareChromaResult* out);
 
 // ============================================================================
 // Features - Spectral (each returns a float array of per-frame values)
@@ -221,14 +220,14 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
                                      int n_fft, int hop_length, float** out, size_t* out_count);
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
                                       int n_fft, int hop_length, float** out, size_t* out_count);
-SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate,
-                                    int n_fft, int hop_length, float roll_percent,
-                                    float** out, size_t* out_count);
+SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate, int n_fft,
+                                    int hop_length, float roll_percent, float** out,
+                                    size_t* out_count);
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count);
 SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int sample_rate,
-                                      int frame_length, int hop_length,
-                                      float** out, size_t* out_count);
+                                      int frame_length, int hop_length, float** out,
+                                      size_t* out_count);
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float** out, size_t* out_count);
 
@@ -236,9 +235,9 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
 // Features - Pitch
 // ============================================================================
 
-SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate,
-                             int frame_length, int hop_length, float fmin, float fmax,
-                             float threshold, SonarePitchResult* out);
+SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
+                             int hop_length, float fmin, float fmax, float threshold,
+                             SonarePitchResult* out);
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float fmin, float fmax,
                               float threshold, SonarePitchResult* out);

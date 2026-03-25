@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "libsonare"
-version = "1.0.0"
-description = "Fast audio analysis library — librosa-like API, 80x faster (C++ with Python bindings)"
+version = "1.0.1"
+description = "Fast audio analysis library — librosa-like API, tens of times faster (C++ with Python bindings)"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [
@@ -71,3 +71,8 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 [tool.mypy]
 strict = true
 python_version = "3.11"
+
+[tool.rye]
+dev-dependencies = [
+    "pytest>=9.0.2",
+]

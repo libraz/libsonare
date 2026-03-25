@@ -9,30 +9,80 @@ from typing import TYPE_CHECKING
 from ._ffi import SONARE_OK, load_library
 from .analyzer import (
     analyze as _analyze,
+)
+from .analyzer import (
     chroma as _chroma,
+)
+from .analyzer import (
     detect_beats as _detect_beats,
+)
+from .analyzer import (
     detect_bpm as _detect_bpm,
+)
+from .analyzer import (
     detect_key as _detect_key,
+)
+from .analyzer import (
     detect_onsets as _detect_onsets,
+)
+from .analyzer import (
     harmonic as _harmonic,
+)
+from .analyzer import (
     hpss as _hpss,
+)
+from .analyzer import (
     mel_spectrogram as _mel_spectrogram,
+)
+from .analyzer import (
     mfcc as _mfcc,
+)
+from .analyzer import (
     normalize as _normalize,
+)
+from .analyzer import (
     percussive as _percussive,
+)
+from .analyzer import (
     pitch_pyin as _pitch_pyin,
+)
+from .analyzer import (
     pitch_shift as _pitch_shift,
+)
+from .analyzer import (
     pitch_yin as _pitch_yin,
+)
+from .analyzer import (
     resample as _resample,
+)
+from .analyzer import (
     rms_energy as _rms_energy,
+)
+from .analyzer import (
     spectral_bandwidth as _spectral_bandwidth,
+)
+from .analyzer import (
     spectral_centroid as _spectral_centroid,
+)
+from .analyzer import (
     spectral_flatness as _spectral_flatness,
+)
+from .analyzer import (
     spectral_rolloff as _spectral_rolloff,
+)
+from .analyzer import (
     stft as _stft,
+)
+from .analyzer import (
     stft_db as _stft_db,
+)
+from .analyzer import (
     time_stretch as _time_stretch,
+)
+from .analyzer import (
     trim as _trim,
+)
+from .analyzer import (
     zero_crossing_rate as _zero_crossing_rate,
 )
 from .types import (
@@ -179,7 +229,9 @@ class Audio:
     # --- Effects ---
 
     def hpss(
-        self, kernel_harmonic: int = 31, kernel_percussive: int = 31,
+        self,
+        kernel_harmonic: int = 31,
+        kernel_percussive: int = 31,
     ) -> HpssResult:
         """Perform harmonic-percussive source separation."""
         return _hpss(self.data, self.sample_rate, kernel_harmonic, kernel_percussive)
@@ -215,7 +267,9 @@ class Audio:
         return _stft(self.data, self.sample_rate, n_fft, hop_length)
 
     def stft_db(
-        self, n_fft: int = 2048, hop_length: int = 512,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
     ) -> tuple[int, int, list[float]]:
         """Compute the STFT in decibels."""
         return _stft_db(self.data, self.sample_rate, n_fft, hop_length)
@@ -223,13 +277,20 @@ class Audio:
     # --- Features - Mel ---
 
     def mel_spectrogram(
-        self, n_fft: int = 2048, hop_length: int = 512, n_mels: int = 128,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
     ) -> MelSpectrogramResult:
         """Compute a Mel spectrogram."""
         return _mel_spectrogram(self.data, self.sample_rate, n_fft, hop_length, n_mels)
 
     def mfcc(
-        self, n_fft: int = 2048, hop_length: int = 512, n_mels: int = 128, n_mfcc: int = 20,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+        n_mfcc: int = 20,
     ) -> MfccResult:
         """Compute Mel-frequency cepstral coefficients."""
         return _mfcc(self.data, self.sample_rate, n_fft, hop_length, n_mels, n_mfcc)
@@ -243,37 +304,50 @@ class Audio:
     # --- Features - Spectral ---
 
     def spectral_centroid(
-        self, n_fft: int = 2048, hop_length: int = 512,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
     ) -> list[float]:
         """Compute the spectral centroid per frame."""
         return _spectral_centroid(self.data, self.sample_rate, n_fft, hop_length)
 
     def spectral_bandwidth(
-        self, n_fft: int = 2048, hop_length: int = 512,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
     ) -> list[float]:
         """Compute the spectral bandwidth per frame."""
         return _spectral_bandwidth(self.data, self.sample_rate, n_fft, hop_length)
 
     def spectral_rolloff(
-        self, n_fft: int = 2048, hop_length: int = 512, roll_percent: float = 0.85,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        roll_percent: float = 0.85,
     ) -> list[float]:
         """Compute the spectral rolloff per frame."""
         return _spectral_rolloff(self.data, self.sample_rate, n_fft, hop_length, roll_percent)
 
     def spectral_flatness(
-        self, n_fft: int = 2048, hop_length: int = 512,
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
     ) -> list[float]:
         """Compute the spectral flatness per frame."""
         return _spectral_flatness(self.data, self.sample_rate, n_fft, hop_length)
 
     def zero_crossing_rate(
-        self, frame_length: int = 2048, hop_length: int = 512,
+        self,
+        frame_length: int = 2048,
+        hop_length: int = 512,
     ) -> list[float]:
         """Compute the zero-crossing rate per frame."""
         return _zero_crossing_rate(self.data, self.sample_rate, frame_length, hop_length)
 
     def rms_energy(
-        self, frame_length: int = 2048, hop_length: int = 512,
+        self,
+        frame_length: int = 2048,
+        hop_length: int = 512,
     ) -> list[float]:
         """Compute the RMS energy per frame."""
         return _rms_energy(self.data, self.sample_rate, frame_length, hop_length)
@@ -281,20 +355,30 @@ class Audio:
     # --- Features - Pitch ---
 
     def pitch_yin(
-        self, frame_length: int = 2048, hop_length: int = 512,
-        fmin: float = 65.0, fmax: float = 2093.0, threshold: float = 0.3,
+        self,
+        frame_length: int = 2048,
+        hop_length: int = 512,
+        fmin: float = 65.0,
+        fmax: float = 2093.0,
+        threshold: float = 0.3,
     ) -> PitchResult:
         """Estimate fundamental frequency using the YIN algorithm."""
-        return _pitch_yin(self.data, self.sample_rate, frame_length, hop_length,
-                          fmin, fmax, threshold)
+        return _pitch_yin(
+            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold
+        )
 
     def pitch_pyin(
-        self, frame_length: int = 2048, hop_length: int = 512,
-        fmin: float = 65.0, fmax: float = 2093.0, threshold: float = 0.3,
+        self,
+        frame_length: int = 2048,
+        hop_length: int = 512,
+        fmin: float = 65.0,
+        fmax: float = 2093.0,
+        threshold: float = 0.3,
     ) -> PitchResult:
         """Estimate fundamental frequency using the pYIN algorithm."""
-        return _pitch_pyin(self.data, self.sample_rate, frame_length, hop_length,
-                           fmin, fmax, threshold)
+        return _pitch_pyin(
+            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold
+        )
 
     # --- Core - Resample ---
 

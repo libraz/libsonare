@@ -93,7 +93,7 @@ class Chroma {
   /// @param norm Norm type: 0 for max (inf), 1 for L1, 2 for L2
   /// @return Normalized chromagram [n_chroma x n_frames]
   /// @note norm=0 (max norm) matches librosa's default norm=np.inf
-  std::vector<float> normalize(int norm = 2) const;
+  std::vector<float> normalize(int norm = 0) const;
 
   /// @brief Returns the dominant pitch class for each frame.
   /// @return Vector of pitch class indices (0=C, 1=C#, ..., 11=B)
@@ -111,7 +111,6 @@ class Chroma {
   Chroma(std::vector<float> features, int n_chroma, int n_frames, int sample_rate, int hop_length);
 
  private:
-
   std::vector<float> features_;  ///< Chromagram [n_chroma * n_frames]
   int n_chroma_;
   int n_frames_;

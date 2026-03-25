@@ -87,7 +87,7 @@ class StreamAnalyzer {
   /// @param qconfig Quantization configuration
   /// @details Reduces bandwidth by 4x compared to Float32.
   void read_frames_quantized_u8(size_t max_frames, QuantizedFrameBufferU8& buffer,
-                                 const QuantizeConfig& qconfig = QuantizeConfig());
+                                const QuantizeConfig& qconfig = QuantizeConfig());
 
   /// @brief Reads processed frames into quantized 16-bit buffer.
   /// @param max_frames Maximum number of frames to read
@@ -95,7 +95,7 @@ class StreamAnalyzer {
   /// @param qconfig Quantization configuration
   /// @details Reduces bandwidth by 2x compared to Float32, higher precision than U8.
   void read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
-                                  const QuantizeConfig& qconfig = QuantizeConfig());
+                                 const QuantizeConfig& qconfig = QuantizeConfig());
 
   /// @brief Resets analyzer state for new stream.
   /// @param base_sample_offset Starting sample offset (default 0)
@@ -141,7 +141,7 @@ class StreamAnalyzer {
   // Using 44100 Hz internally ensures consistent results regardless of input sample rate
   static constexpr int kInternalSampleRate = 44100;
   static constexpr int kMaxDirectSampleRate = 44100;  // Resample anything above 44100 Hz
-  int internal_sample_rate_;  // Actual rate used for analysis
+  int internal_sample_rate_;                          // Actual rate used for analysis
   bool needs_resampling_ = false;
   float resample_ratio_ = 1.0f;
   std::vector<float> resample_buffer_;  // Buffer for resampled audio
@@ -181,14 +181,14 @@ class StreamAnalyzer {
   bool has_prev_frame_ = false;
 
   // Working buffers (reused to avoid allocation)
-  std::vector<float> frame_buffer_;              // [n_fft]
-  std::vector<std::complex<float>> spectrum_;    // [n_bins]
-  std::vector<float> magnitude_;                 // [n_bins]
-  std::vector<float> power_;                     // [n_bins]
-  std::vector<float> mel_buffer_;                // [n_mels]
-  std::vector<float> mel_log_;                   // [n_mels]
-  std::vector<float> chroma_buffer_;             // [12] - L2 normalized
-  std::array<float, 12> chroma_raw_;             // [12] - raw (unnormalized) for accumulation
+  std::vector<float> frame_buffer_;            // [n_fft]
+  std::vector<std::complex<float>> spectrum_;  // [n_bins]
+  std::vector<float> magnitude_;               // [n_bins]
+  std::vector<float> power_;                   // [n_bins]
+  std::vector<float> mel_buffer_;              // [n_mels]
+  std::vector<float> mel_log_;                 // [n_mels]
+  std::vector<float> chroma_buffer_;           // [12] - L2 normalized
+  std::array<float, 12> chroma_raw_;           // [12] - raw (unnormalized) for accumulation
 
   // Progressive estimation accumulators
   std::vector<float> onset_accumulator_;
@@ -206,32 +206,33 @@ class StreamAnalyzer {
   // Chord progression tracking
   int prev_chord_root_ = -1;
   int prev_chord_quality_ = -1;
-  float chord_stable_time_ = 0.0f;        ///< Time chord has been stable
+  float chord_stable_time_ = 0.0f;                  ///< Time chord has been stable
   static constexpr float kChordMinDuration = 0.3f;  ///< Min duration to register change
-  static constexpr int kChordSmoothingFrames = 12;  ///< Number of frames to smooth (~0.25s at default settings)
+  static constexpr int kChordSmoothingFrames =
+      12;  ///< Number of frames to smooth (~0.25s at default settings)
   static constexpr float kChordConfidenceThreshold = 0.5f;  ///< Min correlation for chord detection
-  std::deque<std::array<float, 12>> chroma_history_;  ///< History for chord smoothing
+  std::deque<std::array<float, 12>> chroma_history_;        ///< History for chord smoothing
 
   // Bar-synchronized chord tracking (requires stable BPM)
   static constexpr float kBpmConfidenceThreshold = 0.3f;  ///< Min BPM confidence for bar sync
-  static constexpr int kBeatsPerBar = 4;  ///< Beats per bar (4/4 time signature)
-  bool bar_tracking_active_ = false;      ///< True when BPM is stable enough
-  float bar_duration_ = 0.0f;             ///< Duration of one bar in seconds
-  int current_bar_index_ = -1;            ///< Current bar index (0-based)
-  float bar_start_time_ = 0.0f;           ///< Start time of current bar
-  std::array<float, 12> bar_chroma_sum_;  ///< Accumulated chroma within current bar
-  int bar_chroma_count_ = 0;              ///< Number of frames accumulated in current bar
+  static constexpr int kBeatsPerBar = 4;                  ///< Beats per bar (4/4 time signature)
+  bool bar_tracking_active_ = false;                      ///< True when BPM is stable enough
+  float bar_duration_ = 0.0f;                             ///< Duration of one bar in seconds
+  int current_bar_index_ = -1;                            ///< Current bar index (0-based)
+  float bar_start_time_ = 0.0f;                           ///< Start time of current bar
+  std::array<float, 12> bar_chroma_sum_;                  ///< Accumulated chroma within current bar
+  int bar_chroma_count_ = 0;  ///< Number of frames accumulated in current bar
 
   // Chord voting within bar (alternative to chroma averaging)
-  std::array<int, 48> bar_chord_votes_;   ///< Vote counts per chord (12 roots × 4 qualities)
-  int bar_vote_count_ = 0;                ///< Total votes in current bar
+  std::array<int, 48> bar_chord_votes_;  ///< Vote counts per chord (12 roots × 4 qualities)
+  int bar_vote_count_ = 0;               ///< Total votes in current bar
 
   // Pattern locking (once detected with high confidence, don't change)
-  bool pattern_locked_ = false;           ///< True if pattern is locked
-  float expected_duration_ = 0.0f;        ///< Expected total duration (0 = unknown)
+  bool pattern_locked_ = false;     ///< True if pattern is locked
+  float expected_duration_ = 0.0f;  ///< Expected total duration (0 = unknown)
 
   // Full chroma history for retroactive bar chord detection
-  static constexpr size_t kMaxChromaHistoryFrames = 3000;  ///< ~35s at default settings
+  static constexpr size_t kMaxChromaHistoryFrames = 3000;   ///< ~35s at default settings
   std::vector<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
 
   // Known chord progression patterns (degree, quality pairs)

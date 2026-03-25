@@ -31,6 +31,7 @@
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "quick.h"
+#include "sonare.h"
 #include "streaming/stream_analyzer.h"
 
 using namespace emscripten;
@@ -48,14 +49,6 @@ val vectorToFloat32Array(const std::vector<float>& vec) {
   return result;
 }
 
-val vectorToIntArray(const std::vector<int>& vec) {
-  val result = val::array();
-  for (size_t i = 0; i < vec.size(); ++i) {
-    result.call<void>("push", vec[i]);
-  }
-  return result;
-}
-
 val vectorToInt32Array(const std::vector<int>& vec) {
   val result = val::global("Int32Array").new_(vec.size());
   for (size_t i = 0; i < vec.size(); ++i) {
@@ -64,9 +57,7 @@ val vectorToInt32Array(const std::vector<int>& vec) {
   return result;
 }
 
-std::vector<float> float32ArrayToVector(val arr) {
-  return vecFromJSArray<float>(arr);
-}
+std::vector<float> float32ArrayToVector(val arr) { return vecFromJSArray<float>(arr); }
 
 /// @brief Converts AnalysisResult to JavaScript object.
 /// @param result Analysis result
@@ -634,9 +625,8 @@ val vectorToInt16Array(const std::vector<int16_t>& vec) {
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
-  StreamAnalyzerWrapper(int sample_rate, int n_fft, int hop_length, int n_mels,
-                        bool compute_mel, bool compute_chroma, bool compute_onset,
-                        int emit_every_n_frames) {
+  StreamAnalyzerWrapper(int sample_rate, int n_fft, int hop_length, int n_mels, bool compute_mel,
+                        bool compute_chroma, bool compute_onset, int emit_every_n_frames) {
     StreamConfig config;
     config.sample_rate = sample_rate;
     config.n_fft = n_fft;
@@ -815,16 +805,12 @@ class StreamAnalyzerWrapper {
   }
 
   /// @brief Sets normalization gain for loud audio.
-  void setNormalizationGain(float gain) {
-    analyzer_->set_normalization_gain(gain);
-  }
+  void setNormalizationGain(float gain) { analyzer_->set_normalization_gain(gain); }
 
   /// @brief Sets tuning reference frequency (A4).
   /// @param ref_hz Reference frequency for A4 (default 440 Hz)
   /// @details Use 466.16 if audio is 1 semitone sharp, 415.30 if 1 semitone flat.
-  void setTuningRefHz(float ref_hz) {
-    analyzer_->set_tuning_ref_hz(ref_hz);
-  }
+  void setTuningRefHz(float ref_hz) { analyzer_->set_tuning_ref_hz(ref_hz); }
 
  private:
   StreamConfig config_;
@@ -835,7 +821,7 @@ class StreamAnalyzerWrapper {
 // Version
 // ============================================================================
 
-std::string js_version() { return "1.0.0"; }
+std::string js_version() { return SONARE_VERSION_STRING; }
 
 // ============================================================================
 // Embind Registrations

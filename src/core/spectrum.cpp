@@ -27,16 +27,18 @@ std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
 
 }  // namespace
 
-Spectrogram::Spectrogram() : n_bins_(0), n_frames_(0), n_fft_(0), hop_length_(0), sample_rate_(0) {}
+Spectrogram::Spectrogram()
+    : n_bins_(0), n_frames_(0), n_fft_(0), hop_length_(0), sample_rate_(0), win_length_(0) {}
 
 Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
-                         int hop_length, int sample_rate)
+                         int hop_length, int sample_rate, int win_length)
     : data_(std::move(data)),
       n_bins_(n_bins),
       n_frames_(n_frames),
       n_fft_(n_fft),
       hop_length_(hop_length),
-      sample_rate_(sample_rate) {}
+      sample_rate_(sample_rate),
+      win_length_(win_length > 0 ? win_length : n_fft) {}
 
 Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
                                  SpectrogramProgressCallback progress_callback) {
@@ -132,7 +134,8 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
     }
   }
 
-  return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, audio.sample_rate());
+  return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, audio.sample_rate(),
+                     win_length);
 }
 
 Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
@@ -178,22 +181,7 @@ const std::vector<float>& Spectrogram::power() const {
 std::vector<float> Spectrogram::to_db(float ref, float amin, float top_db) const {
   const std::vector<float>& pwr = power();
   std::vector<float> db(pwr.size());
-
-  float ref_val = std::max(amin, ref * ref);
-  float log_ref = 10.0f * std::log10(ref_val);
-
-  for (size_t i = 0; i < pwr.size(); ++i) {
-    db[i] = 10.0f * std::log10(std::max(amin, pwr[i])) - log_ref;
-  }
-
-  // Apply top_db clipping (librosa compatible)
-  if (top_db >= 0.0f) {
-    float max_db = *std::max_element(db.begin(), db.end());
-    for (auto& v : db) {
-      v = std::max(v, max_db - top_db);
-    }
-  }
-
+  power_to_db(pwr.data(), pwr.size(), ref, amin, top_db, db.data());
   return db;
 }
 
@@ -208,8 +196,13 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     return Audio();
   }
 
-  // Get cached synthesis window
-  const std::vector<float>& window = get_window_cached(window_type, n_fft_);
+  // Get cached synthesis window matching the analysis window length
+  const std::vector<float>& win_short = get_window_cached(window_type, win_length_);
+
+  // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
+  std::vector<float> window(n_fft_, 0.0f);
+  int win_offset = (n_fft_ - win_length_) / 2;
+  std::copy(win_short.begin(), win_short.end(), window.begin() + win_offset);
 
   // Calculate full reconstruction length (before trimming)
   int full_length = (n_frames_ - 1) * hop_length_ + n_fft_;
@@ -319,21 +312,16 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
         std::complex<float> new_val = new_spec.at(f, t);
         float new_angle = std::arg(new_val);
 
-        // Apply momentum (exponential moving average of phase)
-        // momentum = 0.99 means 99% of previous angle, 1% of new angle
+        // Apply momentum following librosa/SciPy convention:
+        //   rebuilt = (1 + momentum) * new_angles - momentum * prev_angles
+        // High momentum extrapolates the phase update, accelerating convergence.
+        float updated_angle = new_angle;
         if (iter > 0 && config.momentum > 0.0f) {
-          float angle_diff = new_angle - prev_angles[idx];
-          // Wrap angle difference to [-pi, pi]
-          while (angle_diff > kPi) angle_diff -= kTwoPi;
-          while (angle_diff < -kPi) angle_diff += kTwoPi;
-          new_angle = prev_angles[idx] + angle_diff * (1.0f - config.momentum);
-          // Wrap result to [-pi, pi]
-          while (new_angle > kPi) new_angle -= kTwoPi;
-          while (new_angle < -kPi) new_angle += kTwoPi;
+          updated_angle = (1.0f + config.momentum) * new_angle - config.momentum * prev_angles[idx];
         }
 
-        prev_angles[idx] = new_angle;
-        spectrum[idx] = std::polar(target_mag, new_angle);
+        prev_angles[idx] = new_angle;  // Store un-extrapolated angle for next iteration
+        spectrum[idx] = std::polar(target_mag, updated_angle);
       }
     }
   }

@@ -77,8 +77,9 @@ def detect_bpm(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out_bpm = ctypes.c_float()
-    rc = lib.sonare_detect_bpm(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                               ctypes.byref(out_bpm))
+    rc = lib.sonare_detect_bpm(
+        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out_bpm)
+    )
     _check(rc)
     return float(out_bpm.value)
 
@@ -102,8 +103,9 @@ def detect_key(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out_key = SonareKey()
-    rc = lib.sonare_detect_key(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                               ctypes.byref(out_key))
+    rc = lib.sonare_detect_key(
+        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out_key)
+    )
     _check(rc)
     return Key(
         root=PitchClass(out_key.root),
@@ -201,8 +203,9 @@ def analyze(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareAnalysisResult()
-    rc = lib.sonare_analyze(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                            ctypes.byref(out))
+    rc = lib.sonare_analyze(
+        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out)
+    )
     _check(rc)
 
     beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
@@ -259,9 +262,14 @@ def hpss(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareHpssResult()
-    rc = lib.sonare_hpss(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                         ctypes.c_int(kernel_harmonic), ctypes.c_int(kernel_percussive),
-                         ctypes.byref(out))
+    rc = lib.sonare_hpss(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(kernel_harmonic),
+        ctypes.c_int(kernel_percussive),
+        ctypes.byref(out),
+    )
     _check(rc)
     n = out.length
     result = HpssResult(
@@ -291,8 +299,13 @@ def harmonic(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_harmonic(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                             ctypes.byref(out), ctypes.byref(out_length))
+    rc = lib.sonare_harmonic(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:
@@ -317,8 +330,13 @@ def percussive(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_percussive(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                               ctypes.byref(out), ctypes.byref(out_length))
+    rc = lib.sonare_percussive(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:
@@ -345,9 +363,14 @@ def time_stretch(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_time_stretch(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                                 ctypes.c_float(rate), ctypes.byref(out),
-                                 ctypes.byref(out_length))
+    rc = lib.sonare_time_stretch(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(rate),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:
@@ -374,9 +397,14 @@ def pitch_shift(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_pitch_shift(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                                ctypes.c_float(semitones), ctypes.byref(out),
-                                ctypes.byref(out_length))
+    rc = lib.sonare_pitch_shift(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(semitones),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:
@@ -403,9 +431,14 @@ def normalize(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_normalize(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                              ctypes.c_float(target_db), ctypes.byref(out),
-                              ctypes.byref(out_length))
+    rc = lib.sonare_normalize(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(target_db),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:
@@ -432,9 +465,14 @@ def trim(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_trim(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                         ctypes.c_float(threshold_db), ctypes.byref(out),
-                         ctypes.byref(out_length))
+    rc = lib.sonare_trim(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(threshold_db),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:
@@ -467,8 +505,14 @@ def stft(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareStftResult()
-    rc = lib.sonare_stft(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                         ctypes.c_int(n_fft), ctypes.c_int(hop_length), ctypes.byref(out))
+    rc = lib.sonare_stft(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+    )
     _check(rc)
     total = out.n_bins * out.n_frames
     result = StftResult(
@@ -506,10 +550,16 @@ def stft_db(
     out_n_bins = ctypes.c_int()
     out_n_frames = ctypes.c_int()
     out_db = ctypes.POINTER(ctypes.c_float)()
-    rc = lib.sonare_stft_db(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                            ctypes.c_int(n_fft), ctypes.c_int(hop_length),
-                            ctypes.byref(out_n_bins), ctypes.byref(out_n_frames),
-                            ctypes.byref(out_db))
+    rc = lib.sonare_stft_db(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out_n_bins),
+        ctypes.byref(out_n_frames),
+        ctypes.byref(out_db),
+    )
     _check(rc)
     total = out_n_bins.value * out_n_frames.value
     result = [float(out_db[i]) for i in range(total)]
@@ -545,9 +595,15 @@ def mel_spectrogram(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareMelResult()
-    rc = lib.sonare_mel_spectrogram(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                                    ctypes.c_int(n_fft), ctypes.c_int(hop_length),
-                                    ctypes.c_int(n_mels), ctypes.byref(out))
+    rc = lib.sonare_mel_spectrogram(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_mels),
+        ctypes.byref(out),
+    )
     _check(rc)
     total = out.n_mels * out.n_frames
     result = MelSpectrogramResult(
@@ -586,9 +642,16 @@ def mfcc(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareMfccResult()
-    rc = lib.sonare_mfcc(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                         ctypes.c_int(n_fft), ctypes.c_int(hop_length),
-                         ctypes.c_int(n_mels), ctypes.c_int(n_mfcc), ctypes.byref(out))
+    rc = lib.sonare_mfcc(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_mels),
+        ctypes.c_int(n_mfcc),
+        ctypes.byref(out),
+    )
     _check(rc)
     total = out.n_mfcc * out.n_frames
     result = MfccResult(
@@ -625,8 +688,14 @@ def chroma(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChromaResult()
-    rc = lib.sonare_chroma(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                           ctypes.c_int(n_fft), ctypes.c_int(hop_length), ctypes.byref(out))
+    rc = lib.sonare_chroma(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+    )
     _check(rc)
     total = out.n_chroma * out.n_frames
     result = ChromaResult(
@@ -667,10 +736,15 @@ def spectral_centroid(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_spectral_centroid(c_array, ctypes.c_size_t(length),
-                                      ctypes.c_int(sample_rate), ctypes.c_int(n_fft),
-                                      ctypes.c_int(hop_length), ctypes.byref(out),
-                                      ctypes.byref(out_count))
+    rc = lib.sonare_spectral_centroid(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_count.value)]
     if out and out_count.value > 0:
@@ -699,10 +773,15 @@ def spectral_bandwidth(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_spectral_bandwidth(c_array, ctypes.c_size_t(length),
-                                        ctypes.c_int(sample_rate), ctypes.c_int(n_fft),
-                                        ctypes.c_int(hop_length), ctypes.byref(out),
-                                        ctypes.byref(out_count))
+    rc = lib.sonare_spectral_bandwidth(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_count.value)]
     if out and out_count.value > 0:
@@ -733,10 +812,16 @@ def spectral_rolloff(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_spectral_rolloff(c_array, ctypes.c_size_t(length),
-                                      ctypes.c_int(sample_rate), ctypes.c_int(n_fft),
-                                      ctypes.c_int(hop_length), ctypes.c_float(roll_percent),
-                                      ctypes.byref(out), ctypes.byref(out_count))
+    rc = lib.sonare_spectral_rolloff(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(roll_percent),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_count.value)]
     if out and out_count.value > 0:
@@ -765,10 +850,15 @@ def spectral_flatness(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_spectral_flatness(c_array, ctypes.c_size_t(length),
-                                       ctypes.c_int(sample_rate), ctypes.c_int(n_fft),
-                                       ctypes.c_int(hop_length), ctypes.byref(out),
-                                       ctypes.byref(out_count))
+    rc = lib.sonare_spectral_flatness(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_count.value)]
     if out and out_count.value > 0:
@@ -797,10 +887,15 @@ def zero_crossing_rate(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_zero_crossing_rate(c_array, ctypes.c_size_t(length),
-                                        ctypes.c_int(sample_rate), ctypes.c_int(frame_length),
-                                        ctypes.c_int(hop_length), ctypes.byref(out),
-                                        ctypes.byref(out_count))
+    rc = lib.sonare_zero_crossing_rate(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_count.value)]
     if out and out_count.value > 0:
@@ -829,9 +924,15 @@ def rms_energy(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_rms_energy(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                               ctypes.c_int(frame_length), ctypes.c_int(hop_length),
-                               ctypes.byref(out), ctypes.byref(out_count))
+    rc = lib.sonare_rms_energy(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_count.value)]
     if out and out_count.value > 0:
@@ -870,10 +971,17 @@ def pitch_yin(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonarePitchResult()
-    rc = lib.sonare_pitch_yin(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                              ctypes.c_int(frame_length), ctypes.c_int(hop_length),
-                              ctypes.c_float(fmin), ctypes.c_float(fmax),
-                              ctypes.c_float(threshold), ctypes.byref(out))
+    rc = lib.sonare_pitch_yin(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_float(threshold),
+        ctypes.byref(out),
+    )
     _check(rc)
     n = out.n_frames
     result = PitchResult(
@@ -914,10 +1022,17 @@ def pitch_pyin(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonarePitchResult()
-    rc = lib.sonare_pitch_pyin(c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate),
-                               ctypes.c_int(frame_length), ctypes.c_int(hop_length),
-                               ctypes.c_float(fmin), ctypes.c_float(fmax),
-                               ctypes.c_float(threshold), ctypes.byref(out))
+    rc = lib.sonare_pitch_pyin(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_float(threshold),
+        ctypes.byref(out),
+    )
     _check(rc)
     n = out.n_frames
     result = PitchResult(
@@ -977,15 +1092,17 @@ def note_to_hz(note: str) -> float:
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float:
     """Convert frame count to time in seconds."""
     lib = _get_lib()
-    return float(lib.sonare_frames_to_time(ctypes.c_int(frames), ctypes.c_int(sr),
-                                            ctypes.c_int(hop_length)))
+    return float(
+        lib.sonare_frames_to_time(ctypes.c_int(frames), ctypes.c_int(sr), ctypes.c_int(hop_length))
+    )
 
 
 def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
     """Convert time in seconds to frame count."""
     lib = _get_lib()
-    return int(lib.sonare_time_to_frames(ctypes.c_float(time), ctypes.c_int(sr),
-                                          ctypes.c_int(hop_length)))
+    return int(
+        lib.sonare_time_to_frames(ctypes.c_float(time), ctypes.c_int(sr), ctypes.c_int(hop_length))
+    )
 
 
 # ============================================================================
@@ -1012,9 +1129,14 @@ def resample(
     c_array, length = _to_c_float_array(samples)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_resample(c_array, ctypes.c_size_t(length), ctypes.c_int(src_sr),
-                             ctypes.c_int(target_sr), ctypes.byref(out),
-                             ctypes.byref(out_length))
+    rc = lib.sonare_resample(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(src_sr),
+        ctypes.c_int(target_sr),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
     _check(rc)
     result = [float(out[i]) for i in range(out_length.value)]
     if out and out_length.value > 0:

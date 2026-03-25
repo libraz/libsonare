@@ -109,21 +109,27 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
     }
   }
 
-  /// Find end (last frame above threshold)
+  /// Find end (last frame above threshold), scanning backward.
+  /// Use a while-loop to guard against size_t underflow: the break-before-subtract
+  /// pattern ensures `pos -= hop_length` never wraps an unsigned value.
   size_t end = n_samples;
-  for (size_t pos = n_samples - frame_length; pos > 0; pos -= hop_length) {
-    float rms = 0.0f;
-    for (int i = 0; i < frame_length; ++i) {
-      rms += data[pos + i] * data[pos + i];
-    }
-    rms = std::sqrt(rms / static_cast<float>(frame_length));
+  if (n_samples >= static_cast<size_t>(frame_length)) {
+    size_t pos = n_samples - frame_length;
+    while (true) {
+      float rms = 0.0f;
+      for (int i = 0; i < frame_length; ++i) {
+        rms += data[pos + i] * data[pos + i];
+      }
+      rms = std::sqrt(rms / static_cast<float>(frame_length));
 
-    if (rms > threshold_linear) {
-      end = pos + frame_length;
-      break;
-    }
+      if (rms > threshold_linear) {
+        end = pos + frame_length;
+        break;
+      }
 
-    if (pos < static_cast<size_t>(hop_length)) break;
+      if (pos < static_cast<size_t>(hop_length)) break;
+      pos -= hop_length;
+    }
   }
 
   if (start >= end) {

@@ -67,9 +67,11 @@ std::vector<float> yin_difference(const float* frame, int frame_length, int max_
   std::vector<float> diff(max_lag, 0.0f);
 
   // d(tau) = sum_{j=0}^{W-1} (x[j] - x[j+tau])^2
+  // Per the YIN paper, the summation window W is constant (frame_length / 2)
+  // for all tau values, ensuring consistent normalization.
+  int window = frame_length / 2;
   for (int tau = 0; tau < max_lag; ++tau) {
     float sum = 0.0f;
-    int window = frame_length - max_lag;
     for (int j = 0; j < window; ++j) {
       float delta = frame[j] - frame[j + tau];
       sum += delta * delta;

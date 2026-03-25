@@ -65,8 +65,7 @@ TEST_CASE("YIN pitch librosa compatibility", "[pitch][librosa]") {
 
           // Both should be voiced (> 0)
           if (ref > 0.0f && det > 0.0f) {
-            REQUIRE_THAT(static_cast<double>(det),
-                         WithinRel(static_cast<double>(ref), 1e-2));
+            REQUIRE_THAT(static_cast<double>(det), WithinRel(static_cast<double>(ref), 1e-2));
           }
         }
       }
@@ -80,8 +79,8 @@ TEST_CASE("YIN pitch librosa compatibility", "[pitch][librosa]") {
         std::vector<float> samples(n_samples);
         for (size_t i = 0; i < n_samples; ++i) {
           float t = static_cast<float>(i) / static_cast<float>(sr);
-          float phase = kTwoPi * (chirp_fmin * t +
-                                  0.5f * (chirp_fmax - chirp_fmin) * t * t / duration);
+          float phase =
+              kTwoPi * (chirp_fmin * t + 0.5f * (chirp_fmax - chirp_fmin) * t * t / duration);
           samples[i] = std::sin(phase);
         }
         Audio audio = Audio::from_buffer(samples.data(), n_samples, sr);
@@ -116,8 +115,7 @@ TEST_CASE("YIN pitch librosa compatibility", "[pitch][librosa]") {
           ref_vec[i] = ref_f0[i + boundary].as_float();
         }
 
-        float corr = pearson_correlation(our_f0.data(), ref_vec.data(),
-                                         static_cast<size_t>(count));
+        float corr = pearson_correlation(our_f0.data(), ref_vec.data(), static_cast<size_t>(count));
         REQUIRE(corr > 0.9f);
       }
     }

@@ -473,7 +473,7 @@ def test_detect_bpm_click_track() -> None:
 
 def test_detect_key_a_major() -> None:
     """detect_key identifies A as root from 440 Hz sine."""
-    from libsonare import detect_key, PitchClass
+    from libsonare import PitchClass, detect_key
     from libsonare.types import Mode
 
     tone = _generate_sine(440, 22050, 2.0)
@@ -719,7 +719,7 @@ def test_different_sample_rates() -> None:
 
 def test_short_audio() -> None:
     """Functions handle very short audio without crashing."""
-    from libsonare import stft, mel_spectrogram
+    from libsonare import mel_spectrogram, stft
 
     short = _generate_sine(440, 22050, 0.1)  # 100ms
     result = stft(short, sample_rate=22050)
@@ -755,7 +755,7 @@ def test_two_tone_chroma() -> None:
 
 def test_analysis_result_types() -> None:
     """AnalysisResult fields have correct types."""
-    from libsonare import analyze, PitchClass
+    from libsonare import PitchClass, analyze
     from libsonare.types import Mode
 
     tone = _generate_sine(440, 22050, 4.0)

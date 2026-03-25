@@ -102,8 +102,8 @@ std::vector<float> apply_mel_filterbank(const float* power, int n_bins, int n_fr
   // result: [n_mels x n_frames] (row-major)
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
       filterbank, n_mels, n_bins);
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      power_map(power, n_bins, n_frames);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> power_map(
+      power, n_bins, n_frames);
   Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> result_map(
       mel_spec.data(), n_mels, n_frames);
 

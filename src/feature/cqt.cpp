@@ -72,15 +72,14 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   // Create kernel
   auto kernel = std::shared_ptr<CqtKernel>(CqtKernel::create(sr, config).release());
 
-  // Pre-compute Eigen matrix
+  // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
-  int fft_bins = fft_length / 2 + 1;
   const auto& freq_kernels = kernel->kernel();
 
-  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_bins);
+  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
   for (int k = 0; k < n_bins; ++k) {
-    for (int i = 0; i < fft_bins; ++i) {
+    for (int i = 0; i < fft_length; ++i) {
       (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
     }
   }
@@ -152,22 +151,7 @@ const std::vector<float>& CqtResult::power() const {
 std::vector<float> CqtResult::to_db(float ref, float amin, float top_db) const {
   const std::vector<float>& pwr = power();
   std::vector<float> db(pwr.size());
-
-  float ref_val = std::max(amin, ref * ref);
-  float log_ref = 10.0f * std::log10(ref_val);
-
-  for (size_t i = 0; i < pwr.size(); ++i) {
-    db[i] = 10.0f * std::log10(std::max(amin, pwr[i])) - log_ref;
-  }
-
-  // Apply top_db clipping (librosa compatible)
-  if (top_db >= 0.0f) {
-    float max_db = *std::max_element(db.begin(), db.end());
-    for (auto& v : db) {
-      v = std::max(v, max_db - top_db);
-    }
-  }
-
+  power_to_db(pwr.data(), pwr.size(), ref, amin, top_db, db.data());
   return db;
 }
 
@@ -207,8 +191,8 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
   // Generate kernels in frequency domain
   kernel->kernel_.resize(config.n_bins * kernel->fft_length_);
 
-  std::vector<float> time_kernel(kernel->fft_length_, 0.0f);
-  std::vector<std::complex<float>> freq_kernel(kernel->fft_length_ / 2 + 1);
+  std::vector<std::complex<float>> complex_time_kernel(kernel->fft_length_, {0.0f, 0.0f});
+  std::vector<std::complex<float>> complex_freq_kernel(kernel->fft_length_);
 
   for (int k = 0; k < config.n_bins; ++k) {
     float freq = kernel->frequencies_[k];
@@ -224,22 +208,23 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
     }
     float norm = 1.0f / win_sum;
 
-    // Generate time-domain kernel: windowed complex sinusoid
-    std::fill(time_kernel.begin(), time_kernel.end(), 0.0f);
+    // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*n/sr)
+    std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
+              std::complex<float>(0.0f, 0.0f));
 
     for (int n = 0; n < length; ++n) {
-      float phase = 2.0f * M_PI * freq * n / sr;
-      // Center the window
-      int idx = n;
-      time_kernel[idx] = window[n] * norm * std::cos(phase);
+      float phase = kTwoPi * freq * n / sr;
+      float scaled_win = window[n] * norm;
+      complex_time_kernel[n] =
+          std::complex<float>(scaled_win * std::cos(phase), -scaled_win * std::sin(phase));
     }
 
-    // FFT of kernel
-    fft.forward(time_kernel.data(), freq_kernel.data());
+    // Complex FFT of kernel
+    fft.forward_complex(complex_time_kernel.data(), complex_freq_kernel.data());
 
-    // Store conjugate (for correlation instead of convolution)
-    for (int i = 0; i < kernel->fft_length_ / 2 + 1; ++i) {
-      kernel->kernel_[k * kernel->fft_length_ + i] = std::conj(freq_kernel[i]);
+    // Store conjugate over all fft_length bins (for correlation instead of convolution)
+    for (int i = 0; i < kernel->fft_length_; ++i) {
+      kernel->kernel_[k * kernel->fft_length_ + i] = std::conj(complex_freq_kernel[i]);
     }
   }
 
@@ -271,7 +256,6 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
 
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
-  int fft_bins = fft_length / 2 + 1;
 
   // Center padding: pad signal by fft_length/2 on each side (matches librosa center=True).
   // This ensures the first frame is centered at t=0 and produces the expected number of
@@ -295,9 +279,10 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   // Create FFT processor
   FFT fft(fft_length);
 
-  // Pre-allocate temporary buffers
+  // Pre-allocate temporary buffers (complex FFT for full spectrum)
   std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> frame_fft(fft_bins);
+  std::vector<std::complex<float>> complex_frame(fft_length, {0.0f, 0.0f});
+  std::vector<std::complex<float>> frame_fft(fft_length);
   VectorXcf result(n_bins);
 
   const float* data = padded_signal.data();
@@ -317,11 +302,16 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
       std::copy(data + start, data + start + copy_length, frame.begin());
     }
 
-    // FFT of frame
-    fft.forward(frame.data(), frame_fft.data());
+    // Copy real frame into complex buffer
+    for (int n = 0; n < fft_length; ++n) {
+      complex_frame[n] = {frame[n], 0.0f};
+    }
+
+    // Complex FFT of frame (full spectrum)
+    fft.forward_complex(complex_frame.data(), frame_fft.data());
 
     // Compute all correlations at once using cached Eigen matrix
-    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_bins);
+    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_length);
     result.noalias() = kernel_matrix * frame_vec * norm_factor;
 
     // Copy to output
@@ -375,8 +365,8 @@ Audio icqt(const CqtResult& cqt_result, int length) {
       for (int n = 0; n < filter_length; ++n) {
         int idx = center + n - filter_length / 2;
         if (idx >= 0 && idx < output_length) {
-          float phase = 2.0f * M_PI * freq * n / sr;
-          float win = 0.5f * (1.0f - std::cos(2.0f * M_PI * n / filter_length));
+          float phase = kTwoPi * freq * n / sr;
+          float win = 0.5f * (1.0f - std::cos(kTwoPi * n / filter_length));
 
           // Real part of complex multiplication
           float val = std::real(coef) * std::cos(phase) - std::imag(coef) * std::sin(phase);

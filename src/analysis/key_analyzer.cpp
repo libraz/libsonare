@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <map>
 
 #include "analysis/chord_analyzer.h"
 #include "util/exception.h"
@@ -292,8 +291,8 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
           if (is_diatonic_minor) minor_tonic_score += duration * 0.5f;
           break;
         case 2:
-          is_diatonic_minor = (chord.quality == ChordQuality::Diminished ||
-                               chord.quality == ChordQuality::Minor);
+          is_diatonic_minor =
+              (chord.quality == ChordQuality::Diminished || chord.quality == ChordQuality::Minor);
           break;
         case 3:
           is_diatonic_minor = (chord.quality == ChordQuality::Major);
@@ -345,8 +344,8 @@ Key refine_key_with_chords(const Key& chroma_key, const std::vector<Chord>& chor
 
   // If both methods agree, use that key with boosted confidence
   if (chroma_key.root == chord_key.root && chroma_key.mode == chord_key.mode) {
-    float combined_confidence = std::min(
-        (chroma_key.confidence + chord_key.confidence) / 2.0f + 0.1f, 1.0f);
+    float combined_confidence =
+        std::min((chroma_key.confidence + chord_key.confidence) / 2.0f + 0.1f, 1.0f);
     return Key{chroma_key.root, chroma_key.mode, combined_confidence};
   }
 

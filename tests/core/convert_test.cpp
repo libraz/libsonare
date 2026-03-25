@@ -47,6 +47,31 @@ TEST_CASE("hz_to_note / note_to_hz", "[convert]") {
   REQUIRE_THAT(note_to_hz("C4"), WithinAbs(261.63f, 0.1f));
 }
 
+TEST_CASE("hz_to_note with sub-zero octave frequencies", "[convert]") {
+  SECTION("very low frequencies should not crash") {
+    // Very low frequency - should not crash (negative MIDI index)
+    REQUIRE_NOTHROW(hz_to_note(1.0f));
+    REQUIRE_NOTHROW(hz_to_note(5.0f));
+    REQUIRE_NOTHROW(hz_to_note(0.1f));
+
+    // Should return valid note strings
+    std::string note1 = hz_to_note(1.0f);
+    REQUIRE(!note1.empty());
+
+    std::string note5 = hz_to_note(5.0f);
+    REQUIRE(!note5.empty());
+  }
+}
+
+TEST_CASE("note_to_hz with non-ASCII input", "[convert]") {
+  SECTION("non-ASCII bytes should not cause UB") {
+    // Should not crash (UB from negative char in toupper)
+    REQUIRE_NOTHROW(note_to_hz("\xC0"));
+    // Invalid note should return 0
+    REQUIRE(note_to_hz("\xC0") == 0.0f);
+  }
+}
+
 TEST_CASE("frames_to_time / time_to_frames", "[convert]") {
   int sr = 22050;
   int hop = 512;
@@ -81,9 +106,7 @@ TEST_CASE("time_to_frames floor behavior", "[convert]") {
     REQUIRE(time_to_frames(time_after, sr, hop) == 10);
   }
 
-  SECTION("zero time") {
-    REQUIRE(time_to_frames(0.0f, sr, hop) == 0);
-  }
+  SECTION("zero time") { REQUIRE(time_to_frames(0.0f, sr, hop) == 0); }
 
   SECTION("very small time") {
     // Less than one hop should give frame 0

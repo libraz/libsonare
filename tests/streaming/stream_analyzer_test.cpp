@@ -530,7 +530,8 @@ TEST_CASE("Quantization bandwidth reduction", "[streaming]") {
   size_t n_frames = analyzer.available_frames();
 
   // Calculate expected sizes for 1 frame
-  // Float32 SOA: timestamps(4) + mel(128*4) + chroma(12*4) + onset(4) + rms(4) + centroid(4) + flatness(4)
+  // Float32 SOA: timestamps(4) + mel(128*4) + chroma(12*4) + onset(4) + rms(4) + centroid(4) +
+  // flatness(4)
   //            = 4 + 512 + 48 + 16 = 580 bytes per frame
   // U8: timestamps(4) + mel(128) + chroma(12) + onset(1) + rms(1) + centroid(1) + flatness(1)
   //   = 4 + 128 + 12 + 4 = 148 bytes per frame
@@ -538,7 +539,8 @@ TEST_CASE("Quantization bandwidth reduction", "[streaming]") {
 
   SECTION("U8 is approximately 4x smaller than Float32") {
     size_t float32_size = n_frames * (sizeof(float) * (1 + 128 + 12 + 4));  // ~580 bytes/frame
-    size_t u8_size = n_frames * (sizeof(float) + sizeof(uint8_t) * (128 + 12 + 4));  // ~148 bytes/frame
+    size_t u8_size =
+        n_frames * (sizeof(float) + sizeof(uint8_t) * (128 + 12 + 4));  // ~148 bytes/frame
 
     // U8 should be roughly 4x smaller (allowing some tolerance)
     float ratio = static_cast<float>(float32_size) / static_cast<float>(u8_size);

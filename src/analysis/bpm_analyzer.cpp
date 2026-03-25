@@ -2,10 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <numeric>
 
-#include "core/fft.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/exception.h"
@@ -14,7 +12,7 @@
 namespace sonare {
 
 std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
-                                                  float bpm_min, float bpm_max, float bin_width) {
+                                                 float bpm_min, float bpm_max, float bin_width) {
   if (candidates.empty() || bpm_min >= bpm_max || bin_width <= 0.0f) {
     return {};
   }
@@ -126,8 +124,8 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
       static_cast<float>(higher_clusters[0].second) / static_cast<float>(total_votes) >=
           bpm_constants::kThreshHigher) {
     float rep_bpm = higher_clusters[0].first;
-    float confidence = 100.0f * static_cast<float>(higher_clusters[0].second) /
-                       static_cast<float>(total_votes);
+    float confidence =
+        100.0f * static_cast<float>(higher_clusters[0].second) / static_cast<float>(total_votes);
     return {rep_bpm, confidence};
   }
 
@@ -145,7 +143,7 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
   constexpr float kAcceptableBpmMax = 200.0f;
 
   /// Categorize candidates
-  std::vector<std::pair<float, int>> common_range;     ///< 80-180 BPM
+  std::vector<std::pair<float, int>> common_range;      ///< 80-180 BPM
   std::vector<std::pair<float, int>> acceptable_range;  ///< 60-200 BPM
   int max_votes_in_cluster = 0;
 
@@ -191,77 +189,17 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     rep_bpm = best_member->first;
   }
 
-  float confidence =
-      100.0f * static_cast<float>(best_base_votes) / static_cast<float>(total_votes);
+  float confidence = 100.0f * static_cast<float>(best_base_votes) / static_cast<float>(total_votes);
 
   return {rep_bpm, confidence};
 }
 
 namespace {
 
-/// @brief Computes autocorrelation of a signal using FFT (O(n log n)).
-/// @details Uses the Wiener-Khinchin theorem: autocorr(x) = IFFT(|FFT(x)|^2)
-///          Zero-pads to avoid circular correlation artifacts.
-std::vector<float> compute_autocorrelation(const std::vector<float>& signal, int max_lag) {
-  int n = static_cast<int>(signal.size());
+/// @brief Computes autocorrelation of a signal using shared FFT-based implementation.
+std::vector<float> compute_autocorrelation_local(const std::vector<float>& signal, int max_lag) {
   std::vector<float> autocorr(max_lag, 0.0f);
-
-  if (n == 0 || max_lag <= 0) {
-    return autocorr;
-  }
-
-  // Compute mean
-  float mean = 0.0f;
-  for (float val : signal) {
-    mean += val;
-  }
-  mean /= static_cast<float>(n);
-
-  // Compute variance
-  float var = 0.0f;
-  for (float val : signal) {
-    float diff = val - mean;
-    var += diff * diff;
-  }
-
-  if (var < 1e-10f) {
-    return autocorr;
-  }
-
-  // Zero-pad to at least 2*n to avoid circular correlation artifacts
-  int fft_size = next_power_of_2(2 * n);
-
-  // Prepare zero-mean, zero-padded signal
-  std::vector<float> padded(fft_size, 0.0f);
-  for (int i = 0; i < n; ++i) {
-    padded[i] = signal[i] - mean;
-  }
-
-  // FFT-based autocorrelation
-  FFT fft(fft_size);
-  int n_bins = fft.n_bins();
-
-  std::vector<std::complex<float>> spectrum(n_bins);
-  fft.forward(padded.data(), spectrum.data());
-
-  // Compute power spectrum (|FFT(x)|^2)
-  for (int i = 0; i < n_bins; ++i) {
-    float re = spectrum[i].real();
-    float im = spectrum[i].imag();
-    spectrum[i] = std::complex<float>(re * re + im * im, 0.0f);
-  }
-
-  // Inverse FFT to get autocorrelation
-  std::vector<float> raw_autocorr(fft_size);
-  fft.inverse(spectrum.data(), raw_autocorr.data());
-
-  // Normalize by variance and extract relevant lags
-  // raw_autocorr[0] should equal var after normalization
-  float norm_factor = var * static_cast<float>(n);
-  for (int lag = 0; lag < max_lag && lag < n; ++lag) {
-    autocorr[lag] = raw_autocorr[lag] / norm_factor;
-  }
-
+  compute_autocorrelation(signal.data(), static_cast<int>(signal.size()), max_lag, autocorr.data());
   return autocorr;
 }
 
@@ -354,7 +292,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   }
 
   /// Compute autocorrelation
-  autocorr_ = compute_autocorrelation(onset_strength, max_lag);
+  autocorr_ = compute_autocorrelation_local(onset_strength, max_lag);
 
   /// Find all tempo peaks
   candidates_ = find_tempo_peaks(autocorr_, sr, hop_length, config_.bpm_min, config_.bpm_max);
@@ -421,9 +359,9 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     /// Update candidates_ for API compatibility
     candidates_.clear();
     for (const auto& bin : top_bins) {
-      float bin_conf =
-          (total_votes > 0) ? static_cast<float>(bin.votes) / static_cast<float>(total_votes)
-                            : 0.0f;
+      float bin_conf = (total_votes > 0)
+                           ? static_cast<float>(bin.votes) / static_cast<float>(total_votes)
+                           : 0.0f;
       candidates_.push_back({bin.bpm_center, bin_conf});
     }
   }

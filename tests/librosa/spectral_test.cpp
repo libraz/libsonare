@@ -70,8 +70,7 @@ TEST_CASE("spectral features librosa compatibility", "[spectral][librosa]") {
     }
     float our_mean = our_sum / result.size();
     float ref_mean = ref_sum / ref.size();
-    REQUIRE_THAT(static_cast<double>(our_mean),
-                 WithinRel(static_cast<double>(ref_mean), 2e-1));
+    REQUIRE_THAT(static_cast<double>(our_mean), WithinRel(static_cast<double>(ref_mean), 2e-1));
   }
 
   SECTION("rolloff") {

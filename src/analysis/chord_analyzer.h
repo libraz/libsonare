@@ -46,13 +46,14 @@ struct Chord {
 
 /// @brief Configuration for chord analysis.
 struct ChordConfig {
-  float min_duration = chord_constants::kMinDurationSec;        ///< Minimum chord duration in seconds
-  float smoothing_window = chord_constants::kSmoothingWindowSec;  ///< Smoothing window (2.0s default)
-  float threshold = chord_constants::kCorrelationThreshold;       ///< Minimum correlation for detection
-  bool use_triads_only = false;   ///< Use only triads (no 7th chords)
-  int n_fft = 2048;               ///< FFT size for STFT
-  int hop_length = 512;           ///< Hop length for STFT
-  bool use_beat_sync = true;      ///< Use beat-synchronized chord detection
+  float min_duration = chord_constants::kMinDurationSec;  ///< Minimum chord duration in seconds
+  float smoothing_window =
+      chord_constants::kSmoothingWindowSec;                  ///< Smoothing window (2.0s default)
+  float threshold = chord_constants::kCorrelationThreshold;  ///< Minimum correlation for detection
+  bool use_triads_only = false;                              ///< Use only triads (no 7th chords)
+  int n_fft = 2048;                                          ///< FFT size for STFT
+  int hop_length = 512;                                      ///< Hop length for STFT
+  bool use_beat_sync = true;  ///< Use beat-synchronized chord detection
 };
 
 /// @brief Chord analyzer for detecting chords from audio.
@@ -108,8 +109,8 @@ class ChordAnalyzer {
  private:
   /// @brief Result from chord matching.
   struct ChordMatch {
-    int index;        ///< Template index
-    float confidence; ///< Correlation score
+    int index;         ///< Template index
+    float confidence;  ///< Correlation score
   };
 
   void analyze_chords();

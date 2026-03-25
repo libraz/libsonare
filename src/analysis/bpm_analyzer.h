@@ -63,7 +63,7 @@ constexpr int kTopBins = 10;
 /// @details Includes common tempo relationships: half, 2/3, 3/4, same, 4/3, 3/2, double, triple,
 /// quadruple.
 constexpr std::array<float, 9> kHarmonicRatios = {0.5f, 2.0f / 3.0f, 0.75f, 1.0f, 4.0f / 3.0f,
-                                                   1.5f, 2.0f,       3.0f,  4.0f};
+                                                  1.5f, 2.0f,        3.0f,  4.0f};
 }  // namespace bpm_constants
 
 /// @brief Configuration for BPM analysis.
@@ -99,8 +99,8 @@ using HarmonicClusterMap = std::map<float, std::vector<std::pair<float, int>>>;
 /// @param bin_width Histogram bin width (default: 0.5 BPM)
 /// @return Vector of histogram bins sorted by vote count (descending)
 std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
-                                                  float bpm_min, float bpm_max,
-                                                  float bin_width = bpm_constants::kBinWidth);
+                                                 float bpm_min, float bpm_max,
+                                                 float bin_width = bpm_constants::kBinWidth);
 
 /// @brief Groups BPM candidates into harmonic clusters.
 /// @details Groups BPMs that are harmonically related (half, double, triplet, etc.).

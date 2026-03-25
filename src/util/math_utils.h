@@ -146,4 +146,24 @@ inline int next_power_of_2(int n) {
   return power;
 }
 
+/// @brief Convert power spectrogram to decibel scale.
+/// @details Matches librosa.power_to_db: 10 * log10(S / ref), clipped to top_db below peak.
+///          Note: ref is treated as a power value directly (not squared).
+/// @param power Input power values
+/// @param n Number of values
+/// @param ref Reference power value (default 1.0)
+/// @param amin Minimum amplitude threshold (default 1e-10)
+/// @param top_db Maximum dB below peak to clip (negative to disable)
+/// @param out Output dB values (can alias power for in-place conversion)
+void power_to_db(const float* power, size_t n, float ref, float amin, float top_db, float* out);
+
+/// @brief Compute normalized autocorrelation using FFT (Wiener-Khinchin theorem).
+/// @details Zero-pads to 2*n, computes IFFT(|FFT(x)|^2), and normalizes by variance.
+///          The input is mean-subtracted before processing.
+/// @param input Input signal
+/// @param n Length of input
+/// @param max_lag Maximum lag to compute (output size)
+/// @param output Output autocorrelation values (size max_lag)
+void compute_autocorrelation(const float* input, int n, int max_lag, float* output);
+
 }  // namespace sonare

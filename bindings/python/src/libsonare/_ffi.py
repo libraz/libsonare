@@ -7,7 +7,6 @@ import ctypes.util
 import os
 from pathlib import Path
 
-
 # --- C structures ---
 
 

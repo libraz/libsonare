@@ -5,7 +5,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <vector>
+
+#include "core/fft.h"
 
 namespace sonare {
 
@@ -74,6 +77,83 @@ float percentile(const float* data, size_t size, float p) {
   float frac = idx - lo;
 
   return sorted[lo] * (1.0f - frac) + sorted[hi] * frac;
+}
+
+void power_to_db(const float* power, size_t n, float ref, float amin, float top_db, float* out) {
+  float ref_val = std::max(amin, ref);
+  float log_ref = 10.0f * std::log10(ref_val);
+  for (size_t i = 0; i < n; ++i) {
+    out[i] = 10.0f * std::log10(std::max(amin, power[i])) - log_ref;
+  }
+  if (top_db >= 0.0f) {
+    float max_val = *std::max_element(out, out + n);
+    for (size_t i = 0; i < n; ++i) {
+      out[i] = std::max(out[i], max_val - top_db);
+    }
+  }
+}
+
+void compute_autocorrelation(const float* input, int n, int max_lag, float* output) {
+  for (int i = 0; i < max_lag; ++i) {
+    output[i] = 0.0f;
+  }
+
+  if (n == 0 || max_lag <= 0) {
+    return;
+  }
+
+  // Compute mean
+  float mean_val = 0.0f;
+  for (int i = 0; i < n; ++i) {
+    mean_val += input[i];
+  }
+  mean_val /= static_cast<float>(n);
+
+  // Compute variance
+  float var = 0.0f;
+  for (int i = 0; i < n; ++i) {
+    float diff = input[i] - mean_val;
+    var += diff * diff;
+  }
+
+  if (var < 1e-10f) {
+    return;
+  }
+
+  // Zero-pad to at least 2*n to avoid circular correlation artifacts
+  int fft_size = next_power_of_2(2 * n);
+
+  // Prepare zero-mean, zero-padded signal
+  std::vector<float> padded(fft_size, 0.0f);
+  for (int i = 0; i < n; ++i) {
+    padded[i] = input[i] - mean_val;
+  }
+
+  // FFT-based autocorrelation
+  FFT fft(fft_size);
+  int n_bins = fft.n_bins();
+
+  std::vector<std::complex<float>> spectrum(n_bins);
+  fft.forward(padded.data(), spectrum.data());
+
+  // Compute power spectrum (|FFT(x)|^2)
+  for (int i = 0; i < n_bins; ++i) {
+    float re = spectrum[i].real();
+    float im = spectrum[i].imag();
+    spectrum[i] = std::complex<float>(re * re + im * im, 0.0f);
+  }
+
+  // Inverse FFT to get autocorrelation
+  std::vector<float> raw_autocorr(fft_size);
+  fft.inverse(spectrum.data(), raw_autocorr.data());
+
+  // Normalize by variance (unnormalized sum of squared deviations).
+  // IFFT already applied 1/fft_size scaling, and by Parseval's theorem
+  // the raw autocorrelation at lag 0 equals var (the unnormalized variance).
+  // Dividing by var gives output[0] = 1.0 (normalized autocorrelation).
+  for (int lag = 0; lag < max_lag && lag < n; ++lag) {
+    output[lag] = raw_autocorr[lag] / var;
+  }
 }
 
 }  // namespace sonare

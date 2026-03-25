@@ -21,7 +21,7 @@ class FFT {
  public:
   /// @brief Constructs FFT processor.
   /// @param n_fft FFT size (should be power of 2 for efficiency)
-  /// @throws std::runtime_error if allocation fails
+  /// @throws SonareException with ErrorCode::OutOfMemory if allocation fails
   explicit FFT(int n_fft);
 
   ~FFT();
@@ -35,13 +35,18 @@ class FFT {
   /// @brief Performs forward FFT (real to complex).
   /// @param input Input signal (size must equal n_fft)
   /// @param output Complex spectrum (size must equal n_bins)
-  /// @throws std::invalid_argument if sizes don't match
+  /// @throws SonareException with ErrorCode::InvalidParameter if input or output is null
   void forward(const float* input, std::complex<float>* output);
+
+  /// @brief Performs forward complex-to-complex FFT.
+  /// @param input Complex input signal (size must equal n_fft)
+  /// @param output Complex spectrum (size must equal n_fft, all bins)
+  void forward_complex(const std::complex<float>* input, std::complex<float>* output);
 
   /// @brief Performs inverse FFT (complex to real).
   /// @param input Complex spectrum (size must equal n_bins)
   /// @param output Output signal (size must equal n_fft)
-  /// @throws std::invalid_argument if sizes don't match
+  /// @throws SonareException with ErrorCode::InvalidParameter if input or output is null
   void inverse(const std::complex<float>* input, float* output);
 
   /// @brief Returns FFT size.

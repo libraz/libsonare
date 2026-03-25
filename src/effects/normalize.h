@@ -48,9 +48,13 @@ float peak_db(const Audio& audio);
 float rms_db(const Audio& audio);
 
 /// @brief Applies gain to audio.
+///
+/// Output samples are hard-clipped to the [-1, 1] range after gain is applied,
+/// so the result is silently saturated when the gain would exceed full scale.
+///
 /// @param audio Input audio
 /// @param gain_db Gain in dB (positive = louder, negative = quieter)
-/// @return Audio with applied gain
+/// @return Audio with applied gain (clipped to [-1, 1])
 Audio apply_gain(const Audio& audio, float gain_db);
 
 /// @brief Applies fade in to audio.

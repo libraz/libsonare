@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -17,7 +18,7 @@ float wrap_phase(float phase) {
   if (!std::isfinite(phase)) {
     return 0.0f;
   }
-  return std::remainder(phase, 2.0f * static_cast<float>(M_PI));
+  return std::remainder(phase, kTwoPi);
 }
 
 }  // namespace
@@ -34,7 +35,7 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
     /// Expected phase advance based on bin frequency
     float bin_freq = static_cast<float>(k) * static_cast<float>(sample_rate) /
                      static_cast<float>((n_bins - 1) * 2);
-    float expected_phase_advance = 2.0f * M_PI * bin_freq * time_step;
+    float expected_phase_advance = kTwoPi * bin_freq * time_step;
 
     /// Actual phase difference
     float phase_diff = phase[k] - prev_phase[k];
@@ -43,7 +44,7 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
     float phase_deviation = wrap_phase(phase_diff - expected_phase_advance);
 
     /// Instantaneous frequency
-    inst_freq[k] = bin_freq + phase_deviation / (2.0f * M_PI * time_step);
+    inst_freq[k] = bin_freq + phase_deviation / (kTwoPi * time_step);
   }
 
   return inst_freq;
@@ -109,17 +110,17 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
       /// Expected phase advance based on bin frequency
       float bin_freq =
           static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-      float expected_advance = 2.0f * M_PI * bin_freq * time_step;
+      float expected_advance = kTwoPi * bin_freq * time_step;
 
       /// Phase difference with unwrapping
       float phase_diff = wrap_phase(phase1 - phase0 - expected_advance);
-      float inst_freq = bin_freq + phase_diff / (2.0f * M_PI * time_step);
+      float inst_freq = bin_freq + phase_diff / (kTwoPi * time_step);
 
       /// Accumulate phase
       if (t_out == 0) {
         phase_acc[k] = phase0 + frac * wrap_phase(phase1 - phase0);
       } else {
-        phase_acc[k] += 2.0f * M_PI * inst_freq * time_step;
+        phase_acc[k] += kTwoPi * inst_freq * time_step;
         phase_acc[k] = wrap_phase(phase_acc[k]);
       }
 

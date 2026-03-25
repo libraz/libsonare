@@ -95,6 +95,10 @@ class Spectrogram {
   /// @brief Returns hop length.
   int hop_length() const { return hop_length_; }
 
+  /// @brief Returns window length used for analysis.
+  /// @details Defaults to n_fft if not explicitly set.
+  int win_length() const { return win_length_; }
+
   /// @brief Returns sample rate of original audio.
   int sample_rate() const { return sample_rate_; }
 
@@ -136,7 +140,7 @@ class Spectrogram {
 
  private:
   Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
-              int hop_length, int sample_rate);
+              int hop_length, int sample_rate, int win_length = 0);
 
   std::vector<std::complex<float>> data_;  ///< Complex spectrum [n_bins * n_frames]
   int n_bins_;
@@ -144,6 +148,7 @@ class Spectrogram {
   int n_fft_;
   int hop_length_;
   int sample_rate_;
+  int win_length_;  ///< Window length used for analysis (defaults to n_fft)
 
   // Cached derived data (computed lazily)
   mutable std::vector<float> magnitude_cache_;

@@ -35,9 +35,9 @@ TEST_CASE("chroma librosa compatibility", "[chroma][librosa]") {
       if (signal_name == "C_major_chord") {
         for (size_t i = 0; i < n_samples; ++i) {
           float t = static_cast<float>(i) / static_cast<float>(sr);
-          samples[i] = (1.0f / 3.0f) * (std::sin(kTwoPi * 261.63f * t) +
-                                         std::sin(kTwoPi * 329.63f * t) +
-                                         std::sin(kTwoPi * 392.0f * t));
+          samples[i] =
+              (1.0f / 3.0f) * (std::sin(kTwoPi * 261.63f * t) + std::sin(kTwoPi * 329.63f * t) +
+                               std::sin(kTwoPi * 392.0f * t));
         }
       } else if (signal_name == "440Hz_tone") {
         for (size_t i = 0; i < n_samples; ++i) {
@@ -85,8 +85,7 @@ TEST_CASE("chroma librosa compatibility", "[chroma][librosa]") {
         float our_norm = mean_energy[c] / our_sum;
         float ref_norm = ref_mean[c].as_float() / ref_sum_val;
         CAPTURE(c, our_norm, ref_norm, mean_energy[c], ref_mean[c].as_float());
-        REQUIRE_THAT(static_cast<double>(our_norm),
-                     WithinAbs(static_cast<double>(ref_norm), 0.15));
+        REQUIRE_THAT(static_cast<double>(our_norm), WithinAbs(static_cast<double>(ref_norm), 0.15));
       }
 
       // Verify dominant pitch class (argmax of mean_per_class should match)

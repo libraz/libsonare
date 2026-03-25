@@ -35,8 +35,7 @@ struct VqtKernelCacheKey {
 struct VqtKernelCacheKeyHash {
   size_t operator()(const VqtKernelCacheKey& k) const {
     return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
-           (std::hash<int>()(k.bins_per_octave) << 2) ^
-           (std::hash<float>()(k.gamma) << 3);
+           (std::hash<int>()(k.bins_per_octave) << 2) ^ (std::hash<float>()(k.gamma) << 3);
   }
 };
 
@@ -60,8 +59,8 @@ std::list<VqtKernelCacheKey> g_vqt_cache_lru;
 
 /// @brief Get or create cached VQT kernel with Eigen matrix
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
-  VqtKernelCacheKey key{sr, config.hop_length, config.fmin, config.n_bins,
-                        config.bins_per_octave, config.gamma};
+  VqtKernelCacheKey key{
+      sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave, config.gamma};
 
   std::lock_guard<std::mutex> lock(g_vqt_cache_mutex);
   auto it = g_vqt_cache.find(key);
@@ -75,15 +74,14 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   // Create kernel
   auto kernel = VqtKernel::create(sr, config);
 
-  // Pre-compute Eigen matrix
+  // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
-  int fft_bins = fft_length / 2 + 1;
   const auto& freq_kernels = kernel->kernel();
 
-  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_bins);
+  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
   for (int k = 0; k < n_bins; ++k) {
-    for (int i = 0; i < fft_bins; ++i) {
+    for (int i = 0; i < fft_length; ++i) {
       (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
     }
   }
@@ -164,8 +162,8 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   // Generate kernels in frequency domain
   kernel->kernel_.resize(config.n_bins * kernel->fft_length_);
 
-  std::vector<float> time_kernel(kernel->fft_length_, 0.0f);
-  std::vector<std::complex<float>> freq_kernel(kernel->fft_length_ / 2 + 1);
+  std::vector<std::complex<float>> complex_time_kernel(kernel->fft_length_, {0.0f, 0.0f});
+  std::vector<std::complex<float>> complex_freq_kernel(kernel->fft_length_);
 
   for (int k = 0; k < config.n_bins; ++k) {
     float freq = kernel->frequencies_[k];
@@ -181,20 +179,23 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     }
     float norm = 1.0f / win_sum;
 
-    // Generate time-domain kernel: windowed complex sinusoid
-    std::fill(time_kernel.begin(), time_kernel.end(), 0.0f);
+    // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*n/sr)
+    std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
+              std::complex<float>(0.0f, 0.0f));
 
     for (int n = 0; n < length; ++n) {
-      float phase = 2.0f * M_PI * freq * n / sr;
-      time_kernel[n] = window[n] * norm * std::cos(phase);
+      float phase = kTwoPi * freq * n / sr;
+      float scaled_win = window[n] * norm;
+      complex_time_kernel[n] =
+          std::complex<float>(scaled_win * std::cos(phase), -scaled_win * std::sin(phase));
     }
 
-    // FFT of kernel
-    fft.forward(time_kernel.data(), freq_kernel.data());
+    // Complex FFT of kernel
+    fft.forward_complex(complex_time_kernel.data(), complex_freq_kernel.data());
 
-    // Store conjugate (for correlation instead of convolution)
-    for (int i = 0; i < kernel->fft_length_ / 2 + 1; ++i) {
-      kernel->kernel_[k * kernel->fft_length_ + i] = std::conj(freq_kernel[i]);
+    // Store conjugate over all fft_length bins (for correlation instead of convolution)
+    for (int i = 0; i < kernel->fft_length_; ++i) {
+      kernel->kernel_[k * kernel->fft_length_ + i] = std::conj(complex_freq_kernel[i]);
     }
   }
 
@@ -223,10 +224,15 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
-  int fft_bins = fft_length / 2 + 1;
 
-  // Calculate number of frames
-  int n_frames = 1 + (n_samples - fft_length) / config.hop_length;
+  // Center padding (matches CQT and librosa center=True)
+  int pad_length = fft_length / 2;
+  int padded_length = n_samples + 2 * pad_length;
+  std::vector<float> padded_signal(padded_length, 0.0f);
+  std::copy(audio.data(), audio.data() + n_samples, padded_signal.begin() + pad_length);
+
+  // Calculate number of frames from padded signal
+  int n_frames = 1 + (padded_length - fft_length) / config.hop_length;
   if (n_frames <= 0) {
     n_frames = 1;
   }
@@ -239,12 +245,13 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   // Create FFT processor
   FFT fft(fft_length);
 
-  // Temporary buffers
+  // Temporary buffers (complex FFT for full spectrum)
   std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> frame_fft(fft_bins);
+  std::vector<std::complex<float>> complex_frame(fft_length, {0.0f, 0.0f});
+  std::vector<std::complex<float>> frame_fft(fft_length);
   VectorXcf result(n_bins);
 
-  const float* data = audio.data();
+  const float* data = padded_signal.data();
   float norm_factor = 1.0f / static_cast<float>(fft_length);
 
   // Progress reporting interval
@@ -254,18 +261,23 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   for (int t = 0; t < n_frames; ++t) {
     int start = t * config.hop_length;
 
-    // Extract frame with zero-padding
+    // Extract frame with zero-padding if needed at boundaries
     std::fill(frame.begin(), frame.end(), 0.0f);
-    int copy_length = std::min(fft_length, n_samples - start);
+    int copy_length = std::min(fft_length, padded_length - start);
     if (copy_length > 0) {
       std::copy(data + start, data + start + copy_length, frame.begin());
     }
 
-    // FFT of frame
-    fft.forward(frame.data(), frame_fft.data());
+    // Copy real frame into complex buffer
+    for (int n = 0; n < fft_length; ++n) {
+      complex_frame[n] = {frame[n], 0.0f};
+    }
+
+    // Complex FFT of frame (full spectrum)
+    fft.forward_complex(complex_frame.data(), frame_fft.data());
 
     // Compute all correlations at once using cached Eigen matrix
-    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_bins);
+    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_length);
     result.noalias() = kernel_matrix * frame_vec * norm_factor;
 
     // Copy to output

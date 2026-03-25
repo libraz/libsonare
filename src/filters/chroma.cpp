@@ -109,8 +109,8 @@ std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n
   // result: [n_chroma x n_frames] (row-major)
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
       filterbank, n_chroma, n_bins);
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      power_map(power, n_bins, n_frames);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> power_map(
+      power, n_bins, n_frames);
   Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> result_map(
       chromagram.data(), n_chroma, n_frames);
 

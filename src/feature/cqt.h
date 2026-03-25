@@ -24,7 +24,6 @@ struct CqtConfig {
   int bins_per_octave = 12;              ///< Bins per octave (12 for semitones)
   float filter_scale = 1.0f;             ///< Filter length scale factor
   WindowType window = WindowType::Hann;  ///< Window function for filters
-  float sparsity = 0.01f;                ///< Sparsity threshold for kernel
 };
 
 /// @brief CQT result container.

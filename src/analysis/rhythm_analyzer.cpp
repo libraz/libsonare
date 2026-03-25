@@ -148,8 +148,8 @@ float RhythmAnalyzer::calculate_swing_ratio() const {
   }
 
   // Calculate swing ratio: 0.5 + (swing - straight) / (2 * total)
-  float swing_ratio =
-      0.5f + static_cast<float>(swing_count - straight_count) / (2.0f * static_cast<float>(total_count));
+  float swing_ratio = 0.5f + static_cast<float>(swing_count - straight_count) /
+                                 (2.0f * static_cast<float>(total_count));
 
   return std::max(0.0f, std::min(1.0f, swing_ratio));
 }

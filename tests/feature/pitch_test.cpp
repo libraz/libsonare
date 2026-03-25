@@ -115,6 +115,18 @@ TEST_CASE("yin single frame - sawtooth", "[pitch]") {
   REQUIRE_THAT(freq, WithinRel(330.0f, 0.05f));
 }
 
+TEST_CASE("yin 440Hz constant window accuracy", "[pitch]") {
+  // With the corrected constant window size (frame_length / 2) in the YIN
+  // difference function, pitch detection should be more accurate.
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  float freq = yin(audio.data(), 2048, 22050, 100.0f, 1000.0f, 0.2f);
+
+  REQUIRE(freq > 0.0f);
+  // Tighter tolerance: within 1% of 440 Hz
+  REQUIRE_THAT(freq, WithinRel(440.0f, 0.01f));
+}
+
 TEST_CASE("yin_with_confidence", "[pitch]") {
   Audio audio = generate_sine(440.0f, 0.2f, 22050);
 

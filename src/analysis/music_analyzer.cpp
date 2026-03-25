@@ -171,8 +171,8 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     section_config.n_fft = config_.n_fft;
     section_config.hop_length = config_.hop_length;
     // Use cached boundary_detector's boundaries to avoid recomputation
-    section_analyzer_ = std::make_unique<SectionAnalyzer>(audio_, boundary_detector().boundary_times(),
-                                                          section_config);
+    section_analyzer_ = std::make_unique<SectionAnalyzer>(
+        audio_, boundary_detector().boundary_times(), section_config);
   }
   return *section_analyzer_;
 }
@@ -194,7 +194,8 @@ const Spectrogram& MusicAnalyzer::spectrogram() {
     StftConfig stft_config;
     stft_config.n_fft = config_.n_fft;
     stft_config.hop_length = config_.hop_length;
-    spectrogram_ = std::make_unique<Spectrogram>(Spectrogram::compute(analysis_audio_, stft_config));
+    spectrogram_ =
+        std::make_unique<Spectrogram>(Spectrogram::compute(analysis_audio_, stft_config));
   }
   return *spectrogram_;
 }
@@ -285,8 +286,8 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       }
     }
 
-    harmonic_chroma_ =
-        std::make_unique<Chroma>(Chroma(std::move(chroma_features), 12, n_frames, analysis_sr, chroma_hop));
+    harmonic_chroma_ = std::make_unique<Chroma>(
+        Chroma(std::move(chroma_features), 12, n_frames, analysis_sr, chroma_hop));
   }
   return *harmonic_chroma_;
 }
@@ -321,9 +322,7 @@ void MusicAnalyzer::precompute_features() {
   });
 
   // Group B: harmonic_chroma (HPSS + CQT)
-  auto future_b = std::async(std::launch::async, [this]() {
-    harmonic_chroma();
-  });
+  auto future_b = std::async(std::launch::async, [this]() { harmonic_chroma(); });
 
   future_a.get();
   future_b.get();

@@ -42,8 +42,8 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
   Eigen::VectorXf freqs = bin_frequencies_eigen(n_bins, sr, n_fft);
 
   /// Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      mag_map(magnitude, n_bins, n_frames);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
+      magnitude, n_bins, n_frames);
 
   /// Compute weighted sum: freqs^T * mag (produces row vector of length n_frames)
   Eigen::RowVectorXf sum_weighted = freqs.transpose() * mag_map;
@@ -145,8 +145,8 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   constexpr float kAmin = 1e-10f;
 
   // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      mag_map(magnitude, n_bins, n_frames);
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
+      magnitude, n_bins, n_frames);
 
   // Compute log sum per frame (for geometric mean)
   Eigen::RowVectorXf sum_log = mag_map.array().max(kAmin).log().colwise().sum();

@@ -6,7 +6,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <vector>
 
 using namespace sonare;
@@ -183,4 +185,38 @@ TEST_CASE("AudioLoadOptions defaults", "[audio_io]") {
   SECTION("kDefaultLoadOptions uses defaults") {
     REQUIRE(kDefaultLoadOptions.max_file_size == 500 * 1024 * 1024);
   }
+}
+
+TEST_CASE("load_audio with max_file_size rejects large files before allocating", "[audio_io]") {
+  // Create a small WAV file on disk
+  constexpr int sr = 22050;
+  constexpr int samples = 100;
+  std::vector<float> sine = generate_sine(samples, 440.0f, sr);
+  std::vector<uint8_t> wav_data = create_wav_buffer(sine.data(), sine.size(), sr);
+
+  // Write to a temporary file
+  std::string tmp_path = "test_max_filesize.wav";
+  {
+    std::ofstream out(tmp_path, std::ios::binary);
+    REQUIRE(out.is_open());
+    out.write(reinterpret_cast<const char*>(wav_data.data()),
+              static_cast<std::streamsize>(wav_data.size()));
+  }
+
+  SECTION("rejects file exceeding max_file_size") {
+    AudioLoadOptions opts;
+    opts.max_file_size = 10;  // 10 bytes max -- the WAV file is much larger
+    REQUIRE_THROWS(load_audio(tmp_path, opts));
+  }
+
+  SECTION("accepts file within max_file_size") {
+    AudioLoadOptions opts;
+    opts.max_file_size = wav_data.size() + 1024;  // Generous limit
+    auto [loaded, loaded_sr] = load_audio(tmp_path, opts);
+    REQUIRE(loaded_sr == sr);
+    REQUIRE(loaded.size() == samples);
+  }
+
+  // Clean up
+  std::remove(tmp_path.c_str());
 }

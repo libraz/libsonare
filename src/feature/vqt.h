@@ -21,7 +21,6 @@ using VqtProgressCallback = std::function<void(float progress)>;
 struct VqtConfig {
   int hop_length = 512;                  ///< Hop length in samples
   float fmin = 32.7f;                    ///< Minimum frequency in Hz (C1)
-  float fmax = 0.0f;                     ///< Maximum frequency (0 = auto from n_bins)
   int n_bins = 84;                       ///< Number of frequency bins
   int bins_per_octave = 12;              ///< Bins per octave
   float gamma = 0.0f;                    ///< Bandwidth offset (0 = standard CQT)

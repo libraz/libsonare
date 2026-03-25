@@ -192,7 +192,7 @@ TEST_CASE("phase_vocoder validation", "[time_stretch]") {
     Audio short_audio = create_test_audio(440.0f, 22050, 0.01f);  // 10ms
 
     StftConfig stft_config;
-    stft_config.n_fft = 4096;    // Large FFT
+    stft_config.n_fft = 4096;  // Large FFT
     stft_config.hop_length = 512;
     stft_config.center = false;  // No center padding to get minimal frames
 
