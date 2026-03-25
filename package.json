@@ -19,9 +19,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "preinstall": "npx only-allow yarn",
-    "postinstall": "simple-git-hooks",
-    "prepare": "simple-git-hooks",
+    "prepare": "simple-git-hooks || true",
     "build": "yarn build:wasm && yarn build:js",
     "build:wasm": "emcmake cmake -B build-wasm -DBUILD_WASM=ON && cmake --build build-wasm",
     "build:js": "tsc",
