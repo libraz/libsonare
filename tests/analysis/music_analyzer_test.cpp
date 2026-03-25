@@ -321,9 +321,10 @@ TEST_CASE("MusicAnalyzer precompute then lazy access", "[music_analyzer]") {
   REQUIRE(analyzer.key_analyzer().key().confidence >= 0.0f);
   REQUIRE(analyzer.timbre_analyzer().brightness() >= 0.0f);
   REQUIRE(analyzer.dynamics_analyzer().dynamics().dynamic_range_db >= 0.0f);
-  REQUIRE(analyzer.beat_analyzer().count() >= 0);
-  REQUIRE(analyzer.chord_analyzer().count() >= 0);
+  // count() returns size_t; just verify the calls succeed without throwing
+  (void)analyzer.beat_analyzer().count();
+  (void)analyzer.chord_analyzer().count();
   REQUIRE(!analyzer.rhythm_analyzer().groove_type().empty());
-  REQUIRE(analyzer.section_analyzer().count() >= 0);
-  REQUIRE(analyzer.melody_analyzer().count() >= 0);
+  (void)analyzer.section_analyzer().count();
+  (void)analyzer.melody_analyzer().count();
 }
