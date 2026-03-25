@@ -10,6 +10,10 @@
 #include "filters/iir.h"
 #include "util/exception.h"
 
+#ifndef __EMSCRIPTEN__
+#include <future>
+#endif
+
 namespace sonare {
 
 MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& config)
@@ -22,6 +26,9 @@ void MusicAnalyzer::set_progress_callback(ProgressCallback callback) {
 }
 
 void MusicAnalyzer::report_progress(float progress, const char* stage) {
+#ifndef __EMSCRIPTEN__
+  std::lock_guard<std::mutex> lock(progress_mutex_);
+#endif
   if (progress_callback_) {
     progress_callback_(progress, stage);
   }
@@ -303,11 +310,41 @@ const std::vector<float>& MusicAnalyzer::onset_strength() {
   return onset_strength_;
 }
 
+void MusicAnalyzer::precompute_features() {
+#ifndef __EMSCRIPTEN__
+  // Native: compute the two independent heavy paths in parallel
+  // Group A: spectrogram → mel_spectrogram → onset_strength
+  auto future_a = std::async(std::launch::async, [this]() {
+    spectrogram();
+    mel_spectrogram();
+    onset_strength();
+  });
+
+  // Group B: harmonic_chroma (HPSS + CQT)
+  auto future_b = std::async(std::launch::async, [this]() {
+    harmonic_chroma();
+  });
+
+  future_a.get();
+  future_b.get();
+#else
+  // WASM: sequential execution (no threading support)
+  spectrogram();
+  mel_spectrogram();
+  onset_strength();
+  harmonic_chroma();
+#endif
+}
+
 AnalysisResult MusicAnalyzer::analyze() {
   AnalysisResult result;
 
-  // BPM and tempo (0-15%)
-  report_progress(0.0f, "bpm");
+  // Eagerly precompute feature caches (parallel on native, sequential on WASM)
+  report_progress(0.0f, "features");
+  precompute_features();
+
+  // BPM and tempo
+  report_progress(0.15f, "bpm");
   result.bpm = bpm_analyzer().bpm();
   result.bpm_confidence = bpm_analyzer().confidence();
 

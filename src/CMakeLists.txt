@@ -70,6 +70,12 @@ target_include_directories(sonare_core PUBLIC
 
 target_link_libraries(sonare_core PUBLIC Eigen3::Eigen kissfft)
 
+# Threading support for parallel analysis on native builds
+if(NOT BUILD_WASM)
+  find_package(Threads REQUIRED)
+  target_link_libraries(sonare_core PUBLIC Threads::Threads)
+endif()
+
 # Shared library for language bindings (Python ctypes, etc.)
 if(BUILD_SHARED)
   add_library(sonare_shared SHARED ${SONARE_SOURCES})
@@ -86,6 +92,9 @@ if(BUILD_SHARED)
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen kissfft)
+  if(NOT BUILD_WASM)
+    target_link_libraries(sonare_shared PUBLIC Threads::Threads)
+  endif()
 endif()
 
 # WASM build

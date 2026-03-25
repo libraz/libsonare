@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <atomic>
 #include <cmath>
 #include <vector>
 
@@ -237,9 +238,92 @@ TEST_CASE("MusicAnalyzer progress callback", "[music_analyzer]") {
   REQUIRE(progress_values.back() == 1.0f);
 
   // Should have expected stages
-  REQUIRE(stages.front() == "bpm");
+  REQUIRE(stages.front() == "features");
   REQUIRE(stages.back() == "complete");
 
   // Result should still be valid
   REQUIRE(result.bpm > 0.0f);
+}
+
+TEST_CASE("MusicAnalyzer analyze deterministic", "[music_analyzer]") {
+  Audio audio = create_test_audio();
+
+  MusicAnalyzer analyzer1(audio);
+  AnalysisResult r1 = analyzer1.analyze();
+
+  MusicAnalyzer analyzer2(audio);
+  AnalysisResult r2 = analyzer2.analyze();
+
+  REQUIRE(r1.bpm == r2.bpm);
+  REQUIRE(r1.key.root == r2.key.root);
+  REQUIRE(r1.key.mode == r2.key.mode);
+  REQUIRE(r1.key.confidence == r2.key.confidence);
+  REQUIRE(r1.beats.size() == r2.beats.size());
+  REQUIRE(r1.chords.size() == r2.chords.size());
+  REQUIRE(r1.timbre.brightness == r2.timbre.brightness);
+  REQUIRE(r1.dynamics.dynamic_range_db == r2.dynamics.dynamic_range_db);
+  REQUIRE(r1.form == r2.form);
+}
+
+TEST_CASE("MusicAnalyzer analyze multiple instances", "[music_analyzer]") {
+  Audio audio = create_test_audio();
+
+  MusicAnalyzer a(audio);
+  MusicAnalyzer b(audio);
+
+  AnalysisResult ra = a.analyze();
+  AnalysisResult rb = b.analyze();
+
+  REQUIRE(ra.bpm == rb.bpm);
+  REQUIRE(ra.key.root == rb.key.root);
+  REQUIRE(ra.key.mode == rb.key.mode);
+  REQUIRE(ra.beats.size() == rb.beats.size());
+  REQUIRE(ra.chords.size() == rb.chords.size());
+  REQUIRE(ra.timbre.brightness == rb.timbre.brightness);
+  REQUIRE(ra.dynamics.dynamic_range_db == rb.dynamics.dynamic_range_db);
+  REQUIRE(ra.form == rb.form);
+}
+
+TEST_CASE("MusicAnalyzer progress callback thread safety", "[music_analyzer]") {
+  Audio audio = create_test_audio();
+
+  MusicAnalyzer analyzer(audio);
+
+  std::atomic<int> counter{0};
+  std::vector<float> recorded_progress;
+
+  analyzer.set_progress_callback([&](float progress, const char* /*stage*/) {
+    counter.fetch_add(1, std::memory_order_relaxed);
+    recorded_progress.push_back(progress);
+  });
+
+  analyzer.analyze();
+
+  REQUIRE(counter.load() > 0);
+
+  for (float p : recorded_progress) {
+    REQUIRE(p >= 0.0f);
+    REQUIRE(p <= 1.0f);
+  }
+}
+
+TEST_CASE("MusicAnalyzer precompute then lazy access", "[music_analyzer]") {
+  Audio audio = create_test_audio();
+
+  MusicAnalyzer analyzer(audio);
+
+  // analyze() calls precompute_features() internally
+  AnalysisResult result = analyzer.analyze();
+  REQUIRE(result.bpm > 0.0f);
+
+  // Lazy accessors should return valid results from cached features
+  REQUIRE(analyzer.bpm_analyzer().bpm() > 0.0f);
+  REQUIRE(analyzer.key_analyzer().key().confidence >= 0.0f);
+  REQUIRE(analyzer.timbre_analyzer().brightness() >= 0.0f);
+  REQUIRE(analyzer.dynamics_analyzer().dynamics().dynamic_range_db >= 0.0f);
+  REQUIRE(analyzer.beat_analyzer().count() >= 0);
+  REQUIRE(analyzer.chord_analyzer().count() >= 0);
+  REQUIRE(!analyzer.rhythm_analyzer().groove_type().empty());
+  REQUIRE(analyzer.section_analyzer().count() >= 0);
+  REQUIRE(analyzer.melody_analyzer().count() >= 0);
 }

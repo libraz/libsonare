@@ -8,6 +8,11 @@
 #include <string>
 #include <vector>
 
+#ifndef __EMSCRIPTEN__
+#include <future>
+#include <mutex>
+#endif
+
 #include "analysis/beat_analyzer.h"
 #include "analysis/boundary_detector.h"
 #include "analysis/bpm_analyzer.h"
@@ -138,9 +143,16 @@ class MusicAnalyzer {
   /// @brief Reports progress to callback if set.
   void report_progress(float progress, const char* stage);
 
+  /// @brief Eagerly precomputes feature caches in parallel on native builds.
+  void precompute_features();
+
   Audio audio_;
   MusicAnalyzerConfig config_;
   ProgressCallback progress_callback_;
+
+#ifndef __EMSCRIPTEN__
+  std::mutex progress_mutex_;
+#endif
 
   // Shared feature caches (lazy-initialized)
   /// @brief Returns cached spectrogram, computing if needed.
