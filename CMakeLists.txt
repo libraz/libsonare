@@ -40,8 +40,9 @@ if(ENABLE_COVERAGE)
 endif()
 
 # Eigen3
-if(BUILD_WASM)
-  # For WASM, use FetchContent to get Eigen3
+find_package(Eigen3 3.3 QUIET NO_MODULE)
+if(NOT Eigen3_FOUND)
+  # Fallback: fetch Eigen3 (for WASM or when system Eigen is incompatible)
   include(FetchContent)
   FetchContent_Declare(
     Eigen3
@@ -50,8 +51,6 @@ if(BUILD_WASM)
     GIT_SHALLOW TRUE
   )
   FetchContent_MakeAvailable(Eigen3)
-else()
-  find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 endif()
 
 # サブディレクトリ

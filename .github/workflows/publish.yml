@@ -61,6 +61,7 @@ jobs:
 
   python-wheels:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -75,10 +76,7 @@ jobs:
             arch: arm64
             plat_tag: macosx_11_0_arm64
             lib_name: libsonare.dylib
-          - os: macos-13
-            arch: x86_64
-            plat_tag: macosx_10_15_x86_64
-            lib_name: libsonare.dylib
+          # macOS x86_64 omitted: GitHub no longer provides Intel macOS runners
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +114,7 @@ jobs:
 
       - name: Test wheel
         run: |
-          pip install bindings/python/dist/*.whl
+          pip install bindings/python/dist/*.whl pytest
           python3 -c "import libsonare; print(f'Version: {libsonare.version()}')"
           cd bindings/python && python3 -m pytest tests/ -x -q
 
@@ -126,7 +124,8 @@ jobs:
           path: bindings/python/dist/*.whl
 
   publish-pypi:
-    needs: [publish-npm, python-wheels]
+    needs: [python-wheels]
+    if: always() && needs.python-wheels.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: pypi
