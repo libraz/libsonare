@@ -69,6 +69,7 @@ target_include_directories(sonare_core PUBLIC
 )
 
 target_link_libraries(sonare_core PUBLIC Eigen3::Eigen kissfft)
+target_compile_options(sonare_core PRIVATE ${SONARE_WARNING_FLAGS})
 
 # Threading support for parallel analysis on native builds
 if(NOT BUILD_WASM)
@@ -83,6 +84,7 @@ if(BUILD_SHARED)
     OUTPUT_NAME sonare
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
+    POSITION_INDEPENDENT_CODE ON
   )
   target_include_directories(sonare_shared PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -92,6 +94,7 @@ if(BUILD_SHARED)
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen kissfft)
+  target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
     target_link_libraries(sonare_shared PUBLIC Threads::Threads)
   endif()

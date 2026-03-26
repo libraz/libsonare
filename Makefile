@@ -1,4 +1,4 @@
-.PHONY: all build test clean rebuild format wasm coverage coverage-build coverage-clean \
+.PHONY: all build release test clean rebuild format wasm coverage coverage-build coverage-clean \
        build-shared build-node test-python test-node
 
 BUILD_DIR := build

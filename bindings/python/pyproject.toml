@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "libsonare"
-version = "1.0.1"
+version = "1.0.2"
 description = "Fast audio analysis library — librosa-like API, tens of times faster (C++ with Python bindings)"
 requires-python = ">=3.11"
 license = "Apache-2.0"

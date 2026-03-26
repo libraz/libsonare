@@ -39,7 +39,8 @@ Audio create_percussive_audio(int sr = 22050, float duration = 0.5f, int n_click
     int start = c * interval;
     for (int i = 0; i < click_length && start + i < n_samples; ++i) {
       float envelope = 1.0f - static_cast<float>(i) / click_length;
-      samples[start + i] = envelope * (static_cast<float>(std::rand()) / RAND_MAX * 2.0f - 1.0f);
+      samples[start + i] =
+          envelope * (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f);
     }
   }
 

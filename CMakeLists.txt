@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(libsonare VERSION 1.0.1 LANGUAGES C CXX)
+project(libsonare VERSION 1.0.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,12 +19,11 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# 警告設定
-if(MSVC)
-  add_compile_options(/W4 /WX)
-else()
-  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-endif()
+# 警告設定 (サードパーティに波及させないためターゲット単位で適用)
+set(SONARE_WARNING_FLAGS
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
+)
 
 # Coverage settings
 if(ENABLE_COVERAGE)

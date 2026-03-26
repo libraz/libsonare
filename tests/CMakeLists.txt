@@ -66,6 +66,7 @@ add_executable(sonare_tests
 )
 
 target_link_libraries(sonare_tests PRIVATE sonare_core Catch2::Catch2WithMain)
+target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(CTest)

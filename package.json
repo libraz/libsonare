@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libsonare",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "packageManager": "yarn@4.12.0",
   "description": "Audio analysis library for music information retrieval",
@@ -21,7 +21,7 @@
   "scripts": {
     "prepare": "simple-git-hooks || true",
     "build": "yarn build:wasm && yarn build:js",
-    "build:wasm": "emcmake cmake -B build-wasm -DBUILD_WASM=ON && cmake --build build-wasm",
+    "build:wasm": "emcmake cmake -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build-wasm",
     "build:js": "tsc",
     "clean": "rm -rf dist build-wasm",
     "lint": "biome check js/ tests/wasm/ bindings/node/src/ bindings/node/tests/",

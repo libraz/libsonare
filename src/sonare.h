@@ -7,8 +7,8 @@
 // Version information
 #define SONARE_VERSION_MAJOR 1
 #define SONARE_VERSION_MINOR 0
-#define SONARE_VERSION_PATCH 1
-#define SONARE_VERSION_STRING "1.0.1"
+#define SONARE_VERSION_PATCH 2
+#define SONARE_VERSION_STRING "1.0.2"
 
 // Utility
 #include "util/exception.h"
@@ -32,9 +32,12 @@
 
 // Features
 #include "feature/chroma.h"
+#include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
+#include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "feature/vqt.h"
 
 // Effects
 #include "effects/hpss.h"

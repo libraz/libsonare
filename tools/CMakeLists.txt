@@ -2,6 +2,7 @@
 add_executable(sonare sonare_cli.cpp)
 
 target_link_libraries(sonare PRIVATE sonare_core)
+target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 
 target_include_directories(sonare PRIVATE
   ${CMAKE_SOURCE_DIR}/src
