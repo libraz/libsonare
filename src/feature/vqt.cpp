@@ -225,7 +225,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
 
-  // Center padding (matches CQT and librosa center=True)
+  // Center padding aligned with the CQT path.
   int pad_length = fft_length / 2;
   int padded_length = n_samples + 2 * pad_length;
   std::vector<float> padded_signal(padded_length, 0.0f);

@@ -1,5 +1,5 @@
 /// @file convert_test.cpp
-/// @brief librosa compatibility tests for unit conversion functions.
+/// @brief Reference compatibility tests for unit conversion functions.
 /// @details Reference values from: tests/librosa/reference/convert.json
 
 #include "core/convert.h"
@@ -14,7 +14,7 @@ using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("convert librosa compatibility", "[convert][librosa]") {
+TEST_CASE("convert reference compatibility", "[convert][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/convert.json");
   const auto& data = json["data"].as_array();
 

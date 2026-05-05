@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import os
+import platform
 from pathlib import Path
 
 # --- C structures ---
@@ -152,7 +153,7 @@ def _find_library() -> str:
 
     # Dev build dir: src/libsonare/ -> bindings/python -> bindings -> project root
     project_root = pkg_dir.parent.parent.parent.parent
-    lib_name = "libsonare.dylib" if os.uname().sysname == "Darwin" else "libsonare.so"
+    lib_name = "libsonare.dylib" if platform.system() == "Darwin" else "libsonare.so"
     build_path = project_root / "build" / "lib" / lib_name
     if build_path.exists():
         return str(build_path)
@@ -228,6 +229,29 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     # sonare_audio_duration
     lib.sonare_audio_duration.restype = ctypes.c_float
     lib.sonare_audio_duration.argtypes = [ctypes.c_void_p]
+
+    lib.sonare_audio_detect_bpm.restype = ctypes.c_int32
+    lib.sonare_audio_detect_bpm.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+
+    lib.sonare_audio_detect_key.restype = ctypes.c_int32
+    lib.sonare_audio_detect_key.argtypes = [ctypes.c_void_p, ctypes.POINTER(SonareKey)]
+
+    lib.sonare_audio_detect_beats.restype = ctypes.c_int32
+    lib.sonare_audio_detect_beats.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_audio_detect_onsets.restype = ctypes.c_int32
+    lib.sonare_audio_detect_onsets.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_audio_analyze.restype = ctypes.c_int32
+    lib.sonare_audio_analyze.argtypes = [ctypes.c_void_p, ctypes.POINTER(SonareAnalysisResult)]
 
     # --- Quick detection functions ---
 

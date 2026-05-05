@@ -549,6 +549,7 @@ export interface AnalysisResult {
   bpmConfidence: number;
   key: Key;
   timeSignature: TimeSignature;
+  beatTimes: Float32Array;
   beats: Beat[];
   chords: Chord[];
   sections: Section[];
@@ -655,8 +656,13 @@ export async function init(options?: {
   }
 
   initPromise = (async () => {
-    const createModule = (await import('./sonare.js')).default;
-    module = await createModule(options);
+    try {
+      const createModule = (await import('./sonare.js')).default;
+      module = await createModule(options);
+    } catch (error) {
+      initPromise = null;
+      throw error;
+    }
   })();
 
   return initPromise;
@@ -748,6 +754,10 @@ export function detectBeats(samples: Float32Array, sampleRate: number): Float32A
 
 // Helper to convert WASM result to typed result
 function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
+  const beatTimes = new Float32Array(wasm.beats.length);
+  for (let i = 0; i < wasm.beats.length; i++) {
+    beatTimes[i] = wasm.beats[i].time;
+  }
   return {
     bpm: wasm.bpm,
     bpmConfidence: wasm.bpmConfidence,
@@ -759,6 +769,7 @@ function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
       shortName: wasm.key.shortName,
     },
     timeSignature: wasm.timeSignature,
+    beatTimes,
     beats: wasm.beats,
     chords: wasm.chords.map((c) => ({
       root: c.root as PitchClass,

@@ -90,6 +90,11 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
   return SONARE_OK;
 }
 
+template <typename T>
+T* release_array(std::unique_ptr<T[]>& ptr) {
+  return ptr.release();
+}
+
 }  // namespace
 
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
@@ -156,6 +161,96 @@ float sonare_audio_duration(const SonareAudio* audio) {
     return 0.0f;
   }
   return audio->audio.duration();
+}
+
+SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm) {
+  if (audio == nullptr || out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  *out_bpm = quick::detect_bpm(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key) {
+  if (audio == nullptr || out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  Key key = quick::detect_key(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  out_key->root = static_cast<SonarePitchClass>(key.root);
+  out_key->mode = static_cast<SonareMode>(key.mode);
+  out_key->confidence = key.confidence;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times, size_t* out_count) {
+  if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  std::vector<float> beats =
+      quick::detect_beats(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  *out_count = beats.size();
+  if (beats.empty()) {
+    *out_times = nullptr;
+  } else {
+    *out_times = new float[beats.size()];
+    std::memcpy(*out_times, beats.data(), beats.size() * sizeof(float));
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
+                                       size_t* out_count) {
+  if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  std::vector<float> onsets =
+      quick::detect_onsets(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  *out_count = onsets.size();
+  if (onsets.empty()) {
+    *out_times = nullptr;
+  } else {
+    *out_times = new float[onsets.size()];
+    std::memcpy(*out_times, onsets.data(), onsets.size() * sizeof(float));
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out) {
+  if (audio == nullptr || out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+
+  out->beat_times = nullptr;
+
+  SONARE_C_TRY
+  AnalysisResult result =
+      quick::analyze(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+
+  out->bpm = result.bpm;
+  out->bpm_confidence = result.bpm_confidence;
+  out->key.root = static_cast<SonarePitchClass>(result.key.root);
+  out->key.mode = static_cast<SonareMode>(result.key.mode);
+  out->key.confidence = result.key.confidence;
+  out->time_signature.numerator = result.time_signature.numerator;
+  out->time_signature.denominator = result.time_signature.denominator;
+  out->time_signature.confidence = result.time_signature.confidence;
+  out->beat_count = result.beats.size();
+  if (result.beats.empty()) {
+    out->beat_times = nullptr;
+  } else {
+    out->beat_times = new float[result.beats.size()];
+    for (size_t i = 0; i < result.beats.size(); ++i) {
+      out->beat_times[i] = result.beats[i].time;
+    }
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 // Quick detection functions
@@ -323,10 +418,12 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 
   out->length = result.harmonic.size();
   out->sample_rate = result.harmonic.sample_rate();
-  out->harmonic = new float[out->length];
-  out->percussive = new float[out->length];
-  std::memcpy(out->harmonic, result.harmonic.data(), out->length * sizeof(float));
-  std::memcpy(out->percussive, result.percussive.data(), out->length * sizeof(float));
+  std::unique_ptr<float[]> harmonic(new float[out->length]);
+  std::unique_ptr<float[]> percussive(new float[out->length]);
+  std::memcpy(harmonic.get(), result.harmonic.data(), out->length * sizeof(float));
+  std::memcpy(percussive.get(), result.percussive.data(), out->length * sizeof(float));
+  out->harmonic = release_array(harmonic);
+  out->percussive = release_array(percussive);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -457,10 +554,12 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
   const std::vector<float>& mag = spec.magnitude();
   const std::vector<float>& pow = spec.power();
 
-  out->magnitude = new float[total];
-  out->power = new float[total];
-  std::memcpy(out->magnitude, mag.data(), total * sizeof(float));
-  std::memcpy(out->power, pow.data(), total * sizeof(float));
+  std::unique_ptr<float[]> magnitude(new float[total]);
+  std::unique_ptr<float[]> power(new float[total]);
+  std::memcpy(magnitude.get(), mag.data(), total * sizeof(float));
+  std::memcpy(power.get(), pow.data(), total * sizeof(float));
+  out->magnitude = release_array(magnitude);
+  out->power = release_array(power);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -514,12 +613,14 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
   out->hop_length = mel.hop_length();
 
   size_t total = static_cast<size_t>(mel.n_mels()) * mel.n_frames();
-  out->power = new float[total];
-  std::memcpy(out->power, mel.power_data(), total * sizeof(float));
+  std::unique_ptr<float[]> power(new float[total]);
+  std::memcpy(power.get(), mel.power_data(), total * sizeof(float));
 
   std::vector<float> db = mel.to_db();
-  out->db = new float[total];
-  std::memcpy(out->db, db.data(), total * sizeof(float));
+  std::unique_ptr<float[]> db_out(new float[total]);
+  std::memcpy(db_out.get(), db.data(), total * sizeof(float));
+  out->power = release_array(power);
+  out->db = release_array(db_out);
   return SONARE_OK;
   SONARE_C_CATCH
 }

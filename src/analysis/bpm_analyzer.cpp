@@ -261,7 +261,6 @@ BpmAnalyzer::BpmAnalyzer(const Audio& audio, const BpmConfig& config) : config_(
   OnsetConfig onset_config;
   onset_config.lag = 1;
   onset_config.detrend = true;
-  onset_config.center = false;
 
   std::vector<float> onset = compute_onset_strength(audio, mel_config, onset_config);
 

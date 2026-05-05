@@ -1,4 +1,4 @@
-"""libsonare - librosa-like audio analysis library (Python binding)."""
+"""libsonare - audio analysis library (Python binding)."""
 
 from .analyzer import (
     analyze,

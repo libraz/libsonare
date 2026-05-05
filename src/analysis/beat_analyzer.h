@@ -24,7 +24,7 @@ struct TimeSignature {
 };
 
 /// @brief Configuration for beat tracking.
-/// @details Default values match librosa.
+/// @details Default values follow common MIR defaults.
 struct BeatConfig {
   float start_bpm = 120.0f;  ///< Prior estimate for tempo
   float bpm_min = 30.0f;     ///< Minimum BPM to consider

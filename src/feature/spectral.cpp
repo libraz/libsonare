@@ -11,6 +11,8 @@ namespace sonare {
 
 namespace {
 
+constexpr float kLog10Scale = 4.342944819032518f;
+
 /// @brief Computes frequency for each FFT bin using Eigen.
 Eigen::VectorXf bin_frequencies_eigen(int n_bins, int sr, int n_fft) {
   float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
@@ -25,6 +27,15 @@ std::vector<float> bin_frequencies(int n_bins, int sr, int n_fft) {
     freqs[i] = static_cast<float>(i) * bin_width;
   }
   return freqs;
+}
+
+std::vector<float> pad_for_centered_frames(const float* samples, size_t n_samples, int frame_length) {
+  int pad_length = frame_length / 2;
+  std::vector<float> padded(n_samples + static_cast<size_t>(pad_length * 2), 0.0f);
+  if (n_samples > 0) {
+    std::copy(samples, samples + n_samples, padded.begin() + pad_length);
+  }
+  return padded;
 }
 
 }  // namespace
@@ -181,32 +192,28 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   int n_frames = spec.n_frames();
   int n_fft = spec.n_fft();
 
-  // Compute frequency bounds for each band (octave bands)
+  // Compute octave-band edges, including the low band from 0..fmin.
   std::vector<float> band_edges(n_bands + 2);
   float fmax = static_cast<float>(sr) / 2.0f;
-  band_edges[0] = fmin;
-  band_edges[n_bands + 1] = fmax;
-
-  for (int i = 1; i <= n_bands; ++i) {
-    band_edges[i] = fmin * std::pow(2.0f, static_cast<float>(i));
-    if (band_edges[i] > fmax) {
-      band_edges[i] = fmax;
-    }
+  band_edges[0] = 0.0f;
+  band_edges[1] = std::min(fmin, fmax);
+  for (int i = 2; i <= n_bands + 1; ++i) {
+    band_edges[i] = std::min(fmin * std::pow(2.0f, static_cast<float>(i - 1)), fmax);
   }
 
   // Convert frequency edges to bin indices
   float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
   std::vector<int> band_bins(n_bands + 2);
   for (int i = 0; i <= n_bands + 1; ++i) {
-    band_bins[i] = static_cast<int>(band_edges[i] / bin_width);
-    band_bins[i] = std::min(band_bins[i], n_bins - 1);
+    int edge_bin = static_cast<int>(std::floor(band_edges[i] / bin_width));
+    band_bins[i] = std::max(0, std::min(edge_bin, n_bins));
   }
 
-  // Output: [n_bands + 1 x n_frames] (includes residual)
+  // Output: [n_bands + 1 x n_frames]
   std::vector<float> contrast((n_bands + 1) * n_frames, 0.0f);
 
   for (int t = 0; t < n_frames; ++t) {
-    for (int b = 0; b < n_bands; ++b) {
+    for (int b = 0; b <= n_bands; ++b) {
       int start = band_bins[b];
       int end = band_bins[b + 1];
 
@@ -228,25 +235,16 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
       // Sort to find quantiles
       std::sort(band_mags.begin(), band_mags.end());
 
-      int q_idx = static_cast<int>(quantile * static_cast<float>(band_mags.size()));
-      q_idx = std::max(0, std::min(q_idx, static_cast<int>(band_mags.size()) - 1));
+      int q_index = static_cast<int>(quantile * static_cast<float>(band_mags.size()));
+      q_index = std::max(1, std::min(q_index, static_cast<int>(band_mags.size()) - 1));
 
-      float valley = band_mags[q_idx];
-      float peak = band_mags[band_mags.size() - 1 - q_idx];
+      float valley = band_mags[q_index - 1];
+      float peak = band_mags[band_mags.size() - q_index];
 
-      // Contrast is log ratio of peak to valley
       float amin = 1e-10f;
       contrast[b * n_frames + t] =
-          std::log(std::max(peak, amin)) - std::log(std::max(valley, amin));
+          kLog10Scale * std::log(std::max(peak, amin) / std::max(valley, amin));
     }
-
-    // Residual: overall spectral mean
-    float mean_mag = 0.0f;
-    for (int k = 0; k < n_bins; ++k) {
-      mean_mag += magnitude[k * n_frames + t];
-    }
-    mean_mag /= static_cast<float>(n_bins);
-    contrast[n_bands * n_frames + t] = std::log(std::max(mean_mag, 1e-10f));
   }
 
   return contrast;
@@ -261,11 +259,14 @@ std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, in
   SONARE_CHECK(samples != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
 
-  if (n_samples < static_cast<size_t>(frame_length)) {
-    return std::vector<float>();
-  }
+  std::vector<float> padded = pad_for_centered_frames(samples, n_samples, frame_length);
+  const float* padded_samples = padded.data();
+  size_t padded_length = padded.size();
 
-  int n_frames = static_cast<int>((n_samples - frame_length) / hop_length) + 1;
+  int n_frames = 1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
+  if (n_frames <= 0) {
+    n_frames = 1;
+  }
   std::vector<float> zcr(n_frames);
 
   for (int t = 0; t < n_frames; ++t) {
@@ -274,10 +275,7 @@ std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, in
 
     for (int i = 1; i < frame_length; ++i) {
       size_t idx = start + i;
-      if (idx >= n_samples) break;
-
-      // Check if sign changed
-      if ((samples[idx] >= 0.0f) != (samples[idx - 1] >= 0.0f)) {
+      if ((padded_samples[idx] >= 0.0f) != (padded_samples[idx - 1] >= 0.0f)) {
         crossings++;
       }
     }
@@ -297,31 +295,26 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
   SONARE_CHECK(samples != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
 
-  if (n_samples < static_cast<size_t>(frame_length)) {
-    return std::vector<float>();
-  }
+  std::vector<float> padded = pad_for_centered_frames(samples, n_samples, frame_length);
+  const float* padded_samples = padded.data();
+  size_t padded_length = padded.size();
 
-  int n_frames = static_cast<int>((n_samples - frame_length) / hop_length) + 1;
+  int n_frames = 1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
+  if (n_frames <= 0) {
+    n_frames = 1;
+  }
   std::vector<float> rms(n_frames);
 
   for (int t = 0; t < n_frames; ++t) {
     size_t start = static_cast<size_t>(t) * hop_length;
     float sum_sq = 0.0f;
-    int count = 0;
 
     for (int i = 0; i < frame_length; ++i) {
-      size_t idx = start + i;
-      if (idx >= n_samples) break;
-
-      sum_sq += samples[idx] * samples[idx];
-      count++;
+      float sample = padded_samples[start + i];
+      sum_sq += sample * sample;
     }
 
-    if (count > 0) {
-      rms[t] = std::sqrt(sum_sq / static_cast<float>(count));
-    } else {
-      rms[t] = 0.0f;
-    }
+    rms[t] = std::sqrt(sum_sq / static_cast<float>(frame_length));
   }
 
   return rms;

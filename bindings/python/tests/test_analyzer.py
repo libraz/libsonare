@@ -93,6 +93,9 @@ def test_audio_detect_key() -> None:
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     key = audio.detect_key()
     assert key.root is not None
+    assert isinstance(key.name, str)
+    assert isinstance(key.short_name, str)
+    assert isinstance(key.shortName, str)
 
 
 def test_audio_detect_beats() -> None:
@@ -121,6 +124,9 @@ def test_audio_analyze() -> None:
     result = audio.analyze()
     assert isinstance(result.bpm, float)
     assert result.key is not None
+    assert isinstance(result.key.name, str)
+    assert isinstance(result.beatTimes, list)
+    assert isinstance(result.beats, list)
 
 
 ## Effects tests
@@ -521,6 +527,9 @@ def test_analyze_with_signal() -> None:
     assert result.key.confidence >= 0.0
     assert result.time_signature.numerator > 0
     assert result.time_signature.denominator > 0
+    assert result.bpmConfidence == result.bpm_confidence
+    assert result.timeSignature == result.time_signature
+    assert result.beatTimes == result.beat_times
 
 
 ## Audio class properties

@@ -11,7 +11,7 @@ namespace sonare {
 /// @brief Converts Hz to mel frequency (Slaney formula).
 /// @param hz Frequency in Hz
 /// @return Mel frequency
-/// @details Uses librosa default (Slaney) formula:
+/// @details Uses the Slaney-style mel formula:
 ///          Linear below 1000 Hz, logarithmic above.
 float hz_to_mel(float hz);
 
@@ -61,8 +61,8 @@ float frames_to_time(int frames, int sr, int hop_length);
 /// @param time Time in seconds
 /// @param sr Sample rate
 /// @param hop_length Hop length in samples
-/// @return Frame index (floor of time * sr / hop_length, librosa compatible)
-/// @note Uses floor for consistency with librosa.core.time_to_frames.
+/// @return Frame index (floor of time * sr / hop_length)
+/// @note Uses floor for deterministic frame alignment.
 int time_to_frames(float time, int sr, int hop_length);
 
 /// @brief Converts sample count to time in seconds.

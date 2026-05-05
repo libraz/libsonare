@@ -1,5 +1,5 @@
 /// @file mfcc_test.cpp
-/// @brief librosa compatibility tests for MFCC.
+/// @brief Reference compatibility tests for MFCC.
 /// @details Reference values from: tests/librosa/reference/mfcc.json
 
 #include <catch2/catch_test_macros.hpp>
@@ -16,7 +16,7 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-/// @brief Creates 440Hz sine tone matching librosa.tone().
+/// @brief Creates a 440Hz sine tone matching the reference generator.
 std::vector<float> create_tone(int sr, float duration, float freq = 440.0f) {
   size_t n_samples = static_cast<size_t>(duration * sr);
   std::vector<float> y(n_samples);
@@ -52,7 +52,7 @@ float compute_std(const float* data, size_t size) {
 
 }  // namespace
 
-TEST_CASE("MFCC librosa compatibility", "[mfcc][librosa]") {
+TEST_CASE("MFCC reference compatibility", "[mfcc][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/mfcc.json");
   const auto& data = json["data"].as_array();
 
@@ -99,7 +99,7 @@ TEST_CASE("MFCC librosa compatibility", "[mfcc][librosa]") {
 
         CAPTURE(c, our_mean, expected_mean, our_std, expected_std);
 
-        // Compare mean and std with librosa reference
+        // Compare mean and std with reference values
         // 10% tolerance for mean, 15% for std
         // (higher coefficients and lower n_mels have more variance)
         if (std::abs(expected_mean) > 1.0f) {

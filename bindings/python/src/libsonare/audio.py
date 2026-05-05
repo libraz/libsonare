@@ -208,23 +208,80 @@ class Audio:
 
     def detect_bpm(self) -> float:
         """Detect BPM (tempo)."""
-        return _detect_bpm(self.data, self.sample_rate)
+        out_bpm = ctypes.c_float()
+        rc = self._lib.sonare_audio_detect_bpm(self._handle, ctypes.byref(out_bpm))
+        _check(rc)
+        return float(out_bpm.value)
 
     def detect_key(self) -> Key:
         """Detect musical key."""
-        return _detect_key(self.data, self.sample_rate)
+        from ._ffi import SonareKey
+        from .types import Mode, PitchClass
+
+        out_key = SonareKey()
+        rc = self._lib.sonare_audio_detect_key(self._handle, ctypes.byref(out_key))
+        _check(rc)
+        return Key(
+            root=PitchClass(out_key.root),
+            mode=Mode(out_key.mode),
+            confidence=float(out_key.confidence),
+        )
 
     def detect_beats(self) -> list[float]:
         """Detect beat times in seconds."""
-        return _detect_beats(self.data, self.sample_rate)
+        out_times = ctypes.POINTER(ctypes.c_float)()
+        out_count = ctypes.c_size_t()
+        rc = self._lib.sonare_audio_detect_beats(
+            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+        )
+        _check(rc)
+        try:
+            return [float(out_times[i]) for i in range(out_count.value)]
+        finally:
+            if out_times and out_count.value > 0:
+                self._lib.sonare_free_floats(out_times)
 
     def detect_onsets(self) -> list[float]:
         """Detect onset times in seconds."""
-        return _detect_onsets(self.data, self.sample_rate)
+        out_times = ctypes.POINTER(ctypes.c_float)()
+        out_count = ctypes.c_size_t()
+        rc = self._lib.sonare_audio_detect_onsets(
+            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+        )
+        _check(rc)
+        try:
+            return [float(out_times[i]) for i in range(out_count.value)]
+        finally:
+            if out_times and out_count.value > 0:
+                self._lib.sonare_free_floats(out_times)
 
     def analyze(self) -> AnalysisResult:
         """Run full music analysis."""
-        return _analyze(self.data, self.sample_rate)
+        from ._ffi import SonareAnalysisResult
+        from .types import Mode, PitchClass, TimeSignature
+
+        out = SonareAnalysisResult()
+        rc = self._lib.sonare_audio_analyze(self._handle, ctypes.byref(out))
+        _check(rc)
+        try:
+            beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
+            return AnalysisResult(
+                bpm=float(out.bpm),
+                bpm_confidence=float(out.bpm_confidence),
+                key=Key(
+                    root=PitchClass(out.key.root),
+                    mode=Mode(out.key.mode),
+                    confidence=float(out.key.confidence),
+                ),
+                time_signature=TimeSignature(
+                    numerator=int(out.time_signature.numerator),
+                    denominator=int(out.time_signature.denominator),
+                    confidence=float(out.time_signature.confidence),
+                ),
+                beat_times=beat_times,
+            )
+        finally:
+            self._lib.sonare_free_result(ctypes.byref(out))
 
     # --- Effects ---
 

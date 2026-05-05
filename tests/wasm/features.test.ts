@@ -1,5 +1,5 @@
 /**
- * WASM feature API precision tests against librosa reference data.
+ * WASM feature API precision tests against reference data.
  */
 
 import { readFileSync } from 'node:fs';
@@ -91,7 +91,7 @@ function generateCMajorChord(sr: number, duration: number): Float32Array {
 const SR = 22050;
 const DURATION = 1.0;
 
-describe('Feature API precision (librosa compatibility)', () => {
+describe('Feature API precision (reference compatibility)', () => {
   beforeAll(async () => {
     await init();
   });
@@ -276,27 +276,10 @@ describe('Feature API precision (librosa compatibility)', () => {
       const result = chroma(chord, SR, 2048, 512);
       const refMean = refData.mean_per_class as number[];
 
-      // L-inf normalize each frame (column) so max chroma bin = 1.0,
-      // matching librosa's default chroma normalization.
-      const normalized = new Float32Array(result.features.length);
-      for (let f = 0; f < result.nFrames; f++) {
-        let frameMax = 0;
-        for (let c = 0; c < 12; c++) {
-          const val = Math.abs(result.features[c * result.nFrames + f]);
-          if (val > frameMax) {
-            frameMax = val;
-          }
-        }
-        for (let c = 0; c < 12; c++) {
-          normalized[c * result.nFrames + f] =
-            frameMax > 0 ? result.features[c * result.nFrames + f] / frameMax : 0;
-        }
-      }
-
       for (let c = 0; c < 12; c++) {
         let sum = 0;
         for (let f = 0; f < result.nFrames; f++) {
-          sum += normalized[c * result.nFrames + f];
+          sum += result.features[c * result.nFrames + f];
         }
         const mean = sum / result.nFrames;
 

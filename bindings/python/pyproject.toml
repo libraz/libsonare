@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "libsonare"
 version = "1.0.2"
-description = "Fast audio analysis library — librosa-like API, tens of times faster (C++ with Python bindings)"
+description = "Fast audio analysis library with C++ and Python bindings"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [
     { name = "libraz", email = "libraz@libraz.net" },
 ]
 readme = "README.md"
-keywords = ["audio", "music", "analysis", "mir", "bpm", "key", "tempo", "librosa", "dsp"]
+keywords = ["audio", "music", "analysis", "mir", "bpm", "key", "tempo", "dsp"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

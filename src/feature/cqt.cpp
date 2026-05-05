@@ -102,6 +102,40 @@ float compute_q(int bins_per_octave, float filter_scale) {
   return filter_scale / (std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f);
 }
 
+std::vector<float> create_cqt_window(WindowType type, int length) {
+  if (length <= 1) {
+    return std::vector<float>(length, 1.0f);
+  }
+
+  std::vector<float> window(length, 1.0f);
+  switch (type) {
+    case WindowType::Hann:
+      for (int i = 0; i < length; ++i) {
+        window[i] = 0.5f * (1.0f - std::cos(kTwoPi * i / length));
+      }
+      break;
+    case WindowType::Hamming:
+      for (int i = 0; i < length; ++i) {
+        window[i] = 0.54f - 0.46f * std::cos(kTwoPi * i / length);
+      }
+      break;
+    case WindowType::Blackman: {
+      constexpr float a0 = 0.42f;
+      constexpr float a1 = 0.5f;
+      constexpr float a2 = 0.08f;
+      for (int i = 0; i < length; ++i) {
+        float t = static_cast<float>(i) / length;
+        window[i] = a0 - a1 * std::cos(kTwoPi * t) + a2 * std::cos(2.0f * kTwoPi * t);
+      }
+      break;
+    }
+    case WindowType::Rectangular:
+      break;
+  }
+
+  return window;
+}
+
 }  // namespace
 
 // CqtResult implementation
@@ -197,25 +231,27 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
   for (int k = 0; k < config.n_bins; ++k) {
     float freq = kernel->frequencies_[k];
     int length = kernel->lengths_[k];
+    int offset = (kernel->fft_length_ - length + 1) / 2;
+    float center = 0.5f * static_cast<float>(length);
 
     // Create window
-    std::vector<float> window = create_window(config.window, length);
+    std::vector<float> window = create_cqt_window(config.window, length);
 
     // Compute normalization
     float win_sum = 0.0f;
     for (int i = 0; i < length; ++i) {
       win_sum += window[i];
     }
-    float norm = 1.0f / win_sum;
+    float norm = std::sqrt(static_cast<float>(length)) / win_sum;
 
     // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*n/sr)
     std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
               std::complex<float>(0.0f, 0.0f));
 
     for (int n = 0; n < length; ++n) {
-      float phase = kTwoPi * freq * n / sr;
+      float phase = kTwoPi * freq * (static_cast<float>(n) - center) / sr;
       float scaled_win = window[n] * norm;
-      complex_time_kernel[n] =
+      complex_time_kernel[offset + n] =
           std::complex<float>(scaled_win * std::cos(phase), -scaled_win * std::sin(phase));
     }
 
@@ -257,7 +293,7 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
 
-  // Center padding: pad signal by fft_length/2 on each side (matches librosa center=True).
+  // Center padding: pad signal by fft_length/2 on each side.
   // This ensures the first frame is centered at t=0 and produces the expected number of
   // frames: 1 + n_samples / hop_length (approximately).
   int pad_length = fft_length / 2;

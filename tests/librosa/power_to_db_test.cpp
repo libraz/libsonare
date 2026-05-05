@@ -1,5 +1,5 @@
 /// @file power_to_db_test.cpp
-/// @brief librosa compatibility tests for power_to_db conversion.
+/// @brief Reference compatibility tests for power_to_db conversion.
 /// @details Reference values from: tests/librosa/reference/power_to_db.json
 
 #include <catch2/catch_test_macros.hpp>
@@ -18,7 +18,7 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-/// @brief Creates sine tone matching librosa.tone().
+/// @brief Creates a sine tone matching the reference generator.
 std::vector<float> create_tone(int sr, float duration, float freq) {
   size_t n = static_cast<size_t>(duration * sr);
   std::vector<float> y(n);
@@ -50,7 +50,7 @@ float compute_std(const float* data, size_t size) {
 
 }  // namespace
 
-TEST_CASE("power_to_db librosa compatibility", "[power_to_db][librosa]") {
+TEST_CASE("power_to_db reference compatibility", "[power_to_db][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/power_to_db.json");
   const auto& data = json["data"];
 

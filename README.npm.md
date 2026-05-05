@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/libsonare)](https://pypi.org/project/libsonare/)
 [![License](https://img.shields.io/github/license/libraz/libsonare)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-Fast, dependency-free audio analysis library for browser and Node.js via WebAssembly. A librosa-like API for music information retrieval -- **tens of times faster** than Python.
+Fast, dependency-free audio analysis library for browser and Node.js via WebAssembly.
 
 ## Installation
 

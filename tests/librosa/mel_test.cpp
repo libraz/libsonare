@@ -1,5 +1,5 @@
 /// @file mel_test.cpp
-/// @brief librosa compatibility tests for Mel filterbank.
+/// @brief Reference compatibility tests for Mel filterbank.
 /// @details Reference values from: tests/librosa/reference/mel_filterbank.json
 
 #include "filters/mel.h"
@@ -14,7 +14,7 @@ using namespace sonare;
 using namespace sonare::test;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("mel filterbank librosa compatibility", "[mel][librosa]") {
+TEST_CASE("mel filterbank reference compatibility", "[mel][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/mel_filterbank.json");
   const auto& data = json["data"].as_array();
 

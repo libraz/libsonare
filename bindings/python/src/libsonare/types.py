@@ -58,8 +58,20 @@ class Key:
     mode: Mode
     confidence: float
 
-    def __str__(self) -> str:
+    @property
+    def name(self) -> str:
         return f"{self.root} {self.mode}"
+
+    @property
+    def short_name(self) -> str:
+        return f"{self.root}{'' if self.mode == Mode.MAJOR else 'm'}"
+
+    @property
+    def shortName(self) -> str:
+        return self.short_name
+
+    def __str__(self) -> str:
+        return self.name
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +87,14 @@ class TimeSignature:
 
 
 @dataclass(frozen=True, slots=True)
+class Beat:
+    """Beat event."""
+
+    time: float
+    strength: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisResult:
     """Full audio analysis result."""
 
@@ -83,6 +103,22 @@ class AnalysisResult:
     key: Key
     time_signature: TimeSignature
     beat_times: list[float]
+
+    @property
+    def bpmConfidence(self) -> float:
+        return self.bpm_confidence
+
+    @property
+    def timeSignature(self) -> TimeSignature:
+        return self.time_signature
+
+    @property
+    def beatTimes(self) -> list[float]:
+        return self.beat_times
+
+    @property
+    def beats(self) -> list[Beat]:
+        return [Beat(time=t) for t in self.beat_times]
 
 
 @dataclass(frozen=True, slots=True)

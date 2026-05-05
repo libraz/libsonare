@@ -17,6 +17,11 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   Napi::Value GetLength(const Napi::CallbackInfo& info);
   Napi::Value GetSampleRate(const Napi::CallbackInfo& info);
   Napi::Value GetDuration(const Napi::CallbackInfo& info);
+  Napi::Value DetectBpmInstance(const Napi::CallbackInfo& info);
+  Napi::Value DetectKeyInstance(const Napi::CallbackInfo& info);
+  Napi::Value DetectBeatsInstance(const Napi::CallbackInfo& info);
+  Napi::Value DetectOnsetsInstance(const Napi::CallbackInfo& info);
+  Napi::Value AnalyzeInstance(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
   // Static factory methods (return new SonareWrap instances)

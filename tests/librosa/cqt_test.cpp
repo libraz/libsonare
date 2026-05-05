@@ -1,5 +1,5 @@
 /// @file cqt_test.cpp
-/// @brief librosa compatibility tests for Constant-Q Transform.
+/// @brief Reference compatibility tests for Constant-Q Transform.
 /// @details Reference values from: tests/librosa/reference/cqt.json
 
 #include "feature/cqt.h"
@@ -17,7 +17,7 @@ using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("CQT librosa compatibility", "[cqt][librosa]") {
+TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/cqt.json");
   const auto& data = json["data"];
 
@@ -49,14 +49,12 @@ TEST_CASE("CQT librosa compatibility", "[cqt][librosa]") {
     const auto& shape = data["shape"].as_array();
     REQUIRE(result.n_bins() == shape[0].as_int());
 
-    // With center padding, frame counts should match librosa
+    // With center padding, frame counts should match the reference
     int ref_n_frames = shape[1].as_int();
     int our_n_frames = result.n_frames();
     CAPTURE(our_n_frames, ref_n_frames);
     REQUIRE(our_n_frames == ref_n_frames);
 
-    // The magnitude scales also differ due to different CQT normalization.
-    // Verify that the output is non-trivial (has positive energy).
     const auto& mag = result.magnitude();
     float mag_sum = 0.0f;
     float mag_max = 0.0f;
@@ -64,8 +62,43 @@ TEST_CASE("CQT librosa compatibility", "[cqt][librosa]") {
       mag_sum += v;
       mag_max = std::max(mag_max, v);
     }
-    REQUIRE(mag_sum > 0.0f);
-    REQUIRE(mag_max > 0.0f);
+
+    REQUIRE_THAT(static_cast<double>(mag_sum),
+                 WithinRel(static_cast<double>(data["magnitude_sum"].as_float()), 1.9e-2));
+    REQUIRE_THAT(static_cast<double>(mag_max),
+                 WithinRel(static_cast<double>(data["magnitude_max"].as_float()), 1.6e-2));
+  }
+
+  SECTION("stored frames") {
+    CqtConfig config;
+    config.fmin = ref_fmin;
+    config.n_bins = ref_n_bins;
+    config.bins_per_octave = ref_bins_per_octave;
+    config.hop_length = hop_length;
+
+    CqtResult result = cqt(audio, config);
+
+    const auto& mag = result.magnitude();
+    const auto& ref_frames = data["frames"].as_array();
+    int stored_frames = data["n_stored_frames"].as_int();
+    int n_frames = result.n_frames();
+
+    REQUIRE(static_cast<int>(ref_frames.size()) == result.n_bins() * stored_frames);
+
+    float mean_abs_diff = 0.0f;
+    float max_abs_diff = 0.0f;
+    size_t ref_idx = 0;
+    for (int bin = 0; bin < result.n_bins(); ++bin) {
+      for (int frame = 0; frame < stored_frames; ++frame) {
+        float diff = std::abs(mag[bin * n_frames + frame] - ref_frames[ref_idx++].as_float());
+        mean_abs_diff += diff;
+        max_abs_diff = std::max(max_abs_diff, diff);
+      }
+    }
+    mean_abs_diff /= static_cast<float>(ref_frames.size());
+
+    REQUIRE(mean_abs_diff < 0.025f);
+    REQUIRE(max_abs_diff < 0.3f);
   }
 
   SECTION("frequencies") {

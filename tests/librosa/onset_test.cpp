@@ -1,5 +1,5 @@
 /// @file onset_test.cpp
-/// @brief librosa compatibility tests for onset strength.
+/// @brief Reference compatibility tests for onset strength.
 /// @details Reference values from: tests/librosa/reference/onset_strength.json
 
 #include "feature/onset.h"
@@ -17,7 +17,7 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-/// @brief Creates impulse train signal matching the librosa reference.
+/// @brief Creates impulse train signal matching the reference.
 /// @details Signal has impulses at 0.2s intervals with Hann window.
 std::vector<float> create_impulse_train(int sr, float duration) {
   std::vector<float> y(static_cast<size_t>(duration * sr), 0.0f);
@@ -40,7 +40,7 @@ std::vector<float> create_impulse_train(int sr, float duration) {
 
 }  // namespace
 
-TEST_CASE("onset strength librosa compatibility", "[onset][librosa]") {
+TEST_CASE("onset strength reference compatibility", "[onset][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/onset_strength.json");
   const auto& data = json["data"].as_array();
 
@@ -54,32 +54,25 @@ TEST_CASE("onset strength librosa compatibility", "[onset][librosa]") {
 
     SECTION(section_name) {
       CAPTURE(ref_max, ref_mean);
-      // Create the same impulse train signal used in librosa reference
+      // Create the same impulse train signal used in the reference
       auto samples = create_impulse_train(sr, 1.0f);
       Audio audio = Audio::from_vector(std::move(samples), sr);
 
-      // Configure Mel spectrogram to match librosa defaults
+      // Configure Mel spectrogram with standard defaults
       MelConfig mel_config;
       mel_config.n_fft = 2048;
       mel_config.hop_length = hop_length;
       mel_config.n_mels = 128;
 
-      // Match librosa defaults: detrend=False, center=True (but different meaning)
       OnsetConfig onset_config;
       onset_config.detrend = false;
-      onset_config.center = false;  // Disable z-score normalization
 
       // Compute onset strength
       auto onset_env = compute_onset_strength(audio, mel_config, onset_config);
 
-      // Normalize by n_mels to convert sum to mean (librosa uses mean)
-      for (auto& v : onset_env) {
-        v /= static_cast<float>(mel_config.n_mels);
-      }
-
-      // Verify shape (approximately)
-      // Note: exact frame count may differ slightly due to padding differences
-      REQUIRE(onset_env.size() > 0);
+      // Verify shape
+      const auto& ref_shape = item["shape"].as_array();
+      REQUIRE(onset_env.size() == static_cast<size_t>(ref_shape[0].as_int()));
 
       // Compute statistics
       float max_val = 0.0f;
@@ -90,18 +83,28 @@ TEST_CASE("onset strength librosa compatibility", "[onset][librosa]") {
       }
       float mean = sum / onset_env.size();
 
-      // Compare with librosa reference values
-      // Note: Some difference is expected due to:
-      // - Mel filterbank implementation details
-      // - Power-to-dB conversion parameters
-      // - Padding/centering differences
       REQUIRE(max_val > 0.0f);
       REQUIRE(mean > 0.0f);
 
-      // Verify relative ratio is similar (within 50% tolerance)
-      float ref_ratio = ref_max / ref_mean;
-      float our_ratio = max_val / mean;
-      REQUIRE_THAT(our_ratio, WithinRel(ref_ratio, 0.5f));
+      REQUIRE_THAT(max_val, WithinRel(ref_max, 0.2f));
+      REQUIRE_THAT(mean, WithinRel(ref_mean, 0.2f));
+
+      const auto& ref_peaks = item["top_peak_frames"].as_array();
+      REQUIRE(ref_peaks.size() >= 4);
+
+      std::vector<int> peak_frames;
+      for (size_t i = 1; i + 1 < onset_env.size(); ++i) {
+        if (onset_env[i] > onset_env[i - 1] && onset_env[i] >= onset_env[i + 1] &&
+            onset_env[i] >= max_val * 0.3f) {
+          peak_frames.push_back(static_cast<int>(i));
+        }
+      }
+      REQUIRE(peak_frames.size() >= 4);
+
+      for (size_t i = 0; i < 4; ++i) {
+        CAPTURE(i, peak_frames[i], ref_peaks[i].as_int());
+        REQUIRE(std::abs(peak_frames[i] - ref_peaks[i].as_int()) <= 1);
+      }
     }
   }
 }

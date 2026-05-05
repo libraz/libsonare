@@ -1,5 +1,5 @@
 /// @file stft_test.cpp
-/// @brief librosa compatibility tests for STFT.
+/// @brief Reference compatibility tests for STFT.
 /// @details Reference values from: tests/librosa/reference/stft.json
 
 #include <catch2/catch_test_macros.hpp>
@@ -18,7 +18,7 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-/// @brief Creates sine tone matching librosa.tone().
+/// @brief Creates a sine tone matching the reference generator.
 std::vector<float> create_tone(int sr, float duration, float freq) {
   size_t n = static_cast<size_t>(duration * sr);
   std::vector<float> y(n);
@@ -30,7 +30,7 @@ std::vector<float> create_tone(int sr, float duration, float freq) {
 
 }  // namespace
 
-TEST_CASE("STFT librosa compatibility", "[stft][librosa]") {
+TEST_CASE("STFT reference compatibility", "[stft][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/stft.json");
   const auto& data = json["data"].as_array();
 

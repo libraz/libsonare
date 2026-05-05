@@ -10,7 +10,7 @@ namespace sonare {
 /// @brief Mel filterbank normalization type.
 enum class MelNorm {
   None,   ///< No normalization
-  Slaney  ///< Slaney-style area normalization (librosa default)
+  Slaney  ///< Slaney-style area normalization
 };
 
 /// @brief Configuration for Mel filterbank.

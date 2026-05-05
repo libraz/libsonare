@@ -1,5 +1,5 @@
 /// @file tempo_test.cpp
-/// @brief librosa compatibility tests for tempo detection.
+/// @brief Reference compatibility tests for tempo detection.
 /// @details Reference values from: tests/librosa/reference/tempo.json
 
 #include <catch2/catch_test_macros.hpp>
@@ -56,7 +56,7 @@ bool tempo_matches(float detected, float expected, float tolerance_pct) {
 
 }  // namespace
 
-TEST_CASE("tempo detection librosa compatibility", "[tempo][librosa]") {
+TEST_CASE("tempo detection reference compatibility", "[tempo][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/tempo.json");
   const auto& data = json["data"].as_array();
 

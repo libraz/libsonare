@@ -83,6 +83,12 @@ const float* sonare_audio_data(const SonareAudio* audio);
 size_t sonare_audio_length(const SonareAudio* audio);
 int sonare_audio_sample_rate(const SonareAudio* audio);
 float sonare_audio_duration(const SonareAudio* audio);
+SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
+SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
+SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times, size_t* out_count);
+SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
+                                       size_t* out_count);
+SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
 
 // Quick detection functions
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate, float* out_bpm);

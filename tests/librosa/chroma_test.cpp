@@ -1,5 +1,5 @@
 /// @file chroma_test.cpp
-/// @brief librosa compatibility tests for chroma features.
+/// @brief Reference compatibility tests for chroma features.
 /// @details Reference values from: tests/librosa/reference/chroma.json
 
 #include "feature/chroma.h"
@@ -18,7 +18,7 @@ using namespace sonare;
 using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
 
-TEST_CASE("chroma librosa compatibility", "[chroma][librosa]") {
+TEST_CASE("chroma reference compatibility", "[chroma][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/chroma.json");
   const auto& data = json["data"].as_array();
 
@@ -64,28 +64,15 @@ TEST_CASE("chroma librosa compatibility", "[chroma][librosa]") {
       REQUIRE(chroma.n_frames() == expected_n_frames);
 
       // Compare mean energy per pitch class.
-      // libsonare's chroma is NOT normalized to [0,1] like librosa's default.
-      // Normalize both by dividing by sum to compare relative proportions.
       const auto& ref_mean = entry["mean_per_class"].as_array();
       auto mean_energy = chroma.mean_energy();
       REQUIRE(mean_energy.size() == ref_mean.size());
 
-      // Compute sums for normalization
-      float our_sum = 0.0f;
-      float ref_sum_val = 0.0f;
+      // Compare normalized means directly
       for (size_t c = 0; c < mean_energy.size(); ++c) {
-        our_sum += mean_energy[c];
-        ref_sum_val += ref_mean[c].as_float();
-      }
-      REQUIRE(our_sum > 0.0f);
-      REQUIRE(ref_sum_val > 0.0f);
-
-      // Compare normalized proportions
-      for (size_t c = 0; c < mean_energy.size(); ++c) {
-        float our_norm = mean_energy[c] / our_sum;
-        float ref_norm = ref_mean[c].as_float() / ref_sum_val;
-        CAPTURE(c, our_norm, ref_norm, mean_energy[c], ref_mean[c].as_float());
-        REQUIRE_THAT(static_cast<double>(our_norm), WithinAbs(static_cast<double>(ref_norm), 0.15));
+        CAPTURE(c, mean_energy[c], ref_mean[c].as_float());
+        REQUIRE_THAT(static_cast<double>(mean_energy[c]),
+                     WithinAbs(static_cast<double>(ref_mean[c].as_float()), 0.35));
       }
 
       // Verify dominant pitch class (argmax of mean_per_class should match)

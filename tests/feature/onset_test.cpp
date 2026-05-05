@@ -100,7 +100,6 @@ TEST_CASE("compute_onset_strength transient vs steady", "[onset]") {
 
   OnsetConfig onset_config;
   onset_config.detrend = false;  // Keep raw values for comparison
-  onset_config.center = false;
 
   std::vector<float> steady_onset = compute_onset_strength(steady, mel_config, onset_config);
   std::vector<float> transient_onset = compute_onset_strength(transient, mel_config, onset_config);
@@ -128,9 +127,7 @@ TEST_CASE("compute_onset_strength lag parameter", "[onset]") {
   config1.lag = 1;
   config2.lag = 3;
   config1.detrend = false;
-  config1.center = false;
   config2.detrend = false;
-  config2.center = false;
 
   std::vector<float> onset1 = compute_onset_strength(mel, config1);
   std::vector<float> onset2 = compute_onset_strength(mel, config2);
@@ -158,9 +155,7 @@ TEST_CASE("compute_onset_strength detrend", "[onset]") {
 
   OnsetConfig no_detrend, with_detrend;
   no_detrend.detrend = false;
-  no_detrend.center = false;
   with_detrend.detrend = true;
-  with_detrend.center = false;
 
   std::vector<float> onset_nd = compute_onset_strength(mel, no_detrend);
   std::vector<float> onset_d = compute_onset_strength(mel, with_detrend);
@@ -212,7 +207,6 @@ TEST_CASE("onset_strength_multi bands independence", "[onset]") {
   int n_bands = 3;
   OnsetConfig config;
   config.detrend = false;
-  config.center = false;
 
   std::vector<float> onset_multi = onset_strength_multi(mel, n_bands, config);
 

@@ -84,7 +84,7 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
 std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_bands = 6,
                                      float fmin = 200.0f, float quantile = 0.02f);
 
-/// @brief Computes zero crossing rate of time-domain signal.
+/// @brief Computes zero crossing rate of a centered time-domain signal.
 /// @param audio Input audio
 /// @param frame_length Frame length in samples (default 2048)
 /// @param hop_length Hop length in samples (default 512)
@@ -101,7 +101,7 @@ std::vector<float> zero_crossing_rate(const Audio& audio, int frame_length = 204
 std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, int frame_length,
                                       int hop_length);
 
-/// @brief Computes RMS energy of time-domain signal.
+/// @brief Computes RMS energy of a centered time-domain signal.
 /// @param audio Input audio
 /// @param frame_length Frame length in samples (default 2048)
 /// @param hop_length Hop length in samples (default 512)

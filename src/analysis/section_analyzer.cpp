@@ -9,6 +9,24 @@
 
 namespace sonare {
 
+namespace {
+
+void add_fallback_section(std::vector<Section>& sections, float audio_duration) {
+  if (!sections.empty() || audio_duration <= 0.0f) {
+    return;
+  }
+
+  Section section;
+  section.start = 0.0f;
+  section.end = audio_duration;
+  section.energy_level = 0.0f;
+  section.confidence = 0.5f;
+  section.type = SectionType::Verse;
+  sections.push_back(section);
+}
+
+}  // namespace
+
 std::string Section::type_string() const { return section_type_to_string(type); }
 
 char section_type_to_char(SectionType type) {
@@ -101,6 +119,8 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
     }
   }
 
+  add_fallback_section(sections_, audio_duration);
+
   // Classify sections
   classify_sections();
 }
@@ -146,6 +166,8 @@ void SectionAnalyzer::analyze() {
       sections_.push_back(section);
     }
   }
+
+  add_fallback_section(sections_, audio_duration);
 
   // Classify sections
   classify_sections();

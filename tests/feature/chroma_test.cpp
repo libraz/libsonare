@@ -177,7 +177,7 @@ TEST_CASE("Chroma normalize default produces max norm", "[chroma]") {
 
   Chroma chroma = Chroma::compute(audio, config);
 
-  // Default normalize() should use max norm (norm=0, matching librosa norm=np.inf)
+  // Default normalize() should use max norm (norm=0)
   std::vector<float> normalized = chroma.normalize();
   REQUIRE(normalized.size() == static_cast<size_t>(12 * chroma.n_frames()));
 

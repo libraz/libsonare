@@ -1,5 +1,5 @@
 /// @file pitch_test.cpp
-/// @brief librosa compatibility tests for YIN pitch detection.
+/// @brief Reference compatibility tests for YIN pitch detection.
 /// @details Reference values from: tests/librosa/reference/yin.json
 
 #include "feature/pitch.h"
@@ -17,7 +17,7 @@ using namespace sonare;
 using namespace sonare::test;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("YIN pitch librosa compatibility", "[pitch][librosa]") {
+TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/yin.json");
   const auto& data = json["data"].as_array();
 
@@ -49,7 +49,7 @@ TEST_CASE("YIN pitch librosa compatibility", "[pitch][librosa]") {
 
         PitchResult result = yin_track(audio, config);
 
-        // libsonare and librosa may produce different frame counts due to
+        // Implementations may produce different frame counts due to
         // different framing/padding strategies. Compare overlapping frames.
         int our_frames = result.n_frames();
         int ref_frames = static_cast<int>(ref_f0.size());
@@ -93,7 +93,7 @@ TEST_CASE("YIN pitch librosa compatibility", "[pitch][librosa]") {
 
         PitchResult result = yin_track(audio, config);
 
-        // libsonare and librosa may produce different frame counts due to
+        // Implementations may produce different frame counts due to
         // different framing/padding strategies. Compare overlapping frames.
         int our_frames = result.n_frames();
         int ref_frames = static_cast<int>(ref_f0.size());

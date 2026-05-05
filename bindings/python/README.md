@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-Fast audio analysis library for Python -- librosa-like API, **tens of times faster**.
+Fast audio analysis library for Python.
 
 Built on a C++ core with zero Python dependencies.
 
@@ -61,9 +61,9 @@ sonare chroma song.mp3           # Chromagram with visualization
 - **Conversions**: Hz/mel/MIDI/note, frames/time
 - **I/O**: Load WAV/MP3 files, resample
 
-## librosa Compatibility
+## Compatibility
 
-Default parameters match librosa:
+Default parameters:
 - Sample rate: 22050 Hz
 - n_fft: 2048
 - hop_length: 512

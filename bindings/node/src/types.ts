@@ -2,6 +2,8 @@ export interface Key {
   root: string;
   mode: string;
   confidence: number;
+  name: string;
+  shortName: string;
 }
 
 export interface TimeSignature {
@@ -16,6 +18,7 @@ export interface AnalysisResult {
   key: Key;
   timeSignature: TimeSignature;
   beatTimes: Float32Array;
+  beats: Array<{ time: number; strength: undefined }>;
 }
 
 export interface HpssResult {

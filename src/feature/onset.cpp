@@ -9,6 +9,14 @@
 
 namespace sonare {
 
+namespace {
+
+constexpr float kAmin = 1e-10f;
+constexpr float kPowerToDbScale = 4.342944819f;
+constexpr float kTopDb = 80.0f;
+
+}  // namespace
+
 std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
                                           const OnsetConfig& config) {
   SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
@@ -22,10 +30,11 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> power_map(
       power, n_mels, n_frames);
 
-  /// Compute log power using Eigen (vectorized)
-  constexpr float kAmin = 1e-10f;
+  /// Convert power to decibels before differencing.
   Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
-      power_map.array().max(kAmin).log();
+      power_map.array().max(kAmin).log() * kPowerToDbScale;
+  float max_db = log_power.maxCoeff();
+  log_power = (log_power.array() - max_db).max(-kTopDb);
 
   /// @details Compute first-order difference and half-wave rectification.
   /// diff = log_power[:, lag:] - log_power[:, :-lag]
@@ -37,9 +46,9 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
     // Compute difference matrix
     Eigen::MatrixXf diff = log_power.rightCols(diff_frames) - log_power.leftCols(diff_frames);
 
-    // Half-wave rectification and column sum
+    // Half-wave rectification and column mean
     Eigen::Map<Eigen::VectorXf> env_map(onset_env.data() + config.lag, diff_frames);
-    env_map = diff.array().max(0.0f).colwise().sum();
+    env_map = diff.array().max(0.0f).colwise().mean();
   }
 
   /// Detrend: remove mean
@@ -48,25 +57,31 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
     env_array -= env_array.mean();
   }
 
-  /// Center: normalize by standard deviation
-  if (config.center && n_frames > 1) {
-    Eigen::Map<Eigen::ArrayXf> env_array(onset_env.data(), n_frames);
-    float mean = env_array.mean();
-    float var = (env_array - mean).square().sum() / static_cast<float>(n_frames - 1);
-    float std_dev = std::sqrt(var);
-
-    if (std_dev > 1e-10f) {
-      env_array = (env_array - mean) / std_dev;
-    }
-  }
-
   return onset_env;
 }
 
 std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& mel_config,
                                           const OnsetConfig& onset_config) {
-  MelSpectrogram mel_spec = MelSpectrogram::compute(audio, mel_config);
-  return compute_onset_strength(mel_spec, onset_config);
+  MelConfig aligned_mel_config = mel_config;
+  aligned_mel_config.center = onset_config.center;
+  MelSpectrogram mel_spec = MelSpectrogram::compute(audio, aligned_mel_config);
+  std::vector<float> onset_env = compute_onset_strength(mel_spec, onset_config);
+
+  if (onset_config.center && !onset_env.empty() && aligned_mel_config.hop_length > 0) {
+    int frame_offset = aligned_mel_config.n_fft / (2 * aligned_mel_config.hop_length);
+    if (frame_offset > 0) {
+      std::vector<float> shifted(onset_env.size(), 0.0f);
+      for (size_t i = 0; i < onset_env.size(); ++i) {
+        size_t shifted_index = i + static_cast<size_t>(frame_offset);
+        if (shifted_index < shifted.size()) {
+          shifted[shifted_index] = onset_env[i];
+        }
+      }
+      return shifted;
+    }
+  }
+
+  return onset_env;
 }
 
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands,
@@ -84,9 +99,10 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
       power, n_mels, n_frames);
 
   // Compute log power using Eigen
-  constexpr float kAmin = 1e-10f;
   Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
-      power_map.array().max(kAmin).log();
+      power_map.array().max(kAmin).log() * kPowerToDbScale;
+  float max_db = log_power.maxCoeff();
+  log_power = (log_power.array() - max_db).max(-kTopDb);
 
   // Divide Mel bands into n_bands groups
   int mels_per_band = n_mels / n_bands;
@@ -106,33 +122,20 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
       Eigen::MatrixXf band_diff = log_power.block(mel_start, config.lag, band_size, diff_frames) -
                                   log_power.block(mel_start, 0, band_size, diff_frames);
 
-      // Half-wave rectification and column sum
+      // Half-wave rectification and column mean
       Eigen::Map<Eigen::VectorXf> out_map(onset_multi.data() + b * n_frames + config.lag,
                                           diff_frames);
-      out_map = band_diff.array().max(0.0f).colwise().sum();
+      out_map = band_diff.array().max(0.0f).colwise().mean();
     }
   }
 
-  // Apply detrend and center per band using Eigen
+  // Apply detrend per band using Eigen
   Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> onset_map(
       onset_multi.data(), n_bands, n_frames);
 
   if (config.detrend && n_frames > 0) {
     Eigen::VectorXf row_means = onset_map.rowwise().mean();
     onset_map.colwise() -= row_means;
-  }
-
-  if (config.center && n_frames > 1) {
-    for (int b = 0; b < n_bands; ++b) {
-      Eigen::Map<Eigen::ArrayXf> band(onset_multi.data() + b * n_frames, n_frames);
-      float mean = band.mean();
-      float var = (band - mean).square().sum() / static_cast<float>(n_frames - 1);
-      float std_dev = std::sqrt(var);
-
-      if (std_dev > 1e-10f) {
-        band = (band - mean) / std_dev;
-      }
-    }
   }
 
   return onset_multi;

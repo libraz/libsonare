@@ -84,7 +84,7 @@ TEST_CASE("frames_to_time / time_to_frames", "[convert]") {
 }
 
 TEST_CASE("time_to_frames floor behavior", "[convert]") {
-  // Test that time_to_frames uses floor (librosa compatible)
+  // Test that time_to_frames uses floor
   int sr = 22050;
   int hop = 512;
 

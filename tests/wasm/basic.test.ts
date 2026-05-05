@@ -2,7 +2,7 @@
  * Basic WASM module tests
  */
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   analyze,
   detectBeats,
@@ -26,6 +26,20 @@ describe('Sonare WASM Module', () => {
     it('should return version string', () => {
       const v = version();
       expect(v).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    it('should allow retry after failed init', async () => {
+      vi.resetModules();
+      const fresh = await import('../../js/index');
+
+      await expect(
+        fresh.init({
+          locateFile: () => '/definitely-missing/sonare.wasm',
+        }),
+      ).rejects.toBeDefined();
+
+      await expect(fresh.init()).resolves.toBeUndefined();
+      expect(fresh.isInitialized()).toBe(true);
     });
   });
 
@@ -107,6 +121,7 @@ describe('Sonare WASM Module', () => {
       expect(result.bpm).toBeGreaterThan(0);
       expect(result.key).toBeDefined();
       expect(result.timeSignature).toBeDefined();
+      expect(result.beatTimes).toBeInstanceOf(Float32Array);
       expect(result.beats).toBeDefined();
       expect(result.chords).toBeDefined();
       expect(result.sections).toBeDefined();

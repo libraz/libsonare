@@ -76,8 +76,7 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   SONARE_CHECK(n_mfcc > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_mfcc <= n_mels_, ErrorCode::InvalidParameter);
 
-  // Compute log Mel spectrogram in dB (librosa compatible)
-  // librosa uses: 10 * log10(S / ref) with ref=1.0, amin=1e-10, top_db=80
+  // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling.
   // Clipping is done in dB scale: max(log_spec, log_spec.max() - top_db)
   std::vector<float> log_mel(power_.size());
   const float amin = 1e-10f;

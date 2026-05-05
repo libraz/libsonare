@@ -14,8 +14,8 @@ namespace sonare {
 
 namespace {
 
-/// @brief Pads signal with zeros for centered STFT (librosa compatible).
-/// @details librosa uses pad_mode='constant' (zero padding) by default.
+/// @brief Pads signal with zeros for centered STFT.
+/// @details Uses constant zero padding.
 std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
   std::vector<float> padded(size + 2 * pad_length, 0.0f);
 
@@ -23,6 +23,40 @@ std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
   std::copy(data, data + size, padded.begin() + pad_length);
 
   return padded;
+}
+
+std::vector<float> create_fft_window(WindowType type, int length) {
+  if (length <= 1) {
+    return std::vector<float>(length, 1.0f);
+  }
+
+  std::vector<float> window(length, 1.0f);
+  switch (type) {
+    case WindowType::Hann:
+      for (int i = 0; i < length; ++i) {
+        window[i] = 0.5f * (1.0f - std::cos(kTwoPi * i / length));
+      }
+      break;
+    case WindowType::Hamming:
+      for (int i = 0; i < length; ++i) {
+        window[i] = 0.54f - 0.46f * std::cos(kTwoPi * i / length);
+      }
+      break;
+    case WindowType::Blackman: {
+      constexpr float a0 = 0.42f;
+      constexpr float a1 = 0.5f;
+      constexpr float a2 = 0.08f;
+      for (int i = 0; i < length; ++i) {
+        float t = static_cast<float>(i) / length;
+        window[i] = a0 - a1 * std::cos(kTwoPi * t) + a2 * std::cos(2.0f * kTwoPi * t);
+      }
+      break;
+    }
+    case WindowType::Rectangular:
+      break;
+  }
+
+  return window;
 }
 
 }  // namespace
@@ -56,7 +90,7 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
   // Get cached window
-  const std::vector<float>& window = get_window_cached(config.window, win_length);
+  std::vector<float> window = create_fft_window(config.window, win_length);
 
   /// Pad window to n_fft if necessary
   std::vector<float> padded_window(n_fft, 0.0f);
@@ -197,7 +231,7 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   }
 
   // Get cached synthesis window matching the analysis window length
-  const std::vector<float>& win_short = get_window_cached(window_type, win_length_);
+  std::vector<float> win_short = create_fft_window(window_type, win_length_);
 
   // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
   std::vector<float> window(n_fft_, 0.0f);
@@ -312,7 +346,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
         std::complex<float> new_val = new_spec.at(f, t);
         float new_angle = std::arg(new_val);
 
-        // Apply momentum following librosa/SciPy convention:
+        // Apply momentum using the common phase-vocoder convention:
         //   rebuilt = (1 + momentum) * new_angles - momentum * prev_angles
         // High momentum extrapolates the phase update, accelerating convergence.
         float updated_angle = new_angle;

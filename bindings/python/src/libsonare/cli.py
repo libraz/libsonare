@@ -14,8 +14,8 @@ def _load_audio(path: str) -> tuple[list[float], int]:
     """Load audio from file via the Audio class."""
     from .audio import Audio
 
-    audio = Audio.from_file(path)
-    return audio.data, audio.sample_rate
+    with Audio.from_file(path) as audio:
+        return audio.data, audio.sample_rate
 
 
 def _format_time(seconds: float) -> str:
@@ -39,10 +39,10 @@ def cmd_version(args: argparse.Namespace) -> int:
 def cmd_info(args: argparse.Namespace) -> int:
     from .audio import Audio
 
-    audio = Audio.from_file(args.file)
-    sr = audio.sample_rate
-    n = audio.length
-    dur = audio.duration
+    with Audio.from_file(args.file) as audio:
+        sr = audio.sample_rate
+        n = audio.length
+        dur = audio.duration
 
     if args.json:
         print(

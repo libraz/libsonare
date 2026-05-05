@@ -1,5 +1,5 @@
 /// @file zcr_test.cpp
-/// @brief librosa compatibility tests for ZCR and RMS energy.
+/// @brief Reference compatibility tests for ZCR and RMS energy.
 /// @details Reference values from: tests/librosa/reference/zcr_rms.json
 
 #include <catch2/catch_test_macros.hpp>
@@ -15,11 +15,12 @@
 
 using namespace sonare;
 using namespace sonare::test;
+using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
 
-/// @brief Creates sine tone matching librosa.tone().
+/// @brief Creates a sine tone matching the reference generator.
 std::vector<float> create_tone(int sr, float duration, float freq) {
   size_t n = static_cast<size_t>(duration * sr);
   std::vector<float> y(n);
@@ -53,7 +54,7 @@ std::vector<float> create_signal(const std::string& name, int sr, float duration
 
 }  // namespace
 
-TEST_CASE("ZCR/RMS librosa compatibility", "[zcr][librosa]") {
+TEST_CASE("ZCR/RMS reference compatibility", "[zcr][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/zcr_rms.json");
   const auto& data = json["data"].as_array();
 
@@ -76,12 +77,8 @@ TEST_CASE("ZCR/RMS librosa compatibility", "[zcr][librosa]") {
       auto zcr = zero_crossing_rate(audio, frame_length, hop_length);
       int n_frames = static_cast<int>(zcr.size());
 
-      // librosa uses center=True (pads by frame_length//2), libsonare does not.
-      // The offset is frame_length / (2 * hop_length) frames.
-      int offset = frame_length / (2 * hop_length);
-      int compare_frames = std::min(n_frames, ref_n_frames - offset);
-      CAPTURE(signal_name, n_frames, ref_n_frames, offset);
-      REQUIRE(compare_frames > 0);
+      CAPTURE(signal_name, n_frames, ref_n_frames);
+      REQUIRE(n_frames == ref_n_frames);
 
       if (signal_name == "white_noise") {
         // C++ std::mt19937 and numpy use different RNG algorithms, so
@@ -95,12 +92,11 @@ TEST_CASE("ZCR/RMS librosa compatibility", "[zcr][librosa]") {
         CAPTURE(signal_name, zcr_mean);
         REQUIRE(std::abs(zcr_mean - 0.5f) < 0.05f);
       } else {
-        // Compare ZCR values with offset into reference
-        for (int i = 0; i < compare_frames; ++i) {
-          float expected = ref_zcr[i + offset].as_float();
+        for (int i = 0; i < n_frames; ++i) {
+          float expected = ref_zcr[i].as_float();
           float actual = zcr[i];
           CAPTURE(signal_name, i, actual, expected);
-          REQUIRE_THAT(actual, WithinRel(expected, 1e-2f));
+          REQUIRE_THAT(actual, WithinAbs(expected, 1e-3f));
         }
       }
     }
@@ -118,11 +114,8 @@ TEST_CASE("ZCR/RMS librosa compatibility", "[zcr][librosa]") {
       auto rms = rms_energy(audio, frame_length, hop_length);
       int n_frames = static_cast<int>(rms.size());
 
-      // librosa uses center=True (pads by frame_length//2), libsonare does not.
-      int offset = frame_length / (2 * hop_length);
-      int compare_frames = std::min(n_frames, ref_n_frames - offset);
-      CAPTURE(signal_name, n_frames, ref_n_frames, offset);
-      REQUIRE(compare_frames > 0);
+      CAPTURE(signal_name, n_frames, ref_n_frames);
+      REQUIRE(n_frames == ref_n_frames);
 
       if (signal_name == "white_noise") {
         // C++ std::mt19937 and numpy use different RNG algorithms, so
@@ -136,9 +129,8 @@ TEST_CASE("ZCR/RMS librosa compatibility", "[zcr][librosa]") {
         CAPTURE(signal_name, rms_mean);
         REQUIRE(std::abs(rms_mean - 1.0f) < 0.1f);
       } else {
-        // Compare RMS values with offset into reference
-        for (int i = 0; i < compare_frames; ++i) {
-          float expected = ref_rms[i + offset].as_float();
+        for (int i = 0; i < n_frames; ++i) {
+          float expected = ref_rms[i].as_float();
           float actual = rms[i];
           CAPTURE(signal_name, i, actual, expected);
           REQUIRE_THAT(actual, WithinRel(expected, 1e-2f));

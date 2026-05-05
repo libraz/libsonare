@@ -13,7 +13,7 @@ namespace sonare {
 struct OnsetConfig {
   int lag = 1;          ///< Time lag for computing differences (frames)
   bool detrend = true;  ///< Remove DC component from onset curve
-  bool center = true;   ///< Center the onset strength signal
+  bool center = true;   ///< Pad frames so each onset value is aligned to the frame center
 };
 
 /// @brief Computes onset strength envelope from Mel spectrogram.

@@ -183,6 +183,17 @@ TEST_CASE("sonare_analyze", "[c_api]") {
     SonareError err = sonare_analyze(nullptr, 100, 22050, &result);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("free_result is safe on partially initialized struct") {
+    SonareAnalysisResult result = {};
+    result.beat_times = new float[2]{0.1f, 0.2f};
+    result.beat_count = 2;
+
+    sonare_free_result(&result);
+
+    REQUIRE(result.beat_times == nullptr);
+    REQUIRE(result.beat_count == 0);
+  }
 }
 
 TEST_CASE("sonare_error_message", "[c_api]") {

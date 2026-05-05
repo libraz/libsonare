@@ -74,7 +74,6 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
   OnsetConfig onset_config;
   onset_config.lag = 1;
   onset_config.detrend = true;
-  onset_config.center = false;
 
   onset_strength_ = compute_onset_strength(audio, mel_config, onset_config);
 

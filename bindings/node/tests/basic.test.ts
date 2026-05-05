@@ -68,6 +68,8 @@ describe('sonare native binding', () => {
       expect(typeof key.root).toBe('string');
       expect(typeof key.mode).toBe('string');
       expect(typeof key.confidence).toBe('number');
+      expect(typeof key.name).toBe('string');
+      expect(typeof key.shortName).toBe('string');
     });
 
     it('detectBeats returns Float32Array', () => {
@@ -84,7 +86,19 @@ describe('sonare native binding', () => {
       expect(result).toHaveProperty('key');
       expect(result).toHaveProperty('timeSignature');
       expect(result).toHaveProperty('beatTimes');
+      expect(result).toHaveProperty('beats');
       expect(result.beatTimes).toBeInstanceOf(Float32Array);
+      expect(Array.isArray(result.beats)).toBe(true);
+    });
+
+    it('rejects non-Float32Array input', () => {
+      expect(() => detectBpm(new Float64Array(SR) as unknown as Float32Array, SR)).toThrow(
+        /Float32Array/,
+      );
+    });
+
+    it('converts invalid native arguments into JS exceptions', () => {
+      expect(() => timeStretch(new Float32Array(SR), -1, 2.0)).toThrow(/Invalid parameter/);
     });
   });
 
@@ -314,6 +328,15 @@ describe('sonare native binding', () => {
       const funcKey = detectKey(samples, SR);
       expect(classKey.root).toBe(funcKey.root);
       expect(classKey.mode).toBe(funcKey.mode);
+      expect(classKey.name).toBe(funcKey.name);
+      audio.destroy();
+    });
+
+    it('analyze via class returns beat aliases and rich key', () => {
+      const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
+      const result = audio.analyze();
+      expect(result.key.name).toContain(result.key.root);
+      expect(result.beats.length).toBe(result.beatTimes.length);
       audio.destroy();
     });
 

@@ -59,23 +59,23 @@ export class Audio {
   // -- Analysis --
 
   detectBpm(): number {
-    return addon.detectBpm(this.getData(), this.getSampleRate());
+    return this.native.detectBpm();
   }
 
   detectKey(): Key {
-    return addon.detectKey(this.getData(), this.getSampleRate());
+    return this.native.detectKey();
   }
 
   detectBeats(): Float32Array {
-    return addon.detectBeats(this.getData(), this.getSampleRate());
+    return this.native.detectBeats();
   }
 
   detectOnsets(): Float32Array {
-    return addon.detectOnsets(this.getData(), this.getSampleRate());
+    return this.native.detectOnsets();
   }
 
   analyze(): AnalysisResult {
-    return addon.analyze(this.getData(), this.getSampleRate());
+    return this.native.analyze();
   }
 
   // -- Effects --

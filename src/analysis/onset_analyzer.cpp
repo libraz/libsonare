@@ -23,7 +23,6 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
   OnsetConfig feature_onset_cfg;
   feature_onset_cfg.lag = 1;
   feature_onset_cfg.detrend = true;
-  feature_onset_cfg.center = false;
 
   onset_strength_ = compute_onset_strength(audio, mel_config, feature_onset_cfg);
 

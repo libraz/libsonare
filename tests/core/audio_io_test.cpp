@@ -164,6 +164,18 @@ TEST_CASE("load_buffer_wav pcm16", "[audio_io]") {
   }
 }
 
+TEST_CASE("load_buffer_wav rejects invalid channel count", "[audio_io]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 128;
+  std::vector<float> original = generate_sine(samples, 440.0f, sr);
+  std::vector<uint8_t> wav_data = create_wav_buffer(original.data(), original.size(), sr);
+
+  auto* channels = reinterpret_cast<uint16_t*>(wav_data.data() + 22);
+  *channels = 0;
+
+  REQUIRE_THROWS(load_buffer_wav(wav_data.data(), wav_data.size()));
+}
+
 TEST_CASE("load_buffer auto-detect WAV", "[audio_io]") {
   constexpr int sr = 22050;
   constexpr int samples = 500;

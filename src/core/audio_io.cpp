@@ -19,6 +19,8 @@ namespace sonare {
 
 namespace {
 
+constexpr int kMinSupportedChannels = 1;
+
 /// @brief RAII guard for MP3 decode buffer.
 /// @details Ensures mp3dec_file_info_t.buffer is freed even on exception.
 struct Mp3BufferGuard {
@@ -135,13 +137,17 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
   drwav_bool32 ok = drwav_init_memory(&wav, data, size, nullptr);
   SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to parse WAV data");
 
+  int sample_rate = static_cast<int>(wav.sampleRate);
+  int channels = static_cast<int>(wav.channels);
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid WAV sample rate");
+  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
+                   "Invalid WAV channel count");
+
   size_t total_samples = wav.totalPCMFrameCount * wav.channels;
   std::vector<float> samples(total_samples);
 
   drwav_uint64 frames_read =
       drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples.data());
-  int sample_rate = static_cast<int>(wav.sampleRate);
-  int channels = static_cast<int>(wav.channels);
 
   drwav_uninit(&wav);
 
@@ -168,6 +174,9 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
 
   int sample_rate = info.hz;
   int channels = info.channels;
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid MP3 sample rate");
+  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
+                   "Invalid MP3 channel count");
   size_t total_samples = static_cast<size_t>(info.samples);
 
   // Convert int16 samples to float and mono
@@ -178,12 +187,12 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
 }
 
 AudioLoadResult load_wav(const std::string& path) {
-  std::vector<uint8_t> data = read_file(path);
+  std::vector<uint8_t> data = read_file(path, kDefaultLoadOptions.max_file_size);
   return load_buffer_wav(data.data(), data.size());
 }
 
 AudioLoadResult load_mp3(const std::string& path) {
-  std::vector<uint8_t> data = read_file(path);
+  std::vector<uint8_t> data = read_file(path, kDefaultLoadOptions.max_file_size);
   return load_buffer_mp3(data.data(), data.size());
 }
 

@@ -310,11 +310,11 @@ TEST_CASE("vqt different gamma values", "[vqt]") {
 }
 
 // =============================================================================
-// Librosa Compatibility Tests
+// Reference-formula tests
 // =============================================================================
 
-TEST_CASE("vqt frequencies match librosa formula", "[vqt][librosa]") {
-  // librosa.vqt_frequencies: f_k = fmin * 2^(k / bins_per_octave)
+TEST_CASE("vqt frequencies match reference formula", "[vqt][reference]") {
+  // f_k = fmin * 2^(k / bins_per_octave)
   float fmin = 32.7f;  // C1
   int n_bins = 84;     // 7 octaves
   int bins_per_octave = 12;
@@ -323,7 +323,7 @@ TEST_CASE("vqt frequencies match librosa formula", "[vqt][librosa]") {
 
   REQUIRE(freqs.size() == 84);
 
-  // Check each frequency matches librosa formula
+  // Check each frequency matches the expected formula
   for (int k = 0; k < n_bins; ++k) {
     float expected = fmin * std::pow(2.0f, static_cast<float>(k) / bins_per_octave);
     REQUIRE_THAT(freqs[k], WithinRel(expected, 1e-5f));
@@ -338,8 +338,8 @@ TEST_CASE("vqt frequencies match librosa formula", "[vqt][librosa]") {
   REQUIRE_THAT(freqs[48], WithinRel(523.25f, 0.01f));  // C5
 }
 
-TEST_CASE("vqt bandwidth formula matches librosa", "[vqt][librosa]") {
-  // librosa.variable_bandwidth: bw = alpha * f + gamma
+TEST_CASE("vqt bandwidth formula matches reference", "[vqt][reference]") {
+  // variable-bandwidth formula: bw = alpha * f + gamma
   // where alpha = 2^(1/bins_per_octave) - 1
   int bins_per_octave = 12;
   float alpha = std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f;
@@ -355,8 +355,8 @@ TEST_CASE("vqt bandwidth formula matches librosa", "[vqt][librosa]") {
     }
   }
 
-  // VQT bandwidth (gamma=24, librosa default)
-  SECTION("gamma=24 (librosa default)") {
+  // VQT bandwidth (gamma=24)
+  SECTION("gamma=24") {
     float gamma = 24.0f;
     std::vector<float> freqs = {100.0f, 200.0f, 400.0f, 800.0f};
     auto bw = vqt_bandwidths(freqs, bins_per_octave, gamma);
@@ -375,8 +375,8 @@ TEST_CASE("vqt bandwidth formula matches librosa", "[vqt][librosa]") {
   }
 }
 
-TEST_CASE("vqt output dimensions match librosa", "[vqt][librosa]") {
-  // librosa.vqt returns shape (n_bins, n_frames)
+TEST_CASE("vqt output dimensions match reference", "[vqt][reference]") {
+  // Expected output shape: (n_bins, n_frames)
   // n_frames depends on audio length and hop_length
   Audio audio = generate_sine(440.0f, 1.0f, 22050);
 
@@ -401,7 +401,7 @@ TEST_CASE("vqt output dimensions match librosa", "[vqt][librosa]") {
   REQUIRE(result.frequencies().size() == 84);
 }
 
-TEST_CASE("vqt center padding matches cqt frame count", "[vqt][librosa]") {
+TEST_CASE("vqt center padding matches cqt frame count", "[vqt][reference]") {
   // CQT (gamma=0) and VQT (gamma=very small) should produce the same number of frames
   // because both apply center padding.
   Audio audio = generate_sine(440.0f, 1.0f, 22050);
@@ -420,9 +420,9 @@ TEST_CASE("vqt center padding matches cqt frame count", "[vqt][librosa]") {
   REQUIRE(vqt_result.n_frames() == cqt_result.n_frames());
 }
 
-TEST_CASE("vqt energy concentration for pure tone", "[vqt][librosa]") {
+TEST_CASE("vqt energy concentration for pure tone", "[vqt][reference]") {
   // For a pure tone, VQT should concentrate energy in bins near the tone frequency
-  // This behavior should match librosa
+  // This behavior should follow the reference implementation
   float test_freq = 261.63f;  // C4
   Audio audio = generate_sine(test_freq, 1.0f, 22050);
 

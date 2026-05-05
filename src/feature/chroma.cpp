@@ -7,6 +7,44 @@
 
 namespace sonare {
 
+namespace {
+
+std::vector<float> normalize_columns(std::vector<float> features, int n_chroma, int n_frames, int norm) {
+  for (int t = 0; t < n_frames; ++t) {
+    float norm_val = 0.0f;
+
+    if (norm == 0) {
+      for (int c = 0; c < n_chroma; ++c) {
+        norm_val = std::max(norm_val, std::abs(features[c * n_frames + t]));
+      }
+    } else if (norm == 1) {
+      for (int c = 0; c < n_chroma; ++c) {
+        norm_val += std::abs(features[c * n_frames + t]);
+      }
+    } else {
+      for (int c = 0; c < n_chroma; ++c) {
+        float val = features[c * n_frames + t];
+        norm_val += val * val;
+      }
+      norm_val = std::sqrt(norm_val);
+    }
+
+    if (norm_val > 1e-10f) {
+      for (int c = 0; c < n_chroma; ++c) {
+        features[c * n_frames + t] /= norm_val;
+      }
+    } else {
+      for (int c = 0; c < n_chroma; ++c) {
+        features[c * n_frames + t] = 0.0f;
+      }
+    }
+  }
+
+  return features;
+}
+
+}  // namespace
+
 Chroma::Chroma() : n_chroma_(0), n_frames_(0), sample_rate_(0), hop_length_(0) {}
 
 Chroma::Chroma(std::vector<float> features, int n_chroma, int n_frames, int sample_rate,
@@ -43,6 +81,7 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
 
   std::vector<float> chroma_features =
       apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_chroma);
+  chroma_features = normalize_columns(std::move(chroma_features), n_chroma, n_frames, 0);
 
   return Chroma(std::move(chroma_features), n_chroma, n_frames, sr, spec.hop_length());
 }
@@ -84,7 +123,7 @@ std::vector<float> Chroma::normalize(int norm) const {
 
     // Compute norm
     if (norm == 0) {
-      // Max norm (infinity norm) — matches librosa default norm=np.inf
+      // Max norm (infinity norm)
       for (int c = 0; c < n_chroma_; ++c) {
         float val = std::abs(features_[c * n_frames_ + t]);
         if (val > norm_val) norm_val = val;

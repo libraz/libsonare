@@ -1,5 +1,5 @@
 /// @file spectral_test.cpp
-/// @brief librosa compatibility tests for spectral features.
+/// @brief Reference compatibility tests for spectral features.
 /// @details Reference values from: tests/librosa/reference/spectral_features.json
 
 #include "feature/spectral.h"
@@ -18,7 +18,7 @@ using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("spectral features librosa compatibility", "[spectral][librosa]") {
+TEST_CASE("spectral features reference compatibility", "[spectral][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/spectral_features.json");
   const auto& data = json["data"];
 
@@ -30,8 +30,10 @@ TEST_CASE("spectral features librosa compatibility", "[spectral][librosa]") {
   size_t n_samples = static_cast<size_t>(sr);
   std::vector<float> samples(n_samples);
   for (size_t i = 0; i < n_samples; ++i) {
-    float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.5f * (std::sin(kTwoPi * 440.0f * t) + std::sin(kTwoPi * 880.0f * t));
+    double t = static_cast<double>(i) / static_cast<double>(sr);
+    samples[i] = static_cast<float>(
+        0.5 * (std::sin(static_cast<double>(kTwoPi) * 440.0 * t) +
+               std::sin(static_cast<double>(kTwoPi) * 880.0 * t)));
   }
   Audio audio = Audio::from_buffer(samples.data(), n_samples, sr);
 
@@ -40,7 +42,7 @@ TEST_CASE("spectral features librosa compatibility", "[spectral][librosa]") {
   stft_config.hop_length = hop_length;
   Spectrogram spec = Spectrogram::compute(audio, stft_config);
 
-  // Note: librosa uses center=True STFT by default, which pads the signal.
+  // Centered STFT pads the signal at both edges.
   // Edge frames (first and last) may differ significantly between implementations.
   // We skip boundary frames for element-level comparison.
   int skip_boundary = 1;  // skip first and last frame
@@ -61,16 +63,11 @@ TEST_CASE("spectral features librosa compatibility", "[spectral][librosa]") {
     const auto& ref = data["bandwidth"].as_array();
     auto result = spectral_bandwidth(spec, sr);
     REQUIRE(result.size() == ref.size());
-    // Bandwidth computation has significant implementation differences (p-norm weighting).
-    // Compare mean values instead of per-frame to absorb boundary divergence.
-    float our_sum = 0.0f, ref_sum = 0.0f;
     for (size_t i = 0; i < result.size(); ++i) {
-      our_sum += result[i];
-      ref_sum += ref[i].as_float();
+      CAPTURE(i);
+      REQUIRE_THAT(static_cast<double>(result[i]),
+                   WithinAbs(static_cast<double>(ref[i].as_float()), 0.5));
     }
-    float our_mean = our_sum / result.size();
-    float ref_mean = ref_sum / ref.size();
-    REQUIRE_THAT(static_cast<double>(our_mean), WithinRel(static_cast<double>(ref_mean), 2e-1));
   }
 
   SECTION("rolloff") {
@@ -109,15 +106,18 @@ TEST_CASE("spectral features librosa compatibility", "[spectral][librosa]") {
     REQUIRE(result.size() == ref.size());
     REQUIRE(result.size() == static_cast<size_t>(n_bands_plus_one * n_frames));
 
-    // Spectral contrast depends heavily on quantile estimation which varies
-    // between implementations. Use generous tolerances.
+    float mean_abs_diff = 0.0f;
+    float max_abs_diff = 0.0f;
     for (size_t i = 0; i < result.size(); ++i) {
       float ref_val = ref[i].as_float();
       float res_val = result[i];
-      CAPTURE(i, res_val, ref_val);
-      // Use absolute tolerance; contrast values can vary significantly
-      // between quantile estimation methods
-      REQUIRE(std::abs(res_val - ref_val) < std::max(std::abs(ref_val) * 1.0f, 1.0f));
+      float diff = std::abs(res_val - ref_val);
+      mean_abs_diff += diff;
+      max_abs_diff = std::max(max_abs_diff, diff);
     }
+    mean_abs_diff /= static_cast<float>(result.size());
+
+    REQUIRE(mean_abs_diff < 0.7f);
+    REQUIRE(max_abs_diff < 7.5f);
   }
 }

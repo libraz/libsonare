@@ -147,7 +147,7 @@ inline int next_power_of_2(int n) {
 }
 
 /// @brief Convert power spectrogram to decibel scale.
-/// @details Matches librosa.power_to_db: 10 * log10(S / ref), clipped to top_db below peak.
+/// @details Uses 10 * log10(S / ref), clipped to top_db below peak.
 ///          Note: ref is treated as a power value directly (not squared).
 /// @param power Input power values
 /// @param n Number of values

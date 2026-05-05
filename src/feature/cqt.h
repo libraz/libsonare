@@ -132,7 +132,7 @@ class CqtKernel {
 /// @param config CQT configuration
 /// @param progress_callback Optional progress callback
 /// @return CQT result
-/// @note Center padding is applied to match librosa's center=True behavior.
+/// @note Center padding is applied so each frame is aligned around its timestamp.
 ///       Input is padded with fft_length/2 zeros on each side.
 /// @note Thread-safe. Uses mutex-protected kernel cache internally.
 CqtResult cqt(const Audio& audio, const CqtConfig& config = CqtConfig(),

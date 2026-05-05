@@ -16,8 +16,54 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "util/exception.h"
 
 Napi::FunctionReference SonareWrap::constructor_;
+
+namespace {
+
+#define SONARE_NODE_TRY try {
+#define SONARE_NODE_CATCH(env)                                                     \
+  }                                                                                \
+  catch (const sonare::SonareException& e) {                                       \
+    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();                  \
+    return env.Undefined();                                                        \
+  }                                                                                \
+  catch (const std::bad_alloc&) {                                                  \
+    Napi::Error::New(env, "Out of memory").ThrowAsJavaScriptException();           \
+    return env.Undefined();                                                        \
+  }                                                                                \
+  catch (const std::exception& e) {                                                \
+    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();                  \
+    return env.Undefined();                                                        \
+  }                                                                                \
+  catch (...) {                                                                    \
+    Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();           \
+    return env.Undefined();                                                        \
+  }
+
+bool IsFloat32Array(const Napi::Value& value) {
+  return value.IsTypedArray() &&
+         value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array;
+}
+
+bool IsUint8Array(const Napi::Value& value) {
+  return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
+}
+
+const char* PitchClassNameLocal(SonarePitchClass pc) {
+  static const char* names[] = {
+      "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+  int idx = static_cast<int>(pc);
+  if (idx < 0 || idx > 11) return "C";
+  return names[idx];
+}
+
+const char* ModeNameLocal(SonareMode mode) {
+  return mode == SONARE_MODE_MAJOR ? "major" : "minor";
+}
+
+}  // namespace
 
 const char* SonareWrap::PitchClassName(SonarePitchClass pc) {
   static const char* names[] = {
@@ -29,6 +75,48 @@ const char* SonareWrap::PitchClassName(SonarePitchClass pc) {
 
 const char* SonareWrap::ModeName(SonareMode mode) {
   return mode == SONARE_MODE_MAJOR ? "major" : "minor";
+}
+
+Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence) {
+  Napi::Object key = Napi::Object::New(env);
+  std::string root_name = PitchClassNameLocal(root);
+  std::string mode_name = ModeNameLocal(mode);
+  key.Set("root", Napi::String::New(env, root_name));
+  key.Set("mode", Napi::String::New(env, mode_name));
+  key.Set("confidence", Napi::Number::New(env, static_cast<double>(confidence)));
+  key.Set("name", Napi::String::New(env, root_name + " " + mode_name));
+  key.Set("shortName", Napi::String::New(env, root_name + (mode == SONARE_MODE_MAJOR ? "" : "m")));
+  return key;
+}
+
+Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis) {
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));
+  result.Set("bpmConfidence",
+             Napi::Number::New(env, static_cast<double>(analysis.bpm_confidence)));
+  result.Set("key", KeyToObject(env, analysis.key.root, analysis.key.mode, analysis.key.confidence));
+
+  Napi::Object ts = Napi::Object::New(env);
+  ts.Set("numerator", Napi::Number::New(env, analysis.time_signature.numerator));
+  ts.Set("denominator", Napi::Number::New(env, analysis.time_signature.denominator));
+  ts.Set("confidence",
+         Napi::Number::New(env, static_cast<double>(analysis.time_signature.confidence)));
+  result.Set("timeSignature", ts);
+
+  auto beat_times = Napi::Float32Array::New(env, analysis.beat_count);
+  Napi::Array beats = Napi::Array::New(env, analysis.beat_count);
+  if (analysis.beat_count > 0 && analysis.beat_times != nullptr) {
+    std::memcpy(beat_times.Data(), analysis.beat_times, analysis.beat_count * sizeof(float));
+    for (size_t i = 0; i < analysis.beat_count; ++i) {
+      Napi::Object beat = Napi::Object::New(env);
+      beat.Set("time", Napi::Number::New(env, static_cast<double>(analysis.beat_times[i])));
+      beat.Set("strength", env.Undefined());
+      beats.Set(static_cast<uint32_t>(i), beat);
+    }
+  }
+  result.Set("beatTimes", beat_times);
+  result.Set("beats", beats);
+  return result;
 }
 
 Napi::Float32Array SonareWrap::VecToFloat32(Napi::Env env, const std::vector<float>& vec) {
@@ -47,6 +135,11 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&SonareWrap::GetLength>("getLength"),
           InstanceMethod<&SonareWrap::GetSampleRate>("getSampleRate"),
           InstanceMethod<&SonareWrap::GetDuration>("getDuration"),
+          InstanceMethod<&SonareWrap::DetectBpmInstance>("detectBpm"),
+          InstanceMethod<&SonareWrap::DetectKeyInstance>("detectKey"),
+          InstanceMethod<&SonareWrap::DetectBeatsInstance>("detectBeats"),
+          InstanceMethod<&SonareWrap::DetectOnsetsInstance>("detectOnsets"),
+          InstanceMethod<&SonareWrap::AnalyzeInstance>("analyze"),
           InstanceMethod<&SonareWrap::Destroy>("destroy"),
           StaticMethod<&SonareWrap::FromFile>("fromFile"),
           StaticMethod<&SonareWrap::FromBuffer>("fromBuffer"),
@@ -164,7 +257,7 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -204,7 +297,7 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
     auto buf = info[0].As<Napi::Buffer<uint8_t>>();
     data = buf.Data();
     len = buf.Length();
-  } else if (info[0].IsTypedArray()) {
+  } else if (IsUint8Array(info[0])) {
     auto arr = info[0].As<Napi::Uint8Array>();
     data = arr.Data();
     len = arr.ByteLength();
@@ -277,6 +370,108 @@ Napi::Value SonareWrap::GetDuration(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, static_cast<double>(sonare_audio_duration(audio_)));
 }
 
+Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  float bpm = 0.0f;
+  SonareError err = sonare_detect_bpm(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                                      sonare_audio_sample_rate(audio_), &bpm);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, static_cast<double>(bpm));
+}
+
+Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SonareKey key{};
+  SonareError err = sonare_detect_key(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                                      sonare_audio_sample_rate(audio_), &key);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return KeyToObject(env, key.root, key.mode, key.confidence);
+}
+
+Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  float* times = nullptr;
+  size_t count = 0;
+  SonareError err = sonare_detect_beats(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                                        sonare_audio_sample_rate(audio_), &times, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto result = Napi::Float32Array::New(env, count);
+  if (count > 0 && times != nullptr) {
+    std::memcpy(result.Data(), times, count * sizeof(float));
+    sonare_free_floats(times);
+  }
+  return result;
+}
+
+Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  float* times = nullptr;
+  size_t count = 0;
+  SonareError err = sonare_detect_onsets(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                                         sonare_audio_sample_rate(audio_), &times, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto result = Napi::Float32Array::New(env, count);
+  if (count > 0 && times != nullptr) {
+    std::memcpy(result.Data(), times, count * sizeof(float));
+    sonare_free_floats(times);
+  }
+  return result;
+}
+
+Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SonareAnalysisResult analysis{};
+  SonareError err = sonare_analyze(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                                   sonare_audio_sample_rate(audio_), &analysis);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object result = AnalysisToObject(env, analysis);
+  sonare_free_result(&analysis);
+  return result;
+}
+
 void SonareWrap::Destroy(const Napi::CallbackInfo& /*info*/) {
   if (audio_) {
     sonare_audio_free(audio_);
@@ -289,7 +484,7 @@ void SonareWrap::Destroy(const Napi::CallbackInfo& /*info*/) {
 Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -316,7 +511,7 @@ Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -336,18 +531,13 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
-
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("root", Napi::String::New(env, PitchClassName(key.root)));
-  result.Set("mode", Napi::String::New(env, ModeName(key.mode)));
-  result.Set("confidence", Napi::Number::New(env, static_cast<double>(key.confidence)));
-  return result;
+  return KeyToObject(env, key.root, key.mode, key.confidence);
 }
 
 Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -380,7 +570,7 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -413,7 +603,7 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -433,36 +623,7 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
-
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));
-  result.Set("bpmConfidence",
-             Napi::Number::New(env, static_cast<double>(analysis.bpm_confidence)));
-
-  // Key
-  Napi::Object key = Napi::Object::New(env);
-  key.Set("root", Napi::String::New(env, PitchClassName(analysis.key.root)));
-  key.Set("mode", Napi::String::New(env, ModeName(analysis.key.mode)));
-  key.Set("confidence",
-          Napi::Number::New(env, static_cast<double>(analysis.key.confidence)));
-  result.Set("key", key);
-
-  // Time signature
-  Napi::Object ts = Napi::Object::New(env);
-  ts.Set("numerator", Napi::Number::New(env, analysis.time_signature.numerator));
-  ts.Set("denominator", Napi::Number::New(env, analysis.time_signature.denominator));
-  ts.Set("confidence",
-         Napi::Number::New(env, static_cast<double>(analysis.time_signature.confidence)));
-  result.Set("timeSignature", ts);
-
-  // Beat times
-  auto beats = Napi::Float32Array::New(env, analysis.beat_count);
-  if (analysis.beat_count > 0 && analysis.beat_times != nullptr) {
-    std::memcpy(beats.Data(), analysis.beat_times,
-                analysis.beat_count * sizeof(float));
-  }
-  result.Set("beatTimes", beats);
-
+  Napi::Object result = AnalysisToObject(env, analysis);
   sonare_free_result(&analysis);
 
   return result;
@@ -480,12 +641,13 @@ Napi::Value SonareWrap::Version(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !info[0].IsTypedArray() || !info[1].IsNumber()) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -518,17 +680,19 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   out.Set("sampleRate", Napi::Number::New(env, result.harmonic.sample_rate()));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !info[0].IsTypedArray() || !info[1].IsNumber()) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -538,17 +702,19 @@ Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::harmonic(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !info[0].IsTypedArray() || !info[1].IsNumber()) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -558,18 +724,20 @@ Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::percussive(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !info[0].IsTypedArray() || !info[1].IsNumber() ||
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
       !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, rate)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -580,18 +748,20 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::time_stretch(audio, rate);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !info[0].IsTypedArray() || !info[1].IsNumber() ||
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
       !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, semitones)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -602,17 +772,19 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::pitch_shift(audio, semitones);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !info[0].IsTypedArray() || !info[1].IsNumber()) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -625,17 +797,19 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::normalize(audio, target_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !info[0].IsTypedArray() || !info[1].IsNumber()) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -648,6 +822,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::trim(audio, threshold_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -657,11 +832,12 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -692,16 +868,18 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   out.Set("power", VecToFloat32(env, spec.power()));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -728,6 +906,7 @@ Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
   out.Set("db", VecToFloat32(env, spec.to_db()));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -737,11 +916,12 @@ Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -781,16 +961,18 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   out.Set("db", VecToFloat32(env, mel.to_db()));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -825,6 +1007,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   out.Set("coefficients", VecToFloat32(env, mfcc_coeffs));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -834,11 +1017,12 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -878,6 +1062,7 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   out.Set("meanEnergy", mean_arr);
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -887,11 +1072,12 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -914,16 +1100,18 @@ Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   std::vector<float> centroid = sonare::spectral_centroid(spec, sr);
 
   return VecToFloat32(env, centroid);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -946,16 +1134,18 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   std::vector<float> bandwidth = sonare::spectral_bandwidth(spec, sr);
 
   return VecToFloat32(env, bandwidth);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -981,16 +1171,18 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   std::vector<float> rolloff = sonare::spectral_rolloff(spec, sr, roll_percent);
 
   return VecToFloat32(env, rolloff);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -1013,16 +1205,18 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   std::vector<float> flatness = sonare::spectral_flatness(spec);
 
   return VecToFloat32(env, flatness);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -1040,16 +1234,18 @@ Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   std::vector<float> zcr = sonare::zero_crossing_rate(audio, frame_length, hop_length);
 
   return VecToFloat32(env, zcr);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -1067,6 +1263,7 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   std::vector<float> rms = sonare::rms_energy(audio, frame_length, hop_length);
 
   return VecToFloat32(env, rms);
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -1076,11 +1273,12 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -1130,16 +1328,18 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   out.Set("meanF0", Napi::Number::New(env, static_cast<double>(result.mean_f0())));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -1189,6 +1389,7 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   out.Set("meanF0", Napi::Number::New(env, static_cast<double>(result.mean_f0())));
 
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -1203,8 +1404,10 @@ Napi::Value SonareWrap::HzToMel(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   float hz = info[0].As<Napi::Number>().FloatValue();
   return Napi::Number::New(env, static_cast<double>(sonare::hz_to_mel(hz)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MelToHz(const Napi::CallbackInfo& info) {
@@ -1215,8 +1418,10 @@ Napi::Value SonareWrap::MelToHz(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   float mel = info[0].As<Napi::Number>().FloatValue();
   return Napi::Number::New(env, static_cast<double>(sonare::mel_to_hz(mel)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::HzToMidi(const Napi::CallbackInfo& info) {
@@ -1227,8 +1432,10 @@ Napi::Value SonareWrap::HzToMidi(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   float hz = info[0].As<Napi::Number>().FloatValue();
   return Napi::Number::New(env, static_cast<double>(sonare::hz_to_midi(hz)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MidiToHz(const Napi::CallbackInfo& info) {
@@ -1239,8 +1446,10 @@ Napi::Value SonareWrap::MidiToHz(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   float midi = info[0].As<Napi::Number>().FloatValue();
   return Napi::Number::New(env, static_cast<double>(sonare::midi_to_hz(midi)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::HzToNote(const Napi::CallbackInfo& info) {
@@ -1251,8 +1460,10 @@ Napi::Value SonareWrap::HzToNote(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   float hz = info[0].As<Napi::Number>().FloatValue();
   return Napi::String::New(env, sonare::hz_to_note(hz));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::NoteToHz(const Napi::CallbackInfo& info) {
@@ -1263,8 +1474,10 @@ Napi::Value SonareWrap::NoteToHz(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   std::string note = info[0].As<Napi::String>().Utf8Value();
   return Napi::Number::New(env, static_cast<double>(sonare::note_to_hz(note)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
@@ -1275,12 +1488,14 @@ Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   int frames = info[0].As<Napi::Number>().Int32Value();
   int sr = info[1].As<Napi::Number>().Int32Value();
   int hop_length = info[2].As<Napi::Number>().Int32Value();
 
   return Napi::Number::New(env,
                            static_cast<double>(sonare::frames_to_time(frames, sr, hop_length)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
@@ -1291,11 +1506,13 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   float time = info[0].As<Napi::Number>().FloatValue();
   int sr = info[1].As<Napi::Number>().Int32Value();
   int hop_length = info[2].As<Napi::Number>().Int32Value();
 
   return Napi::Number::New(env, sonare::time_to_frames(time, sr, hop_length));
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -1305,13 +1522,14 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !info[0].IsTypedArray() || !info[1].IsNumber() ||
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
       !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, srcSr, targetSr)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
+  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
@@ -1320,4 +1538,5 @@ Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
 
   std::vector<float> result = sonare::resample(data, length, src_sr, target_sr);
   return VecToFloat32(env, result);
+  SONARE_NODE_CATCH(env)
 }

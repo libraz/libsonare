@@ -142,11 +142,12 @@ def detect_beats(
         ctypes.byref(out_count),
     )
     _check(rc)
-    count = out_count.value
-    result = [float(out_times[i]) for i in range(count)]
-    if out_times and count > 0:
-        lib.sonare_free_floats(out_times)
-    return result
+    try:
+        count = out_count.value
+        return [float(out_times[i]) for i in range(count)]
+    finally:
+        if out_times and out_count.value > 0:
+            lib.sonare_free_floats(out_times)
 
 
 def detect_onsets(
@@ -177,11 +178,12 @@ def detect_onsets(
         ctypes.byref(out_count),
     )
     _check(rc)
-    count = out_count.value
-    result = [float(out_times[i]) for i in range(count)]
-    if out_times and count > 0:
-        lib.sonare_free_floats(out_times)
-    return result
+    try:
+        count = out_count.value
+        return [float(out_times[i]) for i in range(count)]
+    finally:
+        if out_times and out_count.value > 0:
+            lib.sonare_free_floats(out_times)
 
 
 def analyze(
@@ -207,27 +209,26 @@ def analyze(
         c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out)
     )
     _check(rc)
+    try:
+        beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
 
-    beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
-
-    result = AnalysisResult(
-        bpm=float(out.bpm),
-        bpm_confidence=float(out.bpm_confidence),
-        key=Key(
-            root=PitchClass(out.key.root),
-            mode=Mode(out.key.mode),
-            confidence=float(out.key.confidence),
-        ),
-        time_signature=TimeSignature(
-            numerator=int(out.time_signature.numerator),
-            denominator=int(out.time_signature.denominator),
-            confidence=float(out.time_signature.confidence),
-        ),
-        beat_times=beat_times,
-    )
-
-    lib.sonare_free_result(ctypes.byref(out))
-    return result
+        return AnalysisResult(
+            bpm=float(out.bpm),
+            bpm_confidence=float(out.bpm_confidence),
+            key=Key(
+                root=PitchClass(out.key.root),
+                mode=Mode(out.key.mode),
+                confidence=float(out.key.confidence),
+            ),
+            time_signature=TimeSignature(
+                numerator=int(out.time_signature.numerator),
+                denominator=int(out.time_signature.denominator),
+                confidence=float(out.time_signature.confidence),
+            ),
+            beat_times=beat_times,
+        )
+    finally:
+        lib.sonare_free_result(ctypes.byref(out))
 
 
 def version() -> str:
@@ -271,15 +272,16 @@ def hpss(
         ctypes.byref(out),
     )
     _check(rc)
-    n = out.length
-    result = HpssResult(
-        harmonic=[float(out.harmonic[i]) for i in range(n)],
-        percussive=[float(out.percussive[i]) for i in range(n)],
-        length=int(n),
-        sample_rate=int(out.sample_rate),
-    )
-    lib.sonare_free_hpss_result(ctypes.byref(out))
-    return result
+    try:
+        n = out.length
+        return HpssResult(
+            harmonic=[float(out.harmonic[i]) for i in range(n)],
+            percussive=[float(out.percussive[i]) for i in range(n)],
+            length=int(n),
+            sample_rate=int(out.sample_rate),
+        )
+    finally:
+        lib.sonare_free_hpss_result(ctypes.byref(out))
 
 
 def harmonic(
@@ -514,18 +516,19 @@ def stft(
         ctypes.byref(out),
     )
     _check(rc)
-    total = out.n_bins * out.n_frames
-    result = StftResult(
-        n_bins=out.n_bins,
-        n_frames=out.n_frames,
-        n_fft=out.n_fft,
-        hop_length=out.hop_length,
-        sample_rate=out.sample_rate,
-        magnitude=[float(out.magnitude[i]) for i in range(total)],
-        power=[float(out.power[i]) for i in range(total)],
-    )
-    lib.sonare_free_stft_result(ctypes.byref(out))
-    return result
+    try:
+        total = out.n_bins * out.n_frames
+        return StftResult(
+            n_bins=out.n_bins,
+            n_frames=out.n_frames,
+            n_fft=out.n_fft,
+            hop_length=out.hop_length,
+            sample_rate=out.sample_rate,
+            magnitude=[float(out.magnitude[i]) for i in range(total)],
+            power=[float(out.power[i]) for i in range(total)],
+        )
+    finally:
+        lib.sonare_free_stft_result(ctypes.byref(out))
 
 
 def stft_db(
@@ -561,11 +564,14 @@ def stft_db(
         ctypes.byref(out_db),
     )
     _check(rc)
-    total = out_n_bins.value * out_n_frames.value
-    result = [float(out_db[i]) for i in range(total)]
-    if out_db and total > 0:
-        lib.sonare_free_floats(out_db)
-    return (out_n_bins.value, out_n_frames.value, result)
+    try:
+        total = out_n_bins.value * out_n_frames.value
+        result = [float(out_db[i]) for i in range(total)]
+        return (out_n_bins.value, out_n_frames.value, result)
+    finally:
+        total = out_n_bins.value * out_n_frames.value
+        if out_db and total > 0:
+            lib.sonare_free_floats(out_db)
 
 
 # ============================================================================
@@ -605,17 +611,18 @@ def mel_spectrogram(
         ctypes.byref(out),
     )
     _check(rc)
-    total = out.n_mels * out.n_frames
-    result = MelSpectrogramResult(
-        n_mels=out.n_mels,
-        n_frames=out.n_frames,
-        sample_rate=out.sample_rate,
-        hop_length=out.hop_length,
-        power=[float(out.power[i]) for i in range(total)],
-        db=[float(out.db[i]) for i in range(total)],
-    )
-    lib.sonare_free_mel_result(ctypes.byref(out))
-    return result
+    try:
+        total = out.n_mels * out.n_frames
+        return MelSpectrogramResult(
+            n_mels=out.n_mels,
+            n_frames=out.n_frames,
+            sample_rate=out.sample_rate,
+            hop_length=out.hop_length,
+            power=[float(out.power[i]) for i in range(total)],
+            db=[float(out.db[i]) for i in range(total)],
+        )
+    finally:
+        lib.sonare_free_mel_result(ctypes.byref(out))
 
 
 def mfcc(
@@ -653,14 +660,15 @@ def mfcc(
         ctypes.byref(out),
     )
     _check(rc)
-    total = out.n_mfcc * out.n_frames
-    result = MfccResult(
-        n_mfcc=out.n_mfcc,
-        n_frames=out.n_frames,
-        coefficients=[float(out.coefficients[i]) for i in range(total)],
-    )
-    lib.sonare_free_mfcc_result(ctypes.byref(out))
-    return result
+    try:
+        total = out.n_mfcc * out.n_frames
+        return MfccResult(
+            n_mfcc=out.n_mfcc,
+            n_frames=out.n_frames,
+            coefficients=[float(out.coefficients[i]) for i in range(total)],
+        )
+    finally:
+        lib.sonare_free_mfcc_result(ctypes.byref(out))
 
 
 # ============================================================================
@@ -697,17 +705,18 @@ def chroma(
         ctypes.byref(out),
     )
     _check(rc)
-    total = out.n_chroma * out.n_frames
-    result = ChromaResult(
-        n_chroma=out.n_chroma,
-        n_frames=out.n_frames,
-        sample_rate=out.sample_rate,
-        hop_length=out.hop_length,
-        features=[float(out.features[i]) for i in range(total)],
-        mean_energy=[float(out.mean_energy[i]) for i in range(out.n_chroma)],
-    )
-    lib.sonare_free_chroma_result(ctypes.byref(out))
-    return result
+    try:
+        total = out.n_chroma * out.n_frames
+        return ChromaResult(
+            n_chroma=out.n_chroma,
+            n_frames=out.n_frames,
+            sample_rate=out.sample_rate,
+            hop_length=out.hop_length,
+            features=[float(out.features[i]) for i in range(total)],
+            mean_energy=[float(out.mean_energy[i]) for i in range(out.n_chroma)],
+        )
+    finally:
+        lib.sonare_free_chroma_result(ctypes.byref(out))
 
 
 # ============================================================================
@@ -983,17 +992,18 @@ def pitch_yin(
         ctypes.byref(out),
     )
     _check(rc)
-    n = out.n_frames
-    result = PitchResult(
-        n_frames=n,
-        f0=[float(out.f0[i]) for i in range(n)],
-        voiced_prob=[float(out.voiced_prob[i]) for i in range(n)],
-        voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
-        median_f0=float(out.median_f0),
-        mean_f0=float(out.mean_f0),
-    )
-    lib.sonare_free_pitch_result(ctypes.byref(out))
-    return result
+    try:
+        n = out.n_frames
+        return PitchResult(
+            n_frames=n,
+            f0=[float(out.f0[i]) for i in range(n)],
+            voiced_prob=[float(out.voiced_prob[i]) for i in range(n)],
+            voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
+            median_f0=float(out.median_f0),
+            mean_f0=float(out.mean_f0),
+        )
+    finally:
+        lib.sonare_free_pitch_result(ctypes.byref(out))
 
 
 def pitch_pyin(
@@ -1034,17 +1044,18 @@ def pitch_pyin(
         ctypes.byref(out),
     )
     _check(rc)
-    n = out.n_frames
-    result = PitchResult(
-        n_frames=n,
-        f0=[float(out.f0[i]) for i in range(n)],
-        voiced_prob=[float(out.voiced_prob[i]) for i in range(n)],
-        voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
-        median_f0=float(out.median_f0),
-        mean_f0=float(out.mean_f0),
-    )
-    lib.sonare_free_pitch_result(ctypes.byref(out))
-    return result
+    try:
+        n = out.n_frames
+        return PitchResult(
+            n_frames=n,
+            f0=[float(out.f0[i]) for i in range(n)],
+            voiced_prob=[float(out.voiced_prob[i]) for i in range(n)],
+            voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
+            median_f0=float(out.median_f0),
+            mean_f0=float(out.mean_f0),
+        )
+    finally:
+        lib.sonare_free_pitch_result(ctypes.byref(out))
 
 
 # ============================================================================

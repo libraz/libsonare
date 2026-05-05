@@ -11,13 +11,13 @@
 namespace sonare {
 
 namespace {
-/// @brief Slaney mel scale constants (librosa default).
-/// @details Uses exact runtime calculation for precision matching with librosa.
+/// @brief Slaney mel scale constants.
+/// @details Uses exact runtime calculation for stable numeric behavior.
 constexpr float kMelFMin = 0.0f;
 constexpr float kMelFSp = 200.0f / 3.0f;  // 66.67 Hz
 constexpr float kMinLogHz = 1000.0f;
 constexpr float kMinLogMel = (kMinLogHz - kMelFMin) / kMelFSp;  // 15.0
-// Runtime calculation matches librosa's np.log(6.4) / 27.0 = 0.06875177742094912
+// Runtime calculation of np.log(6.4) / 27.0
 // Using inline function to avoid static initialization order issues
 inline float log_step() {
   static const float value = std::log(6.4f) / 27.0f;
@@ -118,7 +118,7 @@ float frames_to_time(int frames, int sr, int hop_length) {
 }
 
 int time_to_frames(float time, int sr, int hop_length) {
-  // Use floor for librosa compatibility (np.floor in librosa.core.time_to_frames)
+  // Use floor for deterministic frame conversion.
   return static_cast<int>(
       std::floor(time * static_cast<float>(sr) / static_cast<float>(hop_length)));
 }
