@@ -1,0 +1,71 @@
+{
+  "fixture": "bench_73s_44100.wav",
+  "duration_sec": 73.0,
+  "source_sample_rate": 44100,
+  "resampled_sample_rate": 22050,
+  "runs_per_case": 3,
+  "methodology": "Both libraries measured 'standalone from raw audio': every per-feature call reconstructs STFT/Mel from the resampled samples. libsonare uses chrono::steady_clock inside C++; librosa uses time.perf_counter around the Python call.",
+  "librosa_version": "0.11.0",
+  "full_analysis": {
+    "libsonare_ms": 674.05,
+    "bpm_detector_comprehensive_ms": 36435.08,
+    "bpm_detector_speedup": 54.05,
+    "note": "Full pipeline (BPM + key + beats + chords + sections + timbre + dynamics) running entirely inside libsonare C++. The closest librosa-based equivalent is bpm-detector --comprehensive."
+  },
+  "per_feature": [
+    {
+      "feature": "STFT",
+      "librosa_ms": 13.3,
+      "libsonare_ms": 13.85,
+      "speedup": 0.96
+    },
+    {
+      "feature": "Mel Spectrogram",
+      "librosa_ms": 20.35,
+      "libsonare_ms": 23.01,
+      "speedup": 0.88
+    },
+    {
+      "feature": "HPSS",
+      "librosa_ms": 1761.85,
+      "libsonare_ms": 89.35,
+      "speedup": 19.72
+    },
+    {
+      "feature": "Onset Strength",
+      "librosa_ms": 21.46,
+      "libsonare_ms": 23.54,
+      "speedup": 0.91
+    },
+    {
+      "feature": "Chroma",
+      "librosa_ms": 44.55,
+      "libsonare_ms": 15.36,
+      "speedup": 2.9
+    },
+    {
+      "feature": "Beat Track",
+      "librosa_ms": 35.64,
+      "libsonare_ms": 23.77,
+      "speedup": 1.5
+    },
+    {
+      "feature": "MFCC",
+      "librosa_ms": 21.55,
+      "libsonare_ms": 23.82,
+      "speedup": 0.9
+    },
+    {
+      "feature": "pYIN",
+      "librosa_ms": 5824.64,
+      "libsonare_ms": 474.22,
+      "speedup": 12.28
+    },
+    {
+      "feature": "Spectral Centroid",
+      "librosa_ms": 24.76,
+      "libsonare_ms": 16.54,
+      "speedup": 1.5
+    }
+  ]
+}

@@ -9,6 +9,7 @@ option(BUILD_TESTING "Build tests" ON)
 option(BUILD_WASM "Build for WebAssembly" OFF)
 option(BUILD_SHARED "Build shared library" OFF)
 option(BUILD_CLI "Build CLI tool" ON)
+option(BUILD_BENCH "Build C++ benchmark binary" OFF)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
 
 # 出力ディレクトリ
@@ -62,6 +63,10 @@ endif()
 
 if(BUILD_CLI AND NOT BUILD_WASM)
   add_subdirectory(tools)
+endif()
+
+if(BUILD_BENCH AND NOT BUILD_WASM)
+  add_subdirectory(benchmarks)
 endif()
 
 # Coverage target

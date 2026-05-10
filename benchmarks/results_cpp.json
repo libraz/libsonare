@@ -1,0 +1,27 @@
+{
+  "fixture": "benchmarks/fixtures/bench_73s_44100.wav",
+  "duration_sec": 73.000,
+  "source_sample_rate": 44100,
+  "resampled_sample_rate": 22050,
+  "runs_per_case": 3,
+  "timing_source": "chrono::steady_clock (C++ internal)",
+  "full_analysis_ms": 674.05,
+  "per_feature_standalone": [
+    {"feature": "STFT", "libsonare_ms": 13.85},
+    {"feature": "Mel Spectrogram", "libsonare_ms": 23.01},
+    {"feature": "HPSS", "libsonare_ms": 89.35},
+    {"feature": "Onset Strength", "libsonare_ms": 23.54},
+    {"feature": "Chroma", "libsonare_ms": 15.36},
+    {"feature": "Beat Track", "libsonare_ms": 23.77},
+    {"feature": "MFCC", "libsonare_ms": 23.82},
+    {"feature": "pYIN", "libsonare_ms": 474.22},
+    {"feature": "Spectral Centroid", "libsonare_ms": 16.54}
+  ],
+  "per_feature_cached": [
+    {"feature": "Mel Spectrogram", "libsonare_ms": 9.20},
+    {"feature": "Onset Strength", "libsonare_ms": 0.48},
+    {"feature": "Chroma", "libsonare_ms": 1.12},
+    {"feature": "MFCC", "libsonare_ms": 0.77},
+    {"feature": "Spectral Centroid", "libsonare_ms": 0.42}
+  ]
+}
