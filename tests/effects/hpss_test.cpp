@@ -114,6 +114,36 @@ TEST_CASE("hpss spectrogram basic", "[hpss]") {
   REQUIRE(result.percussive.n_frames() == spec.n_frames());
 }
 
+TEST_CASE("hpss preserves spectrogram center flag", "[hpss]") {
+  Audio audio = create_harmonic_audio();
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+  stft_config.center = false;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  HpssSpectrogramResult result = hpss(spec);
+
+  REQUIRE_FALSE(result.harmonic.center());
+  REQUIRE_FALSE(result.percussive.center());
+}
+
+TEST_CASE("hpss preserves spectrogram win_length", "[hpss]") {
+  Audio audio = create_harmonic_audio();
+
+  StftConfig stft_config;
+  stft_config.n_fft = 2048;
+  stft_config.win_length = 1024;
+  stft_config.hop_length = 512;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  HpssSpectrogramResult result = hpss(spec);
+
+  REQUIRE(result.harmonic.win_length() == stft_config.win_length);
+  REQUIRE(result.percussive.win_length() == stft_config.win_length);
+}
+
 TEST_CASE("hpss audio basic", "[hpss]") {
   Audio audio = create_harmonic_audio();
 

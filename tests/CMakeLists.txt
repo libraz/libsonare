@@ -55,6 +55,7 @@ add_executable(sonare_tests
   librosa/mfcc_test.cpp
   librosa/onset_test.cpp
   librosa/tempo_test.cpp
+  librosa/beat_test.cpp
   librosa/stft_test.cpp
   librosa/power_to_db_test.cpp
   librosa/zcr_test.cpp
@@ -62,6 +63,7 @@ add_executable(sonare_tests
   librosa/chroma_test.cpp
   librosa/cqt_test.cpp
   librosa/pitch_test.cpp
+  librosa/hpss_test.cpp
   cli/cli_test.cpp
 )
 

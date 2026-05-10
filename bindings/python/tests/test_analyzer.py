@@ -309,6 +309,15 @@ def test_zero_crossing_rate() -> None:
     assert all(0 <= v <= 1 for v in result)
 
 
+def test_zero_crossing_rate_uses_edge_padding() -> None:
+    """zero_crossing_rate matches librosa-style edge padding for constant signals."""
+    from libsonare import zero_crossing_rate
+
+    result = zero_crossing_rate([-1.0] * 8, sample_rate=22050, frame_length=8, hop_length=4)
+    assert len(result) > 0
+    assert all(v == 0.0 for v in result)
+
+
 def test_rms_energy() -> None:
     """rms_energy returns non-negative values."""
     from libsonare import rms_energy

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -90,9 +91,10 @@ class JsonReader {
 
   /// @brief Parse JSON from file.
   static JsonValue parse_file(const std::string& path) {
-    std::ifstream file(path);
+    std::string resolved_path = resolve_reference_path(path);
+    std::ifstream file(resolved_path);
     if (!file.is_open()) {
-      throw std::runtime_error("Cannot open file: " + path);
+      throw std::runtime_error("Cannot open file: " + resolved_path);
     }
     std::stringstream buffer;
     buffer << file.rdbuf();
@@ -100,6 +102,26 @@ class JsonReader {
   }
 
  private:
+  static std::string resolve_reference_path(const std::string& path) {
+    constexpr const char* prefix = "tests/librosa/reference/";
+    constexpr size_t prefix_len = 24;
+
+    if (path.rfind(prefix, 0) != 0) {
+      return path;
+    }
+
+    const char* override_dir = std::getenv("SONARE_LIBROSA_REFERENCE_DIR");
+    if (override_dir == nullptr || override_dir[0] == '\0') {
+      return path;
+    }
+
+    std::string dir(override_dir);
+    if (!dir.empty() && dir.back() != '/') {
+      dir.push_back('/');
+    }
+    return dir + path.substr(prefix_len);
+  }
+
   explicit JsonReader(const std::string& json) : json_(json), pos_(0) {}
 
   JsonValue parse_value() {

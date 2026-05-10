@@ -80,6 +80,10 @@ float percentile(const float* data, size_t size, float p) {
 }
 
 void power_to_db(const float* power, size_t n, float ref, float amin, float top_db, float* out) {
+  if (n == 0) {
+    return;
+  }
+
   float ref_val = std::max(amin, ref);
   float log_ref = 10.0f * std::log10(ref_val);
   for (size_t i = 0; i < n; ++i) {

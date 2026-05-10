@@ -299,10 +299,12 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   /// Create result spectrograms
   HpssSpectrogramResult result;
   result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
-                                              spec.n_fft(), spec.hop_length(), spec.sample_rate());
+                                              spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+                                              spec.center(), spec.win_length());
   result.percussive =
       Spectrogram::from_complex(percussive_complex.data(), n_bins, n_frames, spec.n_fft(),
-                                spec.hop_length(), spec.sample_rate());
+                                spec.hop_length(), spec.sample_rate(), spec.center(),
+                                spec.win_length());
 
   return result;
 }
@@ -417,12 +419,15 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   /// Create result spectrograms
   HpssSpectrogramResultWithResidual result;
   result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
-                                              spec.n_fft(), spec.hop_length(), spec.sample_rate());
+                                              spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+                                              spec.center(), spec.win_length());
   result.percussive =
       Spectrogram::from_complex(percussive_complex.data(), n_bins, n_frames, spec.n_fft(),
-                                spec.hop_length(), spec.sample_rate());
+                                spec.hop_length(), spec.sample_rate(), spec.center(),
+                                spec.win_length());
   result.residual = Spectrogram::from_complex(residual_complex.data(), n_bins, n_frames,
-                                              spec.n_fft(), spec.hop_length(), spec.sample_rate());
+                                              spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+                                              spec.center(), spec.win_length());
 
   return result;
 }

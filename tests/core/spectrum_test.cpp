@@ -176,6 +176,49 @@ TEST_CASE("Spectrogram empty audio", "[spectrum]") {
   REQUIRE(spec.n_frames() == 0);
 }
 
+TEST_CASE("Spectrogram center flag controls iSTFT trimming", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 512;
+  std::vector<float> original = generate_sine(samples, 440.0f, sr);
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig config;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.center = false;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  REQUIRE_FALSE(spec.center());
+  REQUIRE(spec.n_frames() == 1);
+
+  Audio reconstructed = spec.to_audio();
+  REQUIRE(reconstructed.size() == static_cast<size_t>(config.n_fft));
+
+  Audio fixed_length = spec.to_audio(samples);
+  REQUIRE(fixed_length.size() == static_cast<size_t>(samples));
+}
+
+TEST_CASE("Spectrogram iSTFT length pads when requested length exceeds reconstruction", "[spectrum]") {
+  constexpr int n_bins = 5;
+  constexpr int n_frames = 1;
+  constexpr int n_fft = 8;
+  constexpr int hop_length = 4;
+  constexpr int sr = 22050;
+
+  std::vector<std::complex<float>> data(n_bins * n_frames, {0.0f, 0.0f});
+  data[0] = {1.0f, 0.0f};
+
+  Spectrogram spec =
+      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr, false);
+  Audio reconstructed = spec.to_audio(12);
+
+  REQUIRE(reconstructed.size() == 12);
+  for (size_t i = 8; i < reconstructed.size(); ++i) {
+    REQUIRE(reconstructed[i] == 0.0f);
+  }
+}
+
 TEST_CASE("Spectrogram DC signal", "[spectrum]") {
   constexpr int sr = 22050;
   constexpr int samples = 4096;
@@ -310,10 +353,45 @@ TEST_CASE("Spectrogram from_complex", "[spectrum]") {
   REQUIRE(spec.n_fft() == n_fft);
   REQUIRE(spec.hop_length() == hop_length);
   REQUIRE(spec.sample_rate() == sr);
+  REQUIRE(spec.center());
 
   // Verify data
   REQUIRE(spec.at(0, 0) == std::complex<float>(1.0f, 1.0f));
   REQUIRE(spec.at(2, 1) == std::complex<float>(3.0f, 2.0f));
+}
+
+TEST_CASE("Spectrogram from_complex can preserve non-centered origin", "[spectrum]") {
+  constexpr int n_bins = 5;
+  constexpr int n_frames = 1;
+  constexpr int n_fft = 8;
+  constexpr int hop_length = 4;
+  constexpr int sr = 22050;
+
+  std::vector<std::complex<float>> data(n_bins * n_frames, {1.0f, 0.0f});
+  Spectrogram spec =
+      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr, false);
+
+  REQUIRE_FALSE(spec.center());
+  Audio reconstructed = spec.to_audio();
+  REQUIRE(reconstructed.size() == static_cast<size_t>(n_fft));
+}
+
+TEST_CASE("Spectrogram from_complex can preserve win_length", "[spectrum]") {
+  constexpr int n_bins = 1025;
+  constexpr int n_frames = 5;
+  constexpr int n_fft = 2048;
+  constexpr int hop_length = 512;
+  constexpr int win_length = 1024;
+  constexpr int sr = 22050;
+
+  std::vector<std::complex<float>> data(n_bins * n_frames, {0.0f, 0.0f});
+  data[10] = {1.0f, 0.0f};
+
+  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
+                                               sr, true, win_length);
+
+  REQUIRE(spec.win_length() == win_length);
+  REQUIRE(spec.center());
 }
 
 TEST_CASE("Griffin-Lim momentum=0.99 produces better SNR than momentum=0.0", "[spectrum]") {

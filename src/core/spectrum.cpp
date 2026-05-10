@@ -62,17 +62,24 @@ std::vector<float> create_fft_window(WindowType type, int length) {
 }  // namespace
 
 Spectrogram::Spectrogram()
-    : n_bins_(0), n_frames_(0), n_fft_(0), hop_length_(0), sample_rate_(0), win_length_(0) {}
+    : n_bins_(0),
+      n_frames_(0),
+      n_fft_(0),
+      hop_length_(0),
+      sample_rate_(0),
+      win_length_(0),
+      center_(true) {}
 
 Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
-                         int hop_length, int sample_rate, int win_length)
+                         int hop_length, int sample_rate, int win_length, bool center)
     : data_(std::move(data)),
       n_bins_(n_bins),
       n_frames_(n_frames),
       n_fft_(n_fft),
       hop_length_(hop_length),
       sample_rate_(sample_rate),
-      win_length_(win_length > 0 ? win_length : n_fft) {}
+      win_length_(win_length > 0 ? win_length : n_fft),
+      center_(center) {}
 
 Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
                                  SpectrogramProgressCallback progress_callback) {
@@ -110,9 +117,10 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   }
 
   /// Calculate number of frames
-  int n_frames = 1 + static_cast<int>((signal_length - n_fft) / hop_length);
-  if (n_frames <= 0) {
-    n_frames = 1;
+  int n_frames = 1;
+  if (signal_length >= static_cast<size_t>(n_fft)) {
+    n_frames = 1 + static_cast<int>((signal_length - static_cast<size_t>(n_fft)) /
+                                    static_cast<size_t>(hop_length));
   }
 
   int n_bins = n_fft / 2 + 1;
@@ -169,13 +177,15 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   }
 
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, audio.sample_rate(),
-                     win_length);
+                     win_length, config.center);
 }
 
 Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
-                                      int n_fft, int hop_length, int sample_rate) {
+                                      int n_fft, int hop_length, int sample_rate, bool center,
+                                      int win_length) {
   std::vector<std::complex<float>> spectrum(data, data + n_bins * n_frames);
-  return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate);
+  return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate,
+                     win_length, center);
 }
 
 float Spectrogram::duration() const {
@@ -282,12 +292,19 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   }
 
   // Trim to requested length or remove center padding
-  int trim_start = n_fft_ / 2;  // Remove padding added by center=true
-  int trim_end = full_length - n_fft_ / 2;
+  int trim_start = center_ ? n_fft_ / 2 : 0;
+  int trim_end = center_ ? full_length - n_fft_ / 2 : full_length;
 
   if (length > 0) {
-    // Use requested length
-    trim_end = std::min(trim_start + length, full_length);
+    std::vector<float> trimmed(static_cast<size_t>(length), 0.0f);
+    if (trim_start < full_length) {
+      int available = std::min(length, full_length - trim_start);
+      if (available > 0) {
+        std::copy(output.begin() + trim_start, output.begin() + trim_start + available,
+                  trimmed.begin());
+      }
+    }
+    return Audio::from_vector(std::move(trimmed), sample_rate_);
   }
 
   if (trim_start < trim_end && trim_start < full_length) {

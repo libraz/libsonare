@@ -38,6 +38,18 @@ std::vector<float> pad_for_centered_frames(const float* samples, size_t n_sample
   return padded;
 }
 
+std::vector<float> pad_for_centered_zcr(const float* samples, size_t n_samples, int frame_length) {
+  int pad_length = frame_length / 2;
+  std::vector<float> padded(n_samples + static_cast<size_t>(pad_length * 2), 0.0f);
+  if (n_samples > 0) {
+    std::fill(padded.begin(), padded.begin() + pad_length, samples[0]);
+    std::copy(samples, samples + n_samples, padded.begin() + pad_length);
+    std::fill(padded.begin() + pad_length + static_cast<int>(n_samples), padded.end(),
+              samples[n_samples - 1]);
+  }
+  return padded;
+}
+
 }  // namespace
 
 std::vector<float> spectral_centroid(const Spectrogram& spec, int sr) {
@@ -259,7 +271,7 @@ std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, in
   SONARE_CHECK(samples != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
 
-  std::vector<float> padded = pad_for_centered_frames(samples, n_samples, frame_length);
+  std::vector<float> padded = pad_for_centered_zcr(samples, n_samples, frame_length);
   const float* padded_samples = padded.data();
   size_t padded_length = padded.size();
 
@@ -280,7 +292,7 @@ std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, in
       }
     }
 
-    zcr[t] = static_cast<float>(crossings) / static_cast<float>(frame_length - 1);
+    zcr[t] = static_cast<float>(crossings) / static_cast<float>(frame_length);
   }
 
   return zcr;

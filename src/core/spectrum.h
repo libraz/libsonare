@@ -79,9 +79,12 @@ class Spectrogram {
   /// @param n_fft Original FFT size
   /// @param hop_length Hop length used
   /// @param sample_rate Sample rate of original audio
+  /// @param center Whether the source signal was center-padded
+  /// @param win_length Analysis window length (0 = n_fft)
   /// @return Spectrogram object
   static Spectrogram from_complex(const std::complex<float>* data, int n_bins, int n_frames,
-                                  int n_fft, int hop_length, int sample_rate);
+                                  int n_fft, int hop_length, int sample_rate, bool center = true,
+                                  int win_length = 0);
 
   /// @brief Returns number of frequency bins (n_fft/2 + 1).
   int n_bins() const { return n_bins_; }
@@ -98,6 +101,9 @@ class Spectrogram {
   /// @brief Returns window length used for analysis.
   /// @details Defaults to n_fft if not explicitly set.
   int win_length() const { return win_length_; }
+
+  /// @brief Returns true if the input was center-padded before STFT.
+  bool center() const { return center_; }
 
   /// @brief Returns sample rate of original audio.
   int sample_rate() const { return sample_rate_; }
@@ -140,7 +146,7 @@ class Spectrogram {
 
  private:
   Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
-              int hop_length, int sample_rate, int win_length = 0);
+              int hop_length, int sample_rate, int win_length = 0, bool center = true);
 
   std::vector<std::complex<float>> data_;  ///< Complex spectrum [n_bins * n_frames]
   int n_bins_;
@@ -149,6 +155,7 @@ class Spectrogram {
   int hop_length_;
   int sample_rate_;
   int win_length_;  ///< Window length used for analysis (defaults to n_fft)
+  bool center_;
 
   // Cached derived data (computed lazily)
   mutable std::vector<float> magnitude_cache_;

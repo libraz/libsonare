@@ -130,7 +130,7 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
   }
 
   return Spectrogram::from_complex(output.data(), n_bins, n_frames_out, n_fft, hop_length,
-                                   sample_rate);
+                                   sample_rate, spec.center(), spec.win_length());
 }
 
 }  // namespace sonare

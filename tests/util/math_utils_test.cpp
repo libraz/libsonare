@@ -117,6 +117,12 @@ TEST_CASE("power_to_db basic", "[math_utils]") {
     REQUIRE_THAT(data[1], WithinAbs(-10.0f, 0.01f));
     REQUIRE_THAT(data[2], WithinAbs(-20.0f, 0.01f));
   }
+
+  SECTION("empty input") {
+    std::vector<float> db;
+    power_to_db(nullptr, 0, 1.0f, 1e-10f, 80.0f, db.data());
+    REQUIRE(db.empty());
+  }
 }
 
 TEST_CASE("compute_autocorrelation", "[math_utils]") {

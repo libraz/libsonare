@@ -52,6 +52,34 @@ TEST_CASE("phase_vocoder basic", "[time_stretch]") {
                WithinRel(static_cast<float>(spec.n_frames()), 0.1f));
 }
 
+TEST_CASE("phase_vocoder preserves spectrogram center flag", "[time_stretch]") {
+  Audio audio = create_test_audio();
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+  stft_config.center = false;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  Spectrogram stretched = phase_vocoder(spec, 1.0f);
+
+  REQUIRE_FALSE(stretched.center());
+}
+
+TEST_CASE("phase_vocoder preserves spectrogram win_length", "[time_stretch]") {
+  Audio audio = create_test_audio();
+
+  StftConfig stft_config;
+  stft_config.n_fft = 2048;
+  stft_config.win_length = 1024;
+  stft_config.hop_length = 512;
+
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  Spectrogram stretched = phase_vocoder(spec, 1.0f);
+
+  REQUIRE(stretched.win_length() == stft_config.win_length);
+}
+
 TEST_CASE("phase_vocoder slower", "[time_stretch]") {
   Audio audio = create_test_audio();
 

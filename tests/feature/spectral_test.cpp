@@ -240,6 +240,18 @@ TEST_CASE("zero_crossing_rate basic", "[spectral]") {
   }
 }
 
+TEST_CASE("zero_crossing_rate uses librosa edge padding", "[spectral]") {
+  std::vector<float> samples(8, -1.0f);
+  Audio audio = Audio::from_vector(std::move(samples), 22050);
+
+  std::vector<float> zcr = zero_crossing_rate(audio, 8, 4);
+
+  REQUIRE_FALSE(zcr.empty());
+  for (float value : zcr) {
+    REQUIRE_THAT(value, WithinAbs(0.0f, 1e-7f));
+  }
+}
+
 TEST_CASE("zero_crossing_rate frequency relationship", "[spectral]") {
   // Higher frequency should have more zero crossings
   Audio low_audio = create_sine_audio(100.0f);
