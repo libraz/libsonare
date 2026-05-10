@@ -42,12 +42,30 @@ std::vector<float> create_white_noise(int sr, float duration, unsigned int seed)
   return y;
 }
 
+std::vector<float> create_alternating_sign(int sr, float duration) {
+  size_t n = static_cast<size_t>(duration * sr);
+  std::vector<float> y(n, 1.0f);
+  for (size_t i = 1; i < n; i += 2) {
+    y[i] = -1.0f;
+  }
+  return y;
+}
+
+std::vector<float> create_constant_negative(int sr, float duration) {
+  size_t n = static_cast<size_t>(duration * sr);
+  return std::vector<float>(n, -1.0f);
+}
+
 /// @brief Creates signal by name.
 std::vector<float> create_signal(const std::string& name, int sr, float duration) {
   if (name == "440Hz_tone") {
     return create_tone(sr, duration, 440.0f);
   } else if (name == "white_noise") {
     return create_white_noise(sr, duration, 42);
+  } else if (name == "alternating_sign") {
+    return create_alternating_sign(sr, duration);
+  } else if (name == "constant_negative") {
+    return create_constant_negative(sr, duration);
   }
   return {};
 }

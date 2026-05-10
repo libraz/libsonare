@@ -238,7 +238,17 @@ def generate_zcr_rms_reference():
     rng = np.random.default_rng(42)
     y_noise = rng.standard_normal(int(sr * duration)).astype(np.float32)
 
-    for name, y in [("440Hz_tone", y_tone), ("white_noise", y_noise)]:
+    y_alternating = np.ones(int(sr * duration), dtype=np.float32)
+    y_alternating[1::2] = -1.0
+
+    y_constant_negative = np.full(int(sr * duration), -1.0, dtype=np.float32)
+
+    for name, y in [
+        ("440Hz_tone", y_tone),
+        ("white_noise", y_noise),
+        ("alternating_sign", y_alternating),
+        ("constant_negative", y_constant_negative),
+    ]:
         zcr = librosa.feature.zero_crossing_rate(y, frame_length=2048, hop_length=512)
         rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)
         refs.append({
