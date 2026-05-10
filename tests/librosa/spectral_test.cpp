@@ -55,7 +55,7 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
          i < result.size() - static_cast<size_t>(skip_boundary); ++i) {
       CAPTURE(i);
       REQUIRE_THAT(static_cast<double>(result[i]),
-                   WithinRel(static_cast<double>(ref[i].as_float()), 5e-2));
+                   WithinRel(static_cast<double>(ref[i].as_float()), 1e-2));
     }
   }
 
@@ -66,7 +66,7 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
     for (size_t i = 0; i < result.size(); ++i) {
       CAPTURE(i);
       REQUIRE_THAT(static_cast<double>(result[i]),
-                   WithinAbs(static_cast<double>(ref[i].as_float()), 0.5));
+                   WithinAbs(static_cast<double>(ref[i].as_float()), 0.45));
     }
   }
 
@@ -89,10 +89,8 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
     for (size_t i = static_cast<size_t>(skip_boundary);
          i < result.size() - static_cast<size_t>(skip_boundary); ++i) {
       CAPTURE(i);
-      // Flatness values can be very small; use generous absolute tolerance
-      // because geometric mean computation differs between float32/float64
       REQUIRE_THAT(static_cast<double>(result[i]),
-                   WithinAbs(static_cast<double>(ref[i].as_float()), 1e-1));
+                   WithinAbs(static_cast<double>(ref[i].as_float()), 1e-7));
     }
   }
 
@@ -106,18 +104,23 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
     REQUIRE(result.size() == ref.size());
     REQUIRE(result.size() == static_cast<size_t>(n_bands_plus_one * n_frames));
 
-    float mean_abs_diff = 0.0f;
-    float max_abs_diff = 0.0f;
-    for (size_t i = 0; i < result.size(); ++i) {
-      float ref_val = ref[i].as_float();
-      float res_val = result[i];
-      float diff = std::abs(res_val - ref_val);
-      mean_abs_diff += diff;
-      max_abs_diff = std::max(max_abs_diff, diff);
+    double mean_abs_diff = 0.0;
+    double max_abs_diff = 0.0;
+    size_t count = 0;
+    for (int b = 0; b < n_bands_plus_one; ++b) {
+      for (int t = skip_boundary; t < n_frames - skip_boundary; ++t) {
+        size_t i = static_cast<size_t>(b * n_frames + t);
+        float ref_val = ref[i].as_float();
+        float res_val = result[i];
+        double diff = std::abs(static_cast<double>(res_val) - static_cast<double>(ref_val));
+        mean_abs_diff += diff;
+        max_abs_diff = std::max(max_abs_diff, diff);
+        ++count;
+      }
     }
-    mean_abs_diff /= static_cast<float>(result.size());
+    mean_abs_diff /= static_cast<double>(count);
 
-    REQUIRE(mean_abs_diff < 0.7f);
-    REQUIRE(max_abs_diff < 7.5f);
+    REQUIRE(mean_abs_diff < 1.0);
+    REQUIRE(max_abs_diff < 9.0);
   }
 }

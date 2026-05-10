@@ -14,6 +14,8 @@ namespace sonare {
 
 namespace {
 
+constexpr double kTwoPiDouble = 6.28318530717958647692;
+
 /// @brief Pads signal with zeros for centered STFT.
 /// @details Uses constant zero padding.
 std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
@@ -34,21 +36,24 @@ std::vector<float> create_fft_window(WindowType type, int length) {
   switch (type) {
     case WindowType::Hann:
       for (int i = 0; i < length; ++i) {
-        window[i] = 0.5f * (1.0f - std::cos(kTwoPi * i / length));
+        double phase = kTwoPiDouble * static_cast<double>(i) / static_cast<double>(length);
+        window[i] = static_cast<float>(0.5 * (1.0 - std::cos(phase)));
       }
       break;
     case WindowType::Hamming:
       for (int i = 0; i < length; ++i) {
-        window[i] = 0.54f - 0.46f * std::cos(kTwoPi * i / length);
+        double phase = kTwoPiDouble * static_cast<double>(i) / static_cast<double>(length);
+        window[i] = static_cast<float>(0.54 - 0.46 * std::cos(phase));
       }
       break;
     case WindowType::Blackman: {
-      constexpr float a0 = 0.42f;
-      constexpr float a1 = 0.5f;
-      constexpr float a2 = 0.08f;
+      constexpr double a0 = 0.42;
+      constexpr double a1 = 0.5;
+      constexpr double a2 = 0.08;
       for (int i = 0; i < length; ++i) {
-        float t = static_cast<float>(i) / length;
-        window[i] = a0 - a1 * std::cos(kTwoPi * t) + a2 * std::cos(2.0f * kTwoPi * t);
+        double t = static_cast<double>(i) / static_cast<double>(length);
+        window[i] = static_cast<float>(a0 - a1 * std::cos(kTwoPiDouble * t) +
+                                       a2 * std::cos(2.0 * kTwoPiDouble * t));
       }
       break;
     }

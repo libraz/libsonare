@@ -6,7 +6,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <vector>
+
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -94,6 +97,15 @@ TEST_CASE("spectral_centroid low vs high frequency", "[spectral]") {
   REQUIRE(high_mean > low_mean * 2.0f);
 }
 
+TEST_CASE("spectral_centroid normalizes tiny nonzero magnitudes like librosa", "[spectral]") {
+  std::vector<float> magnitude = {1e-12f, 1e-12f};
+
+  std::vector<float> centroid = spectral_centroid(magnitude.data(), 2, 1, 2, 2);
+
+  REQUIRE(centroid.size() == 1);
+  REQUIRE_THAT(centroid[0], WithinAbs(0.5f, 1e-7f));
+}
+
 TEST_CASE("spectral_bandwidth basic", "[spectral]") {
   Audio audio = create_sine_audio(1000.0f);
   int sr = audio.sample_rate();
@@ -122,6 +134,15 @@ TEST_CASE("spectral_bandwidth basic", "[spectral]") {
 
   // Should be relatively narrow (< 500 Hz for pure sine)
   REQUIRE(mean_bw < 500.0f);
+}
+
+TEST_CASE("spectral_bandwidth normalizes tiny nonzero magnitudes like librosa", "[spectral]") {
+  std::vector<float> magnitude = {1e-12f, 1e-12f};
+
+  std::vector<float> bandwidth = spectral_bandwidth(magnitude.data(), 2, 1, 2, 2, 2.0f);
+
+  REQUIRE(bandwidth.size() == 1);
+  REQUIRE_THAT(bandwidth[0], WithinAbs(0.5f, 1e-7f));
 }
 
 TEST_CASE("spectral_rolloff basic", "[spectral]") {
@@ -173,6 +194,27 @@ TEST_CASE("spectral_rolloff percentage parameter", "[spectral]") {
   REQUIRE(mean_50 < mean_85);
 }
 
+TEST_CASE("spectral_rolloff uses magnitude accumulation like librosa", "[spectral]") {
+  // Matrix layout is [n_bins x n_frames].  Librosa accumulates the provided
+  // non-negative spectrogram values directly rather than squaring them.
+  std::vector<float> magnitude = {9.0f, 1.0f, 1.0f};
+
+  std::vector<float> rolloff = spectral_rolloff(magnitude.data(), 3, 1, 300, 6, 0.85f);
+
+  REQUIRE(rolloff.size() == 1);
+  REQUIRE_THAT(rolloff[0], WithinAbs(50.0f, 1e-7f));
+}
+
+TEST_CASE("spectral_rolloff validates librosa-compatible inputs", "[spectral]") {
+  std::vector<float> magnitude = {1.0f, 1.0f, 1.0f};
+
+  REQUIRE_THROWS_AS(spectral_rolloff(magnitude.data(), 3, 1, 300, 6, 1.0f), SonareException);
+  REQUIRE_THROWS_AS(spectral_rolloff(magnitude.data(), 3, 1, 300, 6, 0.0f), SonareException);
+
+  std::vector<float> negative = {1.0f, -1.0f, 1.0f};
+  REQUIRE_THROWS_AS(spectral_rolloff(negative.data(), 3, 1, 300, 6, 0.85f), SonareException);
+}
+
 TEST_CASE("spectral_flatness sine vs noise", "[spectral]") {
   Audio sine_audio = create_sine_audio(1000.0f);
   Audio noise_audio = create_noise_audio();
@@ -200,6 +242,15 @@ TEST_CASE("spectral_flatness sine vs noise", "[spectral]") {
   REQUIRE(noise_mean <= 1.0f);
 }
 
+TEST_CASE("spectral_flatness squares magnitude like librosa", "[spectral]") {
+  std::vector<float> magnitude = {1.0f, 10.0f};
+
+  std::vector<float> flatness = spectral_flatness(magnitude.data(), 2, 1);
+
+  REQUIRE(flatness.size() == 1);
+  REQUIRE_THAT(flatness[0], WithinAbs(0.1980198f, 1e-6f));
+}
+
 TEST_CASE("spectral_contrast basic", "[spectral]") {
   Audio audio = create_sine_audio(1000.0f);
   int sr = audio.sample_rate();
@@ -220,6 +271,21 @@ TEST_CASE("spectral_contrast basic", "[spectral]") {
   for (float c : contrast) {
     REQUIRE(std::isfinite(c));
   }
+}
+
+TEST_CASE("spectral_contrast uses librosa band quantile means", "[spectral]") {
+  std::vector<std::complex<float>> data = {
+      {1.0f, 0.0f}, {2.0f, 0.0f}, {3.0f, 0.0f}, {4.0f, 0.0f},
+      {5.0f, 0.0f}, {6.0f, 0.0f}, {7.0f, 0.0f}, {8.0f, 0.0f},
+  };
+  Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14);
+
+  std::vector<float> contrast = spectral_contrast(spec, 14, 2, 1.0f, 0.5f);
+
+  REQUIRE(contrast.size() == 3);
+  REQUIRE_THAT(contrast[0], WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(contrast[1], WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(contrast[2], WithinAbs(2.6884532f, 1e-6f));
 }
 
 TEST_CASE("zero_crossing_rate basic", "[spectral]") {
