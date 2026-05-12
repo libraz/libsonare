@@ -16,7 +16,7 @@ Tens of times faster than librosa/Python.
 
 ```bash
 npm install @libraz/libsonare         # JavaScript / TypeScript (WASM, takes Float32Array)
-pip install libsonare                  # Python (loads WAV/MP3 files; M4A/AAC via FFmpeg)
+pip install libsonare                  # Python (WAV/MP3 — see "Supported audio formats" for M4A/AAC)
 ```
 
 For Node.js with native file decoding, build
@@ -54,8 +54,14 @@ const result = analyze(samples, sampleRate);
 
 ### Python
 
-`libsonare` reads WAV/MP3 out of the box. For M4A/AAC/FLAC/OGG, build with
-`SONARE_FFMPEG=1` (requires system FFmpeg shared libraries).
+`pip install libsonare` ships a **WAV/MP3-only wheel** (matching librosa / pydub /
+soundfile conventions). For M4A/AAC/FLAC/OGG either pre-convert with external
+`ffmpeg`, or rebuild from source with FFmpeg linked:
+
+```bash
+SONARE_FFMPEG=1 pip install libsonare --no-binary libsonare
+# requires system FFmpeg dev libs: brew install ffmpeg / apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
+```
 
 ```python
 import libsonare
@@ -121,11 +127,21 @@ Default parameters match librosa:
 
 ## Supported audio formats
 
-| Format | C++ / Python / Node native (default) | + FFmpeg (`-DSONARE_WITH_FFMPEG=ON`) | WASM (`@libraz/libsonare`) |
-|--------|--------------------------------------|--------------------------------------|----------------------------|
+| Format | Default¹ | With FFmpeg² | WASM (`@libraz/libsonare`) |
+|--------|----------|--------------|----------------------------|
 | WAV (PCM 16/24/32, float32) | ✅ | ✅ | n/a (samples in) |
 | MP3 | ✅ | ✅ | n/a |
 | M4A / AAC / FLAC / OGG / Opus / WMA / ... | ❌ (clear error message) | ✅ | n/a (use Web Audio API) |
+
+¹ **Default**: PyPI wheel (`pip install libsonare`) and source builds where FFmpeg
+dev libs are not present. PyPI wheels are deterministically pinned to this mode
+so installation never depends on the user's `libavformat`.
+
+² **With FFmpeg**: source build with FFmpeg linked. CMake auto-detects via
+pkg-config (`-DSONARE_WITH_FFMPEG=AUTO`, the default for `make build`), and you
+can force on/off with `-DSONARE_WITH_FFMPEG=ON`/`OFF`. Python equivalent:
+`SONARE_FFMPEG=1 pip install libsonare --no-binary libsonare`. Node native:
+`SONARE_FFMPEG=1 yarn build`.
 
 WASM does not bundle a file decoder by design; pass `Float32Array` samples obtained from
 the Web Audio API or another JS decoder.
