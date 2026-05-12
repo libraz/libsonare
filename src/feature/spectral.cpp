@@ -22,7 +22,8 @@ std::vector<float> bin_frequencies(int n_bins, int sr, int n_fft) {
   return freqs;
 }
 
-std::vector<float> pad_for_centered_frames(const float* samples, size_t n_samples, int frame_length) {
+std::vector<float> pad_for_centered_frames(const float* samples, size_t n_samples,
+                                           int frame_length) {
   int pad_length = frame_length / 2;
   std::vector<float> padded(n_samples + static_cast<size_t>(pad_length * 2), 0.0f);
   if (n_samples > 0) {
@@ -225,8 +226,7 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
       }
     }
 
-    int q_count =
-        std::max(1, static_cast<int>(std::round(quantile * band_indices.size())));
+    int q_count = std::max(1, static_cast<int>(std::round(quantile * band_indices.size())));
 
     if (b < n_bands && !band_indices.empty()) {
       band_indices.pop_back();
@@ -279,7 +279,8 @@ std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, in
   const float* padded_samples = padded.data();
   size_t padded_length = padded.size();
 
-  int n_frames = 1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
+  int n_frames =
+      1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
   if (n_frames <= 0) {
     n_frames = 1;
   }
@@ -315,7 +316,8 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
   const float* padded_samples = padded.data();
   size_t padded_length = padded.size();
 
-  int n_frames = 1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
+  int n_frames =
+      1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
   if (n_frames <= 0) {
     n_frames = 1;
   }

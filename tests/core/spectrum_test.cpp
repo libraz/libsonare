@@ -199,7 +199,8 @@ TEST_CASE("Spectrogram center flag controls iSTFT trimming", "[spectrum]") {
   REQUIRE(fixed_length.size() == static_cast<size_t>(samples));
 }
 
-TEST_CASE("Spectrogram iSTFT length pads when requested length exceeds reconstruction", "[spectrum]") {
+TEST_CASE("Spectrogram iSTFT length pads when requested length exceeds reconstruction",
+          "[spectrum]") {
   constexpr int n_bins = 5;
   constexpr int n_frames = 1;
   constexpr int n_fft = 8;
@@ -387,8 +388,8 @@ TEST_CASE("Spectrogram from_complex can preserve win_length", "[spectrum]") {
   std::vector<std::complex<float>> data(n_bins * n_frames, {0.0f, 0.0f});
   data[10] = {1.0f, 0.0f};
 
-  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
-                                               sr, true, win_length);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr,
+                                               true, win_length);
 
   REQUIRE(spec.win_length() == win_length);
   REQUIRE(spec.center());

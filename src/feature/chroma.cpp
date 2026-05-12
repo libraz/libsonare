@@ -9,7 +9,8 @@ namespace sonare {
 
 namespace {
 
-std::vector<float> normalize_columns(std::vector<float> features, int n_chroma, int n_frames, int norm) {
+std::vector<float> normalize_columns(std::vector<float> features, int n_chroma, int n_frames,
+                                     int norm) {
   for (int t = 0; t < n_frames; ++t) {
     float norm_val = 0.0f;
 

@@ -2,16 +2,17 @@
 /// @brief Reference compatibility tests for HPSS.
 /// @details Reference values from: tests/librosa/reference/hpss.json
 
+#include "effects/hpss.h"
+
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <vector>
 
 #include "core/audio.h"
 #include "core/spectrum.h"
-#include "effects/hpss.h"
 #include "util/json_reader.h"
 #include "util/math_utils.h"
 

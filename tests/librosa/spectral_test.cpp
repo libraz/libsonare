@@ -31,9 +31,8 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
   std::vector<float> samples(n_samples);
   for (size_t i = 0; i < n_samples; ++i) {
     double t = static_cast<double>(i) / static_cast<double>(sr);
-    samples[i] = static_cast<float>(
-        0.5 * (std::sin(static_cast<double>(kTwoPi) * 440.0 * t) +
-               std::sin(static_cast<double>(kTwoPi) * 880.0 * t)));
+    samples[i] = static_cast<float>(0.5 * (std::sin(static_cast<double>(kTwoPi) * 440.0 * t) +
+                                           std::sin(static_cast<double>(kTwoPi) * 880.0 * t)));
   }
   Audio audio = Audio::from_buffer(samples.data(), n_samples, sr);
 
