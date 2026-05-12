@@ -42,9 +42,18 @@ def _get_lib() -> ctypes.CDLL:
 
 
 def _check(rc: int) -> None:
-    """Check a SonareError return code and raise on failure."""
+    """Check a SonareError return code and raise on failure.
+
+    When the C layer recorded a detailed thread-local message
+    (``sonare_last_error_message``), it is preferred over the generic
+    ``sonare_error_message(rc)`` fallback so users see the underlying cause.
+    """
     if rc != SONARE_OK:
         lib = _get_lib()
+        detail = lib.sonare_last_error_message()
+        detail_str = detail.decode("utf-8") if detail else ""
+        if detail_str:
+            raise RuntimeError(detail_str)
         msg = lib.sonare_error_message(rc)
         raise RuntimeError(msg.decode("utf-8") if msg else f"sonare error {rc}")
 
@@ -64,12 +73,18 @@ def detect_bpm(
 ) -> float:
     """Detect the BPM (tempo) of audio samples.
 
+    One-shot wrapper for raw sample input. When you load from a file or call
+    multiple analyses on the same signal, prefer :class:`libsonare.Audio` and
+    :meth:`Audio.detect_bpm` to avoid re-copying samples across the FFI.
+
     Args:
-        samples: Audio samples as a list/sequence of floats.
+        samples: Mono audio samples (1D, nominally ``[-1.0, 1.0]``). Accepts
+            ``list[float]``, ``tuple[float, ...]``, ``array.array``, or a numpy
+            1D array of dtype ``float32``.
         sample_rate: Sample rate in Hz (default 22050).
 
     Returns:
-        Detected BPM value.
+        Detected BPM as a ``float``. For confidence, use :func:`analyze`.
 
     Raises:
         RuntimeError: If detection fails.
@@ -91,11 +106,13 @@ def detect_key(
     """Detect the musical key of audio samples.
 
     Args:
-        samples: Audio samples as a list/sequence of floats.
+        samples: Mono audio samples (1D float). See :func:`detect_bpm` for
+            accepted types.
         sample_rate: Sample rate in Hz (default 22050).
 
     Returns:
-        Detected Key with root, mode, and confidence.
+        :class:`libsonare.Key` with ``root`` (:class:`PitchClass`), ``mode``
+        (:class:`Mode`), and ``confidence`` (``float`` in ``[0, 1]``).
 
     Raises:
         RuntimeError: If detection fails.
@@ -193,11 +210,15 @@ def analyze(
     """Run full audio analysis on samples.
 
     Args:
-        samples: Audio samples as a list/sequence of floats.
+        samples: Mono audio samples (1D float). See :func:`detect_bpm` for
+            accepted types.
         sample_rate: Sample rate in Hz (default 22050).
 
     Returns:
-        AnalysisResult with BPM, key, time signature, and beat times.
+        :class:`libsonare.AnalysisResult` with ``bpm`` (``float``),
+        ``bpm_confidence`` (``float`` in ``[0, 1]``), ``key``
+        (:class:`Key`), ``time_signature`` (:class:`TimeSignature`),
+        and ``beat_times`` (``list[float]`` in seconds).
 
     Raises:
         RuntimeError: If analysis fails.
@@ -236,6 +257,18 @@ def version() -> str:
     lib = _get_lib()
     v = lib.sonare_version()
     return v.decode("utf-8") if v else ""
+
+
+def has_ffmpeg_support() -> bool:
+    """Return whether the loaded libsonare was compiled with FFmpeg support.
+
+    When ``True``, :meth:`Audio.from_file` / :meth:`Audio.from_memory` can
+    decode M4A, AAC, FLAC, OGG, Opus and any other container/codec supported
+    by the linked FFmpeg. When ``False``, only WAV and MP3 are supported
+    and unsupported formats raise an actionable :class:`RuntimeError`.
+    """
+    lib = _get_lib()
+    return bool(lib.sonare_has_ffmpeg_support())
 
 
 # ============================================================================

@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace {
@@ -214,5 +215,38 @@ TEST_CASE("sonare_version", "[c_api]") {
     const char* ver = sonare_version();
     REQUIRE(ver != nullptr);
     REQUIRE(std::strlen(ver) > 0);
+  }
+}
+
+TEST_CASE("sonare_last_error_message", "[c_api]") {
+  SECTION("never returns null pointer") {
+    const char* msg = sonare_last_error_message();
+    REQUIRE(msg != nullptr);
+  }
+
+  SECTION("captures detailed message when a C API call fails") {
+    // 12 bytes of random non-audio data so format detection returns Unknown.
+    std::vector<uint8_t> garbage = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                    0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
+    SonareAudio* audio = nullptr;
+
+    SonareError err = sonare_audio_from_memory(garbage.data(), garbage.size(), &audio);
+#ifdef SONARE_WITH_FFMPEG
+    // With FFmpeg the buffer still fails to decode but the message comes from
+    // FFmpeg rather than the static "Unsupported audio format" path.
+    REQUIRE(err != SONARE_OK);
+    const char* msg = sonare_last_error_message();
+    REQUIRE(msg != nullptr);
+    REQUIRE(std::strlen(msg) > 0);
+#else
+    REQUIRE(err == SONARE_ERROR_INVALID_FORMAT);
+    const char* msg = sonare_last_error_message();
+    REQUIRE(msg != nullptr);
+    // The detailed message must be more informative than the generic code label.
+    REQUIRE(std::string(msg).find("Unsupported audio format") != std::string::npos);
+    REQUIRE(std::string(msg).find("WAV, MP3") != std::string::npos);
+    REQUIRE(std::string(msg).find("ffmpeg") != std::string::npos);
+#endif
+    REQUIRE(audio == nullptr);
   }
 }

@@ -1,5 +1,8 @@
 """libsonare - audio analysis library (Python binding)."""
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+
 from .analyzer import (
     analyze,
     chroma,
@@ -9,6 +12,7 @@ from .analyzer import (
     detect_onsets,
     frames_to_time,
     harmonic,
+    has_ffmpeg_support,
     hpss,
     hz_to_mel,
     hz_to_midi,
@@ -52,9 +56,18 @@ from .types import (
     TimeSignature,
 )
 
+try:
+    __version__ = _pkg_version("libsonare")
+except PackageNotFoundError:
+    # Source checkout / editable install without metadata: fall back to the
+    # native library's version string so ``libsonare.__version__`` is always
+    # populated.
+    __version__ = version()
+
 __all__ = [
     "AnalysisResult",
     "Audio",
+    "__version__",
     "ChromaResult",
     "HpssResult",
     "Key",
@@ -73,6 +86,7 @@ __all__ = [
     "detect_onsets",
     "frames_to_time",
     "harmonic",
+    "has_ffmpeg_support",
     "hpss",
     "hz_to_mel",
     "hz_to_midi",

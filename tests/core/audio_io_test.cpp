@@ -5,11 +5,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <vector>
+
+#include "util/exception.h"
 
 using namespace sonare;
 
@@ -232,3 +235,69 @@ TEST_CASE("load_audio with max_file_size rejects large files before allocating",
   // Clean up
   std::remove(tmp_path.c_str());
 }
+
+#ifdef SONARE_WITH_FFMPEG
+TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]") {
+  // The test relies on the ffmpeg CLI to synthesize an m4a fixture at runtime
+  // so we never commit binary audio to the repo. If the CLI is missing (e.g.
+  // libavformat is linked but ffmpeg binary isn't installed) we skip cleanly.
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+
+  const std::string wav_path = "test_tone_ffmpeg.wav";
+  const std::string m4a_path = "test_tone_ffmpeg.m4a";
+  auto cleanup = [&]() {
+    std::remove(wav_path.c_str());
+    std::remove(m4a_path.c_str());
+  };
+
+  const std::string gen_wav =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "sine=frequency=440:duration=0.5:sample_rate=22050 "
+      "-ac 1 -y " +
+      wav_path;
+  const std::string gen_m4a =
+      "ffmpeg -loglevel error -i " + wav_path + " -c:a aac -b:a 64k -y " + m4a_path;
+  REQUIRE(std::system(gen_wav.c_str()) == 0);
+  REQUIRE(std::system(gen_m4a.c_str()) == 0);
+
+  AudioLoadResult loaded;
+  REQUIRE_NOTHROW(loaded = load_audio(m4a_path));
+  REQUIRE(std::get<0>(loaded).size() > 1000);
+  REQUIRE(std::get<1>(loaded) > 0);
+
+  cleanup();
+}
+#endif  // SONARE_WITH_FFMPEG
+
+#ifndef SONARE_WITH_FFMPEG
+TEST_CASE("load_buffer rejects unknown format with actionable message", "[audio_io]") {
+  // 12 bytes of nothing recognisable as WAV or MP3.
+  std::vector<uint8_t> garbage = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                  0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
+
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(load_buffer(garbage.data(), garbage.size()),
+                      ContainsSubstring("Unsupported audio format") &&
+                          ContainsSubstring("WAV, MP3") && ContainsSubstring("ffmpeg"));
+}
+
+TEST_CASE("load_audio reports extension and ffmpeg hint for unsupported file", "[audio_io]") {
+  // Write a tiny non-audio file with an .m4a extension to disk.
+  std::string tmp_path = "test_unsupported.m4a";
+  {
+    std::ofstream out(tmp_path, std::ios::binary);
+    REQUIRE(out.is_open());
+    const char payload[] = "not really an m4a file";
+    out.write(payload, static_cast<std::streamsize>(sizeof(payload) - 1));
+  }
+
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(load_audio(tmp_path), ContainsSubstring("'.m4a'") &&
+                                                ContainsSubstring("ffmpeg -i") &&
+                                                ContainsSubstring("SONARE_WITH_FFMPEG"));
+
+  std::remove(tmp_path.c_str());
+}
+#endif  // !SONARE_WITH_FFMPEG

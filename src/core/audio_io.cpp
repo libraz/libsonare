@@ -6,6 +6,10 @@
 
 #include "util/exception.h"
 
+#ifdef SONARE_WITH_FFMPEG
+#include "core/audio_io_ffmpeg.h"
+#endif
+
 // dr_wav implementation
 #define DR_WAV_IMPLEMENTATION
 #include "dr_wav.h"
@@ -20,6 +24,46 @@ namespace sonare {
 namespace {
 
 constexpr int kMinSupportedChannels = 1;
+
+#ifndef SONARE_WITH_FFMPEG
+/// @brief Extracts a lowercase file extension (including the leading dot) from a path.
+/// @return The extension (e.g. ".m4a"), or an empty string if none is found.
+/// @note Only used by the unsupported-format messages; with FFmpeg enabled, any
+///       decoder error surfaces via @ref load_buffer_ffmpeg / @ref load_ffmpeg
+///       so the extension hint is no longer needed.
+std::string extract_extension(const std::string& path) {
+  // Find the last '.' after the last path separator so directory dots are ignored.
+  size_t sep = path.find_last_of("/\\");
+  size_t dot = path.find_last_of('.');
+  if (dot == std::string::npos || (sep != std::string::npos && dot < sep)) {
+    return "";
+  }
+  std::string ext = path.substr(dot);
+  for (char& c : ext) {
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  }
+  return ext;
+}
+
+/// @brief Builds an actionable "unsupported format" error message for buffer input.
+std::string unsupported_buffer_message() {
+  return "Unsupported audio format. Supported codecs: WAV, MP3. "
+         "For M4A/AAC/FLAC/OGG, rebuild libsonare with -DSONARE_WITH_FFMPEG=ON, "
+         "convert via 'ffmpeg -i input.<ext> output.wav', "
+         "or pass float samples to Audio.from_buffer().";
+}
+
+/// @brief Builds an actionable "unsupported format" error message for file input.
+/// @param path The path being loaded (used to extract and display the extension).
+std::string unsupported_file_message(const std::string& path) {
+  std::string ext = extract_extension(path);
+  std::string ext_label = ext.empty() ? "(no extension)" : "'" + ext + "'";
+  return "Unsupported audio format: " + ext_label +
+         ". Supported: WAV, MP3. Rebuild with -DSONARE_WITH_FFMPEG=ON for "
+         "M4A/AAC/FLAC/OGG, or convert via: ffmpeg -i \"" +
+         path + "\" output.wav";
+}
+#endif  // !SONARE_WITH_FFMPEG
 
 /// @brief RAII guard for MP3 decode buffer.
 /// @details Ensures mp3dec_file_info_t.buffer is freed even on exception.
@@ -205,12 +249,26 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
     case AudioFormat::MP3:
       return load_buffer_mp3(data, size);
     default:
-      SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, "Unknown or unsupported audio format");
+#ifdef SONARE_WITH_FFMPEG
+      return load_buffer_ffmpeg(data, size);
+#else
+      SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_buffer_message());
+#endif
   }
 }
 
 AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& options) {
   std::vector<uint8_t> data = read_file(path, options.max_file_size);
+  AudioFormat format = detect_format(data.data(), data.size());
+  if (format == AudioFormat::Unknown) {
+#ifdef SONARE_WITH_FFMPEG
+    // Defer to FFmpeg, which handles a far wider set of containers and codecs
+    // (M4A/AAC/FLAC/OGG/Opus/WMA/...) than the built-in WAV/MP3 sniffers.
+    return load_buffer_ffmpeg(data.data(), data.size());
+#else
+    SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
+#endif
+  }
   return load_buffer(data.data(), data.size());
 }
 

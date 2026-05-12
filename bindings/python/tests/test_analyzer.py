@@ -5,7 +5,9 @@ from __future__ import annotations
 import io
 import math
 import os
+import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import wave
@@ -35,6 +37,25 @@ def _lib_available() -> bool:
 pytestmark = pytest.mark.skipif(not _lib_available(), reason="libsonare shared library not found")
 
 
+def _ffmpeg_cli() -> str | None:
+    """Locate the ffmpeg CLI on PATH; return None when unavailable."""
+    return shutil.which("ffmpeg")
+
+
+def _has_ffmpeg_build_support() -> bool:
+    """Return whether the loaded libsonare was compiled with FFmpeg support.
+
+    Safe to call at collection time: imports lazily so we don't fail when the
+    shared library is missing (the pytestmark above already skips in that case).
+    """
+    try:
+        import libsonare
+
+        return libsonare.has_ffmpeg_support()
+    except Exception:
+        return False
+
+
 def test_version() -> None:
     """sonare_version returns a non-empty string."""
     from libsonare import version
@@ -42,6 +63,91 @@ def test_version() -> None:
     v = version()
     assert isinstance(v, str)
     assert len(v) > 0
+
+
+def test_has_ffmpeg_support_returns_bool() -> None:
+    """has_ffmpeg_support is exposed and returns a bool."""
+    import libsonare
+
+    assert isinstance(libsonare.has_ffmpeg_support(), bool)
+
+
+@pytest.mark.skipif(
+    not _has_ffmpeg_build_support() or _ffmpeg_cli() is None,
+    reason="requires libsonare built with FFmpeg and ffmpeg CLI on PATH",
+)
+def test_audio_from_file_decodes_m4a() -> None:
+    """Audio.from_file decodes a real .m4a (AAC) file when FFmpeg is linked."""
+    import libsonare
+
+    ffmpeg = _ffmpeg_cli()
+    assert ffmpeg is not None  # narrowed for the type checker; pytest.skip above guards
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone.wav")
+        m4a_path = os.path.join(tmpdir, "tone.m4a")
+        subprocess.run(
+            [
+                ffmpeg, "-f", "lavfi", "-i",
+                "sine=frequency=440:duration=0.5:sample_rate=22050",
+                "-ac", "1", "-y", wav_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [
+                ffmpeg, "-i", wav_path, "-c:a", "aac", "-b:a", "64k",
+                "-y", m4a_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        audio = libsonare.Audio.from_file(m4a_path)
+        try:
+            assert audio.length > 1000
+            assert audio.sample_rate > 0
+            data = audio.data
+            assert isinstance(data, list)
+            assert len(data) == audio.length
+            peak = max(abs(v) for v in data)
+            assert 0.01 < peak <= 1.0
+        finally:
+            audio.close()
+
+
+def test_dunder_version_attribute() -> None:
+    """libsonare.__version__ is exposed as a non-empty string."""
+    import libsonare
+
+    assert isinstance(libsonare.__version__, str)
+    assert len(libsonare.__version__) > 0
+
+
+def test_unsupported_format_error_is_actionable() -> None:
+    """Loading an unsupported format raises a helpful, format-specific error."""
+    from libsonare import Audio
+
+    # Write a small file with an .m4a extension but no real audio payload, so
+    # we can verify the error path even without an actual M4A decoder. (When
+    # the library is built with FFmpeg support, this path raises a decode-time
+    # error from FFmpeg instead.)
+    with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as f:
+        f.write(b"not really an m4a file")
+        path = f.name
+
+    try:
+        with pytest.raises(RuntimeError) as exc:
+            Audio.from_file(path)
+        msg = str(exc.value)
+        # Must always carry *some* concrete signal, not just "Invalid format".
+        assert msg != "Invalid format"
+        assert msg.lower() != "decode failed"
+        # Default (no-FFmpeg) build surfaces the actionable hint; FFmpeg build
+        # surfaces FFmpeg's own error string. Either way the message must be
+        # meaningfully long.
+        assert len(msg) > 20
+    finally:
+        os.unlink(path)
 
 
 def test_detect_bpm_with_silence() -> None:

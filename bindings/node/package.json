@@ -7,10 +7,11 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist/",
+    "scripts/",
     "build/Release/*.node"
   ],
   "scripts": {
-    "build:native": "cmake-js compile",
+    "build:native": "node scripts/build-native.mjs",
     "build": "yarn build:native && tsc",
     "lint": "biome check src/ tests/",
     "lint:fix": "biome check --write src/ tests/",

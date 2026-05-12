@@ -17,6 +17,15 @@ string(REPLACE "\"" "" NAPI_INCLUDE_DIR ${NAPI_INCLUDE_DIR})
 # Root of the libsonare source tree
 set(SONARE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
+# Optional: enable FFmpeg-backed decoding (M4A/AAC/FLAC/OGG/Opus/...). Forwarded
+# from the npm build via SONARE_FFMPEG (handled in scripts/build-native.mjs):
+#   unset / AUTO -> probe via pkg-config; enable if found, else WAV/MP3 only
+#   1 / ON       -> require FFmpeg (FATAL_ERROR if missing)
+#   0 / OFF      -> force OFF
+set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
+    "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")
+set_property(CACHE SONARE_WITH_FFMPEG PROPERTY STRINGS ON OFF AUTO)
+
 # Core library sources (built inline as static)
 set(SONARE_SOURCES
   ${SONARE_ROOT}/src/util/math_utils.cpp
@@ -77,6 +86,55 @@ set(ADDON_SOURCES
 # Find Eigen3
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
+# Optional FFmpeg discovery (mirrors src/CMakeLists.txt).
+#   ON   -> required (FATAL_ERROR if missing)
+#   OFF  -> forced off
+#   AUTO -> probe pkg-config; enable if found, else WAV/MP3 only
+set(_node_ffmpeg_mode "${SONARE_WITH_FFMPEG}")
+string(TOUPPER "${_node_ffmpeg_mode}" _node_ffmpeg_mode)
+if(_node_ffmpeg_mode MATCHES "^(TRUE|YES|1)$")
+  set(_node_ffmpeg_mode "ON")
+elseif(_node_ffmpeg_mode MATCHES "^(FALSE|NO|0)$")
+  set(_node_ffmpeg_mode "OFF")
+endif()
+
+set(_node_ffmpeg_enabled OFF)
+
+if(NOT _node_ffmpeg_mode STREQUAL "OFF")
+  find_package(PkgConfig QUIET)
+  set(_node_ffmpeg_found OFF)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(FFMPEG QUIET IMPORTED_TARGET
+      libavformat
+      libavcodec
+      libavutil
+      libswresample
+    )
+    if(FFMPEG_FOUND)
+      set(_node_ffmpeg_found ON)
+    endif()
+  endif()
+
+  if(_node_ffmpeg_found)
+    list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/core/audio_io_ffmpeg.cpp)
+    set(_node_ffmpeg_enabled ON)
+    message(STATUS "sonare-node: FFmpeg detected (libavformat ${FFMPEG_libavformat_VERSION}) "
+                   "-> M4A/AAC/FLAC/OGG enabled")
+  elseif(_node_ffmpeg_mode STREQUAL "ON")
+    message(FATAL_ERROR
+      "SONARE_WITH_FFMPEG=ON but FFmpeg development libraries were not found via pkg-config.\n"
+      "Install them, e.g.:\n"
+      "  macOS:         brew install ffmpeg\n"
+      "  Debian/Ubuntu: sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev\n"
+      "  Fedora:        sudo dnf install ffmpeg-devel\n"
+      "If FFmpeg is in a non-standard prefix, set PKG_CONFIG_PATH to its .pc directory, "
+      "or pass -DSONARE_WITH_FFMPEG=OFF to opt out.")
+  else()
+    message(STATUS "sonare-node: FFmpeg not found -> WAV/MP3 only "
+                   "(pass -DSONARE_WITH_FFMPEG=ON to require, or install FFmpeg dev libs to enable)")
+  endif()
+endif()
+
 # Build the addon
 add_library(${PROJECT_NAME} SHARED
   ${SONARE_SOURCES}
@@ -104,6 +162,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   Eigen3::Eigen
   ${CMAKE_JS_LIB}
 )
+
+if(_node_ffmpeg_enabled)
+  target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::FFMPEG)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE SONARE_WITH_FFMPEG=1)
+endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   NAPI_DISABLE_CPP_EXCEPTIONS

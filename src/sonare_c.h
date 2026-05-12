@@ -85,7 +85,8 @@ int sonare_audio_sample_rate(const SonareAudio* audio);
 float sonare_audio_duration(const SonareAudio* audio);
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
-SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times, size_t* out_count);
+SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
+                                      size_t* out_count);
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count);
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
@@ -111,8 +112,22 @@ void sonare_free_result(SonareAnalysisResult* result);
 // Error handling
 const char* sonare_error_message(SonareError error);
 
+/// @brief Returns the detailed message for the most recent error on the calling thread.
+/// @details The returned string is owned by libsonare and valid until the next API call on
+///   the same thread that records or clears an error. Returns an empty string ("") when no
+///   detailed message has been recorded. The pointer is never NULL.
+/// @return Pointer to a NUL-terminated thread-local message string.
+const char* sonare_last_error_message(void);
+
 // Version
 const char* sonare_version(void);
+
+/// @brief Returns 1 if libsonare was compiled with FFmpeg-backed decoding for
+///        M4A/AAC/FLAC/OGG, 0 otherwise.
+/// @details This reflects the value of the @c SONARE_WITH_FFMPEG CMake option at
+///   build time. Language bindings expose this so test suites can conditionally
+///   exercise the FFmpeg decode path without false failures.
+int sonare_has_ffmpeg_support(void);
 
 // ============================================================================
 // Result structures for feature/effect functions

@@ -22,6 +22,19 @@ Napi::FunctionReference SonareWrap::constructor_;
 
 namespace {
 
+/// @brief Returns the most informative error string available for a C API failure.
+/// @details Prefers the thread-local detailed message from @c sonare_last_error_message
+///          (which carries the original @c SonareException::what() text, e.g. the
+///          "Unsupported audio format: '.m4a'..." hint), falling back to the
+///          generic code label if the detail string is empty. Never returns null.
+const char* ErrorMessageForCode(SonareError err) {
+  const char* detail = sonare_last_error_message();
+  if (detail != nullptr && detail[0] != '\0') {
+    return detail;
+  }
+  return sonare_error_message(err);
+}
+
 #define SONARE_NODE_TRY try {
 #define SONARE_NODE_CATCH(env)                                                     \
   }                                                                                \
@@ -159,6 +172,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::DetectOnsets, "detectOnsets"));
   exports.Set("analyze", Napi::Function::New(env, &SonareWrap::Analyze, "analyze"));
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
+  exports.Set(
+      "hasFfmpegSupport",
+      Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
 
   // Effects
   exports.Set("hpss", Napi::Function::New(env, &SonareWrap::Hpss, "hpss"));
@@ -246,7 +262,7 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
   SonareAudio* audio = nullptr;
   SonareError err = sonare_audio_from_file(path.c_str(), &audio);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -274,7 +290,7 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   SonareAudio* audio = nullptr;
   SonareError err = sonare_audio_from_buffer(data, length, sample_rate, &audio);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -309,7 +325,7 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   SonareAudio* audio = nullptr;
   SonareError err = sonare_audio_from_memory(data, len, &audio);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -381,7 +397,7 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
   SonareError err = sonare_detect_bpm(sonare_audio_data(audio_), sonare_audio_length(audio_),
                                       sonare_audio_sample_rate(audio_), &bpm);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(bpm));
@@ -398,7 +414,7 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   SonareError err = sonare_detect_key(sonare_audio_data(audio_), sonare_audio_length(audio_),
                                       sonare_audio_sample_rate(audio_), &key);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return KeyToObject(env, key.root, key.mode, key.confidence);
@@ -416,7 +432,7 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
   SonareError err = sonare_detect_beats(sonare_audio_data(audio_), sonare_audio_length(audio_),
                                         sonare_audio_sample_rate(audio_), &times, &count);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -440,7 +456,7 @@ Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
   SonareError err = sonare_detect_onsets(sonare_audio_data(audio_), sonare_audio_length(audio_),
                                          sonare_audio_sample_rate(audio_), &times, &count);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -463,7 +479,7 @@ Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
   SonareError err = sonare_analyze(sonare_audio_data(audio_), sonare_audio_length(audio_),
                                    sonare_audio_sample_rate(audio_), &analysis);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -501,7 +517,7 @@ Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   float bpm = 0.0f;
   SonareError err = sonare_detect_bpm(data, length, sample_rate, &bpm);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -528,7 +544,7 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   SonareKey key{};
   SonareError err = sonare_detect_key(data, length, sample_rate, &key);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return KeyToObject(env, key.root, key.mode, key.confidence);
@@ -555,7 +571,7 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_detect_beats(data, length, sample_rate, &times, &count);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -588,7 +604,7 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_detect_onsets(data, length, sample_rate, &times, &count);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -620,7 +636,7 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   SonareAnalysisResult analysis{};
   SonareError err = sonare_analyze(data, length, sample_rate, &analysis);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_error_message(err)).ThrowAsJavaScriptException();
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object result = AnalysisToObject(env, analysis);
@@ -632,6 +648,11 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Version(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return Napi::String::New(env, sonare_version());
+}
+
+Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);
 }
 
 // ============================================================================

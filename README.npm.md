@@ -7,6 +7,12 @@
 
 Fast, dependency-free audio analysis library for browser and Node.js via WebAssembly.
 
+> **Audio input:** This package expects already-decoded `Float32Array` mono
+> samples (it does not bundle a file decoder). Use the Web Audio API in the
+> browser or `node:wasi` / a JS audio decoder in Node to obtain samples.
+> If you need to read WAV/MP3/M4A files directly in Node, use the native
+> N-API package [`@libraz/libsonare-native`](https://github.com/libraz/libsonare/tree/main/bindings/node) instead.
+
 ## Installation
 
 ```bash
@@ -31,6 +37,24 @@ const audio = Audio.fromBuffer(samples, sampleRate);
 console.log(`BPM: ${audio.detectBpm()}`);
 console.log(`Key: ${audio.detectKey().name}`);
 ```
+
+### Decoding files in the browser
+
+```typescript
+import { init, analyze } from '@libraz/libsonare';
+
+await init();
+
+const arrayBuffer = await fetch('song.m4a').then((r) => r.arrayBuffer());
+const audioCtx = new AudioContext();
+const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+// Mono downmix for libsonare:
+const samples = decoded.getChannelData(0);
+const result = analyze(samples, decoded.sampleRate);
+```
+
+Web Audio's `decodeAudioData` handles whatever codecs the browser ships with
+(WAV/MP3/M4A/AAC/Opus/FLAC on most modern browsers).
 
 ### Browser (CDN)
 

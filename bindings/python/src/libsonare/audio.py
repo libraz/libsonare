@@ -110,9 +110,18 @@ def _get_lib() -> ctypes.CDLL:
 
 
 def _check(rc: int) -> None:
-    """Check a SonareError return code and raise on failure."""
+    """Check a SonareError return code and raise on failure.
+
+    When the C layer recorded a detailed thread-local message
+    (``sonare_last_error_message``), it is preferred over the generic
+    ``sonare_error_message(rc)`` fallback so users see the underlying cause.
+    """
     if rc != SONARE_OK:
         lib = _get_lib()
+        detail = lib.sonare_last_error_message()
+        detail_str = detail.decode("utf-8") if detail else ""
+        if detail_str:
+            raise RuntimeError(detail_str)
         msg = lib.sonare_error_message(rc)
         raise RuntimeError(msg.decode("utf-8") if msg else f"sonare error {rc}")
 
@@ -129,7 +138,17 @@ class Audio:
 
     @classmethod
     def from_file(cls, path: str) -> Audio:
-        """Load audio from a file path (WAV, MP3, etc.)."""
+        """Load audio from a file path.
+
+        Supported formats in default builds: WAV, MP3.
+        With FFmpeg enabled (``-DSONARE_WITH_FFMPEG=ON``): M4A/AAC/FLAC/OGG/Opus
+        and any other container/codec supported by the linked FFmpeg.
+
+        Raises:
+            RuntimeError: If the file does not exist, is too large, or has an
+                unsupported format. The error message includes the offending
+                extension and a copy-pasteable ``ffmpeg`` conversion hint.
+        """
         lib = _get_lib()
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_file(
@@ -148,8 +167,11 @@ class Audio:
         """Create audio from a float sample buffer.
 
         Args:
-            data: Audio samples as a list of floats or any sequence/array-like.
-                  numpy arrays are accepted via the buffer protocol.
+            data: Mono audio samples. Accepts ``list[float]``, ``tuple[float, ...]``,
+                ``array.array``, or a numpy 1D array of dtype ``float32`` (or
+                anything castable to ``float``). Stereo input must be downmixed
+                first (e.g. ``samples.mean(axis=1, dtype=np.float32)``).
+                Values are nominally in ``[-1.0, 1.0]``.
             sample_rate: Sample rate in Hz (default 22050).
         """
         lib = _get_lib()
@@ -167,10 +189,12 @@ class Audio:
 
     @classmethod
     def from_memory(cls, data: bytes) -> Audio:
-        """Create audio from in-memory WAV/MP3 binary data.
+        """Create audio from in-memory encoded audio bytes.
 
         Args:
-            data: Raw file bytes (WAV, MP3, etc.).
+            data: Raw file bytes (WAV / MP3 in default builds; also
+                M4A/AAC/FLAC/OGG/Opus when libsonare is built with
+                ``-DSONARE_WITH_FFMPEG=ON``).
         """
         lib = _get_lib()
         length = len(data)
@@ -207,7 +231,12 @@ class Audio:
         return float(self._lib.sonare_audio_duration(self._handle))
 
     def detect_bpm(self) -> float:
-        """Detect BPM (tempo)."""
+        """Detect BPM (tempo).
+
+        Returns:
+            Estimated tempo in beats per minute. For confidence and time
+            signature, use :meth:`analyze` instead.
+        """
         out_bpm = ctypes.c_float()
         rc = self._lib.sonare_audio_detect_bpm(self._handle, ctypes.byref(out_bpm))
         _check(rc)

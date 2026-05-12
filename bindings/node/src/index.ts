@@ -231,6 +231,17 @@ export function version(): string {
   return addon.version();
 }
 
+/**
+ * Returns whether the loaded native binding was compiled with FFmpeg support.
+ *
+ * When `true`, `Audio.fromFile` / `Audio.fromMemory` can decode M4A, AAC,
+ * FLAC, OGG, Opus, etc. (anything libavformat handles). When `false`, only
+ * WAV and MP3 are supported and other formats throw an actionable error.
+ */
+export function hasFfmpegSupport(): boolean {
+  return addon.hasFfmpegSupport();
+}
+
 // -- Effects --
 
 export function hpss(

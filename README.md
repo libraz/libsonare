@@ -15,13 +15,32 @@ Tens of times faster than librosa/Python.
 ## Installation
 
 ```bash
-npm install @libraz/libsonare   # JavaScript / TypeScript (WASM)
-pip install libsonare            # Python
+npm install @libraz/libsonare         # JavaScript / TypeScript (WASM, takes Float32Array)
+pip install libsonare                  # Python (loads WAV/MP3 files; M4A/AAC via FFmpeg)
+```
+
+For Node.js with native file decoding, build
+[`@libraz/libsonare-native`](bindings/node/) from source:
+
+```bash
+cd bindings/node
+yarn install
+yarn build  # auto-detects FFmpeg via pkg-config (WAV/MP3 if absent, +M4A/AAC/FLAC/OGG if present)
+```
+
+To force a specific mode:
+
+```bash
+SONARE_FFMPEG=0 yarn build  # explicitly disable FFmpeg
+SONARE_FFMPEG=1 yarn build  # require FFmpeg (fails if dev libs missing)
 ```
 
 ## Quick Start
 
-### JavaScript / TypeScript
+### JavaScript / TypeScript (WASM)
+
+`@libraz/libsonare` accepts decoded `Float32Array` samples — use the Web Audio
+API or a JS decoder to obtain them.
 
 ```typescript
 import { init, detectBpm, detectKey, analyze } from '@libraz/libsonare';
@@ -35,16 +54,20 @@ const result = analyze(samples, sampleRate);
 
 ### Python
 
+`libsonare` reads WAV/MP3 out of the box. For M4A/AAC/FLAC/OGG, build with
+`SONARE_FFMPEG=1` (requires system FFmpeg shared libraries).
+
 ```python
 import libsonare
 
+# Recommended: Audio class for file input
+audio = libsonare.Audio.from_file("song.mp3")
+print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
+
+# Or pass numpy / list samples to the functional API
 bpm = libsonare.detect_bpm(samples, sample_rate=22050)
 key = libsonare.detect_key(samples, sample_rate=22050)
 result = libsonare.analyze(samples, sample_rate=22050)
-
-# Or use the Audio class
-audio = libsonare.Audio.from_file("song.mp3")
-print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
 ```
 
 ### Python CLI
@@ -96,10 +119,21 @@ Default parameters match librosa:
 - n_fft: 2048, hop_length: 512, n_mels: 128
 - fmin: 0.0, fmax: sr/2
 
+## Supported audio formats
+
+| Format | C++ / Python / Node native (default) | + FFmpeg (`-DSONARE_WITH_FFMPEG=ON`) | WASM (`@libraz/libsonare`) |
+|--------|--------------------------------------|--------------------------------------|----------------------------|
+| WAV (PCM 16/24/32, float32) | ✅ | ✅ | n/a (samples in) |
+| MP3 | ✅ | ✅ | n/a |
+| M4A / AAC / FLAC / OGG / Opus / WMA / ... | ❌ (clear error message) | ✅ | n/a (use Web Audio API) |
+
+WASM does not bundle a file decoder by design; pass `Float32Array` samples obtained from
+the Web Audio API or another JS decoder.
+
 ## Build from Source
 
 ```bash
-# Native (C++ library + CLI)
+# Native (auto-detects FFmpeg; pass -DSONARE_WITH_FFMPEG=ON to require, =OFF to disable)
 make build && make test
 
 # WebAssembly

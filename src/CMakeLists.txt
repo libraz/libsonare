@@ -57,6 +57,56 @@ set(SONARE_SOURCES
   sonare_c.cpp
 )
 
+# Decide whether to enable FFmpeg integration.
+#   ON   -> required (FATAL_ERROR if missing)
+#   OFF  -> forced off
+#   AUTO -> probe pkg-config; enable if found, else WAV/MP3 only
+set(_sonare_ffmpeg_mode "${SONARE_WITH_FFMPEG}")
+string(TOUPPER "${_sonare_ffmpeg_mode}" _sonare_ffmpeg_mode)
+# Normalize TRUE/FALSE/1/0/YES/NO to ON/OFF
+if(_sonare_ffmpeg_mode MATCHES "^(TRUE|YES|1)$")
+  set(_sonare_ffmpeg_mode "ON")
+elseif(_sonare_ffmpeg_mode MATCHES "^(FALSE|NO|0)$")
+  set(_sonare_ffmpeg_mode "OFF")
+endif()
+
+set(SONARE_FFMPEG_ENABLED OFF CACHE INTERNAL "Whether FFmpeg decoding is linked")
+
+if(NOT BUILD_WASM AND NOT _sonare_ffmpeg_mode STREQUAL "OFF")
+  find_package(PkgConfig QUIET)
+  set(_sonare_ffmpeg_found OFF)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(FFMPEG QUIET IMPORTED_TARGET
+      libavformat
+      libavcodec
+      libavutil
+      libswresample
+    )
+    if(FFMPEG_FOUND)
+      set(_sonare_ffmpeg_found ON)
+    endif()
+  endif()
+
+  if(_sonare_ffmpeg_found)
+    list(APPEND SONARE_SOURCES core/audio_io_ffmpeg.cpp)
+    set(SONARE_FFMPEG_ENABLED ON CACHE INTERNAL "" FORCE)
+    message(STATUS "libsonare: FFmpeg detected (libavformat ${FFMPEG_libavformat_VERSION}) "
+                   "-> M4A/AAC/FLAC/OGG enabled")
+  elseif(_sonare_ffmpeg_mode STREQUAL "ON")
+    message(FATAL_ERROR
+      "SONARE_WITH_FFMPEG=ON but FFmpeg development libraries were not found via pkg-config.\n"
+      "Install them, e.g.:\n"
+      "  macOS:         brew install ffmpeg\n"
+      "  Debian/Ubuntu: sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev\n"
+      "  Fedora:        sudo dnf install ffmpeg-devel\n"
+      "If FFmpeg is in a non-standard prefix, set PKG_CONFIG_PATH to its .pc directory, "
+      "or pass -DSONARE_WITH_FFMPEG=OFF to opt out.")
+  else()
+    message(STATUS "libsonare: FFmpeg not found -> WAV/MP3 only "
+                   "(pass -DSONARE_WITH_FFMPEG=ON to require, or install FFmpeg dev libs to enable)")
+  endif()
+endif()
+
 # Library
 add_library(sonare_core STATIC ${SONARE_SOURCES})
 
@@ -75,6 +125,11 @@ target_compile_options(sonare_core PRIVATE ${SONARE_WARNING_FLAGS})
 if(NOT BUILD_WASM)
   find_package(Threads REQUIRED)
   target_link_libraries(sonare_core PUBLIC Threads::Threads)
+endif()
+
+if(SONARE_FFMPEG_ENABLED)
+  target_link_libraries(sonare_core PUBLIC PkgConfig::FFMPEG)
+  target_compile_definitions(sonare_core PUBLIC SONARE_WITH_FFMPEG=1)
 endif()
 
 # Shared library for language bindings (Python ctypes, etc.)
@@ -97,6 +152,10 @@ if(BUILD_SHARED)
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
     target_link_libraries(sonare_shared PUBLIC Threads::Threads)
+  endif()
+  if(SONARE_FFMPEG_ENABLED)
+    target_link_libraries(sonare_shared PUBLIC PkgConfig::FFMPEG)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_FFMPEG=1)
   endif()
 endif()
 

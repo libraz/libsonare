@@ -36,6 +36,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value DetectOnsets(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
   static Napi::Value Version(const Napi::CallbackInfo& info);
+  static Napi::Value HasFfmpegSupport(const Napi::CallbackInfo& info);
 
   // Effects
   static Napi::Value Hpss(const Napi::CallbackInfo& info);

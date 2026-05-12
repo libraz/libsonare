@@ -7,7 +7,26 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PYTHON_PKG="$SCRIPT_DIR/src/libsonare"
 
 echo "=== Building libsonare shared library (Release) ==="
-cmake -B "$PROJECT_ROOT/build" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON "$PROJECT_ROOT"
+CMAKE_EXTRA_ARGS=()
+# Distribution wheels: pin to explicit OFF so the wheel never silently picks up
+# FFmpeg from the build host. Override with SONARE_FFMPEG=1 (developer wheels) or
+# SONARE_FFMPEG=AUTO (use cmake-default AUTO detection).
+case "${SONARE_FFMPEG:-OFF}" in
+    1|ON|on)
+        echo "    (with FFmpeg support: SONARE_WITH_FFMPEG=ON)"
+        CMAKE_EXTRA_ARGS+=(-DSONARE_WITH_FFMPEG=ON)
+        ;;
+    AUTO|auto)
+        echo "    (FFmpeg support: AUTO detect)"
+        CMAKE_EXTRA_ARGS+=(-DSONARE_WITH_FFMPEG=AUTO)
+        ;;
+    *)
+        echo "    (FFmpeg support: OFF -- wheels are pinned to OFF by default)"
+        CMAKE_EXTRA_ARGS+=(-DSONARE_WITH_FFMPEG=OFF)
+        ;;
+esac
+cmake -B "$PROJECT_ROOT/build" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
+    "${CMAKE_EXTRA_ARGS[@]}" "$PROJECT_ROOT"
 cmake --build "$PROJECT_ROOT/build" --config Release -j
 
 echo "=== Copying shared library to Python package ==="

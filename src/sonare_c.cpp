@@ -30,21 +30,48 @@
 
 using namespace sonare;
 
+namespace {
+
+/// @brief Thread-local storage for the most recent detailed error message.
+/// @details Populated by SONARE_C_CATCH whenever an exception is caught. Consumers query
+///   it via sonare_last_error_message() when a C API call returns a non-OK code.
+std::string& last_error_storage() {
+  static thread_local std::string storage;
+  return storage;
+}
+
+/// @brief Stores a detailed error message for retrieval by sonare_last_error_message.
+void set_last_error(const char* msg) {
+  // Defensive: treat NULL as empty so consumers never see a dangling pointer.
+  last_error_storage().assign(msg != nullptr ? msg : "");
+}
+
+}  // namespace
+
 // Standardized try/catch macros for C API functions.
 // Every C API function that can throw should use these to ensure SonareException
 // is properly mapped to the correct C error code instead of falling through to
-// the catch(...) handler as SONARE_ERROR_UNKNOWN.
+// the catch(...) handler as SONARE_ERROR_UNKNOWN. The catch handlers also record
+// the detailed message into thread-local storage so callers can retrieve it via
+// sonare_last_error_message().
 #define SONARE_C_TRY try {
-#define SONARE_C_CATCH                 \
-  }                                    \
-  catch (const SonareException& e) {   \
-    return map_sonare_exception(e);    \
-  }                                    \
-  catch (const std::bad_alloc&) {      \
-    return SONARE_ERROR_OUT_OF_MEMORY; \
-  }                                    \
-  catch (...) {                        \
-    return SONARE_ERROR_UNKNOWN;       \
+#define SONARE_C_CATCH                                                 \
+  }                                                                    \
+  catch (const SonareException& e) {                                   \
+    set_last_error(e.what());                                          \
+    return map_sonare_exception(e);                                    \
+  }                                                                    \
+  catch (const std::bad_alloc& e) {                                    \
+    set_last_error(e.what());                                          \
+    return SONARE_ERROR_OUT_OF_MEMORY;                                 \
+  }                                                                    \
+  catch (const std::exception& e) {                                    \
+    set_last_error(e.what());                                          \
+    return SONARE_ERROR_UNKNOWN;                                       \
+  }                                                                    \
+  catch (...) {                                                        \
+    set_last_error("Unknown C++ exception (non-std::exception type)"); \
+    return SONARE_ERROR_UNKNOWN;                                       \
   }
 
 // Internal wrapper structure
@@ -167,7 +194,8 @@ SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm) {
   if (audio == nullptr || out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
-  *out_bpm = quick::detect_bpm(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  *out_bpm =
+      quick::detect_bpm(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -184,7 +212,8 @@ SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key
   SONARE_C_CATCH
 }
 
-SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times, size_t* out_count) {
+SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
+                                      size_t* out_count) {
   if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -392,9 +421,22 @@ const char* sonare_error_message(SonareError error) {
   }
 }
 
+const char* sonare_last_error_message(void) {
+  // c_str() guarantees a valid NUL-terminated pointer even when the string is empty.
+  return last_error_storage().c_str();
+}
+
 // Version
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
+
+int sonare_has_ffmpeg_support(void) {
+#ifdef SONARE_WITH_FFMPEG
+  return 1;
+#else
+  return 0;
+#endif
+}
 
 // ============================================================================
 // Effects
@@ -698,24 +740,18 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_centroid(spec, sample_rate);
-    *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> result = spectral_centroid(spec, sample_rate);
+  *out_count = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
@@ -724,24 +760,18 @@ SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int s
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_bandwidth(spec, sample_rate);
-    *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> result = spectral_bandwidth(spec, sample_rate);
+  *out_count = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate, int n_fft,
@@ -751,24 +781,18 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_rolloff(spec, sample_rate, roll_percent);
-    *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> result = spectral_rolloff(spec, sample_rate, roll_percent);
+  *out_count = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
@@ -777,24 +801,18 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    StftConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    Spectrogram spec = Spectrogram::compute(audio, config);
-    std::vector<float> result = spectral_flatness(spec);
-    *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> result = spectral_flatness(spec);
+  *out_count = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int sample_rate,
@@ -804,20 +822,14 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);
-    *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);
+  *out_count = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
@@ -826,20 +838,14 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    std::vector<float> result = rms_energy(audio, frame_length, hop_length);
-    *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  std::vector<float> result = rms_energy(audio, frame_length, hop_length);
+  *out_count = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 // ============================================================================
@@ -876,23 +882,17 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    PitchConfig config;
-    config.frame_length = frame_length;
-    config.hop_length = hop_length;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.threshold = threshold;
-    PitchResult result = yin_track(audio, config);
-    return fill_pitch_result(result, out);
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  PitchConfig config;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.threshold = threshold;
+  PitchResult result = yin_track(audio, config);
+  return fill_pitch_result(result, out);
+  SONARE_C_CATCH
 }
 
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
@@ -902,23 +902,17 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    PitchConfig config;
-    config.frame_length = frame_length;
-    config.hop_length = hop_length;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.threshold = threshold;
-    PitchResult result = pyin(audio, config);
-    return fill_pitch_result(result, out);
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  PitchConfig config;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.threshold = threshold;
+  PitchResult result = pyin(audio, config);
+  return fill_pitch_result(result, out);
+  SONARE_C_CATCH
 }
 
 // ============================================================================
@@ -967,19 +961,13 @@ SonareError sonare_resample(const float* samples, size_t length, int src_sr, int
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  try {
-    std::vector<float> result = resample(samples, length, src_sr, target_sr);
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
-  } catch (const SonareException& e) {
-    return map_sonare_exception(e);
-  } catch (const std::bad_alloc&) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    return SONARE_ERROR_UNKNOWN;
-  }
+  SONARE_C_TRY
+  std::vector<float> result = resample(samples, length, src_sr, target_sr);
+  *out_length = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 // ============================================================================

@@ -320,11 +320,22 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     lib.sonare_error_message.restype = ctypes.c_char_p
     lib.sonare_error_message.argtypes = [ctypes.c_int32]
 
+    # sonare_last_error_message: returns the detailed thread-local message for the
+    # most recent error. Returns an empty (but non-NULL) string when nothing has been
+    # recorded. Only meaningful when a preceding C API call returned non-OK.
+    lib.sonare_last_error_message.restype = ctypes.c_char_p
+    lib.sonare_last_error_message.argtypes = []
+
     # --- Version ---
 
     # sonare_version
     lib.sonare_version.restype = ctypes.c_char_p
     lib.sonare_version.argtypes = []
+
+    # sonare_has_ffmpeg_support: returns 1 if the shared library was compiled
+    # with FFmpeg-backed decoding for M4A/AAC/FLAC/OGG, 0 otherwise.
+    lib.sonare_has_ffmpeg_support.restype = ctypes.c_int
+    lib.sonare_has_ffmpeg_support.argtypes = []
 
     # --- Effects ---
 

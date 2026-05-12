@@ -11,6 +11,18 @@ option(BUILD_SHARED "Build shared library" OFF)
 option(BUILD_CLI "Build CLI tool" ON)
 option(BUILD_BENCH "Build C++ benchmark binary" OFF)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
+set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
+    "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")
+set_property(CACHE SONARE_WITH_FFMPEG PROPERTY STRINGS ON OFF AUTO)
+
+# FFmpeg is not WASM-compatible and would bloat the bundle. Force OFF for WASM.
+if(BUILD_WASM AND NOT SONARE_WITH_FFMPEG STREQUAL "OFF")
+  if(SONARE_WITH_FFMPEG STREQUAL "ON")
+    message(WARNING "SONARE_WITH_FFMPEG=ON is not supported with BUILD_WASM=ON; "
+                    "forcing SONARE_WITH_FFMPEG=OFF.")
+  endif()
+  set(SONARE_WITH_FFMPEG "OFF" CACHE STRING "" FORCE)
+endif()
 
 # 出力ディレクトリ
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
