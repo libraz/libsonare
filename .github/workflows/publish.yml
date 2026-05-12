@@ -94,8 +94,13 @@ jobs:
           python-version: '3.13'
 
       - name: Build shared library
+        # Pin SONARE_WITH_FFMPEG=OFF for deterministic wheels: PyPI artifacts
+        # must not depend on libavformat being present on the user's machine.
+        # m4a/AAC users can rebuild from source with SONARE_FFMPEG=1.
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
+                         -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
+                         -DSONARE_WITH_FFMPEG=OFF
           cmake --build build --config Release -j
 
       - name: Copy shared library
