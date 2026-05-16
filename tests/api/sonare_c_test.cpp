@@ -39,7 +39,8 @@ std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
   return samples;
 }
 
-std::vector<float> generate_chord(const std::vector<float>& freqs, int sample_rate, float duration) {
+std::vector<float> generate_chord(const std::vector<float>& freqs, int sample_rate,
+                                  float duration) {
   size_t n_samples = static_cast<size_t>(sample_rate * duration);
   std::vector<float> samples(n_samples, 0.0f);
   float gain = 0.8f / static_cast<float>(freqs.size());
@@ -344,8 +345,8 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
     SonareChordAnalysisResult result = {};
 
-    SonareError err = sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f,
-                                           0.5f, 1, 2048, 512, 0, &result);
+    SonareError err = sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f,
+                                           1, 2048, 512, 0, &result);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(result.chord_count > 0);
@@ -366,26 +367,25 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     SonareChordAnalysisResult result = {};
 
-    REQUIRE(sonare_detect_chords(nullptr, samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048, 512,
-                                 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, -0.1f, 2.0f, 0.5f, 0,
-                                 2048, 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 0.0f, 0.5f, 0,
-                                 2048, 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, -0.1f, 0,
-                                 2048, 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 0,
+    REQUIRE(sonare_detect_chords(nullptr, samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048, 512, 0,
+                                 &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, -0.1f, 2.0f, 0.5f, 0, 2048,
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0,
-                                 2048, 0, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0,
-                                 2048, 512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 0.0f, 0.5f, 0, 2048,
+                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, -0.1f, 0, 2048,
+                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 0, 512,
+                                 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048,
+                                 0, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048,
+                                 512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("free is safe on partially initialized struct") {
     SonareChordAnalysisResult result = {};
-    result.chords = new SonareChord[1]{
-        {SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f}};
+    result.chords = new SonareChord[1]{{SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f}};
     result.chord_count = 1;
 
     sonare_free_chord_analysis_result(&result);

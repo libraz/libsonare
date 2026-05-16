@@ -63,16 +63,16 @@ TtsQualityResult analyze_tts_quality(const Audio& audio, float silence_threshold
   size_t silent_frames = 0;
   size_t total_frames = 0;
   for (size_t start = 0; start < audio.size(); start += static_cast<size_t>(hop_length)) {
-    const size_t end =
-        std::min(audio.size(), start + static_cast<size_t>(frame_length));
+    const size_t end = std::min(audio.size(), start + static_cast<size_t>(frame_length));
     if (frame_rms_db(data, start, end) < silence_threshold_db) {
       ++silent_frames;
     }
     ++total_frames;
     if (end == audio.size()) break;
   }
-  result.silence_ratio =
-      total_frames == 0 ? 0.0f : static_cast<float>(silent_frames) / static_cast<float>(total_frames);
+  result.silence_ratio = total_frames == 0
+                             ? 0.0f
+                             : static_cast<float>(silent_frames) / static_cast<float>(total_frames);
 
   const float silence_amp = db_to_amplitude(silence_threshold_db);
   result.leading_silence_sec =

@@ -304,12 +304,10 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
 SonareError sonare_analyze_tts_quality(const float* samples, size_t length, int sample_rate,
-                                       float silence_threshold_db,
-                                       SonareTtsQualityResult* out);
+                                       float silence_threshold_db, SonareTtsQualityResult* out);
 SonareError sonare_prepare_tts(const float* samples, size_t length, int sample_rate,
-                               float target_rms_db, float silence_threshold_db,
-                               float peak_limit_db, float fade_sec, float** out,
-                               size_t* out_length);
+                               float target_rms_db, float silence_threshold_db, float peak_limit_db,
+                               float fade_sec, float** out, size_t* out_length);
 SonareError sonare_compress_pauses(const float* samples, size_t length, int sample_rate,
                                    float max_pause_sec, float silence_threshold_db, float** out,
                                    size_t* out_length);
@@ -318,24 +316,22 @@ SonareError sonare_compress_pauses(const float* samples, size_t length, int samp
 // Detailed analysis primitives
 // ============================================================================
 
-SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate,
-                               float bpm_min, float bpm_max, float start_bpm, int n_fft,
-                               int hop_length, int max_candidates,
-                               SonareBpmAnalysisResult* out);
+SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
+                               float bpm_max, float start_bpm, int n_fft, int hop_length,
+                               int max_candidates, SonareBpmAnalysisResult* out);
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out);
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
-                                    float window_sec, int hop_length,
-                                    float compression_threshold,
+                                    float window_sec, int hop_length, float compression_threshold,
                                     SonareDynamicsResult* out);
-SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate,
-                                  int n_fft, int hop_length, int n_mels, int n_mfcc,
-                                  float window_sec, SonareTimbreResult* out);
+SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
+                                  int hop_length, int n_mels, int n_mfcc, float window_sec,
+                                  SonareTimbreResult* out);
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
                                  float min_duration, float smoothing_window, float threshold,
-                                 int use_triads_only, int n_fft, int hop_length,
-                                 int use_beat_sync, SonareChordAnalysisResult* out);
+                                 int use_triads_only, int n_fft, int hop_length, int use_beat_sync,
+                                 SonareChordAnalysisResult* out);
 void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* result);
 void sonare_free_rhythm_result(SonareRhythmResult* result);
 void sonare_free_dynamics_result(SonareDynamicsResult* result);
