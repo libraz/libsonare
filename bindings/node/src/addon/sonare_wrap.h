@@ -35,6 +35,11 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value DetectBeats(const Napi::CallbackInfo& info);
   static Napi::Value DetectOnsets(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeBpm(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeRhythm(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeDynamics(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeTimbre(const Napi::CallbackInfo& info);
+  static Napi::Value DetectChords(const Napi::CallbackInfo& info);
   static Napi::Value Version(const Napi::CallbackInfo& info);
   static Napi::Value HasFfmpegSupport(const Napi::CallbackInfo& info);
 
@@ -46,6 +51,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value PitchShift(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeTtsQuality(const Napi::CallbackInfo& info);
+  static Napi::Value PrepareTts(const Napi::CallbackInfo& info);
+  static Napi::Value CompressPauses(const Napi::CallbackInfo& info);
 
   // Features - Spectrogram
   static Napi::Value Stft(const Napi::CallbackInfo& info);

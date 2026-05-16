@@ -39,6 +39,18 @@ std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
   return samples;
 }
 
+std::vector<float> generate_chord(const std::vector<float>& freqs, int sample_rate, float duration) {
+  size_t n_samples = static_cast<size_t>(sample_rate * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  float gain = 0.8f / static_cast<float>(freqs.size());
+  for (size_t i = 0; i < n_samples; ++i) {
+    for (float freq : freqs) {
+      samples[i] += gain * std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+    }
+  }
+  return samples;
+}
+
 }  // namespace
 
 TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
@@ -194,6 +206,192 @@ TEST_CASE("sonare_analyze", "[c_api]") {
 
     REQUIRE(result.beat_times == nullptr);
     REQUIRE(result.beat_count == 0);
+  }
+}
+
+TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
+  SECTION("returns dynamics and loudness curve") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    SonareDynamicsResult result = {};
+
+    SonareError err =
+        sonare_analyze_dynamics(samples.data(), samples.size(), 22050, 0.4f, 512, 6.0f, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.peak_db <= 1.0f);
+    REQUIRE(result.rms_db <= result.peak_db);
+    REQUIRE(result.dynamic_range_db >= 0.0f);
+    REQUIRE(result.loudness_range_db >= 0.0f);
+    REQUIRE((result.is_compressed == 0 || result.is_compressed == 1));
+    REQUIRE(result.loudness_count > 0);
+    REQUIRE(result.loudness_times != nullptr);
+    REQUIRE(result.loudness_rms_db != nullptr);
+    for (size_t i = 1; i < result.loudness_count; ++i) {
+      REQUIRE(result.loudness_times[i] >= result.loudness_times[i - 1]);
+    }
+
+    sonare_free_dynamics_result(&result);
+    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_rms_db == nullptr);
+    REQUIRE(result.loudness_count == 0);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    SonareDynamicsResult result = {};
+
+    REQUIRE(sonare_analyze_dynamics(nullptr, samples.size(), 22050, 0.4f, 512, 6.0f, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(samples.data(), samples.size(), 22050, 0.0f, 512, 6.0f,
+                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(samples.data(), samples.size(), 22050, 0.4f, 0, 6.0f,
+                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(samples.data(), samples.size(), 22050, 0.4f, 512, 6.0f,
+                                    nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("free is safe on partially initialized struct") {
+    SonareDynamicsResult result = {};
+    result.loudness_times = new float[1]{0.0f};
+    result.loudness_rms_db = new float[1]{-12.0f};
+    result.loudness_count = 1;
+
+    sonare_free_dynamics_result(&result);
+
+    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_rms_db == nullptr);
+    REQUIRE(result.loudness_count == 0);
+  }
+}
+
+TEST_CASE("sonare_analyze_timbre", "[c_api]") {
+  SECTION("returns timbre scalars and spectral curves") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
+    SonareTimbreResult result = {};
+
+    SonareError err = sonare_analyze_timbre(samples.data(), samples.size(), 22050, 2048, 512, 128,
+                                            13, 0.5f, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.brightness >= 0.0f);
+    REQUIRE(result.brightness <= 1.0f);
+    REQUIRE(result.warmth >= 0.0f);
+    REQUIRE(result.warmth <= 1.0f);
+    REQUIRE(result.density >= 0.0f);
+    REQUIRE(result.density <= 1.0f);
+    REQUIRE(result.roughness >= 0.0f);
+    REQUIRE(result.roughness <= 1.0f);
+    REQUIRE(result.complexity >= 0.0f);
+    REQUIRE(result.complexity <= 1.0f);
+    REQUIRE(result.spectral_centroid_count > 0);
+    REQUIRE(result.spectral_flatness_count == result.spectral_centroid_count);
+    REQUIRE(result.spectral_rolloff_count == result.spectral_centroid_count);
+    REQUIRE(result.spectral_centroid != nullptr);
+    REQUIRE(result.spectral_flatness != nullptr);
+    REQUIRE(result.spectral_rolloff != nullptr);
+
+    sonare_free_timbre_result(&result);
+    REQUIRE(result.spectral_centroid == nullptr);
+    REQUIRE(result.spectral_flatness == nullptr);
+    REQUIRE(result.spectral_rolloff == nullptr);
+    REQUIRE(result.spectral_centroid_count == 0);
+    REQUIRE(result.spectral_flatness_count == 0);
+    REQUIRE(result.spectral_rolloff_count == 0);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    SonareTimbreResult result = {};
+
+    REQUIRE(sonare_analyze_timbre(nullptr, samples.size(), 22050, 2048, 512, 128, 13, 0.5f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), 22050, 0, 512, 128, 13, 0.5f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), 22050, 2048, 0, 128, 13, 0.5f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), 22050, 2048, 512, 0, 13, 0.5f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), 22050, 2048, 512, 128, 0, 0.5f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), 22050, 2048, 512, 128, 13, 0.0f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), 22050, 2048, 512, 128, 13, 0.5f,
+                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("free is safe on partially initialized struct") {
+    SonareTimbreResult result = {};
+    result.spectral_centroid = new float[1]{1000.0f};
+    result.spectral_flatness = new float[1]{0.5f};
+    result.spectral_rolloff = new float[1]{3000.0f};
+    result.spectral_centroid_count = 1;
+    result.spectral_flatness_count = 1;
+    result.spectral_rolloff_count = 1;
+
+    sonare_free_timbre_result(&result);
+
+    REQUIRE(result.spectral_centroid == nullptr);
+    REQUIRE(result.spectral_flatness == nullptr);
+    REQUIRE(result.spectral_rolloff == nullptr);
+    REQUIRE(result.spectral_centroid_count == 0);
+    REQUIRE(result.spectral_flatness_count == 0);
+    REQUIRE(result.spectral_rolloff_count == 0);
+  }
+}
+
+TEST_CASE("sonare_detect_chords", "[c_api]") {
+  SECTION("returns chord segments for a simple C major chord") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
+    SonareChordAnalysisResult result = {};
+
+    SonareError err = sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f,
+                                           0.5f, 1, 2048, 512, 0, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.chord_count > 0);
+    REQUIRE(result.chords != nullptr);
+    REQUIRE(result.chords[0].root >= SONARE_PITCH_C);
+    REQUIRE(result.chords[0].root <= SONARE_PITCH_B);
+    REQUIRE(result.chords[0].quality >= SONARE_CHORD_MAJOR);
+    REQUIRE(result.chords[0].quality <= SONARE_CHORD_UNKNOWN);
+    REQUIRE(result.chords[0].end >= result.chords[0].start);
+    REQUIRE(result.chords[0].confidence >= 0.0f);
+
+    sonare_free_chord_analysis_result(&result);
+    REQUIRE(result.chords == nullptr);
+    REQUIRE(result.chord_count == 0);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
+    SonareChordAnalysisResult result = {};
+
+    REQUIRE(sonare_detect_chords(nullptr, samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048, 512,
+                                 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, -0.1f, 2.0f, 0.5f, 0,
+                                 2048, 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 0.0f, 0.5f, 0,
+                                 2048, 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, -0.1f, 0,
+                                 2048, 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 0,
+                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0,
+                                 2048, 0, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0,
+                                 2048, 512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("free is safe on partially initialized struct") {
+    SonareChordAnalysisResult result = {};
+    result.chords = new SonareChord[1]{
+        {SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f}};
+    result.chord_count = 1;
+
+    sonare_free_chord_analysis_result(&result);
+
+    REQUIRE(result.chords == nullptr);
+    REQUIRE(result.chord_count == 0);
   }
 }
 

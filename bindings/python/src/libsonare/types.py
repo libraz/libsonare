@@ -122,6 +122,168 @@ class AnalysisResult:
 
 
 @dataclass(frozen=True, slots=True)
+class BpmCandidate:
+    """BPM candidate with confidence."""
+
+    bpm: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class BpmAnalysisResult:
+    """Detailed BPM analysis result."""
+
+    bpm: float
+    confidence: float
+    candidates: list[BpmCandidate]
+    autocorrelation: list[float]
+    tempogram: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class RhythmResult:
+    """Rhythm analysis primitives."""
+
+    bpm: float
+    time_signature: TimeSignature
+    groove_type: str
+    syncopation: float
+    pattern_regularity: float
+    tempo_stability: float
+    beat_intervals: list[float]
+
+    @property
+    def timeSignature(self) -> TimeSignature:
+        return self.time_signature
+
+    @property
+    def grooveType(self) -> str:
+        return self.groove_type
+
+    @property
+    def patternRegularity(self) -> float:
+        return self.pattern_regularity
+
+    @property
+    def tempoStability(self) -> float:
+        return self.tempo_stability
+
+    @property
+    def beatIntervals(self) -> list[float]:
+        return self.beat_intervals
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicsResult:
+    """Dynamics and loudness analysis primitives."""
+
+    dynamic_range_db: float
+    peak_db: float
+    rms_db: float
+    crest_factor: float
+    loudness_range_db: float
+    is_compressed: bool
+    loudness_times: list[float]
+    loudness_rms_db: list[float]
+
+    @property
+    def dynamicRangeDb(self) -> float:
+        return self.dynamic_range_db
+
+    @property
+    def peakDb(self) -> float:
+        return self.peak_db
+
+    @property
+    def rmsDb(self) -> float:
+        return self.rms_db
+
+    @property
+    def crestFactor(self) -> float:
+        return self.crest_factor
+
+    @property
+    def loudnessRangeDb(self) -> float:
+        return self.loudness_range_db
+
+    @property
+    def isCompressed(self) -> bool:
+        return self.is_compressed
+
+    @property
+    def loudnessTimes(self) -> list[float]:
+        return self.loudness_times
+
+    @property
+    def loudnessRmsDb(self) -> list[float]:
+        return self.loudness_rms_db
+
+
+@dataclass(frozen=True, slots=True)
+class TimbreResult:
+    """Timbre and spectral-shape analysis primitives."""
+
+    brightness: float
+    warmth: float
+    density: float
+    roughness: float
+    complexity: float
+    spectral_centroid: list[float]
+    spectral_flatness: list[float]
+    spectral_rolloff: list[float]
+
+    @property
+    def spectralCentroid(self) -> list[float]:
+        return self.spectral_centroid
+
+    @property
+    def spectralFlatness(self) -> list[float]:
+        return self.spectral_flatness
+
+    @property
+    def spectralRolloff(self) -> list[float]:
+        return self.spectral_rolloff
+
+
+@dataclass(frozen=True, slots=True)
+class Chord:
+    """Detected chord with timing and confidence."""
+
+    root: PitchClass
+    quality: str
+    start: float
+    end: float
+    confidence: float
+
+    @property
+    def duration(self) -> float:
+        return self.end - self.start
+
+    @property
+    def name(self) -> str:
+        suffixes = {
+            "major": "maj",
+            "minor": "m",
+            "diminished": "dim",
+            "augmented": "aug",
+            "dominant7": "7",
+            "major7": "maj7",
+            "minor7": "m7",
+            "sus2": "sus2",
+            "sus4": "sus4",
+            "unknown": "",
+        }
+        return f"{self.root}{suffixes.get(self.quality, '')}"
+
+
+@dataclass(frozen=True, slots=True)
+class ChordAnalysisResult:
+    """Chord detection primitives."""
+
+    chords: list[Chord]
+
+
+@dataclass(frozen=True, slots=True)
 class StftResult:
     """Short-time Fourier transform result."""
 
@@ -187,3 +349,16 @@ class HpssResult:
     percussive: list[float]
     length: int
     sample_rate: int
+
+
+@dataclass(frozen=True, slots=True)
+class TtsQualityResult:
+    """Objective TTS audio quality measurements."""
+
+    duration_sec: float
+    peak_db: float
+    rms_db: float
+    silence_ratio: float
+    clipping_ratio: float
+    leading_silence_sec: float
+    trailing_silence_sec: float

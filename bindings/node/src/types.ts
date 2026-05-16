@@ -21,6 +21,74 @@ export interface AnalysisResult {
   beats: Array<{ time: number; strength: undefined }>;
 }
 
+export interface BpmCandidate {
+  bpm: number;
+  confidence: number;
+}
+
+export interface BpmAnalysisResult {
+  bpm: number;
+  confidence: number;
+  candidates: BpmCandidate[];
+  autocorrelation: Float32Array;
+  tempogram: Float32Array;
+}
+
+export interface RhythmResult {
+  bpm: number;
+  timeSignature: TimeSignature;
+  grooveType: 'straight' | 'shuffle' | 'swing';
+  syncopation: number;
+  patternRegularity: number;
+  tempoStability: number;
+  beatIntervals: Float32Array;
+}
+
+export interface DynamicsResult {
+  dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
+  crestFactor: number;
+  loudnessRangeDb: number;
+  isCompressed: boolean;
+  loudnessTimes: Float32Array;
+  loudnessRmsDb: Float32Array;
+}
+
+export interface TimbreResult {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+  spectralRolloff: Float32Array;
+}
+
+export interface Chord {
+  root: string;
+  quality:
+    | 'major'
+    | 'minor'
+    | 'diminished'
+    | 'augmented'
+    | 'dominant7'
+    | 'major7'
+    | 'minor7'
+    | 'sus2'
+    | 'sus4'
+    | 'unknown';
+  start: number;
+  end: number;
+  duration: number;
+  confidence: number;
+}
+
+export interface ChordAnalysisResult {
+  chords: Chord[];
+}
+
 export interface HpssResult {
   harmonic: Float32Array;
   percussive: Float32Array;
@@ -74,4 +142,14 @@ export interface PitchResult {
   nFrames: number;
   medianF0: number;
   meanF0: number;
+}
+
+export interface TtsQualityResult {
+  durationSec: number;
+  peakDb: number;
+  rmsDb: number;
+  silenceRatio: number;
+  clippingRatio: number;
+  leadingSilenceSec: number;
+  trailingSilenceSec: number;
 }

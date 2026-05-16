@@ -69,6 +69,25 @@ typedef struct {
   size_t beat_count;
 } SonareAnalysisResult;
 
+typedef enum {
+  SONARE_GROOVE_STRAIGHT = 0,
+  SONARE_GROOVE_SHUFFLE = 1,
+  SONARE_GROOVE_SWING = 2
+} SonareGrooveType;
+
+typedef enum {
+  SONARE_CHORD_MAJOR = 0,
+  SONARE_CHORD_MINOR = 1,
+  SONARE_CHORD_DIMINISHED = 2,
+  SONARE_CHORD_AUGMENTED = 3,
+  SONARE_CHORD_DOMINANT7 = 4,
+  SONARE_CHORD_MAJOR7 = 5,
+  SONARE_CHORD_MINOR7 = 6,
+  SONARE_CHORD_SUS2 = 7,
+  SONARE_CHORD_SUS4 = 8,
+  SONARE_CHORD_UNKNOWN = 9
+} SonareChordQuality;
+
 // Audio functions
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out);
@@ -189,6 +208,83 @@ typedef struct {
   int sample_rate;
 } SonareHpssResult;
 
+// TTS quality result
+typedef struct {
+  float duration_sec;
+  float peak_db;
+  float rms_db;
+  float silence_ratio;
+  float clipping_ratio;
+  float leading_silence_sec;
+  float trailing_silence_sec;
+} SonareTtsQualityResult;
+
+typedef struct {
+  float bpm;
+  float confidence;
+} SonareBpmCandidate;
+
+typedef struct {
+  float bpm;
+  float confidence;
+  SonareBpmCandidate* candidates;
+  size_t candidate_count;
+  float* autocorrelation;
+  size_t autocorrelation_count;
+  float* tempogram;
+  size_t tempogram_count;
+} SonareBpmAnalysisResult;
+
+typedef struct {
+  float bpm;
+  SonareTimeSignature time_signature;
+  SonareGrooveType groove_type;
+  float syncopation;
+  float pattern_regularity;
+  float tempo_stability;
+  float* beat_intervals;
+  size_t beat_interval_count;
+} SonareRhythmResult;
+
+typedef struct {
+  float dynamic_range_db;
+  float peak_db;
+  float rms_db;
+  float crest_factor;
+  float loudness_range_db;
+  int is_compressed;
+  float* loudness_times;
+  float* loudness_rms_db;
+  size_t loudness_count;
+} SonareDynamicsResult;
+
+typedef struct {
+  float brightness;
+  float warmth;
+  float density;
+  float roughness;
+  float complexity;
+  float* spectral_centroid;
+  size_t spectral_centroid_count;
+  float* spectral_flatness;
+  size_t spectral_flatness_count;
+  float* spectral_rolloff;
+  size_t spectral_rolloff_count;
+} SonareTimbreResult;
+
+typedef struct {
+  SonarePitchClass root;
+  SonareChordQuality quality;
+  float start;
+  float end;
+  float confidence;
+} SonareChord;
+
+typedef struct {
+  SonareChord* chords;
+  size_t chord_count;
+} SonareChordAnalysisResult;
+
 // ============================================================================
 // Effects
 // ============================================================================
@@ -207,6 +303,44 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
+SonareError sonare_analyze_tts_quality(const float* samples, size_t length, int sample_rate,
+                                       float silence_threshold_db,
+                                       SonareTtsQualityResult* out);
+SonareError sonare_prepare_tts(const float* samples, size_t length, int sample_rate,
+                               float target_rms_db, float silence_threshold_db,
+                               float peak_limit_db, float fade_sec, float** out,
+                               size_t* out_length);
+SonareError sonare_compress_pauses(const float* samples, size_t length, int sample_rate,
+                                   float max_pause_sec, float silence_threshold_db, float** out,
+                                   size_t* out_length);
+
+// ============================================================================
+// Detailed analysis primitives
+// ============================================================================
+
+SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate,
+                               float bpm_min, float bpm_max, float start_bpm, int n_fft,
+                               int hop_length, int max_candidates,
+                               SonareBpmAnalysisResult* out);
+SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
+                                  float bpm_min, float bpm_max, float start_bpm, int n_fft,
+                                  int hop_length, SonareRhythmResult* out);
+SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
+                                    float window_sec, int hop_length,
+                                    float compression_threshold,
+                                    SonareDynamicsResult* out);
+SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate,
+                                  int n_fft, int hop_length, int n_mels, int n_mfcc,
+                                  float window_sec, SonareTimbreResult* out);
+SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
+                                 float min_duration, float smoothing_window, float threshold,
+                                 int use_triads_only, int n_fft, int hop_length,
+                                 int use_beat_sync, SonareChordAnalysisResult* out);
+void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* result);
+void sonare_free_rhythm_result(SonareRhythmResult* result);
+void sonare_free_dynamics_result(SonareDynamicsResult* result);
+void sonare_free_timbre_result(SonareTimbreResult* result);
+void sonare_free_chord_analysis_result(SonareChordAnalysisResult* result);
 
 // ============================================================================
 // Features - Spectrogram

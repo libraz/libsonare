@@ -8,16 +8,37 @@ from typing import TYPE_CHECKING
 
 from ._ffi import SONARE_OK, load_library
 from .analyzer import (
+    analyze_tts_quality as _analyze_tts_quality,
+)
+from .analyzer import (
     analyze as _analyze,
 )
 from .analyzer import (
+    analyze_bpm as _analyze_bpm,
+)
+from .analyzer import (
+    analyze_dynamics as _analyze_dynamics,
+)
+from .analyzer import (
+    analyze_rhythm as _analyze_rhythm,
+)
+from .analyzer import (
+    analyze_timbre as _analyze_timbre,
+)
+from .analyzer import (
     chroma as _chroma,
+)
+from .analyzer import (
+    compress_pauses as _compress_pauses,
 )
 from .analyzer import (
     detect_beats as _detect_beats,
 )
 from .analyzer import (
     detect_bpm as _detect_bpm,
+)
+from .analyzer import (
+    detect_chords as _detect_chords,
 )
 from .analyzer import (
     detect_key as _detect_key,
@@ -51,6 +72,9 @@ from .analyzer import (
 )
 from .analyzer import (
     pitch_yin as _pitch_yin,
+)
+from .analyzer import (
+    prepare_tts as _prepare_tts,
 )
 from .analyzer import (
     resample as _resample,
@@ -87,13 +111,19 @@ from .analyzer import (
 )
 from .types import (
     AnalysisResult,
+    BpmAnalysisResult,
+    ChordAnalysisResult,
     ChromaResult,
+    DynamicsResult,
     HpssResult,
     Key,
     MelSpectrogramResult,
     MfccResult,
     PitchResult,
+    RhythmResult,
     StftResult,
+    TimbreResult,
+    TtsQualityResult,
 )
 
 if TYPE_CHECKING:
@@ -312,6 +342,103 @@ class Audio:
         finally:
             self._lib.sonare_free_result(ctypes.byref(out))
 
+    def analyze_bpm(
+        self,
+        bpm_min: float = 30.0,
+        bpm_max: float = 300.0,
+        start_bpm: float = 120.0,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        max_candidates: int = 5,
+    ) -> BpmAnalysisResult:
+        """Analyze BPM with candidates and intermediate curves."""
+        return _analyze_bpm(
+            self.data,
+            self.sample_rate,
+            bpm_min,
+            bpm_max,
+            start_bpm,
+            n_fft,
+            hop_length,
+            max_candidates,
+        )
+
+    def analyze_rhythm(
+        self,
+        bpm_min: float = 60.0,
+        bpm_max: float = 200.0,
+        start_bpm: float = 120.0,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+    ) -> RhythmResult:
+        """Analyze rhythm primitives."""
+        return _analyze_rhythm(
+            self.data,
+            self.sample_rate,
+            bpm_min,
+            bpm_max,
+            start_bpm,
+            n_fft,
+            hop_length,
+        )
+
+    def analyze_dynamics(
+        self,
+        window_sec: float = 0.4,
+        hop_length: int = 512,
+        compression_threshold: float = 6.0,
+    ) -> DynamicsResult:
+        """Analyze dynamics and loudness primitives."""
+        return _analyze_dynamics(
+            self.data,
+            self.sample_rate,
+            window_sec,
+            hop_length,
+            compression_threshold,
+        )
+
+    def analyze_timbre(
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+        n_mfcc: int = 13,
+        window_sec: float = 0.5,
+    ) -> TimbreResult:
+        """Analyze timbre and spectral-shape primitives."""
+        return _analyze_timbre(
+            self.data,
+            self.sample_rate,
+            n_fft,
+            hop_length,
+            n_mels,
+            n_mfcc,
+            window_sec,
+        )
+
+    def detect_chords(
+        self,
+        min_duration: float = 0.3,
+        smoothing_window: float = 2.0,
+        threshold: float = 0.5,
+        use_triads_only: bool = False,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        use_beat_sync: bool = True,
+    ) -> ChordAnalysisResult:
+        """Detect chord segments."""
+        return _detect_chords(
+            self.data,
+            self.sample_rate,
+            min_duration,
+            smoothing_window,
+            threshold,
+            use_triads_only,
+            n_fft,
+            hop_length,
+            use_beat_sync,
+        )
+
     # --- Effects ---
 
     def hpss(
@@ -345,6 +472,35 @@ class Audio:
     def trim(self, threshold_db: float = -60.0) -> list[float]:
         """Trim silence from the beginning and end."""
         return _trim(self.data, self.sample_rate, threshold_db)
+
+    def analyze_tts_quality(self, silence_threshold_db: float = -45.0) -> TtsQualityResult:
+        """Measure objective TTS audio properties."""
+        return _analyze_tts_quality(self.data, self.sample_rate, silence_threshold_db)
+
+    def prepare_tts(
+        self,
+        target_rms_db: float = -20.0,
+        silence_threshold_db: float = -45.0,
+        peak_limit_db: float = -1.0,
+        fade_sec: float = 0.005,
+    ) -> list[float]:
+        """Trim, normalize, peak-limit, and lightly fade TTS audio."""
+        return _prepare_tts(
+            self.data,
+            self.sample_rate,
+            target_rms_db,
+            silence_threshold_db,
+            peak_limit_db,
+            fade_sec,
+        )
+
+    def compress_pauses(
+        self,
+        max_pause_sec: float = 0.6,
+        silence_threshold_db: float = -45.0,
+    ) -> list[float]:
+        """Shorten contiguous low-level pauses."""
+        return _compress_pauses(self.data, self.sample_rate, max_pause_sec, silence_threshold_db)
 
     # --- Features - Spectrogram ---
 

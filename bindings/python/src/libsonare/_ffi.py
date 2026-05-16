@@ -44,6 +44,100 @@ class SonareAnalysisResult(ctypes.Structure):
     ]
 
 
+class SonareBpmCandidate(ctypes.Structure):
+    """Maps to SonareBpmCandidate in sonare_c.h."""
+
+    _fields_ = [
+        ("bpm", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareBpmAnalysisResult(ctypes.Structure):
+    """Maps to SonareBpmAnalysisResult in sonare_c.h."""
+
+    _fields_ = [
+        ("bpm", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+        ("candidates", ctypes.POINTER(SonareBpmCandidate)),
+        ("candidate_count", ctypes.c_size_t),
+        ("autocorrelation", ctypes.POINTER(ctypes.c_float)),
+        ("autocorrelation_count", ctypes.c_size_t),
+        ("tempogram", ctypes.POINTER(ctypes.c_float)),
+        ("tempogram_count", ctypes.c_size_t),
+    ]
+
+
+class SonareRhythmResult(ctypes.Structure):
+    """Maps to SonareRhythmResult in sonare_c.h."""
+
+    _fields_ = [
+        ("bpm", ctypes.c_float),
+        ("time_signature", SonareTimeSignature),
+        ("groove_type", ctypes.c_int32),
+        ("syncopation", ctypes.c_float),
+        ("pattern_regularity", ctypes.c_float),
+        ("tempo_stability", ctypes.c_float),
+        ("beat_intervals", ctypes.POINTER(ctypes.c_float)),
+        ("beat_interval_count", ctypes.c_size_t),
+    ]
+
+
+class SonareDynamicsResult(ctypes.Structure):
+    """Maps to SonareDynamicsResult in sonare_c.h."""
+
+    _fields_ = [
+        ("dynamic_range_db", ctypes.c_float),
+        ("peak_db", ctypes.c_float),
+        ("rms_db", ctypes.c_float),
+        ("crest_factor", ctypes.c_float),
+        ("loudness_range_db", ctypes.c_float),
+        ("is_compressed", ctypes.c_int),
+        ("loudness_times", ctypes.POINTER(ctypes.c_float)),
+        ("loudness_rms_db", ctypes.POINTER(ctypes.c_float)),
+        ("loudness_count", ctypes.c_size_t),
+    ]
+
+
+class SonareTimbreResult(ctypes.Structure):
+    """Maps to SonareTimbreResult in sonare_c.h."""
+
+    _fields_ = [
+        ("brightness", ctypes.c_float),
+        ("warmth", ctypes.c_float),
+        ("density", ctypes.c_float),
+        ("roughness", ctypes.c_float),
+        ("complexity", ctypes.c_float),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_centroid_count", ctypes.c_size_t),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_flatness_count", ctypes.c_size_t),
+        ("spectral_rolloff", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_rolloff_count", ctypes.c_size_t),
+    ]
+
+
+class SonareChord(ctypes.Structure):
+    """Maps to SonareChord in sonare_c.h."""
+
+    _fields_ = [
+        ("root", ctypes.c_int32),
+        ("quality", ctypes.c_int32),
+        ("start", ctypes.c_float),
+        ("end", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareChordAnalysisResult(ctypes.Structure):
+    """Maps to SonareChordAnalysisResult in sonare_c.h."""
+
+    _fields_ = [
+        ("chords", ctypes.POINTER(SonareChord)),
+        ("chord_count", ctypes.c_size_t),
+    ]
+
+
 class SonareStftResult(ctypes.Structure):
     """Maps to SonareStftResult in sonare_c.h."""
 
@@ -115,6 +209,20 @@ class SonareHpssResult(ctypes.Structure):
         ("percussive", ctypes.POINTER(ctypes.c_float)),
         ("length", ctypes.c_size_t),
         ("sample_rate", ctypes.c_int32),
+    ]
+
+
+class SonareTtsQualityResult(ctypes.Structure):
+    """Maps to SonareTtsQualityResult in sonare_c.h."""
+
+    _fields_ = [
+        ("duration_sec", ctypes.c_float),
+        ("peak_db", ctypes.c_float),
+        ("rms_db", ctypes.c_float),
+        ("silence_ratio", ctypes.c_float),
+        ("clipping_ratio", ctypes.c_float),
+        ("leading_silence_sec", ctypes.c_float),
+        ("trailing_silence_sec", ctypes.c_float),
     ]
 
 
@@ -304,6 +412,72 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareAnalysisResult),
     ]
 
+    lib.sonare_analyze_bpm.restype = ctypes.c_int32
+    lib.sonare_analyze_bpm.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareBpmAnalysisResult),
+    ]
+
+    lib.sonare_analyze_rhythm.restype = ctypes.c_int32
+    lib.sonare_analyze_rhythm.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareRhythmResult),
+    ]
+
+    lib.sonare_analyze_dynamics.restype = ctypes.c_int32
+    lib.sonare_analyze_dynamics.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(SonareDynamicsResult),
+    ]
+
+    lib.sonare_analyze_timbre.restype = ctypes.c_int32
+    lib.sonare_analyze_timbre.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(SonareTimbreResult),
+    ]
+
+    lib.sonare_detect_chords.restype = ctypes.c_int32
+    lib.sonare_detect_chords.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChordAnalysisResult),
+    ]
+
     # --- Memory management ---
 
     # sonare_free_floats
@@ -313,6 +487,23 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     # sonare_free_result
     lib.sonare_free_result.restype = None
     lib.sonare_free_result.argtypes = [ctypes.POINTER(SonareAnalysisResult)]
+
+    lib.sonare_free_bpm_analysis_result.restype = None
+    lib.sonare_free_bpm_analysis_result.argtypes = [ctypes.POINTER(SonareBpmAnalysisResult)]
+
+    lib.sonare_free_rhythm_result.restype = None
+    lib.sonare_free_rhythm_result.argtypes = [ctypes.POINTER(SonareRhythmResult)]
+
+    lib.sonare_free_dynamics_result.restype = None
+    lib.sonare_free_dynamics_result.argtypes = [ctypes.POINTER(SonareDynamicsResult)]
+
+    lib.sonare_free_timbre_result.restype = None
+    lib.sonare_free_timbre_result.argtypes = [ctypes.POINTER(SonareTimbreResult)]
+
+    lib.sonare_free_chord_analysis_result.restype = None
+    lib.sonare_free_chord_analysis_result.argtypes = [
+        ctypes.POINTER(SonareChordAnalysisResult)
+    ]
 
     # --- Error handling ---
 
@@ -409,6 +600,39 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_analyze_tts_quality.restype = ctypes.c_int32
+    lib.sonare_analyze_tts_quality.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(SonareTtsQualityResult),
+    ]
+
+    lib.sonare_prepare_tts.restype = ctypes.c_int32
+    lib.sonare_prepare_tts.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_compress_pauses.restype = ctypes.c_int32
+    lib.sonare_compress_pauses.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
         ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),

@@ -8,18 +8,29 @@ from collections.abc import Sequence
 from ._ffi import (
     SONARE_OK,
     SonareAnalysisResult,
+    SonareBpmAnalysisResult,
+    SonareChordAnalysisResult,
     SonareChromaResult,
+    SonareDynamicsResult,
     SonareHpssResult,
     SonareKey,
     SonareMelResult,
     SonareMfccResult,
     SonarePitchResult,
+    SonareRhythmResult,
     SonareStftResult,
+    SonareTimbreResult,
+    SonareTtsQualityResult,
     load_library,
 )
 from .types import (
     AnalysisResult,
+    BpmAnalysisResult,
+    BpmCandidate,
+    Chord,
+    ChordAnalysisResult,
     ChromaResult,
+    DynamicsResult,
     HpssResult,
     Key,
     MelSpectrogramResult,
@@ -27,8 +38,11 @@ from .types import (
     Mode,
     PitchClass,
     PitchResult,
+    RhythmResult,
     StftResult,
+    TimbreResult,
     TimeSignature,
+    TtsQualityResult,
 )
 
 _lib: ctypes.CDLL | None = None
@@ -250,6 +264,246 @@ def analyze(
         )
     finally:
         lib.sonare_free_result(ctypes.byref(out))
+
+
+def analyze_bpm(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    bpm_min: float = 30.0,
+    bpm_max: float = 300.0,
+    start_bpm: float = 120.0,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    max_candidates: int = 5,
+) -> BpmAnalysisResult:
+    """Analyze BPM with confidence, candidates, autocorrelation, and tempogram."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareBpmAnalysisResult()
+    rc = lib.sonare_analyze_bpm(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(bpm_min),
+        ctypes.c_float(bpm_max),
+        ctypes.c_float(start_bpm),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(max_candidates),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return BpmAnalysisResult(
+            bpm=float(out.bpm),
+            confidence=float(out.confidence),
+            candidates=[
+                BpmCandidate(
+                    bpm=float(out.candidates[i].bpm),
+                    confidence=float(out.candidates[i].confidence),
+                )
+                for i in range(out.candidate_count)
+            ],
+            autocorrelation=[
+                float(out.autocorrelation[i]) for i in range(out.autocorrelation_count)
+            ],
+            tempogram=[float(out.tempogram[i]) for i in range(out.tempogram_count)],
+        )
+    finally:
+        lib.sonare_free_bpm_analysis_result(ctypes.byref(out))
+
+
+def analyze_rhythm(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    bpm_min: float = 60.0,
+    bpm_max: float = 200.0,
+    start_bpm: float = 120.0,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+) -> RhythmResult:
+    """Analyze rhythm primitives without generating a summary report."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareRhythmResult()
+    rc = lib.sonare_analyze_rhythm(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(bpm_min),
+        ctypes.c_float(bpm_max),
+        ctypes.c_float(start_bpm),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    groove_names = {0: "straight", 1: "shuffle", 2: "swing"}
+    try:
+        return RhythmResult(
+            bpm=float(out.bpm),
+            time_signature=TimeSignature(
+                numerator=int(out.time_signature.numerator),
+                denominator=int(out.time_signature.denominator),
+                confidence=float(out.time_signature.confidence),
+            ),
+            groove_type=groove_names.get(int(out.groove_type), "straight"),
+            syncopation=float(out.syncopation),
+            pattern_regularity=float(out.pattern_regularity),
+            tempo_stability=float(out.tempo_stability),
+            beat_intervals=[
+                float(out.beat_intervals[i]) for i in range(out.beat_interval_count)
+            ],
+        )
+    finally:
+        lib.sonare_free_rhythm_result(ctypes.byref(out))
+
+
+def analyze_dynamics(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    window_sec: float = 0.4,
+    hop_length: int = 512,
+    compression_threshold: float = 6.0,
+) -> DynamicsResult:
+    """Analyze dynamics and loudness primitives."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareDynamicsResult()
+    rc = lib.sonare_analyze_dynamics(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(window_sec),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(compression_threshold),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return DynamicsResult(
+            dynamic_range_db=float(out.dynamic_range_db),
+            peak_db=float(out.peak_db),
+            rms_db=float(out.rms_db),
+            crest_factor=float(out.crest_factor),
+            loudness_range_db=float(out.loudness_range_db),
+            is_compressed=bool(out.is_compressed),
+            loudness_times=[
+                float(out.loudness_times[i]) for i in range(out.loudness_count)
+            ],
+            loudness_rms_db=[
+                float(out.loudness_rms_db[i]) for i in range(out.loudness_count)
+            ],
+        )
+    finally:
+        lib.sonare_free_dynamics_result(ctypes.byref(out))
+
+
+def analyze_timbre(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_mels: int = 128,
+    n_mfcc: int = 13,
+    window_sec: float = 0.5,
+) -> TimbreResult:
+    """Analyze timbre and spectral-shape primitives."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareTimbreResult()
+    rc = lib.sonare_analyze_timbre(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_mels),
+        ctypes.c_int(n_mfcc),
+        ctypes.c_float(window_sec),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return TimbreResult(
+            brightness=float(out.brightness),
+            warmth=float(out.warmth),
+            density=float(out.density),
+            roughness=float(out.roughness),
+            complexity=float(out.complexity),
+            spectral_centroid=[
+                float(out.spectral_centroid[i])
+                for i in range(out.spectral_centroid_count)
+            ],
+            spectral_flatness=[
+                float(out.spectral_flatness[i])
+                for i in range(out.spectral_flatness_count)
+            ],
+            spectral_rolloff=[
+                float(out.spectral_rolloff[i])
+                for i in range(out.spectral_rolloff_count)
+            ],
+        )
+    finally:
+        lib.sonare_free_timbre_result(ctypes.byref(out))
+
+
+def detect_chords(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    min_duration: float = 0.3,
+    smoothing_window: float = 2.0,
+    threshold: float = 0.5,
+    use_triads_only: bool = False,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    use_beat_sync: bool = True,
+) -> ChordAnalysisResult:
+    """Detect chord segments without generating a summary report."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareChordAnalysisResult()
+    rc = lib.sonare_detect_chords(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(min_duration),
+        ctypes.c_float(smoothing_window),
+        ctypes.c_float(threshold),
+        ctypes.c_int(1 if use_triads_only else 0),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(1 if use_beat_sync else 0),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    quality_names = {
+        0: "major",
+        1: "minor",
+        2: "diminished",
+        3: "augmented",
+        4: "dominant7",
+        5: "major7",
+        6: "minor7",
+        7: "sus2",
+        8: "sus4",
+        9: "unknown",
+    }
+    try:
+        return ChordAnalysisResult(
+            chords=[
+                Chord(
+                    root=PitchClass(out.chords[i].root),
+                    quality=quality_names.get(int(out.chords[i].quality), "unknown"),
+                    start=float(out.chords[i].start),
+                    end=float(out.chords[i].end),
+                    confidence=float(out.chords[i].confidence),
+                )
+                for i in range(out.chord_count)
+            ]
+        )
+    finally:
+        lib.sonare_free_chord_analysis_result(ctypes.byref(out))
 
 
 def version() -> str:
@@ -505,6 +759,92 @@ def trim(
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
         ctypes.c_float(threshold_db),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    result = [float(out[i]) for i in range(out_length.value)]
+    if out and out_length.value > 0:
+        lib.sonare_free_floats(out)
+    return result
+
+
+def analyze_tts_quality(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    silence_threshold_db: float = -45.0,
+) -> TtsQualityResult:
+    """Measure objective TTS audio properties without heuristic labels."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareTtsQualityResult()
+    rc = lib.sonare_analyze_tts_quality(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(silence_threshold_db),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return TtsQualityResult(
+        duration_sec=float(out.duration_sec),
+        peak_db=float(out.peak_db),
+        rms_db=float(out.rms_db),
+        silence_ratio=float(out.silence_ratio),
+        clipping_ratio=float(out.clipping_ratio),
+        leading_silence_sec=float(out.leading_silence_sec),
+        trailing_silence_sec=float(out.trailing_silence_sec),
+    )
+
+
+def prepare_tts(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    target_rms_db: float = -20.0,
+    silence_threshold_db: float = -45.0,
+    peak_limit_db: float = -1.0,
+    fade_sec: float = 0.005,
+) -> list[float]:
+    """Trim, RMS-normalize, peak-limit, and lightly fade TTS audio."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_prepare_tts(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(target_rms_db),
+        ctypes.c_float(silence_threshold_db),
+        ctypes.c_float(peak_limit_db),
+        ctypes.c_float(fade_sec),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    result = [float(out[i]) for i in range(out_length.value)]
+    if out and out_length.value > 0:
+        lib.sonare_free_floats(out)
+    return result
+
+
+def compress_pauses(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    max_pause_sec: float = 0.6,
+    silence_threshold_db: float = -45.0,
+) -> list[float]:
+    """Shorten contiguous low-level pauses to at most max_pause_sec."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_compress_pauses(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(max_pause_sec),
+        ctypes.c_float(silence_threshold_db),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )

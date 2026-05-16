@@ -1,14 +1,20 @@
 import { createRequire } from 'node:module';
 import type {
   AnalysisResult,
+  BpmAnalysisResult,
+  ChordAnalysisResult,
   ChromaResult,
+  DynamicsResult,
   HpssResult,
   Key,
   MelSpectrogramResult,
   MfccResult,
   PitchResult,
+  RhythmResult,
   StftDbResult,
   StftResult,
+  TimbreResult,
+  TtsQualityResult,
 } from './types.js';
 
 const require = createRequire(import.meta.url);
@@ -78,6 +84,94 @@ export class Audio {
     return this.native.analyze();
   }
 
+  analyzeBpm(
+    bpmMin = 30.0,
+    bpmMax = 300.0,
+    startBpm = 120.0,
+    nFft = 2048,
+    hopLength = 512,
+    maxCandidates = 5,
+  ): BpmAnalysisResult {
+    return addon.analyzeBpm(
+      this.getData(),
+      this.getSampleRate(),
+      bpmMin,
+      bpmMax,
+      startBpm,
+      nFft,
+      hopLength,
+      maxCandidates,
+    );
+  }
+
+  analyzeRhythm(
+    bpmMin = 60.0,
+    bpmMax = 200.0,
+    startBpm = 120.0,
+    nFft = 2048,
+    hopLength = 512,
+  ): RhythmResult {
+    return addon.analyzeRhythm(
+      this.getData(),
+      this.getSampleRate(),
+      bpmMin,
+      bpmMax,
+      startBpm,
+      nFft,
+      hopLength,
+    );
+  }
+
+  analyzeDynamics(windowSec = 0.4, hopLength = 512, compressionThreshold = 6.0): DynamicsResult {
+    return addon.analyzeDynamics(
+      this.getData(),
+      this.getSampleRate(),
+      windowSec,
+      hopLength,
+      compressionThreshold,
+    );
+  }
+
+  analyzeTimbre(
+    nFft = 2048,
+    hopLength = 512,
+    nMels = 128,
+    nMfcc = 13,
+    windowSec = 0.5,
+  ): TimbreResult {
+    return addon.analyzeTimbre(
+      this.getData(),
+      this.getSampleRate(),
+      nFft,
+      hopLength,
+      nMels,
+      nMfcc,
+      windowSec,
+    );
+  }
+
+  detectChords(
+    minDuration = 0.3,
+    smoothingWindow = 2.0,
+    threshold = 0.5,
+    useTriadsOnly = false,
+    nFft = 2048,
+    hopLength = 512,
+    useBeatSync = true,
+  ): ChordAnalysisResult {
+    return addon.detectChords(
+      this.getData(),
+      this.getSampleRate(),
+      minDuration,
+      smoothingWindow,
+      threshold,
+      useTriadsOnly,
+      nFft,
+      hopLength,
+      useBeatSync,
+    );
+  }
+
   // -- Effects --
 
   hpss(kernelHarmonic = 31, kernelPercussive = 31): HpssResult {
@@ -106,6 +200,35 @@ export class Audio {
 
   trim(thresholdDb = -60.0): Float32Array {
     return addon.trim(this.getData(), this.getSampleRate(), thresholdDb);
+  }
+
+  analyzeTtsQuality(silenceThresholdDb = -45.0): TtsQualityResult {
+    return addon.analyzeTtsQuality(this.getData(), this.getSampleRate(), silenceThresholdDb);
+  }
+
+  prepareTts(
+    targetRmsDb = -20.0,
+    silenceThresholdDb = -45.0,
+    peakLimitDb = -1.0,
+    fadeSec = 0.005,
+  ): Float32Array {
+    return addon.prepareTts(
+      this.getData(),
+      this.getSampleRate(),
+      targetRmsDb,
+      silenceThresholdDb,
+      peakLimitDb,
+      fadeSec,
+    );
+  }
+
+  compressPauses(maxPauseSec = 0.6, silenceThresholdDb = -45.0): Float32Array {
+    return addon.compressPauses(
+      this.getData(),
+      this.getSampleRate(),
+      maxPauseSec,
+      silenceThresholdDb,
+    );
   }
 
   // -- Features --
@@ -227,6 +350,86 @@ export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResu
   return addon.analyze(samples, sampleRate);
 }
 
+export function analyzeBpm(
+  samples: Float32Array,
+  sampleRate = 22050,
+  bpmMin = 30.0,
+  bpmMax = 300.0,
+  startBpm = 120.0,
+  nFft = 2048,
+  hopLength = 512,
+  maxCandidates = 5,
+): BpmAnalysisResult {
+  return addon.analyzeBpm(
+    samples,
+    sampleRate,
+    bpmMin,
+    bpmMax,
+    startBpm,
+    nFft,
+    hopLength,
+    maxCandidates,
+  );
+}
+
+export function analyzeRhythm(
+  samples: Float32Array,
+  sampleRate = 22050,
+  bpmMin = 60.0,
+  bpmMax = 200.0,
+  startBpm = 120.0,
+  nFft = 2048,
+  hopLength = 512,
+): RhythmResult {
+  return addon.analyzeRhythm(samples, sampleRate, bpmMin, bpmMax, startBpm, nFft, hopLength);
+}
+
+export function analyzeDynamics(
+  samples: Float32Array,
+  sampleRate = 22050,
+  windowSec = 0.4,
+  hopLength = 512,
+  compressionThreshold = 6.0,
+): DynamicsResult {
+  return addon.analyzeDynamics(samples, sampleRate, windowSec, hopLength, compressionThreshold);
+}
+
+export function analyzeTimbre(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nMfcc = 13,
+  windowSec = 0.5,
+): TimbreResult {
+  return addon.analyzeTimbre(samples, sampleRate, nFft, hopLength, nMels, nMfcc, windowSec);
+}
+
+export function detectChords(
+  samples: Float32Array,
+  sampleRate = 22050,
+  minDuration = 0.3,
+  smoothingWindow = 2.0,
+  threshold = 0.5,
+  useTriadsOnly = false,
+  nFft = 2048,
+  hopLength = 512,
+  useBeatSync = true,
+): ChordAnalysisResult {
+  return addon.detectChords(
+    samples,
+    sampleRate,
+    minDuration,
+    smoothingWindow,
+    threshold,
+    useTriadsOnly,
+    nFft,
+    hopLength,
+    useBeatSync,
+  );
+}
+
 export function version(): string {
   return addon.version();
 }
@@ -279,6 +482,41 @@ export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 
 
 export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -60.0): Float32Array {
   return addon.trim(samples, sampleRate, thresholdDb);
+}
+
+export function analyzeTtsQuality(
+  samples: Float32Array,
+  sampleRate = 22050,
+  silenceThresholdDb = -45.0,
+): TtsQualityResult {
+  return addon.analyzeTtsQuality(samples, sampleRate, silenceThresholdDb);
+}
+
+export function prepareTts(
+  samples: Float32Array,
+  sampleRate = 22050,
+  targetRmsDb = -20.0,
+  silenceThresholdDb = -45.0,
+  peakLimitDb = -1.0,
+  fadeSec = 0.005,
+): Float32Array {
+  return addon.prepareTts(
+    samples,
+    sampleRate,
+    targetRmsDb,
+    silenceThresholdDb,
+    peakLimitDb,
+    fadeSec,
+  );
+}
+
+export function compressPauses(
+  samples: Float32Array,
+  sampleRate = 22050,
+  maxPauseSec = 0.6,
+  silenceThresholdDb = -45.0,
+): Float32Array {
+  return addon.compressPauses(samples, sampleRate, maxPauseSec, silenceThresholdDb);
 }
 
 // -- Features --
@@ -450,13 +688,21 @@ export function resample(samples: Float32Array, srcSr: number, targetSr: number)
 
 export type {
   AnalysisResult,
+  BpmAnalysisResult,
+  BpmCandidate,
+  Chord,
+  ChordAnalysisResult,
   ChromaResult,
+  DynamicsResult,
   HpssResult,
   Key,
   MelSpectrogramResult,
   MfccResult,
   PitchResult,
+  RhythmResult,
   StftDbResult,
   StftResult,
+  TimbreResult,
   TimeSignature,
+  TtsQualityResult,
 } from './types.js';

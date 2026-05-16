@@ -235,6 +235,69 @@ def test_audio_analyze() -> None:
     assert isinstance(result.beats, list)
 
 
+def test_analysis_primitives() -> None:
+    """Detailed BPM and rhythm APIs expose reusable primitives."""
+    from libsonare import (
+        Audio,
+        analyze_bpm,
+        analyze_dynamics,
+        analyze_rhythm,
+        analyze_timbre,
+        detect_chords,
+    )
+
+    sr = 22050
+    duration = 4.0
+    bpm = 120
+    samples = [0.0] * int(sr * duration)
+    samples_per_beat = sr * 60 / bpm
+    for beat in range(int(duration * bpm / 60)):
+        start = int(beat * samples_per_beat)
+        for i in range(start, min(start + 200, len(samples))):
+            samples[i] = 1.0
+
+    bpm_result = analyze_bpm(samples, sample_rate=sr, max_candidates=5)
+    assert bpm_result.bpm > 0
+    assert bpm_result.confidence >= 0.0
+    assert len(bpm_result.candidates) <= 5
+    assert len(bpm_result.autocorrelation) > 0
+    assert len(bpm_result.tempogram) > 0
+
+    rhythm = analyze_rhythm(samples, sample_rate=sr)
+    assert rhythm.bpm > 0
+    assert rhythm.time_signature.numerator > 0
+    assert rhythm.groove_type in {"straight", "shuffle", "swing"}
+    assert rhythm.pattern_regularity >= 0.0
+    assert rhythm.tempo_stability >= 0.0
+
+    dynamics = analyze_dynamics(samples, sample_rate=sr)
+    assert dynamics.peak_db <= 1.0
+    assert len(dynamics.loudness_times) == len(dynamics.loudness_rms_db)
+
+    tone = [
+        0.25
+        * (
+            math.sin(2 * math.pi * 261.63 * i / sr)
+            + math.sin(2 * math.pi * 329.63 * i / sr)
+            + math.sin(2 * math.pi * 392.00 * i / sr)
+        )
+        for i in range(sr * 2)
+    ]
+    timbre = analyze_timbre(tone, sample_rate=sr)
+    assert 0.0 <= timbre.brightness <= 1.0
+    assert len(timbre.spectral_centroid) > 0
+
+    chords = detect_chords(tone, sample_rate=sr, use_beat_sync=False)
+    assert isinstance(chords.chords, list)
+
+    audio = Audio.from_buffer(samples, sample_rate=sr)
+    assert audio.analyze_bpm().bpm > 0
+    assert audio.analyze_rhythm().bpm > 0
+    assert len(audio.analyze_dynamics().loudness_times) > 0
+    assert len(audio.analyze_timbre().spectral_centroid) > 0
+    assert isinstance(audio.detect_chords(use_beat_sync=False).chords, list)
+
+
 ## Effects tests
 
 
@@ -310,6 +373,28 @@ def test_trim() -> None:
     result = trim(samples, sample_rate=22050, threshold_db=-40.0)
     assert len(result) < len(samples)
     assert len(result) > 0
+
+
+def test_tts_utilities() -> None:
+    """TTS utilities measure, prepare, and shorten pauses."""
+    from libsonare import analyze_tts_quality, compress_pauses, prepare_tts
+
+    sr = 22050
+    tone = [0.2 * x for x in _generate_sine(440, sr, 0.4)]
+    samples = [0.0] * int(sr * 0.2) + tone + [0.0] * int(sr * 1.0) + tone
+
+    quality = analyze_tts_quality(samples, sample_rate=sr)
+    assert quality.duration_sec > 1.5
+    assert quality.silence_ratio > 0.2
+    assert quality.clipping_ratio == 0.0
+
+    prepared = prepare_tts(samples, sample_rate=sr)
+    assert len(prepared) < len(samples)
+    assert len(prepared) > 0
+
+    compressed = compress_pauses(samples, sample_rate=sr, max_pause_sec=0.25)
+    assert len(compressed) < len(samples)
+    assert len(compressed) > len(tone)
 
 
 ## Feature tests
@@ -794,6 +879,11 @@ def test_audio_effects() -> None:
     trimmed = audio.trim()
     assert len(trimmed) > 0
     assert len(trimmed) <= len(samples)
+
+    quality = audio.analyze_tts_quality()
+    assert quality.duration_sec > 0
+    assert len(audio.prepare_tts()) > 0
+    assert len(audio.compress_pauses()) > 0
 
 
 def test_audio_stft_db() -> None:

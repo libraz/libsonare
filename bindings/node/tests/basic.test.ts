@@ -6,9 +6,16 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   analyze,
+  analyzeBpm,
+  analyzeDynamics,
+  analyzeRhythm,
+  analyzeTimbre,
+  analyzeTtsQuality,
   chroma,
+  compressPauses,
   detectBeats,
   detectBpm,
+  detectChords,
   detectKey,
   detectOnsets,
   framesToTime,
@@ -28,6 +35,7 @@ import {
   pitchPyin,
   pitchShift,
   pitchYin,
+  prepareTts,
   resample,
   rmsEnergy,
   spectralBandwidth,
@@ -105,6 +113,51 @@ describe('sonare native binding', () => {
       expect(Array.isArray(result.beats)).toBe(true);
     });
 
+    it('analysis primitives expose detailed BPM and rhythm data', () => {
+      const samples = new Float32Array(SR * 4);
+      const samplesPerBeat = (SR * 60) / 120;
+      for (let beat = 0; beat < 8; beat++) {
+        const start = Math.floor(beat * samplesPerBeat);
+        for (let i = start; i < Math.min(start + 200, samples.length); i++) {
+          samples[i] = 1.0;
+        }
+      }
+
+      const bpm = analyzeBpm(samples, SR);
+      expect(bpm.bpm).toBeGreaterThan(0);
+      expect(bpm.confidence).toBeGreaterThanOrEqual(0);
+      expect(bpm.candidates.length).toBeLessThanOrEqual(5);
+      expect(bpm.autocorrelation).toBeInstanceOf(Float32Array);
+      expect(bpm.tempogram).toBeInstanceOf(Float32Array);
+
+      const rhythm = analyzeRhythm(samples, SR);
+      expect(rhythm.bpm).toBeGreaterThan(0);
+      expect(rhythm.timeSignature.numerator).toBeGreaterThan(0);
+      expect(['straight', 'shuffle', 'swing']).toContain(rhythm.grooveType);
+      expect(rhythm.beatIntervals).toBeInstanceOf(Float32Array);
+
+      const dynamics = analyzeDynamics(samples, SR);
+      expect(dynamics.peakDb).toBeLessThanOrEqual(1);
+      expect(dynamics.loudnessTimes).toBeInstanceOf(Float32Array);
+      expect(dynamics.loudnessRmsDb.length).toBe(dynamics.loudnessTimes.length);
+
+      const tone = new Float32Array(SR * 2);
+      for (let i = 0; i < tone.length; i++) {
+        tone[i] =
+          0.25 *
+          (Math.sin((2 * Math.PI * 261.63 * i) / SR) +
+            Math.sin((2 * Math.PI * 329.63 * i) / SR) +
+            Math.sin((2 * Math.PI * 392.0 * i) / SR));
+      }
+      const timbre = analyzeTimbre(tone, SR);
+      expect(timbre.brightness).toBeGreaterThanOrEqual(0);
+      expect(timbre.brightness).toBeLessThanOrEqual(1);
+      expect(timbre.spectralCentroid).toBeInstanceOf(Float32Array);
+
+      const chords = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
+      expect(Array.isArray(chords.chords)).toBe(true);
+    });
+
     it('rejects non-Float32Array input', () => {
       expect(() => detectBpm(new Float64Array(SR) as unknown as Float32Array, SR)).toThrow(
         /Float32Array/,
@@ -178,6 +231,29 @@ describe('sonare native binding', () => {
       const result = trim(samples, SR, -40.0);
       expect(result.length).toBeLessThan(samples.length);
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('TTS utilities measure, prepare, and shorten pauses', () => {
+      const tone = generateSine(440, SR, 0.4);
+      for (let i = 0; i < tone.length; i++) {
+        tone[i] *= 0.2;
+      }
+      const samples = new Float32Array(Math.floor(SR * 1.6));
+      samples.set(tone, Math.floor(SR * 0.2));
+      samples.set(tone, Math.floor(SR * 1.2));
+
+      const quality = analyzeTtsQuality(samples, SR);
+      expect(quality.durationSec).toBeGreaterThan(1.5);
+      expect(quality.silenceRatio).toBeGreaterThan(0.2);
+      expect(quality.clippingRatio).toBe(0);
+
+      const prepared = prepareTts(samples, SR);
+      expect(prepared.length).toBeLessThan(samples.length);
+      expect(prepared.length).toBeGreaterThan(0);
+
+      const compressed = compressPauses(samples, SR, 0.25);
+      expect(compressed.length).toBeLessThan(samples.length);
+      expect(compressed.length).toBeGreaterThan(tone.length);
     });
   });
 
@@ -354,6 +430,18 @@ describe('sonare native binding', () => {
       audio.destroy();
     });
 
+    it('analysis primitives work via class', () => {
+      const audio = Audio.fromBuffer(generateSine(440, SR, 2.0), SR);
+      expect(audio.analyzeBpm().bpm).toBeGreaterThan(0);
+      expect(audio.analyzeRhythm().bpm).toBeGreaterThan(0);
+      expect(audio.analyzeDynamics().loudnessTimes).toBeInstanceOf(Float32Array);
+      expect(audio.analyzeTimbre().spectralCentroid).toBeInstanceOf(Float32Array);
+      expect(Array.isArray(audio.detectChords(0.3, 2.0, 0.5, false, 2048, 512, false).chords)).toBe(
+        true,
+      );
+      audio.destroy();
+    });
+
     it('stft works via class', () => {
       const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
       const result = audio.stft();
@@ -381,6 +469,16 @@ describe('sonare native binding', () => {
       const result = audio.hpss();
       expect(result.harmonic).toBeInstanceOf(Float32Array);
       expect(result.percussive).toBeInstanceOf(Float32Array);
+      audio.destroy();
+    });
+
+    it('TTS utilities work via class', () => {
+      const samples = new Float32Array(SR);
+      samples.set(generateSine(440, SR, 0.4), Math.floor(SR * 0.3));
+      const audio = Audio.fromBuffer(samples, SR);
+      expect(audio.analyzeTtsQuality().durationSec).toBeGreaterThan(0);
+      expect(audio.prepareTts().length).toBeGreaterThan(0);
+      expect(audio.compressPauses().length).toBeGreaterThan(0);
       audio.destroy();
     });
 

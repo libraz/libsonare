@@ -38,6 +38,7 @@ set(SONARE_SOURCES
   effects/time_stretch.cpp
   effects/pitch_shift.cpp
   effects/normalize.cpp
+  effects/tts.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
   analysis/bpm_analyzer.cpp
