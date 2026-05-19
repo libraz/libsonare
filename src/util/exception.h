@@ -3,6 +3,7 @@
 /// @file exception.h
 /// @brief Exception classes for libsonare.
 
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -46,6 +47,23 @@ class SonareException : public std::runtime_error {
     if (!(cond)) {                        \
       throw SonareException(code, msg);   \
     }                                     \
+  } while (0)
+
+/// @def SONARE_CHECK_RANGE
+/// @brief Throws InvalidParameter with a detailed inclusive range message.
+#define SONARE_CHECK_RANGE(name, value, min_value, max_value)                                  \
+  do {                                                                                         \
+    const auto sonare_check_range_value = (value);                                             \
+    const auto sonare_check_range_min = (min_value);                                           \
+    const auto sonare_check_range_max = (max_value);                                           \
+    if (!(sonare_check_range_value >= sonare_check_range_min &&                                \
+          sonare_check_range_value <= sonare_check_range_max)) {                               \
+      std::ostringstream sonare_check_range_stream;                                            \
+      sonare_check_range_stream << (name) << " must be in [" << sonare_check_range_min << ", " \
+                                << sonare_check_range_max << "], got "                         \
+                                << sonare_check_range_value;                                   \
+      throw SonareException(ErrorCode::InvalidParameter, sonare_check_range_stream.str());     \
+    }                                                                                          \
   } while (0)
 
 }  // namespace sonare
