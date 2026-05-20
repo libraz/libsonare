@@ -1,5 +1,6 @@
 #include "analysis/music_analyzer.h"
 
+#include "analysis/downbeat_analyzer.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
@@ -90,6 +91,8 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     // Use cached onset strength to avoid recomputation
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
                                                     config_.hop_length, beat_config);
+    beat_analyzer_->refine_downbeats(
+        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_));
   }
   return *beat_analyzer_;
 }
@@ -101,10 +104,23 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
     chord_config.hop_length = config_.hop_length;
     chord_config.use_triads_only = config_.use_triads_only;
     chord_config.use_beat_sync = true;
+    chord_config.use_hmm = config_.use_chord_hmm;
+    chord_config.hmm_beam_width = config_.chord_hmm_beam_width;
+    chord_config.detect_inversions = config_.detect_chord_inversions;
+    if (config_.use_chord_key_context) {
+      const Key key = key_analyzer().key();
+      chord_config.use_key_context = true;
+      chord_config.key_root = key.root;
+      chord_config.key_mode = key.mode;
+    }
 
     // Use beat-synchronized chord detection with harmonic chroma for better accuracy
     auto beat_times = beat_analyzer().beat_times();
     chord_analyzer_ = std::make_unique<ChordAnalyzer>(harmonic_chroma(), beat_times, chord_config);
+    const auto chord_changes =
+        chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
+    beat_analyzer_->refine_downbeats(
+        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_), chord_changes);
   }
   return *chord_analyzer_;
 }

@@ -26,13 +26,15 @@ struct TimeSignature {
 /// @brief Configuration for beat tracking.
 /// @details Default values follow common MIR defaults.
 struct BeatConfig {
-  float start_bpm = 120.0f;  ///< Prior estimate for tempo
-  float bpm_min = 30.0f;     ///< Minimum BPM to consider
-  float bpm_max = 300.0f;    ///< Maximum BPM to consider
-  float tightness = 100.0f;  ///< Tightness of beat distribution
-  bool trim = true;          ///< Trim leading/trailing silent beats
-  int n_fft = 2048;          ///< FFT size for onset detection
-  int hop_length = 512;      ///< Hop length for onset detection
+  float start_bpm = 120.0f;             ///< Prior estimate for tempo
+  float bpm_min = 30.0f;                ///< Minimum BPM to consider
+  float bpm_max = 300.0f;               ///< Maximum BPM to consider
+  float tightness = 100.0f;             ///< Tightness of beat distribution
+  bool trim = true;                     ///< Trim leading/trailing silent beats
+  int n_fft = 2048;                     ///< FFT size for onset detection
+  int hop_length = 512;                 ///< Hop length for onset detection
+  bool adaptive_tempo = false;          ///< Locally update tempo prior during DP
+  int tempo_update_interval_beats = 8;  ///< Local tempo context length in beats
 };
 
 /// @brief Beat analyzer using dynamic programming beat tracking.
@@ -62,6 +64,16 @@ class BeatAnalyzer {
   /// @brief Returns beat frames (indices).
   std::vector<int> beat_frames() const;
 
+  /// @brief Returns downbeat beat indices.
+  const std::vector<int>& downbeat_indices() const { return downbeat_indices_; }
+
+  /// @brief Returns estimated downbeats.
+  const std::vector<Beat>& downbeats() const { return downbeats_; }
+
+  /// @brief Refines downbeats using optional beat-level observations.
+  void refine_downbeats(const std::vector<float>& low_frequency_energy = {},
+                        const std::vector<float>& chord_changes = {});
+
   /// @brief Returns estimated BPM from beat intervals.
   float bpm() const { return bpm_; }
 
@@ -86,9 +98,12 @@ class BeatAnalyzer {
   float compute_transition_cost(int from_frame, int to_frame, float period) const;
 
   std::vector<Beat> beats_;
+  std::vector<int> downbeat_indices_;
+  std::vector<Beat> downbeats_;
   std::vector<float> onset_strength_;
   float bpm_;
   TimeSignature time_signature_;
+  int downbeat_phase_ = 0;
   int sr_;
   int hop_length_;
   BeatConfig config_;

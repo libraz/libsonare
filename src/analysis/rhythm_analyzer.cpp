@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "analysis/meter_analyzer.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -180,56 +181,7 @@ void RhythmAnalyzer::detect_time_signature() {
     return;
   }
 
-  // Collect beat strengths
-  std::vector<float> strengths;
-  strengths.reserve(beats_.size());
-  for (const auto& beat : beats_) {
-    strengths.push_back(beat.strength);
-  }
-
-  // Test different time signatures (3, 4, 6)
-  std::vector<std::pair<int, float>> candidates;
-
-  for (int beats_per_bar : {3, 4, 6}) {
-    // Calculate variance of downbeat vs non-downbeat strengths
-    // Try each possible phase offset
-
-    float best_score = -1.0f;
-
-    for (int phase = 0; phase < beats_per_bar; ++phase) {
-      float downbeat_sum = 0.0f;
-      float other_sum = 0.0f;
-      int downbeat_count = 0;
-      int other_count = 0;
-
-      for (size_t i = 0; i < strengths.size(); ++i) {
-        if (static_cast<int>(i) % beats_per_bar == phase) {
-          downbeat_sum += strengths[i];
-          downbeat_count++;
-        } else {
-          other_sum += strengths[i];
-          other_count++;
-        }
-      }
-
-      float downbeat_avg = (downbeat_count > 0) ? downbeat_sum / downbeat_count : 0.0f;
-      float other_avg = (other_count > 0) ? other_sum / other_count : 0.0f;
-
-      // Score based on contrast
-      float score = (other_avg > 0.0f) ? downbeat_avg / other_avg : 1.0f;
-      best_score = std::max(best_score, score);
-    }
-
-    candidates.push_back({beats_per_bar, best_score});
-  }
-
-  // Find best time signature
-  auto best = std::max_element(candidates.begin(), candidates.end(),
-                               [](const auto& a, const auto& b) { return a.second < b.second; });
-
-  features_.time_signature.numerator = best->first;
-  features_.time_signature.denominator = 4;
-  features_.time_signature.confidence = std::min(1.0f, best->second / 2.0f);
+  features_.time_signature = estimate_meter({}, beats_).time_signature;
 }
 
 void RhythmAnalyzer::detect_groove_type() {
