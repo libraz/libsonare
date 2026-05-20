@@ -119,6 +119,34 @@ std::array<float, 12> Chroma::mean_energy() const {
   return result;
 }
 
+std::array<float, 12> Chroma::weighted_mean_energy(const std::vector<float>& frame_weights) const {
+  std::array<float, 12> result = {};
+
+  if (n_frames_ == 0 || n_chroma_ != 12 || frame_weights.empty()) {
+    return mean_energy();
+  }
+
+  const int n = std::min(n_frames_, static_cast<int>(frame_weights.size()));
+  float total_weight = 0.0f;
+  for (int t = 0; t < n; ++t) {
+    const float weight = std::max(0.0f, frame_weights[t]);
+    total_weight += weight;
+    for (int c = 0; c < 12; ++c) {
+      result[c] += features_[c * n_frames_ + t] * weight;
+    }
+  }
+
+  if (total_weight <= 1e-10f) {
+    return mean_energy();
+  }
+
+  for (float& value : result) {
+    value /= total_weight;
+  }
+
+  return result;
+}
+
 std::vector<float> Chroma::normalize(int norm) const {
   std::vector<float> result(features_.size());
 
@@ -285,6 +313,33 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   }
 
   return Chroma(std::move(chroma), config.n_chroma, n_frames, audio.sample_rate(),
+                config.cqt.hop_length);
+}
+
+Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
+
+  ChromaConfig stft_config;
+  stft_config.n_fft = 4096;
+  stft_config.hop_length = config.cqt.hop_length;
+  stft_config.fmin = config.cqt.fmin;
+  stft_config.n_octaves = std::max(1, config.cqt.n_bins / config.cqt.bins_per_octave);
+
+  Chroma result = Chroma::compute(audio, stft_config);
+  if (result.empty()) {
+    return Chroma();
+  }
+
+  std::vector<float> chroma(result.data(),
+                            result.data() + static_cast<size_t>(result.n_chroma()) *
+                                                static_cast<size_t>(result.n_frames()));
+  if (config.normalize_frames && result.n_frames() > 0) {
+    chroma = normalize_matrix(chroma.data(), config.n_chroma, result.n_frames(), /*axis=*/0,
+                              NormType::Inf);
+  }
+  return Chroma(std::move(chroma), config.n_chroma, result.n_frames(), audio.sample_rate(),
                 config.cqt.hop_length);
 }
 

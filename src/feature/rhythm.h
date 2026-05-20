@@ -47,6 +47,23 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
 std::vector<float> fourier_tempogram(const Audio& audio,
                                      const TempogramConfig& config = TempogramConfig());
 
+/// @brief Cyclic tempogram by octave-folding a Fourier tempogram.
+/// @details Tempo bins are folded into one octave [bpm_min, 2*bpm_min), so
+///          octave-equivalent tempi such as 60, 120, and 240 BPM contribute
+///          to the same cyclic tempo class.
+/// @param onset_envelope Pre-computed onset strength envelope
+/// @param sr Sample rate
+/// @param bpm_min Lower tempo of the cyclic octave
+/// @param n_bins Number of cyclic tempo classes
+/// @return Matrix [n_bins x n_frames], row-major
+std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
+                                    const TempogramConfig& config = TempogramConfig(),
+                                    float bpm_min = 60.0f, int n_bins = 60);
+
+std::vector<float> cyclic_tempogram(const Audio& audio,
+                                    const TempogramConfig& config = TempogramConfig(),
+                                    float bpm_min = 60.0f, int n_bins = 60);
+
 /// @brief Aggregated tempogram values at integer tempo ratios of a reference tempo.
 /// @param tempogram_data Tempogram matrix as returned by tempogram()
 /// @param win_length Tempogram win_length used to compute the lag axis

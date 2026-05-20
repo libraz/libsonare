@@ -172,6 +172,52 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
   return fourier_tempogram(env, audio.sample_rate(), config);
 }
 
+std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
+                                    const TempogramConfig& config, float bpm_min, int n_bins) {
+  if (sr <= 0 || config.hop_length <= 0) {
+    throw std::invalid_argument("cyclic_tempogram: sr and hop_length must be > 0");
+  }
+  if (bpm_min <= 0.0f || n_bins <= 0) {
+    throw std::invalid_argument("cyclic_tempogram: bpm_min and n_bins must be > 0");
+  }
+  if (onset_envelope.empty()) return {};
+
+  const std::vector<float> ft = fourier_tempogram(onset_envelope, sr, config);
+  const int n_frames = static_cast<int>(onset_envelope.size());
+  const int fourier_bins = config.win_length / 2 + 1;
+  std::vector<float> cyclic(static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
+                            0.0f);
+
+  const double octave_width = std::log(2.0);
+  for (int bin = 1; bin < fourier_bins; ++bin) {
+    const double bpm = static_cast<double>(bin) / static_cast<double>(config.win_length) * 60.0 *
+                       static_cast<double>(sr) / static_cast<double>(config.hop_length);
+    if (bpm <= 0.0) continue;
+    double phase = std::fmod(std::log(bpm / static_cast<double>(bpm_min)) / octave_width, 1.0);
+    if (phase < 0.0) phase += 1.0;
+    const int cyclic_bin = std::clamp(
+        static_cast<int>(std::round(phase * static_cast<double>(n_bins))) % n_bins, 0, n_bins - 1);
+    for (int frame = 0; frame < n_frames; ++frame) {
+      cyclic[static_cast<std::size_t>(cyclic_bin) * static_cast<std::size_t>(n_frames) +
+             static_cast<std::size_t>(frame)] +=
+          ft[static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
+             static_cast<std::size_t>(frame)];
+    }
+  }
+
+  return cyclic;
+}
+
+std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& config,
+                                    float bpm_min, int n_bins) {
+  MelConfig mel_cfg;
+  mel_cfg.hop_length = config.hop_length;
+  OnsetConfig onset_cfg;
+  onset_cfg.center = config.center;
+  const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
+  return cyclic_tempogram(env, audio.sample_rate(), config, bpm_min, n_bins);
+}
+
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
   if (config.win_length <= 1) {
     throw std::invalid_argument("plp: win_length must be > 1");
