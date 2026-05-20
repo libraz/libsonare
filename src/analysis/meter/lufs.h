@@ -3,6 +3,7 @@
 /// @file lufs.h
 /// @brief Offline LUFS loudness meter.
 
+#include <cstddef>
 #include <vector>
 
 #include "core/audio.h"
@@ -26,6 +27,8 @@ struct LufsConfig {
 };
 
 LufsResult lufs(const Audio& audio, const LufsConfig& config = {});
+LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
+                            const LufsConfig& config = {});
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config = {});
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config = {});
 

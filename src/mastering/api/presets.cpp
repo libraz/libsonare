@@ -25,6 +25,15 @@ namespace {
 // flips on / configures the stages relevant to the preset.
 // ---------------------------------------------------------------------------
 
+void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling_db) {
+  cfg.maximizer.true_peak_limiter.enabled = true;
+  cfg.maximizer.true_peak_limiter.config.ceiling_db = ceiling_db;
+  cfg.loudness.enabled = true;
+  cfg.loudness.target_lufs = target_lufs;
+  cfg.loudness.ceiling_db = ceiling_db;
+  cfg.loudness.true_peak_oversample = 4;
+}
+
 MasteringChainConfig make_pop() {
   MasteringChainConfig cfg;
 
@@ -46,13 +55,7 @@ MasteringChainConfig make_pop() {
   cfg.stereo.imager.enabled = true;
   cfg.stereo.imager.config.width = 1.1f;
 
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
-
-  cfg.loudness.enabled = true;
-  cfg.loudness.target_lufs = -14.0f;
-  cfg.loudness.ceiling_db = -1.0f;
-  cfg.loudness.true_peak_oversample = 4;
+  enable_loudness(cfg, -14.0f, -1.0f);
 
   return cfg;
 }
@@ -75,13 +78,7 @@ MasteringChainConfig make_edm() {
   cfg.stereo.imager.enabled = true;
   cfg.stereo.imager.config.width = 1.3f;
 
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = -0.3f;
-
-  cfg.loudness.enabled = true;
-  cfg.loudness.target_lufs = -12.0f;
-  cfg.loudness.ceiling_db = -0.3f;
-  cfg.loudness.true_peak_oversample = 4;
+  enable_loudness(cfg, -12.0f, -0.3f);
 
   return cfg;
 }
@@ -101,13 +98,7 @@ MasteringChainConfig make_acoustic() {
   cfg.stereo.imager.enabled = true;
   cfg.stereo.imager.config.width = 0.95f;
 
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = -1.5f;
-
-  cfg.loudness.enabled = true;
-  cfg.loudness.target_lufs = -16.0f;
-  cfg.loudness.ceiling_db = -1.5f;
-  cfg.loudness.true_peak_oversample = 4;
+  enable_loudness(cfg, -16.0f, -1.5f);
 
   return cfg;
 }
@@ -130,13 +121,7 @@ MasteringChainConfig make_hiphop() {
   cfg.saturation.exciter.enabled = true;
   cfg.saturation.exciter.config.amount = 0.10f;
 
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = -0.5f;
-
-  cfg.loudness.enabled = true;
-  cfg.loudness.target_lufs = -13.0f;
-  cfg.loudness.ceiling_db = -0.5f;
-  cfg.loudness.true_peak_oversample = 4;
+  enable_loudness(cfg, -13.0f, -0.5f);
 
   return cfg;
 }
@@ -163,13 +148,7 @@ MasteringChainConfig make_ai_music() {
   cfg.stereo.mono_maker.enabled = true;
   cfg.stereo.mono_maker.config.amount = 0.3f;
 
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
-
-  cfg.loudness.enabled = true;
-  cfg.loudness.target_lufs = -14.0f;
-  cfg.loudness.ceiling_db = -1.0f;
-  cfg.loudness.true_peak_oversample = 4;
+  enable_loudness(cfg, -14.0f, -1.0f);
 
   return cfg;
 }
@@ -192,13 +171,130 @@ MasteringChainConfig make_speech() {
   cfg.dynamics.compressor.config.attack_ms = 5.0f;
   cfg.dynamics.compressor.config.release_ms = 100.0f;
 
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+  enable_loudness(cfg, -16.0f, -1.0f);
 
-  cfg.loudness.enabled = true;
-  cfg.loudness.target_lufs = -16.0f;
-  cfg.loudness.ceiling_db = -1.0f;
-  cfg.loudness.true_peak_oversample = 4;
+  return cfg;
+}
+
+MasteringChainConfig make_streaming() {
+  auto cfg = make_pop();
+  enable_loudness(cfg, -14.0f, -1.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_youtube() {
+  auto cfg = make_pop();
+  cfg.dynamics.transient_shaper.config.attack_gain_db = 2.8f;
+  cfg.saturation.exciter.config.amount = 0.2f;
+  cfg.stereo.imager.config.width = 1.15f;
+  enable_loudness(cfg, -14.0f, -1.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_broadcast() {
+  MasteringChainConfig cfg;
+  cfg.eq.tilt.enabled = true;
+  cfg.eq.tilt.tilt_db = 0.2f;
+  cfg.dynamics.compressor.enabled = true;
+  cfg.dynamics.compressor.config.threshold_db = -24.0f;
+  cfg.dynamics.compressor.config.ratio = 1.4f;
+  cfg.dynamics.compressor.config.attack_ms = 25.0f;
+  cfg.dynamics.compressor.config.release_ms = 250.0f;
+  enable_loudness(cfg, -23.0f, -1.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_podcast() {
+  auto cfg = make_speech();
+  cfg.dynamics.compressor.config.threshold_db = -22.0f;
+  cfg.dynamics.compressor.config.ratio = 3.5f;
+  cfg.dynamics.deesser.enabled = true;
+  enable_loudness(cfg, -16.0f, -1.5f);
+  return cfg;
+}
+
+MasteringChainConfig make_audiobook() {
+  auto cfg = make_speech();
+  cfg.repair.declick.enabled = true;
+  cfg.dynamics.compressor.config.threshold_db = -24.0f;
+  cfg.dynamics.compressor.config.ratio = 2.2f;
+  cfg.eq.tilt.tilt_db = 0.5f;
+  enable_loudness(cfg, -18.0f, -3.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_cinema() {
+  MasteringChainConfig cfg;
+  cfg.eq.tilt.enabled = true;
+  cfg.eq.tilt.tilt_db = -0.2f;
+  cfg.dynamics.compressor.enabled = true;
+  cfg.dynamics.compressor.config.threshold_db = -28.0f;
+  cfg.dynamics.compressor.config.ratio = 1.25f;
+  cfg.dynamics.compressor.config.attack_ms = 30.0f;
+  cfg.dynamics.compressor.config.release_ms = 300.0f;
+  cfg.stereo.imager.enabled = true;
+  cfg.stereo.imager.config.width = 1.05f;
+  enable_loudness(cfg, -27.0f, -2.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_jpop() {
+  auto cfg = make_pop();
+  cfg.eq.tilt.tilt_db = 0.8f;
+  cfg.dynamics.compressor.config.threshold_db = -16.0f;
+  cfg.dynamics.compressor.config.ratio = 3.0f;
+  cfg.dynamics.transient_shaper.config.attack_gain_db = 2.4f;
+  cfg.saturation.exciter.config.amount = 0.22f;
+  cfg.stereo.imager.config.width = 1.2f;
+  enable_loudness(cfg, -9.0f, -0.5f);
+  return cfg;
+}
+
+MasteringChainConfig make_ambient() {
+  MasteringChainConfig cfg;
+  cfg.eq.tilt.enabled = true;
+  cfg.eq.tilt.tilt_db = 0.1f;
+  cfg.dynamics.compressor.enabled = true;
+  cfg.dynamics.compressor.config.threshold_db = -26.0f;
+  cfg.dynamics.compressor.config.ratio = 1.2f;
+  cfg.dynamics.compressor.config.attack_ms = 40.0f;
+  cfg.dynamics.compressor.config.release_ms = 400.0f;
+  cfg.spectral.air_band.enabled = true;
+  cfg.spectral.air_band.config.amount = 0.3f;
+  cfg.stereo.imager.enabled = true;
+  cfg.stereo.imager.config.width = 1.35f;
+  enable_loudness(cfg, -18.0f, -1.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_lofi() {
+  MasteringChainConfig cfg;
+  cfg.eq.tilt.enabled = true;
+  cfg.eq.tilt.tilt_db = -1.0f;
+  cfg.dynamics.compressor.enabled = true;
+  cfg.dynamics.compressor.config.threshold_db = -18.0f;
+  cfg.dynamics.compressor.config.ratio = 2.0f;
+  cfg.saturation.tape.enabled = true;
+  cfg.saturation.tape.config.drive_db = 4.0f;
+  cfg.saturation.tape.config.saturation = 0.35f;
+  cfg.stereo.imager.enabled = true;
+  cfg.stereo.imager.config.width = 0.95f;
+  enable_loudness(cfg, -11.0f, -1.0f);
+  return cfg;
+}
+
+MasteringChainConfig make_classical() {
+  MasteringChainConfig cfg;
+  cfg.eq.tilt.enabled = true;
+  cfg.eq.tilt.tilt_db = 0.0f;
+  cfg.dynamics.compressor.enabled = true;
+  cfg.dynamics.compressor.config.threshold_db = -30.0f;
+  cfg.dynamics.compressor.config.ratio = 1.15f;
+  cfg.dynamics.compressor.config.attack_ms = 50.0f;
+  cfg.dynamics.compressor.config.release_ms = 500.0f;
+  cfg.stereo.imager.enabled = true;
+  cfg.stereo.imager.config.width = 1.0f;
+  enable_loudness(cfg, -23.0f, -2.0f);
 
   return cfg;
 }
@@ -206,7 +302,9 @@ MasteringChainConfig make_speech() {
 }  // namespace
 
 std::vector<std::string> preset_names() {
-  return {"pop", "edm", "acoustic", "hipHop", "aiMusic", "speech"};
+  return {"pop",       "edm",     "acoustic",  "hipHop",   "aiMusic",   "speech",
+          "streaming", "youtube", "broadcast", "podcast",  "audiobook", "cinema",
+          "jpop",      "ambient", "lofi",      "classical"};
 }
 
 Preset preset_from_string(const std::string& name) {
@@ -216,6 +314,16 @@ Preset preset_from_string(const std::string& name) {
   if (name == "hipHop") return Preset::HipHop;
   if (name == "aiMusic") return Preset::AIMusic;
   if (name == "speech") return Preset::Speech;
+  if (name == "streaming") return Preset::Streaming;
+  if (name == "youtube") return Preset::YouTube;
+  if (name == "broadcast") return Preset::Broadcast;
+  if (name == "podcast") return Preset::Podcast;
+  if (name == "audiobook") return Preset::Audiobook;
+  if (name == "cinema") return Preset::Cinema;
+  if (name == "jpop") return Preset::JPop;
+  if (name == "ambient") return Preset::Ambient;
+  if (name == "lofi") return Preset::Lofi;
+  if (name == "classical") return Preset::Classical;
   throw std::invalid_argument("unknown mastering preset: " + name);
 }
 
@@ -233,6 +341,26 @@ const char* preset_to_string(Preset preset) noexcept {
       return "aiMusic";
     case Preset::Speech:
       return "speech";
+    case Preset::Streaming:
+      return "streaming";
+    case Preset::YouTube:
+      return "youtube";
+    case Preset::Broadcast:
+      return "broadcast";
+    case Preset::Podcast:
+      return "podcast";
+    case Preset::Audiobook:
+      return "audiobook";
+    case Preset::Cinema:
+      return "cinema";
+    case Preset::JPop:
+      return "jpop";
+    case Preset::Ambient:
+      return "ambient";
+    case Preset::Lofi:
+      return "lofi";
+    case Preset::Classical:
+      return "classical";
   }
   return "unknown";
 }
@@ -251,6 +379,26 @@ MasteringChainConfig preset_config(Preset preset) {
       return make_ai_music();
     case Preset::Speech:
       return make_speech();
+    case Preset::Streaming:
+      return make_streaming();
+    case Preset::YouTube:
+      return make_youtube();
+    case Preset::Broadcast:
+      return make_broadcast();
+    case Preset::Podcast:
+      return make_podcast();
+    case Preset::Audiobook:
+      return make_audiobook();
+    case Preset::Cinema:
+      return make_cinema();
+    case Preset::JPop:
+      return make_jpop();
+    case Preset::Ambient:
+      return make_ambient();
+    case Preset::Lofi:
+      return make_lofi();
+    case Preset::Classical:
+      return make_classical();
   }
   // Unreachable for well-formed Preset values; defensive default.
   return MasteringChainConfig{};

@@ -55,6 +55,22 @@ Biquad highpass(double frequency, double sample_rate, double q) {
           -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
 }
 
+std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
+  if (sample_rate == 48000) {
+    return {
+        {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241,
+         0.73248077421585},
+        {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621},
+    };
+  }
+
+  const double sr = static_cast<double>(sample_rate);
+  return {
+      high_shelf(1681.974450955533, sr, 3.999843853973347, 0.7071752369554196),
+      highpass(38.13547087613982, sr, 0.5003270373238773),
+  };
+}
+
 std::vector<float> apply_biquad_double(const float* input, size_t size, const Biquad& coeffs) {
   std::vector<float> output(size);
   double z1 = 0.0;
@@ -72,12 +88,34 @@ std::vector<float> apply_biquad_double(const float* input, size_t size, const Bi
 std::vector<float> k_weighted(const Audio& audio) {
   if (audio.empty()) return {};
 
-  const double sr = static_cast<double>(audio.sample_rate());
-  const Biquad pre = high_shelf(1681.974450955533, sr, 3.999843853973347, 0.7071752369554196);
-  const Biquad rlb = highpass(38.13547087613982, sr, 0.5003270373238773);
+  const auto [pre, rlb] = k_weighting_filters(audio.sample_rate());
 
   std::vector<float> filtered = apply_biquad_double(audio.data(), audio.size(), pre);
   return apply_biquad_double(filtered.data(), filtered.size(), rlb);
+}
+
+std::vector<float> k_weighted_channel(const float* interleaved, size_t frames, int channels,
+                                      int channel, int sample_rate) {
+  std::vector<float> mono(frames);
+  for (size_t frame = 0; frame < frames; ++frame) {
+    mono[frame] = interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
+  }
+
+  const auto [pre, rlb] = k_weighting_filters(sample_rate);
+
+  std::vector<float> filtered = apply_biquad_double(mono.data(), mono.size(), pre);
+  return apply_biquad_double(filtered.data(), filtered.size(), rlb);
+}
+
+double bs1770_channel_weight(int channel, int channels) {
+  // LFE is excluded. For common 5.1 WAV order, channel 3 is LFE.
+  if (channels == 6 && channel == 3) return 0.0;
+  // Surround channels are weighted +1.5 dB in BS.1770.
+  if ((channels == 5 && (channel == 3 || channel == 4)) ||
+      (channels == 6 && (channel == 4 || channel == 5))) {
+    return 1.4125375446227544;
+  }
+  return 1.0;
 }
 
 double mean_square(const float* data, size_t start, size_t length) {
@@ -105,6 +143,42 @@ std::vector<double> block_energies(const std::vector<float>& samples, int sample
     const size_t length = std::min(clamped_block, available);
     energies.push_back(mean_square(samples.data(), start, length));
     if (start + length == samples.size()) break;
+  }
+  return energies;
+}
+
+std::vector<double> block_energies_interleaved(const float* interleaved, size_t frames,
+                                               int channels, int sample_rate, float duration_sec,
+                                               float overlap) {
+  if (interleaved == nullptr || frames == 0) return {};
+
+  std::vector<std::vector<float>> weighted_channels;
+  weighted_channels.reserve(static_cast<size_t>(channels));
+  for (int channel = 0; channel < channels; ++channel) {
+    weighted_channels.push_back(
+        k_weighted_channel(interleaved, frames, channels, channel, sample_rate));
+  }
+
+  const size_t block_size =
+      std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
+  const size_t clamped_block = std::min(block_size, frames);
+  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.95f);
+  const size_t hop = std::max<size_t>(
+      1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
+
+  std::vector<double> energies;
+  for (size_t start = 0; start < frames; start += hop) {
+    const size_t available = frames - start;
+    const size_t length = std::min(clamped_block, available);
+
+    double energy = 0.0;
+    for (int channel = 0; channel < channels; ++channel) {
+      energy += bs1770_channel_weight(channel, channels) *
+                mean_square(weighted_channels[static_cast<size_t>(channel)].data(), start, length);
+    }
+    energies.push_back(energy);
+
+    if (start + length == frames) break;
   }
   return energies;
 }
@@ -176,13 +250,23 @@ void validate_config(const LufsConfig& config) {
 }  // namespace
 
 LufsResult lufs(const Audio& audio, const LufsConfig& config) {
-  validate_config(config);
+  return lufs_interleaved(audio.data(), audio.size(), 1, audio.sample_rate(), config);
+}
 
-  const std::vector<float> weighted = k_weighted(audio);
-  const std::vector<double> integrated_blocks = block_energies(
-      weighted, audio.sample_rate(), config.block_duration_sec, config.block_overlap);
-  const std::vector<float> momentary = momentary_lufs(audio, config);
-  const std::vector<float> short_term = short_term_lufs(audio, config);
+LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
+                            const LufsConfig& config) {
+  validate_config(config);
+  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
+
+  const std::vector<double> integrated_blocks = block_energies_interleaved(
+      samples, frames, channels, sample_rate, config.block_duration_sec, config.block_overlap);
+  const std::vector<float> momentary = energies_to_lufs(block_energies_interleaved(
+      samples, frames, channels, sample_rate, config.momentary_duration_sec, config.block_overlap));
+  const std::vector<float> short_term = energies_to_lufs(
+      block_energies_interleaved(samples, frames, channels, sample_rate,
+                                 config.short_term_duration_sec, config.block_overlap));
 
   LufsResult result;
   result.integrated_lufs = gated_integrated_lufs(integrated_blocks, config);
@@ -196,16 +280,16 @@ std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) 
   validate_config(config);
 
   const std::vector<float> weighted = k_weighted(audio);
-  return energies_to_lufs(
-      block_energies(weighted, audio.sample_rate(), config.momentary_duration_sec, 0.0f));
+  return energies_to_lufs(block_energies(weighted, audio.sample_rate(),
+                                         config.momentary_duration_sec, config.block_overlap));
 }
 
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config) {
   validate_config(config);
 
   const std::vector<float> weighted = k_weighted(audio);
-  return energies_to_lufs(
-      block_energies(weighted, audio.sample_rate(), config.short_term_duration_sec, 0.0f));
+  return energies_to_lufs(block_energies(weighted, audio.sample_rate(),
+                                         config.short_term_duration_sec, config.block_overlap));
 }
 
 }  // namespace sonare::analysis::meter

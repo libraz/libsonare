@@ -79,6 +79,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -858,6 +859,9 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     config.output_gain_db = f(map, "outputGainDb", config.output_gain_db);
     config.decorrelation_amount = f(map, "decorrelationAmount", config.decorrelation_amount);
     config.preserve_energy = b(map, "preserveEnergy", config.preserve_energy);
+    SONARE_CHECK_RANGE("stereo.imager.width", config.width, 0.0f, 2.0f);
+    SONARE_CHECK_RANGE("stereo.imager.decorrelationAmount", config.decorrelation_amount, 0.0f,
+                       1.0f);
     stereo::Imager p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "stereo.monoMaker") {
