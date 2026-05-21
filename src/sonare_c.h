@@ -39,7 +39,25 @@ typedef enum {
 } SonarePitchClass;
 
 // Mode enum
-typedef enum { SONARE_MODE_MAJOR = 0, SONARE_MODE_MINOR = 1 } SonareMode;
+typedef enum {
+  SONARE_MODE_MAJOR = 0,
+  SONARE_MODE_MINOR = 1,
+  SONARE_MODE_DORIAN = 2,
+  SONARE_MODE_PHRYGIAN = 3,
+  SONARE_MODE_LYDIAN = 4,
+  SONARE_MODE_MIXOLYDIAN = 5,
+  SONARE_MODE_LOCRIAN = 6
+} SonareMode;
+
+typedef enum {
+  SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER = 0,
+  SONARE_KEY_PROFILE_TEMPERLEY = 1,
+  SONARE_KEY_PROFILE_SHAATH = 2,
+  SONARE_KEY_PROFILE_FARALDO_EDMT = 3,
+  SONARE_KEY_PROFILE_FARALDO_EDMA = 4,
+  SONARE_KEY_PROFILE_FARALDO_EDMM = 5,
+  SONARE_KEY_PROFILE_BELLMAN_BUDGE = 6
+} SonareKeyProfileType;
 
 // Opaque types
 typedef struct SonareAudio SonareAudio;
@@ -51,6 +69,11 @@ typedef struct {
   SonareMode mode;
   float confidence;
 } SonareKey;
+
+typedef struct {
+  SonareKey key;
+  float correlation;
+} SonareKeyCandidate;
 
 // Time signature structure
 typedef struct {
@@ -85,7 +108,14 @@ typedef enum {
   SONARE_CHORD_MINOR7 = 6,
   SONARE_CHORD_SUS2 = 7,
   SONARE_CHORD_SUS4 = 8,
-  SONARE_CHORD_UNKNOWN = 9
+  SONARE_CHORD_UNKNOWN = 9,
+  SONARE_CHORD_ADD9 = 10,
+  SONARE_CHORD_MINOR_ADD9 = 11,
+  SONARE_CHORD_DIM7 = 12,
+  SONARE_CHORD_HALF_DIM7 = 13,
+  SONARE_CHORD_MAJOR9 = 14,
+  SONARE_CHORD_DOMINANT9 = 15,
+  SONARE_CHORD_SUS2_ADD4 = 16
 } SonareChordQuality;
 
 // Audio functions
@@ -106,6 +136,8 @@ SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
 SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
                                       size_t* out_count);
+SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_times,
+                                          size_t* out_count);
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count);
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
@@ -114,8 +146,36 @@ SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult*
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate, float* out_bpm);
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key);
+SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
+                                           int n_fft, int hop_length, int use_hpss,
+                                           int loudness_weighted, float high_pass_hz,
+                                           SonareKey* out_key);
+SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_t length,
+                                                     int sample_rate, int n_fft, int hop_length,
+                                                     int use_hpss, int loudness_weighted,
+                                                     float high_pass_hz, const SonareMode* modes,
+                                                     size_t mode_count, SonareKey* out_key);
+SonareError sonare_detect_key_with_extended_options(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key);
+SonareError sonare_detect_key_candidates(const float* samples, size_t length, int sample_rate,
+                                         int n_fft, int hop_length, int use_hpss,
+                                         int loudness_weighted, float high_pass_hz,
+                                         SonareKeyCandidate** out_candidates, size_t* out_count);
+SonareError sonare_detect_key_candidates_with_modes(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyCandidate** out_candidates, size_t* out_count);
+SonareError sonare_detect_key_candidates_with_extended_options(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
+    size_t* out_count);
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate,
                                 float** out_times, size_t* out_count);
+SonareError sonare_detect_downbeats(const float* samples, size_t length, int sample_rate,
+                                    float** out_times, size_t* out_count);
 SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
                                  float** out_times, size_t* out_count);
 
@@ -127,6 +187,7 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
 void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);
 void sonare_free_string(char* ptr);
+void sonare_free_key_candidates(SonareKeyCandidate* ptr);
 void sonare_free_result(SonareAnalysisResult* result);
 
 // Error handling
@@ -215,6 +276,21 @@ typedef struct {
 } SonareBpmCandidate;
 
 typedef struct {
+  float rt60;
+  float edt;
+  float c50;
+  float c80;
+  float d50;
+  float* rt60_bands;
+  float* edt_bands;
+  float* c50_bands;
+  float* c80_bands;
+  size_t band_count;
+  float confidence;
+  int is_blind;
+} SonareAcousticResult;
+
+typedef struct {
   float bpm;
   float confidence;
   SonareBpmCandidate* candidates;
@@ -268,12 +344,30 @@ typedef struct {
   float start;
   float end;
   float confidence;
+  SonarePitchClass bass;
 } SonareChord;
 
 typedef struct {
   SonareChord* chords;
   size_t chord_count;
 } SonareChordAnalysisResult;
+
+typedef struct {
+  float min_duration;
+  float smoothing_window;
+  float threshold;
+  int use_triads_only;
+  int n_fft;
+  int hop_length;
+  int use_beat_sync;
+  int use_hmm;
+  int hmm_beam_width;
+  int use_key_context;
+  SonarePitchClass key_root;
+  SonareMode key_mode;
+  int detect_inversions;
+  int chroma_method;  // 0 = STFT, 1 = NNLS
+} SonareChordDetectionOptions;
 
 // ============================================================================
 // Mastering
@@ -510,6 +604,12 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out);
+SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
+                                            int n_octave_bands, SonareAcousticResult* out);
+SonareError sonare_detect_acoustic(const float* samples, size_t length, int sample_rate,
+                                   int n_octave_bands, int n_third_octave_subbands,
+                                   float min_decay_db, float noise_floor_margin_db,
+                                   SonareAcousticResult* out);
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out);
@@ -523,7 +623,11 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
                                  float min_duration, float smoothing_window, float threshold,
                                  int use_triads_only, int n_fft, int hop_length, int use_beat_sync,
                                  SonareChordAnalysisResult* out);
+SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
+                                    const SonareChordDetectionOptions* options,
+                                    SonareChordAnalysisResult* out);
 void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* result);
+void sonare_free_acoustic_result(SonareAcousticResult* result);
 void sonare_free_rhythm_result(SonareRhythmResult* result);
 void sonare_free_dynamics_result(SonareDynamicsResult* result);
 void sonare_free_timbre_result(SonareTimbreResult* result);
@@ -643,6 +747,9 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
 SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                              int hop_length, int win_length, int center, int norm, float** out,
                              size_t* out_length, int* out_n_frames);
+SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
+                                    int hop_length, int win_length, float bpm_min, int n_bins,
+                                    float** out, size_t* out_length, int* out_n_frames);
 SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
                        float tempo_min, float tempo_max, int win_length, float** out,
                        size_t* out_length);

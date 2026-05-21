@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/acoustic_analyzer.h"
 #include "analysis/beat_analyzer.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/chord_analyzer.h"
@@ -136,6 +137,44 @@ bool boolProperty(val object, const char* key, bool default_value) {
   return value.isUndefined() ? default_value : value.as<bool>();
 }
 
+std::vector<Mode> modesFromVal(val modes) {
+  std::vector<Mode> out;
+  if (modes.isUndefined() || modes.isNull()) {
+    return out;
+  }
+  const int length = modes["length"].as<int>();
+  out.reserve(static_cast<size_t>(length));
+  for (int i = 0; i < length; ++i) {
+    const int mode = modes[i].as<int>();
+    if (mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
+      throw std::invalid_argument("invalid key mode");
+    }
+    out.push_back(static_cast<Mode>(mode));
+  }
+  return out;
+}
+
+KeyProfileType keyProfileFromInt(int profile_type) {
+  switch (profile_type) {
+    case 0:
+      return KeyProfileType::KrumhanslSchmuckler;
+    case 1:
+      return KeyProfileType::Temperley;
+    case 2:
+      return KeyProfileType::Shaath;
+    case 3:
+      return KeyProfileType::FaraldoEDMT;
+    case 4:
+      return KeyProfileType::FaraldoEDMA;
+    case 5:
+      return KeyProfileType::FaraldoEDMM;
+    case 6:
+      return KeyProfileType::BellmanBudge;
+    default:
+      return KeyProfileType::KrumhanslSchmuckler;
+  }
+}
+
 void processMono(mastering::common::ProcessorBase& processor, std::vector<float>& samples,
                  int sample_rate) {
   if (samples.empty()) {
@@ -183,6 +222,26 @@ void applyGainDb(std::vector<float>& left, std::vector<float>& right, float gain
   }
 }
 
+val chordToVal(const Chord& chord_result) {
+  val chord = val::object();
+  chord.set("root", static_cast<int>(chord_result.root));
+  chord.set("bass", static_cast<int>(chord_result.bass));
+  chord.set("quality", static_cast<int>(chord_result.quality));
+  chord.set("start", chord_result.start);
+  chord.set("end", chord_result.end);
+  chord.set("confidence", chord_result.confidence);
+  chord.set("name", chord_result.to_string());
+  return chord;
+}
+
+val chordsToVal(const std::vector<Chord>& chord_results) {
+  val chords = val::array();
+  for (size_t i = 0; i < chord_results.size(); ++i) {
+    chords.call<void>("push", chordToVal(chord_results[i]));
+  }
+  return chords;
+}
+
 /// @brief Converts AnalysisResult to JavaScript object.
 /// @param result Analysis result
 /// @return JavaScript object with all analysis data
@@ -220,18 +279,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   out.set("beats", beats);
 
   // Chords
-  val chords = val::array();
-  for (size_t i = 0; i < result.chords.size(); ++i) {
-    val chord = val::object();
-    chord.set("root", static_cast<int>(result.chords[i].root));
-    chord.set("quality", static_cast<int>(result.chords[i].quality));
-    chord.set("start", result.chords[i].start);
-    chord.set("end", result.chords[i].end);
-    chord.set("confidence", result.chords[i].confidence);
-    chord.set("name", result.chords[i].to_string());
-    chords.call<void>("push", chord);
-  }
-  out.set("chords", chords);
+  out.set("chords", chordsToVal(result.chords));
 
   // Sections
   val sections = val::array();
@@ -299,6 +347,69 @@ val js_detect_key(val samples, int sample_rate) {
   return result;
 }
 
+val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_length,
+                               bool use_hpss, bool loudness_weighted, float high_pass_hz, val modes,
+                               int profile_type, std::string genre_hint) {
+  std::vector<float> data = vecFromJSArray<float>(samples);
+  KeyConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_hpss = use_hpss;
+  config.loudness_weighted = loudness_weighted;
+  config.high_pass_hz = high_pass_hz;
+  config.modes = modesFromVal(modes);
+  if (profile_type >= 0) {
+    config.profile_type = keyProfileFromInt(profile_type);
+  }
+  if (!genre_hint.empty()) {
+    config.genre_hint = genre_hint;
+  }
+  Key key = quick::detect_key(data.data(), data.size(), sample_rate, config);
+
+  val result = val::object();
+  result.set("root", static_cast<int>(key.root));
+  result.set("mode", static_cast<int>(key.mode));
+  result.set("confidence", key.confidence);
+  result.set("name", key.to_string());
+  result.set("shortName", key.to_short_string());
+  return result;
+}
+
+val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_length, bool use_hpss,
+                             bool loudness_weighted, float high_pass_hz, val modes,
+                             int profile_type, std::string genre_hint) {
+  std::vector<float> data = vecFromJSArray<float>(samples);
+  KeyConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_hpss = use_hpss;
+  config.loudness_weighted = loudness_weighted;
+  config.high_pass_hz = high_pass_hz;
+  config.modes = modesFromVal(modes);
+  if (profile_type >= 0) {
+    config.profile_type = keyProfileFromInt(profile_type);
+  }
+  if (!genre_hint.empty()) {
+    config.genre_hint = genre_hint;
+  }
+  const auto candidates =
+      quick::detect_key_candidates(data.data(), data.size(), sample_rate, config);
+  val out = val::array();
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    val candidate = val::object();
+    val key = val::object();
+    key.set("root", static_cast<int>(candidates[i].key.root));
+    key.set("mode", static_cast<int>(candidates[i].key.mode));
+    key.set("confidence", candidates[i].key.confidence);
+    key.set("name", candidates[i].key.to_string());
+    key.set("shortName", candidates[i].key.to_short_string());
+    candidate.set("key", key);
+    candidate.set("correlation", candidates[i].correlation);
+    out.call<void>("push", candidate);
+  }
+  return out;
+}
+
 val js_detect_onsets(val samples, int sample_rate) {
   std::vector<float> data = vecFromJSArray<float>(samples);
   std::vector<float> onsets = quick::detect_onsets(data.data(), data.size(), sample_rate);
@@ -311,10 +422,82 @@ val js_detect_beats(val samples, int sample_rate) {
   return vectorToFloat32Array(beats);
 }
 
+val js_detect_downbeats(val samples, int sample_rate) {
+  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> downbeats = quick::detect_downbeats(data.data(), data.size(), sample_rate);
+  return vectorToFloat32Array(downbeats);
+}
+
+val js_detect_chords(val samples, int sample_rate, float min_duration, float smoothing_window,
+                     float threshold, bool use_triads_only, int n_fft, int hop_length,
+                     bool use_beat_sync, bool use_hmm, int hmm_beam_width, bool use_key_context,
+                     int key_root, int key_mode, bool detect_inversions, int chroma_method) {
+  std::vector<float> data = vecFromJSArray<float>(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  ChordConfig config;
+  config.min_duration = min_duration;
+  config.smoothing_window = smoothing_window;
+  config.threshold = threshold;
+  config.use_triads_only = use_triads_only;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_beat_sync = use_beat_sync;
+  config.use_hmm = use_hmm;
+  config.hmm_beam_width = hmm_beam_width;
+  config.use_key_context = use_key_context;
+  config.key_root = static_cast<PitchClass>(key_root);
+  config.key_mode = static_cast<Mode>(key_mode);
+  config.detect_inversions = detect_inversions;
+  config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+
+  val result = val::object();
+  result.set("chords", chordsToVal(detect_chords(audio, config)));
+  return result;
+}
+
 val js_analyze(val samples, int sample_rate) {
   std::vector<float> data = vecFromJSArray<float>(samples);
   AnalysisResult result = quick::analyze(data.data(), data.size(), sample_rate);
   return analysisResultToVal(result);
+}
+
+val acousticParametersToVal(const AcousticParameters& params) {
+  val out = val::object();
+  out.set("rt60", params.rt60);
+  out.set("edt", params.edt);
+  out.set("c50", params.c50);
+  out.set("c80", params.c80);
+  out.set("d50", params.d50);
+  out.set("rt60Bands", vectorToFloat32Array(params.rt60_bands));
+  out.set("edtBands", vectorToFloat32Array(params.edt_bands));
+  out.set("c50Bands", vectorToFloat32Array(params.c50_bands));
+  out.set("c80Bands", vectorToFloat32Array(params.c80_bands));
+  out.set("confidence", params.confidence);
+  out.set("isBlind", params.is_blind);
+  return out;
+}
+
+val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
+  std::vector<float> data = vecFromJSArray<float>(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  AcousticConfig config;
+  config.n_octave_bands = n_octave_bands;
+  return acousticParametersToVal(analyze_impulse_response(audio, config));
+}
+
+val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
+                       int n_third_octave_subbands, float min_decay_db,
+                       float noise_floor_margin_db) {
+  std::vector<float> data = vecFromJSArray<float>(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = n_octave_bands;
+  config.n_third_octave_subbands = n_third_octave_subbands;
+  config.min_decay_db = min_decay_db;
+  config.noise_floor_margin_db = noise_floor_margin_db;
+  return acousticParametersToVal(detect_acoustic(audio, config));
 }
 
 // Analyze with progress callback
@@ -1409,6 +1592,22 @@ val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_le
   return out;
 }
 
+val js_cyclic_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length,
+                        float bpm_min, int n_bins) {
+  std::vector<float> data = float32ArrayToVector(onset_envelope);
+  TempogramConfig config;
+  config.hop_length = hop_length;
+  config.win_length = win_length;
+  config.center = true;
+  config.norm = false;
+  auto result = cyclic_tempogram(data, sample_rate, config, bpm_min, n_bins);
+  val out = val::object();
+  out.set("nFrames", static_cast<int>(data.size()));
+  out.set("nBins", n_bins);
+  out.set("data", vectorToFloat32Array(result));
+  return out;
+}
+
 val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min, float tempo_max,
            int win_length) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
@@ -1674,7 +1873,14 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("As", PitchClass::As)
       .value("B", PitchClass::B);
 
-  enum_<Mode>("Mode").value("Major", Mode::Major).value("Minor", Mode::Minor);
+  enum_<Mode>("Mode")
+      .value("Major", Mode::Major)
+      .value("Minor", Mode::Minor)
+      .value("Dorian", Mode::Dorian)
+      .value("Phrygian", Mode::Phrygian)
+      .value("Lydian", Mode::Lydian)
+      .value("Mixolydian", Mode::Mixolydian)
+      .value("Locrian", Mode::Locrian);
 
   enum_<ChordQuality>("ChordQuality")
       .value("Major", ChordQuality::Major)
@@ -1685,7 +1891,15 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("Major7", ChordQuality::Major7)
       .value("Minor7", ChordQuality::Minor7)
       .value("Sus2", ChordQuality::Sus2)
-      .value("Sus4", ChordQuality::Sus4);
+      .value("Sus4", ChordQuality::Sus4)
+      .value("Unknown", ChordQuality::Unknown)
+      .value("Add9", ChordQuality::Add9)
+      .value("MinorAdd9", ChordQuality::MinorAdd9)
+      .value("Dim7", ChordQuality::Dim7)
+      .value("HalfDim7", ChordQuality::HalfDim7)
+      .value("Major9", ChordQuality::Major9)
+      .value("Dominant9", ChordQuality::Dominant9)
+      .value("Sus2Add4", ChordQuality::Sus2Add4);
 
   enum_<SectionType>("SectionType")
       .value("Intro", SectionType::Intro)
@@ -1699,9 +1913,15 @@ EMSCRIPTEN_BINDINGS(sonare) {
   // Quick API (high-level)
   function("detectBpm", &js_detect_bpm);
   function("detectKey", &js_detect_key);
+  function("_detectKeyWithOptions", &js_detect_key_with_options);
+  function("_detectKeyCandidates", &js_detect_key_candidates);
   function("detectOnsets", &js_detect_onsets);
   function("detectBeats", &js_detect_beats);
+  function("detectDownbeats", &js_detect_downbeats);
+  function("detectChords", &js_detect_chords);
   function("analyze", &js_analyze);
+  function("analyzeImpulseResponse", &js_analyze_impulse_response);
+  function("detectAcoustic", &js_detect_acoustic);
   function("analyzeWithProgress", &js_analyze_with_progress);
   function("version", &js_version);
 
@@ -1782,6 +2002,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("pcen", &js_pcen);
   function("tonnetz", &js_tonnetz);
   function("tempogram", &js_tempogram);
+  function("cyclicTempogram", &js_cyclic_tempogram);
   function("plp", &js_plp);
 
   // Core - Resample

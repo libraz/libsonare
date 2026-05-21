@@ -5,8 +5,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
+#include <memory>
 #include <string>
 
+#include "analysis/acoustic_analyzer.h"
 #include "analysis/beat_analyzer.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/chord_analyzer.h"
@@ -18,7 +21,6 @@
 #include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
 #include "core/convert.h"
-#include "core/resample.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
@@ -34,6 +36,126 @@
 
 using namespace sonare;
 using namespace sonare_c_detail;
+
+namespace {
+
+float* copy_float_vector_or_nan(const std::vector<float>& values, size_t count) {
+  if (count == 0) {
+    return nullptr;
+  }
+  float* out = new float[count];
+  for (size_t i = 0; i < count; ++i) {
+    out[i] = i < values.size() ? values[i] : std::numeric_limits<float>::quiet_NaN();
+  }
+  return out;
+}
+
+void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out) {
+  out->rt60 = params.rt60;
+  out->edt = params.edt;
+  out->c50 = params.c50;
+  out->c80 = params.c80;
+  out->d50 = params.d50;
+  out->band_count = params.rt60_bands.size();
+  out->rt60_bands = copy_float_vector_or_nan(params.rt60_bands, out->band_count);
+  out->edt_bands = copy_float_vector_or_nan(params.edt_bands, out->band_count);
+  // Clarity bands are not computed in blind mode; expose null (rather than a
+  // NaN-filled array) so callers can distinguish "not computed" from "invalid".
+  out->c50_bands = params.c50_bands.empty()
+                       ? nullptr
+                       : copy_float_vector_or_nan(params.c50_bands, out->band_count);
+  out->c80_bands = params.c80_bands.empty()
+                       ? nullptr
+                       : copy_float_vector_or_nan(params.c80_bands, out->band_count);
+  out->confidence = params.confidence;
+  out->is_blind = params.is_blind ? 1 : 0;
+}
+
+PitchClass from_c_pitch_class(SonarePitchClass pitch) {
+  const int value = static_cast<int>(pitch);
+  if (value < static_cast<int>(PitchClass::C) || value > static_cast<int>(PitchClass::B)) {
+    return PitchClass::C;
+  }
+  return static_cast<PitchClass>(value);
+}
+
+Mode from_c_mode(SonareMode mode) {
+  const int value = static_cast<int>(mode);
+  if (value < static_cast<int>(Mode::Major) || value > static_cast<int>(Mode::Locrian)) {
+    return Mode::Major;
+  }
+  return static_cast<Mode>(value);
+}
+
+bool fill_key_profile(SonareKeyProfileType profile_type, KeyConfig* config) {
+  if (config == nullptr) {
+    return false;
+  }
+  switch (profile_type) {
+    case SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER:
+      config->profile_type = KeyProfileType::KrumhanslSchmuckler;
+      return true;
+    case SONARE_KEY_PROFILE_TEMPERLEY:
+      config->profile_type = KeyProfileType::Temperley;
+      return true;
+    case SONARE_KEY_PROFILE_SHAATH:
+      config->profile_type = KeyProfileType::Shaath;
+      return true;
+    case SONARE_KEY_PROFILE_FARALDO_EDMT:
+      config->profile_type = KeyProfileType::FaraldoEDMT;
+      return true;
+    case SONARE_KEY_PROFILE_FARALDO_EDMA:
+      config->profile_type = KeyProfileType::FaraldoEDMA;
+      return true;
+    case SONARE_KEY_PROFILE_FARALDO_EDMM:
+      config->profile_type = KeyProfileType::FaraldoEDMM;
+      return true;
+    case SONARE_KEY_PROFILE_BELLMAN_BUDGE:
+      config->profile_type = KeyProfileType::BellmanBudge;
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool fill_key_modes(const SonareMode* modes, size_t mode_count, KeyConfig* config) {
+  if (mode_count == 0) {
+    return true;
+  }
+  if (modes == nullptr || config == nullptr) {
+    return false;
+  }
+  config->modes.clear();
+  config->modes.reserve(mode_count);
+  for (size_t i = 0; i < mode_count; ++i) {
+    const int value = static_cast<int>(modes[i]);
+    if (value < static_cast<int>(Mode::Major) || value > static_cast<int>(Mode::Locrian)) {
+      return false;
+    }
+    config->modes.push_back(static_cast<Mode>(value));
+  }
+  return true;
+}
+
+void fill_chord_result(const std::vector<Chord>& chords, SonareChordAnalysisResult* out) {
+  out->chord_count = chords.size();
+  if (chords.empty()) {
+    return;
+  }
+
+  std::unique_ptr<SonareChord[]> data(new SonareChord[chords.size()]);
+  for (size_t i = 0; i < chords.size(); ++i) {
+    data[i].root = static_cast<SonarePitchClass>(chords[i].root);
+    data[i].quality = to_c_chord_quality(chords[i].quality);
+    data[i].start = chords[i].start;
+    data[i].end = chords[i].end;
+    data[i].confidence = chords[i].confidence;
+    data[i].bass = static_cast<SonarePitchClass>(chords[i].bass);
+  }
+  out->chords = release_array(data);
+}
+
+}  // namespace
 
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out) {
@@ -143,6 +265,26 @@ SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_time
   SONARE_C_CATCH
 }
 
+SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_times,
+                                          size_t* out_count) {
+  if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  std::vector<float> downbeats =
+      quick::detect_downbeats(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  *out_count = downbeats.size();
+  if (downbeats.empty()) {
+    *out_times = nullptr;
+  } else {
+    *out_times = new float[downbeats.size()];
+    std::memcpy(*out_times, downbeats.data(), downbeats.size() * sizeof(float));
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count) {
   if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
@@ -222,6 +364,128 @@ SonareError sonare_detect_key(const float* samples, size_t length, int sample_ra
   SONARE_C_CATCH
 }
 
+SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
+                                           int n_fft, int hop_length, int use_hpss,
+                                           int loudness_weighted, float high_pass_hz,
+                                           SonareKey* out_key) {
+  return sonare_detect_key_with_options_and_modes(samples, length, sample_rate, n_fft, hop_length,
+                                                  use_hpss, loudness_weighted, high_pass_hz,
+                                                  nullptr, 0, out_key);
+}
+
+SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_t length,
+                                                     int sample_rate, int n_fft, int hop_length,
+                                                     int use_hpss, int loudness_weighted,
+                                                     float high_pass_hz, const SonareMode* modes,
+                                                     size_t mode_count, SonareKey* out_key) {
+  return sonare_detect_key_with_extended_options(
+      samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
+      modes, mode_count, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, out_key);
+}
+
+SonareError sonare_detect_key_with_extended_options(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key) {
+  if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (n_fft <= 0 || hop_length <= 0 || high_pass_hz < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  KeyConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_hpss = use_hpss != 0;
+  config.loudness_weighted = loudness_weighted != 0;
+  config.high_pass_hz = high_pass_hz;
+  if (!fill_key_modes(modes, mode_count, &config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!fill_key_profile(profile_type, &config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (genre_hint != nullptr && genre_hint[0] != '\0') {
+    config.genre_hint = genre_hint;
+  }
+  Key key = quick::detect_key(samples, length, sample_rate, config);
+  out_key->root = static_cast<SonarePitchClass>(key.root);
+  out_key->mode = static_cast<SonareMode>(key.mode);
+  out_key->confidence = key.confidence;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_detect_key_candidates(const float* samples, size_t length, int sample_rate,
+                                         int n_fft, int hop_length, int use_hpss,
+                                         int loudness_weighted, float high_pass_hz,
+                                         SonareKeyCandidate** out_candidates, size_t* out_count) {
+  return sonare_detect_key_candidates_with_modes(samples, length, sample_rate, n_fft, hop_length,
+                                                 use_hpss, loudness_weighted, high_pass_hz, nullptr,
+                                                 0, out_candidates, out_count);
+}
+
+SonareError sonare_detect_key_candidates_with_modes(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyCandidate** out_candidates, size_t* out_count) {
+  return sonare_detect_key_candidates_with_extended_options(
+      samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
+      modes, mode_count, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, out_candidates,
+      out_count);
+}
+
+SonareError sonare_detect_key_candidates_with_extended_options(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
+    size_t* out_count) {
+  if (out_candidates == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_candidates = nullptr;
+  *out_count = 0;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (n_fft <= 0 || hop_length <= 0 || high_pass_hz < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  KeyConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_hpss = use_hpss != 0;
+  config.loudness_weighted = loudness_weighted != 0;
+  config.high_pass_hz = high_pass_hz;
+  if (!fill_key_modes(modes, mode_count, &config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!fill_key_profile(profile_type, &config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (genre_hint != nullptr && genre_hint[0] != '\0') {
+    config.genre_hint = genre_hint;
+  }
+
+  const auto candidates = quick::detect_key_candidates(samples, length, sample_rate, config);
+  *out_count = candidates.size();
+  if (candidates.empty()) {
+    return SONARE_OK;
+  }
+
+  auto* out = new SonareKeyCandidate[candidates.size()];
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    out[i].key.root = static_cast<SonarePitchClass>(candidates[i].key.root);
+    out[i].key.mode = static_cast<SonareMode>(candidates[i].key.mode);
+    out[i].key.confidence = candidates[i].key.confidence;
+    out[i].correlation = candidates[i].correlation;
+  }
+  *out_candidates = out;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate,
                                 float** out_times, size_t* out_count) {
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
@@ -236,6 +500,25 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
   } else {
     *out_times = new float[beats.size()];
     std::memcpy(*out_times, beats.data(), beats.size() * sizeof(float));
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_detect_downbeats(const float* samples, size_t length, int sample_rate,
+                                    float** out_times, size_t* out_count) {
+  if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  std::vector<float> downbeats = quick::detect_downbeats(samples, length, sample_rate);
+  *out_count = downbeats.size();
+  if (downbeats.empty()) {
+    *out_times = nullptr;
+  } else {
+    *out_times = new float[downbeats.size()];
+    std::memcpy(*out_times, downbeats.data(), downbeats.size() * sizeof(float));
   }
   return SONARE_OK;
   SONARE_C_CATCH
@@ -354,6 +637,59 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
     std::memcpy(data.get(), tempogram.data(), tempogram.size() * sizeof(float));
     out->tempogram = release_array(data);
   }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
+                                            int n_octave_bands, SonareAcousticResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (n_octave_bands < 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  out->rt60_bands = nullptr;
+  out->edt_bands = nullptr;
+  out->c50_bands = nullptr;
+  out->c80_bands = nullptr;
+  out->band_count = 0;
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  AcousticConfig config;
+  config.n_octave_bands = n_octave_bands;
+  fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_detect_acoustic(const float* samples, size_t length, int sample_rate,
+                                   int n_octave_bands, int n_third_octave_subbands,
+                                   float min_decay_db, float noise_floor_margin_db,
+                                   SonareAcousticResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
+      noise_floor_margin_db < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  out->rt60_bands = nullptr;
+  out->edt_bands = nullptr;
+  out->c50_bands = nullptr;
+  out->c80_bands = nullptr;
+  out->band_count = 0;
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = n_octave_bands;
+  config.n_third_octave_subbands = n_third_octave_subbands;
+  config.min_decay_db = min_decay_db;
+  config.noise_floor_margin_db = noise_floor_margin_db;
+  fill_acoustic_result(sonare::detect_acoustic(audio, config), out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -535,18 +871,46 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   config.use_beat_sync = use_beat_sync != 0;
 
   std::vector<Chord> chords = detect_chords(audio, config);
-  out->chord_count = chords.size();
-  if (!chords.empty()) {
-    std::unique_ptr<SonareChord[]> data(new SonareChord[chords.size()]);
-    for (size_t i = 0; i < chords.size(); ++i) {
-      data[i].root = static_cast<SonarePitchClass>(chords[i].root);
-      data[i].quality = to_c_chord_quality(chords[i].quality);
-      data[i].start = chords[i].start;
-      data[i].end = chords[i].end;
-      data[i].confidence = chords[i].confidence;
-    }
-    out->chords = release_array(data);
+  fill_chord_result(chords, out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
+                                    const SonareChordDetectionOptions* options,
+                                    SonareChordAnalysisResult* out) {
+  if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (options->min_duration < 0.0f || options->smoothing_window <= 0.0f ||
+      options->threshold < 0.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
+      options->hmm_beam_width < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+
+  out->chords = nullptr;
+  out->chord_count = 0;
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  ChordConfig config;
+  config.min_duration = options->min_duration;
+  config.smoothing_window = options->smoothing_window;
+  config.threshold = options->threshold;
+  config.use_triads_only = options->use_triads_only != 0;
+  config.n_fft = options->n_fft;
+  config.hop_length = options->hop_length;
+  config.use_beat_sync = options->use_beat_sync != 0;
+  config.use_hmm = options->use_hmm != 0;
+  config.hmm_beam_width = options->hmm_beam_width;
+  config.use_key_context = options->use_key_context != 0;
+  config.key_root = from_c_pitch_class(options->key_root);
+  config.key_mode = from_c_mode(options->key_mode);
+  config.detect_inversions = options->detect_inversions != 0;
+  config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+
+  std::vector<Chord> chords = detect_chords(audio, config);
+  fill_chord_result(chords, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }

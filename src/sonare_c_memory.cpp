@@ -10,6 +10,8 @@ void sonare_free_ints(int* ptr) { delete[] ptr; }
 
 void sonare_free_string(char* ptr) { delete[] ptr; }
 
+void sonare_free_key_candidates(SonareKeyCandidate* ptr) { delete[] ptr; }
+
 void sonare_free_result(SonareAnalysisResult* result) {
   if (result != nullptr) {
     delete[] result->beat_times;
@@ -114,6 +116,20 @@ void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* r) {
     r->autocorrelation_count = 0;
     r->tempogram = nullptr;
     r->tempogram_count = 0;
+  }
+}
+
+void sonare_free_acoustic_result(SonareAcousticResult* r) {
+  if (r) {
+    delete[] r->rt60_bands;
+    delete[] r->edt_bands;
+    delete[] r->c50_bands;
+    delete[] r->c80_bands;
+    r->rt60_bands = nullptr;
+    r->edt_bands = nullptr;
+    r->c50_bands = nullptr;
+    r->c80_bands = nullptr;
+    r->band_count = 0;
   }
 }
 

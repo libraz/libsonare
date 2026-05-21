@@ -257,6 +257,24 @@ SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sam
   SONARE_C_CATCH
 }
 
+SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
+                                    int hop_length, int win_length, float bpm_min, int n_bins,
+                                    float** out, size_t* out_length, int* out_n_frames) {
+  if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  TempogramConfig config;
+  config.hop_length = hop_length;
+  config.win_length = win_length;
+  config.center = true;
+  config.norm = false;
+  std::vector<float> input(onset_envelope, onset_envelope + length);
+  *out_n_frames = static_cast<int>(input.size());
+  return copy_float_vector(cyclic_tempogram(input, sample_rate, config, bpm_min, n_bins), out,
+                           out_length);
+  SONARE_C_CATCH
+}
+
 SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
                        float tempo_min, float tempo_max, int win_length, float** out,
                        size_t* out_length) {
