@@ -14,7 +14,7 @@ Audio bit_depth(const Audio& audio, const BitDepthConfig& config) {
   if (config.target_bits < 2 || config.target_bits > 32) {
     throw std::invalid_argument("target_bits must be in [2, 32]");
   }
-  const float scale = static_cast<float>((int64_t{1} << (config.target_bits - 1)) - 1);
+  const float scale = static_cast<float>(int64_t{1} << (config.target_bits - 1));
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (auto& sample : samples) {
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);

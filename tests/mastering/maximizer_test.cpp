@@ -100,16 +100,22 @@ TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximi
   AdaptiveRelease limiter({-6.0f, 0.0f, 10.0f, 120.0f});
   limiter.prepare(48000.0, 512);
 
+  // Sustained sine -> low crest factor -> release should approach max_release_ms.
   auto signal = sine(1000.0f, 48000, 2048, 1.0f);
   process(limiter, signal);
   REQUIRE(peak_abs(signal) <= 0.502f);
+  REQUIRE(limiter.current_crest_factor() < 2.0f);
+  REQUIRE(limiter.current_release_ms() >= 100.0f);
 
-  auto second = sine(1000.0f, 48000, 2048, 1.0f);
-  process(limiter, second);
-
-  REQUIRE(peak_abs(second) <= 0.502f);
-  REQUIRE(limiter.current_release_ms() > 10.0f);
-  REQUIRE(limiter.current_release_ms() <= 120.0f);
+  // Transient burst -> high crest -> release should drop toward min.
+  std::vector<float> burst(2048, 0.0f);
+  burst[0] = 1.0f;
+  burst[512] = 1.0f;
+  burst[1024] = 1.0f;
+  burst[1536] = 1.0f;
+  process(limiter, burst);
+  REQUIRE(limiter.current_crest_factor() > 5.0f);
+  REQUIRE(limiter.current_release_ms() < 60.0f);
 }
 
 TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceiling",

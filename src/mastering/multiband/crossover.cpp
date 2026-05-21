@@ -134,12 +134,11 @@ std::vector<double> Crossover::filter_q_values(CrossoverSlope slope, CrossoverMo
 
   if (mode == CrossoverMode::LinkwitzRiley) {
     const int half = order / 2;
-    std::vector<double> half_qs;
     if (half <= 1) {
-      // LR2: two cascaded 1st-order one-pole sections -> biquad with Q = 0.5.
-      return {0.5, 0.5};
+      // LR2 = product of two 1st-order LPFs = single 2nd-order biquad with Q = 0.5.
+      return {0.5};
     }
-    half_qs = butterworth_q_values(half);
+    const auto half_qs = butterworth_q_values(half);
     std::vector<double> qs;
     qs.reserve(half_qs.size() * 2);
     for (double q : half_qs) qs.push_back(q);
@@ -163,7 +162,25 @@ void Crossover::install_coefficients() {
         std::clamp(static_cast<double>(config_.cutoffs_hz[split_index]), 1.0, sample_rate_ * 0.49);
     for (auto& channel_states : states_[split_index]) {
       for (size_t k = 0; k < qs.size() && k < channel_states.size(); ++k) {
-        make_lowpass_biquad(f, sample_rate_, qs[k], channel_states[k]);
+        const double w0 = 2.0 * kPi * f / sample_rate_;
+        const double cos_w0 = std::cos(w0);
+        const double sin_w0 = std::sin(w0);
+        const double alpha = sin_w0 / (2.0 * qs[k]);
+
+        const double b0 = (1.0 - cos_w0) * 0.5;
+        const double b1 = 1.0 - cos_w0;
+        const double b2 = (1.0 - cos_w0) * 0.5;
+        const double a0 = 1.0 + alpha;
+        const double a1 = -2.0 * cos_w0;
+        const double a2 = 1.0 - alpha;
+        const double inv = 1.0 / a0;
+
+        auto& bq = channel_states[k];
+        bq.b0 = static_cast<float>(b0 * inv);
+        bq.b1 = static_cast<float>(b1 * inv);
+        bq.b2 = static_cast<float>(b2 * inv);
+        bq.a1 = static_cast<float>(a1 * inv);
+        bq.a2 = static_cast<float>(a2 * inv);
       }
     }
   }

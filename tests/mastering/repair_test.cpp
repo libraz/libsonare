@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <random>
 #include <vector>
 
 #include "mastering/repair/declick.h"
@@ -80,18 +81,42 @@ TEST_CASE("Dehum notch filter reduces fundamental tone", "[mastering][repair]") 
   REQUIRE(rms(result) < rms(input));
 }
 
-TEST_CASE("DenoiseClassical attenuates samples under noise floor", "[mastering][repair]") {
-  const auto result = denoise_classical(make_audio({0.01f, 0.2f, -0.01f}), {0.02f, 0.0f});
+TEST_CASE("DenoiseClassical reduces broadband noise while preserving a tone",
+          "[mastering][repair]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate;
+  constexpr double kPi = 3.14159265358979323846;
 
-  REQUIRE_THAT(result[0], WithinAbs(0.0f, 0.001f));
-  REQUIRE_THAT(result[1], WithinAbs(0.2f, 0.001f));
+  std::vector<float> samples(kSamples);
+  std::mt19937 rng(12345);
+  std::uniform_real_distribution<float> noise(-0.05f, 0.05f);
+  for (int i = 0; i < kSamples; ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    samples[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * 1000.0 * t)) + noise(rng);
+  }
+
+  const Audio input = Audio::from_vector(std::move(samples), kSampleRate);
+  const Audio output = denoise_classical(input, {1024, 256, 2.0f, 0.05f, 0.1f});
+
+  // Compare RMS in a quiet region (assumed first 2048 samples are mostly silence?
+  // Instead measure the high-frequency residual: subtract a smoothed reference.
+  auto residual_rms = [](const Audio& a) {
+    double sum = 0.0;
+    for (size_t i = 1; i < a.size(); ++i) {
+      const float diff = a[i] - a[i - 1];
+      sum += static_cast<double>(diff) * diff;
+    }
+    return std::sqrt(sum / static_cast<double>(a.size()));
+  };
+
+  REQUIRE(residual_rms(output) < residual_rms(input));
+  REQUIRE(output.size() == input.size());
 }
 
-TEST_CASE("DenoiseClassical uses a soft transition above noise floor", "[mastering][repair]") {
-  const auto result = denoise_classical(make_audio({0.03f, 0.05f}), {0.02f, 0.25f});
-
-  REQUIRE(result[0] > 0.03f * 0.25f);
-  REQUIRE(result[0] < 0.03f);
+TEST_CASE("DenoiseClassical returns short inputs unchanged", "[mastering][repair]") {
+  const auto result = denoise_classical(make_audio({0.03f, 0.05f}));
+  REQUIRE(result.size() == 2);
+  REQUIRE_THAT(result[0], WithinAbs(0.03f, 0.001f));
   REQUIRE_THAT(result[1], WithinAbs(0.05f, 0.001f));
 }
 
@@ -110,6 +135,6 @@ TEST_CASE("Repair helpers validate inputs", "[mastering][repair]") {
   REQUIRE_THROWS(decrackle(make_audio({0.0f}), {0.0f}));
   REQUIRE_THROWS(declip(make_audio({0.0f}), {2.0f}));
   REQUIRE_THROWS(dehum(make_audio({0.0f}), {0.0f, 1, 10.0f}));
-  REQUIRE_THROWS(denoise_classical(make_audio({0.0f}), {0.0f, 2.0f}));
+  REQUIRE_THROWS(denoise_classical(make_audio({0.0f}), {0, 256, 1.0f, 0.05f, 0.1f}));
   REQUIRE_THROWS(dereverb_classical(make_audio({0.0f}), {0.0f, 2.0f}));
 }
