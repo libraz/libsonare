@@ -42,6 +42,7 @@ add_executable(sonare_tests
   analysis/beat_analyzer_test.cpp
   analysis/chord_analyzer_test.cpp
   analysis/boundary_detector_test.cpp
+  analysis/meter_basic_test.cpp
   analysis/rhythm_analyzer_test.cpp
   analysis/timbre_analyzer_test.cpp
   analysis/melody_analyzer_test.cpp
@@ -70,6 +71,23 @@ add_executable(sonare_tests
 target_link_libraries(sonare_tests PRIVATE sonare_core Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+if(BUILD_MASTERING)
+  target_sources(sonare_tests PRIVATE
+    mastering/common_test.cpp
+    mastering/dynamics_test.cpp
+    mastering/eq_test.cpp
+    mastering/final_test.cpp
+    mastering/match_test.cpp
+    mastering/maximizer_test.cpp
+    mastering/multiband_test.cpp
+    mastering/repair_test.cpp
+    mastering/saturation_test.cpp
+    mastering/spectral_test.cpp
+    mastering/stereo_test.cpp
+  )
+  target_link_libraries(sonare_tests PRIVATE sonare_mastering)
+endif()
 
 include(CTest)
 include(Catch)

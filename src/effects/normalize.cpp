@@ -4,44 +4,15 @@
 #include <cmath>
 #include <vector>
 
+#include "analysis/meter/basic.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare {
 
-float peak_db(const Audio& audio) {
-  if (audio.empty()) return -std::numeric_limits<float>::infinity();
+float peak_db(const Audio& audio) { return analysis::meter::peak_db(audio); }
 
-  float peak = 0.0f;
-  const float* data = audio.data();
-  for (size_t i = 0; i < audio.size(); ++i) {
-    peak = std::max(peak, std::abs(data[i]));
-  }
-
-  if (peak < kEpsilon) {
-    return -std::numeric_limits<float>::infinity();
-  }
-
-  return 20.0f * std::log10(peak);
-}
-
-float rms_db(const Audio& audio) {
-  if (audio.empty()) return -std::numeric_limits<float>::infinity();
-
-  double sum_sq = 0.0;
-  const float* data = audio.data();
-  for (size_t i = 0; i < audio.size(); ++i) {
-    sum_sq += static_cast<double>(data[i]) * static_cast<double>(data[i]);
-  }
-
-  double rms = std::sqrt(sum_sq / static_cast<double>(audio.size()));
-
-  if (rms < kEpsilon) {
-    return -std::numeric_limits<float>::infinity();
-  }
-
-  return 20.0f * std::log10(static_cast<float>(rms));
-}
+float rms_db(const Audio& audio) { return analysis::meter::rms_db(audio); }
 
 Audio apply_gain(const Audio& audio, float gain_db) {
   if (audio.empty()) return audio;

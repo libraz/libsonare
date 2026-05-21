@@ -52,7 +52,16 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/effects/time_stretch.cpp
   ${SONARE_ROOT}/src/effects/pitch_shift.cpp
   ${SONARE_ROOT}/src/effects/normalize.cpp
-  ${SONARE_ROOT}/src/effects/tts.cpp
+  ${SONARE_ROOT}/src/analysis/meter/basic.cpp
+  ${SONARE_ROOT}/src/analysis/meter/clipping.cpp
+  ${SONARE_ROOT}/src/analysis/meter/dynamic_range.cpp
+  ${SONARE_ROOT}/src/analysis/meter/lufs.cpp
+  ${SONARE_ROOT}/src/analysis/meter/phase_scope.cpp
+  ${SONARE_ROOT}/src/analysis/meter/spectrum.cpp
+  ${SONARE_ROOT}/src/analysis/meter/spectrogram.cpp
+  ${SONARE_ROOT}/src/analysis/meter/stereo.cpp
+  ${SONARE_ROOT}/src/analysis/meter/true_peak.cpp
+  ${SONARE_ROOT}/src/tts/tts.cpp
   ${SONARE_ROOT}/src/analysis/key_profiles.cpp
   ${SONARE_ROOT}/src/analysis/chord_templates.cpp
   ${SONARE_ROOT}/src/analysis/bpm_analyzer.cpp

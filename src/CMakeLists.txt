@@ -38,7 +38,16 @@ set(SONARE_SOURCES
   effects/time_stretch.cpp
   effects/pitch_shift.cpp
   effects/normalize.cpp
-  effects/tts.cpp
+  analysis/meter/basic.cpp
+  analysis/meter/clipping.cpp
+  analysis/meter/dynamic_range.cpp
+  analysis/meter/lufs.cpp
+  analysis/meter/phase_scope.cpp
+  analysis/meter/spectrum.cpp
+  analysis/meter/spectrogram.cpp
+  analysis/meter/stereo.cpp
+  analysis/meter/true_peak.cpp
+  tts/tts.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
   analysis/bpm_analyzer.cpp
@@ -131,6 +140,98 @@ endif()
 if(SONARE_FFMPEG_ENABLED)
   target_link_libraries(sonare_core PUBLIC PkgConfig::FFMPEG)
   target_compile_definitions(sonare_core PUBLIC SONARE_WITH_FFMPEG=1)
+endif()
+
+if(BUILD_MASTERING)
+  add_library(sonare_mastering STATIC
+    mastering/common/param_smoother.cpp
+    mastering/common/envelope_follower.cpp
+    mastering/common/oversampler.cpp
+    mastering/common/delay_line.cpp
+    mastering/common/lookahead_buffer.cpp
+    mastering/dynamics/brickwall_limiter.cpp
+    mastering/dynamics/compressor.cpp
+    mastering/dynamics/deesser.cpp
+    mastering/dynamics/expander.cpp
+    mastering/dynamics/gate.cpp
+    mastering/dynamics/limiter.cpp
+    mastering/dynamics/parallel_comp.cpp
+    mastering/dynamics/sidechain_router.cpp
+    mastering/dynamics/transient_shaper.cpp
+    mastering/dynamics/upward_compressor.cpp
+    mastering/dynamics/upward_expander.cpp
+    mastering/dynamics/vocal_rider.cpp
+    mastering/final/bit_depth.cpp
+    mastering/final/dither.cpp
+    mastering/final/output_chain.cpp
+    mastering/multiband/crossover.cpp
+    mastering/multiband/multiband_compressor.cpp
+    mastering/multiband/multiband_dynamic_eq.cpp
+    mastering/multiband/multiband_expander.cpp
+    mastering/multiband/multiband_imager.cpp
+    mastering/multiband/multiband_limiter.cpp
+    mastering/multiband/multiband_saturation.cpp
+    mastering/maximizer/adaptive_release.cpp
+    mastering/maximizer/loudness_optimize.cpp
+    mastering/maximizer/maximizer.cpp
+    mastering/maximizer/soft_knee_max.cpp
+    mastering/maximizer/streaming_preview.cpp
+    mastering/maximizer/true_peak_limiter.cpp
+    mastering/match/ab_switcher.cpp
+    mastering/match/match_eq.cpp
+    mastering/match/reference_loudness.cpp
+    mastering/match/reference_spectrum.cpp
+    mastering/match/tonal_balance.cpp
+    mastering/repair/declick.cpp
+    mastering/repair/declip.cpp
+    mastering/repair/decrackle.cpp
+    mastering/repair/dehum.cpp
+    mastering/repair/denoise_classical.cpp
+    mastering/repair/dereverb_classical.cpp
+    mastering/repair/trim_silence.cpp
+    mastering/saturation/bitcrusher.cpp
+    mastering/saturation/exciter.cpp
+    mastering/saturation/hard_clipper.cpp
+    mastering/saturation/multiband_exciter.cpp
+    mastering/saturation/soft_clipper.cpp
+    mastering/saturation/tape.cpp
+    mastering/saturation/transformer.cpp
+    mastering/saturation/tube.cpp
+    mastering/saturation/waveshaper.cpp
+    mastering/spectral/air_band.cpp
+    mastering/spectral/low_end_focus.cpp
+    mastering/spectral/presence_enhancer.cpp
+    mastering/spectral/spectral_shaper.cpp
+    mastering/stereo/auto_pan.cpp
+    mastering/stereo/haas_enhancer.cpp
+    mastering/stereo/imager.cpp
+    mastering/stereo/mid_side.cpp
+    mastering/stereo/mono_compat_check.cpp
+    mastering/stereo/mono_maker.cpp
+    mastering/stereo/phase_align.cpp
+    mastering/stereo/stereo_balance.cpp
+    mastering/eq/api_style.cpp
+    mastering/eq/band_pass.cpp
+    mastering/eq/cut_filter.cpp
+    mastering/eq/dynamic_eq.cpp
+    mastering/eq/graphic_eq.cpp
+    mastering/eq/linear_phase.cpp
+    mastering/eq/mid_side_eq.cpp
+    mastering/eq/minimum_phase.cpp
+    mastering/eq/parametric.cpp
+    mastering/eq/pultec.cpp
+    mastering/eq/shelving.cpp
+    mastering/eq/tilt.cpp
+  )
+  target_include_directories(sonare_mastering PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party/kissfft
+    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
+    ${CMAKE_SOURCE_DIR}/third_party/minimp3
+    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  )
+  target_link_libraries(sonare_mastering PUBLIC sonare_core)
+  target_compile_options(sonare_mastering PRIVATE ${SONARE_WARNING_FLAGS})
 endif()
 
 # Shared library for language bindings (Python ctypes, etc.)
