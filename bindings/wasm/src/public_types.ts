@@ -24,9 +24,41 @@ export type PitchClass = (typeof PitchClass)[keyof typeof PitchClass];
 export const Mode = {
   Major: 0,
   Minor: 1,
+  Dorian: 2,
+  Phrygian: 3,
+  Lydian: 4,
+  Mixolydian: 5,
+  Locrian: 6,
 } as const;
 
 export type Mode = (typeof Mode)[keyof typeof Mode];
+
+export const KeyProfile = {
+  KrumhanslSchmuckler: 0,
+  Temperley: 1,
+  Shaath: 2,
+  FaraldoEDMT: 3,
+  FaraldoEDMA: 4,
+  FaraldoEDMM: 5,
+  BellmanBudge: 6,
+} as const;
+
+export type KeyProfile = (typeof KeyProfile)[keyof typeof KeyProfile];
+
+export type KeyProfileName =
+  | 'ks'
+  | 'krumhansl'
+  | 'temperley'
+  | 'shaath'
+  | 'keyfinder'
+  | 'faraldo-edmt'
+  | 'edmt'
+  | 'faraldo-edma'
+  | 'edma'
+  | 'faraldo-edmm'
+  | 'edmm'
+  | 'bellman-budge'
+  | 'bellman';
 
 /**
  * Chord quality
@@ -41,9 +73,116 @@ export const ChordQuality = {
   Minor7: 6,
   Sus2: 7,
   Sus4: 8,
+  Unknown: 9,
+  Add9: 10,
+  MinorAdd9: 11,
+  Dim7: 12,
+  HalfDim7: 13,
+  Major9: 14,
+  Dominant9: 15,
+  Sus2Add4: 16,
 } as const;
 
 export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
+
+export type MasteringPreset =
+  | 'pop'
+  | 'edm'
+  | 'acoustic'
+  | 'hipHop'
+  | 'aiMusic'
+  | 'speech'
+  | 'streaming'
+  | 'youtube'
+  | 'broadcast'
+  | 'podcast'
+  | 'audiobook'
+  | 'cinema'
+  | 'jpop'
+  | 'ambient'
+  | 'lofi'
+  | 'classical';
+
+export type SoloProcessor =
+  | 'dynamics.brickwallLimiter'
+  | 'dynamics.compressor'
+  | 'dynamics.deesser'
+  | 'dynamics.expander'
+  | 'dynamics.gate'
+  | 'dynamics.limiter'
+  | 'dynamics.parallelComp'
+  | 'dynamics.sidechainRouter'
+  | 'dynamics.transientShaper'
+  | 'dynamics.upwardCompressor'
+  | 'dynamics.upwardExpander'
+  | 'dynamics.vocalRider'
+  | 'eq.apiStyle'
+  | 'eq.bandPass'
+  | 'eq.cutFilter'
+  | 'eq.dynamic'
+  | 'eq.graphic'
+  | 'eq.linearPhase'
+  | 'eq.midSide'
+  | 'eq.minimumPhase'
+  | 'eq.parametric'
+  | 'eq.pultec'
+  | 'eq.shelving'
+  | 'eq.tilt'
+  | 'final.bitDepth'
+  | 'final.dither'
+  | 'final.outputChain'
+  | 'maximizer.adaptiveRelease'
+  | 'maximizer.loudnessOptimize'
+  | 'maximizer.maximizer'
+  | 'maximizer.softKneeMax'
+  | 'maximizer.truePeakLimiter'
+  | 'multiband.compressor'
+  | 'multiband.dynamicEq'
+  | 'multiband.expander'
+  | 'multiband.imager'
+  | 'multiband.limiter'
+  | 'multiband.saturation'
+  | 'repair.declick'
+  | 'repair.declip'
+  | 'repair.decrackle'
+  | 'repair.dehum'
+  | 'repair.denoiseClassical'
+  | 'repair.dereverbClassical'
+  | 'repair.trimSilence'
+  | 'saturation.bitcrusher'
+  | 'saturation.exciter'
+  | 'saturation.hardClipper'
+  | 'saturation.multibandExciter'
+  | 'saturation.softClipper'
+  | 'saturation.tape'
+  | 'saturation.transformer'
+  | 'saturation.tube'
+  | 'saturation.waveshaper'
+  | 'spectral.airBand'
+  | 'spectral.lowEndFocus'
+  | 'spectral.presenceEnhancer'
+  | 'spectral.spectralShaper'
+  | 'stereo.autoPan'
+  | 'stereo.haasEnhancer'
+  | 'stereo.imager'
+  | 'stereo.monoMaker'
+  | 'stereo.phaseAlign'
+  | 'stereo.stereoBalance';
+
+export type PairProcessor =
+  | 'match.applyMatchEq'
+  | 'match.alignReferenceToSource'
+  | 'match.abSwitch'
+  | 'match.abCrossfade';
+
+export type PairAnalysis =
+  | 'match.referenceLoudness'
+  | 'match.tonalBalance'
+  | 'match.tonalBalanceLogBands'
+  | 'match.matchEqCurve'
+  | 'match.estimateReferenceDelaySamples';
+
+export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckLogBands';
 
 /**
  * Section type
@@ -71,6 +210,44 @@ export interface Key {
   shortName: string;
 }
 
+export interface KeyDetectionOptions {
+  nFft?: number;
+  hopLength?: number;
+  useHpss?: boolean;
+  loudnessWeighted?: boolean;
+  highPassHz?: number;
+  modes?:
+    | Mode[]
+    | ('major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian')[]
+    | 'major-minor'
+    | 'all'
+    | 'modal';
+  profile?: KeyProfile | KeyProfileName;
+  genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
+}
+
+export interface KeyCandidate {
+  key: Key;
+  correlation: number;
+}
+
+export interface ChordDetectionOptions {
+  minDuration?: number;
+  smoothingWindow?: number;
+  threshold?: number;
+  useTriadsOnly?: boolean;
+  nFft?: number;
+  hopLength?: number;
+  useBeatSync?: boolean;
+  useHmm?: boolean;
+  hmmBeamWidth?: number;
+  useKeyContext?: boolean;
+  keyRoot?: PitchClass;
+  keyMode?: Mode;
+  detectInversions?: boolean;
+  chromaMethod?: 'stft' | 'nnls';
+}
+
 /**
  * Detected beat
  */
@@ -84,11 +261,16 @@ export interface Beat {
  */
 export interface Chord {
   root: PitchClass;
+  bass: PitchClass;
   quality: ChordQuality;
   start: number;
   end: number;
   confidence: number;
   name: string;
+}
+
+export interface ChordAnalysisResult {
+  chords: Chord[];
 }
 
 /**
@@ -158,6 +340,23 @@ export interface AnalysisResult {
   dynamics: Dynamics;
   rhythm: RhythmFeatures;
   form: string;
+}
+
+/**
+ * Room acoustic parameters from an impulse response
+ */
+export interface AcousticResult {
+  rt60: number;
+  edt: number;
+  c50: number;
+  c80: number;
+  d50: number;
+  rt60Bands: Float32Array;
+  edtBands: Float32Array;
+  c50Bands: Float32Array;
+  c80Bands: Float32Array;
+  confidence: number;
+  isBlind: boolean;
 }
 
 /**

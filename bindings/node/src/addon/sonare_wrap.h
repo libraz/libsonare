@@ -25,7 +25,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   Napi::Value GetDuration(const Napi::CallbackInfo& info);
   Napi::Value DetectBpmInstance(const Napi::CallbackInfo& info);
   Napi::Value DetectKeyInstance(const Napi::CallbackInfo& info);
+  Napi::Value DetectKeyCandidatesInstance(const Napi::CallbackInfo& info);
   Napi::Value DetectBeatsInstance(const Napi::CallbackInfo& info);
+  Napi::Value DetectDownbeatsInstance(const Napi::CallbackInfo& info);
   Napi::Value DetectOnsetsInstance(const Napi::CallbackInfo& info);
   Napi::Value AnalyzeInstance(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
@@ -38,10 +40,14 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Static analysis functions (standalone, exported on module)
   static Napi::Value DetectBpm(const Napi::CallbackInfo& info);
   static Napi::Value DetectKey(const Napi::CallbackInfo& info);
+  static Napi::Value DetectKeyCandidates(const Napi::CallbackInfo& info);
   static Napi::Value DetectBeats(const Napi::CallbackInfo& info);
+  static Napi::Value DetectDownbeats(const Napi::CallbackInfo& info);
   static Napi::Value DetectOnsets(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeBpm(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeImpulseResponse(const Napi::CallbackInfo& info);
+  static Napi::Value DetectAcoustic(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeRhythm(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeDynamics(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeTimbre(const Napi::CallbackInfo& info);
@@ -128,6 +134,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Pcen(const Napi::CallbackInfo& info);
   static Napi::Value Tonnetz(const Napi::CallbackInfo& info);
   static Napi::Value Tempogram(const Napi::CallbackInfo& info);
+  static Napi::Value CyclicTempogram(const Napi::CallbackInfo& info);
   static Napi::Value Plp(const Napi::CallbackInfo& info);
 
   // Core - Resample

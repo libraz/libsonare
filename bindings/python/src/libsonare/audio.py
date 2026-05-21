@@ -14,6 +14,9 @@ from .analyzer import (
     analyze_dynamics as _analyze_dynamics,
 )
 from .analyzer import (
+    analyze_impulse_response as _analyze_impulse_response,
+)
+from .analyzer import (
     analyze_rhythm as _analyze_rhythm,
 )
 from .analyzer import (
@@ -23,7 +26,13 @@ from .analyzer import (
     chroma as _chroma,
 )
 from .analyzer import (
+    detect_acoustic as _detect_acoustic,
+)
+from .analyzer import (
     detect_chords as _detect_chords,
+)
+from .analyzer import (
+    detect_key_candidates as _detect_key_candidates,
 )
 from .analyzer import (
     harmonic as _harmonic,
@@ -98,6 +107,7 @@ from .analyzer import (
     zero_crossing_rate as _zero_crossing_rate,
 )
 from .types import (
+    AcousticResult,
     AnalysisResult,
     BpmAnalysisResult,
     ChordAnalysisResult,
@@ -105,10 +115,14 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    KeyCandidate,
+    KeyProfile,
     MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
     MfccResult,
+    Mode,
+    PitchClass,
     PitchResult,
     RhythmResult,
     StftResult,
@@ -261,18 +275,56 @@ class Audio:
         _check(rc)
         return float(out_bpm.value)
 
-    def detect_key(self) -> Key:
+    def detect_key(
+        self,
+        n_fft: int = 4096,
+        hop_length: int = 512,
+        use_hpss: bool = False,
+        loudness_weighted: bool = False,
+        high_pass_hz: float = 0.0,
+        modes: Sequence[Mode | str] | str | None = None,
+        profile: KeyProfile | str | None = None,
+        genre_hint: str | None = None,
+    ) -> Key:
         """Detect musical key."""
-        from ._ffi import SonareKey
-        from .types import Mode, PitchClass
+        from .analyzer import detect_key
 
-        out_key = SonareKey()
-        rc = self._lib.sonare_audio_detect_key(self._handle, ctypes.byref(out_key))
-        _check(rc)
-        return Key(
-            root=PitchClass(out_key.root),
-            mode=Mode(out_key.mode),
-            confidence=float(out_key.confidence),
+        return detect_key(
+            self.data,
+            self.sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            use_hpss=use_hpss,
+            loudness_weighted=loudness_weighted,
+            high_pass_hz=high_pass_hz,
+            modes=modes,
+            profile=profile,
+            genre_hint=genre_hint,
+        )
+
+    def detect_key_candidates(
+        self,
+        n_fft: int = 4096,
+        hop_length: int = 512,
+        use_hpss: bool = False,
+        loudness_weighted: bool = False,
+        high_pass_hz: float = 0.0,
+        modes: Sequence[Mode | str] | str | None = None,
+        profile: KeyProfile | str | None = None,
+        genre_hint: str | None = None,
+    ) -> list[KeyCandidate]:
+        """Return ranked musical key candidates."""
+        return _detect_key_candidates(
+            self.data,
+            self.sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            use_hpss=use_hpss,
+            loudness_weighted=loudness_weighted,
+            high_pass_hz=high_pass_hz,
+            modes=modes,
+            profile=profile,
+            genre_hint=genre_hint,
         )
 
     def detect_beats(self) -> list[float]:
@@ -280,6 +332,20 @@ class Audio:
         out_times = ctypes.POINTER(ctypes.c_float)()
         out_count = ctypes.c_size_t()
         rc = self._lib.sonare_audio_detect_beats(
+            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+        )
+        _check(rc)
+        try:
+            return [float(out_times[i]) for i in range(out_count.value)]
+        finally:
+            if out_times and out_count.value > 0:
+                self._lib.sonare_free_floats(out_times)
+
+    def detect_downbeats(self) -> list[float]:
+        """Detect downbeat times in seconds."""
+        out_times = ctypes.POINTER(ctypes.c_float)()
+        out_count = ctypes.c_size_t()
+        rc = self._lib.sonare_audio_detect_downbeats(
             self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
         )
         _check(rc)
@@ -352,6 +418,27 @@ class Audio:
             max_candidates,
         )
 
+    def analyze_impulse_response(self, n_octave_bands: int = 6) -> AcousticResult:
+        """Analyze RT60, EDT, and clarity metrics treating this audio as an impulse response."""
+        return _analyze_impulse_response(self.data, self.sample_rate, n_octave_bands)
+
+    def detect_acoustic(
+        self,
+        n_octave_bands: int = 6,
+        n_third_octave_subbands: int = 24,
+        min_decay_db: float = 30.0,
+        noise_floor_margin_db: float = 10.0,
+    ) -> AcousticResult:
+        """Estimate blind RT60/EDT acoustic parameters from this audio."""
+        return _detect_acoustic(
+            self.data,
+            self.sample_rate,
+            n_octave_bands,
+            n_third_octave_subbands,
+            min_decay_db,
+            noise_floor_margin_db,
+        )
+
     def analyze_rhythm(
         self,
         bpm_min: float = 60.0,
@@ -414,6 +501,13 @@ class Audio:
         n_fft: int = 2048,
         hop_length: int = 512,
         use_beat_sync: bool = True,
+        use_hmm: bool = False,
+        hmm_beam_width: int = 24,
+        use_key_context: bool = False,
+        key_root: PitchClass = PitchClass.C,
+        key_mode: Mode = Mode.MAJOR,
+        detect_inversions: bool = False,
+        chroma_method: str = "stft",
     ) -> ChordAnalysisResult:
         """Detect chord segments."""
         return _detect_chords(
@@ -426,6 +520,13 @@ class Audio:
             n_fft,
             hop_length,
             use_beat_sync,
+            use_hmm,
+            hmm_beam_width,
+            use_key_context,
+            key_root,
+            key_mode,
+            detect_inversions,
+            chroma_method,
         )
 
     # --- Effects ---

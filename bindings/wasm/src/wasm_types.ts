@@ -8,6 +8,11 @@ export interface WasmKeyResult {
   shortName: string;
 }
 
+export interface WasmKeyCandidateResult {
+  key: WasmKeyResult;
+  correlation: number;
+}
+
 export interface WasmBeatResult {
   time: number;
   strength: number;
@@ -15,6 +20,7 @@ export interface WasmBeatResult {
 
 export interface WasmChordResult {
   root: number;
+  bass: number;
   quality: number;
   start: number;
   end: number;
@@ -70,6 +76,24 @@ export interface WasmAnalysisResult {
   dynamics: WasmDynamicsResult;
   rhythm: WasmRhythmResult;
   form: string;
+}
+
+export interface WasmChordAnalysisResult {
+  chords: WasmChordResult[];
+}
+
+export interface WasmAcousticResult {
+  rt60: number;
+  edt: number;
+  c50: number;
+  c80: number;
+  d50: number;
+  rt60Bands: Float32Array;
+  edtBands: Float32Array;
+  c50Bands: Float32Array;
+  c80Bands: Float32Array;
+  confidence: number;
+  isBlind: boolean;
 }
 
 export interface WasmHpssResult {
@@ -177,6 +201,12 @@ export interface WasmTempogramResult {
   data: Float32Array;
 }
 
+export interface WasmCyclicTempogramResult {
+  nFrames: number;
+  nBins: number;
+  data: Float32Array;
+}
+
 export interface WasmChordChange {
   root: number;
   quality: number;
@@ -276,9 +306,65 @@ export interface WasmStreamAnalyzer {
 export interface SonareModule {
   detectBpm: (samples: Float32Array, sampleRate: number) => number;
   detectKey: (samples: Float32Array, sampleRate: number) => WasmKeyResult;
+  _detectKeyWithOptions: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    useHpss: boolean,
+    loudnessWeighted: boolean,
+    highPassHz: number,
+    modes: number[],
+    profileType: number,
+    genreHint: string,
+  ) => WasmKeyResult;
+  _detectKeyCandidates: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    useHpss: boolean,
+    loudnessWeighted: boolean,
+    highPassHz: number,
+    modes: number[],
+    profileType: number,
+    genreHint: string,
+  ) => WasmKeyCandidateResult[];
   detectOnsets: (samples: Float32Array, sampleRate: number) => Float32Array;
   detectBeats: (samples: Float32Array, sampleRate: number) => Float32Array;
+  detectDownbeats: (samples: Float32Array, sampleRate: number) => Float32Array;
+  detectChords: (
+    samples: Float32Array,
+    sampleRate: number,
+    minDuration: number,
+    smoothingWindow: number,
+    threshold: number,
+    useTriadsOnly: boolean,
+    nFft: number,
+    hopLength: number,
+    useBeatSync: boolean,
+    useHmm: boolean,
+    hmmBeamWidth: number,
+    useKeyContext: boolean,
+    keyRoot: number,
+    keyMode: number,
+    detectInversions: boolean,
+    chromaMethod: number,
+  ) => WasmChordAnalysisResult;
   analyze: (samples: Float32Array, sampleRate: number) => WasmAnalysisResult;
+  analyzeImpulseResponse: (
+    samples: Float32Array,
+    sampleRate: number,
+    nOctaveBands: number,
+  ) => WasmAcousticResult;
+  detectAcoustic: (
+    samples: Float32Array,
+    sampleRate: number,
+    nOctaveBands: number,
+    nThirdOctaveSubbands: number,
+    minDecayDb: number,
+    noiseFloorMarginDb: number,
+  ) => WasmAcousticResult;
   analyzeWithProgress: (
     samples: Float32Array,
     sampleRate: number,
@@ -530,6 +616,14 @@ export interface SonareModule {
     hopLength: number,
     winLength: number,
   ) => WasmTempogramResult;
+  cyclicTempogram: (
+    onsetEnvelope: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    winLength: number,
+    bpmMin: number,
+    nBins: number,
+  ) => WasmCyclicTempogramResult;
   plp: (
     onsetEnvelope: Float32Array,
     sampleRate: number,

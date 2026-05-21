@@ -1,20 +1,29 @@
 import { createRequire } from 'node:module';
 import type {
+  AcousticResult,
   AnalysisResult,
   BpmAnalysisResult,
   ChordAnalysisResult,
+  ChordChromaMethod,
   ChromaResult,
   DynamicsResult,
   HpssResult,
   Key,
+  KeyCandidate,
+  KeyDetectionOptions,
   MasteringChainResult,
   MasteringChainStereoResult,
+  MasteringPreset,
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
+  PairAnalysis,
+  PairProcessor,
   PitchResult,
   RhythmResult,
+  SoloProcessor,
+  StereoAnalysis,
   StftDbResult,
   StftResult,
   TimbreResult,
@@ -71,12 +80,20 @@ export class Audio {
     return this.native.detectBpm();
   }
 
-  detectKey(): Key {
-    return this.native.detectKey();
+  detectKey(options: KeyDetectionOptions = {}): Key {
+    return addon.detectKey(this.getData(), this.getSampleRate(), options);
+  }
+
+  detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
+    return addon.detectKeyCandidates(this.getData(), this.getSampleRate(), options);
   }
 
   detectBeats(): Float32Array {
     return this.native.detectBeats();
+  }
+
+  detectDownbeats(): Float32Array {
+    return this.native.detectDownbeats();
   }
 
   detectOnsets(): Float32Array {
@@ -104,6 +121,26 @@ export class Audio {
       nFft,
       hopLength,
       maxCandidates,
+    );
+  }
+
+  analyzeImpulseResponse(nOctaveBands = 6): AcousticResult {
+    return addon.analyzeImpulseResponse(this.getData(), this.getSampleRate(), nOctaveBands);
+  }
+
+  detectAcoustic(
+    nOctaveBands = 6,
+    nThirdOctaveSubbands = 24,
+    minDecayDb = 30.0,
+    noiseFloorMarginDb = 10.0,
+  ): AcousticResult {
+    return addon.detectAcoustic(
+      this.getData(),
+      this.getSampleRate(),
+      nOctaveBands,
+      nThirdOctaveSubbands,
+      minDecayDb,
+      noiseFloorMarginDb,
     );
   }
 
@@ -161,6 +198,13 @@ export class Audio {
     nFft = 2048,
     hopLength = 512,
     useBeatSync = true,
+    useHmm = false,
+    hmmBeamWidth = 24,
+    useKeyContext = false,
+    keyRoot = 0,
+    keyMode = 0,
+    detectInversions = false,
+    chromaMethod: ChordChromaMethod = 'stft',
   ): ChordAnalysisResult {
     return addon.detectChords(
       this.getData(),
@@ -172,6 +216,13 @@ export class Audio {
       nFft,
       hopLength,
       useBeatSync,
+      useHmm,
+      hmmBeamWidth,
+      useKeyContext,
+      keyRoot,
+      keyMode,
+      detectInversions,
+      chordChromaMethodValue(chromaMethod),
     );
   }
 
@@ -212,7 +263,7 @@ export class Audio {
   }
 
   masteringProcess(
-    processorName: string,
+    processorName: SoloProcessor,
     params: Record<string, number | boolean> = {},
   ): MasteringResult {
     return addon.masteringProcess(processorName, this.getData(), this.getSampleRate(), params);
@@ -234,7 +285,7 @@ export class Audio {
   }
 
   masterAudio(
-    preset = 'pop',
+    preset: MasteringPreset = 'pop',
     overrides: Record<string, number | boolean> = {},
     onProgress?: (progress: number, stage: string) => void,
   ): MasteringChainResult {
@@ -357,12 +408,28 @@ export function detectBpm(samples: Float32Array, sampleRate = 22050): number {
   return addon.detectBpm(samples, sampleRate);
 }
 
-export function detectKey(samples: Float32Array, sampleRate = 22050): Key {
-  return addon.detectKey(samples, sampleRate);
+export function detectKey(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: KeyDetectionOptions = {},
+): Key {
+  return addon.detectKey(samples, sampleRate, options);
+}
+
+export function detectKeyCandidates(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: KeyDetectionOptions = {},
+): KeyCandidate[] {
+  return addon.detectKeyCandidates(samples, sampleRate, options);
 }
 
 export function detectBeats(samples: Float32Array, sampleRate = 22050): Float32Array {
   return addon.detectBeats(samples, sampleRate);
+}
+
+export function detectDownbeats(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.detectDownbeats(samples, sampleRate);
 }
 
 export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32Array {
@@ -417,6 +484,32 @@ export function analyzeDynamics(
   return addon.analyzeDynamics(samples, sampleRate, windowSec, hopLength, compressionThreshold);
 }
 
+export function analyzeImpulseResponse(
+  samples: Float32Array,
+  sampleRate = 48000,
+  nOctaveBands = 6,
+): AcousticResult {
+  return addon.analyzeImpulseResponse(samples, sampleRate, nOctaveBands);
+}
+
+export function detectAcoustic(
+  samples: Float32Array,
+  sampleRate = 48000,
+  nOctaveBands = 6,
+  nThirdOctaveSubbands = 24,
+  minDecayDb = 30.0,
+  noiseFloorMarginDb = 10.0,
+): AcousticResult {
+  return addon.detectAcoustic(
+    samples,
+    sampleRate,
+    nOctaveBands,
+    nThirdOctaveSubbands,
+    minDecayDb,
+    noiseFloorMarginDb,
+  );
+}
+
 export function analyzeTimbre(
   samples: Float32Array,
   sampleRate = 22050,
@@ -439,6 +532,13 @@ export function detectChords(
   nFft = 2048,
   hopLength = 512,
   useBeatSync = true,
+  useHmm = false,
+  hmmBeamWidth = 24,
+  useKeyContext = false,
+  keyRoot = 0,
+  keyMode = 0,
+  detectInversions = false,
+  chromaMethod: ChordChromaMethod = 'stft',
 ): ChordAnalysisResult {
   return addon.detectChords(
     samples,
@@ -450,7 +550,24 @@ export function detectChords(
     nFft,
     hopLength,
     useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
+    keyRoot,
+    keyMode,
+    detectInversions,
+    chordChromaMethodValue(chromaMethod),
   );
+}
+
+function chordChromaMethodValue(method: ChordChromaMethod): number {
+  if (method === 'stft') {
+    return 0;
+  }
+  if (method === 'nnls') {
+    return 1;
+  }
+  throw new Error(`Invalid chord chroma method: ${method}`);
 }
 
 export function version(): string {
@@ -514,7 +631,7 @@ export function mastering(
 }
 
 export function masteringProcess(
-  processorName: string,
+  processorName: SoloProcessor,
   samples: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
@@ -523,7 +640,7 @@ export function masteringProcess(
 }
 
 export function masteringProcessStereo(
-  processorName: string,
+  processorName: SoloProcessor,
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
@@ -618,14 +735,14 @@ export class StreamingMasteringChain {
   }
 }
 
-export function masteringPresetNames(): string[] {
+export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
 }
 
 export function masterAudio(
   samples: Float32Array,
   sampleRate = 22050,
-  preset = 'pop',
+  preset: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
@@ -639,7 +756,7 @@ export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  preset = 'pop',
+  preset: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
@@ -656,24 +773,24 @@ export function masterAudioStereo(
   return addon.masterAudioStereo(preset, left, right, sampleRate, overrides);
 }
 
-export function masteringProcessorNames(): string[] {
+export function masteringProcessorNames(): SoloProcessor[] {
   return addon.masteringProcessorNames();
 }
 
-export function masteringPairProcessorNames(): string[] {
+export function masteringPairProcessorNames(): PairProcessor[] {
   return addon.masteringPairProcessorNames();
 }
 
-export function masteringPairAnalysisNames(): string[] {
+export function masteringPairAnalysisNames(): PairAnalysis[] {
   return addon.masteringPairAnalysisNames();
 }
 
-export function masteringStereoAnalysisNames(): string[] {
+export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   return addon.masteringStereoAnalysisNames();
 }
 
 export function masteringPairProcess(
-  processorName: string,
+  processorName: PairProcessor,
   source: Float32Array,
   reference: Float32Array,
   sampleRate = 22050,
@@ -683,7 +800,7 @@ export function masteringPairProcess(
 }
 
 export function masteringPairAnalyze(
-  analysisName: string,
+  analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
   sampleRate = 22050,
@@ -693,7 +810,7 @@ export function masteringPairAnalyze(
 }
 
 export function masteringStereoAnalyze(
-  analysisName: string,
+  analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
@@ -992,6 +1109,17 @@ export function tempogram(
   return addon.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
 }
 
+export function cyclicTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate: number,
+  hopLength = 512,
+  winLength = 384,
+  bpmMin = 60.0,
+  nBins = 60,
+): { nFrames: number; nBins: number; data: Float32Array } {
+  return addon.cyclicTempogram(onsetEnvelope, sampleRate, hopLength, winLength, bpmMin, nBins);
+}
+
 export function plp(
   onsetEnvelope: Float32Array,
   sampleRate = 22050,
@@ -1008,15 +1136,20 @@ export function resample(samples: Float32Array, srcSr: number, targetSr: number)
 }
 
 export type {
+  AcousticResult,
   AnalysisResult,
   BpmAnalysisResult,
   BpmCandidate,
   Chord,
   ChordAnalysisResult,
+  ChordChromaMethod,
   ChromaResult,
   DynamicsResult,
   HpssResult,
   Key,
+  KeyCandidate,
+  KeyDetectionOptions,
+  KeyMode,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringResult,

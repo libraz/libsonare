@@ -21,6 +21,15 @@ class SonareKey(ctypes.Structure):
     ]
 
 
+class SonareKeyCandidate(ctypes.Structure):
+    """Maps to SonareKeyCandidate in sonare_c.h."""
+
+    _fields_ = [
+        ("key", SonareKey),
+        ("correlation", ctypes.c_float),
+    ]
+
+
 class SonareTimeSignature(ctypes.Structure):
     """Maps to SonareTimeSignature in sonare_c.h."""
 
@@ -65,6 +74,25 @@ class SonareBpmAnalysisResult(ctypes.Structure):
         ("autocorrelation_count", ctypes.c_size_t),
         ("tempogram", ctypes.POINTER(ctypes.c_float)),
         ("tempogram_count", ctypes.c_size_t),
+    ]
+
+
+class SonareAcousticResult(ctypes.Structure):
+    """Maps to SonareAcousticResult in sonare_c.h."""
+
+    _fields_ = [
+        ("rt60", ctypes.c_float),
+        ("edt", ctypes.c_float),
+        ("c50", ctypes.c_float),
+        ("c80", ctypes.c_float),
+        ("d50", ctypes.c_float),
+        ("rt60_bands", ctypes.POINTER(ctypes.c_float)),
+        ("edt_bands", ctypes.POINTER(ctypes.c_float)),
+        ("c50_bands", ctypes.POINTER(ctypes.c_float)),
+        ("c80_bands", ctypes.POINTER(ctypes.c_float)),
+        ("band_count", ctypes.c_size_t),
+        ("confidence", ctypes.c_float),
+        ("is_blind", ctypes.c_int),
     ]
 
 
@@ -126,6 +154,7 @@ class SonareChord(ctypes.Structure):
         ("start", ctypes.c_float),
         ("end", ctypes.c_float),
         ("confidence", ctypes.c_float),
+        ("bass", ctypes.c_int32),
     ]
 
 
@@ -135,6 +164,27 @@ class SonareChordAnalysisResult(ctypes.Structure):
     _fields_ = [
         ("chords", ctypes.POINTER(SonareChord)),
         ("chord_count", ctypes.c_size_t),
+    ]
+
+
+class SonareChordDetectionOptions(ctypes.Structure):
+    """Maps to SonareChordDetectionOptions in sonare_c.h."""
+
+    _fields_ = [
+        ("min_duration", ctypes.c_float),
+        ("smoothing_window", ctypes.c_float),
+        ("threshold", ctypes.c_float),
+        ("use_triads_only", ctypes.c_int),
+        ("n_fft", ctypes.c_int),
+        ("hop_length", ctypes.c_int),
+        ("use_beat_sync", ctypes.c_int),
+        ("use_hmm", ctypes.c_int),
+        ("hmm_beam_width", ctypes.c_int),
+        ("use_key_context", ctypes.c_int),
+        ("key_root", ctypes.c_int32),
+        ("key_mode", ctypes.c_int32),
+        ("detect_inversions", ctypes.c_int),
+        ("chroma_method", ctypes.c_int),
     ]
 
 
@@ -329,17 +379,18 @@ def _find_library() -> str:
         return env_path
 
     pkg_dir = Path(__file__).parent
-    for name in ("libsonare.dylib", "libsonare.so", "sonare.dll"):
-        candidate = pkg_dir / name
-        if candidate.exists():
-            return str(candidate)
-
-    # Dev build dir: src/libsonare/ -> bindings/python -> bindings -> project root
+    # In editable/source checkouts, prefer the freshly built shared library over
+    # any package-adjacent copy that may have been left by an older build.
     project_root = pkg_dir.parent.parent.parent.parent
     lib_name = "libsonare.dylib" if platform.system() == "Darwin" else "libsonare.so"
     build_path = project_root / "build" / "lib" / lib_name
     if build_path.exists():
         return str(build_path)
+
+    for name in ("libsonare.dylib", "libsonare.so", "sonare.dll"):
+        candidate = pkg_dir / name
+        if candidate.exists():
+            return str(candidate)
 
     path = ctypes.util.find_library("sonare")
     if path:
@@ -426,6 +477,13 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    lib.sonare_audio_detect_downbeats.restype = ctypes.c_int32
+    lib.sonare_audio_detect_downbeats.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     lib.sonare_audio_detect_onsets.restype = ctypes.c_int32
     lib.sonare_audio_detect_onsets.argtypes = [
         ctypes.c_void_p,
@@ -456,9 +514,114 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareKey),
     ]
 
+    # sonare_detect_key_with_options
+    lib.sonare_detect_key_with_options.restype = ctypes.c_int32
+    lib.sonare_detect_key_with_options.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(SonareKey),
+    ]
+
+    lib.sonare_detect_key_with_options_and_modes.restype = ctypes.c_int32
+    lib.sonare_detect_key_with_options_and_modes.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareKey),
+    ]
+
+    lib.sonare_detect_key_with_extended_options.restype = ctypes.c_int32
+    lib.sonare_detect_key_with_extended_options.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.POINTER(SonareKey),
+    ]
+
+    lib.sonare_detect_key_candidates.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_detect_key_candidates_with_modes.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates_with_modes.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_detect_key_candidates_with_extended_options.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates_with_extended_options.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_free_key_candidates.restype = None
+    lib.sonare_free_key_candidates.argtypes = [ctypes.POINTER(SonareKeyCandidate)]
+
     # sonare_detect_beats
     lib.sonare_detect_beats.restype = ctypes.c_int32
     lib.sonare_detect_beats.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_detect_downbeats.restype = ctypes.c_int32
+    lib.sonare_detect_downbeats.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
@@ -499,6 +662,27 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.POINTER(SonareBpmAnalysisResult),
+    ]
+
+    lib.sonare_analyze_impulse_response.restype = ctypes.c_int32
+    lib.sonare_analyze_impulse_response.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareAcousticResult),
+    ]
+
+    lib.sonare_detect_acoustic.restype = ctypes.c_int32
+    lib.sonare_detect_acoustic.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(SonareAcousticResult),
     ]
 
     lib.sonare_analyze_rhythm.restype = ctypes.c_int32
@@ -553,6 +737,15 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareChordAnalysisResult),
     ]
 
+    lib.sonare_detect_chords_ex.restype = ctypes.c_int32
+    lib.sonare_detect_chords_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChordDetectionOptions),
+        ctypes.POINTER(SonareChordAnalysisResult),
+    ]
+
     # --- Memory management ---
 
     # sonare_free_floats
@@ -565,6 +758,9 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
 
     lib.sonare_free_bpm_analysis_result.restype = None
     lib.sonare_free_bpm_analysis_result.argtypes = [ctypes.POINTER(SonareBpmAnalysisResult)]
+
+    lib.sonare_free_acoustic_result.restype = None
+    lib.sonare_free_acoustic_result.argtypes = [ctypes.POINTER(SonareAcousticResult)]
 
     lib.sonare_free_rhythm_result.restype = None
     lib.sonare_free_rhythm_result.argtypes = [ctypes.POINTER(SonareRhythmResult)]
@@ -1039,6 +1235,20 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    lib.sonare_cyclic_tempogram.restype = ctypes.c_int32
+    lib.sonare_cyclic_tempogram.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
         ctypes.c_int,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),

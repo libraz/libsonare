@@ -1073,6 +1073,36 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected onset envelope Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto arr = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int hop =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
+  int win =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 384;
+  float bpm_min =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 60.0f;
+  int n_bins =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 60;
+  float* out = nullptr;
+  size_t count = 0;
+  int n_frames = 0;
+  SonareError err = sonare_cyclic_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, bpm_min,
+                                            n_bins, &out, &count, &n_frames);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("nFrames", n_frames);
+  result.Set("nBins", n_bins);
+  result.Set("data", FloatResult(env, out, count));
+  return result;
+}
+
 Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {

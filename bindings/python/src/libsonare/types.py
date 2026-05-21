@@ -49,9 +49,35 @@ class Mode(IntEnum):
 
     MAJOR = 0
     MINOR = 1
+    DORIAN = 2
+    PHRYGIAN = 3
+    LYDIAN = 4
+    MIXOLYDIAN = 5
+    LOCRIAN = 6
 
     def __str__(self) -> str:
-        return "major" if self == Mode.MAJOR else "minor"
+        names = {
+            Mode.MAJOR: "major",
+            Mode.MINOR: "minor",
+            Mode.DORIAN: "dorian",
+            Mode.PHRYGIAN: "phrygian",
+            Mode.LYDIAN: "lydian",
+            Mode.MIXOLYDIAN: "mixolydian",
+            Mode.LOCRIAN: "locrian",
+        }
+        return names[self]
+
+
+class KeyProfile(IntEnum):
+    """Key-profile family used by profile-correlation key detection."""
+
+    KRUMHANSL_SCHMUCKLER = 0
+    TEMPERLEY = 1
+    SHAATH = 2
+    FARALDO_EDMT = 3
+    FARALDO_EDMA = 4
+    FARALDO_EDMM = 5
+    BELLMAN_BUDGE = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +94,11 @@ class Key:
 
     @property
     def short_name(self) -> str:
-        return f"{self.root}{'' if self.mode == Mode.MAJOR else 'm'}"
+        if self.mode == Mode.MAJOR:
+            return f"{self.root}"
+        if self.mode == Mode.MINOR:
+            return f"{self.root}m"
+        return f"{self.root} {self.mode}"
 
     @property
     def shortName(self) -> str:  # noqa: N802
@@ -76,6 +106,14 @@ class Key:
 
     def __str__(self) -> str:
         return self.name
+
+
+@dataclass(frozen=True, slots=True)
+class KeyCandidate:
+    """Key candidate with raw profile correlation."""
+
+    key: Key
+    correlation: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +180,43 @@ class BpmAnalysisResult:
     candidates: list[BpmCandidate]
     autocorrelation: list[float]
     tempogram: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class AcousticResult:
+    """Room acoustic parameters from an impulse response."""
+
+    rt60: float
+    edt: float
+    c50: float
+    c80: float
+    d50: float
+    rt60_bands: list[float]
+    edt_bands: list[float]
+    c50_bands: list[float]
+    c80_bands: list[float]
+    confidence: float
+    is_blind: bool
+
+    @property
+    def rt60Bands(self) -> list[float]:  # noqa: N802
+        return self.rt60_bands
+
+    @property
+    def edtBands(self) -> list[float]:  # noqa: N802
+        return self.edt_bands
+
+    @property
+    def c50Bands(self) -> list[float]:  # noqa: N802
+        return self.c50_bands
+
+    @property
+    def c80Bands(self) -> list[float]:  # noqa: N802
+        return self.c80_bands
+
+    @property
+    def isBlind(self) -> bool:  # noqa: N802
+        return self.is_blind
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +333,7 @@ class Chord:
     start: float
     end: float
     confidence: float
+    bass: PitchClass | None = None
 
     @property
     def duration(self) -> float:
@@ -276,8 +352,17 @@ class Chord:
             "sus2": "sus2",
             "sus4": "sus4",
             "unknown": "",
+            "add9": "add9",
+            "minorAdd9": "madd9",
+            "dim7": "dim7",
+            "halfDim7": "m7b5",
+            "major9": "maj9",
+            "dominant9": "9",
+            "sus2Add4": "sus2add4",
         }
-        return f"{self.root}{suffixes.get(self.quality, '')}"
+        bass = self.root if self.bass is None else self.bass
+        slash = "" if bass == self.root else f"/{bass}"
+        return f"{self.root}{suffixes.get(self.quality, '')}{slash}"
 
 
 @dataclass(frozen=True, slots=True)

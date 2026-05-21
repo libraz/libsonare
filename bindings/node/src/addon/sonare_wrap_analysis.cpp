@@ -1,10 +1,116 @@
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "sonare_wrap.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
+
+namespace {
+
+int int_option(const Napi::Object& object, const char* key, int fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsNumber() ? value.As<Napi::Number>().Int32Value() : fallback;
+}
+
+float float_option(const Napi::Object& object, const char* key, float fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsNumber() ? value.As<Napi::Number>().FloatValue() : fallback;
+}
+
+bool bool_option(const Napi::Object& object, const char* key, bool fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
+}
+
+SonareMode mode_from_value(const Napi::Value& value) {
+  if (value.IsNumber()) {
+    const int mode = value.As<Napi::Number>().Int32Value();
+    if (mode < SONARE_MODE_MAJOR || mode > SONARE_MODE_LOCRIAN) {
+      throw Napi::Error::New(value.Env(), "invalid key mode");
+    }
+    return static_cast<SonareMode>(mode);
+  }
+  if (!value.IsString()) {
+    throw Napi::Error::New(value.Env(), "key modes must be strings or numbers");
+  }
+  std::string key = value.As<Napi::String>().Utf8Value();
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "major" || key == "maj") return SONARE_MODE_MAJOR;
+  if (key == "minor" || key == "min" || key == "m") return SONARE_MODE_MINOR;
+  if (key == "dorian") return SONARE_MODE_DORIAN;
+  if (key == "phrygian") return SONARE_MODE_PHRYGIAN;
+  if (key == "lydian") return SONARE_MODE_LYDIAN;
+  if (key == "mixolydian") return SONARE_MODE_MIXOLYDIAN;
+  if (key == "locrian") return SONARE_MODE_LOCRIAN;
+  throw Napi::Error::New(value.Env(), "invalid key mode: " + key);
+}
+
+std::vector<SonareMode> modes_option(const Napi::Object& object) {
+  Napi::Value value = object.Get("modes");
+  if (value.IsUndefined() || value.IsNull()) {
+    return {};
+  }
+  if (value.IsString()) {
+    std::string key = value.As<Napi::String>().Utf8Value();
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (key == "major-minor" || key == "majmin" || key == "diatonic") {
+      return {SONARE_MODE_MAJOR, SONARE_MODE_MINOR};
+    }
+    if (key == "all" || key == "modal") {
+      return {SONARE_MODE_MAJOR,  SONARE_MODE_MINOR,      SONARE_MODE_DORIAN, SONARE_MODE_PHRYGIAN,
+              SONARE_MODE_LYDIAN, SONARE_MODE_MIXOLYDIAN, SONARE_MODE_LOCRIAN};
+    }
+    return {mode_from_value(value)};
+  }
+  if (!value.IsArray()) {
+    throw Napi::Error::New(object.Env(), "modes must be an array or mode-set string");
+  }
+  Napi::Array arr = value.As<Napi::Array>();
+  std::vector<SonareMode> modes;
+  modes.reserve(arr.Length());
+  for (uint32_t i = 0; i < arr.Length(); ++i) {
+    modes.push_back(mode_from_value(arr.Get(i)));
+  }
+  return modes;
+}
+
+SonareKeyProfileType profile_from_value(const Napi::Value& value) {
+  if (value.IsUndefined() || value.IsNull()) {
+    return SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  }
+  if (value.IsNumber()) {
+    const int profile = value.As<Napi::Number>().Int32Value();
+    if (profile < SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER ||
+        profile > SONARE_KEY_PROFILE_BELLMAN_BUDGE) {
+      throw Napi::Error::New(value.Env(), "invalid key profile");
+    }
+    return static_cast<SonareKeyProfileType>(profile);
+  }
+  if (!value.IsString()) {
+    throw Napi::Error::New(value.Env(), "key profile must be a string or number");
+  }
+  std::string key = value.As<Napi::String>().Utf8Value();
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "ks" || key == "krumhansl" || key == "krumhansl-schmuckler") {
+    return SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  }
+  if (key == "temperley") return SONARE_KEY_PROFILE_TEMPERLEY;
+  if (key == "shaath" || key == "keyfinder") return SONARE_KEY_PROFILE_SHAATH;
+  if (key == "faraldo-edmt" || key == "edmt") return SONARE_KEY_PROFILE_FARALDO_EDMT;
+  if (key == "faraldo-edma" || key == "edma") return SONARE_KEY_PROFILE_FARALDO_EDMA;
+  if (key == "faraldo-edmm" || key == "edmm") return SONARE_KEY_PROFILE_FARALDO_EDMM;
+  if (key == "bellman-budge" || key == "bellman") return SONARE_KEY_PROFILE_BELLMAN_BUDGE;
+  throw Napi::Error::New(value.Env(), "invalid key profile: " + key);
+}
+
+}  // namespace
 
 Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -50,13 +156,99 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     sample_rate = info[1].As<Napi::Number>().Int32Value();
   }
 
+  int n_fft = 4096;
+  int hop_length = 512;
+  bool use_hpss = false;
+  bool loudness_weighted = false;
+  float high_pass_hz = 0.0f;
+  std::vector<SonareMode> modes;
+  SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  std::string genre_hint;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    n_fft = int_option(options, "nFft", n_fft);
+    hop_length = int_option(options, "hopLength", hop_length);
+    use_hpss = bool_option(options, "useHpss", use_hpss);
+    loudness_weighted = bool_option(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = float_option(options, "highPassHz", high_pass_hz);
+    modes = modes_option(options);
+    profile = profile_from_value(options.Get("profile"));
+    Napi::Value genre = options.Get("genreHint");
+    if (genre.IsString()) genre_hint = genre.As<Napi::String>().Utf8Value();
+  }
+
   SonareKey key{};
-  SonareError err = sonare_detect_key(data, length, sample_rate, &key);
+  SonareError err = sonare_detect_key_with_extended_options(
+      data, length, sample_rate, n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0,
+      high_pass_hz, modes.empty() ? nullptr : modes.data(), modes.size(), profile,
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), &key);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return KeyToObject(env, key.root, key.mode, key.confidence);
+}
+
+Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+
+  int sample_rate = 22050;
+  if (info.Length() >= 2 && info[1].IsNumber()) {
+    sample_rate = info[1].As<Napi::Number>().Int32Value();
+  }
+
+  int n_fft = 4096;
+  int hop_length = 512;
+  bool use_hpss = false;
+  bool loudness_weighted = false;
+  float high_pass_hz = 0.0f;
+  std::vector<SonareMode> modes;
+  SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  std::string genre_hint;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    n_fft = int_option(options, "nFft", n_fft);
+    hop_length = int_option(options, "hopLength", hop_length);
+    use_hpss = bool_option(options, "useHpss", use_hpss);
+    loudness_weighted = bool_option(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = float_option(options, "highPassHz", high_pass_hz);
+    modes = modes_option(options);
+    profile = profile_from_value(options.Get("profile"));
+    Napi::Value genre = options.Get("genreHint");
+    if (genre.IsString()) genre_hint = genre.As<Napi::String>().Utf8Value();
+  }
+
+  SonareKeyCandidate* candidates = nullptr;
+  size_t count = 0;
+  SonareError err = sonare_detect_key_candidates_with_extended_options(
+      data, length, sample_rate, n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0,
+      high_pass_hz, modes.empty() ? nullptr : modes.data(), modes.size(), profile,
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), &candidates, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    Napi::Object candidate = Napi::Object::New(env);
+    candidate.Set("key", KeyToObject(env, candidates[i].key.root, candidates[i].key.mode,
+                                     candidates[i].key.confidence));
+    candidate.Set("correlation",
+                  Napi::Number::New(env, static_cast<double>(candidates[i].correlation)));
+    out.Set(i, candidate);
+  }
+  sonare_free_key_candidates(candidates);
+  return out;
 }
 
 Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
@@ -79,6 +271,39 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
   float* times = nullptr;
   size_t count = 0;
   SonareError err = sonare_detect_beats(data, length, sample_rate, &times, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto result = Napi::Float32Array::New(env, count);
+  if (count > 0 && times != nullptr) {
+    std::memcpy(result.Data(), times, count * sizeof(float));
+    sonare_free_floats(times);
+  }
+  return result;
+}
+
+Napi::Value SonareWrap::DetectDownbeats(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+
+  int sample_rate = 22050;
+  if (info.Length() >= 2 && info[1].IsNumber()) {
+    sample_rate = info[1].As<Napi::Number>().Int32Value();
+  }
+
+  float* times = nullptr;
+  size_t count = 0;
+  SonareError err = sonare_detect_downbeats(data, length, sample_rate, &times, &count);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -215,6 +440,127 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   result.Set("tempogram", tempogram);
 
   sonare_free_bpm_analysis_result(&analysis);
+  return result;
+}
+
+Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 48000;
+  int n_octave_bands =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 6;
+
+  SonareAcousticResult acoustic{};
+  SonareError err =
+      sonare_analyze_impulse_response(data, length, sample_rate, n_octave_bands, &acoustic);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("rt60", Napi::Number::New(env, acoustic.rt60));
+  result.Set("edt", Napi::Number::New(env, acoustic.edt));
+  result.Set("c50", Napi::Number::New(env, acoustic.c50));
+  result.Set("c80", Napi::Number::New(env, acoustic.c80));
+  result.Set("d50", Napi::Number::New(env, acoustic.d50));
+  result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
+  result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
+
+  auto rt60_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  auto edt_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  auto c50_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  auto c80_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  if (acoustic.band_count > 0) {
+    std::memcpy(rt60_bands.Data(), acoustic.rt60_bands, acoustic.band_count * sizeof(float));
+    std::memcpy(edt_bands.Data(), acoustic.edt_bands, acoustic.band_count * sizeof(float));
+    // Clarity bands may be null in blind mode (not computed); leave arrays zeroed.
+    if (acoustic.c50_bands != nullptr) {
+      std::memcpy(c50_bands.Data(), acoustic.c50_bands, acoustic.band_count * sizeof(float));
+    }
+    if (acoustic.c80_bands != nullptr) {
+      std::memcpy(c80_bands.Data(), acoustic.c80_bands, acoustic.band_count * sizeof(float));
+    }
+  }
+  result.Set("rt60Bands", rt60_bands);
+  result.Set("edtBands", edt_bands);
+  result.Set("c50Bands", c50_bands);
+  result.Set("c80Bands", c80_bands);
+
+  sonare_free_acoustic_result(&acoustic);
+  return result;
+}
+
+Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 48000;
+  int n_octave_bands =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 6;
+  int n_third_octave_subbands =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 24;
+  float min_decay_db =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 30.0f;
+  float noise_floor_margin_db =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 10.0f;
+
+  SonareAcousticResult acoustic{};
+  SonareError err =
+      sonare_detect_acoustic(data, length, sample_rate, n_octave_bands, n_third_octave_subbands,
+                             min_decay_db, noise_floor_margin_db, &acoustic);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("rt60", Napi::Number::New(env, acoustic.rt60));
+  result.Set("edt", Napi::Number::New(env, acoustic.edt));
+  result.Set("c50", Napi::Number::New(env, acoustic.c50));
+  result.Set("c80", Napi::Number::New(env, acoustic.c80));
+  result.Set("d50", Napi::Number::New(env, acoustic.d50));
+  result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
+  result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
+
+  auto rt60_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  auto edt_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  auto c50_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  auto c80_bands = Napi::Float32Array::New(env, acoustic.band_count);
+  if (acoustic.band_count > 0) {
+    std::memcpy(rt60_bands.Data(), acoustic.rt60_bands, acoustic.band_count * sizeof(float));
+    std::memcpy(edt_bands.Data(), acoustic.edt_bands, acoustic.band_count * sizeof(float));
+    // Clarity bands may be null in blind mode (not computed); leave arrays zeroed.
+    if (acoustic.c50_bands != nullptr) {
+      std::memcpy(c50_bands.Data(), acoustic.c50_bands, acoustic.band_count * sizeof(float));
+    }
+    if (acoustic.c80_bands != nullptr) {
+      std::memcpy(c80_bands.Data(), acoustic.c80_bands, acoustic.band_count * sizeof(float));
+    }
+  }
+  result.Set("rt60Bands", rt60_bands);
+  result.Set("edtBands", edt_bands);
+  result.Set("c50Bands", c50_bands);
+  result.Set("c80Bands", c80_bands);
+
+  sonare_free_acoustic_result(&acoustic);
   return result;
 }
 
@@ -417,11 +763,38 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().Int32Value() : 512;
   bool use_beat_sync =
       info.Length() >= 9 && info[8].IsBoolean() ? info[8].As<Napi::Boolean>().Value() : true;
+  bool use_hmm =
+      info.Length() >= 10 && info[9].IsBoolean() ? info[9].As<Napi::Boolean>().Value() : false;
+  int hmm_beam_width =
+      info.Length() >= 11 && info[10].IsNumber() ? info[10].As<Napi::Number>().Int32Value() : 24;
+  bool use_key_context =
+      info.Length() >= 12 && info[11].IsBoolean() ? info[11].As<Napi::Boolean>().Value() : false;
+  int key_root =
+      info.Length() >= 13 && info[12].IsNumber() ? info[12].As<Napi::Number>().Int32Value() : 0;
+  int key_mode =
+      info.Length() >= 14 && info[13].IsNumber() ? info[13].As<Napi::Number>().Int32Value() : 0;
+  bool detect_inversions =
+      info.Length() >= 15 && info[14].IsBoolean() ? info[14].As<Napi::Boolean>().Value() : false;
+  int chroma_method =
+      info.Length() >= 16 && info[15].IsNumber() ? info[15].As<Napi::Number>().Int32Value() : 0;
 
   SonareChordAnalysisResult analysis{};
-  SonareError err = sonare_detect_chords(data, length, sample_rate, min_duration, smoothing_window,
-                                         threshold, use_triads_only ? 1 : 0, n_fft, hop_length,
-                                         use_beat_sync ? 1 : 0, &analysis);
+  SonareChordDetectionOptions options{};
+  options.min_duration = min_duration;
+  options.smoothing_window = smoothing_window;
+  options.threshold = threshold;
+  options.use_triads_only = use_triads_only ? 1 : 0;
+  options.n_fft = n_fft;
+  options.hop_length = hop_length;
+  options.use_beat_sync = use_beat_sync ? 1 : 0;
+  options.use_hmm = use_hmm ? 1 : 0;
+  options.hmm_beam_width = hmm_beam_width;
+  options.use_key_context = use_key_context ? 1 : 0;
+  options.key_root = static_cast<SonarePitchClass>(key_root);
+  options.key_mode = static_cast<SonareMode>(key_mode);
+  options.detect_inversions = detect_inversions ? 1 : 0;
+  options.chroma_method = chroma_method;
+  SonareError err = sonare_detect_chords_ex(data, length, sample_rate, &options, &analysis);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -431,8 +804,10 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   for (size_t i = 0; i < analysis.chord_count; ++i) {
     Napi::Object chord = Napi::Object::New(env);
     std::string root = PitchClassNameLocal(analysis.chords[i].root);
+    std::string bass = PitchClassNameLocal(analysis.chords[i].bass);
     std::string quality = ChordQualityName(analysis.chords[i].quality);
     chord.Set("root", Napi::String::New(env, root));
+    chord.Set("bass", Napi::String::New(env, bass));
     chord.Set("quality", Napi::String::New(env, quality));
     chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
     chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));

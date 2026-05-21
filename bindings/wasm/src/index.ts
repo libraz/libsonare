@@ -19,61 +19,87 @@
  */
 
 import type {
+  AcousticResult,
   AnalysisResult,
+  ChordAnalysisResult,
+  ChordDetectionOptions,
   ChordQuality,
   ChromaResult,
   HpssResult,
   Key,
+  KeyCandidate,
+  KeyDetectionOptions,
+  KeyProfileName,
   MasteringChainConfig,
   MasteringChainResult,
+  MasteringPreset,
   MasteringProcessorParams,
   MasteringResult,
   MasteringStereoChainResult,
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
-  Mode,
-  PitchClass,
+  PairAnalysis,
+  PairProcessor,
   PitchResult,
   SectionType,
+  SoloProcessor,
+  StereoAnalysis,
   StftResult,
 } from './public_types';
+import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
 import type { AnalyzerStats, FrameBuffer, StreamConfig } from './stream_types';
 import type {
   ProgressCallback,
   SonareModule,
+  WasmAcousticResult,
   WasmAnalysisResult,
+  WasmChordAnalysisResult,
+  WasmCyclicTempogramResult,
   WasmFrameResult,
+  WasmKeyCandidateResult,
   WasmStreamAnalyzer,
   WasmTempogramResult,
   WasmTrimResult,
 } from './wasm_types';
 
 export type {
+  AcousticResult,
   AnalysisResult,
   Beat,
   Chord,
+  ChordAnalysisResult,
+  ChordDetectionOptions,
   ChromaResult,
   Dynamics,
   HpssResult,
   Key,
+  KeyCandidate,
+  KeyDetectionOptions,
+  KeyProfileName,
   MasteringChainConfig,
   MasteringChainResult,
+  MasteringPreset,
   MasteringProcessorParams,
   MasteringResult,
   MasteringStereoChainResult,
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
+  PairAnalysis,
+  PairProcessor,
   PitchResult,
   RhythmFeatures,
   Section,
+  SoloProcessor,
+  StereoAnalysis,
   StftResult,
   Timbre,
   TimeSignature,
 } from './public_types';
 export {
   ChordQuality,
+  KeyProfile,
   Mode,
   PitchClass,
   SectionType,
@@ -173,11 +199,26 @@ export function detectBpm(samples: Float32Array, sampleRate: number): number {
  * @param sampleRate - Sample rate in Hz
  * @returns Detected key
  */
-export function detectKey(samples: Float32Array, sampleRate: number): Key {
+export function detectKey(
+  samples: Float32Array,
+  sampleRate: number,
+  options: KeyDetectionOptions = {},
+): Key {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  const result = module.detectKey(samples, sampleRate);
+  const result = module._detectKeyWithOptions(
+    samples,
+    sampleRate,
+    options.nFft ?? 4096,
+    options.hopLength ?? 512,
+    options.useHpss ?? false,
+    options.loudnessWeighted ?? false,
+    options.highPassHz ?? 0,
+    keyModeValues(options.modes),
+    keyProfileValue(options.profile),
+    options.genreHint ?? '',
+  );
   return {
     root: result.root as PitchClass,
     mode: result.mode as Mode,
@@ -185,6 +226,98 @@ export function detectKey(samples: Float32Array, sampleRate: number): Key {
     name: result.name,
     shortName: result.shortName,
   };
+}
+
+function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate {
+  return {
+    key: {
+      root: wasm.key.root as PitchClass,
+      mode: wasm.key.mode as Mode,
+      confidence: wasm.key.confidence,
+      name: wasm.key.name,
+      shortName: wasm.key.shortName,
+    },
+    correlation: wasm.correlation,
+  };
+}
+
+function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
+  if (!modes) {
+    return [];
+  }
+  if (modes === 'major-minor') {
+    return [Mode.Major, Mode.Minor];
+  }
+  if (modes === 'all' || modes === 'modal') {
+    return [
+      Mode.Major,
+      Mode.Minor,
+      Mode.Dorian,
+      Mode.Phrygian,
+      Mode.Lydian,
+      Mode.Mixolydian,
+      Mode.Locrian,
+    ];
+  }
+  const names = {
+    major: Mode.Major,
+    minor: Mode.Minor,
+    dorian: Mode.Dorian,
+    phrygian: Mode.Phrygian,
+    lydian: Mode.Lydian,
+    mixolydian: Mode.Mixolydian,
+    locrian: Mode.Locrian,
+  } as const;
+  return modes.map((mode) => (typeof mode === 'number' ? mode : names[mode]));
+}
+
+function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefined): number {
+  if (profile === undefined) {
+    return -1;
+  }
+  if (typeof profile === 'number') {
+    return profile;
+  }
+  const names: Record<KeyProfileName, number> = {
+    ks: KeyProfileValues.KrumhanslSchmuckler,
+    krumhansl: KeyProfileValues.KrumhanslSchmuckler,
+    temperley: KeyProfileValues.Temperley,
+    shaath: KeyProfileValues.Shaath,
+    keyfinder: KeyProfileValues.Shaath,
+    'faraldo-edmt': KeyProfileValues.FaraldoEDMT,
+    edmt: KeyProfileValues.FaraldoEDMT,
+    'faraldo-edma': KeyProfileValues.FaraldoEDMA,
+    edma: KeyProfileValues.FaraldoEDMA,
+    'faraldo-edmm': KeyProfileValues.FaraldoEDMM,
+    edmm: KeyProfileValues.FaraldoEDMM,
+    'bellman-budge': KeyProfileValues.BellmanBudge,
+    bellman: KeyProfileValues.BellmanBudge,
+  };
+  return names[profile];
+}
+
+export function detectKeyCandidates(
+  samples: Float32Array,
+  sampleRate: number,
+  options: KeyDetectionOptions = {},
+): KeyCandidate[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module
+    ._detectKeyCandidates(
+      samples,
+      sampleRate,
+      options.nFft ?? 4096,
+      options.hopLength ?? 512,
+      options.useHpss ?? false,
+      options.loudnessWeighted ?? false,
+      options.highPassHz ?? 0,
+      keyModeValues(options.modes),
+      keyProfileValue(options.profile),
+      options.genreHint ?? '',
+    )
+    .map(convertKeyCandidate);
 }
 
 /**
@@ -215,6 +348,81 @@ export function detectBeats(samples: Float32Array, sampleRate: number): Float32A
   return module.detectBeats(samples, sampleRate);
 }
 
+/**
+ * Detect downbeat times from audio samples.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @returns Array of downbeat times in seconds
+ */
+export function detectDownbeats(samples: Float32Array, sampleRate: number): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.detectDownbeats(samples, sampleRate);
+}
+
+function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): ChordAnalysisResult {
+  return {
+    chords: wasm.chords.map((c) => ({
+      root: c.root as PitchClass,
+      bass: c.bass as PitchClass,
+      quality: c.quality as ChordQuality,
+      start: c.start,
+      end: c.end,
+      confidence: c.confidence,
+      name: c.name,
+    })),
+  };
+}
+
+/**
+ * Detect chords from audio samples.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param options - Optional chord detection settings
+ * @returns Detected chord segments
+ */
+export function detectChords(
+  samples: Float32Array,
+  sampleRate: number,
+  options: ChordDetectionOptions = {},
+): ChordAnalysisResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  const result = module.detectChords(
+    samples,
+    sampleRate,
+    options.minDuration ?? 0.3,
+    options.smoothingWindow ?? 2.0,
+    options.threshold ?? 0.5,
+    options.useTriadsOnly ?? false,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.useBeatSync ?? true,
+    options.useHmm ?? false,
+    options.hmmBeamWidth ?? 24,
+    options.useKeyContext ?? false,
+    options.keyRoot ?? PitchClass.C,
+    options.keyMode ?? Mode.Major,
+    options.detectInversions ?? false,
+    chordChromaMethodValue(options.chromaMethod ?? 'stft'),
+  );
+  return convertChordAnalysisResult(result);
+}
+
+function chordChromaMethodValue(method: 'stft' | 'nnls'): number {
+  if (method === 'stft') {
+    return 0;
+  }
+  if (method === 'nnls') {
+    return 1;
+  }
+  throw new Error(`Invalid chord chroma method: ${method}`);
+}
+
 // Helper to convert WASM result to typed result
 function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
   const beatTimes = new Float32Array(wasm.beats.length);
@@ -236,6 +444,7 @@ function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
     beats: wasm.beats,
     chords: wasm.chords.map((c) => ({
       root: c.root as PitchClass,
+      bass: c.bass as PitchClass,
       quality: c.quality as ChordQuality,
       start: c.start,
       end: c.end,
@@ -270,6 +479,44 @@ export function analyze(samples: Float32Array, sampleRate: number): AnalysisResu
   }
   const result = module.analyze(samples, sampleRate);
   return convertAnalysisResult(result);
+}
+
+export function analyzeImpulseResponse(
+  samples: Float32Array,
+  sampleRate: number,
+  nOctaveBands = 6,
+): AcousticResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  const result: WasmAcousticResult = module.analyzeImpulseResponse(
+    samples,
+    sampleRate,
+    nOctaveBands,
+  );
+  return result;
+}
+
+export function detectAcoustic(
+  samples: Float32Array,
+  sampleRate: number,
+  nOctaveBands = 6,
+  nThirdOctaveSubbands = 24,
+  minDecayDb = 30.0,
+  noiseFloorMarginDb = 10.0,
+): AcousticResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  const result: WasmAcousticResult = module.detectAcoustic(
+    samples,
+    sampleRate,
+    nOctaveBands,
+    nThirdOctaveSubbands,
+    minDecayDb,
+    noiseFloorMarginDb,
+  );
+  return result;
 }
 
 /**
@@ -417,36 +664,36 @@ export function mastering(
   return module.mastering(samples, sampleRate, targetLufs, ceilingDb, truePeakOversample);
 }
 
-export function masteringProcessorNames(): string[] {
+export function masteringProcessorNames(): SoloProcessor[] {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.masteringProcessorNames();
+  return module.masteringProcessorNames() as SoloProcessor[];
 }
 
-export function masteringPairProcessorNames(): string[] {
+export function masteringPairProcessorNames(): PairProcessor[] {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.masteringPairProcessorNames();
+  return module.masteringPairProcessorNames() as PairProcessor[];
 }
 
-export function masteringPairAnalysisNames(): string[] {
+export function masteringPairAnalysisNames(): PairAnalysis[] {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.masteringPairAnalysisNames();
+  return module.masteringPairAnalysisNames() as PairAnalysis[];
 }
 
-export function masteringStereoAnalysisNames(): string[] {
+export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.masteringStereoAnalysisNames();
+  return module.masteringStereoAnalysisNames() as StereoAnalysis[];
 }
 
 export function masteringProcess(
-  processorName: string,
+  processorName: SoloProcessor,
   samples: Float32Array,
   sampleRate: number,
   params: MasteringProcessorParams = {},
@@ -458,7 +705,7 @@ export function masteringProcess(
 }
 
 export function masteringProcessStereo(
-  processorName: string,
+  processorName: SoloProcessor,
   left: Float32Array,
   right: Float32Array,
   sampleRate: number,
@@ -474,7 +721,7 @@ export function masteringProcessStereo(
 }
 
 export function masteringPairProcess(
-  processorName: string,
+  processorName: PairProcessor,
   source: Float32Array,
   reference: Float32Array,
   sampleRate: number,
@@ -487,7 +734,7 @@ export function masteringPairProcess(
 }
 
 export function masteringPairAnalyze(
-  analysisName: string,
+  analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
   sampleRate: number,
@@ -500,7 +747,7 @@ export function masteringPairAnalyze(
 }
 
 export function masteringStereoAnalyze(
-  analysisName: string,
+  analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
   sampleRate: number,
@@ -618,11 +865,11 @@ export function masteringChainStereoWithProgress(
  *
  * @returns Preset names in display order (e.g. "pop", "edm", "aiMusic")
  */
-export function masteringPresetNames(): string[] {
+export function masteringPresetNames(): MasteringPreset[] {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.masteringPresetNames();
+  return module.masteringPresetNames() as MasteringPreset[];
 }
 
 /**
@@ -637,7 +884,7 @@ export function masteringPresetNames(): string[] {
 export function masterAudio(
   samples: Float32Array,
   sampleRate: number,
-  presetName: string,
+  presetName: MasteringPreset,
   overrides: Record<string, number | boolean> | null = null,
 ): MasteringChainResult {
   if (!module) {
@@ -660,7 +907,7 @@ export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate: number,
-  presetName: string,
+  presetName: MasteringPreset,
   overrides: Record<string, number | boolean> | null = null,
 ): MasteringStereoChainResult {
   if (!module) {
@@ -1378,6 +1625,20 @@ export function tempogram(
   return module.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
 }
 
+export function cyclicTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate: number,
+  hopLength = 512,
+  winLength = 384,
+  bpmMin = 60.0,
+  nBins = 60,
+): WasmCyclicTempogramResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.cyclicTempogram(onsetEnvelope, sampleRate, hopLength, winLength, bpmMin, nBins);
+}
+
 export function plp(
   onsetEnvelope: Float32Array,
   sampleRate: number,
@@ -1471,8 +1732,12 @@ export class Audio {
     return detectBpm(this._samples, this._sampleRate);
   }
 
-  detectKey(): Key {
-    return detectKey(this._samples, this._sampleRate);
+  detectKey(options: KeyDetectionOptions = {}): Key {
+    return detectKey(this._samples, this._sampleRate, options);
+  }
+
+  detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
+    return detectKeyCandidates(this._samples, this._sampleRate, options);
   }
 
   detectOnsets(): Float32Array {
@@ -1481,6 +1746,14 @@ export class Audio {
 
   detectBeats(): Float32Array {
     return detectBeats(this._samples, this._sampleRate);
+  }
+
+  detectDownbeats(): Float32Array {
+    return detectDownbeats(this._samples, this._sampleRate);
+  }
+
+  detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
+    return detectChords(this._samples, this._sampleRate, options);
   }
 
   analyze(): AnalysisResult {
@@ -1526,13 +1799,16 @@ export class Audio {
   }
 
   masterAudio(
-    presetName: string,
+    presetName: MasteringPreset,
     overrides: Record<string, number | boolean> | null = null,
   ): MasteringChainResult {
     return masterAudio(this._samples, this._sampleRate, presetName, overrides);
   }
 
-  masteringProcess(processorName: string, params: MasteringProcessorParams = {}): MasteringResult {
+  masteringProcess(
+    processorName: SoloProcessor,
+    params: MasteringProcessorParams = {},
+  ): MasteringResult {
     return masteringProcess(processorName, this._samples, this._sampleRate, params);
   }
 

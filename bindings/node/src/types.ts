@@ -6,6 +6,54 @@ export interface Key {
   shortName: string;
 }
 
+export type KeyMode =
+  | 'major'
+  | 'minor'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'locrian';
+
+export type KeyProfile =
+  | 'ks'
+  | 'krumhansl'
+  | 'krumhansl-schmuckler'
+  | 'temperley'
+  | 'shaath'
+  | 'keyfinder'
+  | 'faraldo-edmt'
+  | 'edmt'
+  | 'faraldo-edma'
+  | 'edma'
+  | 'faraldo-edmm'
+  | 'edmm'
+  | 'bellman-budge'
+  | 'bellman'
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6;
+
+export interface KeyDetectionOptions {
+  nFft?: number;
+  hopLength?: number;
+  useHpss?: boolean;
+  loudnessWeighted?: boolean;
+  highPassHz?: number;
+  modes?: KeyMode[] | 'major-minor' | 'all' | 'modal';
+  profile?: KeyProfile;
+  genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
+}
+
+export interface KeyCandidate {
+  key: Key;
+  correlation: number;
+}
+
 export interface TimeSignature {
   numerator: number;
   denominator: number;
@@ -33,6 +81,119 @@ export interface BpmAnalysisResult {
   autocorrelation: Float32Array;
   tempogram: Float32Array;
 }
+
+export interface AcousticResult {
+  rt60: number;
+  edt: number;
+  c50: number;
+  c80: number;
+  d50: number;
+  rt60Bands: Float32Array;
+  edtBands: Float32Array;
+  c50Bands: Float32Array;
+  c80Bands: Float32Array;
+  confidence: number;
+  isBlind: boolean;
+}
+
+export type MasteringPreset =
+  | 'pop'
+  | 'edm'
+  | 'acoustic'
+  | 'hipHop'
+  | 'aiMusic'
+  | 'speech'
+  | 'streaming'
+  | 'youtube'
+  | 'broadcast'
+  | 'podcast'
+  | 'audiobook'
+  | 'cinema'
+  | 'jpop'
+  | 'ambient'
+  | 'lofi'
+  | 'classical';
+
+export type SoloProcessor =
+  | 'dynamics.brickwallLimiter'
+  | 'dynamics.compressor'
+  | 'dynamics.deesser'
+  | 'dynamics.expander'
+  | 'dynamics.gate'
+  | 'dynamics.limiter'
+  | 'dynamics.parallelComp'
+  | 'dynamics.sidechainRouter'
+  | 'dynamics.transientShaper'
+  | 'dynamics.upwardCompressor'
+  | 'dynamics.upwardExpander'
+  | 'dynamics.vocalRider'
+  | 'eq.apiStyle'
+  | 'eq.bandPass'
+  | 'eq.cutFilter'
+  | 'eq.dynamic'
+  | 'eq.graphic'
+  | 'eq.linearPhase'
+  | 'eq.midSide'
+  | 'eq.minimumPhase'
+  | 'eq.parametric'
+  | 'eq.pultec'
+  | 'eq.shelving'
+  | 'eq.tilt'
+  | 'final.bitDepth'
+  | 'final.dither'
+  | 'final.outputChain'
+  | 'maximizer.adaptiveRelease'
+  | 'maximizer.loudnessOptimize'
+  | 'maximizer.maximizer'
+  | 'maximizer.softKneeMax'
+  | 'maximizer.truePeakLimiter'
+  | 'multiband.compressor'
+  | 'multiband.dynamicEq'
+  | 'multiband.expander'
+  | 'multiband.imager'
+  | 'multiband.limiter'
+  | 'multiband.saturation'
+  | 'repair.declick'
+  | 'repair.declip'
+  | 'repair.decrackle'
+  | 'repair.dehum'
+  | 'repair.denoiseClassical'
+  | 'repair.dereverbClassical'
+  | 'repair.trimSilence'
+  | 'saturation.bitcrusher'
+  | 'saturation.exciter'
+  | 'saturation.hardClipper'
+  | 'saturation.multibandExciter'
+  | 'saturation.softClipper'
+  | 'saturation.tape'
+  | 'saturation.transformer'
+  | 'saturation.tube'
+  | 'saturation.waveshaper'
+  | 'spectral.airBand'
+  | 'spectral.lowEndFocus'
+  | 'spectral.presenceEnhancer'
+  | 'spectral.spectralShaper'
+  | 'stereo.autoPan'
+  | 'stereo.haasEnhancer'
+  | 'stereo.imager'
+  | 'stereo.monoMaker'
+  | 'stereo.phaseAlign'
+  | 'stereo.stereoBalance';
+
+export type PairProcessor =
+  | 'match.applyMatchEq'
+  | 'match.alignReferenceToSource'
+  | 'match.abSwitch'
+  | 'match.abCrossfade';
+
+export type PairAnalysis =
+  | 'match.referenceLoudness'
+  | 'match.tonalBalance'
+  | 'match.tonalBalanceLogBands'
+  | 'match.matchEqCurve'
+  | 'match.estimateReferenceDelaySamples';
+
+export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckLogBands';
 
 export interface RhythmResult {
   bpm: number;
@@ -68,6 +229,7 @@ export interface TimbreResult {
 
 export interface Chord {
   root: string;
+  bass: string;
   quality:
     | 'major'
     | 'minor'
@@ -78,6 +240,13 @@ export interface Chord {
     | 'minor7'
     | 'sus2'
     | 'sus4'
+    | 'add9'
+    | 'minorAdd9'
+    | 'dim7'
+    | 'halfDim7'
+    | 'major9'
+    | 'dominant9'
+    | 'sus2Add4'
     | 'unknown';
   start: number;
   end: number;
@@ -88,6 +257,8 @@ export interface Chord {
 export interface ChordAnalysisResult {
   chords: Chord[];
 }
+
+export type ChordChromaMethod = 'stft' | 'nnls';
 
 export interface HpssResult {
   harmonic: Float32Array;

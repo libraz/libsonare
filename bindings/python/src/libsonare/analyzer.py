@@ -8,13 +8,16 @@ from collections.abc import Callable, Sequence
 
 from ._ffi import (
     SONARE_OK,
+    SonareAcousticResult,
     SonareAnalysisResult,
     SonareBpmAnalysisResult,
     SonareChordAnalysisResult,
+    SonareChordDetectionOptions,
     SonareChromaResult,
     SonareDynamicsResult,
     SonareHpssResult,
     SonareKey,
+    SonareKeyCandidate,
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
     SonareMasteringConfig,
@@ -31,6 +34,7 @@ from ._ffi import (
     load_library,
 )
 from .types import (
+    AcousticResult,
     AnalysisResult,
     BpmAnalysisResult,
     BpmCandidate,
@@ -40,6 +44,8 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    KeyCandidate,
+    KeyProfile,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringResult,
@@ -91,13 +97,90 @@ def _to_c_float_array(
     return c_array, length
 
 
-def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int], int]:
+def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int32], int]:
     length = len(values)
-    c_array = (ctypes.c_int * length)(*values)
+    c_array = (ctypes.c_int32 * length)(*values)
     return c_array, length
 
 
+def _mode_values(modes: Sequence[Mode | str] | str | None) -> list[int]:
+    if modes is None:
+        return []
+    if isinstance(modes, str):
+        key = modes.lower()
+        if key in ("major-minor", "majmin", "diatonic"):
+            return [int(Mode.MAJOR), int(Mode.MINOR)]
+        if key in ("all", "modal"):
+            return [
+                int(Mode.MAJOR),
+                int(Mode.MINOR),
+                int(Mode.DORIAN),
+                int(Mode.PHRYGIAN),
+                int(Mode.LYDIAN),
+                int(Mode.MIXOLYDIAN),
+                int(Mode.LOCRIAN),
+            ]
+        modes = [modes]
+    names = {
+        "major": Mode.MAJOR,
+        "maj": Mode.MAJOR,
+        "minor": Mode.MINOR,
+        "min": Mode.MINOR,
+        "m": Mode.MINOR,
+        "dorian": Mode.DORIAN,
+        "phrygian": Mode.PHRYGIAN,
+        "lydian": Mode.LYDIAN,
+        "mixolydian": Mode.MIXOLYDIAN,
+        "locrian": Mode.LOCRIAN,
+    }
+    out: list[int] = []
+    for mode in modes:
+        if isinstance(mode, str):
+            key = mode.lower()
+            if key not in names:
+                raise ValueError(f"invalid mode: {mode}")
+            out.append(int(names[key]))
+        else:
+            out.append(int(Mode(mode)))
+    return out
+
+
+def _profile_value(profile: KeyProfile | str | None) -> int:
+    if profile is None:
+        return int(KeyProfile.KRUMHANSL_SCHMUCKLER)
+    if isinstance(profile, str):
+        names = {
+            "ks": KeyProfile.KRUMHANSL_SCHMUCKLER,
+            "krumhansl": KeyProfile.KRUMHANSL_SCHMUCKLER,
+            "krumhansl-schmuckler": KeyProfile.KRUMHANSL_SCHMUCKLER,
+            "temperley": KeyProfile.TEMPERLEY,
+            "shaath": KeyProfile.SHAATH,
+            "keyfinder": KeyProfile.SHAATH,
+            "faraldo-edmt": KeyProfile.FARALDO_EDMT,
+            "edmt": KeyProfile.FARALDO_EDMT,
+            "faraldo-edma": KeyProfile.FARALDO_EDMA,
+            "edma": KeyProfile.FARALDO_EDMA,
+            "faraldo-edmm": KeyProfile.FARALDO_EDMM,
+            "edmm": KeyProfile.FARALDO_EDMM,
+            "bellman-budge": KeyProfile.BELLMAN_BUDGE,
+            "bellman": KeyProfile.BELLMAN_BUDGE,
+        }
+        key = profile.lower()
+        if key not in names:
+            raise ValueError(f"invalid key profile: {profile}")
+        return int(names[key])
+    return int(KeyProfile(profile))
+
+
 def _float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+    return [float(out[i]) for i in range(count)]
+
+
+def _optional_float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+    # A null pointer means the array was not computed (e.g. clarity bands in
+    # blind mode); represent that as an empty list rather than crashing.
+    if not out:
+        return []
     return [float(out[i]) for i in range(count)]
 
 
@@ -140,6 +223,14 @@ def detect_bpm(
 def detect_key(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
+    n_fft: int = 4096,
+    hop_length: int = 512,
+    use_hpss: bool = False,
+    loudness_weighted: bool = False,
+    high_pass_hz: float = 0.0,
+    modes: Sequence[Mode | str] | str | None = None,
+    profile: KeyProfile | str | None = None,
+    genre_hint: str | None = None,
 ) -> Key:
     """Detect the musical key of audio samples.
 
@@ -147,6 +238,14 @@ def detect_key(
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
         sample_rate: Sample rate in Hz (default 22050).
+        n_fft: FFT size used for chroma analysis.
+        hop_length: Hop length used for chroma analysis.
+        use_hpss: Use harmonic-percussive separation before chroma analysis.
+        loudness_weighted: Weight chroma frames by RMS loudness.
+        high_pass_hz: Optional high-pass cutoff before chroma analysis.
+        profile: Optional key-profile family.
+        genre_hint: Optional genre hint (``"auto"``, ``"edm"``, ``"pop"``,
+            ``"classical"``, or ``"jazz"``).
 
     Returns:
         :class:`libsonare.Key` with ``root`` (:class:`PitchClass`), ``mode``
@@ -157,9 +256,23 @@ def detect_key(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
+    mode_values = _mode_values(modes)
+    mode_array, mode_count = _to_c_int_array(mode_values) if mode_values else (None, 0)
     out_key = SonareKey()
-    rc = lib.sonare_detect_key(
-        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out_key)
+    rc = lib.sonare_detect_key_with_extended_options(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(1 if use_hpss else 0),
+        ctypes.c_int(1 if loudness_weighted else 0),
+        ctypes.c_float(high_pass_hz),
+        mode_array,
+        ctypes.c_size_t(mode_count),
+        ctypes.c_int32(_profile_value(profile)),
+        genre_hint.encode("utf-8") if genre_hint else None,
+        ctypes.byref(out_key),
     )
     _check(rc)
     return Key(
@@ -167,6 +280,59 @@ def detect_key(
         mode=Mode(out_key.mode),
         confidence=float(out_key.confidence),
     )
+
+
+def detect_key_candidates(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 4096,
+    hop_length: int = 512,
+    use_hpss: bool = False,
+    loudness_weighted: bool = False,
+    high_pass_hz: float = 0.0,
+    modes: Sequence[Mode | str] | str | None = None,
+    profile: KeyProfile | str | None = None,
+    genre_hint: str | None = None,
+) -> list[KeyCandidate]:
+    """Return ranked musical key candidates for ambiguous material."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    mode_values = _mode_values(modes)
+    mode_array, mode_count = _to_c_int_array(mode_values) if mode_values else (None, 0)
+    out_candidates = ctypes.POINTER(SonareKeyCandidate)()
+    out_count = ctypes.c_size_t()
+    rc = lib.sonare_detect_key_candidates_with_extended_options(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(1 if use_hpss else 0),
+        ctypes.c_int(1 if loudness_weighted else 0),
+        ctypes.c_float(high_pass_hz),
+        mode_array,
+        ctypes.c_size_t(mode_count),
+        ctypes.c_int32(_profile_value(profile)),
+        genre_hint.encode("utf-8") if genre_hint else None,
+        ctypes.byref(out_candidates),
+        ctypes.byref(out_count),
+    )
+    _check(rc)
+    try:
+        return [
+            KeyCandidate(
+                key=Key(
+                    root=PitchClass(out_candidates[i].key.root),
+                    mode=Mode(out_candidates[i].key.mode),
+                    confidence=float(out_candidates[i].key.confidence),
+                ),
+                correlation=float(out_candidates[i].correlation),
+            )
+            for i in range(out_count.value)
+        ]
+    finally:
+        if out_candidates and out_count.value > 0:
+            lib.sonare_free_key_candidates(out_candidates)
 
 
 def detect_beats(
@@ -190,6 +356,31 @@ def detect_beats(
     out_times = ctypes.POINTER(ctypes.c_float)()
     out_count = ctypes.c_size_t()
     rc = lib.sonare_detect_beats(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out_times),
+        ctypes.byref(out_count),
+    )
+    _check(rc)
+    try:
+        count = out_count.value
+        return [float(out_times[i]) for i in range(count)]
+    finally:
+        if out_times and out_count.value > 0:
+            lib.sonare_free_floats(out_times)
+
+
+def detect_downbeats(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+) -> list[float]:
+    """Detect downbeat positions in audio samples."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out_times = ctypes.POINTER(ctypes.c_float)()
+    out_count = ctypes.c_size_t()
+    rc = lib.sonare_detect_downbeats(
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
@@ -337,6 +528,84 @@ def analyze_bpm(
         lib.sonare_free_bpm_analysis_result(ctypes.byref(out))
 
 
+def analyze_impulse_response(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 48000,
+    n_octave_bands: int = 6,
+) -> AcousticResult:
+    """Analyze RT60, EDT, and clarity metrics from an impulse response."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareAcousticResult()
+    rc = lib.sonare_analyze_impulse_response(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_octave_bands),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        count = out.band_count
+        return AcousticResult(
+            rt60=float(out.rt60),
+            edt=float(out.edt),
+            c50=float(out.c50),
+            c80=float(out.c80),
+            d50=float(out.d50),
+            rt60_bands=[float(out.rt60_bands[i]) for i in range(count)],
+            edt_bands=[float(out.edt_bands[i]) for i in range(count)],
+            c50_bands=_optional_float_array_result(out.c50_bands, count),
+            c80_bands=_optional_float_array_result(out.c80_bands, count),
+            confidence=float(out.confidence),
+            is_blind=bool(out.is_blind),
+        )
+    finally:
+        lib.sonare_free_acoustic_result(ctypes.byref(out))
+
+
+def detect_acoustic(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 48000,
+    n_octave_bands: int = 6,
+    n_third_octave_subbands: int = 24,
+    min_decay_db: float = 30.0,
+    noise_floor_margin_db: float = 10.0,
+) -> AcousticResult:
+    """Estimate blind RT60/EDT acoustic parameters from ordinary audio."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareAcousticResult()
+    rc = lib.sonare_detect_acoustic(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_octave_bands),
+        ctypes.c_int(n_third_octave_subbands),
+        ctypes.c_float(min_decay_db),
+        ctypes.c_float(noise_floor_margin_db),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        count = out.band_count
+        return AcousticResult(
+            rt60=float(out.rt60),
+            edt=float(out.edt),
+            c50=float(out.c50),
+            c80=float(out.c80),
+            d50=float(out.d50),
+            rt60_bands=[float(out.rt60_bands[i]) for i in range(count)],
+            edt_bands=[float(out.edt_bands[i]) for i in range(count)],
+            c50_bands=_optional_float_array_result(out.c50_bands, count),
+            c80_bands=_optional_float_array_result(out.c80_bands, count),
+            confidence=float(out.confidence),
+            is_blind=bool(out.is_blind),
+        )
+    finally:
+        lib.sonare_free_acoustic_result(ctypes.byref(out))
+
+
 def analyze_rhythm(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -473,22 +742,42 @@ def detect_chords(
     n_fft: int = 2048,
     hop_length: int = 512,
     use_beat_sync: bool = True,
+    use_hmm: bool = False,
+    hmm_beam_width: int = 24,
+    use_key_context: bool = False,
+    key_root: PitchClass = PitchClass.C,
+    key_mode: Mode = Mode.MAJOR,
+    detect_inversions: bool = False,
+    chroma_method: str = "stft",
 ) -> ChordAnalysisResult:
     """Detect chord segments without generating a summary report."""
+    chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
+    if chroma_method_value is None:
+        raise ValueError("chroma_method must be 'stft' or 'nnls'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChordAnalysisResult()
-    rc = lib.sonare_detect_chords(
+    options = SonareChordDetectionOptions(
+        min_duration,
+        smoothing_window,
+        threshold,
+        1 if use_triads_only else 0,
+        n_fft,
+        hop_length,
+        1 if use_beat_sync else 0,
+        1 if use_hmm else 0,
+        hmm_beam_width,
+        1 if use_key_context else 0,
+        int(key_root),
+        int(key_mode),
+        1 if detect_inversions else 0,
+        chroma_method_value,
+    )
+    rc = lib.sonare_detect_chords_ex(
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
-        ctypes.c_float(min_duration),
-        ctypes.c_float(smoothing_window),
-        ctypes.c_float(threshold),
-        ctypes.c_int(1 if use_triads_only else 0),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(1 if use_beat_sync else 0),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)
@@ -503,6 +792,13 @@ def detect_chords(
         7: "sus2",
         8: "sus4",
         9: "unknown",
+        10: "add9",
+        11: "minorAdd9",
+        12: "dim7",
+        13: "halfDim7",
+        14: "major9",
+        15: "dominant9",
+        16: "sus2Add4",
     }
     try:
         return ChordAnalysisResult(
@@ -513,6 +809,7 @@ def detect_chords(
                     start=float(out.chords[i].start),
                     end=float(out.chords[i].end),
                     confidence=float(out.chords[i].confidence),
+                    bass=PitchClass(out.chords[i].bass),
                 )
                 for i in range(out.chord_count)
             ]
@@ -2557,6 +2854,40 @@ def tempogram(
         ctypes.c_int(win_length),
         ctypes.c_int(1 if center else 0),
         ctypes.c_int(1 if norm else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def cyclic_tempogram(
+    onset_envelope: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    win_length: int = 384,
+    bpm_min: float = 60.0,
+    n_bins: int = 60,
+) -> tuple[int, list[float]]:
+    """Compute cyclic tempogram. Returns (n_frames, row-major matrix)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(onset_envelope)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_cyclic_tempogram(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(win_length),
+        ctypes.c_float(bpm_min),
+        ctypes.c_int(n_bins),
         ctypes.byref(out),
         ctypes.byref(out_length),
         ctypes.byref(n_frames),
