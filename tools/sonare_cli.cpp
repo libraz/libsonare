@@ -79,6 +79,83 @@ std::vector<int> parse_int_list(const std::string& text) {
   return values;
 }
 
+PitchClass parse_pitch_class_option(const std::string& value) {
+  static const std::map<std::string, PitchClass> names = {
+      {"C", PitchClass::C},   {"C#", PitchClass::Cs}, {"DB", PitchClass::Cs},
+      {"D", PitchClass::D},   {"D#", PitchClass::Ds}, {"EB", PitchClass::Ds},
+      {"E", PitchClass::E},   {"F", PitchClass::F},   {"F#", PitchClass::Fs},
+      {"GB", PitchClass::Fs}, {"G", PitchClass::G},   {"G#", PitchClass::Gs},
+      {"AB", PitchClass::Gs}, {"A", PitchClass::A},   {"A#", PitchClass::As},
+      {"BB", PitchClass::As}, {"B", PitchClass::B},
+  };
+  std::string key = value;
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+  auto it = names.find(key);
+  if (it == names.end()) {
+    throw std::invalid_argument("invalid pitch class: " + value);
+  }
+  return it->second;
+}
+
+Mode parse_mode_option(const std::string& value) {
+  std::string key = value;
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "major" || key == "maj") return Mode::Major;
+  if (key == "minor" || key == "min" || key == "m") return Mode::Minor;
+  if (key == "dorian") return Mode::Dorian;
+  if (key == "phrygian") return Mode::Phrygian;
+  if (key == "lydian") return Mode::Lydian;
+  if (key == "mixolydian") return Mode::Mixolydian;
+  if (key == "locrian") return Mode::Locrian;
+  throw std::invalid_argument("invalid mode: " + value);
+}
+
+std::vector<Mode> parse_mode_list_option(const std::string& value) {
+  std::string key = value;
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "all" || key == "modal") {
+    return {Mode::Major,    Mode::Minor,      Mode::Dorian,     Mode::Phrygian,
+            Mode::Lydian,   Mode::Mixolydian, Mode::Locrian};
+  }
+  if (key == "major-minor" || key == "majmin" || key == "diatonic") {
+    return {Mode::Major, Mode::Minor};
+  }
+
+  std::vector<Mode> modes;
+  std::stringstream stream(value);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    if (!item.empty()) {
+      modes.push_back(parse_mode_option(item));
+    }
+  }
+  if (modes.empty()) {
+    throw std::invalid_argument("--modes must contain at least one mode");
+  }
+  return modes;
+}
+
+KeyProfileType parse_key_profile_option(const std::string& value) {
+  std::string key = value;
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "ks" || key == "krumhansl" || key == "krumhansl-schmuckler") {
+    return KeyProfileType::KrumhanslSchmuckler;
+  }
+  if (key == "temperley") return KeyProfileType::Temperley;
+  if (key == "shaath" || key == "keyfinder") return KeyProfileType::Shaath;
+  if (key == "faraldo-edmt" || key == "edmt") return KeyProfileType::FaraldoEDMT;
+  if (key == "faraldo-edma" || key == "edma") return KeyProfileType::FaraldoEDMA;
+  if (key == "faraldo-edmm" || key == "edmm") return KeyProfileType::FaraldoEDMM;
+  if (key == "bellman-budge" || key == "bellman" || key == "budge") {
+    return KeyProfileType::BellmanBudge;
+  }
+  throw std::invalid_argument("invalid key profile: " + value);
+}
+
 void print_float_values(const CliArgs& args, const std::vector<float>& values) {
   if (args.json_output) {
     JsonBuilder().float_array(values).print();
@@ -362,23 +439,72 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_key(const CliArgs& args, const Audio& audio) {
-  Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate());
+  KeyConfig config;
+  config.n_fft = args.n_fft == 2048 ? 4096 : args.n_fft;
+  config.hop_length = args.hop_length;
+  config.use_hpss = args.has("use-hpss") || args.has("hpss");
+  config.loudness_weighted = args.has("loudness-weighted");
+  config.high_pass_hz = args.get_float("high-pass-hz", 0.0f);
+  if (args.has("genre-hint")) {
+    config.genre_hint = args.get_string("genre-hint");
+  }
+  if (args.has("profile")) {
+    config.profile_type = parse_key_profile_option(args.get_string("profile"));
+  }
+  if (args.has("modes")) {
+    config.modes = parse_mode_list_option(args.get_string("modes"));
+  }
+
+  auto candidates =
+      quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
+  Key key = candidates.empty() ? quick::detect_key(audio.data(), audio.size(), audio.sample_rate())
+                               : candidates.front().key;
+  int candidate_count = 0;
+  if (args.has("candidates")) {
+    const std::string value = args.get_string("candidates");
+    candidate_count = (value == "true") ? 5 : std::max(0, std::stoi(value));
+    candidate_count = std::min(candidate_count, static_cast<int>(candidates.size()));
+  }
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("root", static_cast<int>(key.root))
         .kv("mode", static_cast<int>(key.mode))
         .kv("confidence", key.confidence)
-        .kv("name", key.to_string())
-        .end_object()
-        .print();
+        .kv("name", key.to_string());
+    if (candidate_count > 0) {
+      json.key("candidates").begin_array();
+      for (int i = 0; i < candidate_count; ++i) {
+        const auto& candidate = candidates[static_cast<size_t>(i)];
+        json.begin_object()
+            .kv("root", static_cast<int>(candidate.key.root))
+            .kv("mode", static_cast<int>(candidate.key.mode))
+            .kv("confidence", candidate.key.confidence)
+            .kv("name", candidate.key.to_string())
+            .kv("correlation", candidate.correlation)
+            .end_object();
+      }
+      json.end_array();
+    }
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::magenta << color::bold << "> Estimated Key : " << key.to_string()
               << "  (conf " << std::fixed << std::setprecision(1) << (key.confidence * 100.0f)
               << "%)" << color::reset << "\n\n";
+    if (candidate_count > 0) {
+      std::cout << "  " << color::blue << "> Key candidates:" << color::reset << "\n";
+      for (int i = 0; i < candidate_count; ++i) {
+        const auto& candidate = candidates[static_cast<size_t>(i)];
+        std::cout << "    " << std::setw(2) << (i + 1) << ". " << candidate.key.to_string()
+                  << "  corr " << std::fixed << std::setprecision(3) << candidate.correlation
+                  << "  conf " << std::setprecision(1) << (candidate.key.confidence * 100.0f)
+                  << "%\n";
+      }
+      std::cout << "\n";
+    }
   }
   return 0;
 }
@@ -397,6 +523,27 @@ int cmd_beats(const CliArgs& args, const Audio& audio) {
     for (size_t i = 0; i < beats.size(); ++i) {
       printf("%.2f", beats[i]);
       if (i < beats.size() - 1) std::cout << ", ";
+      if ((i + 1) % 10 == 0) std::cout << "\n    ";
+    }
+    std::cout << "\n\n";
+  }
+  return 0;
+}
+
+int cmd_downbeats(const CliArgs& args, const Audio& audio) {
+  auto downbeats = quick::detect_downbeats(audio.data(), audio.size(), audio.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder().float_array(downbeats).print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::green << "> Detected " << downbeats.size() << " downbeats"
+              << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Downbeat times:" << color::reset << "\n    ";
+    for (size_t i = 0; i < downbeats.size(); ++i) {
+      printf("%.2f", downbeats[i]);
+      if (i < downbeats.size() - 1) std::cout << ", ";
       if ((i + 1) % 10 == 0) std::cout << "\n    ";
     }
     std::cout << "\n\n";
@@ -432,6 +579,15 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
   config.use_triads_only = args.has("triads-only");
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
+  config.chroma_method = args.has("nnls") ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  config.use_hmm = args.has("use-hmm");
+  config.hmm_beam_width = args.get_int("hmm-beam-width", config.hmm_beam_width);
+  config.detect_inversions = args.has("detect-inversions");
+  config.use_key_context = args.has("key-context");
+  if (config.use_key_context) {
+    config.key_root = parse_pitch_class_option(args.get_string("key-root", "C"));
+    config.key_mode = parse_mode_option(args.get_string("key-mode", "major"));
+  }
 
   ChordAnalyzer analyzer(audio, config);
   const auto& chords = analyzer.chords();
@@ -447,6 +603,7 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
       json.begin_object()
           .kv("name", c.to_string())
           .kv("root", static_cast<int>(c.root))
+          .kv("bass", static_cast<int>(c.bass))
           .kv("start", c.start)
           .kv("end", c.end)
           .kv("confidence", c.confidence)
@@ -1730,6 +1887,7 @@ const std::vector<CommandInfo>& get_commands() {
       {"bpm", "Detect BPM only", cmd_bpm, true},
       {"key", "Detect key only", cmd_key, true},
       {"beats", "Detect beat times", cmd_beats, true},
+      {"downbeats", "Detect downbeat times", cmd_downbeats, true},
       {"onsets", "Detect onset times", cmd_onsets, true},
       {"chords", "Detect chord progression", cmd_chords, true},
       {"sections", "Detect song structure", cmd_sections, true},

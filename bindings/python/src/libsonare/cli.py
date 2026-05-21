@@ -7,7 +7,7 @@ import json
 import sys
 
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-MODE_NAMES = ["major", "minor"]
+MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
 
 
 def _load_audio(path: str) -> tuple[list[float], int]:
@@ -23,6 +23,99 @@ def _format_time(seconds: float) -> str:
     mm = int(seconds) // 60
     ss = int(seconds) % 60
     return f"{mm}:{ss:02d}"
+
+
+def _parse_pitch_class(value: str):
+    from .types import PitchClass
+
+    names = {
+        "C": PitchClass.C,
+        "C#": PitchClass.CS,
+        "DB": PitchClass.CS,
+        "D": PitchClass.D,
+        "D#": PitchClass.DS,
+        "EB": PitchClass.DS,
+        "E": PitchClass.E,
+        "F": PitchClass.F,
+        "F#": PitchClass.FS,
+        "GB": PitchClass.FS,
+        "G": PitchClass.G,
+        "G#": PitchClass.GS,
+        "AB": PitchClass.GS,
+        "A": PitchClass.A,
+        "A#": PitchClass.AS,
+        "BB": PitchClass.AS,
+        "B": PitchClass.B,
+    }
+    key = value.upper()
+    if key not in names:
+        raise ValueError(f"invalid pitch class: {value}")
+    return names[key]
+
+
+def _parse_mode(value: str):
+    from .types import Mode
+
+    key = value.lower()
+    if key in ("major", "maj"):
+        return Mode.MAJOR
+    if key in ("minor", "min", "m"):
+        return Mode.MINOR
+    if key == "dorian":
+        return Mode.DORIAN
+    if key == "phrygian":
+        return Mode.PHRYGIAN
+    if key == "lydian":
+        return Mode.LYDIAN
+    if key == "mixolydian":
+        return Mode.MIXOLYDIAN
+    if key == "locrian":
+        return Mode.LOCRIAN
+    raise ValueError(f"invalid mode: {value}")
+
+
+def _parse_modes(value: str):
+    from .types import Mode
+
+    key = value.lower()
+    if key in ("major-minor", "majmin", "diatonic"):
+        return [Mode.MAJOR, Mode.MINOR]
+    if key in ("all", "modal"):
+        return [
+            Mode.MAJOR,
+            Mode.MINOR,
+            Mode.DORIAN,
+            Mode.PHRYGIAN,
+            Mode.LYDIAN,
+            Mode.MIXOLYDIAN,
+            Mode.LOCRIAN,
+        ]
+    return [_parse_mode(item.strip()) for item in value.split(",") if item.strip()]
+
+
+def _parse_key_profile(value: str):
+    from .types import KeyProfile
+
+    names = {
+        "ks": KeyProfile.KRUMHANSL_SCHMUCKLER,
+        "krumhansl": KeyProfile.KRUMHANSL_SCHMUCKLER,
+        "krumhansl-schmuckler": KeyProfile.KRUMHANSL_SCHMUCKLER,
+        "temperley": KeyProfile.TEMPERLEY,
+        "shaath": KeyProfile.SHAATH,
+        "keyfinder": KeyProfile.SHAATH,
+        "faraldo-edmt": KeyProfile.FARALDO_EDMT,
+        "edmt": KeyProfile.FARALDO_EDMT,
+        "faraldo-edma": KeyProfile.FARALDO_EDMA,
+        "edma": KeyProfile.FARALDO_EDMA,
+        "faraldo-edmm": KeyProfile.FARALDO_EDMM,
+        "edmm": KeyProfile.FARALDO_EDMM,
+        "bellman-budge": KeyProfile.BELLMAN_BUDGE,
+        "bellman": KeyProfile.BELLMAN_BUDGE,
+    }
+    key = value.lower()
+    if key not in names:
+        raise ValueError(f"invalid key profile: {value}")
+    return names[key]
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -74,24 +167,61 @@ def cmd_bpm(args: argparse.Namespace) -> int:
 
 
 def cmd_key(args: argparse.Namespace) -> int:
-    from . import detect_key
+    from . import detect_key, detect_key_candidates
 
     samples, sr = _load_audio(args.file)
-    key = detect_key(samples, sample_rate=sr)
+    n_fft = 4096 if args.n_fft == 2048 else args.n_fft
+    key_options = {
+        "sample_rate": sr,
+        "n_fft": n_fft,
+        "hop_length": args.hop_length,
+        "use_hpss": args.use_hpss,
+        "loudness_weighted": args.loudness_weighted,
+        "high_pass_hz": args.high_pass_hz,
+        "modes": _parse_modes(args.modes) if args.modes else None,
+        "profile": _parse_key_profile(args.profile) if args.profile else None,
+        "genre_hint": args.genre_hint or None,
+    }
+    key = detect_key(samples, **key_options)
     name = f"{PITCH_NAMES[key.root.value]} {MODE_NAMES[key.mode.value]}"
+    candidate_count = max(0, args.candidates)
+    candidates = (
+        detect_key_candidates(samples, **key_options)[:candidate_count] if candidate_count else []
+    )
     if args.json:
-        print(
-            json.dumps(
+        payload: dict[str, object] = {
+            "root": key.root.value,
+            "mode": key.mode.value,
+            "confidence": round(key.confidence, 4),
+            "name": name,
+        }
+        if candidates:
+            payload["candidates"] = [
                 {
-                    "root": key.root.value,
-                    "mode": key.mode.value,
-                    "confidence": round(key.confidence, 4),
-                    "name": name,
+                    "root": candidate.key.root.value,
+                    "mode": candidate.key.mode.value,
+                    "confidence": round(candidate.key.confidence, 4),
+                    "name": f"{PITCH_NAMES[candidate.key.root.value]} "
+                    f"{MODE_NAMES[candidate.key.mode.value]}",
+                    "correlation": round(candidate.correlation, 6),
                 }
-            )
-        )
+                for candidate in candidates
+            ]
+        print(json.dumps(payload))
     else:
         print(f"  Key: {name} (confidence: {key.confidence:.1%})")
+        if candidates:
+            print("  Key candidates:")
+            for index, candidate in enumerate(candidates, start=1):
+                candidate_name = (
+                    f"{PITCH_NAMES[candidate.key.root.value]} "
+                    f"{MODE_NAMES[candidate.key.mode.value]}"
+                )
+                print(
+                    f"    {index:2d}. {candidate_name} "
+                    f"(corr: {candidate.correlation:.3f}, "
+                    f"confidence: {candidate.key.confidence:.1%})"
+                )
     return 0
 
 
@@ -111,6 +241,22 @@ def cmd_beats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_downbeats(args: argparse.Namespace) -> int:
+    from . import detect_downbeats
+
+    samples, sr = _load_audio(args.file)
+    downbeats = detect_downbeats(samples, sample_rate=sr)
+    if args.json:
+        print(json.dumps([round(d, 4) for d in downbeats]))
+    else:
+        print(f"  Downbeat times ({len(downbeats)} downbeats):")
+        for i, d in enumerate(downbeats[:20]):
+            print(f"    {i + 1:3d}. {d:.3f}s")
+        if len(downbeats) > 20:
+            print(f"    ... ({len(downbeats) - 20} more)")
+    return 0
+
+
 def cmd_onsets(args: argparse.Namespace) -> int:
     from . import detect_onsets
 
@@ -124,6 +270,61 @@ def cmd_onsets(args: argparse.Namespace) -> int:
             print(f"    {i + 1:3d}. {o:.3f}s")
         if len(onsets) > 20:
             print(f"    ... ({len(onsets) - 20} more)")
+    return 0
+
+
+def cmd_chords(args: argparse.Namespace) -> int:
+    from . import detect_chords
+
+    samples, sr = _load_audio(args.file)
+    result = detect_chords(
+        samples,
+        sample_rate=sr,
+        min_duration=args.min_duration,
+        smoothing_window=args.smoothing_window,
+        threshold=args.threshold,
+        use_triads_only=args.triads_only,
+        n_fft=args.n_fft,
+        hop_length=args.hop_length,
+        use_beat_sync=not args.no_beat_sync,
+        use_hmm=args.use_hmm,
+        hmm_beam_width=args.hmm_beam_width,
+        use_key_context=args.key_context,
+        key_root=_parse_pitch_class(args.key_root),
+        key_mode=_parse_mode(args.key_mode),
+        detect_inversions=args.detect_inversions,
+        chroma_method="nnls" if args.nnls else "stft",
+    )
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "count": len(result.chords),
+                    "chords": [
+                        {
+                            "name": chord.name,
+                            "root": chord.root.value,
+                            "quality": chord.quality,
+                            "bass": (chord.bass or chord.root).value,
+                            "start": round(chord.start, 6),
+                            "end": round(chord.end, 6),
+                            "confidence": round(chord.confidence, 4),
+                        }
+                        for chord in result.chords
+                    ],
+                }
+            )
+        )
+    else:
+        print(f"  Chords ({len(result.chords)} changes):")
+        for index, chord in enumerate(result.chords[:40], start=1):
+            print(
+                f"    {index:2d}. {chord.name:<10s} "
+                f"({chord.start:.2f}s - {chord.end:.2f}s, "
+                f"confidence: {chord.confidence:.0%})"
+            )
+        if len(result.chords) > 40:
+            print(f"    ... ({len(result.chords) - 40} more)")
     return 0
 
 
@@ -343,9 +544,55 @@ def main() -> None:
     sub.add_parser("version", parents=[common], help="Show version")
     sub.add_parser("info", parents=[common], help="Show audio file information")
     sub.add_parser("bpm", parents=[common], help="Detect BPM")
-    sub.add_parser("key", parents=[common], help="Detect musical key")
+    key_p = sub.add_parser("key", parents=[common], help="Detect musical key")
+    key_p.add_argument(
+        "--candidates",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Also show the top N key candidates",
+    )
+    key_p.add_argument("--use-hpss", action="store_true", help="Use harmonic audio for key chroma")
+    key_p.add_argument(
+        "--loudness-weighted", action="store_true", help="Weight key chroma frames by RMS"
+    )
+    key_p.add_argument(
+        "--high-pass-hz", type=float, default=0.0, help="High-pass cutoff before key analysis"
+    )
+    key_p.add_argument(
+        "--modes",
+        type=str,
+        default="",
+        help="Candidate modes: major-minor, all, or comma-separated mode names",
+    )
+    key_p.add_argument(
+        "--profile",
+        type=str,
+        default="",
+        help="Key profile: ks, temperley, shaath, edmt, edma, edmm, or bellman",
+    )
+    key_p.add_argument(
+        "--genre-hint",
+        type=str,
+        default="",
+        help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz",
+    )
     sub.add_parser("beats", parents=[common], help="Detect beat times")
+    sub.add_parser("downbeats", parents=[common], help="Detect downbeat times")
     sub.add_parser("onsets", parents=[common], help="Detect onset times")
+    chords_p = sub.add_parser("chords", parents=[common], help="Detect chord progression")
+    chords_p.add_argument("--min-duration", type=float, default=0.3)
+    chords_p.add_argument("--smoothing-window", type=float, default=2.0)
+    chords_p.add_argument("--threshold", type=float, default=0.5)
+    chords_p.add_argument("--triads-only", action="store_true")
+    chords_p.add_argument("--nnls", action="store_true")
+    chords_p.add_argument("--no-beat-sync", action="store_true")
+    chords_p.add_argument("--use-hmm", action="store_true")
+    chords_p.add_argument("--hmm-beam-width", type=int, default=24)
+    chords_p.add_argument("--key-context", action="store_true")
+    chords_p.add_argument("--key-root", default="C")
+    chords_p.add_argument("--key-mode", default="major")
+    chords_p.add_argument("--detect-inversions", action="store_true")
     sub.add_parser("analyze", parents=[common], help="Full music analysis")
     sub.add_parser("mel", parents=[common], help="Compute mel spectrogram")
     sub.add_parser("chroma", parents=[common], help="Compute chromagram")
@@ -360,7 +607,9 @@ def main() -> None:
         "bpm",
         "key",
         "beats",
+        "downbeats",
         "onsets",
+        "chords",
         "analyze",
         "mel",
         "chroma",
@@ -382,7 +631,9 @@ def main() -> None:
         "bpm": cmd_bpm,
         "key": cmd_key,
         "beats": cmd_beats,
+        "downbeats": cmd_downbeats,
         "onsets": cmd_onsets,
+        "chords": cmd_chords,
         "analyze": cmd_analyze,
         "mel": cmd_mel,
         "chroma": cmd_chroma,

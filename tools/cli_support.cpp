@@ -250,8 +250,10 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
 void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i,
                              int argc) {
   static const std::vector<std::string> bool_flags = {
-      "harmonic-only", "percussive-only", "with-residual", "hard-mask",
-      "triads-only",   "no-hpss",         "with-seventh"};
+      "harmonic-only",     "percussive-only", "with-residual",     "hard-mask",
+      "triads-only",       "no-hpss",         "with-seventh",      "no-pad",
+      "use-hpss",          "hpss",            "loudness-weighted", "nnls",
+      "use-hmm",           "detect-inversions", "key-context"};
 
   bool is_flag =
       std::find(bool_flags.begin(), bool_flags.end(), key) != bool_flags.end() ||
