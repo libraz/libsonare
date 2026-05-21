@@ -1,0 +1,34 @@
+#pragma once
+
+/// @file tilt.h
+/// @brief Simple two-shelf tilt equalizer.
+
+#include "mastering/common/processor_base.h"
+#include "mastering/eq/parametric.h"
+
+namespace sonare::mastering::eq {
+
+class TiltEq : public common::ProcessorBase {
+ public:
+  void prepare(double sample_rate, int max_block_size) override;
+  void process(float* const* channels, int num_channels, int num_samples) override;
+  void reset() override;
+
+  void set_tilt_db(float tilt_db);
+  void set_pivot_hz(float pivot_hz);
+
+  float tilt_db() const { return tilt_db_; }
+  float pivot_hz() const { return pivot_hz_; }
+
+ private:
+  void update_bands();
+
+  ParametricEq eq_;
+  double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
+  float tilt_db_ = 0.0f;
+  float pivot_hz_ = 1000.0f;
+  bool prepared_ = false;
+};
+
+}  // namespace sonare::mastering::eq

@@ -1,0 +1,26 @@
+#pragma once
+
+/// @file loudness_optimize.h
+/// @brief Offline loudness normalization helper with peak ceiling.
+
+#include "core/audio.h"
+
+namespace sonare::mastering::maximizer {
+
+struct LoudnessOptimizeConfig {
+  float target_lufs = -14.0f;
+  float ceiling_db = -1.0f;
+  int true_peak_oversample = 4;
+};
+
+struct LoudnessOptimizeResult {
+  Audio audio;
+  float input_lufs = 0.0f;
+  float output_lufs = 0.0f;
+  float applied_gain_db = 0.0f;
+};
+
+LoudnessOptimizeResult loudness_optimize(const Audio& audio,
+                                         const LoudnessOptimizeConfig& config = {});
+
+}  // namespace sonare::mastering::maximizer

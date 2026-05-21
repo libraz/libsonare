@@ -1,0 +1,260 @@
+#include "mastering/eq/linear_phase.h"
+
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <stdexcept>
+
+#include "core/fft.h"
+
+namespace sonare::mastering::eq {
+namespace {
+
+constexpr double kPi = 3.14159265358979323846;
+
+bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
+
+float db_to_gain(float db) { return std::pow(10.0f, db / 20.0f); }
+
+double clamp_frequency(double frequency_hz, double sample_rate) {
+  return std::clamp(frequency_hz, 1.0, sample_rate * 0.5 - 1.0);
+}
+
+}  // namespace
+
+LinearPhaseEq::LinearPhaseEq(LinearPhaseEqConfig config) : config_(config) { validate_config(); }
+
+void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
+  if (!(sample_rate > 0.0)) {
+    throw std::invalid_argument("sample_rate must be positive");
+  }
+  if (max_block_size < 0) {
+    throw std::invalid_argument("max_block_size must be non-negative");
+  }
+
+  sample_rate_ = sample_rate;
+  max_block_size_ = max_block_size;
+  prepared_ = true;
+  rebuild_kernel();
+  reset();
+}
+
+void LinearPhaseEq::process(float* const* channels, int num_channels, int num_samples) {
+  if (!prepared_) {
+    throw std::logic_error("LinearPhaseEq must be prepared before processing");
+  }
+  if (num_channels < 0 || num_samples < 0) {
+    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+  }
+  if (num_channels == 0 || num_samples == 0) {
+    return;
+  }
+  if (channels == nullptr) {
+    throw std::invalid_argument("channels must not be null");
+  }
+
+  ensure_channel_state(num_channels);
+
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (channels[ch] == nullptr) {
+      throw std::invalid_argument("channel buffer must not be null");
+    }
+  }
+
+  const size_t kernel_size = kernel_.size();
+  for (int ch = 0; ch < num_channels; ++ch) {
+    auto& state = states_[static_cast<size_t>(ch)];
+    float* samples = channels[ch];
+    for (int i = 0; i < num_samples; ++i) {
+      state.history[state.write_index] = samples[i];
+
+      double y = 0.0;
+      size_t read = state.write_index;
+      for (size_t k = 0; k < kernel_size; ++k) {
+        y += static_cast<double>(kernel_[k]) * state.history[read];
+        read = (read == 0) ? kernel_size - 1 : read - 1;
+      }
+
+      samples[i] = static_cast<float>(y);
+      state.write_index = (state.write_index + 1) % kernel_size;
+    }
+  }
+}
+
+void LinearPhaseEq::reset() {
+  for (auto& state : states_) {
+    std::fill(state.history.begin(), state.history.end(), 0.0f);
+    state.write_index = 0;
+  }
+}
+
+void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
+  validate_band_index(index);
+  if (band.enabled) {
+    if (!(band.frequency_hz > 0.0f) ||
+        !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
+      throw std::invalid_argument("EQ band frequency must be between 0 Hz and Nyquist");
+    }
+    if (!(band.q > 0.0f)) {
+      throw std::invalid_argument("EQ band Q must be positive");
+    }
+  }
+
+  bands_[index] = band;
+  if (prepared_) {
+    rebuild_kernel();
+    reset();
+  }
+}
+
+void LinearPhaseEq::clear_band(size_t index) {
+  validate_band_index(index);
+  bands_[index] = {};
+  if (prepared_) {
+    rebuild_kernel();
+    reset();
+  }
+}
+
+void LinearPhaseEq::clear() {
+  for (auto& band : bands_) {
+    band = {};
+  }
+  if (prepared_) {
+    rebuild_kernel();
+    reset();
+  }
+}
+
+const EqBand& LinearPhaseEq::band(size_t index) const {
+  validate_band_index(index);
+  return bands_[index];
+}
+
+void LinearPhaseEq::rebuild_kernel() {
+  validate_config();
+
+  FFT fft(config_.fft_size);
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
+  for (int bin = 0; bin < fft.n_bins(); ++bin) {
+    const double frequency_hz = static_cast<double>(bin) * sample_rate_ / config_.fft_size;
+    float magnitude = 1.0f;
+    for (const auto& band : bands_) {
+      if (band.enabled) {
+        magnitude *= band_magnitude(band, frequency_hz, sample_rate_);
+      }
+    }
+    spectrum[static_cast<size_t>(bin)] = {magnitude, 0.0f};
+  }
+
+  std::vector<float> zero_phase(static_cast<size_t>(config_.fft_size), 0.0f);
+  fft.inverse(spectrum.data(), zero_phase.data());
+
+  const size_t kernel_size = static_cast<size_t>(config_.kernel_size);
+  kernel_.assign(kernel_size, 0.0f);
+  const int half = config_.kernel_size / 2;
+  for (int i = 0; i < config_.kernel_size; ++i) {
+    const int source = (i - half + config_.fft_size) % config_.fft_size;
+    kernel_[static_cast<size_t>(i)] =
+        zero_phase[static_cast<size_t>(source)] * hann(static_cast<size_t>(i), kernel_size);
+  }
+
+  latency_samples_ = half;
+  ensure_channel_state(static_cast<int>(states_.size()));
+}
+
+void LinearPhaseEq::ensure_channel_state(int num_channels) {
+  if (num_channels < 0) {
+    throw std::invalid_argument("num_channels must be non-negative");
+  }
+  if (kernel_.empty()) {
+    return;
+  }
+  if (states_.size() == static_cast<size_t>(num_channels)) {
+    return;
+  }
+
+  states_.assign(static_cast<size_t>(num_channels), {});
+  for (auto& state : states_) {
+    state.history.assign(kernel_.size(), 0.0f);
+    state.write_index = 0;
+  }
+}
+
+void LinearPhaseEq::validate_config() const {
+  if (!is_power_of_two(config_.fft_size)) {
+    throw std::invalid_argument("LinearPhaseEq fft_size must be a power of two");
+  }
+  if (config_.kernel_size <= 0 || config_.kernel_size > config_.fft_size) {
+    throw std::invalid_argument("LinearPhaseEq kernel_size must be between 1 and fft_size");
+  }
+  if ((config_.kernel_size % 2) == 0) {
+    throw std::invalid_argument("LinearPhaseEq kernel_size must be odd");
+  }
+}
+
+void LinearPhaseEq::validate_band_index(size_t index) {
+  if (index >= kMaxBands) {
+    throw std::out_of_range("EQ band index out of range");
+  }
+}
+
+float LinearPhaseEq::band_magnitude(const EqBand& band, double frequency_hz, double sample_rate) {
+  const double frequency = clamp_frequency(frequency_hz, sample_rate);
+  const double center = clamp_frequency(band.frequency_hz, sample_rate);
+  const float target_gain = db_to_gain(band.gain_db);
+  const double q = std::max(static_cast<double>(band.q), 1.0e-6);
+
+  switch (band.type) {
+    case EqBandType::Peak: {
+      const double octaves = std::log2(frequency / center);
+      const double weight = std::exp(-0.5 * std::pow(octaves * q * 2.0, 2.0));
+      return static_cast<float>(1.0 + (target_gain - 1.0) * weight);
+    }
+
+    case EqBandType::LowShelf: {
+      const double ratio = std::pow(frequency / center, q * 2.0);
+      const double weight = 1.0 / (1.0 + ratio);
+      return static_cast<float>(1.0 + (target_gain - 1.0) * weight);
+    }
+
+    case EqBandType::HighShelf: {
+      const double ratio = std::pow(center / frequency, q * 2.0);
+      const double weight = 1.0 / (1.0 + ratio);
+      return static_cast<float>(1.0 + (target_gain - 1.0) * weight);
+    }
+
+    case EqBandType::LowPass: {
+      const double ratio = frequency / center;
+      return static_cast<float>(1.0 / std::sqrt(1.0 + std::pow(ratio, 4.0 * q)));
+    }
+
+    case EqBandType::HighPass: {
+      const double ratio = center / frequency;
+      return static_cast<float>(1.0 / std::sqrt(1.0 + std::pow(ratio, 4.0 * q)));
+    }
+
+    case EqBandType::BandPass: {
+      const double octaves = std::abs(std::log2(frequency / center));
+      return static_cast<float>(std::exp(-0.5 * std::pow(octaves * q * 2.0, 2.0)));
+    }
+
+    case EqBandType::Notch: {
+      const double octaves = std::log2(frequency / center);
+      const double weight = std::exp(-0.5 * std::pow(octaves * q * 2.0, 2.0));
+      return static_cast<float>(std::max(0.0, 1.0 - weight));
+    }
+  }
+
+  return 1.0f;
+}
+
+float LinearPhaseEq::hann(size_t index, size_t length) {
+  if (length <= 1) {
+    return 1.0f;
+  }
+  return static_cast<float>(0.5 - 0.5 * std::cos(2.0 * kPi * static_cast<double>(index) /
+                                                 static_cast<double>(length - 1)));
+}
+
+}  // namespace sonare::mastering::eq

@@ -1,0 +1,76 @@
+#pragma once
+
+/// @file parametric.h
+/// @brief RBJ Cookbook style parametric equalizer.
+
+#include <array>
+#include <cstddef>
+#include <vector>
+
+#include "mastering/common/processor_base.h"
+
+namespace sonare::mastering::eq {
+
+enum class EqBandType {
+  Peak,
+  LowShelf,
+  HighShelf,
+  LowPass,
+  HighPass,
+  BandPass,
+  Notch,
+};
+
+struct EqBand {
+  EqBandType type = EqBandType::Peak;
+  float frequency_hz = 1000.0f;
+  float gain_db = 0.0f;
+  float q = 0.70710678f;
+  bool enabled = false;
+};
+
+class ParametricEq : public common::ProcessorBase {
+ public:
+  static constexpr size_t kMaxBands = 16;
+
+  void prepare(double sample_rate, int max_block_size) override;
+  void process(float* const* channels, int num_channels, int num_samples) override;
+  void reset() override;
+
+  void set_band(size_t index, const EqBand& band);
+  void clear_band(size_t index);
+  void clear();
+
+  const EqBand& band(size_t index) const;
+  double sample_rate() const { return sample_rate_; }
+
+ private:
+  struct Coefficients {
+    float b0 = 1.0f;
+    float b1 = 0.0f;
+    float b2 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+  };
+
+  struct State {
+    float z1 = 0.0f;
+    float z2 = 0.0f;
+  };
+
+  static Coefficients make_coefficients(const EqBand& band, double sample_rate);
+  static Coefficients normalize(double b0, double b1, double b2, double a0, double a1, double a2);
+  void update_coefficients(size_t index);
+  static void validate_band_index(size_t index);
+  void ensure_prepared() const;
+
+  double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
+  int num_channels_ = 0;
+  bool prepared_ = false;
+  std::array<EqBand, kMaxBands> bands_{};
+  std::array<Coefficients, kMaxBands> coefficients_{};
+  std::array<std::vector<State>, kMaxBands> states_{};
+};
+
+}  // namespace sonare::mastering::eq
