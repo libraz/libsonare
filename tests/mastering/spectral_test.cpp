@@ -24,6 +24,26 @@ float rms(const std::vector<float>& samples) {
   return static_cast<float>(std::sqrt(sum / static_cast<double>(samples.size())));
 }
 
+std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude) {
+  std::vector<float> out(static_cast<size_t>(samples));
+  for (int i = 0; i < samples; ++i) {
+    out[static_cast<size_t>(i)] =
+        amplitude *
+        static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * frequency_hz * i / sample_rate));
+  }
+  return out;
+}
+
+float rms_tail(const std::vector<float>& samples, size_t skip) {
+  double sum = 0.0;
+  size_t count = 0;
+  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
+    sum += static_cast<double>(samples[i]) * samples[i];
+    ++count;
+  }
+  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
+}
+
 void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
@@ -32,33 +52,49 @@ void process(sonare::mastering::common::ProcessorBase& processor, std::vector<fl
 }  // namespace
 
 TEST_CASE("SpectralShaper reduces material above threshold", "[mastering][spectral]") {
-  SpectralShaper shaper({0.25f, 0.75f});
-  shaper.prepare(48000.0, 16);
+  SpectralShaper shaper({0.05f, 1.0f, 500.0f, 8000.0f, 0.0f, 0.0f, 24.0f});
+  shaper.prepare(48000.0, 512);
 
-  std::vector<float> signal = {0.1f, 0.2f, 0.5f, -0.6f};
+  auto signal = sine(4000.0f, 48000, 512, 0.5f);
+  const float before = rms_tail(signal, 128);
   process(shaper, signal);
 
-  REQUIRE(peak_abs(signal) < 0.6f);
+  REQUIRE(rms_tail(signal, 128) < before * 0.75f);
   REQUIRE(shaper.last_reduction_db() < 0.0f);
 }
 
 TEST_CASE("SpectralShaper targets high-band energy more than low-band energy",
           "[mastering][spectral]") {
-  SpectralShaper shaper({0.05f, 1.0f, 1000.0f});
-  shaper.prepare(48000.0, 256);
+  SpectralShaper shaper({0.05f, 1.0f, 2000.0f, 6000.0f, 0.0f, 0.0f, 24.0f});
+  shaper.prepare(48000.0, 2048);
 
-  std::vector<float> low(256, 0.5f);
-  std::vector<float> high(256);
-  for (size_t i = 0; i < high.size(); ++i) high[i] = (i % 2 == 0) ? 0.5f : -0.5f;
+  auto low = sine(500.0f, 48000, 2048, 0.5f);
+  auto target = sine(4000.0f, 48000, 2048, 0.5f);
 
-  const float low_before = rms(low);
-  const float high_before = rms(high);
+  const float low_before = rms_tail(low, 512);
+  const float target_before = rms_tail(target, 512);
   process(shaper, low);
   shaper.reset();
-  process(shaper, high);
+  process(shaper, target);
 
-  REQUIRE(rms(low) > low_before * 0.85f);
-  REQUIRE(rms(high) < high_before * 0.7f);
+  REQUIRE(rms_tail(low, 512) > low_before * 0.85f);
+  REQUIRE(rms_tail(target, 512) < target_before * 0.7f);
+}
+
+TEST_CASE("SpectralShaper attack slows initial gain reduction", "[mastering][spectral]") {
+  SpectralShaper fast({0.05f, 1.0f, 2000.0f, 6000.0f, 0.0f, 20.0f, 24.0f});
+  SpectralShaper slow({0.05f, 1.0f, 2000.0f, 6000.0f, 50.0f, 20.0f, 24.0f});
+  fast.prepare(48000.0, 256);
+  slow.prepare(48000.0, 256);
+
+  auto fast_signal = sine(4000.0f, 48000, 256, 0.5f);
+  auto slow_signal = fast_signal;
+  const float before = rms(fast_signal);
+  process(fast, fast_signal);
+  process(slow, slow_signal);
+
+  REQUIRE(rms(fast_signal) < before * 0.8f);
+  REQUIRE(rms(slow_signal) > rms(fast_signal) * 1.1f);
 }
 
 TEST_CASE("LowEndFocus narrows low-frequency stereo difference", "[mastering][spectral]") {
@@ -97,6 +133,7 @@ TEST_CASE("PresenceEnhancer increases RMS with harmonic drive", "[mastering][spe
 
 TEST_CASE("Spectral processors validate configuration and state", "[mastering][spectral]") {
   REQUIRE_THROWS(SpectralShaper({0.1f, 1.5f}));
+  REQUIRE_THROWS(SpectralShaper({0.1f, 0.5f, 6000.0f, 2000.0f}));
   REQUIRE_THROWS(LowEndFocus({0.0f, 0.0f}));
   REQUIRE_THROWS(AirBand({-0.1f}));
   REQUIRE_THROWS(PresenceEnhancer({0.1f, 0.0f}));

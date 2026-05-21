@@ -6,6 +6,14 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+constexpr float kFloorDb = -120.0f;
+constexpr float kRmsWindowMs = 10.0f;
+constexpr float kLogRmsWindowMs = 50.0f;
+
+}  // namespace
+
 Compressor::Compressor(CompressorConfig config) : config_(config) { validate_config(config_); }
 
 void Compressor::prepare(double sample_rate, int max_block_size) {
@@ -15,12 +23,9 @@ void Compressor::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) {
     throw std::invalid_argument("max_block_size must be non-negative");
   }
-
   sample_rate_ = sample_rate;
   prepared_ = true;
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  update_coefficients();
   reset();
 }
 
@@ -37,41 +42,65 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   if (channels == nullptr) {
     throw std::invalid_argument("channels must not be null");
   }
-
-  ensure_followers(num_channels);
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       throw std::invalid_argument("channel buffer must not be null");
     }
   }
 
-  float max_reduction = 0.0f;
   const float makeup_db =
       config_.makeup_gain_db + (config_.auto_makeup ? std::max(0.0f, -config_.threshold_db) *
                                                           (1.0f - 1.0f / config_.ratio) * 0.5f
                                                     : 0.0f);
 
+  float max_reduction = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
+    // Linked detection: take the loudest channel each sample so all channels
+    // receive the same gain (preserves stereo image).
+    float peak_lin = 0.0f;
+    float power_lin = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
-      const float detector_input = config_.detector == DetectorMode::Rms
-                                       ? channels[ch][i] * channels[ch][i]
-                                       : std::abs(channels[ch][i]);
-      const float envelope = followers_[static_cast<size_t>(ch)].process(detector_input);
-      const float level = config_.detector == DetectorMode::Rms ? std::sqrt(envelope) : envelope;
-      const float reduction_db = gain_reduction_db(linear_to_db(level), config_);
-      const float gain = db_to_linear(reduction_db + makeup_db);
-      channels[ch][i] *= gain;
-      max_reduction = std::min(max_reduction, reduction_db);
+      const float s = channels[ch][i];
+      peak_lin = std::max(peak_lin, std::abs(s));
+      power_lin = std::max(power_lin, s * s);
     }
+
+    float level_db = kFloorDb;
+    switch (config_.detector) {
+      case DetectorMode::Peak:
+        level_db = linear_to_db(peak_lin);
+        break;
+      case DetectorMode::Rms:
+        // Linear-domain RMS smoothing (10 ms window). Fast response, follows
+        // transients more aggressively than LogRms.
+        rms_state_ = rms_coeff_ * rms_state_ + (1.0f - rms_coeff_) * power_lin;
+        level_db = linear_to_db(std::sqrt(std::max(rms_state_, 0.0f)));
+        break;
+      case DetectorMode::LogRms:
+        // Slower RMS smoothing (50 ms window) for sustained-level estimation.
+        // Used for "musical" compression that ignores brief transients.
+        rms_state_ = log_rms_coeff_ * rms_state_ + (1.0f - log_rms_coeff_) * power_lin;
+        level_db = linear_to_db(std::sqrt(std::max(rms_state_, 0.0f)));
+        break;
+    }
+
+    const float target_db = gain_reduction_db(level_db, config_);
+    const float coeff = target_db < reduction_state_db_ ? attack_coeff_ : release_coeff_;
+    reduction_state_db_ = coeff * reduction_state_db_ + (1.0f - coeff) * target_db;
+
+    const float gain = db_to_linear(reduction_state_db_ + makeup_db);
+    for (int ch = 0; ch < num_channels; ++ch) {
+      channels[ch][i] *= gain;
+    }
+    max_reduction = std::min(max_reduction, reduction_state_db_);
   }
 
   last_gain_reduction_db_ = max_reduction;
 }
 
 void Compressor::reset() {
-  for (auto& follower : followers_) {
-    follower.reset();
-  }
+  rms_state_ = 0.0f;
+  reduction_state_db_ = 0.0f;
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -79,9 +108,7 @@ void Compressor::set_config(const CompressorConfig& config) {
   validate_config(config);
   config_ = config;
   if (prepared_) {
-    for (auto& follower : followers_) {
-      follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-    }
+    update_coefficients();
     reset();
   }
 }
@@ -97,7 +124,7 @@ void Compressor::validate_config(const CompressorConfig& config) {
 
 float Compressor::linear_to_db(float value) {
   if (value <= 0.0f) {
-    return -120.0f;
+    return kFloorDb;
   }
   return 20.0f * std::log10(value);
 }
@@ -128,15 +155,18 @@ float Compressor::gain_reduction_db(float input_db, const CompressorConfig& conf
   return -compressed_over_db;
 }
 
-void Compressor::ensure_followers(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
-    return;
-  }
+float Compressor::time_coefficient(double sample_rate, float time_ms) {
+  const float clamped_ms = std::max(time_ms, 0.0f);
+  if (clamped_ms == 0.0f || sample_rate <= 0.0) return 0.0f;
+  const double samples = sample_rate * static_cast<double>(clamped_ms) * 0.001;
+  return static_cast<float>(std::exp(-1.0 / samples));
+}
 
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+void Compressor::update_coefficients() {
+  attack_coeff_ = time_coefficient(sample_rate_, config_.attack_ms);
+  release_coeff_ = time_coefficient(sample_rate_, config_.release_ms);
+  rms_coeff_ = time_coefficient(sample_rate_, kRmsWindowMs);
+  log_rms_coeff_ = time_coefficient(sample_rate_, kLogRmsWindowMs);
 }
 
 }  // namespace sonare::mastering::dynamics

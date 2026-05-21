@@ -18,9 +18,7 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
-  const double release_samples = sample_rate_ * std::max(config_.release_ms, 0.0f) * 0.001;
-  release_coeff_ =
-      release_samples <= 0.0 ? 0.0f : static_cast<float>(std::exp(-1.0 / release_samples));
+  update_release_coeff();
   prepared_ = true;
   lookahead_.clear();
   gains_.clear();
@@ -91,6 +89,16 @@ void Limiter::set_config(const LimiterConfig& config) {
   }
 }
 
+void Limiter::set_release_ms(float release_ms) {
+  if (release_ms < 0.0f) {
+    throw std::invalid_argument("limiter release must be non-negative");
+  }
+  config_.release_ms = release_ms;
+  if (prepared_) {
+    update_release_coeff();
+  }
+}
+
 void Limiter::validate_config(const LimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw std::invalid_argument("limiter timing values must be non-negative");
@@ -116,6 +124,12 @@ void Limiter::prepare_buffers(int num_channels) {
   for (auto& buffer : lookahead_) {
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
   }
+}
+
+void Limiter::update_release_coeff() {
+  const double release_samples = sample_rate_ * std::max(config_.release_ms, 0.0f) * 0.001;
+  release_coeff_ =
+      release_samples <= 0.0 ? 0.0f : static_cast<float>(std::exp(-1.0 / release_samples));
 }
 
 }  // namespace sonare::mastering::dynamics

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/match/reference_spectrum.h"
 
@@ -25,8 +26,18 @@ struct MatchEqCurve {
   std::vector<float> gain_db;
 };
 
+struct MatchEqFirConfig {
+  int fft_size = 2048;
+  int kernel_size = 513;
+};
+
 MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpectrum& reference,
                             const MatchEqConfig& config = {});
+std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rate,
+                                       const MatchEqFirConfig& config = {});
+Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
+                     const ReferenceSpectrum& reference, const MatchEqConfig& match_config = {},
+                     const MatchEqFirConfig& fir_config = {});
 std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
                                        const ReferenceSpectrum& reference,
                                        const MatchEqConfig& config = {});

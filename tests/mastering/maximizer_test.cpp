@@ -118,6 +118,22 @@ TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximi
   REQUIRE(limiter.current_release_ms() < 60.0f);
 }
 
+TEST_CASE("AdaptiveRelease preserves lookahead state across release updates",
+          "[mastering][maximizer]") {
+  AdaptiveRelease limiter({-6.0f, 1.0f, 10.0f, 120.0f});
+  limiter.prepare(1000.0, 1);
+
+  std::vector<float> first = {1.0f};
+  process(limiter, first);
+  REQUIRE_THAT(first[0], WithinAbs(0.0f, 0.0001f));
+
+  std::vector<float> second = {0.0f};
+  process(limiter, second);
+
+  REQUIRE(second[0] > 0.49f);
+  REQUIRE(second[0] <= 0.502f);
+}
+
 TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceiling",
           "[mastering][maximizer]") {
   const Audio input = sine_audio(0.05f);

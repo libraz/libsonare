@@ -53,6 +53,14 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
   if (prepared_) prepare(sample_rate_, max_block_size_);
 }
 
+void TruePeakLimiter::set_release_ms(float release_ms) {
+  if (release_ms < 0.0f) {
+    throw std::invalid_argument("true peak limiter release must be non-negative");
+  }
+  config_.release_ms = release_ms;
+  limiter_.set_release_ms(release_ms);
+}
+
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f || config.oversample_factor < 1) {
     throw std::invalid_argument("invalid true peak limiter configuration");

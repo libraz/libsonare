@@ -23,6 +23,7 @@ class BrickwallLimiter : public common::ProcessorBase {
   void reset() override;
 
   void set_config(const BrickwallLimiterConfig& config);
+  void set_release_ms(float release_ms);
   const BrickwallLimiterConfig& config() const { return config_; }
   float last_gain_reduction_db() const { return last_gain_reduction_db_; }
   int latency_samples() const { return limiter_.latency_samples(); }

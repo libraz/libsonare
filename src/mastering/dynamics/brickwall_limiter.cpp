@@ -62,6 +62,14 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
   }
 }
 
+void BrickwallLimiter::set_release_ms(float release_ms) {
+  if (release_ms < 0.0f) {
+    throw std::invalid_argument("brickwall limiter release must be non-negative");
+  }
+  config_.release_ms = release_ms;
+  limiter_.set_release_ms(release_ms);
+}
+
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw std::invalid_argument("brickwall limiter timing values must be non-negative");

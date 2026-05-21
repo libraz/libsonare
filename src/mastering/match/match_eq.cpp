@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <stdexcept>
 #include <utility>
+#include <vector>
+
+#include "core/fft.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -29,6 +33,17 @@ float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   const float f1 = spectrum.frequencies[index];
   const float t = (frequency_hz - f0) / std::max(f1 - f0, 1.0f);
   return spectrum.db[index - 1] + (spectrum.db[index] - spectrum.db[index - 1]) * t;
+}
+
+bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
+
+float db_to_gain(float db) { return std::pow(10.0f, db / 20.0f); }
+
+float hann(size_t index, size_t length) {
+  if (length <= 1) return 1.0f;
+  return static_cast<float>(
+      0.5 - 0.5 * std::cos(2.0 * 3.14159265358979323846 * static_cast<double>(index) /
+                           static_cast<double>(length - 1)));
 }
 
 }  // namespace
@@ -73,6 +88,65 @@ MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpec
     curve.gain_db = std::move(smoothed);
   }
   return curve;
+}
+
+std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rate,
+                                       const MatchEqFirConfig& config) {
+  if (curve.frequencies.empty() || curve.frequencies.size() != curve.gain_db.size()) {
+    throw std::invalid_argument("invalid match EQ curve");
+  }
+  if (sample_rate <= 0 || !is_power_of_two(config.fft_size) || config.kernel_size <= 0 ||
+      config.kernel_size > config.fft_size || (config.kernel_size % 2) == 0) {
+    throw std::invalid_argument("invalid match EQ FIR configuration");
+  }
+
+  FFT fft(config.fft_size);
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
+  const ReferenceSpectrum curve_spectrum{curve.frequencies, curve.gain_db, sample_rate};
+  for (int bin = 0; bin < fft.n_bins(); ++bin) {
+    const float frequency = static_cast<float>(bin) * static_cast<float>(sample_rate) /
+                            static_cast<float>(config.fft_size);
+    spectrum[static_cast<size_t>(bin)] = {db_to_gain(interpolate_db(curve_spectrum, frequency)),
+                                          0.0f};
+  }
+
+  std::vector<float> zero_phase(static_cast<size_t>(config.fft_size), 0.0f);
+  fft.inverse(spectrum.data(), zero_phase.data());
+
+  const size_t kernel_size = static_cast<size_t>(config.kernel_size);
+  std::vector<float> kernel(kernel_size, 0.0f);
+  const int half = config.kernel_size / 2;
+  for (int i = 0; i < config.kernel_size; ++i) {
+    const int source = (i - half + config.fft_size) % config.fft_size;
+    kernel[static_cast<size_t>(i)] =
+        zero_phase[static_cast<size_t>(source)] * hann(static_cast<size_t>(i), kernel_size);
+  }
+
+  return kernel;
+}
+
+Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
+                     const ReferenceSpectrum& reference, const MatchEqConfig& match_config,
+                     const MatchEqFirConfig& fir_config) {
+  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.sample_rate() != source.sample_rate || source.sample_rate != reference.sample_rate) {
+    throw std::invalid_argument("sample rates must match");
+  }
+
+  const MatchEqCurve curve = match_eq_curve(source, reference, match_config);
+  const std::vector<float> kernel = match_eq_fir_kernel(curve, audio.sample_rate(), fir_config);
+  const int half = static_cast<int>(kernel.size() / 2);
+  std::vector<float> output(audio.size(), 0.0f);
+  for (size_t i = 0; i < audio.size(); ++i) {
+    double sum = 0.0;
+    for (size_t k = 0; k < kernel.size(); ++k) {
+      const int source_index = static_cast<int>(i) + static_cast<int>(k) - half;
+      if (source_index < 0 || source_index >= static_cast<int>(audio.size())) continue;
+      sum += static_cast<double>(kernel[k]) * audio[static_cast<size_t>(source_index)];
+    }
+    output[i] = static_cast<float>(sum);
+  }
+  return Audio::from_vector(std::move(output), audio.sample_rate());
 }
 
 std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,

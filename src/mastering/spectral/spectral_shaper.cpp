@@ -5,6 +5,21 @@
 #include <stdexcept>
 
 namespace sonare::mastering::spectral {
+namespace {
+
+constexpr double kPi = 3.14159265358979323846;
+
+float one_pole_alpha(float frequency_hz, double sample_rate) {
+  return std::clamp(
+      static_cast<float>(2.0 * kPi * frequency_hz / (2.0 * kPi * frequency_hz + sample_rate)), 0.0f,
+      1.0f);
+}
+
+float db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
+
+float linear_to_db(float value) { return value <= 0.0f ? -120.0f : 20.0f * std::log10(value); }
+
+}  // namespace
 
 SpectralShaper::SpectralShaper(SpectralShaperConfig config) : config_(config) {
   validate_config(config_);
@@ -15,6 +30,8 @@ void SpectralShaper::prepare(double sample_rate, int max_block_size) {
     throw std::invalid_argument("invalid prepare arguments");
   }
   sample_rate_ = sample_rate;
+  for (auto& envelope : envelopes_)
+    envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   prepared_ = true;
   reset();
 }
@@ -26,48 +43,74 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
   if (channels == nullptr) throw std::invalid_argument("channels must not be null");
   if (low_state_.size() != static_cast<size_t>(num_channels)) {
     low_state_.assign(static_cast<size_t>(num_channels), 0.0f);
+    band_low_state_.assign(static_cast<size_t>(num_channels), 0.0f);
+    gain_state_.assign(static_cast<size_t>(num_channels), 1.0f);
+    envelopes_.assign(static_cast<size_t>(num_channels), {});
+    for (auto& envelope : envelopes_) {
+      envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+    }
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
 
-  const float alpha = std::clamp(
-      static_cast<float>(2.0 * 3.14159265358979323846 * config_.frequency_hz /
-                         (2.0 * 3.14159265358979323846 * config_.frequency_hz + sample_rate_)),
-      0.0f, 1.0f);
+  const float low_alpha = one_pole_alpha(config_.frequency_hz, sample_rate_);
+  const float high_alpha = one_pole_alpha(config_.high_frequency_hz, sample_rate_);
   float min_gain = 1.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     float low = low_state_[static_cast<size_t>(ch)];
+    float band_low = band_low_state_[static_cast<size_t>(ch)];
+    float gain_state = gain_state_[static_cast<size_t>(ch)];
+    auto& envelope = envelopes_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
-      low += alpha * (channels[ch][i] - low);
-      const float high = channels[ch][i] - low;
-      const float level = std::abs(high);
-      float gain = 1.0f;
+      const float dry = channels[ch][i];
+      low += low_alpha * (dry - low);
+      const float high_passed = dry - low;
+      band_low += high_alpha * (high_passed - band_low);
+      const float target_band = band_low;
+      const float remainder = dry - target_band;
+
+      const float level = envelope.process(target_band);
+      float target_gain = 1.0f;
       if (level > config_.threshold) {
         const float over = (level - config_.threshold) / std::max(level, 1e-6f);
-        gain = std::clamp(1.0f - over * config_.amount, 0.0f, 1.0f);
-        min_gain = std::min(min_gain, gain);
+        const float proportional_gain = std::clamp(1.0f - over * config_.amount, 0.0f, 1.0f);
+        target_gain = std::max(proportional_gain, db_to_linear(-config_.range_db));
       }
-      channels[ch][i] = low + high * gain;
+      const float coeff = target_gain < gain_state ? 0.25f : 0.02f;
+      gain_state += coeff * (target_gain - gain_state);
+      min_gain = std::min(min_gain, gain_state);
+      channels[ch][i] = remainder + target_band * gain_state;
     }
     low_state_[static_cast<size_t>(ch)] = low;
+    band_low_state_[static_cast<size_t>(ch)] = band_low;
+    gain_state_[static_cast<size_t>(ch)] = gain_state;
   }
-  last_reduction_db_ = min_gain <= 0.0f ? -120.0f : 20.0f * std::log10(min_gain);
+  last_reduction_db_ = linear_to_db(min_gain);
 }
 
 void SpectralShaper::reset() {
   std::fill(low_state_.begin(), low_state_.end(), 0.0f);
+  std::fill(band_low_state_.begin(), band_low_state_.end(), 0.0f);
+  std::fill(gain_state_.begin(), gain_state_.end(), 1.0f);
+  for (auto& envelope : envelopes_) envelope.reset();
   last_reduction_db_ = 0.0f;
 }
 
 void SpectralShaper::set_config(const SpectralShaperConfig& config) {
   validate_config(config);
   config_ = config;
+  if (prepared_) {
+    for (auto& envelope : envelopes_) {
+      envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+    }
+  }
 }
 
 void SpectralShaper::validate_config(const SpectralShaperConfig& config) {
   if (!(config.threshold >= 0.0f) || !(config.amount >= 0.0f && config.amount <= 1.0f) ||
-      !(config.frequency_hz > 0.0f)) {
+      !(config.frequency_hz > 0.0f) || !(config.high_frequency_hz > config.frequency_hz) ||
+      config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db < 0.0f) {
     throw std::invalid_argument("invalid spectral shaper configuration");
   }
 }

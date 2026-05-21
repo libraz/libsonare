@@ -25,6 +25,7 @@ class Limiter : public common::ProcessorBase {
   void reset() override;
 
   void set_config(const LimiterConfig& config);
+  void set_release_ms(float release_ms);
   const LimiterConfig& config() const { return config_; }
   float last_gain_reduction_db() const { return last_gain_reduction_db_; }
   int latency_samples() const { return lookahead_samples_; }
@@ -34,6 +35,7 @@ class Limiter : public common::ProcessorBase {
   static float db_to_linear(float db);
   static float linear_to_db(float value);
   void prepare_buffers(int num_channels);
+  void update_release_coeff();
 
   LimiterConfig config_{};
   double sample_rate_ = 48000.0;

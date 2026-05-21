@@ -3,9 +3,6 @@
 /// @file compressor.h
 /// @brief Feed-forward compressor with soft knee and makeup gain.
 
-#include <vector>
-
-#include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::dynamics {
@@ -13,6 +10,7 @@ namespace sonare::mastering::dynamics {
 enum class DetectorMode {
   Peak,
   Rms,
+  LogRms,
 };
 
 struct CompressorConfig {
@@ -43,12 +41,21 @@ class Compressor : public common::ProcessorBase {
   static float linear_to_db(float value);
   static float db_to_linear(float db);
   static float gain_reduction_db(float input_db, const CompressorConfig& config);
-  void ensure_followers(int num_channels);
+  static float time_coefficient(double sample_rate, float time_ms);
+  void update_coefficients();
 
   CompressorConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
-  std::vector<common::EnvelopeFollower> followers_;
+  // RMS pre-smoothing state (for Rms / LogRms detectors). Rms = 10 ms window,
+  // LogRms = 50 ms window for sustained-level estimation.
+  float rms_state_ = 0.0f;
+  float rms_coeff_ = 0.0f;
+  float log_rms_coeff_ = 0.0f;
+  // Log-domain attack/release smoothing on the gain-reduction signal (in dB).
+  float reduction_state_db_ = 0.0f;
+  float attack_coeff_ = 0.0f;
+  float release_coeff_ = 0.0f;
   float last_gain_reduction_db_ = 0.0f;
 };
 

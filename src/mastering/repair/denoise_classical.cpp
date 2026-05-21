@@ -13,12 +13,20 @@ namespace sonare::mastering::repair {
 
 namespace {
 
+constexpr double kPi = 3.14159265358979323846;
+
 void validate(const DenoiseClassicalConfig& config) {
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
     throw std::invalid_argument("denoise n_fft must be a positive power of two");
   }
   if (config.hop_length <= 0 || config.hop_length > config.n_fft) {
     throw std::invalid_argument("denoise hop_length must be in (0, n_fft]");
+  }
+  if (!(config.dd_alpha >= 0.0f) || config.dd_alpha >= 1.0f) {
+    throw std::invalid_argument("denoise dd_alpha must be in [0, 1)");
+  }
+  if (!(config.gain_floor >= 0.0f) || config.gain_floor > 1.0f) {
+    throw std::invalid_argument("denoise gain_floor must be in [0, 1]");
   }
   if (!(config.over_subtraction >= 0.0f) || config.over_subtraction > 16.0f) {
     throw std::invalid_argument("denoise over_subtraction must be in [0, 16]");
@@ -62,28 +70,115 @@ std::vector<double> estimate_noise_psd(const Spectrogram& spec, float quantile) 
   return noise;
 }
 
-}  // namespace
-
-Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
-  validate(config);
-
-  if (static_cast<int>(audio.size()) < config.n_fft) {
-    return audio;
+// Exponential integral E1(x) = integral from x to infinity of (e^-t / t) dt.
+// Approximated via Abramowitz & Stegun 5.1.53 (series) for x <= 1, and
+// 5.1.56 (rational asymptotic) for x > 1. Accuracy ~1e-7 over (0, inf).
+double exponential_integral_e1(double x) {
+  if (x <= 0.0) return 0.0;
+  if (x <= 1.0) {
+    // A&S 5.1.53: E1(x) = -gamma - ln(x) + sum_{n=1..inf} (-1)^(n+1) x^n / (n * n!)
+    constexpr double kGamma = 0.5772156649015329;
+    double sum = -kGamma - std::log(x);
+    double term = 1.0;
+    for (int n = 1; n < 20; ++n) {
+      term *= -x / static_cast<double>(n);
+      sum -= term / static_cast<double>(n);
+    }
+    return sum;
   }
+  // A&S 5.1.56: rational approximation for x > 1.
+  const double a0 = 8.5733287401, a1 = 18.0590169730, a2 = 8.6347608925, a3 = 0.2677737343;
+  const double b0 = 9.5733223454, b1 = 25.6329561486, b2 = 21.0996530827, b3 = 3.9584969228;
+  const double num = x * x * x * x + a3 * x * x * x + a2 * x * x + a1 * x + a0;
+  const double den = x * x * x * x + b3 * x * x * x + b2 * x * x + b1 * x + b0;
+  return std::exp(-x) / x * (num / den);
+}
 
-  StftConfig stft_config;
-  stft_config.n_fft = config.n_fft;
-  stft_config.hop_length = config.hop_length;
-  stft_config.window = WindowType::Hann;
-  stft_config.center = true;
+float gain_logmmse(double ksi, double gamma_post) {
+  const double nu = ksi * gamma_post / (1.0 + ksi);
+  const double e1 = exponential_integral_e1(nu);
+  return static_cast<float>((ksi / (1.0 + ksi)) * std::exp(0.5 * e1));
+}
 
-  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
-  if (spec.empty()) return audio;
+float gain_mmse_stsa(double ksi, double gamma_post) {
+  // Closed-form using modified Bessel functions of orders 0 and 1 (Ephraim-Malah 1984).
+  // G_STSA = sqrt(pi)/2 * sqrt(nu)/gamma * exp(-nu/2) * ((1+nu)*I0(nu/2) + nu*I1(nu/2))
+  const double nu = ksi * gamma_post / (1.0 + ksi);
+  if (nu < 1e-12) return 0.0f;
+  const double half_nu = 0.5 * nu;
+  // Series for I0 and I1 (accurate for small arguments, which is the common case).
+  double i0 = 1.0;
+  double i1 = 0.0;
+  double term0 = 1.0;
+  double term1 = 0.5 * half_nu;
+  i1 = term1;
+  for (int k = 1; k < 25; ++k) {
+    term0 *= (half_nu * half_nu) / static_cast<double>(k * k);
+    i0 += term0;
+    if (k >= 1) {
+      term1 *= (half_nu * half_nu) / static_cast<double>(k * (k + 1));
+      i1 += term1;
+    }
+  }
+  const double envelope = std::exp(-half_nu) * ((1.0 + nu) * i0 + nu * i1);
+  const double prefactor = std::sqrt(kPi) * 0.5 * std::sqrt(nu) / gamma_post;
+  return static_cast<float>(prefactor * envelope);
+}
 
+Audio denoise_ephraim_malah(const Audio& audio, const Spectrogram& spec,
+                            const std::vector<double>& noise_psd,
+                            const DenoiseClassicalConfig& config) {
   const int bins = spec.n_bins();
   const int frames = spec.n_frames();
-  const auto noise_psd = estimate_noise_psd(spec, config.noise_estimation_quantile);
+  const auto* complex_data = spec.complex_data();
+
+  std::vector<std::complex<float>> denoised_data(static_cast<size_t>(bins * frames));
+  // Decision-directed a priori SNR uses the previous frame's clean estimate.
+  std::vector<double> prev_clean_power(static_cast<size_t>(bins), 0.0);
+  const double alpha = config.dd_alpha;
+  const double floor_gain = static_cast<double>(config.gain_floor);
+
+  for (int t = 0; t < frames; ++t) {
+    for (int b = 0; b < bins; ++b) {
+      const size_t idx = static_cast<size_t>(b * frames + t);
+      const std::complex<float>& bin = complex_data[idx];
+      const double mag = std::abs(bin);
+      const double power = mag * mag;
+      const double noise = std::max(noise_psd[static_cast<size_t>(b)], 1e-12);
+
+      // a posteriori SNR.
+      const double gamma_post = std::max(power / noise, 1e-6);
+      // Decision-directed a priori SNR (Ephraim-Malah recursion).
+      const double ml_estimate = std::max(gamma_post - 1.0, 0.0);
+      const double ksi = std::max(
+          alpha * prev_clean_power[static_cast<size_t>(b)] / noise + (1.0 - alpha) * ml_estimate,
+          1e-6);
+
+      double gain;
+      if (config.mode == DenoiseMode::LogMmse) {
+        gain = gain_logmmse(ksi, gamma_post);
+      } else {
+        gain = gain_mmse_stsa(ksi, gamma_post);
+      }
+      gain = std::max(gain, floor_gain);
+      gain = std::min(gain, 1.0);
+
+      const float gf = static_cast<float>(gain);
+      denoised_data[idx] = {bin.real() * gf, bin.imag() * gf};
+      prev_clean_power[static_cast<size_t>(b)] = power * gain * gain;
+    }
+  }
+
+  const Spectrogram clean =
+      Spectrogram::from_complex(denoised_data.data(), bins, frames, spec.n_fft(), spec.hop_length(),
+                                spec.sample_rate(), spec.center(), spec.win_length());
+  return clean.to_audio(static_cast<int>(audio.size()));
+}
+
+Audio denoise_berouti(const Audio& audio, const Spectrogram& spec,
+                      const std::vector<double>& noise_psd, const DenoiseClassicalConfig& config) {
+  const int bins = spec.n_bins();
+  const int frames = spec.n_frames();
   const auto* complex_data = spec.complex_data();
 
   std::vector<std::complex<float>> denoised_data(static_cast<size_t>(bins * frames));
@@ -109,6 +204,37 @@ Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config
       Spectrogram::from_complex(denoised_data.data(), bins, frames, spec.n_fft(), spec.hop_length(),
                                 spec.sample_rate(), spec.center(), spec.win_length());
   return clean.to_audio(static_cast<int>(audio.size()));
+}
+
+}  // namespace
+
+Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config) {
+  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  validate(config);
+
+  if (static_cast<int>(audio.size()) < config.n_fft) {
+    return audio;
+  }
+
+  StftConfig stft_config;
+  stft_config.n_fft = config.n_fft;
+  stft_config.hop_length = config.hop_length;
+  stft_config.window = WindowType::Hann;
+  stft_config.center = true;
+
+  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  if (spec.empty()) return audio;
+
+  const auto noise_psd = estimate_noise_psd(spec, config.noise_estimation_quantile);
+
+  switch (config.mode) {
+    case DenoiseMode::LogMmse:
+    case DenoiseMode::MmseStsa:
+      return denoise_ephraim_malah(audio, spec, noise_psd, config);
+    case DenoiseMode::SpectralSubtraction:
+      return denoise_berouti(audio, spec, noise_psd, config);
+  }
+  return audio;
 }
 
 }  // namespace sonare::mastering::repair

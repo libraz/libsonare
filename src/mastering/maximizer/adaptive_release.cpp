@@ -43,8 +43,7 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
   current_release_ms_ =
       config_.min_release_ms + (config_.max_release_ms - config_.min_release_ms) * (1.0f - norm);
 
-  configure_limiter();
-  limiter_.prepare(sample_rate_, max_block_size_);
+  limiter_.set_release_ms(current_release_ms_);
   limiter_.process(channels, num_channels, num_samples);
 }
 

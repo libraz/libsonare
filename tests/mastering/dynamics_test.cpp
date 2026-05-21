@@ -97,6 +97,32 @@ TEST_CASE("Compressor validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(Compressor({-18.0f, 2.0f, -1.0f, 100.0f, 0.0f, 0.0f, false, DetectorMode::Rms}));
 }
 
+TEST_CASE("Compressor LogRms detector compresses loud sustained tones", "[mastering][dynamics]") {
+  Compressor compressor({-18.0f, 4.0f, 10.0f, 50.0f, 0.0f, 0.0f, false, DetectorMode::LogRms});
+  compressor.prepare(48000.0, 1024);
+
+  auto loud = sine(1000.0f, 48000, 48000, 0.8f);
+  const float before = rms_tail(loud, 4096);
+  process(compressor, loud);
+
+  REQUIRE(rms_tail(loud, 4096) / before < 0.55f);
+  REQUIRE(compressor.last_gain_reduction_db() < -4.0f);
+}
+
+TEST_CASE("Compressor links detection across stereo channels", "[mastering][dynamics]") {
+  Compressor compressor({-18.0f, 4.0f, 10.0f, 50.0f, 0.0f, 0.0f, false, DetectorMode::Peak});
+  compressor.prepare(48000.0, 1024);
+
+  auto left = sine(1000.0f, 48000, 48000, 0.8f);
+  auto right = sine(1000.0f, 48000, 48000, 0.02f);
+  float* channels[] = {left.data(), right.data()};
+  compressor.process(channels, 2, static_cast<int>(left.size()));
+
+  // The quiet channel must be attenuated because the loud channel drove the
+  // detector — this is the defining property of linked stereo detection.
+  REQUIRE(rms_tail(right, 4096) < 0.018f);
+}
+
 TEST_CASE("Limiter delays audio and limits peaks", "[mastering][dynamics]") {
   Limiter limiter({-6.0f, 1.0f, 5.0f});
   limiter.prepare(1000.0, 128);

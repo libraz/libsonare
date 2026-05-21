@@ -107,6 +107,35 @@ TEST_CASE("Tape saturation changes driven signal and keeps state resettable",
   REQUIRE_THAT(rms_tail(first, 4096), WithinAbs(rms_tail(second, 4096), 0.000001f));
 }
 
+TEST_CASE("Tape hysteresis loop depends on prior signal direction", "[mastering][saturation]") {
+  // A defining property of the Jiles-Atherton model: the output at H=0 differs
+  // depending on whether the field is rising or falling — the hallmark of
+  // hysteresis. A memoryless saturator (tanh) cannot exhibit this property.
+  Tape tape({6.0f, 0.5f, 0.9f, 0.0f});
+  tape.prepare(48000.0, 1024);
+
+  std::vector<float> ramp_up(2048, 0.0f);
+  for (size_t i = 0; i < ramp_up.size(); ++i) {
+    ramp_up[i] = static_cast<float>(i) / static_cast<float>(ramp_up.size() - 1);  // 0 → 1
+  }
+  std::vector<float> ramp_down(2048, 0.0f);
+  for (size_t i = 0; i < ramp_down.size(); ++i) {
+    ramp_down[i] = 1.0f - static_cast<float>(i) / static_cast<float>(ramp_down.size() - 1);
+  }
+
+  auto rising = ramp_up;
+  process(tape, rising);
+  const float at_top = rising.back();
+
+  auto falling = ramp_down;
+  process(tape, falling);
+  const float at_bottom = falling.back();
+
+  // Returning to H = 0 from saturation does not return to M = 0 (remanence).
+  REQUIRE(std::abs(at_bottom) > 0.01f);
+  REQUIRE(at_top > at_bottom);
+}
+
 TEST_CASE("BitCrusher quantizes and holds samples", "[mastering][saturation]") {
   std::vector<float> signal = {0.1f, 0.2f, 0.3f, 0.4f};
   BitCrusher crusher({4, 2, 1.0f});

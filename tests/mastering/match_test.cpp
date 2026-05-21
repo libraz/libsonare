@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -26,6 +27,16 @@ Audio sine_audio(float frequency_hz, float amplitude, int sample_rate = 48000,
         amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
   }
   return Audio::from_vector(std::move(out), sample_rate);
+}
+
+float rms(const Audio& audio, size_t skip = 0) {
+  double sum = 0.0;
+  size_t count = 0;
+  for (size_t i = std::min(skip, audio.size()); i < audio.size(); ++i) {
+    sum += static_cast<double>(audio[i]) * audio[i];
+    ++count;
+  }
+  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
 }  // namespace
@@ -83,6 +94,28 @@ TEST_CASE("MatchEq curve keeps dense smoothed correction data", "[mastering][mat
   REQUIRE(curve.gain_db.size() == curve.frequencies.size());
   REQUIRE(curve.gain_db.front() > 0.0f);
   REQUIRE(curve.gain_db.back() < 0.0f);
+}
+
+TEST_CASE("MatchEq FIR kernel is linear phase and follows curve gain", "[mastering][match]") {
+  MatchEqCurve curve{{100.0f, 1000.0f, 10000.0f}, {0.0f, 6.0f, 0.0f}};
+
+  const auto kernel = match_eq_fir_kernel(curve, 48000, {1024, 257});
+
+  REQUIRE(kernel.size() == 257);
+  REQUIRE_THAT(kernel.front(), WithinAbs(kernel.back(), 0.0001f));
+  REQUIRE_THAT(kernel[10], WithinAbs(kernel[kernel.size() - 11], 0.0001f));
+}
+
+TEST_CASE("ApplyMatchEq boosts material toward the reference spectrum", "[mastering][match]") {
+  const Audio input = sine_audio(1000.0f, 0.1f);
+  ReferenceSpectrum source{{100.0f, 1000.0f, 10000.0f}, {-20.0f, -20.0f, -20.0f}, 48000};
+  ReferenceSpectrum reference{{100.0f, 1000.0f, 10000.0f}, {-20.0f, -14.0f, -20.0f}, 48000};
+
+  const auto output =
+      apply_match_eq(input, source, reference, {8, 6.0f, 100.0f, 10000.0f, 1.0f, 0}, {1024, 257});
+
+  REQUIRE(output.size() == input.size());
+  REQUIRE(rms(output, 512) > rms(input, 512) * 1.5f);
 }
 
 TEST_CASE("TonalBalance summarizes broad band deviations", "[mastering][match]") {

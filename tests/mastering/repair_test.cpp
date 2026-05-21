@@ -69,6 +69,17 @@ TEST_CASE("Declip reconstructs clipped runs as a continuous segment", "[masterin
   REQUIRE_THAT(result[2], WithinAbs(0.6f, 0.001f));
 }
 
+TEST_CASE("Declip uses cubic context for smoother clipped run reconstruction",
+          "[mastering][repair]") {
+  const auto result = declip(make_audio({0.1f, 0.2f, 1.0f, 1.0f, 0.7f, 0.9f}), {0.98f});
+
+  REQUIRE(result[2] > 0.34f);
+  REQUIRE(result[2] < 0.45f);
+  REQUIRE(result[3] > 0.52f);
+  REQUIRE(result[3] < 0.62f);
+  REQUIRE(result[2] < result[3]);
+}
+
 TEST_CASE("Dehum notch filter reduces fundamental tone", "[mastering][repair]") {
   std::vector<float> samples(4800);
   for (size_t i = 0; i < samples.size(); ++i) {
@@ -81,36 +92,60 @@ TEST_CASE("Dehum notch filter reduces fundamental tone", "[mastering][repair]") 
   REQUIRE(rms(result) < rms(input));
 }
 
-TEST_CASE("DenoiseClassical reduces broadband noise while preserving a tone",
-          "[mastering][repair]") {
-  constexpr int kSampleRate = 48000;
-  constexpr int kSamples = kSampleRate;
+namespace {
+Audio noisy_tone(int sample_rate, int samples, float tone_freq, float tone_amp, float noise_amp,
+                 uint32_t seed) {
   constexpr double kPi = 3.14159265358979323846;
-
-  std::vector<float> samples(kSamples);
-  std::mt19937 rng(12345);
-  std::uniform_real_distribution<float> noise(-0.05f, 0.05f);
-  for (int i = 0; i < kSamples; ++i) {
-    const double t = static_cast<double>(i) / kSampleRate;
-    samples[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * 1000.0 * t)) + noise(rng);
+  std::vector<float> data(static_cast<size_t>(samples));
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<float> noise(-noise_amp, noise_amp);
+  for (int i = 0; i < samples; ++i) {
+    const double t = static_cast<double>(i) / sample_rate;
+    data[static_cast<size_t>(i)] =
+        static_cast<float>(tone_amp * std::sin(2.0 * kPi * tone_freq * t)) + noise(rng);
   }
+  return Audio::from_vector(std::move(data), sample_rate);
+}
 
-  const Audio input = Audio::from_vector(std::move(samples), kSampleRate);
-  const Audio output = denoise_classical(input, {1024, 256, 2.0f, 0.05f, 0.1f});
+float high_frequency_residual_rms(const Audio& a) {
+  // First-difference RMS is dominated by broadband noise content; it is a
+  // proxy for "how noisy this signal sounds" that is largely insensitive to
+  // the low-frequency tone.
+  double sum = 0.0;
+  for (size_t i = 1; i < a.size(); ++i) {
+    const float diff = a[i] - a[i - 1];
+    sum += static_cast<double>(diff) * diff;
+  }
+  return static_cast<float>(std::sqrt(sum / static_cast<double>(a.size())));
+}
+}  // namespace
 
-  // Compare RMS in a quiet region (assumed first 2048 samples are mostly silence?
-  // Instead measure the high-frequency residual: subtract a smoothed reference.
-  auto residual_rms = [](const Audio& a) {
-    double sum = 0.0;
-    for (size_t i = 1; i < a.size(); ++i) {
-      const float diff = a[i] - a[i - 1];
-      sum += static_cast<double>(diff) * diff;
-    }
-    return std::sqrt(sum / static_cast<double>(a.size()));
-  };
+TEST_CASE("DenoiseClassical LogMmse reduces broadband noise", "[mastering][repair]") {
+  const Audio input = noisy_tone(48000, 48000, 1000.0f, 0.5f, 0.05f, 12345);
+  DenoiseClassicalConfig config{};
+  config.mode = DenoiseMode::LogMmse;
+  const Audio output = denoise_classical(input, config);
 
-  REQUIRE(residual_rms(output) < residual_rms(input));
   REQUIRE(output.size() == input.size());
+  REQUIRE(high_frequency_residual_rms(output) < high_frequency_residual_rms(input) * 0.85f);
+}
+
+TEST_CASE("DenoiseClassical MmseStsa reduces broadband noise", "[mastering][repair]") {
+  const Audio input = noisy_tone(48000, 48000, 1000.0f, 0.5f, 0.05f, 23456);
+  DenoiseClassicalConfig config{};
+  config.mode = DenoiseMode::MmseStsa;
+  const Audio output = denoise_classical(input, config);
+
+  REQUIRE(high_frequency_residual_rms(output) < high_frequency_residual_rms(input) * 0.85f);
+}
+
+TEST_CASE("DenoiseClassical SpectralSubtraction reduces broadband noise", "[mastering][repair]") {
+  const Audio input = noisy_tone(48000, 48000, 1000.0f, 0.5f, 0.05f, 34567);
+  DenoiseClassicalConfig config{};
+  config.mode = DenoiseMode::SpectralSubtraction;
+  const Audio output = denoise_classical(input, config);
+
+  REQUIRE(high_frequency_residual_rms(output) < high_frequency_residual_rms(input));
 }
 
 TEST_CASE("DenoiseClassical returns short inputs unchanged", "[mastering][repair]") {
@@ -135,6 +170,8 @@ TEST_CASE("Repair helpers validate inputs", "[mastering][repair]") {
   REQUIRE_THROWS(decrackle(make_audio({0.0f}), {0.0f}));
   REQUIRE_THROWS(declip(make_audio({0.0f}), {2.0f}));
   REQUIRE_THROWS(dehum(make_audio({0.0f}), {0.0f, 1, 10.0f}));
-  REQUIRE_THROWS(denoise_classical(make_audio({0.0f}), {0, 256, 1.0f, 0.05f, 0.1f}));
+  DenoiseClassicalConfig bad_config{};
+  bad_config.n_fft = 0;
+  REQUIRE_THROWS(denoise_classical(make_audio({0.0f}), bad_config));
   REQUIRE_THROWS(dereverb_classical(make_audio({0.0f}), {0.0f, 2.0f}));
 }

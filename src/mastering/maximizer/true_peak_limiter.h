@@ -21,6 +21,7 @@ class TruePeakLimiter : public common::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void set_config(const TruePeakLimiterConfig& config);
+  void set_release_ms(float release_ms);
   const TruePeakLimiterConfig& config() const { return config_; }
   float last_gain_reduction_db() const { return last_gain_reduction_db_; }
 
