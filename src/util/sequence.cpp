@@ -34,6 +34,21 @@ float pairwise_cost(const float* X, int rows, int X_cols, int i, const float* Y,
     if (nx == 0.0f || ny == 0.0f) return 1.0f;
     return 1.0f - column_dot(X, rows, X_cols, i, Y, Y_cols, j) / (nx * ny);
   }
+  if (metric == "manhattan") {
+    float s = 0.0f;
+    for (int r = 0; r < rows; ++r) {
+      s += std::fabs(X[r * X_cols + i] - Y[r * Y_cols + j]);
+    }
+    return s;
+  }
+  if (metric == "chebyshev") {
+    float m = 0.0f;
+    for (int r = 0; r < rows; ++r) {
+      m = std::max(m, std::fabs(X[r * X_cols + i] - Y[r * Y_cols + j]));
+    }
+    return m;
+  }
+  // Default: euclidean.
   float s = 0.0f;
   for (int r = 0; r < rows; ++r) {
     float d = X[r * X_cols + i] - Y[r * Y_cols + j];
@@ -45,28 +60,78 @@ float pairwise_cost(const float* X, int rows, int X_cols, int i, const float* Y,
 }  // namespace
 
 DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows, int Y_cols,
-              const std::string& metric, bool subseq) {
+              const std::string& metric, bool subseq,
+              const std::vector<std::pair<int, int>>& step_sizes_sigma,
+              const std::vector<float>& weights_add) {
   if (X == nullptr || Y == nullptr) throw std::invalid_argument("dtw: null input");
   if (X_rows != Y_rows) throw std::invalid_argument("dtw: feature dims must match");
   if (X_cols <= 0 || Y_cols <= 0) return {};
+
+  // Resolve the step pattern. Default is symmetric P0: {(1,1),(1,0),(0,1)}.
+  std::vector<std::pair<int, int>> steps =
+      step_sizes_sigma.empty() ? std::vector<std::pair<int, int>>{{1, 1}, {1, 0}, {0, 1}}
+                               : step_sizes_sigma;
+  for (const auto& s : steps) {
+    if (s.first < 0 || s.second < 0 || (s.first == 0 && s.second == 0)) {
+      throw std::invalid_argument("dtw: step sizes must be non-negative and not (0,0)");
+    }
+  }
+  std::vector<float> weights = weights_add;
+  if (weights.empty()) {
+    weights.assign(steps.size(), 1.0f);
+  } else if (weights.size() != steps.size()) {
+    throw std::invalid_argument("dtw: weights_add must have the same length as step_sizes_sigma");
+  }
 
   DtwResult result;
   result.accumulated_cost.assign(static_cast<size_t>(X_cols) * Y_cols,
                                  std::numeric_limits<float>::infinity());
   auto& D = result.accumulated_cost;
 
+  // Local-cost cache: re-using the metric for each (i, j) lookup is the hot
+  // path of the recursion, so we materialise it once.
+  std::vector<float> C(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
+  for (int i = 0; i < X_cols; ++i) {
+    for (int j = 0; j < Y_cols; ++j) {
+      C[i * Y_cols + j] = pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, metric);
+    }
+  }
+
+  // Initialise. `subseq` lets the path start at any column of Y by zeroing the
+  // first-row prior; otherwise the path must start at (0, 0).
   for (int j = 0; j < Y_cols; ++j) {
-    float c = pairwise_cost(X, X_rows, X_cols, 0, Y, Y_cols, j, metric);
-    D[0 * Y_cols + j] = subseq ? c : (j == 0 ? c : D[0 * Y_cols + (j - 1)] + c);
+    D[0 * Y_cols + j] = subseq
+                            ? C[0 * Y_cols + j]
+                            : (j == 0 ? C[0 * Y_cols + 0] : std::numeric_limits<float>::infinity());
   }
   for (int i = 1; i < X_cols; ++i) {
-    D[i * Y_cols + 0] = D[(i - 1) * Y_cols + 0] + pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, 0,
-                                                                 metric);
-    for (int j = 1; j < Y_cols; ++j) {
-      float c = pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, metric);
-      float best = std::min({D[(i - 1) * Y_cols + j], D[i * Y_cols + (j - 1)],
-                             D[(i - 1) * Y_cols + (j - 1)]});
-      D[i * Y_cols + j] = best + c;
+    D[i * Y_cols + 0] = std::numeric_limits<float>::infinity();
+  }
+  // Forward recursion using the supplied step pattern.
+  // Backpointers store the index into `steps` for traceback.
+  std::vector<int> back(static_cast<size_t>(X_cols) * Y_cols, -1);
+  for (int i = 0; i < X_cols; ++i) {
+    for (int j = 0; j < Y_cols; ++j) {
+      if (i == 0 && j == 0) continue;
+      if (i == 0 && subseq) continue;
+      float best = std::numeric_limits<float>::infinity();
+      int best_step = -1;
+      for (size_t s = 0; s < steps.size(); ++s) {
+        const int pi = i - steps[s].first;
+        const int pj = j - steps[s].second;
+        if (pi < 0 || pj < 0) continue;
+        const float prev = D[pi * Y_cols + pj];
+        if (!std::isfinite(prev)) continue;
+        const float candidate = prev + weights[s] * C[i * Y_cols + j];
+        if (candidate < best) {
+          best = candidate;
+          best_step = static_cast<int>(s);
+        }
+      }
+      if (best_step >= 0) {
+        D[i * Y_cols + j] = best;
+        back[i * Y_cols + j] = best_step;
+      }
     }
   }
 
@@ -74,7 +139,6 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   int i = X_cols - 1;
   int j = Y_cols - 1;
   if (subseq) {
-    // Choose endpoint along the last row.
     float best = D[i * Y_cols + 0];
     int best_j = 0;
     for (int jj = 1; jj < Y_cols; ++jj) {
@@ -87,24 +151,16 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   }
   result.distance = D[i * Y_cols + j];
   result.path.push_back({i, j});
-  while (i > 0 || j > 0) {
-    if (i == 0) {
-      --j;
-    } else if (j == 0) {
-      --i;
-    } else {
-      float a = D[(i - 1) * Y_cols + j];
-      float b = D[i * Y_cols + (j - 1)];
-      float c = D[(i - 1) * Y_cols + (j - 1)];
-      if (c <= a && c <= b) {
-        --i;
-        --j;
-      } else if (a <= b) {
-        --i;
-      } else {
-        --j;
-      }
+  while (!(i == 0 && j == 0) && !(subseq && i == 0)) {
+    const int s = back[i * Y_cols + j];
+    if (s < 0) {
+      // Defensive: shouldn't happen on well-formed inputs, but bail to avoid
+      // infinite loops if the recursion couldn't reach (i, j) via the steps.
+      break;
     }
+    i -= steps[s].first;
+    j -= steps[s].second;
+    if (i < 0 || j < 0) break;
     result.path.push_back({i, j});
   }
   std::reverse(result.path.begin(), result.path.end());
@@ -116,7 +172,8 @@ RqaResult rqa(const float* rec, int n) {
   if (rec == nullptr || n <= 0) return out;
   int n2 = n * n;
   int n_rec = 0;
-  for (int i = 0; i < n2; ++i) if (rec[i] > 0.0f) ++n_rec;
+  for (int i = 0; i < n2; ++i)
+    if (rec[i] > 0.0f) ++n_rec;
   out.recurrence_rate = static_cast<float>(n_rec) / static_cast<float>(n2);
 
   // Collect diagonal line lengths (lines of consecutive ones along main diagonal direction).
@@ -154,8 +211,8 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
 
   // Initial step.
   for (int s = 0; s < n_states; ++s) {
-    float init = p_init ? std::log(std::max(p_init[s], 1e-30f))
-                        : -std::log(static_cast<float>(n_states));
+    float init =
+        p_init ? std::log(std::max(p_init[s], 1e-30f)) : -std::log(static_cast<float>(n_states));
     trellis[s * n_steps + 0] = init + log_prob[s * n_steps + 0];
   }
   // Recursion.

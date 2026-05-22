@@ -10,12 +10,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['js/**/*.test.ts', 'tests/wasm/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['js/**/*.ts'],
-      exclude: ['js/**/*.test.ts', 'js/**/*.d.ts'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts'],
     },
   },
 });

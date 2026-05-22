@@ -11,9 +11,7 @@ using namespace sonare;
 TEST_CASE("decompose returns non-negative W and H of expected shape", "[util][decompose]") {
   // Construct a small non-negative spectrogram.
   std::vector<float> S{
-      1.0f, 2.0f, 1.0f,
-      2.0f, 4.0f, 2.0f,
-      0.5f, 1.0f, 0.5f,
+      1.0f, 2.0f, 1.0f, 2.0f, 4.0f, 2.0f, 0.5f, 1.0f, 0.5f,
   };
   auto r = decompose(S.data(), 3, 3, /*n_components=*/2, /*n_iter=*/50);
   REQUIRE(r.W.size() == 3 * 2);
@@ -24,8 +22,7 @@ TEST_CASE("decompose returns non-negative W and H of expected shape", "[util][de
 
 TEST_CASE("nn_filter preserves shape and stays non-negative", "[util][decompose]") {
   std::vector<float> S{
-      1.0f, 0.0f, 1.0f, 0.0f,
-      0.0f, 1.0f, 0.0f, 1.0f,
+      1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
   };
   auto out = nn_filter(S.data(), 2, 4, "mean", 2, 1);
   REQUIRE(out.size() == 8);
@@ -34,8 +31,7 @@ TEST_CASE("nn_filter preserves shape and stays non-negative", "[util][decompose]
 
 TEST_CASE("nn_filter median aggregator", "[util][decompose]") {
   std::vector<float> S{
-      1.0f, 0.0f, 1.0f, 0.0f,
-      0.0f, 1.0f, 0.0f, 1.0f,
+      1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
   };
   auto out = nn_filter(S.data(), 2, 4, "median", 2, 1);
   REQUIRE(out.size() == 8);

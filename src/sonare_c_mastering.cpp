@@ -193,10 +193,11 @@ const char* sonare_mastering_stereo_analysis_names(void) {
   return join_names(sonare::mastering::api::stereo_analysis_names(), names);
 }
 
-SonareError sonare_mastering_apply_pair_processor(
-    const char* processor_name, const float* source, const float* reference, size_t length,
-    int sample_rate, const SonareMasteringParam* params, size_t param_count,
-    SonareMasteringResult* out) {
+SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
+                                                  const float* reference, size_t length,
+                                                  int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, SonareMasteringResult* out) {
   if (!out || !processor_name) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(source, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -240,8 +241,8 @@ SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float
 
 SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
                                             const float* right, size_t length, int sample_rate,
-                                            const SonareMasteringParam* params,
-                                            size_t param_count, char** json_out) {
+                                            const SonareMasteringParam* params, size_t param_count,
+                                            char** json_out) {
   if (!json_out || !analysis_name) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(left, length, sample_rate);
   if (err != SONARE_OK) return err;

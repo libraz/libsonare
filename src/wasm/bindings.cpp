@@ -847,9 +847,8 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
                                         val right_samples, int sample_rate, val params) {
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  return mastering::api::analyze_named_stereo(analysis_name, left.data(), right.data(),
-                                              left.size(), sample_rate,
-                                              masteringParamsFromObject(params));
+  return mastering::api::analyze_named_stereo(analysis_name, left.data(), right.data(), left.size(),
+                                              sample_rate, masteringParamsFromObject(params));
 }
 
 // ============================================================================

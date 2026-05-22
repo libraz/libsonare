@@ -1,13 +1,12 @@
 /// @file reassigned_test.cpp
 /// @brief Smoke tests for reassigned_spectrogram.
 
-#include "core/audio.h"
-#include "core/spectrum.h"
-
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
 
+#include "core/audio.h"
+#include "core/spectrum.h"
 #include "util/constants.h"
 
 using namespace sonare;

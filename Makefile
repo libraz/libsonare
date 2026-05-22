@@ -1,5 +1,6 @@
 .PHONY: all build release test test-librosa-live clean rebuild format wasm coverage \
-       coverage-build coverage-clean build-shared build-node test-python test-node
+       coverage-build coverage-clean build-shared build-node build-wasm-binding \
+       test-python test-node test-wasm
 
 BUILD_DIR := build
 RYE ?= rye
@@ -44,7 +45,8 @@ rebuild: clean build
 
 format:
 	find src tests bindings/node/src bindings/node/tests \( -name '*.cpp' -o -name '*.h' \) | xargs clang-format -i
-	yarn format
+	cd bindings/wasm && yarn format
+	cd bindings/node && yarn format
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
 	$(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
 	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
@@ -61,12 +63,18 @@ endif
 build-node:
 	cd bindings/node && yarn install && yarn build
 
+build-wasm-binding:
+	cd bindings/wasm && yarn install --immutable && yarn build
+
 test-python: build-shared
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
 	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v
 
 test-node: build-node
 	cd bindings/node && yarn test
+
+test-wasm: build-wasm-binding
+	cd bindings/wasm && yarn test
 
 # Coverage targets
 coverage-build:

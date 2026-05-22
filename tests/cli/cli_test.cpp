@@ -640,9 +640,9 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 
   SECTION("runs named processor") {
-    auto [code, output] =
-        exec_command(CLI + " mastering-processor " + TEST_WAV +
-                     " --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5 --json -q");
+    auto [code, output] = exec_command(
+        CLI + " mastering-processor " + TEST_WAV +
+        " --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"processor\": \"dynamics.compressor\""));
     REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));

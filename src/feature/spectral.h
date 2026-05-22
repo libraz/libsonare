@@ -151,10 +151,8 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 /// @return Sorted vector of zero-crossing indices.
 /// @throw std::invalid_argument if `y` is null with `n > 0` or `threshold < 0`.
 std::vector<int> zero_crossings(const float* y, size_t n, float threshold = 1e-10f,
-                                bool ref_magnitude = false, bool pad = true,
-                                bool zero_pos = true);
+                                bool ref_magnitude = false, bool pad = true, bool zero_pos = true);
 std::vector<int> zero_crossings(const std::vector<float>& y, float threshold = 1e-10f,
-                                bool ref_magnitude = false, bool pad = true,
-                                bool zero_pos = true);
+                                bool ref_magnitude = false, bool pad = true, bool zero_pos = true);
 
 }  // namespace sonare

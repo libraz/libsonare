@@ -102,6 +102,13 @@ add_executable(sonare_tests
   librosa/weighting_test.cpp
   librosa/remix_test.cpp
   librosa/audio_ops_test.cpp
+  librosa/nnls_test.cpp
+  librosa/harmonic_test.cpp
+  librosa/wavelet_filters_test.cpp
+  librosa/segment_test.cpp
+  librosa/sequence_test.cpp
+  librosa/decompose_test.cpp
+  librosa/reassigned_test.cpp
   cli/cli_test.cpp
 )
 

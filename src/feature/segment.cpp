@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace sonare {
 
@@ -60,10 +62,9 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
     std::vector<size_t> order(Y_cols);
     for (int i = 0; i < X_cols; ++i) {
       std::iota(order.begin(), order.end(), size_t{0});
-      std::partial_sort(order.begin(), order.begin() + k, order.end(),
-                        [&](size_t a, size_t b) {
-                          return out[i * Y_cols + a] > out[i * Y_cols + b];
-                        });
+      std::partial_sort(order.begin(), order.begin() + k, order.end(), [&](size_t a, size_t b) {
+        return out[i * Y_cols + a] > out[i * Y_cols + b];
+      });
       std::vector<float> keep(Y_cols, 0.0f);
       for (int q = 0; q < k; ++q) keep[order[q]] = out[i * Y_cols + order[q]];
       for (int j = 0; j < Y_cols; ++j) out[i * Y_cols + j] = keep[j];
@@ -87,9 +88,7 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
     for (int i = 0; i < cols; ++i) {
       std::iota(order.begin(), order.end(), size_t{0});
       std::partial_sort(order.begin(), order.begin() + k, order.end(),
-                        [&](size_t a, size_t b) {
-                          return out[i * cols + a] > out[i * cols + b];
-                        });
+                        [&](size_t a, size_t b) { return out[i * cols + a] > out[i * cols + b]; });
       std::vector<float> keep(cols, 0.0f);
       for (int q = 0; q < k; ++q) keep[order[q]] = out[i * cols + order[q]];
       for (int j = 0; j < cols; ++j) out[i * cols + j] = keep[j];
@@ -171,47 +170,110 @@ std::vector<int> subsegment(const float* data, int rows, int cols,
   return out;
 }
 
-std::vector<int> agglomerative(const float* data, int rows, int cols, int k) {
+std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
+                               const std::string& linkage) {
   if (data == nullptr) throw std::invalid_argument("agglomerative: null input");
   if (k <= 0) throw std::invalid_argument("agglomerative: k must be positive");
+  if (linkage != "average" && linkage != "single" && linkage != "complete" && linkage != "ward") {
+    throw std::invalid_argument("agglomerative: linkage must be average/single/complete/ward");
+  }
   k = std::min(k, cols);
-  std::vector<int> labels(cols, 0);
-  for (int i = 0; i < cols; ++i) labels[i] = i;
-  std::vector<std::vector<int>> clusters(cols);
-  for (int i = 0; i < cols; ++i) clusters[i] = {i};
+  if (cols <= 0) return {};
+  if (k >= cols) {
+    std::vector<int> labels(cols);
+    for (int i = 0; i < cols; ++i) labels[i] = i;
+    return labels;
+  }
 
-  auto distance = [&](const std::vector<int>& A, const std::vector<int>& B) {
-    float sum = 0.0f;
-    int n = 0;
-    for (int a : A) {
-      for (int b : B) {
-        sum += euclidean_dist(data, rows, cols, data, cols, a, b);
-        ++n;
+  // Pairwise squared-euclidean distance matrix. We track an `active` flag so we
+  // can mark merged clusters as removed in-place rather than reshuffling.
+  std::vector<float> D(static_cast<size_t>(cols) * cols, 0.0f);
+  for (int i = 0; i < cols; ++i) {
+    for (int j = i + 1; j < cols; ++j) {
+      float s = 0.0f;
+      for (int r = 0; r < rows; ++r) {
+        const float diff = data[r * cols + i] - data[r * cols + j];
+        s += diff * diff;
       }
+      D[i * cols + j] = s;
+      D[j * cols + i] = s;
     }
-    return (n > 0) ? sum / n : 0.0f;
-  };
+  }
 
-  while (static_cast<int>(clusters.size()) > k) {
-    int best_a = 0, best_b = 1;
+  std::vector<char> active(cols, 1);
+  std::vector<int> size(cols, 1);
+  std::vector<int> parent(cols);
+  for (int i = 0; i < cols; ++i) parent[i] = i;
+
+  int n_clusters = cols;
+  while (n_clusters > k) {
+    // Find the closest pair of active clusters.
+    int best_a = -1, best_b = -1;
     float best_d = std::numeric_limits<float>::infinity();
-    for (size_t a = 0; a < clusters.size(); ++a) {
-      for (size_t b = a + 1; b < clusters.size(); ++b) {
-        float d = distance(clusters[a], clusters[b]);
+    for (int a = 0; a < cols; ++a) {
+      if (!active[a]) continue;
+      for (int b = a + 1; b < cols; ++b) {
+        if (!active[b]) continue;
+        const float d = D[a * cols + b];
         if (d < best_d) {
           best_d = d;
-          best_a = static_cast<int>(a);
-          best_b = static_cast<int>(b);
+          best_a = a;
+          best_b = b;
         }
       }
     }
-    // Merge best_b into best_a, remove best_b.
-    clusters[best_a].insert(clusters[best_a].end(), clusters[best_b].begin(),
-                            clusters[best_b].end());
-    clusters.erase(clusters.begin() + best_b);
+    if (best_a < 0) break;
+
+    // Lance-Williams update of D(best_a, *) and deactivate best_b.
+    const int sa = size[best_a];
+    const int sb = size[best_b];
+    for (int c = 0; c < cols; ++c) {
+      if (!active[c] || c == best_a || c == best_b) continue;
+      const float d_ac = D[best_a * cols + c];
+      const float d_bc = D[best_b * cols + c];
+      const float d_ab = D[best_a * cols + best_b];
+      float d_new = 0.0f;
+      if (linkage == "single") {
+        d_new = std::min(d_ac, d_bc);
+      } else if (linkage == "complete") {
+        d_new = std::max(d_ac, d_bc);
+      } else if (linkage == "ward") {
+        const int sc = size[c];
+        const float total = static_cast<float>(sa + sb + sc);
+        d_new = ((sa + sc) * d_ac + (sb + sc) * d_bc - sc * d_ab) / total;
+      } else {  // "average"
+        d_new = (sa * d_ac + sb * d_bc) / static_cast<float>(sa + sb);
+      }
+      D[best_a * cols + c] = d_new;
+      D[c * cols + best_a] = d_new;
+    }
+    size[best_a] = sa + sb;
+    active[best_b] = 0;
+    // Union-find: point best_b's tree root at best_a.
+    parent[best_b] = best_a;
+    --n_clusters;
   }
-  for (size_t c = 0; c < clusters.size(); ++c) {
-    for (int idx : clusters[c]) labels[idx] = static_cast<int>(c);
+
+  // Final labels: walk parent pointers to a root, then renumber roots to [0, k).
+  auto root = [&](int x) {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+  std::vector<int> labels(cols, 0);
+  std::unordered_map<int, int> root_to_label;
+  int next_label = 0;
+  for (int i = 0; i < cols; ++i) {
+    const int r = root(i);
+    auto it = root_to_label.find(r);
+    if (it == root_to_label.end()) {
+      root_to_label[r] = next_label;
+      labels[i] = next_label++;
+    } else {
+      labels[i] = it->second;
+    }
   }
   return labels;
 }
@@ -234,7 +296,8 @@ std::vector<float> path_enhance(const float* rec, int n, int win, int max_ratio,
     kernel[i] = std::exp(-0.5f * d * d / (sigma * sigma));
     ksum += kernel[i];
   }
-  if (ksum > 0.0f) for (float& k : kernel) k /= ksum;
+  if (ksum > 0.0f)
+    for (float& k : kernel) k /= ksum;
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < n; ++j) {
       float acc = 0.0f;

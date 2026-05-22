@@ -339,18 +339,19 @@ const char* sonare_mastering_processor_names(void);
 const char* sonare_mastering_pair_processor_names(void);
 const char* sonare_mastering_pair_analysis_names(void);
 const char* sonare_mastering_stereo_analysis_names(void);
-SonareError sonare_mastering_apply_pair_processor(
-    const char* processor_name, const float* source, const float* reference, size_t length,
-    int sample_rate, const SonareMasteringParam* params, size_t param_count,
-    SonareMasteringResult* out);
+SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
+                                                  const float* reference, size_t length,
+                                                  int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, SonareMasteringResult* out);
 SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
                                           const float* reference, size_t length, int sample_rate,
                                           const SonareMasteringParam* params, size_t param_count,
                                           char** json_out);
 SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
                                             const float* right, size_t length, int sample_rate,
-                                            const SonareMasteringParam* params,
-                                            size_t param_count, char** json_out);
+                                            const SonareMasteringParam* params, size_t param_count,
+                                            char** json_out);
 void sonare_free_mastering_result(SonareMasteringResult* result);
 void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);
 

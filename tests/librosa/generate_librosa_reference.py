@@ -1221,6 +1221,236 @@ def generate_beat_reference():
     }
 
 
+def generate_nnls_reference():
+    """librosa.util.nnls (scipy.optimize.nnls per column) reference."""
+    rng = np.random.default_rng(31)
+
+    # Case 1: a small over-determined system where the unconstrained least
+    # squares already gives a non-negative solution. NNLS should match LS.
+    A1 = np.array(
+        [[1.0, 0.0, 0.0],
+         [0.0, 2.0, 0.0],
+         [0.0, 0.0, 3.0],
+         [0.5, 0.5, 0.5]],
+        dtype=np.float32,
+    )
+    x_true = np.array([[1.0, 2.0], [3.0, 0.0], [0.5, 4.0]], dtype=np.float32)
+    B1 = A1 @ x_true
+
+    # Case 2: a wider matrix where the LS solution would have negative entries,
+    # exercising the active-set logic.
+    A2 = rng.standard_normal((8, 5)).astype(np.float32)
+    x_pos = np.abs(rng.standard_normal((5, 3))).astype(np.float32)
+    B2 = A2 @ x_pos + 0.01 * rng.standard_normal((8, 3)).astype(np.float32)
+
+    X1 = librosa.util.nnls(A1, B1)
+    X2 = librosa.util.nnls(A2, B2)
+
+    return {
+        "case_a": {
+            "A": A1.tolist(),
+            "A_rows": A1.shape[0],
+            "A_cols": A1.shape[1],
+            "B": B1.tolist(),
+            "B_cols": B1.shape[1],
+            "X": X1.tolist(),
+        },
+        "case_b": {
+            "A": A2.tolist(),
+            "A_rows": A2.shape[0],
+            "A_cols": A2.shape[1],
+            "B": B2.tolist(),
+            "B_cols": B2.shape[1],
+            "X": X2.tolist(),
+        },
+    }
+
+
+def generate_harmonic_reference():
+    """librosa.salience + librosa.interp_harmonics reference."""
+    # A deterministic STFT-like magnitude grid. Frequencies are linearly spaced
+    # so the harmonic mapping is straightforward to verify.
+    n_bins, n_frames = 32, 4
+    freqs = np.linspace(100.0, 800.0, n_bins, dtype=np.float64)
+    S = np.zeros((n_bins, n_frames), dtype=np.float64)
+    rng = np.random.default_rng(17)
+    # Place energy at f0 = 200 Hz and its harmonics so salience has signal.
+    for f0_idx in [4, 8, 12]:
+        S[f0_idx, :] += 1.0
+    S += 0.01 * np.abs(rng.standard_normal(S.shape))
+
+    harmonics = [1, 2, 3]
+    # interp_harmonics returns shape (len(harmonics), n_bins, n_frames).
+    interp = librosa.interp_harmonics(S, freqs=freqs, harmonics=harmonics, axis=0)
+    salience_out = librosa.salience(S, freqs=freqs, harmonics=harmonics, fill_value=0)
+
+    return {
+        "S": S.tolist(),
+        "n_bins": n_bins,
+        "n_frames": n_frames,
+        "frequencies": freqs.tolist(),
+        "harmonics": harmonics,
+        "interp_harmonics": interp.tolist(),  # [n_h x n_bins x n_frames]
+        "salience": salience_out.tolist(),    # [n_bins x n_frames]
+    }
+
+
+def generate_wavelet_filters_reference():
+    """librosa.filters.wavelet / wavelet_lengths reference."""
+    sr = 22050
+    freqs = [100.0, 200.0, 440.0, 880.0]
+
+    # wavelet_lengths returns (lengths, f_cutoff) since librosa 0.10.
+    out = librosa.filters.wavelet_lengths(freqs=np.asarray(freqs), sr=sr, filter_scale=1.0)
+    lengths_raw = out[0] if isinstance(out, tuple) else out
+    lengths = [float(v) for v in np.asarray(lengths_raw)]
+
+    # Padded kernels: librosa returns [n_filters x n_fft_pow2] with kernels
+    # centered inside their slot.
+    out = librosa.filters.wavelet(freqs=np.asarray(freqs), sr=sr, filter_scale=1.0, pad_fft=True)
+    filters = out[0] if isinstance(out, tuple) else out
+    return {
+        "sr": sr,
+        "freqs": freqs,
+        "lengths": lengths,
+        "filters_real": np.real(filters).astype(float).tolist(),
+        "filters_imag": np.imag(filters).astype(float).tolist(),
+        "n_fft": int(filters.shape[1]),
+    }
+
+
+def generate_segment_reference():
+    """librosa.segment.cross_similarity / recurrence_matrix reference."""
+    rng = np.random.default_rng(5)
+    n_features = 6
+    n_samples = 8
+    X = rng.standard_normal((n_features, n_samples)).astype(np.float64)
+
+    # librosa requires k >= 1 for affinity / k-NN modes. Use a small k so the
+    # sparsification stays visible while still leaving room for non-zeros.
+    k = 3
+    affinity = librosa.segment.cross_similarity(X, X, mode="affinity", metric="cosine", k=k)
+    rec = librosa.segment.recurrence_matrix(
+        X, mode="affinity", metric="cosine", width=1, sym=False, k=k
+    )
+
+    return {
+        "X": X.tolist(),
+        "n_features": n_features,
+        "n_samples": n_samples,
+        "k": k,
+        "affinity": np.asarray(affinity).tolist(),
+        "recurrence": np.asarray(rec).tolist(),
+    }
+
+
+def generate_sequence_reference():
+    """librosa.sequence.dtw / viterbi reference."""
+    # DTW: align two near-identical sequences with a small perturbation.
+    rng = np.random.default_rng(2027)
+    X = rng.standard_normal((3, 6)).astype(np.float64)
+    Y = X.copy()
+    Y[:, 2:] = X[:, 2:] + 0.05 * rng.standard_normal(Y[:, 2:].shape)
+
+    D, wp = librosa.sequence.dtw(X=X, Y=Y, metric="euclidean")
+    # librosa returns the warping path as (i, j) pairs in reverse order.
+    wp_pairs = [[int(p[0]), int(p[1])] for p in wp[::-1]]
+
+    # Viterbi: 3 states, 5 time steps. Emission probabilities favour state 1.
+    emit = np.array(
+        [[0.1, 0.1, 0.1, 0.1, 0.1],
+         [0.8, 0.7, 0.6, 0.8, 0.7],
+         [0.1, 0.2, 0.3, 0.1, 0.2]],
+        dtype=np.float64,
+    )
+    trans = np.array(
+        [[0.6, 0.2, 0.2],
+         [0.2, 0.6, 0.2],
+         [0.2, 0.2, 0.6]],
+        dtype=np.float64,
+    )
+    states = librosa.sequence.viterbi(emit, trans).tolist()
+    # Our viterbi takes log-emissions, so capture log_emit for the parity test.
+    log_emit = np.log(emit).tolist()
+
+    return {
+        "dtw_X": X.tolist(),
+        "dtw_Y": Y.tolist(),
+        "dtw_X_rows": X.shape[0],
+        "dtw_X_cols": X.shape[1],
+        "dtw_Y_cols": Y.shape[1],
+        "dtw_distance": float(D[-1, -1]),
+        "dtw_path": wp_pairs,
+        "viterbi_emission": emit.tolist(),
+        "viterbi_log_emission": log_emit,
+        "viterbi_transition": trans.tolist(),
+        "viterbi_path": states,
+    }
+
+
+def generate_decompose_reference():
+    """librosa.decompose.decompose / nn_filter reference (structural)."""
+    rng = np.random.default_rng(9)
+    n_features, n_frames = 6, 10
+    # Build S from two ground-truth components so decompose has signal.
+    W_true = np.abs(rng.standard_normal((n_features, 2))).astype(np.float64)
+    H_true = np.abs(rng.standard_normal((2, n_frames))).astype(np.float64)
+    S = W_true @ H_true + 0.001 * np.abs(rng.standard_normal((n_features, n_frames)))
+
+    # Reconstructed S^ = W @ H — we test reconstruction error rather than
+    # element-wise W, H equality (NMF is identifiable only up to permutation
+    # and scaling).
+    from sklearn.decomposition import NMF
+    nmf = NMF(n_components=2, init="random", solver="mu", beta_loss="frobenius",
+              random_state=0, max_iter=400)
+    W = nmf.fit_transform(S)
+    H = nmf.components_
+    recon = W @ H
+
+    # nn_filter with mean aggregator over k=3 neighbours.
+    filt = librosa.decompose.nn_filter(S, aggregate=np.mean, metric="cosine", width=1, k=3)
+    return {
+        "S": S.tolist(),
+        "n_features": n_features,
+        "n_frames": n_frames,
+        "reconstruction": recon.tolist(),
+        "nn_filter_mean": filt.tolist(),
+    }
+
+
+def generate_reassigned_reference():
+    """librosa.reassigned_spectrogram reference."""
+    sr = 22050
+    duration = 0.25
+    freq = 440.0
+    t = np.arange(int(sr * duration)) / sr
+    y = (0.5 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+
+    freqs, times, mags = librosa.reassigned_spectrogram(
+        y=y, sr=sr, n_fft=1024, hop_length=256, center=True, fill_nan=False
+    )
+
+    # JSON doesn't have NaN; replace with 0.0 (librosa returns NaN-free for
+    # fill_nan=False, but defensive cleanup keeps the file valid for our
+    # JsonReader).
+    def clean(arr):
+        return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0).tolist()
+
+    return {
+        "sr": sr,
+        "n_fft": 1024,
+        "hop_length": 256,
+        "duration": duration,
+        "freq": freq,
+        "freqs_shape": list(freqs.shape),
+        "times_shape": list(times.shape),
+        "mags_shape": list(mags.shape),
+        "freqs_row_center": clean(freqs[:, freqs.shape[1] // 2]),
+        "times_row_center": clean(times[:, times.shape[1] // 2]),
+        "mags_row_center": clean(mags[:, mags.shape[1] // 2]),
+    }
+
+
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1267,6 +1497,13 @@ def main():
         "synthesis": generate_synthesis_reference(),
         "remix": generate_remix_reference(),
         "audio_ops": generate_audio_ops_reference(),
+        "nnls": generate_nnls_reference(),
+        "harmonic": generate_harmonic_reference(),
+        "wavelet_filters": generate_wavelet_filters_reference(),
+        "segment": generate_segment_reference(),
+        "sequence": generate_sequence_reference(),
+        "decompose": generate_decompose_reference(),
+        "reassigned": generate_reassigned_reference(),
     }
 
     metadata = {

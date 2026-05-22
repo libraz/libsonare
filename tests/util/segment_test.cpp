@@ -37,9 +37,7 @@ TEST_CASE("recurrence_matrix excludes central diagonal band", "[util][segment]")
 
 TEST_CASE("recurrence_to_lag / lag_to_recurrence shapes", "[util][segment]") {
   std::vector<float> R{
-      1.0f, 0.5f, 0.0f,
-      0.0f, 1.0f, 0.5f,
-      0.5f, 0.0f, 1.0f,
+      1.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, 0.0f, 1.0f,
   };
   auto lag = recurrence_to_lag(R.data(), 3, false);
   REQUIRE(lag.size() == 9);

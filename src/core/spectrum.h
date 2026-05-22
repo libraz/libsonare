@@ -222,7 +222,23 @@ struct ReassignedSpectrogram {
 /// @param fill_nan If true, low-power bins are filled with NaN.
 ReassignedSpectrogram reassigned_spectrogram(const Audio& audio,
                                              const StftConfig& config = StftConfig(),
-                                             float ref_power = 1e-6f,
-                                             bool fill_nan = false);
+                                             float ref_power = 1e-6f, bool fill_nan = false);
+
+/// @brief Reassigned per-bin frequencies (Hz).
+/// @details Mirrors `librosa.core.spectrum.reassign_frequencies`. Returns just
+/// the [n_bins x n_frames] frequency map computed from `Sw` and a
+/// derivative-window STFT. Bins whose power falls below @p ref_power are
+/// returned with their un-reassigned center frequencies (or NaN if
+/// @p fill_nan is true).
+std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& config = StftConfig(),
+                                        float ref_power = 1e-6f, bool fill_nan = false);
+
+/// @brief Reassigned per-bin times (seconds).
+/// @details Mirrors `librosa.core.spectrum.reassign_times`. Returns just the
+/// [n_bins x n_frames] time map computed from `Sw` and a time-weighted-window
+/// STFT. Bins below @p ref_power are returned with their un-reassigned center
+/// times (or NaN if @p fill_nan is true).
+std::vector<float> reassign_times(const Audio& audio, const StftConfig& config = StftConfig(),
+                                  float ref_power = 1e-6f, bool fill_nan = false);
 
 }  // namespace sonare

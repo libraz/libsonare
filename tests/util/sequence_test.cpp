@@ -23,7 +23,7 @@ TEST_CASE("dtw aligns identical sequences with zero cost", "[util][sequence][dtw
 }
 
 TEST_CASE("dtw subseq finds best alignment within Y", "[util][sequence][dtw]") {
-  std::vector<float> X{1.0f, 0.0f};  // 2 features x 1 sample
+  std::vector<float> X{1.0f, 0.0f};                          // 2 features x 1 sample
   std::vector<float> Y{0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};  // 2 x 3 samples
   auto r = dtw(X.data(), 2, 1, Y.data(), 2, 3, "euclidean", /*subseq=*/true);
   REQUIRE(r.path.size() >= 1);
@@ -39,7 +39,7 @@ TEST_CASE("rqa on a perfect identity matrix returns rate=1/n", "[util][sequence]
 TEST_CASE("viterbi finds a single dominant state", "[util][sequence][viterbi]") {
   // 2 states, 4 time steps. Emission log-probs strongly favour state 0.
   std::vector<float> log_prob{
-      0.0f, 0.0f, 0.0f, 0.0f,    // state 0
+      0.0f,   0.0f,   0.0f,   0.0f,    // state 0
       -10.0f, -10.0f, -10.0f, -10.0f,  // state 1
   };
   std::vector<float> trans{0.9f, 0.1f, 0.1f, 0.9f};
@@ -50,8 +50,7 @@ TEST_CASE("viterbi finds a single dominant state", "[util][sequence][viterbi]") 
 
 TEST_CASE("viterbi_discriminative respects state priors", "[util][sequence][viterbi]") {
   std::vector<float> posteriors{
-      0.9f, 0.9f, 0.9f,
-      0.1f, 0.1f, 0.1f,
+      0.9f, 0.9f, 0.9f, 0.1f, 0.1f, 0.1f,
   };
   std::vector<float> trans{0.9f, 0.1f, 0.1f, 0.9f};
   std::vector<float> prior{0.5f, 0.5f};

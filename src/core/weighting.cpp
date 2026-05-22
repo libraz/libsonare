@@ -21,9 +21,9 @@ double a_weight_one(double f_sq) {
   static const double c1 = 20.598997 * 20.598997;
   static const double c2 = 107.65265 * 107.65265;
   static const double c3 = 737.86223 * 737.86223;
-  return 2.0 + 20.0 * (log10_safe(c0) + 2.0 * log10_safe(f_sq) - log10_safe(f_sq + c0) -
-                       log10_safe(f_sq + c1) - 0.5 * log10_safe(f_sq + c2) -
-                       0.5 * log10_safe(f_sq + c3));
+  return 2.0 +
+         20.0 * (log10_safe(c0) + 2.0 * log10_safe(f_sq) - log10_safe(f_sq + c0) -
+                 log10_safe(f_sq + c1) - 0.5 * log10_safe(f_sq + c2) - 0.5 * log10_safe(f_sq + c3));
 }
 
 double b_weight_one(double f_sq) {
@@ -53,10 +53,10 @@ double d_weight_one(double f_sq) {
 
   const double diff1 = (c1 - f_sq);
   const double diff2 = (c3 - f_sq);
-  return 20.0 * (0.5 * log10_safe(f_sq) - log10_safe(c0) +
-                 0.5 * (log10_safe(diff1 * diff1 + c2 * f_sq) -
-                        log10_safe(diff2 * diff2 + c4 * f_sq) - log10_safe(c5 + f_sq) -
-                        log10_safe(c6 + f_sq)));
+  return 20.0 *
+         (0.5 * log10_safe(f_sq) - log10_safe(c0) +
+          0.5 * (log10_safe(diff1 * diff1 + c2 * f_sq) - log10_safe(diff2 * diff2 + c4 * f_sq) -
+                 log10_safe(c5 + f_sq) - log10_safe(c6 + f_sq)));
 }
 
 std::vector<float> apply_curve(const std::vector<float>& freqs, double (*fn)(double),

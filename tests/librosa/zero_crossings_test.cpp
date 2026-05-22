@@ -1,11 +1,10 @@
 /// @file zero_crossings_test.cpp
 /// @brief Reference compatibility tests for zero_crossings (raw indices).
 
-#include "feature/spectral.h"
-
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
+#include "feature/spectral.h"
 #include "util/json_reader.h"
 
 using namespace sonare;

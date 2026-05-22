@@ -1,10 +1,10 @@
 /// @file zero_crossings_test.cpp
 /// @brief Unit tests for feature/spectral zero_crossings (raw indices).
 
-#include "feature/spectral.h"
-
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
+
+#include "feature/spectral.h"
 
 using namespace sonare;
 

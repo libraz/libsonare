@@ -12,9 +12,7 @@ namespace {
 // 3-bin spectrum at 3 frames: peak at bin 1.
 std::vector<float> make_test_spec() {
   std::vector<float> S{
-      0.0f, 0.0f, 0.0f,
-      1.0f, 1.0f, 1.0f,
-      0.0f, 0.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f,
   };
   return S;
 }

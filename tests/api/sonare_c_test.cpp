@@ -492,9 +492,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 
     SonareMasteringParam pair_params[] = {{"mix", 0.25}};
     SonareMasteringResult paired{};
-    REQUIRE(sonare_mastering_apply_pair_processor(
-                "match.abCrossfade", source.data(), reference.data(), source.size(), 44100,
-                pair_params, 1, &paired) == SONARE_OK);
+    REQUIRE(sonare_mastering_apply_pair_processor("match.abCrossfade", source.data(),
+                                                  reference.data(), source.size(), 44100,
+                                                  pair_params, 1, &paired) == SONARE_OK);
     REQUIRE(paired.samples != nullptr);
     REQUIRE(paired.length == source.size());
     sonare_free_mastering_result(&paired);
@@ -584,8 +584,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
       SonareMasteringParam params[] = {{"highHz", 18000.0}};
       char* json = nullptr;
       REQUIRE(sonare_mastering_analyze_stereo(name.c_str(), source.data(), reference.data(),
-                                              source.size(), 44100, params, 1,
-                                              &json) == SONARE_OK);
+                                              source.size(), 44100, params, 1, &json) == SONARE_OK);
       REQUIRE(json != nullptr);
       REQUIRE(std::strlen(json) > 2);
       sonare_free_string(json);

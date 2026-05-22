@@ -471,6 +471,38 @@ std::vector<std::complex<float>> stft_with_window(const float* signal, size_t si
 
 }  // namespace
 
+namespace {
+
+/// @brief Builds the three windows used by reassignment.
+/// @details `padded_window` is the analysis window, zero-padded to n_fft.
+///          `t_window` is the time-weighted window `(t - half) * w(t)`.
+///          `dw_window` is the central-difference derivative of `w(t)`.
+void build_reassignment_windows(const StftConfig& config, std::vector<float>& padded_window,
+                                std::vector<float>& t_window, std::vector<float>& dw_window,
+                                double& half_n) {
+  const int n_fft = config.n_fft;
+  const int win_length = config.actual_win_length();
+  const std::vector<float> window = create_fft_window(config.window, win_length);
+  const int win_offset = (n_fft - win_length) / 2;
+  padded_window.assign(n_fft, 0.0f);
+  t_window.assign(n_fft, 0.0f);
+  dw_window.assign(n_fft, 0.0f);
+  std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
+  half_n = 0.5 * static_cast<double>(win_length - 1);
+  for (int i = 0; i < win_length; ++i) {
+    const double t_sample = static_cast<double>(i) - half_n;
+    t_window[win_offset + i] = static_cast<float>(t_sample * window[i]);
+  }
+  for (int i = 0; i < win_length; ++i) {
+    const int idx = win_offset + i;
+    const float prev = (i > 0) ? window[i - 1] : 0.0f;
+    const float next = (i + 1 < win_length) ? window[i + 1] : 0.0f;
+    dw_window[idx] = 0.5f * (next - prev);
+  }
+}
+
+}  // namespace
+
 ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfig& config,
                                              float ref_power, bool fill_nan) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
@@ -479,43 +511,23 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   const int win_length = config.actual_win_length();
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
-  // Build three windows: standard, time-weighted, and derivative.
-  std::vector<float> window = create_fft_window(config.window, win_length);
-  std::vector<float> padded_window(n_fft, 0.0f);
-  int win_offset = (n_fft - win_length) / 2;
-  std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
-
-  std::vector<float> t_window(n_fft, 0.0f);
-  std::vector<float> dw_window(n_fft, 0.0f);
-  const double half_n = 0.5 * static_cast<double>(win_length - 1);
-  for (int i = 0; i < win_length; ++i) {
-    double t_sample = static_cast<double>(i) - half_n;
-    t_window[win_offset + i] = static_cast<float>(t_sample * window[i]);
-  }
-  // Numerical derivative of the window (central difference).
-  for (int i = 0; i < win_length; ++i) {
-    int idx = win_offset + i;
-    float prev = (i > 0) ? window[i - 1] : 0.0f;
-    float next = (i + 1 < win_length) ? window[i + 1] : 0.0f;
-    dw_window[idx] = 0.5f * (next - prev);
-  }
+  std::vector<float> padded_window, t_window, dw_window;
+  double half_n = 0.0;
+  build_reassignment_windows(config, padded_window, t_window, dw_window, half_n);
 
   const int sr = audio.sample_rate();
   const float* signal = audio.data();
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw =
-      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
-                       &n_frames);
+  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
+                                                         hop_length, config.center, &n_frames);
   int n_frames_t = 0;
   std::vector<std::complex<float>> Stw =
-      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center,
-                       &n_frames_t);
+      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center, &n_frames_t);
   int n_frames_d = 0;
-  std::vector<std::complex<float>> Sdw =
-      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
-                       &n_frames_d);
+  std::vector<std::complex<float>> Sdw = stft_with_window(signal, signal_len, dw_window, n_fft,
+                                                          hop_length, config.center, &n_frames_d);
   SONARE_CHECK(n_frames == n_frames_t && n_frames == n_frames_d, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;
@@ -541,18 +553,110 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
         out.frequencies[idx] = fill_nan ? nan : center_freq;
         continue;
       }
-      // Time correction: Re(Stw / Sw) -- in samples.
       const std::complex<float> r_time = Stw[idx] / S;
-      const float dt_samples = r_time.real();
-      out.times[idx] = center_time + dt_samples * sample_to_sec;
-      // Frequency correction: -Im(Sdw / Sw) * sr / (2*pi)
+      out.times[idx] = center_time + r_time.real() * sample_to_sec;
       const std::complex<float> r_freq = Sdw[idx] / S;
-      const float df_hz = -r_freq.imag() * static_cast<float>(sr) /
-                          static_cast<float>(constants::kTwoPi);
+      const float df_hz =
+          -r_freq.imag() * static_cast<float>(sr) / static_cast<float>(constants::kTwoPi);
       out.frequencies[idx] = center_freq + df_hz;
     }
   }
   return out;
+}
+
+std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& config,
+                                        float ref_power, bool fill_nan) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  const int n_fft = config.n_fft;
+  const int hop_length = config.hop_length;
+  const int win_length = config.actual_win_length();
+  SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
+
+  std::vector<float> padded_window, t_window, dw_window;
+  double half_n = 0.0;
+  build_reassignment_windows(config, padded_window, t_window, dw_window, half_n);
+  (void)t_window;  // Frequency reassignment only needs the analysis + derivative windows.
+
+  const int sr = audio.sample_rate();
+  const float* signal = audio.data();
+  const size_t signal_len = audio.size();
+
+  int n_frames = 0;
+  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
+                                                         hop_length, config.center, &n_frames);
+  int n_frames_d = 0;
+  std::vector<std::complex<float>> Sdw = stft_with_window(signal, signal_len, dw_window, n_fft,
+                                                          hop_length, config.center, &n_frames_d);
+  SONARE_CHECK(n_frames == n_frames_d, ErrorCode::InvalidParameter);
+
+  const int n_bins = n_fft / 2 + 1;
+  std::vector<float> freqs(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  for (int k = 0; k < n_bins; ++k) {
+    const float center_freq = static_cast<float>(k) * bin_to_hz;
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t idx = static_cast<size_t>(k) * n_frames + t;
+      const std::complex<float> S = Sw[idx];
+      const float power = std::norm(S);
+      if (power < ref_power) {
+        freqs[idx] = fill_nan ? nan : center_freq;
+        continue;
+      }
+      const std::complex<float> r_freq = Sdw[idx] / S;
+      const float df_hz =
+          -r_freq.imag() * static_cast<float>(sr) / static_cast<float>(constants::kTwoPi);
+      freqs[idx] = center_freq + df_hz;
+    }
+  }
+  return freqs;
+}
+
+std::vector<float> reassign_times(const Audio& audio, const StftConfig& config, float ref_power,
+                                  bool fill_nan) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  const int n_fft = config.n_fft;
+  const int hop_length = config.hop_length;
+  const int win_length = config.actual_win_length();
+  SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
+
+  std::vector<float> padded_window, t_window, dw_window;
+  double half_n = 0.0;
+  build_reassignment_windows(config, padded_window, t_window, dw_window, half_n);
+  (void)dw_window;  // Time reassignment only needs the analysis + time-weighted windows.
+
+  const int sr = audio.sample_rate();
+  const float* signal = audio.data();
+  const size_t signal_len = audio.size();
+
+  int n_frames = 0;
+  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
+                                                         hop_length, config.center, &n_frames);
+  int n_frames_t = 0;
+  std::vector<std::complex<float>> Stw =
+      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center, &n_frames_t);
+  SONARE_CHECK(n_frames == n_frames_t, ErrorCode::InvalidParameter);
+
+  const int n_bins = n_fft / 2 + 1;
+  std::vector<float> times(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  const float sample_to_sec = 1.0f / static_cast<float>(sr);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t idx = static_cast<size_t>(k) * n_frames + t;
+      const std::complex<float> S = Sw[idx];
+      const float power = std::norm(S);
+      const float center_time =
+          (static_cast<float>(t * hop_length) + (config.center ? 0.0f : half_n)) * sample_to_sec;
+      if (power < ref_power) {
+        times[idx] = fill_nan ? nan : center_time;
+        continue;
+      }
+      const std::complex<float> r_time = Stw[idx] / S;
+      times[idx] = center_time + r_time.real() * sample_to_sec;
+    }
+  }
+  return times;
 }
 
 }  // namespace sonare

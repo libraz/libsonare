@@ -60,8 +60,8 @@ std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int
 }
 
 std::vector<float> salience(const float* S, int n_bins, int n_frames,
-                            const std::vector<float>& freqs,
-                            const std::vector<float>& harmonics, float fill_value) {
+                            const std::vector<float>& freqs, const std::vector<float>& harmonics,
+                            float fill_value) {
   if (S == nullptr) throw std::invalid_argument("salience: S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
@@ -83,14 +83,13 @@ std::vector<float> salience(const float* S, int n_bins, int n_frames,
 }
 
 std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frames,
-                            const std::vector<float>& freqs,
-                            const std::vector<float>& harmonics, float fill_value) {
+                            const std::vector<float>& freqs, const std::vector<float>& harmonics,
+                            float fill_value) {
   return salience(S.data(), n_bins, n_frames, freqs, harmonics, fill_value);
 }
 
 std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
-                                const std::vector<float>& f0,
-                                const std::vector<float>& freqs,
+                                const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics) {
   if (S == nullptr) throw std::invalid_argument("f0_harmonics: S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
@@ -114,8 +113,7 @@ std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
 }
 
 std::vector<float> f0_harmonics(const std::vector<float>& S, int n_bins, int n_frames,
-                                const std::vector<float>& f0,
-                                const std::vector<float>& freqs,
+                                const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics) {
   return f0_harmonics(S.data(), n_bins, n_frames, f0, freqs, harmonics);
 }

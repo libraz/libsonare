@@ -1,5 +1,7 @@
 #include "effects/decompose.h"
 
+#include <Eigen/Dense>
+#include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -7,8 +9,103 @@
 
 namespace sonare {
 
+namespace {
+
+constexpr float kEps = 1e-9f;
+
+/// @brief Random non-negative initialisation, seeded for determinism.
+void init_random(std::vector<float>& W, std::vector<float>& H, int n_features, int n_components,
+                 int n_frames) {
+  std::mt19937 rng(42);
+  std::uniform_real_distribution<float> dist(0.01f, 1.0f);
+  W.assign(static_cast<size_t>(n_features) * n_components, 0.0f);
+  H.assign(static_cast<size_t>(n_components) * n_frames, 0.0f);
+  for (auto& v : W) v = dist(rng);
+  for (auto& v : H) v = dist(rng);
+}
+
+/// @brief NNDSVD initialisation (Boutsidis & Gallopoulos 2008).
+/// @details Uses the leading singular vectors of S and splits each into its
+///          positive and negative parts to seed (W, H). Deterministic.
+void init_nndsvd(const float* S, std::vector<float>& W, std::vector<float>& H, int n_features,
+                 int n_components, int n_frames) {
+  Eigen::MatrixXf X(n_features, n_frames);
+  for (int f = 0; f < n_features; ++f) {
+    for (int t = 0; t < n_frames; ++t) {
+      X(f, t) = S[f * n_frames + t];
+    }
+  }
+  Eigen::JacobiSVD<Eigen::MatrixXf> svd(X, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  const Eigen::MatrixXf& U = svd.matrixU();
+  const Eigen::MatrixXf& V = svd.matrixV();
+  const Eigen::VectorXf sv = svd.singularValues();
+
+  const int rank = std::min({n_components, static_cast<int>(sv.size())});
+  W.assign(static_cast<size_t>(n_features) * n_components, 0.0f);
+  H.assign(static_cast<size_t>(n_components) * n_frames, 0.0f);
+
+  if (rank == 0) return;
+
+  // Component 0: leading singular vector (take absolute values).
+  const float s0 = std::sqrt(std::max(sv[0], 0.0f));
+  for (int f = 0; f < n_features; ++f) W[f * n_components + 0] = s0 * std::abs(U(f, 0));
+  for (int t = 0; t < n_frames; ++t) H[0 * n_frames + t] = s0 * std::abs(V(t, 0));
+
+  for (int k = 1; k < rank; ++k) {
+    Eigen::VectorXf x = U.col(k);
+    Eigen::VectorXf y = V.col(k);
+    Eigen::VectorXf xp = x.cwiseMax(0.0f);
+    Eigen::VectorXf xn = (-x).cwiseMax(0.0f);
+    Eigen::VectorXf yp = y.cwiseMax(0.0f);
+    Eigen::VectorXf yn = (-y).cwiseMax(0.0f);
+    const float xp_n = xp.norm();
+    const float xn_n = xn.norm();
+    const float yp_n = yp.norm();
+    const float yn_n = yn.norm();
+    const float mp = xp_n * yp_n;
+    const float mn = xn_n * yn_n;
+    Eigen::VectorXf u, v;
+    float sigma;
+    if (mp >= mn) {
+      sigma = mp;
+      u = (xp_n > 0.0f) ? Eigen::VectorXf(xp / xp_n) : Eigen::VectorXf::Zero(n_features);
+      v = (yp_n > 0.0f) ? Eigen::VectorXf(yp / yp_n) : Eigen::VectorXf::Zero(n_frames);
+    } else {
+      sigma = mn;
+      u = (xn_n > 0.0f) ? Eigen::VectorXf(xn / xn_n) : Eigen::VectorXf::Zero(n_features);
+      v = (yn_n > 0.0f) ? Eigen::VectorXf(yn / yn_n) : Eigen::VectorXf::Zero(n_frames);
+    }
+    const float scale = std::sqrt(std::max(sv[k] * sigma, 0.0f));
+    for (int f = 0; f < n_features; ++f) W[f * n_components + k] = scale * u[f];
+    for (int t = 0; t < n_frames; ++t) H[k * n_frames + t] = scale * v[t];
+  }
+
+  // Avoid hard zeros (which the MU updates cannot escape from).
+  const float floor_val = kEps;
+  for (float& v : W) v = std::max(v, floor_val);
+  for (float& v : H) v = std::max(v, floor_val);
+}
+
+/// @brief Computes WH = W * H into `out` [n_features x n_frames].
+void multiply_WH(const std::vector<float>& W, const std::vector<float>& H, int n_features,
+                 int n_components, int n_frames, std::vector<float>& out) {
+  out.assign(static_cast<size_t>(n_features) * n_frames, 0.0f);
+  for (int f = 0; f < n_features; ++f) {
+    for (int t = 0; t < n_frames; ++t) {
+      float s = 0.0f;
+      for (int c = 0; c < n_components; ++c) {
+        s += W[f * n_components + c] * H[c * n_frames + t];
+      }
+      out[f * n_frames + t] = s;
+    }
+  }
+}
+
+}  // namespace
+
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
-                          int n_iter, const std::string& solver) {
+                          int n_iter, const std::string& solver, float beta,
+                          const std::string& init) {
   if (S == nullptr) throw std::invalid_argument("decompose: S is null");
   if (n_features <= 0 || n_frames <= 0 || n_components <= 0) {
     throw std::invalid_argument("decompose: dimensions must be positive");
@@ -16,75 +113,78 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   if (solver != "mu") {
     throw std::invalid_argument("decompose: only solver=\"mu\" is supported");
   }
-
-  std::mt19937 rng(42);
-  std::uniform_real_distribution<float> dist(0.01f, 1.0f);
+  if (!std::isfinite(beta)) {
+    throw std::invalid_argument("decompose: beta must be finite");
+  }
 
   DecomposeResult out;
-  out.W.assign(static_cast<size_t>(n_features) * n_components, 0.0f);
-  out.H.assign(static_cast<size_t>(n_components) * n_frames, 0.0f);
-  for (auto& v : out.W) v = dist(rng);
-  for (auto& v : out.H) v = dist(rng);
-  const float kEps = 1e-9f;
+  if (init == "random") {
+    init_random(out.W, out.H, n_features, n_components, n_frames);
+  } else if (init == "nndsvd") {
+    init_nndsvd(S, out.W, out.H, n_features, n_components, n_frames);
+  } else {
+    throw std::invalid_argument("decompose: init must be \"random\" or \"nndsvd\"");
+  }
 
-  // Iterative multiplicative updates (Lee-Seung Frobenius cost).
+  // Generalized beta-divergence multiplicative updates (Fevotte-Idier 2011).
+  //   H <- H * (W^T (X (WH)^{beta-2})) / (W^T (WH)^{beta-1})
+  //   W <- W * ((X (WH)^{beta-2}) H^T) / ((WH)^{beta-1} H^T)
+  // For beta = 2 these reduce to the familiar Frobenius MU updates.
+  const float exp_num = beta - 2.0f;  // exponent on WH in the numerator's (X * ...)
+  const float exp_den = beta - 1.0f;  // exponent on WH in the denominator
+
+  std::vector<float> WH(static_cast<size_t>(n_features) * n_frames, 0.0f);
+  std::vector<float> num_feat(static_cast<size_t>(n_features) * n_frames, 0.0f);  // X * WH^(b-2)
+  std::vector<float> den_feat(static_cast<size_t>(n_features) * n_frames, 0.0f);  // WH^(b-1)
+
   for (int it = 0; it < n_iter; ++it) {
-    // Update H: H *= (W^T S) / (W^T W H + eps)
-    std::vector<float> WtS(static_cast<size_t>(n_components) * n_frames, 0.0f);
-    for (int c = 0; c < n_components; ++c) {
-      for (int t = 0; t < n_frames; ++t) {
-        float s = 0.0f;
-        for (int f = 0; f < n_features; ++f) {
-          s += out.W[f * n_components + c] * S[f * n_frames + t];
-        }
-        WtS[c * n_frames + t] = s;
-      }
-    }
-    std::vector<float> WtWH(static_cast<size_t>(n_components) * n_frames, 0.0f);
-    for (int c = 0; c < n_components; ++c) {
-      for (int t = 0; t < n_frames; ++t) {
-        float s = 0.0f;
-        for (int cc = 0; cc < n_components; ++cc) {
-          float WtW = 0.0f;
-          for (int f = 0; f < n_features; ++f) {
-            WtW += out.W[f * n_components + c] * out.W[f * n_components + cc];
-          }
-          s += WtW * out.H[cc * n_frames + t];
-        }
-        WtWH[c * n_frames + t] = s;
-      }
-    }
-    for (size_t i = 0; i < out.H.size(); ++i) {
-      out.H[i] *= WtS[i] / (WtWH[i] + kEps);
+    multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
+
+    // Build feature-space numerator/denominator factors.
+    for (size_t i = 0; i < WH.size(); ++i) {
+      const float wh = WH[i] + kEps;
+      const float pow_num = (exp_num == 0.0f) ? 1.0f : std::pow(wh, exp_num);
+      const float pow_den = (exp_den == 0.0f) ? 1.0f : std::pow(wh, exp_den);
+      num_feat[i] = S[i] * pow_num;
+      den_feat[i] = pow_den;
     }
 
-    // Update W: W *= (S H^T) / (W H H^T + eps)
-    std::vector<float> SHt(static_cast<size_t>(n_features) * n_components, 0.0f);
+    // H <- H * (W^T num_feat) / (W^T den_feat)
+    for (int c = 0; c < n_components; ++c) {
+      for (int t = 0; t < n_frames; ++t) {
+        float num = 0.0f;
+        float den = 0.0f;
+        for (int f = 0; f < n_features; ++f) {
+          const float w = out.W[f * n_components + c];
+          num += w * num_feat[f * n_frames + t];
+          den += w * den_feat[f * n_frames + t];
+        }
+        out.H[c * n_frames + t] *= num / (den + kEps);
+      }
+    }
+
+    // Rebuild WH and feature-space factors with the updated H.
+    multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
+    for (size_t i = 0; i < WH.size(); ++i) {
+      const float wh = WH[i] + kEps;
+      const float pow_num = (exp_num == 0.0f) ? 1.0f : std::pow(wh, exp_num);
+      const float pow_den = (exp_den == 0.0f) ? 1.0f : std::pow(wh, exp_den);
+      num_feat[i] = S[i] * pow_num;
+      den_feat[i] = pow_den;
+    }
+
+    // W <- W * (num_feat H^T) / (den_feat H^T)
     for (int f = 0; f < n_features; ++f) {
       for (int c = 0; c < n_components; ++c) {
-        float s = 0.0f;
+        float num = 0.0f;
+        float den = 0.0f;
         for (int t = 0; t < n_frames; ++t) {
-          s += S[f * n_frames + t] * out.H[c * n_frames + t];
+          const float h = out.H[c * n_frames + t];
+          num += num_feat[f * n_frames + t] * h;
+          den += den_feat[f * n_frames + t] * h;
         }
-        SHt[f * n_components + c] = s;
+        out.W[f * n_components + c] *= num / (den + kEps);
       }
-    }
-    std::vector<float> WHHt(static_cast<size_t>(n_features) * n_components, 0.0f);
-    for (int f = 0; f < n_features; ++f) {
-      for (int c = 0; c < n_components; ++c) {
-        float s = 0.0f;
-        for (int cc = 0; cc < n_components; ++cc) {
-          float HHt = 0.0f;
-          for (int t = 0; t < n_frames; ++t) {
-            HHt += out.H[c * n_frames + t] * out.H[cc * n_frames + t];
-          }
-          s += out.W[f * n_components + cc] * HHt;
-        }
-        WHHt[f * n_components + c] = s;
-      }
-    }
-    for (size_t i = 0; i < out.W.size(); ++i) {
-      out.W[i] *= SHt[i] / (WHHt[i] + kEps);
     }
   }
   return out;
@@ -94,6 +194,9 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
                              const std::string& aggregate, int k, int width) {
   if (S == nullptr) throw std::invalid_argument("nn_filter: S is null");
   if (n_features <= 0 || n_frames <= 0) return {};
+  if (aggregate != "mean" && aggregate != "median" && aggregate != "min" && aggregate != "max") {
+    throw std::invalid_argument("nn_filter: aggregate must be mean/median/min/max");
+  }
   if (k <= 0) k = std::min(5, n_frames);
 
   // Pre-compute column norms for cosine similarity.
@@ -101,7 +204,7 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   for (int t = 0; t < n_frames; ++t) {
     float s = 0.0f;
     for (int f = 0; f < n_features; ++f) {
-      float v = S[f * n_frames + t];
+      const float v = S[f * n_frames + t];
       s += v * v;
     }
     norms[t] = std::sqrt(s);
@@ -109,21 +212,19 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
 
   std::vector<float> out(static_cast<size_t>(n_features) * n_frames, 0.0f);
   for (int t = 0; t < n_frames; ++t) {
-    // Compute cosine similarity to every other frame.
     std::vector<std::pair<float, int>> sims;
-    sims.reserve(n_frames);
+    sims.reserve(static_cast<size_t>(n_frames));
     for (int u = 0; u < n_frames; ++u) {
       if (std::abs(u - t) < width) continue;
       float dot = 0.0f;
       for (int f = 0; f < n_features; ++f) {
         dot += S[f * n_frames + t] * S[f * n_frames + u];
       }
-      float sim = (norms[t] > 0.0f && norms[u] > 0.0f) ? dot / (norms[t] * norms[u]) : 0.0f;
+      const float sim = (norms[t] > 0.0f && norms[u] > 0.0f) ? dot / (norms[t] * norms[u]) : 0.0f;
       sims.push_back({sim, u});
     }
     int kk = std::min<int>(k, static_cast<int>(sims.size()));
     if (kk == 0) {
-      // No usable neighbours -> fall back to the frame itself.
       for (int f = 0; f < n_features; ++f) {
         out[f * n_frames + t] = S[f * n_frames + t];
       }
@@ -131,23 +232,30 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
     }
     std::partial_sort(sims.begin(), sims.begin() + kk, sims.end(),
                       [](const auto& a, const auto& b) { return a.first > b.first; });
-    // Aggregate.
     if (aggregate == "median") {
       for (int f = 0; f < n_features; ++f) {
-        std::vector<float> vals(kk);
-        for (int q = 0; q < kk; ++q) {
-          vals[q] = S[f * n_frames + sims[q].second];
-        }
+        std::vector<float> vals(static_cast<size_t>(kk));
+        for (int q = 0; q < kk; ++q) vals[q] = S[f * n_frames + sims[q].second];
         std::nth_element(vals.begin(), vals.begin() + kk / 2, vals.end());
         out[f * n_frames + t] = vals[kk / 2];
       }
-    } else {
+    } else if (aggregate == "min") {
+      for (int f = 0; f < n_features; ++f) {
+        float m = std::numeric_limits<float>::infinity();
+        for (int q = 0; q < kk; ++q) m = std::min(m, S[f * n_frames + sims[q].second]);
+        out[f * n_frames + t] = m;
+      }
+    } else if (aggregate == "max") {
+      for (int f = 0; f < n_features; ++f) {
+        float m = -std::numeric_limits<float>::infinity();
+        for (int q = 0; q < kk; ++q) m = std::max(m, S[f * n_frames + sims[q].second]);
+        out[f * n_frames + t] = m;
+      }
+    } else {  // "mean"
       for (int f = 0; f < n_features; ++f) {
         float s = 0.0f;
-        for (int q = 0; q < kk; ++q) {
-          s += S[f * n_frames + sims[q].second];
-        }
-        out[f * n_frames + t] = s / kk;
+        for (int q = 0; q < kk; ++q) s += S[f * n_frames + sims[q].second];
+        out[f * n_frames + t] = s / static_cast<float>(kk);
       }
     }
   }

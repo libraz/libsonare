@@ -1,0 +1,17 @@
+# Source
+src/
+tests/
+
+# Build
+build-*/
+
+# Config
+biome.json
+tsconfig.json
+vitest.config.ts
+.yarnrc.yml
+
+# Misc
+*.log
+*.tgz
+*.tsbuildinfo

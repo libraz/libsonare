@@ -20,12 +20,12 @@ namespace sonare {
 /// @param fill_value Value to use when the harmonic lies outside @p freqs.
 /// @return Salience map [n_bins x n_frames] row-major.
 std::vector<float> salience(const float* S, int n_bins, int n_frames,
-                            const std::vector<float>& freqs,
-                            const std::vector<float>& harmonics, float fill_value = 0.0f);
+                            const std::vector<float>& freqs, const std::vector<float>& harmonics,
+                            float fill_value = 0.0f);
 
 std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frames,
-                            const std::vector<float>& freqs,
-                            const std::vector<float>& harmonics, float fill_value = 0.0f);
+                            const std::vector<float>& freqs, const std::vector<float>& harmonics,
+                            float fill_value = 0.0f);
 
 /// @brief Linearly interpolates the spectrum at integer multiples of each
 ///        frequency in @p freqs.
@@ -41,13 +41,11 @@ std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int
 /// @brief Extracts harmonic energy at multiples of @p f0 for each frame.
 /// @return [n_harmonics x n_frames] row-major.
 std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
-                                const std::vector<float>& f0,
-                                const std::vector<float>& freqs,
+                                const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics);
 
 std::vector<float> f0_harmonics(const std::vector<float>& S, int n_bins, int n_frames,
-                                const std::vector<float>& f0,
-                                const std::vector<float>& freqs,
+                                const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics);
 
 }  // namespace sonare

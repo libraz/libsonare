@@ -14,19 +14,58 @@ constexpr float kBesselCorrection = 5.0f;  // librosa default cutoff in std devs
 
 }  // namespace
 
-std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param) {
+std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
+                                   float Q) {
   if (sr <= 0) throw std::invalid_argument("wavelet_lengths: sr must be positive");
   if (window_param <= 0.0f) {
     throw std::invalid_argument("wavelet_lengths: window_param must be positive");
   }
+  if (Q < 0.0f) throw std::invalid_argument("wavelet_lengths: Q must be non-negative");
+  const bool use_Q = (Q > 0.0f);
+
+  // Pre-compute alpha[k] from the local bins-per-octave (matches
+  // librosa.filters._relative_bandwidth). For each interior k:
+  //   bpo[k] = 2 / (log2(freqs[k+1]) - log2(freqs[k-1]))
+  //   alpha[k] = (2^(2/bpo) - 1) / (2^(2/bpo) + 1)
+  // Edge bins reflect using a one-sided log difference. When fewer than two
+  // frequencies are supplied we fall back to the legacy
+  // `filter_scale * sr / freq` rule.
+  std::vector<float> alpha;
+  if (!use_Q && freqs.size() >= 2) {
+    alpha.assign(freqs.size(), 0.0f);
+    std::vector<float> bpo(freqs.size(), 0.0f);
+    std::vector<float> logf(freqs.size(), 0.0f);
+    for (size_t i = 0; i < freqs.size(); ++i) {
+      logf[i] = std::log2(std::max(freqs[i], 1e-9f));
+    }
+    bpo[0] = 1.0f / std::max(logf[1] - logf[0], 1e-9f);
+    bpo[freqs.size() - 1] = 1.0f / std::max(logf[freqs.size() - 1] - logf[freqs.size() - 2], 1e-9f);
+    for (size_t k = 1; k + 1 < freqs.size(); ++k) {
+      bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], 1e-9f);
+    }
+    for (size_t k = 0; k < freqs.size(); ++k) {
+      const float t = std::pow(2.0f, 2.0f / bpo[k]);
+      alpha[k] = (t - 1.0f) / (t + 1.0f);
+    }
+  }
+
   std::vector<float> lengths(freqs.size(), 0.0f);
   for (size_t i = 0; i < freqs.size(); ++i) {
     if (freqs[i] <= 0.0f) {
       lengths[i] = 0.0f;
       continue;
     }
-    // librosa: N = ceil(window_param * sr / freq), rounded up to next odd.
-    float n = window_param * static_cast<float>(sr) / freqs[i];
+    float n;
+    if (use_Q) {
+      n = Q * static_cast<float>(sr) / freqs[i];
+    } else if (!alpha.empty()) {
+      // librosa: Q = filter_scale / alpha; length = Q * sr / freq.
+      const float a = std::max(alpha[i], 1e-6f);
+      n = (window_param / a) * static_cast<float>(sr) / freqs[i];
+    } else {
+      // Single-frequency fallback (no alpha available).
+      n = window_param * static_cast<float>(sr) / freqs[i];
+    }
     int n_int = static_cast<int>(std::ceil(n));
     if (n_int % 2 == 0) ++n_int;
     lengths[i] = static_cast<float>(n_int);
@@ -34,35 +73,63 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
   return lengths;
 }
 
+namespace {
+
+int next_pow2(int n) {
+  int p = 1;
+  while (p < n) p <<= 1;
+  return p;
+}
+
+}  // namespace
+
 std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
-                                         float window_param, bool is_cqt) {
-  std::vector<float> lengths = wavelet_lengths(freqs, sr, window_param);
+                                         float window_param, bool is_cqt, bool pad_fft, float Q,
+                                         int* n_fft_out) {
+  std::vector<float> lengths = wavelet_lengths(freqs, sr, window_param, Q);
+
+  const size_t n_filters = freqs.size();
+  size_t n_fft = 0;
+  if (pad_fft) {
+    int max_len = 0;
+    for (float L : lengths) max_len = std::max(max_len, static_cast<int>(L));
+    n_fft = static_cast<size_t>(next_pow2(std::max(max_len, 1)));
+  }
+  const size_t per_kernel = pad_fft ? n_fft : 0;
+
   size_t total = 0;
-  for (float L : lengths) total += static_cast<size_t>(L);
-  std::vector<std::complex<float>> out(total);
+  if (pad_fft) {
+    total = n_filters * n_fft;
+  } else {
+    for (float L : lengths) total += static_cast<size_t>(L);
+  }
+  std::vector<std::complex<float>> out(total, std::complex<float>(0.0f, 0.0f));
+
   size_t cursor = 0;
-  for (size_t i = 0; i < freqs.size(); ++i) {
-    int L = static_cast<int>(lengths[i]);
-    if (L <= 0) continue;
+  for (size_t i = 0; i < n_filters; ++i) {
+    const int L = static_cast<int>(lengths[i]);
+    if (L <= 0) {
+      if (pad_fft) cursor += per_kernel;
+      continue;
+    }
     const float f = freqs[i];
     const float half = 0.5f * static_cast<float>(L - 1);
     const float sigma = static_cast<float>(L) / (kBesselCorrection * window_param);
+    // When padding, center the kernel inside its n_fft slot.
+    const size_t slot_offset =
+        pad_fft ? (cursor + (per_kernel - static_cast<size_t>(L)) / 2) : cursor;
     for (int n = 0; n < L; ++n) {
-      float t = (static_cast<float>(n) - half) / static_cast<float>(sr);
-      // Morlet wavelet: complex exponential with Gaussian envelope.
-      float envelope =
-          std::exp(-0.5f * (static_cast<float>(n) - half) *
-                   (static_cast<float>(n) - half) / (sigma * sigma));
-      float angle = constants::kTwoPi * f * t;
-      out[cursor + n] =
-          std::complex<float>(envelope * std::cos(angle), envelope * std::sin(angle));
-      if (!is_cqt) {
-        // scipy.signal.morlet2 normalises by 1/sqrt(L).
-        out[cursor + n] /= std::sqrt(static_cast<float>(L));
-      }
+      const float t = (static_cast<float>(n) - half) / static_cast<float>(sr);
+      const float envelope = std::exp(-0.5f * (static_cast<float>(n) - half) *
+                                      (static_cast<float>(n) - half) / (sigma * sigma));
+      const float angle = constants::kTwoPi * f * t;
+      std::complex<float> v(envelope * std::cos(angle), envelope * std::sin(angle));
+      if (!is_cqt) v /= std::sqrt(static_cast<float>(L));
+      out[slot_offset + n] = v;
     }
-    cursor += static_cast<size_t>(L);
+    cursor += pad_fft ? per_kernel : static_cast<size_t>(L);
   }
+  if (n_fft_out) *n_fft_out = pad_fft ? static_cast<int>(n_fft) : 0;
   return out;
 }
 
@@ -74,8 +141,8 @@ std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float
   std::vector<float> out(static_cast<size_t>(n_filters) * 6, 0.0f);
   const double nyquist = 0.5 * static_cast<double>(sr);
   for (int i = 0; i < n_filters; ++i) {
-    const double fc = static_cast<double>(fmin) * std::pow(2.0, static_cast<double>(i) /
-                                                                     bins_per_octave);
+    const double fc =
+        static_cast<double>(fmin) * std::pow(2.0, static_cast<double>(i) / bins_per_octave);
     if (fc <= 0.0 || fc >= nyquist) {
       // Identity biquad (passes signal through unchanged).
       out[i * 6 + 0] = 1.0f;
@@ -128,8 +195,8 @@ std::vector<float> diagonal_filter(int n, int direction, float window_param) {
   std::vector<float> out(static_cast<size_t>(n) * n, 0.0f);
   for (int r = 0; r < n; ++r) {
     for (int c = 0; c < n; ++c) {
-      const float d = (direction == 0) ? static_cast<float>(r - (n - 1 - c))
-                                       : static_cast<float>(r - c);
+      const float d =
+          (direction == 0) ? static_cast<float>(r - (n - 1 - c)) : static_cast<float>(r - c);
       out[r * n + c] = std::exp(-0.5f * d * d / (window_param * window_param));
     }
   }

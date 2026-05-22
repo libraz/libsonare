@@ -53,8 +53,13 @@ std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments = 4);
 
 /// @brief Agglomerative clustering of the columns of @p data into @p k groups.
+/// @details Supports linkages "average" (default), "single", "complete", and
+///          "ward" via Lance-Williams updates. Distances are squared euclidean
+///          (required for Ward; equivalent up to monotone transform for the
+///          others).
 /// @return A length-`cols` vector of cluster labels in [0, k).
-std::vector<int> agglomerative(const float* data, int rows, int cols, int k);
+std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
+                               const std::string& linkage = "average");
 
 /// @brief Enhances diagonals in a recurrence matrix via Gaussian smoothing
 ///        along the diagonal direction.

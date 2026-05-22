@@ -24,13 +24,18 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/wasm
     steps:
       - uses: actions/checkout@v4
       - run: corepack enable
+        working-directory: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: yarn
+          cache-dependency-path: bindings/wasm/yarn.lock
       - run: yarn install --immutable
       - run: yarn lint
 
@@ -44,6 +49,7 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+          cache-dependency-path: bindings/wasm/yarn.lock
 
       - name: Cache CMake dependencies
         uses: actions/cache@v4
@@ -110,6 +116,12 @@ jobs:
           name: codecov-libsonare
           fail_ci_if_error: false
 
-      - run: yarn install --immutable
-      - run: yarn build
-      - run: yarn test
+      - name: Install Node deps (WASM binding)
+        working-directory: bindings/wasm
+        run: yarn install --immutable
+      - name: Build WASM binding
+        working-directory: bindings/wasm
+        run: yarn build
+      - name: Test WASM binding
+        working-directory: bindings/wasm
+        run: yarn test

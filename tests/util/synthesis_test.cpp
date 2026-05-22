@@ -58,8 +58,7 @@ TEST_CASE("chirp linear has growing instantaneous frequency", "[util][synthesis]
 }
 
 TEST_CASE("chirp exponential requires positive endpoints", "[util][synthesis][edge]") {
-  REQUIRE_THROWS_AS(chirp(0.0f, 1000.0f, 22050, 0.1f, /*linear=*/false),
-                    std::invalid_argument);
+  REQUIRE_THROWS_AS(chirp(0.0f, 1000.0f, 22050, 0.1f, /*linear=*/false), std::invalid_argument);
 }
 
 TEST_CASE("clicks places clicks at expected positions", "[util][synthesis]") {

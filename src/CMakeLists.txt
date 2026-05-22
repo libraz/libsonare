@@ -325,11 +325,11 @@ if(BUILD_WASM)
     --bind
   )
 
-  # Copy output to dist directory
+  # Copy output to bindings/wasm/dist directory
   add_custom_command(TARGET sonare POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/dist
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${CMAKE_SOURCE_DIR}/dist/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare.wasm ${CMAKE_SOURCE_DIR}/dist/
-    COMMENT "Copying WASM files to dist/"
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bindings/wasm/dist
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare.wasm ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
+    COMMENT "Copying WASM files to bindings/wasm/dist/"
   )
 endif()
