@@ -1,5 +1,8 @@
 # CLI tool
-add_executable(sonare sonare_cli.cpp)
+add_executable(sonare
+  sonare_cli.cpp
+  cli_support.cpp
+)
 
 target_link_libraries(sonare PRIVATE sonare_core)
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})

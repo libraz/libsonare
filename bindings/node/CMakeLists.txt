@@ -77,8 +77,14 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/analysis/section_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/music_analyzer.cpp
   ${SONARE_ROOT}/src/streaming/stream_analyzer.cpp
+  ${SONARE_ROOT}/src/streaming/stream_analyzer_output.cpp
+  ${SONARE_ROOT}/src/streaming/stream_analyzer_utils.cpp
   ${SONARE_ROOT}/src/quick.cpp
   ${SONARE_ROOT}/src/sonare_c.cpp
+  ${SONARE_ROOT}/src/sonare_c_effects.cpp
+  ${SONARE_ROOT}/src/sonare_c_features.cpp
+  ${SONARE_ROOT}/src/sonare_c_internal.cpp
+  ${SONARE_ROOT}/src/sonare_c_memory.cpp
 )
 
 # KissFFT sources
@@ -91,6 +97,10 @@ set(KISSFFT_SOURCES
 set(ADDON_SOURCES
   src/addon/addon.cpp
   src/addon/sonare_wrap.cpp
+  src/addon/sonare_wrap_analysis.cpp
+  src/addon/sonare_wrap_effects.cpp
+  src/addon/sonare_wrap_features.cpp
+  src/addon/sonare_wrap_utils.cpp
 )
 
 # Find Eigen3

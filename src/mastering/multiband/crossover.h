@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file crossover.h
-/// @brief Stateful multiband crossover with reconstructing residual bands.
+/// @brief Stateful multiband crossover built from matched low/high-pass filter pairs.
 
 #include <vector>
 
@@ -72,16 +72,33 @@ class Crossover {
 
   static void validate_config(const CrossoverConfig& config, double sample_rate = 0.0);
   static int filter_order(CrossoverSlope slope, CrossoverMode mode);
-  static std::vector<double> filter_q_values(CrossoverSlope slope, CrossoverMode mode);
+  struct FilterSection {
+    double lowpass_frequency_scale = 1.0;
+    double highpass_frequency_scale = 1.0;
+    double q = 0.7071067811865475;
+  };
+  static std::vector<FilterSection> filter_sections(CrossoverSlope slope, CrossoverMode mode);
   void rebuild_state(int num_channels);
   void install_coefficients();
   float lowpass(float sample, int split_index, int channel);
+  float highpass(float sample, int split_index, int channel);
+  float allpass(float sample, int band_index, int split_index, int channel);
+
+  struct SplitChannelState {
+    std::vector<Biquad> lowpass;
+    std::vector<Biquad> highpass;
+  };
+
+  struct CompensationChannelState {
+    std::vector<std::vector<Biquad>> allpass_by_split;
+  };
 
   CrossoverConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   bool prepared_ = false;
-  std::vector<std::vector<std::vector<Biquad>>> states_;
+  std::vector<std::vector<SplitChannelState>> states_;
+  std::vector<std::vector<CompensationChannelState>> compensation_states_;
 };
 
 }  // namespace sonare::mastering::multiband

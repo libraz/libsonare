@@ -63,8 +63,14 @@ set(SONARE_SOURCES
   analysis/section_analyzer.cpp
   analysis/music_analyzer.cpp
   streaming/stream_analyzer.cpp
+  streaming/stream_analyzer_output.cpp
+  streaming/stream_analyzer_utils.cpp
   quick.cpp
   sonare_c.cpp
+  sonare_c_effects.cpp
+  sonare_c_features.cpp
+  sonare_c_internal.cpp
+  sonare_c_memory.cpp
 )
 
 # Decide whether to enable FFmpeg integration.
