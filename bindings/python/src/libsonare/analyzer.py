@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 from collections.abc import Sequence
 
@@ -14,6 +15,8 @@ from ._ffi import (
     SonareDynamicsResult,
     SonareHpssResult,
     SonareKey,
+    SonareMasteringChainResult,
+    SonareMasteringChainStereoResult,
     SonareMasteringConfig,
     SonareMasteringParam,
     SonareMasteringResult,
@@ -36,6 +39,8 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    MasteringChainResult,
+    MasteringChainStereoResult,
     MasteringResult,
     MasteringStereoResult,
     MelSpectrogramResult,
@@ -910,6 +915,383 @@ def mastering_process_stereo(
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
+
+
+def _flatten_chain_config(
+    config: dict | None,
+    prefix: str = "",
+) -> dict[str, float]:
+    """Flatten a nested chain config dict using dot-notation keys.
+
+    Accepts both nested (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``)
+    and flat (``{"dynamics.compressor.thresholdDb": -24}``) representations.
+    Booleans are coerced to 0.0/1.0; other values are coerced via ``float``.
+    """
+    flat: dict[str, float] = {}
+    if not config:
+        return flat
+    for key, value in config.items():
+        full_key = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
+        if isinstance(value, dict):
+            flat.update(_flatten_chain_config(value, full_key))
+        elif isinstance(value, bool):
+            flat[full_key] = 1.0 if value else 0.0
+        else:
+            flat[full_key] = float(value)
+    return flat
+
+
+def _chain_params(config: dict | None):
+    flat = _flatten_chain_config(config)
+    items = list(flat.items())
+    array_type = SonareMasteringParam * len(items)
+    key_buffers = [str(key).encode("utf-8") for key, _ in items]
+    array = array_type(
+        *[
+            SonareMasteringParam(key=key_buffers[index], value=float(value))
+            for index, (_, value) in enumerate(items)
+        ]
+    )
+    return array, len(items)
+
+
+def _extract_stages(stages_ptr, count: int) -> list[str]:
+    if not stages_ptr or count == 0:
+        return []
+    result: list[str] = []
+    for i in range(count):
+        raw = stages_ptr[i]
+        result.append(raw.decode("utf-8") if raw else "")
+    return result
+
+
+def mastering_chain(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    config: dict | None = None,
+) -> MasteringChainResult:
+    """Apply a configurable mastering chain to mono audio.
+
+    The chain composes (in fixed order) repair, EQ, dynamics, saturation,
+    spectral, maximizer, and loudness stages. Each stage is enabled either
+    by passing ``"<stage>.enabled": True`` or by setting any field under
+    ``"<stage>.*"``. Unknown keys raise ``RuntimeError``.
+
+    Args:
+        samples: Mono audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        config: Either a flat dict using dot-notation keys (e.g.
+            ``{"dynamics.compressor.thresholdDb": -24}``) or a nested dict
+            (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``). The
+            two forms can be freely mixed.
+
+    Returns:
+        :class:`MasteringChainResult` with processed samples, LUFS info,
+        and the ordered list of stages that ran.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_chain"):
+        raise RuntimeError("libsonare was built without mastering chain support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _chain_params(config)
+    out = SonareMasteringChainResult()
+    rc = lib.sonare_mastering_chain(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringChainResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_result(ctypes.byref(out))
+
+
+def mastering_chain_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    config: dict | None = None,
+) -> MasteringChainStereoResult:
+    """Apply a configurable mastering chain to stereo audio.
+
+    See :func:`mastering_chain` for ``config`` semantics. The stereo path
+    also recognises ``stereo.imager.*`` and ``stereo.monoMaker.*`` stages.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_chain_stereo"):
+        raise RuntimeError("libsonare was built without mastering chain support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _chain_params(config)
+    out = SonareMasteringChainStereoResult()
+    rc = lib.sonare_mastering_chain_stereo(
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringChainStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
+
+
+def mastering_preset_names() -> list[str]:
+    """Return built-in mastering preset identifiers (e.g. ``"pop"``, ``"aiMusic"``)."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_preset_names"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    raw = lib.sonare_mastering_preset_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def master_audio(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    preset: str = "pop",
+    overrides: dict[str, float | int | bool] | None = None,
+) -> MasteringChainResult:
+    """Apply a named mastering preset chain to mono audio.
+
+    Args:
+        samples: Mono audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        preset: Preset identifier from :func:`mastering_preset_names`.
+        overrides: Optional flat / nested overrides applied on top of the preset
+            defaults. Keys use the same dot-notation as :func:`mastering_chain`.
+
+    Returns:
+        :class:`MasteringChainResult` with processed samples, LUFS info, and the
+        ordered list of stages that ran.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_master_audio"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _chain_params(overrides)
+    out = SonareMasteringChainResult()
+    rc = lib.sonare_master_audio(
+        preset.encode("utf-8"),
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringChainResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_result(ctypes.byref(out))
+
+
+def master_audio_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    preset: str = "pop",
+    overrides: dict[str, float | int | bool] | None = None,
+) -> MasteringChainStereoResult:
+    """Apply a named mastering preset chain to stereo audio.
+
+    See :func:`master_audio` for the ``preset`` and ``overrides`` semantics.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_master_audio_stereo"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _chain_params(overrides)
+    out = SonareMasteringChainStereoResult()
+    rc = lib.sonare_master_audio_stereo(
+        preset.encode("utf-8"),
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringChainStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
+
+
+class StreamingMasteringChain:
+    """Block-by-block streaming variant of :func:`mastering_chain`.
+
+    Maintains processor state across :meth:`process_mono`/:meth:`process_stereo`
+    calls. Only ProcessorBase-backed stages (eq.tilt, dynamics.compressor,
+    saturation.tape, saturation.exciter, spectral.airBand, stereo.imager,
+    stereo.monoMaker, maximizer.truePeakLimiter) are supported. Configurations
+    that enable ``repair.denoise`` or ``loudness`` raise :class:`RuntimeError`.
+
+    Example::
+
+        chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
+        chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+        out = chain.process_mono([0.1] * 512)
+        chain.reset()
+
+    Can also be used as a context manager to ensure the underlying handle is
+    released::
+
+        with StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}) as chain:
+            chain.prepare(44100, 512, 1)
+            ...
+    """
+
+    def __init__(self, config: dict | None = None) -> None:
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
+            raise RuntimeError("libsonare was built without streaming mastering chain support")
+        param_array, param_count = _chain_params(config)
+        handle = lib.sonare_streaming_mastering_chain_create(
+            param_array, ctypes.c_size_t(param_count)
+        )
+        if not handle:
+            detail = ""
+            if hasattr(lib, "sonare_last_error_message"):
+                raw = lib.sonare_last_error_message()
+                if raw:
+                    detail = raw.decode("utf-8", errors="replace")
+            message = "failed to create StreamingMasteringChain"
+            if detail:
+                message = f"{message}: {detail}"
+            raise RuntimeError(message)
+        self._lib = lib
+        self._handle = ctypes.c_void_p(handle)
+        self._prepared_channels = 0
+
+    def prepare(self, sample_rate: int, max_block_size: int, num_channels: int) -> None:
+        """Initialize processors for the given sample rate and block layout.
+
+        Args:
+            sample_rate: Sample rate in Hz.
+            max_block_size: Maximum block size in samples per
+                :meth:`process_mono` / :meth:`process_stereo` call.
+            num_channels: 1 (mono) or 2 (stereo). Stereo-only stages
+                (imager, monoMaker) are skipped when ``num_channels`` is 1.
+        """
+        self._ensure_open()
+        rc = self._lib.sonare_streaming_mastering_chain_prepare(
+            self._handle,
+            ctypes.c_int(int(sample_rate)),
+            ctypes.c_int(int(max_block_size)),
+            ctypes.c_int(int(num_channels)),
+        )
+        _check(rc)
+        self._prepared_channels = int(num_channels)
+
+    def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
+        """Process one mono block, returning the processed samples (length unchanged)."""
+        self._ensure_open()
+        c_array, length = _to_c_float_array(samples)
+        rc = self._lib.sonare_streaming_mastering_chain_process_mono(
+            self._handle, c_array, ctypes.c_size_t(length)
+        )
+        _check(rc)
+        return [float(c_array[i]) for i in range(length)]
+
+    def process_stereo(
+        self,
+        left: Sequence[float] | list[float],
+        right: Sequence[float] | list[float],
+    ) -> tuple[list[float], list[float]]:
+        """Process one stereo block, returning the processed (left, right) channels."""
+        self._ensure_open()
+        left_array, left_length = _to_c_float_array(left)
+        right_array, right_length = _to_c_float_array(right)
+        if left_length != right_length:
+            raise ValueError("left and right channel lengths must match")
+        rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
+            self._handle, left_array, right_array, ctypes.c_size_t(left_length)
+        )
+        _check(rc)
+        return (
+            [float(left_array[i]) for i in range(left_length)],
+            [float(right_array[i]) for i in range(right_length)],
+        )
+
+    def reset(self) -> None:
+        """Reset all processor state without rebuilding."""
+        self._ensure_open()
+        rc = self._lib.sonare_streaming_mastering_chain_reset(self._handle)
+        _check(rc)
+
+    @property
+    def latency_samples(self) -> int:
+        """Total reported latency in samples across all active processors."""
+        if self._handle is None or not self._handle:
+            return 0
+        return int(self._lib.sonare_streaming_mastering_chain_latency_samples(self._handle))
+
+    def close(self) -> None:
+        """Release the underlying C handle. Safe to call multiple times."""
+        if self._handle is not None and self._handle:
+            self._lib.sonare_streaming_mastering_chain_destroy(self._handle)
+            self._handle = ctypes.c_void_p(0)
+
+    def __enter__(self) -> StreamingMasteringChain:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        # Defensive: __del__ must not raise
+        with contextlib.suppress(Exception):
+            self.close()
+
+    def _ensure_open(self) -> None:
+        if self._handle is None or not self._handle:
+            raise RuntimeError("StreamingMasteringChain is closed")
 
 
 def mastering_pair_process(

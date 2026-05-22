@@ -378,3 +378,28 @@ class MasteringStereoResult:
     output_lufs: float
     applied_gain_db: float
     latency_samples: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringChainResult:
+    """Result of running a configurable mastering chain on mono audio."""
+
+    samples: list[float]
+    sample_rate: int
+    input_lufs: float
+    output_lufs: float
+    applied_gain_db: float
+    stages: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringChainStereoResult:
+    """Result of running a configurable mastering chain on stereo audio."""
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    input_lufs: float
+    output_lufs: float
+    applied_gain_db: float
+    stages: list[str]

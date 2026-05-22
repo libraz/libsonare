@@ -71,7 +71,9 @@ import {
   masteringChainStereo,
   masteringPairAnalyze,
   masteringPairProcess,
+  masteringPairProcessorNames,
   masteringProcess,
+  masteringProcessorNames,
 } from '@libraz/libsonare';
 
 await init();
@@ -101,6 +103,10 @@ const matched = masteringPairProcess('match.abCrossfade', source, reference, sam
 const loudnessJson = masteringPairAnalyze(
   'match.referenceLoudness', source, reference, sampleRate,
 );
+
+// Discover available processors
+masteringProcessorNames();     // ['dynamics.compressor', 'eq.parametric', ...]
+masteringPairProcessorNames(); // ['match.abCrossfade', ...]
 ```
 
 ### Python
@@ -134,6 +140,10 @@ compressed = libsonare.mastering_process(
 loudness_json = libsonare.mastering_pair_analyze(
     "match.referenceLoudness", source, reference, sample_rate=44100,
 )
+
+# Discover available processors
+libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
+libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
 ```
 
 ### Python CLI

@@ -28,6 +28,7 @@ release:
 wasm:
 	emcmake $(CMAKE) -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build build-wasm -j
+	cd bindings/wasm && yarn build:js
 
 test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure

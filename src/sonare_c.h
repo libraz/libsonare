@@ -311,6 +311,36 @@ typedef struct {
   int latency_samples;
 } SonareMasteringStereoResult;
 
+// Result of running the MasteringChain on a mono buffer.
+// Memory for @c samples and @c stages (and each char* entry inside it) is
+// allocated by libsonare with @c new[]; free with
+// @c sonare_free_mastering_chain_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  char** stages;  // newline-free stage identifiers, e.g. "dynamics.compressor"
+  size_t stages_count;
+} SonareMasteringChainResult;
+
+// Result of running the MasteringChain on stereo buffers. Same ownership
+// rules as @c SonareMasteringChainResult; free with
+// @c sonare_free_mastering_chain_stereo_result.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  char** stages;
+  size_t stages_count;
+} SonareMasteringChainStereoResult;
+
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out);
@@ -324,6 +354,40 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
                                                     const SonareMasteringParam* params,
                                                     size_t param_count,
                                                     SonareMasteringStereoResult* out);
+
+/// @brief Run the full mastering chain on a mono buffer.
+/// @details @p params is a flat (key/value) view of the
+///   @c MasteringChainConfig hierarchy using dot-notation keys (see
+///   @c parse_chain_config_params). Unknown keys cause
+///   @c SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_mastering_chain(const float* samples, size_t length, int sample_rate,
+                                   const SonareMasteringParam* params, size_t param_count,
+                                   SonareMasteringChainResult* out);
+
+/// @brief Run the full mastering chain on stereo buffers.
+SonareError sonare_mastering_chain_stereo(const float* left, const float* right, size_t length,
+                                          int sample_rate, const SonareMasteringParam* params,
+                                          size_t param_count,
+                                          SonareMasteringChainStereoResult* out);
+
+/// @brief Returns built-in preset identifiers, separated by '\n'.
+/// @details Pointer is owned by libsonare and remains valid for the program lifetime.
+const char* sonare_mastering_preset_names(void);
+
+/// @brief Apply a preset chain to mono audio.
+/// @param preset_name e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
+/// @param overrides   Optional Param overrides (same flat dot-notation as
+///                    @c sonare_mastering_chain). Pass NULL/0 for preset defaults.
+SonareError sonare_master_audio(const char* preset_name, const float* samples, size_t length,
+                                int sample_rate, const SonareMasteringParam* overrides,
+                                size_t override_count, SonareMasteringChainResult* out);
+
+/// @brief Stereo equivalent of @c sonare_master_audio.
+SonareError sonare_master_audio_stereo(const char* preset_name, const float* left,
+                                       const float* right, size_t length, int sample_rate,
+                                       const SonareMasteringParam* overrides, size_t override_count,
+                                       SonareMasteringChainStereoResult* out);
+
 const char* sonare_mastering_processor_names(void);
 const char* sonare_mastering_pair_processor_names(void);
 const char* sonare_mastering_pair_analysis_names(void);
@@ -343,6 +407,43 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
                                             char** json_out);
 void sonare_free_mastering_result(SonareMasteringResult* result);
 void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);
+void sonare_free_mastering_chain_result(SonareMasteringChainResult* result);
+void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result);
+
+// ----------------------------------------------------------------------------
+// Streaming mastering chain
+// ----------------------------------------------------------------------------
+
+/// @brief Opaque streaming mastering chain handle.
+typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
+
+/// @brief Create a streaming chain from flat params. Returns NULL on error
+/// (e.g. unknown key, non-streaming stage enabled).
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
+    const SonareMasteringParam* params, size_t param_count);
+
+/// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
+SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
+                                                     int sample_rate, int max_block_size,
+                                                     int num_channels);
+
+/// @brief Process one mono block in place. @p samples length must be <= max_block_size.
+SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
+                                                          float* samples, size_t num_samples);
+
+/// @brief Process one stereo block in place. @p left, @p right same length.
+SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
+                                                            float* left, float* right,
+                                                            size_t num_samples);
+
+/// @brief Reset processor state without rebuilding.
+SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle);
+
+/// @brief Returns total latency in samples (0 if not prepared).
+int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle);
+
+/// @brief Destroy and free the handle.
+void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);
 
 // ============================================================================
 // Effects

@@ -21,6 +21,8 @@ import {
   mastering,
   masteringChain,
   masteringChainStereo,
+  masteringChainStereoWithProgress,
+  masteringChainWithProgress,
   masteringPairAnalysisNames,
   masteringPairAnalyze,
   masteringPairProcess,
@@ -30,6 +32,7 @@ import {
   masteringProcessStereo,
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
+  StreamingMasteringChain,
   pcen,
   peakPick,
   plp,
@@ -322,6 +325,71 @@ describe('Sonare WASM Module', () => {
       expect(Number.isFinite(result.outputLufs)).toBe(true);
     });
 
+    it('should invoke progress callback for masteringChainWithProgress', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.18 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+      }
+
+      const stages: string[] = [];
+      const progresses: number[] = [];
+      const result = masteringChainWithProgress(
+        samples,
+        sampleRate,
+        {
+          eq: { tiltDb: 1.0 },
+          dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
+        },
+        (progress, stage) => {
+          progresses.push(progress);
+          stages.push(stage);
+        },
+      );
+
+      expect(stages).toEqual(['eq.tilt', 'dynamics.compressor']);
+      expect(progresses.length).toBe(2);
+      expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
+      expect(result.stages).toEqual(['eq.tilt', 'dynamics.compressor']);
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(samples.length);
+    });
+
+    it('should invoke progress callback for masteringChainStereoWithProgress', () => {
+      const sampleRate = 22050;
+      const left = new Float32Array(sampleRate);
+      const right = new Float32Array(sampleRate);
+      for (let i = 0; i < left.length; i++) {
+        left[i] = 0.18 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+        right[i] = 0.16 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
+      }
+
+      const stages: string[] = [];
+      const progresses: number[] = [];
+      const result = masteringChainStereoWithProgress(
+        left,
+        right,
+        sampleRate,
+        {
+          eq: { tiltDb: 1.0 },
+          stereo: { imager: { width: 1.1 } },
+        },
+        (progress, stage) => {
+          progresses.push(progress);
+          stages.push(stage);
+        },
+      );
+
+      expect(stages).toEqual(['eq.tilt', 'stereo.imager']);
+      expect(progresses.length).toBe(2);
+      expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
+      expect(result.stages).toEqual(['eq.tilt', 'stereo.imager']);
+      expect(result.left).toBeInstanceOf(Float32Array);
+      expect(result.right).toBeInstanceOf(Float32Array);
+      expect(result.left.length).toBe(left.length);
+      expect(result.right.length).toBe(right.length);
+    });
+
     it('should expose named mastering processors in WASM', () => {
       const sampleRate = 22050;
       const samples = new Float32Array(sampleRate / 2);
@@ -397,6 +465,27 @@ describe('Sonare WASM Module', () => {
         sampleRate,
       );
       expect(stereoJson).toContain('"correlation"');
+    });
+
+    it('should stream a mono block through StreamingMasteringChain', () => {
+      const chain = new StreamingMasteringChain({
+        eq: { tiltDb: 1.0 },
+      });
+      try {
+        chain.prepare(44100, 512, 1);
+        const block = new Float32Array(512);
+        for (let i = 0; i < block.length; i += 1) {
+          block[i] = 0.1;
+        }
+        const out = chain.processMono(block);
+        expect(out).toBeInstanceOf(Float32Array);
+        expect(out.length).toBe(block.length);
+        // tilt EQ should modify the constant signal at least somewhere
+        const stages = chain.stageNames();
+        expect(stages).toContain('eq.tilt');
+      } finally {
+        chain.delete();
+      }
     });
   });
 });

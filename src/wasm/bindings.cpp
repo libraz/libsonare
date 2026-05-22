@@ -40,7 +40,9 @@
 #include "feature/rhythm.h"
 #include "feature/spectral.h"
 #include "feature/tonnetz.h"
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/tilt.h"
@@ -441,143 +443,144 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
   return out;
 }
 
-val js_mastering_chain(val samples, int sample_rate, val config) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  const float input_lufs = analysis::meter::lufs(input).integrated_lufs;
-  float applied_gain_db = 0.0f;
-  val stages = val::array();
+// ---------------------------------------------------------------------------
+// Helpers: build a MasteringChainConfig from the nested JS config object that
+// js_mastering_chain / js_mastering_chain_stereo receive.
+// ---------------------------------------------------------------------------
+
+mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
+  mastering::api::MasteringChainConfig out;
 
   val repair = objectProperty(config, "repair");
   if (boolProperty(repair, "denoise", false)) {
-    mastering::repair::DenoiseClassicalConfig denoise_config;
-    denoise_config.n_fft = intProperty(repair, "nFft", denoise_config.n_fft);
-    denoise_config.hop_length = intProperty(repair, "hopLength", denoise_config.hop_length);
-    denoise_config.dd_alpha = floatProperty(repair, "ddAlpha", denoise_config.dd_alpha);
-    denoise_config.gain_floor = floatProperty(repair, "gainFloor", denoise_config.gain_floor);
-    Audio repaired = mastering::repair::denoise_classical(input, denoise_config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
-    input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    stages.call<void>("push", std::string("repair.denoise"));
+    out.repair.denoise.enabled = true;
+    out.repair.denoise.config.n_fft = intProperty(repair, "nFft", out.repair.denoise.config.n_fft);
+    out.repair.denoise.config.hop_length =
+        intProperty(repair, "hopLength", out.repair.denoise.config.hop_length);
+    out.repair.denoise.config.dd_alpha =
+        floatProperty(repair, "ddAlpha", out.repair.denoise.config.dd_alpha);
+    out.repair.denoise.config.gain_floor =
+        floatProperty(repair, "gainFloor", out.repair.denoise.config.gain_floor);
   }
 
   val eq = objectProperty(config, "eq");
   if (hasProperty(eq, "tiltDb") || hasProperty(eq, "pivotHz")) {
-    mastering::eq::TiltEq tilt;
-    tilt.set_tilt_db(floatProperty(eq, "tiltDb", 0.0f));
-    tilt.set_pivot_hz(floatProperty(eq, "pivotHz", 1000.0f));
-    processMono(tilt, data, sample_rate);
-    stages.call<void>("push", std::string("eq.tilt"));
+    out.eq.tilt.enabled = true;
+    out.eq.tilt.tilt_db = floatProperty(eq, "tiltDb", 0.0f);
+    out.eq.tilt.pivot_hz = floatProperty(eq, "pivotHz", 1000.0f);
   }
 
   val dynamics = objectProperty(config, "dynamics");
   if (hasProperty(dynamics, "compressor")) {
     val compressor = objectProperty(dynamics, "compressor");
-    mastering::dynamics::CompressorConfig compressor_config;
-    compressor_config.threshold_db =
-        floatProperty(compressor, "thresholdDb", compressor_config.threshold_db);
-    compressor_config.ratio = floatProperty(compressor, "ratio", compressor_config.ratio);
-    compressor_config.attack_ms =
-        floatProperty(compressor, "attackMs", compressor_config.attack_ms);
-    compressor_config.release_ms =
-        floatProperty(compressor, "releaseMs", compressor_config.release_ms);
-    compressor_config.knee_db = floatProperty(compressor, "kneeDb", compressor_config.knee_db);
-    compressor_config.makeup_gain_db =
-        floatProperty(compressor, "makeupGainDb", compressor_config.makeup_gain_db);
-    compressor_config.auto_makeup =
-        boolProperty(compressor, "autoMakeup", compressor_config.auto_makeup);
-    mastering::dynamics::Compressor processor(compressor_config);
-    processMono(processor, data, sample_rate);
-    stages.call<void>("push", std::string("dynamics.compressor"));
+    out.dynamics.compressor.enabled = true;
+    auto& cc = out.dynamics.compressor.config;
+    cc.threshold_db = floatProperty(compressor, "thresholdDb", cc.threshold_db);
+    cc.ratio = floatProperty(compressor, "ratio", cc.ratio);
+    cc.attack_ms = floatProperty(compressor, "attackMs", cc.attack_ms);
+    cc.release_ms = floatProperty(compressor, "releaseMs", cc.release_ms);
+    cc.knee_db = floatProperty(compressor, "kneeDb", cc.knee_db);
+    cc.makeup_gain_db = floatProperty(compressor, "makeupGainDb", cc.makeup_gain_db);
+    cc.auto_makeup = boolProperty(compressor, "autoMakeup", cc.auto_makeup);
   }
 
   val saturation = objectProperty(config, "saturation");
   if (hasProperty(saturation, "tape")) {
     val tape = objectProperty(saturation, "tape");
-    mastering::saturation::TapeConfig tape_config;
-    tape_config.drive_db = floatProperty(tape, "driveDb", tape_config.drive_db);
-    tape_config.saturation = floatProperty(tape, "saturation", tape_config.saturation);
-    tape_config.hysteresis = floatProperty(tape, "hysteresis", tape_config.hysteresis);
-    tape_config.output_gain_db = floatProperty(tape, "outputGainDb", tape_config.output_gain_db);
-    tape_config.speed_ips = floatProperty(tape, "speedIps", tape_config.speed_ips);
-    tape_config.head_bump_db = floatProperty(tape, "headBumpDb", tape_config.head_bump_db);
-    tape_config.bias = floatProperty(tape, "bias", tape_config.bias);
-    tape_config.gap_loss = floatProperty(tape, "gapLoss", tape_config.gap_loss);
-    mastering::saturation::Tape processor(tape_config);
-    processMono(processor, data, sample_rate);
-    stages.call<void>("push", std::string("saturation.tape"));
+    out.saturation.tape.enabled = true;
+    auto& tc = out.saturation.tape.config;
+    tc.drive_db = floatProperty(tape, "driveDb", tc.drive_db);
+    tc.saturation = floatProperty(tape, "saturation", tc.saturation);
+    tc.hysteresis = floatProperty(tape, "hysteresis", tc.hysteresis);
+    tc.output_gain_db = floatProperty(tape, "outputGainDb", tc.output_gain_db);
+    tc.speed_ips = floatProperty(tape, "speedIps", tc.speed_ips);
+    tc.head_bump_db = floatProperty(tape, "headBumpDb", tc.head_bump_db);
+    tc.bias = floatProperty(tape, "bias", tc.bias);
+    tc.gap_loss = floatProperty(tape, "gapLoss", tc.gap_loss);
   }
   if (hasProperty(saturation, "exciter")) {
     val exciter = objectProperty(saturation, "exciter");
-    mastering::saturation::ExciterConfig exciter_config;
-    exciter_config.frequency_hz =
-        floatProperty(exciter, "frequencyHz", exciter_config.frequency_hz);
-    exciter_config.drive_db = floatProperty(exciter, "driveDb", exciter_config.drive_db);
-    exciter_config.amount = floatProperty(exciter, "amount", exciter_config.amount);
-    exciter_config.q = floatProperty(exciter, "q", exciter_config.q);
-    exciter_config.even_odd_mix = floatProperty(exciter, "evenOddMix", exciter_config.even_odd_mix);
-    mastering::saturation::Exciter processor(exciter_config);
-    processMono(processor, data, sample_rate);
-    stages.call<void>("push", std::string("saturation.exciter"));
+    out.saturation.exciter.enabled = true;
+    auto& ec = out.saturation.exciter.config;
+    ec.frequency_hz = floatProperty(exciter, "frequencyHz", ec.frequency_hz);
+    ec.drive_db = floatProperty(exciter, "driveDb", ec.drive_db);
+    ec.amount = floatProperty(exciter, "amount", ec.amount);
+    ec.q = floatProperty(exciter, "q", ec.q);
+    ec.even_odd_mix = floatProperty(exciter, "evenOddMix", ec.even_odd_mix);
   }
 
   val spectral = objectProperty(config, "spectral");
   if (hasProperty(spectral, "airBand")) {
     val air_band = objectProperty(spectral, "airBand");
-    mastering::spectral::AirBandConfig air_band_config;
-    air_band_config.amount = floatProperty(air_band, "amount", air_band_config.amount);
-    air_band_config.shelf_frequency_hz =
-        floatProperty(air_band, "shelfFrequencyHz", air_band_config.shelf_frequency_hz);
-    air_band_config.dynamic_threshold_db =
-        floatProperty(air_band, "dynamicThresholdDb", air_band_config.dynamic_threshold_db);
-    air_band_config.dynamic_range_db =
-        floatProperty(air_band, "dynamicRangeDb", air_band_config.dynamic_range_db);
-    mastering::spectral::AirBand processor(air_band_config);
-    processMono(processor, data, sample_rate);
-    stages.call<void>("push", std::string("spectral.airBand"));
+    out.spectral.air_band.enabled = true;
+    auto& ac = out.spectral.air_band.config;
+    ac.amount = floatProperty(air_band, "amount", ac.amount);
+    ac.shelf_frequency_hz = floatProperty(air_band, "shelfFrequencyHz", ac.shelf_frequency_hz);
+    ac.dynamic_threshold_db =
+        floatProperty(air_band, "dynamicThresholdDb", ac.dynamic_threshold_db);
+    ac.dynamic_range_db = floatProperty(air_band, "dynamicRangeDb", ac.dynamic_range_db);
+  }
+
+  val stereo = objectProperty(config, "stereo");
+  if (hasProperty(stereo, "imager")) {
+    val imager = objectProperty(stereo, "imager");
+    out.stereo.imager.enabled = true;
+    auto& ic = out.stereo.imager.config;
+    ic.width = floatProperty(imager, "width", ic.width);
+    ic.output_gain_db = floatProperty(imager, "outputGainDb", ic.output_gain_db);
+    ic.decorrelation_amount = floatProperty(imager, "decorrelationAmount", ic.decorrelation_amount);
+    ic.preserve_energy = boolProperty(imager, "preserveEnergy", ic.preserve_energy);
+  }
+  if (hasProperty(stereo, "monoMaker")) {
+    val mono_maker = objectProperty(stereo, "monoMaker");
+    out.stereo.mono_maker.enabled = true;
+    out.stereo.mono_maker.config.amount =
+        floatProperty(mono_maker, "amount", out.stereo.mono_maker.config.amount);
   }
 
   val maximizer = objectProperty(config, "maximizer");
   if (hasProperty(maximizer, "truePeakLimiter")) {
     val limiter = objectProperty(maximizer, "truePeakLimiter");
-    mastering::maximizer::TruePeakLimiterConfig limiter_config;
-    limiter_config.ceiling_db = floatProperty(limiter, "ceilingDb", limiter_config.ceiling_db);
-    limiter_config.lookahead_ms =
-        floatProperty(limiter, "lookaheadMs", limiter_config.lookahead_ms);
-    limiter_config.release_ms = floatProperty(limiter, "releaseMs", limiter_config.release_ms);
-    limiter_config.oversample_factor =
-        intProperty(limiter, "oversampleFactor", limiter_config.oversample_factor);
-    limiter_config.apply_gain_at_input_rate =
-        boolProperty(limiter, "applyGainAtInputRate", limiter_config.apply_gain_at_input_rate);
-    mastering::maximizer::TruePeakLimiter processor(limiter_config);
-    processMono(processor, data, sample_rate);
-    stages.call<void>("push", std::string("maximizer.truePeakLimiter"));
+    out.maximizer.true_peak_limiter.enabled = true;
+    auto& lc = out.maximizer.true_peak_limiter.config;
+    lc.ceiling_db = floatProperty(limiter, "ceilingDb", lc.ceiling_db);
+    lc.lookahead_ms = floatProperty(limiter, "lookaheadMs", lc.lookahead_ms);
+    lc.release_ms = floatProperty(limiter, "releaseMs", lc.release_ms);
+    lc.oversample_factor = intProperty(limiter, "oversampleFactor", lc.oversample_factor);
+    lc.apply_gain_at_input_rate =
+        boolProperty(limiter, "applyGainAtInputRate", lc.apply_gain_at_input_rate);
   }
 
   val loudness = objectProperty(config, "loudness");
   if (!loudness.isUndefined() && !loudness.isNull()) {
-    Audio current = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    mastering::maximizer::LoudnessOptimizeConfig loudness_config;
-    loudness_config.target_lufs =
-        floatProperty(loudness, "targetLufs", loudness_config.target_lufs);
-    loudness_config.ceiling_db = floatProperty(loudness, "ceilingDb", loudness_config.ceiling_db);
-    loudness_config.true_peak_oversample =
-        intProperty(loudness, "truePeakOversample", loudness_config.true_peak_oversample);
-    auto result = mastering::maximizer::loudness_optimize(current, loudness_config);
-    data.assign(result.audio.data(), result.audio.data() + result.audio.size());
-    applied_gain_db += result.applied_gain_db;
-    stages.call<void>("push", std::string("loudness.optimize"));
+    out.loudness.enabled = true;
+    out.loudness.target_lufs = floatProperty(loudness, "targetLufs", out.loudness.target_lufs);
+    out.loudness.ceiling_db = floatProperty(loudness, "ceilingDb", out.loudness.ceiling_db);
+    out.loudness.true_peak_oversample =
+        intProperty(loudness, "truePeakOversample", out.loudness.true_peak_oversample);
+    out.loudness.release_ms = floatProperty(loudness, "releaseMs", out.loudness.release_ms);
+    out.loudness.apply_gain_at_input_rate =
+        boolProperty(loudness, "applyGainAtInputRate", out.loudness.apply_gain_at_input_rate);
   }
 
-  Audio output = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  const float output_lufs = analysis::meter::lufs(output).integrated_lufs;
+  return out;
+}
+
+val js_mastering_chain(val samples, int sample_rate, val config) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  auto result = chain.process_mono(data.data(), data.size(), sample_rate);
 
   val out = val::object();
-  out.set("samples", vectorToFloat32Array(data));
-  out.set("sampleRate", sample_rate);
-  out.set("inputLufs", input_lufs);
-  out.set("outputLufs", output_lufs);
-  out.set("appliedGainDb", applied_gain_db);
+  out.set("samples", vectorToFloat32Array(result.samples));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  val stages = val::array();
+  for (const auto& s : result.stages) {
+    stages.call<void>("push", s);
+  }
   out.set("stages", stages);
   return out;
 }
@@ -589,174 +592,140 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_ra
     throw std::invalid_argument("stereo channel lengths must match");
   }
 
-  const float input_lufs = integratedLufs(monoMix(left, right), sample_rate);
-  float applied_gain_db = 0.0f;
-  val stages = val::array();
+  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
 
-  val repair = objectProperty(config, "repair");
-  if (boolProperty(repair, "denoise", false)) {
-    mastering::repair::DenoiseClassicalConfig denoise_config;
-    denoise_config.n_fft = intProperty(repair, "nFft", denoise_config.n_fft);
-    denoise_config.hop_length = intProperty(repair, "hopLength", denoise_config.hop_length);
-    denoise_config.dd_alpha = floatProperty(repair, "ddAlpha", denoise_config.dd_alpha);
-    denoise_config.gain_floor = floatProperty(repair, "gainFloor", denoise_config.gain_floor);
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    auto left_repaired = mastering::repair::denoise_classical(left_audio, denoise_config);
-    auto right_repaired = mastering::repair::denoise_classical(right_audio, denoise_config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
-    stages.call<void>("push", std::string("repair.denoise"));
-  }
-
-  val eq = objectProperty(config, "eq");
-  if (hasProperty(eq, "tiltDb") || hasProperty(eq, "pivotHz")) {
-    mastering::eq::TiltEq tilt;
-    tilt.set_tilt_db(floatProperty(eq, "tiltDb", 0.0f));
-    tilt.set_pivot_hz(floatProperty(eq, "pivotHz", 1000.0f));
-    processStereo(tilt, left, right, sample_rate);
-    stages.call<void>("push", std::string("eq.tilt"));
-  }
-
-  val dynamics = objectProperty(config, "dynamics");
-  if (hasProperty(dynamics, "compressor")) {
-    val compressor = objectProperty(dynamics, "compressor");
-    mastering::dynamics::CompressorConfig compressor_config;
-    compressor_config.threshold_db =
-        floatProperty(compressor, "thresholdDb", compressor_config.threshold_db);
-    compressor_config.ratio = floatProperty(compressor, "ratio", compressor_config.ratio);
-    compressor_config.attack_ms =
-        floatProperty(compressor, "attackMs", compressor_config.attack_ms);
-    compressor_config.release_ms =
-        floatProperty(compressor, "releaseMs", compressor_config.release_ms);
-    compressor_config.knee_db = floatProperty(compressor, "kneeDb", compressor_config.knee_db);
-    compressor_config.makeup_gain_db =
-        floatProperty(compressor, "makeupGainDb", compressor_config.makeup_gain_db);
-    compressor_config.auto_makeup =
-        boolProperty(compressor, "autoMakeup", compressor_config.auto_makeup);
-    mastering::dynamics::Compressor processor(compressor_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("dynamics.compressor"));
-  }
-
-  val saturation = objectProperty(config, "saturation");
-  if (hasProperty(saturation, "tape")) {
-    val tape = objectProperty(saturation, "tape");
-    mastering::saturation::TapeConfig tape_config;
-    tape_config.drive_db = floatProperty(tape, "driveDb", tape_config.drive_db);
-    tape_config.saturation = floatProperty(tape, "saturation", tape_config.saturation);
-    tape_config.hysteresis = floatProperty(tape, "hysteresis", tape_config.hysteresis);
-    tape_config.output_gain_db = floatProperty(tape, "outputGainDb", tape_config.output_gain_db);
-    tape_config.speed_ips = floatProperty(tape, "speedIps", tape_config.speed_ips);
-    tape_config.head_bump_db = floatProperty(tape, "headBumpDb", tape_config.head_bump_db);
-    tape_config.bias = floatProperty(tape, "bias", tape_config.bias);
-    tape_config.gap_loss = floatProperty(tape, "gapLoss", tape_config.gap_loss);
-    mastering::saturation::Tape processor(tape_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("saturation.tape"));
-  }
-  if (hasProperty(saturation, "exciter")) {
-    val exciter = objectProperty(saturation, "exciter");
-    mastering::saturation::ExciterConfig exciter_config;
-    exciter_config.frequency_hz =
-        floatProperty(exciter, "frequencyHz", exciter_config.frequency_hz);
-    exciter_config.drive_db = floatProperty(exciter, "driveDb", exciter_config.drive_db);
-    exciter_config.amount = floatProperty(exciter, "amount", exciter_config.amount);
-    exciter_config.q = floatProperty(exciter, "q", exciter_config.q);
-    exciter_config.even_odd_mix = floatProperty(exciter, "evenOddMix", exciter_config.even_odd_mix);
-    mastering::saturation::Exciter processor(exciter_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("saturation.exciter"));
-  }
-
-  val spectral = objectProperty(config, "spectral");
-  if (hasProperty(spectral, "airBand")) {
-    val air_band = objectProperty(spectral, "airBand");
-    mastering::spectral::AirBandConfig air_band_config;
-    air_band_config.amount = floatProperty(air_band, "amount", air_band_config.amount);
-    air_band_config.shelf_frequency_hz =
-        floatProperty(air_band, "shelfFrequencyHz", air_band_config.shelf_frequency_hz);
-    air_band_config.dynamic_threshold_db =
-        floatProperty(air_band, "dynamicThresholdDb", air_band_config.dynamic_threshold_db);
-    air_band_config.dynamic_range_db =
-        floatProperty(air_band, "dynamicRangeDb", air_band_config.dynamic_range_db);
-    mastering::spectral::AirBand processor(air_band_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("spectral.airBand"));
-  }
-
-  val stereo = objectProperty(config, "stereo");
-  if (hasProperty(stereo, "imager")) {
-    val imager = objectProperty(stereo, "imager");
-    mastering::stereo::ImagerConfig imager_config;
-    imager_config.width = floatProperty(imager, "width", imager_config.width);
-    imager_config.output_gain_db =
-        floatProperty(imager, "outputGainDb", imager_config.output_gain_db);
-    imager_config.decorrelation_amount =
-        floatProperty(imager, "decorrelationAmount", imager_config.decorrelation_amount);
-    imager_config.preserve_energy =
-        boolProperty(imager, "preserveEnergy", imager_config.preserve_energy);
-    mastering::stereo::Imager processor(imager_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("stereo.imager"));
-  }
-  if (hasProperty(stereo, "monoMaker")) {
-    val mono_maker = objectProperty(stereo, "monoMaker");
-    mastering::stereo::MonoMakerConfig mono_maker_config;
-    mono_maker_config.amount = floatProperty(mono_maker, "amount", mono_maker_config.amount);
-    mastering::stereo::MonoMaker processor(mono_maker_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("stereo.monoMaker"));
-  }
-
-  val maximizer = objectProperty(config, "maximizer");
-  if (hasProperty(maximizer, "truePeakLimiter")) {
-    val limiter = objectProperty(maximizer, "truePeakLimiter");
-    mastering::maximizer::TruePeakLimiterConfig limiter_config;
-    limiter_config.ceiling_db = floatProperty(limiter, "ceilingDb", limiter_config.ceiling_db);
-    limiter_config.lookahead_ms =
-        floatProperty(limiter, "lookaheadMs", limiter_config.lookahead_ms);
-    limiter_config.release_ms = floatProperty(limiter, "releaseMs", limiter_config.release_ms);
-    limiter_config.oversample_factor =
-        intProperty(limiter, "oversampleFactor", limiter_config.oversample_factor);
-    limiter_config.apply_gain_at_input_rate =
-        boolProperty(limiter, "applyGainAtInputRate", limiter_config.apply_gain_at_input_rate);
-    mastering::maximizer::TruePeakLimiter processor(limiter_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("maximizer.truePeakLimiter"));
-  }
-
-  val loudness = objectProperty(config, "loudness");
-  if (!loudness.isUndefined() && !loudness.isNull()) {
-    const float target_lufs = floatProperty(loudness, "targetLufs", -14.0f);
-    const float current_lufs = integratedLufs(monoMix(left, right), sample_rate);
-    if (std::isfinite(current_lufs)) {
-      const float gain_db = target_lufs - current_lufs;
-      applyGainDb(left, right, gain_db);
-      applied_gain_db += gain_db;
-    }
-
-    mastering::maximizer::TruePeakLimiterConfig limiter_config;
-    limiter_config.ceiling_db = floatProperty(loudness, "ceilingDb", limiter_config.ceiling_db);
-    limiter_config.oversample_factor =
-        intProperty(loudness, "truePeakOversample", limiter_config.oversample_factor);
-    limiter_config.apply_gain_at_input_rate =
-        boolProperty(loudness, "applyGainAtInputRate", limiter_config.apply_gain_at_input_rate);
-    mastering::maximizer::TruePeakLimiter processor(limiter_config);
-    processStereo(processor, left, right, sample_rate);
-    stages.call<void>("push", std::string("loudness.optimize"));
-  }
-
-  const float output_lufs = integratedLufs(monoMix(left, right), sample_rate);
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left));
-  out.set("right", vectorToFloat32Array(right));
-  out.set("sampleRate", sample_rate);
-  out.set("inputLufs", input_lufs);
-  out.set("outputLufs", output_lufs);
-  out.set("appliedGainDb", applied_gain_db);
+  out.set("left", vectorToFloat32Array(result.left));
+  out.set("right", vectorToFloat32Array(result.right));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  val stages = val::array();
+  for (const auto& s : result.stages) {
+    stages.call<void>("push", s);
+  }
   out.set("stages", stages);
   return out;
+}
+
+// Mastering chain (mono) with progress callback
+val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
+                                     val progress_callback) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
+    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage));
+    });
+  }
+  auto result = chain.process_mono(data.data(), data.size(), sample_rate);
+
+  val out = val::object();
+  out.set("samples", vectorToFloat32Array(result.samples));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  val stages = val::array();
+  for (const auto& s : result.stages) {
+    stages.call<void>("push", s);
+  }
+  out.set("stages", stages);
+  return out;
+}
+
+// Mastering chain (stereo) with progress callback
+val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples, int sample_rate,
+                                            val config, val progress_callback) {
+  std::vector<float> left = float32ArrayToVector(left_samples);
+  std::vector<float> right = float32ArrayToVector(right_samples);
+  if (left.size() != right.size()) {
+    throw std::invalid_argument("stereo channel lengths must match");
+  }
+
+  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
+    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage));
+    });
+  }
+  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(result.left));
+  out.set("right", vectorToFloat32Array(result.right));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  val stages = val::array();
+  for (const auto& s : result.stages) {
+    stages.call<void>("push", s);
+  }
+  out.set("stages", stages);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// StreamingMasteringChain wrapper (block-by-block streaming).
+// Construct via createStreamingMasteringChain(config) factory. Throws if the
+// configuration enables non-streaming stages (repair.denoise, loudness).
+// ---------------------------------------------------------------------------
+
+class StreamingMasteringChainWrapper {
+ public:
+  explicit StreamingMasteringChainWrapper(val config)
+      : chain_(masteringChainConfigFromVal(config)) {}
+
+  void prepare(double sample_rate, int max_block_size, int num_channels) {
+    chain_.prepare(sample_rate, max_block_size, num_channels);
+  }
+
+  val processMono(val samples) {
+    std::vector<float> block = float32ArrayToVector(samples);
+    if (!block.empty()) {
+      float* channels[] = {block.data()};
+      chain_.process_block(channels, 1, static_cast<int>(block.size()));
+    }
+    return vectorToFloat32Array(block);
+  }
+
+  val processStereo(val left_samples, val right_samples) {
+    std::vector<float> left = float32ArrayToVector(left_samples);
+    std::vector<float> right = float32ArrayToVector(right_samples);
+    if (left.size() != right.size()) {
+      throw std::invalid_argument("stereo channel lengths must match");
+    }
+    if (!left.empty()) {
+      float* channels[] = {left.data(), right.data()};
+      chain_.process_block(channels, 2, static_cast<int>(left.size()));
+    }
+    val out = val::object();
+    out.set("left", vectorToFloat32Array(left));
+    out.set("right", vectorToFloat32Array(right));
+    return out;
+  }
+
+  void reset() { chain_.reset(); }
+
+  int latencySamples() const { return chain_.latency_samples(); }
+
+  val stageNames() const {
+    val out = val::array();
+    for (const auto& name : chain_.stage_names()) {
+      out.call<void>("push", name);
+    }
+    return out;
+  }
+
+ private:
+  mastering::api::StreamingMasteringChain chain_;
+};
+
+StreamingMasteringChainWrapper* createStreamingMasteringChain(val config) {
+  return new StreamingMasteringChainWrapper(config);
 }
 
 val js_mastering_processor_names() {
@@ -765,6 +734,76 @@ val js_mastering_processor_names() {
   for (size_t index = 0; index < names.size(); ++index) {
     out.call<void>("push", names[index]);
   }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Mastering presets (high-level master_audio API).
+// TODO: Support flat / nested overrides objects. For now only null/undefined
+// overrides are accepted; a non-null overrides argument throws.
+// ---------------------------------------------------------------------------
+
+val js_mastering_preset_names() {
+  val out = val::array();
+  auto names = mastering::api::preset_names();
+  for (const auto& name : names) {
+    out.call<void>("push", name);
+  }
+  return out;
+}
+
+val js_master_audio(std::string preset_name, val samples, int sample_rate, val overrides) {
+  if (!overrides.isNull() && !overrides.isUndefined()) {
+    // TODO: convert overrides val into a flat Param vector and pass it to
+    // mastering::api::master_audio_mono(); see masteringChainConfigFromVal for
+    // the existing dispatch shape.
+    throw std::invalid_argument("masterAudio overrides are not yet supported; pass null");
+  }
+  std::vector<float> data = float32ArrayToVector(samples);
+  auto preset = mastering::api::preset_from_string(preset_name);
+  auto result = mastering::api::master_audio_mono(preset, data.data(), data.size(), sample_rate);
+
+  val out = val::object();
+  out.set("samples", vectorToFloat32Array(result.samples));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  val stages = val::array();
+  for (const auto& s : result.stages) {
+    stages.call<void>("push", s);
+  }
+  out.set("stages", stages);
+  return out;
+}
+
+val js_master_audio_stereo(std::string preset_name, val left_samples, val right_samples,
+                           int sample_rate, val overrides) {
+  if (!overrides.isNull() && !overrides.isUndefined()) {
+    // TODO: see js_master_audio above.
+    throw std::invalid_argument("masterAudioStereo overrides are not yet supported; pass null");
+  }
+  std::vector<float> left = float32ArrayToVector(left_samples);
+  std::vector<float> right = float32ArrayToVector(right_samples);
+  if (left.size() != right.size()) {
+    throw std::invalid_argument("stereo channel lengths must match");
+  }
+  auto preset = mastering::api::preset_from_string(preset_name);
+  auto result = mastering::api::master_audio_stereo(preset, left.data(), right.data(), left.size(),
+                                                    sample_rate);
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(result.left));
+  out.set("right", vectorToFloat32Array(result.right));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  val stages = val::array();
+  for (const auto& s : result.stages) {
+    stages.call<void>("push", s);
+  }
+  out.set("stages", stages);
   return out;
 }
 
@@ -1612,6 +1651,11 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);
   function("masteringChain", &js_mastering_chain);
   function("masteringChainStereo", &js_mastering_chain_stereo);
+  function("masteringChainWithProgress", &js_mastering_chain_with_progress);
+  function("masteringChainStereoWithProgress", &js_mastering_chain_stereo_with_progress);
+  function("masteringPresetNames", &js_mastering_preset_names);
+  function("masterAudio", &js_master_audio);
+  function("masterAudioStereo", &js_master_audio_stereo);
   function("trim", &js_trim);
 
   // Features - Spectrogram
@@ -1669,6 +1713,16 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   // Core - Resample
   function("resample", &js_resample);
+
+  // Streaming - StreamingMasteringChain
+  class_<StreamingMasteringChainWrapper>("StreamingMasteringChain")
+      .function("prepare", &StreamingMasteringChainWrapper::prepare)
+      .function("processMono", &StreamingMasteringChainWrapper::processMono)
+      .function("processStereo", &StreamingMasteringChainWrapper::processStereo)
+      .function("reset", &StreamingMasteringChainWrapper::reset)
+      .function("latencySamples", &StreamingMasteringChainWrapper::latencySamples)
+      .function("stageNames", &StreamingMasteringChainWrapper::stageNames);
+  function("createStreamingMasteringChain", &createStreamingMasteringChain, allow_raw_pointers());
 
   // Streaming - StreamAnalyzer
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")

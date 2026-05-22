@@ -242,6 +242,19 @@ export interface WasmFrameBuffer {
   chordConfidence: Float32Array;
 }
 
+export interface WasmStreamingMasteringChain {
+  prepare: (sampleRate: number, maxBlockSize: number, numChannels: number) => void;
+  processMono: (samples: Float32Array) => Float32Array;
+  processStereo: (
+    left: Float32Array,
+    right: Float32Array,
+  ) => { left: Float32Array; right: Float32Array };
+  reset: () => void;
+  latencySamples: () => number;
+  stageNames: () => string[];
+  delete: () => void;
+}
+
 export interface WasmStreamAnalyzer {
   process: (samples: Float32Array) => void;
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
@@ -339,6 +352,33 @@ export interface SonareModule {
     right: Float32Array,
     sampleRate: number,
     config: Record<string, unknown>,
+  ) => WasmMasteringStereoChainResult;
+  masteringChainWithProgress: (
+    samples: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+    progressCallback: ProgressCallback | null,
+  ) => WasmMasteringChainResult;
+  masteringChainStereoWithProgress: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+    progressCallback: ProgressCallback | null,
+  ) => WasmMasteringStereoChainResult;
+  masteringPresetNames: () => string[];
+  masterAudio: (
+    presetName: string,
+    samples: Float32Array,
+    sampleRate: number,
+    overrides: Record<string, number | boolean> | null,
+  ) => WasmMasteringChainResult;
+  masterAudioStereo: (
+    presetName: string,
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    overrides: Record<string, number | boolean> | null,
   ) => WasmMasteringStereoChainResult;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
 
@@ -510,4 +550,6 @@ export interface SonareModule {
     computeOnset: boolean,
     emitEveryNFrames: number,
   ) => WasmStreamAnalyzer;
+
+  createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
 }

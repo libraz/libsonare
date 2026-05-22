@@ -7,14 +7,22 @@ a synthetic 73-second audio fixture (44100 Hz stereo).
 
 ```
 benchmarks/
-├── CMakeLists.txt      # builds sonare_bench (C++ chrono timing)
-├── bench_cpp.cpp       # C++ benchmark binary
-├── pyproject.toml      # rye-managed env (librosa 0.11.0 pinned)
-├── generate_audio.py   # synthesises fixtures/bench_73s_44100.wav
-├── run_bench.py        # times librosa + merges C++ results into results.json
-├── fixtures/           # generated audio (gitignored)
-├── results_cpp.json    # C++-side measurements (from sonare_bench)
-└── results.json        # merged librosa + libsonare numbers used by the homepage
+├── CMakeLists.txt                    # builds all bench binaries below
+├── bench_cpp.cpp                     # main librosa-comparison benchmark (→ sonare_bench)
+├── filterbank_bench.cpp              # mel/chroma filter application micro-bench
+├── spectrum_power_bench.cpp          # |X|² spectrogram micro-bench
+├── transcendental_bench.cpp          # log/exp/pow scalar-vs-vectorised
+├── log10_bench.cpp                   # log10 hot-path variants
+├── streaming_mel_chroma_bench.cpp    # streaming feature pipeline
+├── mastering_isp_bench.cpp           # intersample-peak detector (BUILD_MASTERING)
+├── mastering_support_bench.cpp       # shared mastering DSP utilities (BUILD_MASTERING)
+├── mastering_stereo_bench.cpp        # stereo width / M-S processors (BUILD_MASTERING)
+├── pyproject.toml                    # rye-managed env (librosa 0.11.0 pinned)
+├── generate_audio.py                 # synthesises fixtures/bench_73s_44100.wav
+├── run_bench.py                      # times librosa + merges C++ results into results.json
+├── fixtures/                         # generated audio (gitignored)
+├── results_cpp.json                  # C++-side measurements (from sonare_bench)
+└── results.json                      # merged librosa + libsonare numbers used by the homepage
 ```
 
 ## Methodology
@@ -59,6 +67,22 @@ rye run --pyproject benchmarks/pyproject.toml python benchmarks/run_bench.py
 `results.json` is the source of truth for the homepage `benchmarks.md`. Re-run
 on different hardware and the relative gaps stay stable; absolute times scale
 with the machine.
+
+## Micro-benchmarks
+
+The additional `*_bench.cpp` binaries are standalone micro-benchmarks for
+hot-path DSP work (no librosa comparison, no `results.json` integration). They
+print timings to stdout. Build with `BUILD_BENCH=ON`; mastering benches also
+require `BUILD_MASTERING=ON`. Run individually, e.g.:
+
+```bash
+./build-bench/bin/sonare_filterbank_bench
+./build-bench/bin/sonare_spectrum_power_bench
+./build-bench/bin/sonare_mastering_isp_bench   # needs -DBUILD_MASTERING=ON
+```
+
+The mastering ISP bench is also runnable in WASM via
+`cd bindings/wasm && yarn bench:wasm:isp` (builds and executes under Node).
 
 ## Optional: bpm-detector full-pipeline comparison
 

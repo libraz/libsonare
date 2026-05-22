@@ -129,6 +129,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_analysis.cpp
   src/addon/sonare_wrap_effects.cpp
   src/addon/sonare_wrap_features.cpp
+  src/addon/sonare_wrap_streaming.cpp
   src/addon/sonare_wrap_utils.cpp
 )
 

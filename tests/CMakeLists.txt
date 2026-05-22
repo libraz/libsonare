@@ -118,7 +118,9 @@ target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
+    mastering/chain_test.cpp
     mastering/common_test.cpp
+    mastering/preset_test.cpp
     mastering/dynamics_test.cpp
     mastering/eq_test.cpp
     mastering/final_test.cpp

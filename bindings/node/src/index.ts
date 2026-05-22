@@ -7,6 +7,8 @@ import type {
   DynamicsResult,
   HpssResult,
   Key,
+  MasteringChainResult,
+  MasteringChainStereoResult,
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
@@ -214,6 +216,10 @@ export class Audio {
     params: Record<string, number | boolean> = {},
   ): MasteringResult {
     return addon.masteringProcess(processorName, this.getData(), this.getSampleRate(), params);
+  }
+
+  masteringChain(config: Record<string, number | boolean> = {}): MasteringChainResult {
+    return addon.masteringChain(this.getData(), this.getSampleRate(), config);
   }
 
   trim(thresholdDb = -60.0): Float32Array {
@@ -496,6 +502,107 @@ export function masteringProcessStereo(
   params: Record<string, number | boolean> = {},
 ): MasteringStereoResult {
   return addon.masteringProcessStereo(processorName, left, right, sampleRate, params);
+}
+
+export function masteringChain(
+  samples: Float32Array,
+  sampleRate = 22050,
+  config: Record<string, number | boolean> = {},
+): MasteringChainResult {
+  return addon.masteringChain(samples, sampleRate, config);
+}
+
+export function masteringChainStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  config: Record<string, number | boolean> = {},
+): MasteringChainStereoResult {
+  return addon.masteringChainStereo(left, right, sampleRate, config);
+}
+
+/**
+ * Block-by-block streaming variant of {@link masteringChain}.
+ *
+ * Maintains processor state across {@link processMono}/{@link processStereo}
+ * calls. Only ProcessorBase-backed stages (`eq.tilt`, `dynamics.compressor`,
+ * `saturation.tape`, `saturation.exciter`, `spectral.airBand`, `stereo.imager`,
+ * `stereo.monoMaker`, `maximizer.truePeakLimiter`) are supported. Constructing
+ * with `repair.denoise` or `loudness` enabled throws an Error.
+ *
+ * @example
+ * ```typescript
+ * const chain = new StreamingMasteringChain({ eq: { tiltDb: 1.0 } });
+ * chain.prepare(44100, 512, 1);
+ * const out = chain.processMono(blockSamples);
+ * chain.reset();
+ * ```
+ */
+export class StreamingMasteringChain {
+  private native: InstanceType<typeof addon.StreamingMasteringChain>;
+
+  constructor(config: Record<string, unknown> = {}) {
+    this.native = new addon.StreamingMasteringChain(config);
+  }
+
+  /**
+   * Initialize processors for the given sample rate and block layout.
+   * Stereo-only stages are skipped when ``numChannels`` is 1.
+   */
+  prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void {
+    this.native.prepare(sampleRate, maxBlockSize, numChannels);
+  }
+
+  /** Process one mono block; returns the processed samples (same length). */
+  processMono(samples: Float32Array): Float32Array {
+    return this.native.processMono(samples);
+  }
+
+  /** Process one stereo block; returns the processed channels. */
+  processStereo(
+    left: Float32Array,
+    right: Float32Array,
+  ): { left: Float32Array; right: Float32Array } {
+    return this.native.processStereo(left, right);
+  }
+
+  /** Reset all processor state without rebuilding. */
+  reset(): void {
+    this.native.reset();
+  }
+
+  /** Total reported latency in samples across all active processors. */
+  latencySamples(): number {
+    return this.native.latencySamples();
+  }
+
+  /** Ordered stage names that will run (e.g. ``"eq.tilt"``). */
+  stageNames(): string[] {
+    return this.native.stageNames();
+  }
+}
+
+export function masteringPresetNames(): string[] {
+  return addon.masteringPresetNames();
+}
+
+export function masterAudio(
+  samples: Float32Array,
+  sampleRate = 22050,
+  preset = 'pop',
+  overrides: Record<string, number | boolean> = {},
+): MasteringChainResult {
+  return addon.masterAudio(preset, samples, sampleRate, overrides);
+}
+
+export function masterAudioStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  preset = 'pop',
+  overrides: Record<string, number | boolean> = {},
+): MasteringChainStereoResult {
+  return addon.masterAudioStereo(preset, left, right, sampleRate, overrides);
 }
 
 export function masteringProcessorNames(): string[] {
@@ -859,6 +966,10 @@ export type {
   DynamicsResult,
   HpssResult,
   Key,
+  MasteringChainResult,
+  MasteringChainStereoResult,
+  MasteringResult,
+  MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
   PitchResult,

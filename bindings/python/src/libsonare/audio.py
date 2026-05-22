@@ -32,7 +32,13 @@ from .analyzer import (
     hpss as _hpss,
 )
 from .analyzer import (
+    master_audio as _master_audio,
+)
+from .analyzer import (
     mastering as _mastering,
+)
+from .analyzer import (
+    mastering_chain as _mastering_chain,
 )
 from .analyzer import (
     mastering_process as _mastering_process,
@@ -99,6 +105,7 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
     MfccResult,
@@ -471,6 +478,25 @@ class Audio:
     ) -> MasteringResult:
         """Apply a named mastering processor."""
         return _mastering_process(processor_name, self.data, self.sample_rate, params)
+
+    def mastering_chain(self, config: dict | None = None) -> MasteringChainResult:
+        """Apply a configurable mastering chain (EQ, dynamics, saturation, etc.).
+
+        See :func:`libsonare.mastering_chain` for the ``config`` schema.
+        """
+        return _mastering_chain(self.data, self.sample_rate, config)
+
+    def master_audio(
+        self,
+        preset: str = "pop",
+        overrides: dict | None = None,
+    ) -> MasteringChainResult:
+        """Apply a named mastering preset chain to this audio.
+
+        See :func:`libsonare.master_audio` for the ``preset`` and ``overrides``
+        semantics.
+        """
+        return _master_audio(self.data, self.sample_rate, preset, overrides)
 
     def trim(self, threshold_db: float = -60.0) -> list[float]:
         """Trim silence from the beginning and end."""

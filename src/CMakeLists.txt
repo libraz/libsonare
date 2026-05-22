@@ -172,7 +172,9 @@ endif()
 
 if(BUILD_MASTERING)
   add_library(sonare_mastering STATIC
+    mastering/api/chain.cpp
     mastering/api/named_processor.cpp
+    mastering/api/presets.cpp
     mastering/common/biquad_design.cpp
     mastering/common/param_smoother.cpp
     mastering/common/envelope_follower.cpp

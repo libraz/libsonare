@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
@@ -272,4 +274,346 @@ void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result) {
   result->left = nullptr;
   result->right = nullptr;
   result->length = 0;
+}
+
+namespace {
+
+char** copy_stage_array(const std::vector<std::string>& stages) {
+  if (stages.empty()) return nullptr;
+  std::unique_ptr<char*[]> out(new char*[stages.size()]);
+  for (size_t i = 0; i < stages.size(); ++i) {
+    out[i] = nullptr;
+  }
+  for (size_t i = 0; i < stages.size(); ++i) {
+    out[i] = copy_string(stages[i]);
+  }
+  return out.release();
+}
+
+}  // namespace
+
+SonareError sonare_mastering_chain(const float* samples, size_t length, int sample_rate,
+                                   const SonareMasteringParam* params, size_t param_count,
+                                   SonareMasteringChainResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  out->samples = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->input_lufs = 0.0f;
+  out->output_lufs = 0.0f;
+  out->applied_gain_db = 0.0f;
+  out->stages = nullptr;
+  out->stages_count = 0;
+
+  SONARE_C_TRY
+  auto cpp_params = to_params(params, param_count);
+  auto result = sonare::mastering::api::run_chain_mono_params(cpp_params.data(), cpp_params.size(),
+                                                              samples, length, sample_rate);
+
+  out->length = result.samples.size();
+  out->sample_rate = result.sample_rate;
+  out->input_lufs = result.input_lufs;
+  out->output_lufs = result.output_lufs;
+  out->applied_gain_db = result.applied_gain_db;
+
+  if (out->length > 0) {
+    std::unique_ptr<float[]> processed(new float[out->length]);
+    std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
+    out->samples = release_array(processed);
+  }
+  out->stages = copy_stage_array(result.stages);
+  out->stages_count = result.stages.size();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_chain_stereo(const float* left, const float* right, size_t length,
+                                          int sample_rate, const SonareMasteringParam* params,
+                                          size_t param_count,
+                                          SonareMasteringChainStereoResult* out) {
+  if (!out || !left || !right || sample_rate <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (length == 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  out->left = nullptr;
+  out->right = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->input_lufs = 0.0f;
+  out->output_lufs = 0.0f;
+  out->applied_gain_db = 0.0f;
+  out->stages = nullptr;
+  out->stages_count = 0;
+
+  SONARE_C_TRY
+  auto cpp_params = to_params(params, param_count);
+  auto result = sonare::mastering::api::run_chain_stereo_params(
+      cpp_params.data(), cpp_params.size(), left, right, length, sample_rate);
+
+  out->length = result.left.size();
+  out->sample_rate = result.sample_rate;
+  out->input_lufs = result.input_lufs;
+  out->output_lufs = result.output_lufs;
+  out->applied_gain_db = result.applied_gain_db;
+
+  if (out->length > 0) {
+    std::unique_ptr<float[]> left_out(new float[out->length]);
+    std::unique_ptr<float[]> right_out(new float[out->length]);
+    std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+    std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+    out->left = release_array(left_out);
+    out->right = release_array(right_out);
+  }
+  out->stages = copy_stage_array(result.stages);
+  out->stages_count = result.stages.size();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_free_mastering_chain_result(SonareMasteringChainResult* result) {
+  if (!result) return;
+  delete[] result->samples;
+  result->samples = nullptr;
+  result->length = 0;
+  if (result->stages) {
+    for (size_t i = 0; i < result->stages_count; ++i) {
+      delete[] result->stages[i];
+    }
+    delete[] result->stages;
+  }
+  result->stages = nullptr;
+  result->stages_count = 0;
+}
+
+void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result) {
+  if (!result) return;
+  delete[] result->left;
+  delete[] result->right;
+  result->left = nullptr;
+  result->right = nullptr;
+  result->length = 0;
+  if (result->stages) {
+    for (size_t i = 0; i < result->stages_count; ++i) {
+      delete[] result->stages[i];
+    }
+    delete[] result->stages;
+  }
+  result->stages = nullptr;
+  result->stages_count = 0;
+}
+
+// ============================================================================
+// Built-in mastering presets
+// ============================================================================
+
+namespace {
+
+void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult& result,
+                            SonareMasteringChainResult* out) {
+  out->length = result.samples.size();
+  out->sample_rate = result.sample_rate;
+  out->input_lufs = result.input_lufs;
+  out->output_lufs = result.output_lufs;
+  out->applied_gain_db = result.applied_gain_db;
+
+  if (out->length > 0) {
+    std::unique_ptr<float[]> processed(new float[out->length]);
+    std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
+    out->samples = release_array(processed);
+  }
+  out->stages = copy_stage_array(result.stages);
+  out->stages_count = result.stages.size();
+}
+
+void fill_stereo_chain_result(const sonare::mastering::api::StereoChainResult& result,
+                              SonareMasteringChainStereoResult* out) {
+  out->length = result.left.size();
+  out->sample_rate = result.sample_rate;
+  out->input_lufs = result.input_lufs;
+  out->output_lufs = result.output_lufs;
+  out->applied_gain_db = result.applied_gain_db;
+
+  if (out->length > 0) {
+    std::unique_ptr<float[]> left_out(new float[out->length]);
+    std::unique_ptr<float[]> right_out(new float[out->length]);
+    std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+    std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+    out->left = release_array(left_out);
+    out->right = release_array(right_out);
+  }
+  out->stages = copy_stage_array(result.stages);
+  out->stages_count = result.stages.size();
+}
+
+}  // namespace
+
+const char* sonare_mastering_preset_names(void) {
+  static std::string names;
+  if (names.empty()) {
+    std::ostringstream stream;
+    auto presets = sonare::mastering::api::preset_names();
+    for (size_t index = 0; index < presets.size(); ++index) {
+      if (index > 0) stream << '\n';
+      stream << presets[index];
+    }
+    names = stream.str();
+  }
+  return names.c_str();
+}
+
+SonareError sonare_master_audio(const char* preset_name, const float* samples, size_t length,
+                                int sample_rate, const SonareMasteringParam* overrides,
+                                size_t override_count, SonareMasteringChainResult* out) {
+  if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  out->samples = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->input_lufs = 0.0f;
+  out->output_lufs = 0.0f;
+  out->applied_gain_db = 0.0f;
+  out->stages = nullptr;
+  out->stages_count = 0;
+
+  SONARE_C_TRY
+  sonare::mastering::api::Preset preset;
+  try {
+    preset = sonare::mastering::api::preset_from_string(preset_name);
+  } catch (const std::invalid_argument&) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  auto cpp_overrides = to_params(overrides, override_count);
+  auto result = sonare::mastering::api::master_audio_mono(
+      preset, samples, length, sample_rate, cpp_overrides.data(), cpp_overrides.size());
+  fill_mono_chain_result(result, out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_master_audio_stereo(const char* preset_name, const float* left,
+                                       const float* right, size_t length, int sample_rate,
+                                       const SonareMasteringParam* overrides, size_t override_count,
+                                       SonareMasteringChainStereoResult* out) {
+  if (!out || !preset_name || !left || !right || sample_rate <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (length == 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  out->left = nullptr;
+  out->right = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->input_lufs = 0.0f;
+  out->output_lufs = 0.0f;
+  out->applied_gain_db = 0.0f;
+  out->stages = nullptr;
+  out->stages_count = 0;
+
+  SONARE_C_TRY
+  sonare::mastering::api::Preset preset;
+  try {
+    preset = sonare::mastering::api::preset_from_string(preset_name);
+  } catch (const std::invalid_argument&) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  auto cpp_overrides = to_params(overrides, override_count);
+  auto result = sonare::mastering::api::master_audio_stereo(
+      preset, left, right, length, sample_rate, cpp_overrides.data(), cpp_overrides.size());
+  fill_stereo_chain_result(result, out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+// ============================================================================
+// Streaming mastering chain
+// ============================================================================
+
+struct SonareStreamingMasteringChain {
+  std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
+};
+
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
+    const SonareMasteringParam* params, size_t param_count) {
+  if (!params && param_count > 0) return nullptr;
+  try {
+    auto cpp_params = to_params(params, param_count);
+    auto config =
+        sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
+    auto chain =
+        std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+    auto* handle = new SonareStreamingMasteringChain;
+    handle->chain = std::move(chain);
+    return handle;
+  } catch (const std::exception& e) {
+    sonare_c_detail::set_last_error(e.what());
+    return nullptr;
+  } catch (...) {
+    sonare_c_detail::set_last_error("Unknown C++ exception (non-std::exception type)");
+    return nullptr;
+  }
+}
+
+SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
+                                                     int sample_rate, int max_block_size,
+                                                     int num_channels) {
+  if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
+                                                          float* samples, size_t num_samples) {
+  if (!handle || !handle->chain || (!samples && num_samples > 0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (num_samples == 0) return SONARE_OK;
+  SONARE_C_TRY
+  float* channels[] = {samples};
+  handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
+                                                            float* left, float* right,
+                                                            size_t num_samples) {
+  if (!handle || !handle->chain || (!left && num_samples > 0) || (!right && num_samples > 0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (num_samples == 0) return SONARE_OK;
+  SONARE_C_TRY
+  float* channels[] = {left, right};
+  handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle) {
+  if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  handle->chain->reset();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle) {
+  if (!handle || !handle->chain) return 0;
+  return handle->chain->latency_samples();
+}
+
+void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle) {
+  delete handle;
 }

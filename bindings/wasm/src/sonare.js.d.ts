@@ -271,6 +271,33 @@ interface SonareModule {
     sampleRate: number,
     config: Record<string, unknown>,
   ) => WasmMasteringStereoChainResult;
+  masteringChainWithProgress: (
+    samples: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+    progressCallback: ProgressCallback | null,
+  ) => WasmMasteringChainResult;
+  masteringChainStereoWithProgress: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+    progressCallback: ProgressCallback | null,
+  ) => WasmMasteringStereoChainResult;
+  masteringPresetNames: () => string[];
+  masterAudio: (
+    presetName: string,
+    samples: Float32Array,
+    sampleRate: number,
+    overrides: Record<string, number | boolean> | null,
+  ) => WasmMasteringChainResult;
+  masterAudioStereo: (
+    presetName: string,
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    overrides: Record<string, number | boolean> | null,
+  ) => WasmMasteringStereoChainResult;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
 
   // Features - Spectrogram
@@ -490,6 +517,22 @@ interface SonareModule {
     computeOnset: boolean,
     emitEveryNFrames: number,
   ) => WasmStreamAnalyzer;
+
+  // Streaming - StreamingMasteringChain
+  createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
+}
+
+interface WasmStreamingMasteringChain {
+  prepare: (sampleRate: number, maxBlockSize: number, numChannels: number) => void;
+  processMono: (samples: Float32Array) => Float32Array;
+  processStereo: (
+    left: Float32Array,
+    right: Float32Array,
+  ) => { left: Float32Array; right: Float32Array };
+  reset: () => void;
+  latencySamples: () => number;
+  stageNames: () => string[];
+  delete: () => void;
 }
 
 // Streaming types for StreamAnalyzer

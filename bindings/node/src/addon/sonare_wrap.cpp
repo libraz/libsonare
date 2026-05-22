@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "sonare_wrap_streaming.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
@@ -85,6 +86,15 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set(
       "masteringProcessStereo",
       Napi::Function::New(env, &SonareWrap::MasteringProcessStereo, "masteringProcessStereo"));
+  exports.Set("masteringChain",
+              Napi::Function::New(env, &SonareWrap::MasteringChain, "masteringChain"));
+  exports.Set("masteringChainStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringChainStereo, "masteringChainStereo"));
+  exports.Set("masteringPresetNames",
+              Napi::Function::New(env, &SonareWrap::MasteringPresetNames, "masteringPresetNames"));
+  exports.Set("masterAudio", Napi::Function::New(env, &SonareWrap::MasterAudio, "masterAudio"));
+  exports.Set("masterAudioStereo",
+              Napi::Function::New(env, &SonareWrap::MasterAudioStereo, "masterAudioStereo"));
   exports.Set(
       "masteringProcessorNames",
       Napi::Function::New(env, &SonareWrap::MasteringProcessorNames, "masteringProcessorNames"));
@@ -172,6 +182,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Core - Resample
   exports.Set("resample", Napi::Function::New(env, &SonareWrap::Resample, "resample"));
+
+  // Streaming - StreamingMasteringChain
+  StreamingMasteringChainWrap::Init(env, exports);
 
   return exports;
 }

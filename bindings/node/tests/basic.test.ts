@@ -64,6 +64,7 @@ import {
   spectralFlatness,
   spectralRolloff,
   splitSilence,
+  StreamingMasteringChain,
   stft,
   stftDb,
   tempogram,

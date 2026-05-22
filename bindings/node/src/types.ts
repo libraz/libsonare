@@ -114,6 +114,25 @@ export interface MasteringStereoResult {
   latencySamples: number;
 }
 
+export interface MasteringChainResult {
+  samples: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  stages: string[];
+}
+
+export interface MasteringChainStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  stages: string[];
+}
+
 export interface StftResult {
   nBins: number;
   nFrames: number;

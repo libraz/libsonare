@@ -3,6 +3,8 @@
 /// @file master.h
 /// @brief Optional mastering library umbrella header.
 
+#include "mastering/api/chain.h"
+#include "mastering/api/presets.h"
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/delay_line.h"
 #include "mastering/common/envelope_follower.h"

@@ -15,7 +15,7 @@ def _find_lib_path() -> str:
 
     project_root = Path(__file__).parent.parent.parent.parent
     lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    for build_dir in ("build-mastering-api", "build", "build-mastering"):
+    for build_dir in ("build", "build-mastering-api", "build-mastering"):
         build_path = project_root / build_dir / "lib" / lib_name
         if build_path.exists():
             return str(build_path)

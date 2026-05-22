@@ -1127,6 +1127,27 @@ def test_analysis_result_types() -> None:
         assert isinstance(t, float)
 
 
+def test_streaming_mastering_chain_processes_mono_block() -> None:
+    """StreamingMasteringChain processes a 512-sample mono block in place."""
+    from libsonare import StreamingMasteringChain
+
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
+    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+    block = [0.1] * 512
+    out = chain.process_mono(block)
+    assert len(out) == len(block)
+    assert any(abs(out[i] - block[i]) > 1e-6 for i in range(len(out)))
+    chain.reset()
+
+
+def test_streaming_mastering_chain_rejects_denoise() -> None:
+    """StreamingMasteringChain refuses configurations enabling repair.denoise."""
+    from libsonare import StreamingMasteringChain
+
+    with pytest.raises(RuntimeError):
+        StreamingMasteringChain({"repair.denoise.enabled": 1})
+
+
 def test_stft_result_types() -> None:
     """StftResult fields have correct types and shapes."""
     from libsonare import stft

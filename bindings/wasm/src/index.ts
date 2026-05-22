@@ -556,6 +556,210 @@ export function masteringChainStereo(
 }
 
 /**
+ * Apply a configurable mastering chain in WASM with progress reporting.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param config - Chain stage configuration
+ * @param onProgress - Progress callback (progress: 0-1, stage: string)
+ * @returns Processed audio, loudness metadata, and applied stage names
+ */
+export function masteringChainWithProgress(
+  samples: Float32Array,
+  sampleRate: number,
+  config: MasteringChainConfig,
+  onProgress: ProgressCallback,
+): MasteringChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringChainWithProgress(
+    samples,
+    sampleRate,
+    config as Record<string, unknown>,
+    onProgress,
+  );
+}
+
+/**
+ * Apply a configurable stereo mastering chain in WASM with progress reporting.
+ *
+ * @param left - Left channel samples
+ * @param right - Right channel samples
+ * @param sampleRate - Sample rate in Hz
+ * @param config - Chain stage configuration
+ * @param onProgress - Progress callback (progress: 0-1, stage: string)
+ * @returns Processed stereo audio, loudness metadata, and applied stage names
+ */
+export function masteringChainStereoWithProgress(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config: MasteringChainConfig,
+  onProgress: ProgressCallback,
+): MasteringStereoChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  if (left.length !== right.length) {
+    throw new Error('Stereo channel lengths must match.');
+  }
+  return module.masteringChainStereoWithProgress(
+    left,
+    right,
+    sampleRate,
+    config as Record<string, unknown>,
+    onProgress,
+  );
+}
+
+/**
+ * List built-in mastering preset identifiers.
+ *
+ * @returns Preset names in display order (e.g. "pop", "edm", "aiMusic")
+ */
+export function masteringPresetNames(): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringPresetNames();
+}
+
+/**
+ * Apply a named mastering preset chain to mono audio.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param presetName - Preset identifier from {@link masteringPresetNames}
+ * @param overrides - Reserved for future overrides; currently only `null` is supported
+ * @returns Processed audio, loudness metadata, and applied stage names
+ */
+export function masterAudio(
+  samples: Float32Array,
+  sampleRate: number,
+  presetName: string,
+  overrides: Record<string, number | boolean> | null = null,
+): MasteringChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masterAudio(presetName, samples, sampleRate, overrides);
+}
+
+/**
+ * Apply a named mastering preset chain to stereo audio.
+ *
+ * @param left - Left channel samples
+ * @param right - Right channel samples
+ * @param sampleRate - Sample rate in Hz
+ * @param presetName - Preset identifier from {@link masteringPresetNames}
+ * @param overrides - Reserved for future overrides; currently only `null` is supported
+ * @returns Processed stereo audio, loudness metadata, and applied stage names
+ */
+export function masterAudioStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  presetName: string,
+  overrides: Record<string, number | boolean> | null = null,
+): MasteringStereoChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  if (left.length !== right.length) {
+    throw new Error('Stereo channel lengths must match.');
+  }
+  return module.masterAudioStereo(presetName, left, right, sampleRate, overrides);
+}
+
+// ============================================================================
+// StreamingMasteringChain Class
+// ============================================================================
+
+/**
+ * Block-by-block streaming variant of {@link masteringChain}.
+ *
+ * Maintains processor state across {@link processMono}/{@link processStereo}
+ * calls. Only ProcessorBase-backed stages are supported. Configurations that
+ * enable `repair.denoise` or `loudness` throw at construction.
+ *
+ * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
+ * object — the embind handle is not garbage-collected automatically.
+ *
+ * @example
+ * ```typescript
+ * const chain = new StreamingMasteringChain({ eq: { tiltDb: 1.0 } });
+ * try {
+ *   chain.prepare(44100, 512, 1);
+ *   const out = chain.processMono(blockSamples);
+ * } finally {
+ *   chain.delete();
+ * }
+ * ```
+ */
+export class StreamingMasteringChain {
+  private chain: import('./wasm_types').WasmStreamingMasteringChain;
+
+  constructor(config: MasteringChainConfig) {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    this.chain = module.createStreamingMasteringChain(config as Record<string, unknown>);
+  }
+
+  /**
+   * Initialize processors for the given sample rate and block layout.
+   *
+   * @param sampleRate - Sample rate in Hz
+   * @param maxBlockSize - Maximum block size per process call
+   * @param numChannels - 1 (mono) or 2 (stereo)
+   */
+  prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void {
+    this.chain.prepare(sampleRate, maxBlockSize, numChannels);
+  }
+
+  /**
+   * Process one mono block, returning the processed samples (same length).
+   */
+  processMono(samples: Float32Array): Float32Array {
+    return this.chain.processMono(samples);
+  }
+
+  /**
+   * Process one stereo block, returning the processed channels.
+   */
+  processStereo(
+    left: Float32Array,
+    right: Float32Array,
+  ): { left: Float32Array; right: Float32Array } {
+    if (left.length !== right.length) {
+      throw new Error('Stereo channel lengths must match.');
+    }
+    return this.chain.processStereo(left, right);
+  }
+
+  /** Reset all processor state without rebuilding. */
+  reset(): void {
+    this.chain.reset();
+  }
+
+  /** Total reported latency in samples across all active processors. */
+  latencySamples(): number {
+    return this.chain.latencySamples();
+  }
+
+  /** Ordered stage names that will run (e.g. `"eq.tilt"`). */
+  stageNames(): string[] {
+    return this.chain.stageNames();
+  }
+
+  /** Release the underlying WASM object. Safe to call only once. */
+  delete(): void {
+    this.chain.delete();
+  }
+}
+
+/**
  * Trim silence from beginning and end of audio.
  *
  * @param samples - Audio samples (mono, float32)
@@ -1319,6 +1523,13 @@ export class Audio {
 
   masteringChain(config: MasteringChainConfig): MasteringChainResult {
     return masteringChain(this._samples, this._sampleRate, config);
+  }
+
+  masterAudio(
+    presetName: string,
+    overrides: Record<string, number | boolean> | null = null,
+  ): MasteringChainResult {
+    return masterAudio(this._samples, this._sampleRate, presetName, overrides);
   }
 
   masteringProcess(processorName: string, params: MasteringProcessorParams = {}): MasteringResult {
