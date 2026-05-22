@@ -3,13 +3,13 @@
 /// @file true_peak_limiter.h
 /// @brief Ceiling limiter with true-peak style post guard.
 
-#include "mastering/common/true_peak_filter.h"
+#include <vector>
+
 #include "mastering/common/lookahead_buffer.h"
 #include "mastering/common/oversampler.h"
 #include "mastering/common/sliding_max.h"
+#include "mastering/common/true_peak_filter.h"
 #include "mastering/dynamics/brickwall_limiter.h"
-
-#include <vector>
 
 namespace sonare::mastering::maximizer {
 

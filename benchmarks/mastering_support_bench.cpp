@@ -68,10 +68,7 @@ std::vector<float> make_ir(int samples) {
   return ir;
 }
 
-void direct_fir_block(const float* input,
-                      const float* ir,
-                      int input_samples,
-                      int ir_samples,
+void direct_fir_block(const float* input, const float* ir, int input_samples, int ir_samples,
                       float* output) {
   for (int n = 0; n < input_samples; ++n) {
     float acc = 0.0f;
@@ -201,9 +198,10 @@ int main(int argc, char** argv) {
       runs, std::max(1, iterations / 16));
 
   const double naive_ms = bench(
-      [&] { g_sink += naive_lookahead_peak(lookahead_input.data(),
-                                           static_cast<int>(lookahead_input.size()),
-                                           kLookaheadSamples); },
+      [&] {
+        g_sink += naive_lookahead_peak(lookahead_input.data(),
+                                       static_cast<int>(lookahead_input.size()), kLookaheadSamples);
+      },
       runs, std::max(1, iterations / 16));
 
   const double tp_overhead = tp_ms / std::max(fallback_tp_ms, 1.0e-9);
@@ -229,8 +227,7 @@ int main(int argc, char** argv) {
   std::printf("  \"true_peak_overhead_ratio\": %.6f,\n", tp_overhead);
   std::printf("  \"true_peak_detect_only_overhead_ratio\": %.6f,\n", detect_only_overhead);
   std::printf("  \"true_peak_vs_brickwall_ratio\": %.6f,\n", tp_vs_brickwall);
-  std::printf("  \"true_peak_detect_only_vs_brickwall_ratio\": %.6f,\n",
-              detect_only_vs_brickwall);
+  std::printf("  \"true_peak_detect_only_vs_brickwall_ratio\": %.6f,\n", detect_only_vs_brickwall);
   std::printf("  \"true_peak_overhead_target\": %.3f,\n", kTpOverheadTarget);
   std::printf("  \"true_peak_overhead_pass\": %s,\n", tp_overhead_pass ? "true" : "false");
   std::printf("  \"true_peak_detect_only_overhead_pass\": %s,\n",

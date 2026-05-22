@@ -39,8 +39,8 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   limiter_.prepare(sample_rate_, max_block_size_);
   true_peak_filter_ = common::TruePeakFilter(0, config_.oversample_factor == 2 ? 2 : 4);
   downsampler_.set_factor(config_.oversample_factor == 2 ? 2 : 4);
-  oversampled_peak_window_.prepare(static_cast<size_t>(std::max(1, lookahead_samples_ + 1) *
-                                                        true_peak_filter_.factor()));
+  oversampled_peak_window_.prepare(
+      static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
   prepared_ = true;
   reset();
 }
@@ -67,9 +67,8 @@ void TruePeakLimiter::process_fallback(float* const* channels, int num_channels,
   const float ceiling = db_to_linear(config_.ceiling_db);
   float peak = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
-    peak =
-        std::max(peak, analysis::meter::true_peak(channels[ch], static_cast<size_t>(num_samples),
-                                                  config_.oversample_factor));
+    peak = std::max(peak, analysis::meter::true_peak(channels[ch], static_cast<size_t>(num_samples),
+                                                     config_.oversample_factor));
   }
   if (peak > ceiling && peak > 0.0f) {
     const float gain = ceiling / peak;
@@ -81,8 +80,7 @@ void TruePeakLimiter::process_fallback(float* const* channels, int num_channels,
   }
 }
 
-void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels,
-                                        int num_samples) {
+void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels, int num_samples) {
   prepare_buffers(num_channels);
   if (config_.apply_gain_at_input_rate) {
     process_polyphase_detect_only(channels, num_channels, num_samples);
@@ -104,8 +102,8 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     oversampled_ptrs_[static_cast<size_t>(ch)] =
         oversampled_buffers_[static_cast<size_t>(ch)].data();
   }
-  true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(), num_channels,
-                                         num_samples, true_peak_history_);
+  true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(),
+                                          num_channels, num_samples, true_peak_history_);
 
   linked_abs_.assign(oversampled_samples, 0.0f);
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -138,9 +136,8 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     min_gain = std::min(min_gain, gain);
 
     for (int ch = 0; ch < num_channels; ++ch) {
-      const float delayed =
-          oversampled_lookahead_[static_cast<size_t>(ch)].process(
-              sanitize_sample(oversampled_buffers_[static_cast<size_t>(ch)][os], ceiling));
+      const float delayed = oversampled_lookahead_[static_cast<size_t>(ch)].process(
+          sanitize_sample(oversampled_buffers_[static_cast<size_t>(ch)][os], ceiling));
       float output = sanitize_sample(delayed * gain, ceiling);
       const float abs_output = std::abs(output);
       if (abs_output > ceiling && abs_output > 0.0f) {
@@ -178,8 +175,8 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
     oversampled_ptrs_[static_cast<size_t>(ch)] =
         oversampled_buffers_[static_cast<size_t>(ch)].data();
   }
-  true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(), num_channels,
-                                         num_samples, true_peak_history_);
+  true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(),
+                                          num_channels, num_samples, true_peak_history_);
 
   linked_abs_.assign(oversampled_samples, 0.0f);
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -217,8 +214,8 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
   for (int i = 0; i < num_samples; ++i) {
     const float gain = input_rate_gain_[static_cast<size_t>(i)];
     for (int ch = 0; ch < num_channels; ++ch) {
-      const float delayed = lookahead_[static_cast<size_t>(ch)].process(
-          sanitize_sample(channels[ch][i], ceiling));
+      const float delayed =
+          lookahead_[static_cast<size_t>(ch)].process(sanitize_sample(channels[ch][i], ceiling));
       float output = sanitize_sample(delayed * gain, ceiling);
       const float abs_output = std::abs(output);
       if (abs_output > ceiling && abs_output > 0.0f) {
@@ -285,7 +282,7 @@ void TruePeakLimiter::prepare_buffers(int num_channels) {
   }
   for (auto& buffer : oversampled_lookahead_) {
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0) *
-                                      std::max(true_peak_filter_.factor(), 1)));
+                                       std::max(true_peak_filter_.factor(), 1)));
   }
   fast_gain_ = 1.0f;
   slow_gain_ = 1.0f;
@@ -302,7 +299,8 @@ void TruePeakLimiter::update_time_constants() {
 }
 
 float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
-  crest_peak_ = std::max(linked_peak, crest_coeff_ * crest_peak_ + (1.0f - crest_coeff_) * linked_peak);
+  crest_peak_ =
+      std::max(linked_peak, crest_coeff_ * crest_peak_ + (1.0f - crest_coeff_) * linked_peak);
   crest_rms_ = crest_coeff_ * crest_rms_ + (1.0f - crest_coeff_) * linked_peak * linked_peak;
   const float rms = std::sqrt(std::max(crest_rms_, 1e-12f));
   const float crest = crest_peak_ / rms;
