@@ -291,6 +291,16 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
     ]
 
 
+# Progress callback: void(float progress, const char* stage, void* user_data).
+# Maps to SonareMasteringProgressCallback in sonare_c.h.
+SonareMasteringProgressCallback = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_float,
+    ctypes.c_char_p,
+    ctypes.c_void_p,
+)
+
+
 # --- Error codes ---
 
 SONARE_OK = 0
@@ -1222,6 +1232,56 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.c_int,
                 ctypes.POINTER(SonareMasteringParam),
                 ctypes.c_size_t,
+                ctypes.POINTER(SonareMasteringChainStereoResult),
+            ]
+        if hasattr(lib, "sonare_mastering_chain_with_progress"):
+            lib.sonare_mastering_chain_with_progress.restype = ctypes.c_int32
+            lib.sonare_mastering_chain_with_progress.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainResult),
+            ]
+            lib.sonare_mastering_chain_stereo_with_progress.restype = ctypes.c_int32
+            lib.sonare_mastering_chain_stereo_with_progress.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainStereoResult),
+            ]
+        if hasattr(lib, "sonare_master_audio_with_progress"):
+            lib.sonare_master_audio_with_progress.restype = ctypes.c_int32
+            lib.sonare_master_audio_with_progress.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainResult),
+            ]
+            lib.sonare_master_audio_stereo_with_progress.restype = ctypes.c_int32
+            lib.sonare_master_audio_stereo_with_progress.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
                 ctypes.POINTER(SonareMasteringChainStereoResult),
             ]
 

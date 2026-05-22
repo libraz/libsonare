@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from ._ffi import SONARE_OK, load_library
@@ -479,24 +479,32 @@ class Audio:
         """Apply a named mastering processor."""
         return _mastering_process(processor_name, self.data, self.sample_rate, params)
 
-    def mastering_chain(self, config: dict | None = None) -> MasteringChainResult:
+    def mastering_chain(
+        self,
+        config: dict | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
+    ) -> MasteringChainResult:
         """Apply a configurable mastering chain (EQ, dynamics, saturation, etc.).
 
-        See :func:`libsonare.mastering_chain` for the ``config`` schema.
+        See :func:`libsonare.mastering_chain` for the ``config`` schema and
+        ``on_progress`` semantics.
         """
-        return _mastering_chain(self.data, self.sample_rate, config)
+        return _mastering_chain(self.data, self.sample_rate, config, on_progress=on_progress)
 
     def master_audio(
         self,
         preset: str = "pop",
         overrides: dict | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> MasteringChainResult:
         """Apply a named mastering preset chain to this audio.
 
-        See :func:`libsonare.master_audio` for the ``preset`` and ``overrides``
-        semantics.
+        See :func:`libsonare.master_audio` for the ``preset``, ``overrides``,
+        and ``on_progress`` semantics.
         """
-        return _master_audio(self.data, self.sample_rate, preset, overrides)
+        return _master_audio(
+            self.data, self.sample_rate, preset, overrides, on_progress=on_progress
+        )
 
     def trim(self, threshold_db: float = -60.0) -> list[float]:
         """Trim silence from the beginning and end."""

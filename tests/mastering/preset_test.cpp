@@ -107,4 +107,22 @@ TEST_CASE("master_audio_stereo runs EDM preset", "[mastering][preset]") {
   REQUIRE(result.right.size() == right.size());
 }
 
+TEST_CASE("preset_config(AIMusic) enables full repair trio", "[mastering][preset]") {
+  auto config = preset_config(Preset::AIMusic);
+  REQUIRE(config.repair.denoise.enabled);
+  REQUIRE(config.repair.declick.enabled);
+  REQUIRE(config.repair.dereverb.enabled);
+}
+
+TEST_CASE("preset_config(Speech) enables deesser", "[mastering][preset]") {
+  auto config = preset_config(Preset::Speech);
+  REQUIRE(config.dynamics.deesser.enabled);
+}
+
+TEST_CASE("preset_config(Pop) enables transient_shaper", "[mastering][preset]") {
+  auto config = preset_config(Preset::Pop);
+  REQUIRE(config.dynamics.transient_shaper.enabled);
+  REQUIRE_THAT(config.dynamics.transient_shaper.config.attack_gain_db, WithinAbs(2.0f, 1e-6f));
+}
+
 }  // namespace sonare::mastering::api

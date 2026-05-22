@@ -11,8 +11,13 @@
 
 #include "mastering/api/named_processor.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/transient_shaper.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "mastering/multiband/multiband_compressor.h"
+#include "mastering/repair/declick.h"
 #include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/dereverb_classical.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/spectral/air_band.h"
@@ -26,12 +31,24 @@ namespace sonare::mastering::api {
 // Each carries an `enabled` flag; when false the module is skipped.
 // ---------------------------------------------------------------------------
 
+struct DeclickStage {
+  bool enabled = false;
+  mastering::repair::DeclickConfig config{};
+};
+
+struct DereverbStage {
+  bool enabled = false;
+  mastering::repair::DereverbClassicalConfig config{};
+};
+
 struct DenoiseStage {
   bool enabled = false;
   mastering::repair::DenoiseClassicalConfig config{};
 };
 
 struct RepairChainConfig {
+  DeclickStage declick{};
+  DereverbStage dereverb{};
   DenoiseStage denoise{};
 };
 
@@ -50,8 +67,26 @@ struct CompressorStage {
   mastering::dynamics::CompressorConfig config{};
 };
 
+struct DeEsserStage {
+  bool enabled = false;
+  mastering::dynamics::DeEsserConfig config{};
+};
+
+struct TransientShaperStage {
+  bool enabled = false;
+  mastering::dynamics::TransientShaperConfig config{};
+};
+
+struct MultibandCompStage {
+  bool enabled = false;
+  mastering::multiband::MultibandCompressorConfig config{};
+};
+
 struct DynamicsChainConfig {
+  DeEsserStage deesser{};
+  TransientShaperStage transient_shaper{};
   CompressorStage compressor{};
+  MultibandCompStage multiband_comp{};
 };
 
 struct TapeStage {
@@ -237,10 +272,20 @@ class StreamingMasteringChain {
 // ---------------------------------------------------------------------------
 // Flat-params config bridge (used by C / Python / Node bindings).
 // Param keys use dot notation matching the JS object schema:
-//   "repair.denoise.enabled"       (0 = off, non-zero = on)
+//   "repair.declick.enabled"       (0 = off, non-zero = on)
+//   "repair.declick.threshold"
+//   "repair.dereverb.enabled"
+//   "repair.dereverb.threshold"
+//   "repair.denoise.enabled"
 //   "repair.denoise.nFft"          (int)
 //   "eq.tilt.tiltDb"               (float)
+//   "dynamics.deesser.enabled"
+//   "dynamics.deesser.frequencyHz"
+//   "dynamics.transientShaper.enabled"
+//   "dynamics.transientShaper.attackGainDb"
 //   "dynamics.compressor.thresholdDb"
+//   "dynamics.multibandComp.enabled"
+//   "dynamics.multibandComp.lowCutoffHz"
 //   "saturation.tape.driveDb"
 //   "saturation.exciter.amount"
 //   "spectral.airBand.amount"

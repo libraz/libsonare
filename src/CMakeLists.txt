@@ -309,6 +309,14 @@ endif()
 
 # WASM build
 if(BUILD_WASM)
+  # Enable WebAssembly SIMD128 across the whole WASM build (core, mastering,
+  # binding shim). -msimd128 must be set both on compile and link for Eigen
+  # vectorization to actually map onto v128 ops in the emitted .wasm.
+  target_compile_options(sonare_core PUBLIC -msimd128)
+  if(BUILD_MASTERING)
+    target_compile_options(sonare_mastering PUBLIC -msimd128)
+  endif()
+
   add_executable(sonare wasm/bindings.cpp)
   target_link_libraries(sonare PRIVATE sonare_core)
   if(BUILD_MASTERING)
@@ -317,7 +325,9 @@ if(BUILD_WASM)
   else()
     target_sources(sonare PRIVATE mastering/maximizer/loudness_optimize.cpp)
   endif()
+  target_compile_options(sonare PRIVATE -msimd128)
   target_link_options(sonare PRIVATE
+    -msimd128
     -sEXPORT_NAME='Sonare'
     -sEXPORTED_RUNTIME_METHODS=['UTF8ToString']
     -sMODULARIZE=1

@@ -447,6 +447,172 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsObject() ||
+      !info[3].IsFunction()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, config, onProgress)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  auto params = ParamsFromObject(info[2].As<Napi::Object>());
+  Napi::Function js_cb = info[3].As<Napi::Function>();
+  auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+  sonare::mastering::api::MasteringChain chain(std::move(config));
+  // process_mono is synchronous, so js_cb (referenced by info[3]) outlives the call.
+  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
+    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
+  });
+  auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
+                                   info[1].As<Napi::Number>().Int32Value());
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("samples", VecToFloat32(env, result.samples));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages.size());
+  for (size_t i = 0; i < result.stages.size(); ++i) {
+    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  }
+  out.Set("stages", stages);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber() || !info[3].IsObject() || !info[4].IsFunction()) {
+    Napi::TypeError::New(env, "Expected (left, right, sampleRate, config, onProgress)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::TypeError::New(env, "left and right channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto params = ParamsFromObject(info[3].As<Napi::Object>());
+  Napi::Function js_cb = info[4].As<Napi::Function>();
+  auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+  sonare::mastering::api::MasteringChain chain(std::move(config));
+  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
+    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
+  });
+  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(),
+                                     info[2].As<Napi::Number>().Int32Value());
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", VecToFloat32(env, result.left));
+  out.Set("right", VecToFloat32(env, result.right));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages.size());
+  for (size_t i = 0; i < result.stages.size(); ++i) {
+    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  }
+  out.Set("stages", stages);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 5 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber() ||
+      !info[3].IsObject() || !info[4].IsFunction()) {
+    Napi::TypeError::New(env,
+                         "Expected (presetName, Float32Array, sampleRate, overrides, onProgress)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  auto typed = info[1].As<Napi::Float32Array>();
+  auto overrides = ParamsFromObject(info[3].As<Napi::Object>());
+  Napi::Function js_cb = info[4].As<Napi::Function>();
+  auto preset = sonare::mastering::api::preset_from_string(preset_name);
+  auto config = sonare::mastering::api::preset_config(preset);
+  if (!overrides.empty()) {
+    sonare::mastering::api::apply_chain_config_overrides(config, overrides.data(),
+                                                         overrides.size());
+  }
+  sonare::mastering::api::MasteringChain chain(std::move(config));
+  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
+    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
+  });
+  auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
+                                   info[2].As<Napi::Number>().Int32Value());
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("samples", VecToFloat32(env, result.samples));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages.size());
+  for (size_t i = 0; i < result.stages.size(); ++i) {
+    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  }
+  out.Set("stages", stages);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 6 || !info[0].IsString() || !IsFloat32Array(info[1]) ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsObject() ||
+      !info[5].IsFunction()) {
+    Napi::TypeError::New(env,
+                         "Expected (presetName, left, right, sampleRate, overrides, onProgress)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  auto left = info[1].As<Napi::Float32Array>();
+  auto right = info[2].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::TypeError::New(env, "left and right channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto overrides = ParamsFromObject(info[4].As<Napi::Object>());
+  Napi::Function js_cb = info[5].As<Napi::Function>();
+  auto preset = sonare::mastering::api::preset_from_string(preset_name);
+  auto config = sonare::mastering::api::preset_config(preset);
+  if (!overrides.empty()) {
+    sonare::mastering::api::apply_chain_config_overrides(config, overrides.data(),
+                                                         overrides.size());
+  }
+  sonare::mastering::api::MasteringChain chain(std::move(config));
+  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
+    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
+  });
+  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(),
+                                     info[3].As<Napi::Number>().Int32Value());
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", VecToFloat32(env, result.left));
+  out.Set("right", VecToFloat32(env, result.right));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages.size());
+  for (size_t i = 0; i < result.stages.size(); ++i) {
+    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  }
+  out.Set("stages", stages);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringProcessorNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   auto names = sonare::mastering::api::processor_names();

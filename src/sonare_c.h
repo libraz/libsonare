@@ -311,6 +311,13 @@ typedef struct {
   int latency_samples;
 } SonareMasteringStereoResult;
 
+/// @brief Progress callback type. Called per chain stage completion.
+/// @param progress Progress value (0.0 to 1.0).
+/// @param stage    Stage identifier C string (e.g. "dynamics.compressor"). Valid
+///                 only during the callback invocation; copy if needed later.
+/// @param user_data Opaque pointer passed at registration.
+typedef void (*SonareMasteringProgressCallback)(float progress, const char* stage, void* user_data);
+
 // Result of running the MasteringChain on a mono buffer.
 // Memory for @c samples and @c stages (and each char* entry inside it) is
 // allocated by libsonare with @c new[]; free with
@@ -370,6 +377,23 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
                                           size_t param_count,
                                           SonareMasteringChainStereoResult* out);
 
+/// @brief Same as sonare_mastering_chain but reports per-stage progress.
+SonareError sonare_mastering_chain_with_progress(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareMasteringParam* params,
+                                                 size_t param_count,
+                                                 SonareMasteringProgressCallback callback,
+                                                 void* user_data, SonareMasteringChainResult* out);
+
+/// @brief Same as sonare_mastering_chain_stereo but reports per-stage progress.
+SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
+                                                        size_t length, int sample_rate,
+                                                        const SonareMasteringParam* params,
+                                                        size_t param_count,
+                                                        SonareMasteringProgressCallback callback,
+                                                        void* user_data,
+                                                        SonareMasteringChainStereoResult* out);
+
 /// @brief Returns built-in preset identifiers, separated by '\n'.
 /// @details Pointer is owned by libsonare and remains valid for the program lifetime.
 const char* sonare_mastering_preset_names(void);
@@ -387,6 +411,21 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
                                        const float* right, size_t length, int sample_rate,
                                        const SonareMasteringParam* overrides, size_t override_count,
                                        SonareMasteringChainStereoResult* out);
+
+/// @brief Same as sonare_master_audio but reports per-stage progress.
+SonareError sonare_master_audio_with_progress(const char* preset_name, const float* samples,
+                                              size_t length, int sample_rate,
+                                              const SonareMasteringParam* overrides,
+                                              size_t override_count,
+                                              SonareMasteringProgressCallback callback,
+                                              void* user_data, SonareMasteringChainResult* out);
+
+/// @brief Same as sonare_master_audio_stereo but reports per-stage progress.
+SonareError sonare_master_audio_stereo_with_progress(
+    const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* overrides, size_t override_count,
+    SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out);
 
 const char* sonare_mastering_processor_names(void);
 const char* sonare_mastering_pair_processor_names(void);

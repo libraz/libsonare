@@ -1,7 +1,9 @@
 #include "mastering/api/chain.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -162,6 +164,138 @@ TEST_CASE("StreamingMasteringChain rejects oversized block", "[mastering][chain]
   std::vector<float> block(512, 0.1f);
   float* channels[] = {block.data()};
   REQUIRE_THROWS_AS(chain.process_block(channels, 1, 512), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// New repair / dynamics stages
+// ---------------------------------------------------------------------------
+
+TEST_CASE("MasteringChain applies new repair stages", "[mastering][chain]") {
+  const int sample_rate = 22050;
+  std::vector<float> samples(static_cast<size_t>(sample_rate), 0.0f);
+  // Mild noise + a few "clicks".
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] =
+        0.01f * static_cast<float>(((i * 1103515245u + 12345u) & 0xFFFFu) - 32768) / 32768.0f;
+  }
+  samples[1000] = 0.95f;
+  samples[5000] = -0.95f;
+  samples[10000] = 0.9f;
+
+  MasteringChainConfig config;
+  config.repair.declick.enabled = true;
+  config.repair.dereverb.enabled = true;
+
+  MasteringChain chain(config);
+  auto result = chain.process_mono(samples.data(), samples.size(), sample_rate);
+
+  REQUIRE(result.samples.size() == samples.size());
+  REQUIRE(std::find(result.stages.begin(), result.stages.end(), "repair.declick") !=
+          result.stages.end());
+  REQUIRE(std::find(result.stages.begin(), result.stages.end(), "repair.dereverb") !=
+          result.stages.end());
+}
+
+TEST_CASE("MasteringChain applies new dynamics stages", "[mastering][chain]") {
+  const int sample_rate = 22050;
+  std::vector<float> samples(static_cast<size_t>(sample_rate), 0.1f);
+
+  MasteringChainConfig config;
+  config.dynamics.deesser.enabled = true;
+  config.dynamics.transient_shaper.enabled = true;
+  config.dynamics.multiband_comp.enabled = true;
+
+  MasteringChain chain(config);
+  auto result = chain.process_mono(samples.data(), samples.size(), sample_rate);
+
+  REQUIRE(result.samples.size() == samples.size());
+  REQUIRE(std::find(result.stages.begin(), result.stages.end(), "dynamics.deesser") !=
+          result.stages.end());
+  REQUIRE(std::find(result.stages.begin(), result.stages.end(), "dynamics.transientShaper") !=
+          result.stages.end());
+  REQUIRE(std::find(result.stages.begin(), result.stages.end(), "dynamics.multibandComp") !=
+          result.stages.end());
+}
+
+TEST_CASE("StreamingMasteringChain rejects declick", "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.repair.declick.enabled = true;
+  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), std::invalid_argument);
+}
+
+TEST_CASE("StreamingMasteringChain rejects dereverb", "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.repair.dereverb.enabled = true;
+  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), std::invalid_argument);
+}
+
+TEST_CASE("StreamingMasteringChain supports new dynamics stages", "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.dynamics.deesser.enabled = true;
+  config.dynamics.transient_shaper.enabled = true;
+  config.dynamics.multiband_comp.enabled = true;
+
+  StreamingMasteringChain chain(std::move(config));
+  chain.prepare(44100.0, 512, 1);
+
+  const auto& names = chain.stage_names();
+  REQUIRE(std::find(names.begin(), names.end(), "dynamics.deesser") != names.end());
+  REQUIRE(std::find(names.begin(), names.end(), "dynamics.transientShaper") != names.end());
+  REQUIRE(std::find(names.begin(), names.end(), "dynamics.multibandComp") != names.end());
+
+  std::vector<float> block(512, 0.1f);
+  float* channels[] = {block.data()};
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_NOTHROW(chain.process_block(channels, 1, 512));
+  }
+  for (float v : block) {
+    REQUIRE(std::isfinite(v));
+  }
+}
+
+TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chain]") {
+  Param params[] = {
+      {"repair.declick.threshold", 0.5},
+      {"repair.dereverb.attenuation", 0.7},
+  };
+  auto config = parse_chain_config_params(params, 2);
+  REQUIRE(config.repair.declick.enabled);
+  REQUIRE_THAT(config.repair.declick.config.threshold, WithinAbs(0.5f, 1e-6f));
+  REQUIRE(config.repair.dereverb.enabled);
+  REQUIRE_THAT(config.repair.dereverb.config.attenuation, WithinAbs(0.7f, 1e-6f));
+}
+
+TEST_CASE("parse_chain_config_params handles new dynamics keys", "[mastering][chain]") {
+  Param params[] = {
+      {"dynamics.deesser.thresholdDb", -30.0},
+      {"dynamics.transientShaper.attackGainDb", 4.0},
+      {"dynamics.multibandComp.lowCutoffHz", 200.0},
+      {"dynamics.multibandComp.highCutoffHz", 5000.0},
+      {"dynamics.multibandComp.midThresholdDb", -22.0},
+  };
+  auto config = parse_chain_config_params(params, 5);
+  REQUIRE(config.dynamics.deesser.enabled);
+  REQUIRE_THAT(config.dynamics.deesser.config.threshold_db, WithinAbs(-30.0f, 1e-6f));
+  REQUIRE(config.dynamics.transient_shaper.enabled);
+  REQUIRE_THAT(config.dynamics.transient_shaper.config.attack_gain_db, WithinAbs(4.0f, 1e-6f));
+  REQUIRE(config.dynamics.multiband_comp.enabled);
+  REQUIRE(config.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2);
+  REQUIRE_THAT(config.dynamics.multiband_comp.config.crossover.cutoffs_hz[0],
+               WithinAbs(200.0f, 1e-6f));
+  REQUIRE_THAT(config.dynamics.multiband_comp.config.crossover.cutoffs_hz[1],
+               WithinAbs(5000.0f, 1e-6f));
+  REQUIRE(config.dynamics.multiband_comp.config.bands.size() >= 2);
+  REQUIRE_THAT(config.dynamics.multiband_comp.config.bands[1].threshold_db,
+               WithinAbs(-22.0f, 1e-6f));
+}
+
+TEST_CASE("apply_chain_config_overrides toggles new stages independently", "[mastering][chain]") {
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  Param overrides[] = {{"dynamics.deesser.enabled", 1.0}};
+  apply_chain_config_overrides(config, overrides, 1);
+  REQUIRE(config.dynamics.deesser.enabled);
+  REQUIRE(config.eq.tilt.enabled);  // unaffected
 }
 
 }  // namespace sonare::mastering::api

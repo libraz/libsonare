@@ -90,11 +90,23 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MasteringChain, "masteringChain"));
   exports.Set("masteringChainStereo",
               Napi::Function::New(env, &SonareWrap::MasteringChainStereo, "masteringChainStereo"));
+  exports.Set("masteringChainWithProgress",
+              Napi::Function::New(env, &SonareWrap::MasteringChainWithProgress,
+                                  "masteringChainWithProgress"));
+  exports.Set("masteringChainStereoWithProgress",
+              Napi::Function::New(env, &SonareWrap::MasteringChainStereoWithProgress,
+                                  "masteringChainStereoWithProgress"));
   exports.Set("masteringPresetNames",
               Napi::Function::New(env, &SonareWrap::MasteringPresetNames, "masteringPresetNames"));
   exports.Set("masterAudio", Napi::Function::New(env, &SonareWrap::MasterAudio, "masterAudio"));
   exports.Set("masterAudioStereo",
               Napi::Function::New(env, &SonareWrap::MasterAudioStereo, "masterAudioStereo"));
+  exports.Set(
+      "masterAudioWithProgress",
+      Napi::Function::New(env, &SonareWrap::MasterAudioWithProgress, "masterAudioWithProgress"));
+  exports.Set("masterAudioStereoWithProgress",
+              Napi::Function::New(env, &SonareWrap::MasterAudioStereoWithProgress,
+                                  "masterAudioStereoWithProgress"));
   exports.Set(
       "masteringProcessorNames",
       Napi::Function::New(env, &SonareWrap::MasteringProcessorNames, "masteringProcessorNames"));

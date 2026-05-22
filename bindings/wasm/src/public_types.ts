@@ -190,6 +190,27 @@ export interface MasteringChainConfig {
     hopLength?: number;
     ddAlpha?: number;
     gainFloor?: number;
+    declick?: {
+      threshold?: number;
+      neighborRatio?: number;
+      maxClickSamples?: number;
+      lpcOrder?: number;
+      residualRatio?: number;
+    };
+    dereverb?: {
+      threshold?: number;
+      attenuation?: number;
+      nFft?: number;
+      hopLength?: number;
+      t60Sec?: number;
+      lateDelayMs?: number;
+      overSubtraction?: number;
+      spectralFloor?: number;
+      wpeEnabled?: boolean;
+      wpeIterations?: number;
+      wpeTaps?: number;
+      wpeStrength?: number;
+    };
   };
   eq?: {
     tiltDb?: number;
@@ -204,6 +225,42 @@ export interface MasteringChainConfig {
       kneeDb?: number;
       makeupGainDb?: number;
       autoMakeup?: boolean;
+    };
+    deesser?: {
+      frequencyHz?: number;
+      thresholdDb?: number;
+      ratio?: number;
+      attackMs?: number;
+      releaseMs?: number;
+      rangeDb?: number;
+    };
+    transientShaper?: {
+      attackGainDb?: number;
+      sustainGainDb?: number;
+      fastAttackMs?: number;
+      fastReleaseMs?: number;
+      slowAttackMs?: number;
+      slowReleaseMs?: number;
+      sensitivity?: number;
+      maxGainDb?: number;
+      gainSmoothingMs?: number;
+      lookaheadMs?: number;
+    };
+    multibandComp?: {
+      lowCutoffHz?: number;
+      highCutoffHz?: number;
+      lowThresholdDb?: number;
+      lowRatio?: number;
+      lowAttackMs?: number;
+      lowReleaseMs?: number;
+      midThresholdDb?: number;
+      midRatio?: number;
+      midAttackMs?: number;
+      midReleaseMs?: number;
+      highThresholdDb?: number;
+      highRatio?: number;
+      highAttackMs?: number;
+      highReleaseMs?: number;
     };
   };
   saturation?: {

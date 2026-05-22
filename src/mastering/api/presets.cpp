@@ -1,11 +1,13 @@
 /// @file presets.cpp
 /// @brief Implementation of built-in mastering chain presets.
 /// @details Each factory below configures only modules that the current
-/// MasteringChain class supports (repair.denoise, eq.tilt, dynamics.compressor,
-/// saturation.tape, saturation.exciter, spectral.airBand, stereo.imager,
-/// stereo.monoMaker, maximizer.truePeakLimiter, loudness). Numbers are an
-/// initial pass derived from backup/mastering-demo-plan.md §6.1-6.6; they will
-/// be tuned in a follow-up phase.
+/// MasteringChain class supports (repair.declick, repair.dereverb,
+/// repair.denoise, eq.tilt, dynamics.deesser, dynamics.transientShaper,
+/// dynamics.compressor, dynamics.multibandComp, saturation.tape,
+/// saturation.exciter, spectral.airBand, stereo.imager, stereo.monoMaker,
+/// maximizer.truePeakLimiter, loudness). Numbers are an initial pass derived
+/// from backup/mastering-demo-plan.md §6.1-6.6; they will be tuned in a
+/// follow-up phase.
 
 #include "mastering/api/presets.h"
 
@@ -34,6 +36,9 @@ MasteringChainConfig make_pop() {
   cfg.dynamics.compressor.config.ratio = 2.5f;
   cfg.dynamics.compressor.config.attack_ms = 5.0f;
   cfg.dynamics.compressor.config.release_ms = 50.0f;
+
+  cfg.dynamics.transient_shaper.enabled = true;
+  cfg.dynamics.transient_shaper.config.attack_gain_db = 2.0f;
 
   cfg.saturation.exciter.enabled = true;
   cfg.saturation.exciter.config.amount = 0.15f;
@@ -140,6 +145,8 @@ MasteringChainConfig make_ai_music() {
   MasteringChainConfig cfg;
 
   // Light spectral repair for AI-generated artifacts.
+  cfg.repair.declick.enabled = true;
+  cfg.repair.dereverb.enabled = true;
   cfg.repair.denoise.enabled = true;
 
   cfg.eq.tilt.enabled = true;
@@ -175,6 +182,9 @@ MasteringChainConfig make_speech() {
   // Positive tilt -> high-frequency emphasis for intelligibility.
   cfg.eq.tilt.enabled = true;
   cfg.eq.tilt.tilt_db = 1.0f;
+
+  // Tame sibilant high-frequency energy typical in vocal sources.
+  cfg.dynamics.deesser.enabled = true;
 
   cfg.dynamics.compressor.enabled = true;
   cfg.dynamics.compressor.config.threshold_db = -20.0f;

@@ -160,6 +160,69 @@ const monoCompatJson = masteringStereoAnalyze(
 );
 ```
 
+### Mastering presets
+
+```typescript
+import { init, masterAudio, masteringPresetNames } from '@libraz/libsonare';
+
+await init();
+
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+
+const result = masterAudio('aiMusic', samples, sampleRate, {
+  // optional flat overrides applied on top of the preset
+  'loudness.targetLufs': -13,
+});
+console.log(result.outputLufs, result.appliedGainDb);
+```
+
+### Progress callback
+
+```typescript
+import { init, masteringChain } from '@libraz/libsonare';
+
+await init();
+
+masteringChain(samples, sampleRate,
+  { 'dynamics.compressor.thresholdDb': -24 },
+  (progress, stage) => console.log(`${stage}: ${(progress * 100).toFixed(0)}%`),
+);
+```
+
+The same `(progress, stage) => void` callback is accepted as the final argument
+of `masterAudio`.
+
+### Streaming mastering chain
+
+`StreamingMasteringChain` processes interleaved blocks in place and only
+supports modules whose state depends solely on the sample rate. It cannot
+include `repair.denoise` or `loudness` (those require offline / look-ahead
+analysis).
+
+```typescript
+import { init, StreamingMasteringChain } from '@libraz/libsonare';
+
+await init();
+
+const chain = new StreamingMasteringChain({
+  'eq.tilt.tiltDb': 0.5,
+  'dynamics.compressor.thresholdDb': -20,
+});
+chain.prepare(48000, 512, 2);
+
+// Mono block
+const monoBlock = new Float32Array(512);
+const processedMono = chain.processMono(monoBlock);
+
+// Stereo block (separate L/R Float32Arrays)
+const left = new Float32Array(512);
+const right = new Float32Array(512);
+const { left: outL, right: outR } = chain.processStereo(left, right);
+
+chain.reset();
+chain.delete(); // release WASM memory
+```
+
 ## Features
 
 - **Detection**: BPM, key, beats, onsets, chords, sections

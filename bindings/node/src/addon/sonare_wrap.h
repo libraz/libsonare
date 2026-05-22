@@ -61,9 +61,13 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringProcessStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChain(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChainStereo(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringChainWithProgress(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringChainStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPresetNames(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudio(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioStereo(const Napi::CallbackInfo& info);
+  static Napi::Value MasterAudioWithProgress(const Napi::CallbackInfo& info);
+  static Napi::Value MasterAudioStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcessorNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairProcessorNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairAnalysisNames(const Napi::CallbackInfo& info);

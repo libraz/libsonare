@@ -462,6 +462,34 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     out.repair.denoise.config.gain_floor =
         floatProperty(repair, "gainFloor", out.repair.denoise.config.gain_floor);
   }
+  if (hasProperty(repair, "declick")) {
+    val declick = objectProperty(repair, "declick");
+    out.repair.declick.enabled = true;
+    auto& dc = out.repair.declick.config;
+    dc.threshold = floatProperty(declick, "threshold", dc.threshold);
+    dc.neighbor_ratio = floatProperty(declick, "neighborRatio", dc.neighbor_ratio);
+    dc.max_click_samples = static_cast<size_t>(
+        intProperty(declick, "maxClickSamples", static_cast<int>(dc.max_click_samples)));
+    dc.lpc_order = intProperty(declick, "lpcOrder", dc.lpc_order);
+    dc.residual_ratio = floatProperty(declick, "residualRatio", dc.residual_ratio);
+  }
+  if (hasProperty(repair, "dereverb")) {
+    val dereverb = objectProperty(repair, "dereverb");
+    out.repair.dereverb.enabled = true;
+    auto& rc = out.repair.dereverb.config;
+    rc.threshold = floatProperty(dereverb, "threshold", rc.threshold);
+    rc.attenuation = floatProperty(dereverb, "attenuation", rc.attenuation);
+    rc.n_fft = intProperty(dereverb, "nFft", rc.n_fft);
+    rc.hop_length = intProperty(dereverb, "hopLength", rc.hop_length);
+    rc.t60_sec = floatProperty(dereverb, "t60Sec", rc.t60_sec);
+    rc.late_delay_ms = floatProperty(dereverb, "lateDelayMs", rc.late_delay_ms);
+    rc.over_subtraction = floatProperty(dereverb, "overSubtraction", rc.over_subtraction);
+    rc.spectral_floor = floatProperty(dereverb, "spectralFloor", rc.spectral_floor);
+    rc.wpe_enabled = boolProperty(dereverb, "wpeEnabled", rc.wpe_enabled);
+    rc.wpe_iterations = intProperty(dereverb, "wpeIterations", rc.wpe_iterations);
+    rc.wpe_taps = intProperty(dereverb, "wpeTaps", rc.wpe_taps);
+    rc.wpe_strength = floatProperty(dereverb, "wpeStrength", rc.wpe_strength);
+  }
 
   val eq = objectProperty(config, "eq");
   if (hasProperty(eq, "tiltDb") || hasProperty(eq, "pivotHz")) {
@@ -482,6 +510,55 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     cc.knee_db = floatProperty(compressor, "kneeDb", cc.knee_db);
     cc.makeup_gain_db = floatProperty(compressor, "makeupGainDb", cc.makeup_gain_db);
     cc.auto_makeup = boolProperty(compressor, "autoMakeup", cc.auto_makeup);
+  }
+  if (hasProperty(dynamics, "deesser")) {
+    val deesser = objectProperty(dynamics, "deesser");
+    out.dynamics.deesser.enabled = true;
+    auto& dc = out.dynamics.deesser.config;
+    dc.frequency_hz = floatProperty(deesser, "frequencyHz", dc.frequency_hz);
+    dc.threshold_db = floatProperty(deesser, "thresholdDb", dc.threshold_db);
+    dc.ratio = floatProperty(deesser, "ratio", dc.ratio);
+    dc.attack_ms = floatProperty(deesser, "attackMs", dc.attack_ms);
+    dc.release_ms = floatProperty(deesser, "releaseMs", dc.release_ms);
+    dc.range_db = floatProperty(deesser, "rangeDb", dc.range_db);
+  }
+  if (hasProperty(dynamics, "transientShaper")) {
+    val ts = objectProperty(dynamics, "transientShaper");
+    out.dynamics.transient_shaper.enabled = true;
+    auto& tc = out.dynamics.transient_shaper.config;
+    tc.attack_gain_db = floatProperty(ts, "attackGainDb", tc.attack_gain_db);
+    tc.sustain_gain_db = floatProperty(ts, "sustainGainDb", tc.sustain_gain_db);
+    tc.fast_attack_ms = floatProperty(ts, "fastAttackMs", tc.fast_attack_ms);
+    tc.fast_release_ms = floatProperty(ts, "fastReleaseMs", tc.fast_release_ms);
+    tc.slow_attack_ms = floatProperty(ts, "slowAttackMs", tc.slow_attack_ms);
+    tc.slow_release_ms = floatProperty(ts, "slowReleaseMs", tc.slow_release_ms);
+    tc.sensitivity = floatProperty(ts, "sensitivity", tc.sensitivity);
+    tc.max_gain_db = floatProperty(ts, "maxGainDb", tc.max_gain_db);
+    tc.gain_smoothing_ms = floatProperty(ts, "gainSmoothingMs", tc.gain_smoothing_ms);
+    tc.lookahead_ms = floatProperty(ts, "lookaheadMs", tc.lookahead_ms);
+  }
+  if (hasProperty(dynamics, "multibandComp")) {
+    val mb = objectProperty(dynamics, "multibandComp");
+    out.dynamics.multiband_comp.enabled = true;
+    auto& mc = out.dynamics.multiband_comp.config;
+    // Default config has 2 cutoffs ([120,2000]) and 3 bands; we update in place.
+    if (hasProperty(mb, "lowCutoffHz")) {
+      mc.crossover.cutoffs_hz[0] = floatProperty(mb, "lowCutoffHz", mc.crossover.cutoffs_hz[0]);
+    }
+    if (hasProperty(mb, "highCutoffHz")) {
+      mc.crossover.cutoffs_hz[1] = floatProperty(mb, "highCutoffHz", mc.crossover.cutoffs_hz[1]);
+    }
+    auto apply_band = [&](int idx, const char* prefix_threshold, const char* prefix_ratio,
+                          const char* prefix_attack, const char* prefix_release) {
+      auto& band = mc.bands[idx];
+      band.threshold_db = floatProperty(mb, prefix_threshold, band.threshold_db);
+      band.ratio = floatProperty(mb, prefix_ratio, band.ratio);
+      band.attack_ms = floatProperty(mb, prefix_attack, band.attack_ms);
+      band.release_ms = floatProperty(mb, prefix_release, band.release_ms);
+    };
+    apply_band(0, "lowThresholdDb", "lowRatio", "lowAttackMs", "lowReleaseMs");
+    apply_band(1, "midThresholdDb", "midRatio", "midAttackMs", "midReleaseMs");
+    apply_band(2, "highThresholdDb", "highRatio", "highAttackMs", "highReleaseMs");
   }
 
   val saturation = objectProperty(config, "saturation");

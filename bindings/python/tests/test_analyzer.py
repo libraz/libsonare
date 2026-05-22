@@ -1165,3 +1165,27 @@ def test_stft_result_types() -> None:
     assert result.hop_length == 512
     assert len(result.magnitude) == result.n_bins * result.n_frames
     assert len(result.power) == result.n_bins * result.n_frames
+
+
+def test_mastering_chain_invokes_progress_callback() -> None:
+    """mastering_chain forwards per-stage progress to on_progress callback."""
+    from libsonare import mastering_chain
+
+    calls: list[tuple[float, str]] = []
+
+    def on_progress(progress: float, stage: str) -> None:
+        calls.append((progress, stage))
+
+    result = mastering_chain(
+        samples=[0.1] * 22050,
+        sample_rate=22050,
+        config={"eq.tilt.tiltDb": 1.0, "dynamics.compressor.thresholdDb": -24.0},
+        on_progress=on_progress,
+    )
+    assert len(result.samples) == 22050
+    assert len(calls) >= 2
+    stages = [s for _, s in calls]
+    assert "eq.tilt" in stages
+    assert "dynamics.compressor" in stages
+    # Final progress reaches 1.0.
+    assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)

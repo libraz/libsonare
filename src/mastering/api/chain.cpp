@@ -14,10 +14,15 @@
 #include "core/audio.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/transient_shaper.h"
 #include "mastering/eq/tilt.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "mastering/multiband/multiband_compressor.h"
+#include "mastering/repair/declick.h"
 #include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/dereverb_classical.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/spectral/air_band.h"
@@ -84,9 +89,14 @@ void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float ga
 
 int count_enabled_mono_stages(const MasteringChainConfig& cfg) {
   int n = 0;
+  if (cfg.repair.declick.enabled) ++n;
+  if (cfg.repair.dereverb.enabled) ++n;
   if (cfg.repair.denoise.enabled) ++n;
   if (cfg.eq.tilt.enabled) ++n;
+  if (cfg.dynamics.deesser.enabled) ++n;
+  if (cfg.dynamics.transient_shaper.enabled) ++n;
   if (cfg.dynamics.compressor.enabled) ++n;
+  if (cfg.dynamics.multiband_comp.enabled) ++n;
   if (cfg.saturation.tape.enabled) ++n;
   if (cfg.saturation.exciter.enabled) ++n;
   if (cfg.spectral.air_band.enabled) ++n;
@@ -158,7 +168,23 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     }
   };
 
-  // 1. repair.denoise
+  // 1. repair.declick
+  if (config_.repair.declick.enabled) {
+    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    Audio repaired = mastering::repair::declick(input, config_.repair.declick.config);
+    data.assign(repaired.data(), repaired.data() + repaired.size());
+    report("repair.declick");
+  }
+
+  // 2. repair.dereverb
+  if (config_.repair.dereverb.enabled) {
+    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    Audio repaired = mastering::repair::dereverb_classical(input, config_.repair.dereverb.config);
+    data.assign(repaired.data(), repaired.data() + repaired.size());
+    report("repair.dereverb");
+  }
+
+  // 3. repair.denoise
   if (config_.repair.denoise.enabled) {
     Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
     Audio repaired = mastering::repair::denoise_classical(input, config_.repair.denoise.config);
@@ -166,7 +192,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("repair.denoise");
   }
 
-  // 2. eq.tilt
+  // 4. eq.tilt
   if (config_.eq.tilt.enabled) {
     mastering::eq::TiltEq tilt;
     tilt.set_tilt_db(config_.eq.tilt.tilt_db);
@@ -175,42 +201,63 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("eq.tilt");
   }
 
-  // 3. dynamics.compressor
+  // 5. dynamics.deesser
+  if (config_.dynamics.deesser.enabled) {
+    mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
+    run_processor_mono(processor, data, sample_rate);
+    report("dynamics.deesser");
+  }
+
+  // 6. dynamics.transientShaper
+  if (config_.dynamics.transient_shaper.enabled) {
+    mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
+    run_processor_mono(processor, data, sample_rate);
+    report("dynamics.transientShaper");
+  }
+
+  // 7. dynamics.compressor
   if (config_.dynamics.compressor.enabled) {
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_mono(processor, data, sample_rate);
     report("dynamics.compressor");
   }
 
-  // 4. saturation.tape
+  // 8. dynamics.multibandComp
+  if (config_.dynamics.multiband_comp.enabled) {
+    mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
+    run_processor_mono(processor, data, sample_rate);
+    report("dynamics.multibandComp");
+  }
+
+  // 9. saturation.tape
   if (config_.saturation.tape.enabled) {
     mastering::saturation::Tape processor(config_.saturation.tape.config);
     run_processor_mono(processor, data, sample_rate);
     report("saturation.tape");
   }
 
-  // 5. saturation.exciter
+  // 10. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     mastering::saturation::Exciter processor(config_.saturation.exciter.config);
     run_processor_mono(processor, data, sample_rate);
     report("saturation.exciter");
   }
 
-  // 6. spectral.airBand
+  // 11. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     mastering::spectral::AirBand processor(config_.spectral.air_band.config);
     run_processor_mono(processor, data, sample_rate);
     report("spectral.airBand");
   }
 
-  // 7. maximizer.truePeakLimiter
+  // 12. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_mono(processor, data, sample_rate);
     report("maximizer.truePeakLimiter");
   }
 
-  // 8. loudness (mono uses loudness_optimize)
+  // 13. loudness (mono uses loudness_optimize)
   if (config_.loudness.enabled) {
     Audio current = Audio::from_buffer(data.data(), data.size(), sample_rate);
     mastering::maximizer::LoudnessOptimizeConfig loudness_config;
@@ -250,7 +297,31 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     }
   };
 
-  // 1. repair.denoise (per-channel)
+  // 1. repair.declick (per-channel)
+  if (config_.repair.declick.enabled) {
+    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+    Audio left_repaired = mastering::repair::declick(left_audio, config_.repair.declick.config);
+    Audio right_repaired = mastering::repair::declick(right_audio, config_.repair.declick.config);
+    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
+    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    report("repair.declick");
+  }
+
+  // 2. repair.dereverb (per-channel)
+  if (config_.repair.dereverb.enabled) {
+    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+    Audio left_repaired =
+        mastering::repair::dereverb_classical(left_audio, config_.repair.dereverb.config);
+    Audio right_repaired =
+        mastering::repair::dereverb_classical(right_audio, config_.repair.dereverb.config);
+    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
+    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    report("repair.dereverb");
+  }
+
+  // 3. repair.denoise (per-channel)
   if (config_.repair.denoise.enabled) {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
@@ -263,7 +334,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("repair.denoise");
   }
 
-  // 2. eq.tilt
+  // 4. eq.tilt
   if (config_.eq.tilt.enabled) {
     mastering::eq::TiltEq tilt;
     tilt.set_tilt_db(config_.eq.tilt.tilt_db);
@@ -272,56 +343,77 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("eq.tilt");
   }
 
-  // 3. dynamics.compressor
+  // 5. dynamics.deesser
+  if (config_.dynamics.deesser.enabled) {
+    mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
+    run_processor_stereo(processor, left, right, sample_rate);
+    report("dynamics.deesser");
+  }
+
+  // 6. dynamics.transientShaper
+  if (config_.dynamics.transient_shaper.enabled) {
+    mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
+    run_processor_stereo(processor, left, right, sample_rate);
+    report("dynamics.transientShaper");
+  }
+
+  // 7. dynamics.compressor
   if (config_.dynamics.compressor.enabled) {
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("dynamics.compressor");
   }
 
-  // 4. saturation.tape
+  // 8. dynamics.multibandComp
+  if (config_.dynamics.multiband_comp.enabled) {
+    mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
+    run_processor_stereo(processor, left, right, sample_rate);
+    report("dynamics.multibandComp");
+  }
+
+  // 9. saturation.tape
   if (config_.saturation.tape.enabled) {
     mastering::saturation::Tape processor(config_.saturation.tape.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("saturation.tape");
   }
 
-  // 5. saturation.exciter
+  // 10. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     mastering::saturation::Exciter processor(config_.saturation.exciter.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("saturation.exciter");
   }
 
-  // 6. spectral.airBand
+  // 11. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     mastering::spectral::AirBand processor(config_.spectral.air_band.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("spectral.airBand");
   }
 
-  // 7. stereo.imager
+  // 12. stereo.imager
   if (config_.stereo.imager.enabled) {
     mastering::stereo::Imager processor(config_.stereo.imager.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("stereo.imager");
   }
 
-  // 8. stereo.monoMaker
+  // 13. stereo.monoMaker
   if (config_.stereo.mono_maker.enabled) {
     mastering::stereo::MonoMaker processor(config_.stereo.mono_maker.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("stereo.monoMaker");
   }
 
-  // 9. maximizer.truePeakLimiter
+  // 14. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("maximizer.truePeakLimiter");
   }
 
-  // 10. loudness (stereo path: manual gain + TruePeakLimiter pass)
+  // 15. loudness (stereo path: manual gain + TruePeakLimiter pass)
   if (config_.loudness.enabled) {
     const float current_lufs = integrated_lufs(mono_mix(left, right), sample_rate);
     if (std::isfinite(current_lufs)) {
@@ -354,9 +446,14 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
 namespace {
 
 struct StageFlagsSet {
+  StageFlags declick;
+  StageFlags dereverb;
   StageFlags denoise;
   StageFlags tilt;
+  StageFlags deesser;
+  StageFlags transient_shaper;
   StageFlags compressor;
+  StageFlags multiband_comp;
   StageFlags tape;
   StageFlags exciter;
   StageFlags air_band;
@@ -371,8 +468,67 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   const float vf = static_cast<float>(v);
   const int vi = static_cast<int>(v);
 
-  // ---- repair.denoise ----
-  if (key == "repair.denoise.enabled") {
+  // ---- repair.declick ----
+  if (key == "repair.declick.enabled") {
+    mark_enabled(flags.declick, v);
+  } else if (key == "repair.declick.threshold") {
+    cfg.repair.declick.config.threshold = vf;
+    mark_field(flags.declick);
+  } else if (key == "repair.declick.neighborRatio") {
+    cfg.repair.declick.config.neighbor_ratio = vf;
+    mark_field(flags.declick);
+  } else if (key == "repair.declick.maxClickSamples") {
+    cfg.repair.declick.config.max_click_samples = static_cast<size_t>(vi);
+    mark_field(flags.declick);
+  } else if (key == "repair.declick.lpcOrder") {
+    cfg.repair.declick.config.lpc_order = vi;
+    mark_field(flags.declick);
+  } else if (key == "repair.declick.residualRatio") {
+    cfg.repair.declick.config.residual_ratio = vf;
+    mark_field(flags.declick);
+
+    // ---- repair.dereverb ----
+  } else if (key == "repair.dereverb.enabled") {
+    mark_enabled(flags.dereverb, v);
+  } else if (key == "repair.dereverb.threshold") {
+    cfg.repair.dereverb.config.threshold = vf;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.attenuation") {
+    cfg.repair.dereverb.config.attenuation = vf;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.nFft") {
+    cfg.repair.dereverb.config.n_fft = vi;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.hopLength") {
+    cfg.repair.dereverb.config.hop_length = vi;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.t60Sec") {
+    cfg.repair.dereverb.config.t60_sec = vf;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.lateDelayMs") {
+    cfg.repair.dereverb.config.late_delay_ms = vf;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.overSubtraction") {
+    cfg.repair.dereverb.config.over_subtraction = vf;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.spectralFloor") {
+    cfg.repair.dereverb.config.spectral_floor = vf;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.wpeEnabled") {
+    cfg.repair.dereverb.config.wpe_enabled = v != 0.0;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.wpeIterations") {
+    cfg.repair.dereverb.config.wpe_iterations = vi;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.wpeTaps") {
+    cfg.repair.dereverb.config.wpe_taps = vi;
+    mark_field(flags.dereverb);
+  } else if (key == "repair.dereverb.wpeStrength") {
+    cfg.repair.dereverb.config.wpe_strength = vf;
+    mark_field(flags.dereverb);
+
+    // ---- repair.denoise ----
+  } else if (key == "repair.denoise.enabled") {
     mark_enabled(flags.denoise, v);
   } else if (key == "repair.denoise.nFft") {
     cfg.repair.denoise.config.n_fft = vi;
@@ -396,6 +552,62 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   } else if (key == "eq.tilt.pivotHz") {
     cfg.eq.tilt.pivot_hz = vf;
     mark_field(flags.tilt);
+
+    // ---- dynamics.deesser ----
+  } else if (key == "dynamics.deesser.enabled") {
+    mark_enabled(flags.deesser, v);
+  } else if (key == "dynamics.deesser.frequencyHz") {
+    cfg.dynamics.deesser.config.frequency_hz = vf;
+    mark_field(flags.deesser);
+  } else if (key == "dynamics.deesser.thresholdDb") {
+    cfg.dynamics.deesser.config.threshold_db = vf;
+    mark_field(flags.deesser);
+  } else if (key == "dynamics.deesser.ratio") {
+    cfg.dynamics.deesser.config.ratio = vf;
+    mark_field(flags.deesser);
+  } else if (key == "dynamics.deesser.attackMs") {
+    cfg.dynamics.deesser.config.attack_ms = vf;
+    mark_field(flags.deesser);
+  } else if (key == "dynamics.deesser.releaseMs") {
+    cfg.dynamics.deesser.config.release_ms = vf;
+    mark_field(flags.deesser);
+  } else if (key == "dynamics.deesser.rangeDb") {
+    cfg.dynamics.deesser.config.range_db = vf;
+    mark_field(flags.deesser);
+
+    // ---- dynamics.transientShaper ----
+  } else if (key == "dynamics.transientShaper.enabled") {
+    mark_enabled(flags.transient_shaper, v);
+  } else if (key == "dynamics.transientShaper.attackGainDb") {
+    cfg.dynamics.transient_shaper.config.attack_gain_db = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.sustainGainDb") {
+    cfg.dynamics.transient_shaper.config.sustain_gain_db = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.fastAttackMs") {
+    cfg.dynamics.transient_shaper.config.fast_attack_ms = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.fastReleaseMs") {
+    cfg.dynamics.transient_shaper.config.fast_release_ms = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.slowAttackMs") {
+    cfg.dynamics.transient_shaper.config.slow_attack_ms = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.slowReleaseMs") {
+    cfg.dynamics.transient_shaper.config.slow_release_ms = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.sensitivity") {
+    cfg.dynamics.transient_shaper.config.sensitivity = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.maxGainDb") {
+    cfg.dynamics.transient_shaper.config.max_gain_db = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.gainSmoothingMs") {
+    cfg.dynamics.transient_shaper.config.gain_smoothing_ms = vf;
+    mark_field(flags.transient_shaper);
+  } else if (key == "dynamics.transientShaper.lookaheadMs") {
+    cfg.dynamics.transient_shaper.config.lookahead_ms = vf;
+    mark_field(flags.transient_shaper);
 
     // ---- dynamics.compressor ----
   } else if (key == "dynamics.compressor.enabled") {
@@ -421,6 +633,80 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   } else if (key == "dynamics.compressor.autoMakeup") {
     cfg.dynamics.compressor.config.auto_makeup = v != 0.0;
     mark_field(flags.compressor);
+
+    // ---- dynamics.multibandComp ----
+  } else if (key == "dynamics.multibandComp.enabled") {
+    mark_enabled(flags.multiband_comp, v);
+  } else if (key == "dynamics.multibandComp.lowCutoffHz") {
+    if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 1) {
+      cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[0] = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.highCutoffHz") {
+    if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2) {
+      cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[1] = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.lowThresholdDb") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
+      cfg.dynamics.multiband_comp.config.bands[0].threshold_db = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.lowRatio") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
+      cfg.dynamics.multiband_comp.config.bands[0].ratio = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.lowAttackMs") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
+      cfg.dynamics.multiband_comp.config.bands[0].attack_ms = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.lowReleaseMs") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
+      cfg.dynamics.multiband_comp.config.bands[0].release_ms = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.midThresholdDb") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
+      cfg.dynamics.multiband_comp.config.bands[1].threshold_db = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.midRatio") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
+      cfg.dynamics.multiband_comp.config.bands[1].ratio = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.midAttackMs") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
+      cfg.dynamics.multiband_comp.config.bands[1].attack_ms = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.midReleaseMs") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
+      cfg.dynamics.multiband_comp.config.bands[1].release_ms = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.highThresholdDb") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
+      cfg.dynamics.multiband_comp.config.bands[2].threshold_db = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.highRatio") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
+      cfg.dynamics.multiband_comp.config.bands[2].ratio = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.highAttackMs") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
+      cfg.dynamics.multiband_comp.config.bands[2].attack_ms = vf;
+    }
+    mark_field(flags.multiband_comp);
+  } else if (key == "dynamics.multibandComp.highReleaseMs") {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
+      cfg.dynamics.multiband_comp.config.bands[2].release_ms = vf;
+    }
+    mark_field(flags.multiband_comp);
 
     // ---- saturation.tape ----
   } else if (key == "saturation.tape.enabled") {
@@ -565,9 +851,14 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
     apply_one_param_to_config(cfg, params[i].key, params[i].value, flags);
   }
 
+  cfg.repair.declick.enabled = resolve_enabled(flags.declick);
+  cfg.repair.dereverb.enabled = resolve_enabled(flags.dereverb);
   cfg.repair.denoise.enabled = resolve_enabled(flags.denoise);
   cfg.eq.tilt.enabled = resolve_enabled(flags.tilt);
+  cfg.dynamics.deesser.enabled = resolve_enabled(flags.deesser);
+  cfg.dynamics.transient_shaper.enabled = resolve_enabled(flags.transient_shaper);
   cfg.dynamics.compressor.enabled = resolve_enabled(flags.compressor);
+  cfg.dynamics.multiband_comp.enabled = resolve_enabled(flags.multiband_comp);
   cfg.saturation.tape.enabled = resolve_enabled(flags.tape);
   cfg.saturation.exciter.enabled = resolve_enabled(flags.exciter);
   cfg.spectral.air_band.enabled = resolve_enabled(flags.air_band);
@@ -594,14 +885,29 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
     apply_one_param_to_config(cfg, params[i].key, params[i].value, flags);
   }
 
+  if (flags.declick.any_key_seen) {
+    cfg.repair.declick.enabled = resolve_enabled(flags.declick);
+  }
+  if (flags.dereverb.any_key_seen) {
+    cfg.repair.dereverb.enabled = resolve_enabled(flags.dereverb);
+  }
   if (flags.denoise.any_key_seen) {
     cfg.repair.denoise.enabled = resolve_enabled(flags.denoise);
   }
   if (flags.tilt.any_key_seen) {
     cfg.eq.tilt.enabled = resolve_enabled(flags.tilt);
   }
+  if (flags.deesser.any_key_seen) {
+    cfg.dynamics.deesser.enabled = resolve_enabled(flags.deesser);
+  }
+  if (flags.transient_shaper.any_key_seen) {
+    cfg.dynamics.transient_shaper.enabled = resolve_enabled(flags.transient_shaper);
+  }
   if (flags.compressor.any_key_seen) {
     cfg.dynamics.compressor.enabled = resolve_enabled(flags.compressor);
+  }
+  if (flags.multiband_comp.any_key_seen) {
+    cfg.dynamics.multiband_comp.enabled = resolve_enabled(flags.multiband_comp);
   }
   if (flags.tape.any_key_seen) {
     cfg.saturation.tape.enabled = resolve_enabled(flags.tape);
@@ -653,6 +959,12 @@ struct StreamingMasteringChain::Impl {
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
+  if (config_.repair.declick.enabled) {
+    throw std::invalid_argument("StreamingMasteringChain does not support repair.declick");
+  }
+  if (config_.repair.dereverb.enabled) {
+    throw std::invalid_argument("StreamingMasteringChain does not support repair.dereverb");
+  }
   if (config_.repair.denoise.enabled) {
     throw std::invalid_argument("StreamingMasteringChain does not support repair.denoise");
   }
@@ -695,43 +1007,63 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     add_stage(std::move(tilt), "eq.tilt");
   }
 
-  // 2. dynamics.compressor
+  // 2. dynamics.deesser
+  if (config_.dynamics.deesser.enabled) {
+    add_stage(std::make_unique<mastering::dynamics::DeEsser>(config_.dynamics.deesser.config),
+              "dynamics.deesser");
+  }
+
+  // 3. dynamics.transientShaper
+  if (config_.dynamics.transient_shaper.enabled) {
+    add_stage(std::make_unique<mastering::dynamics::TransientShaper>(
+                  config_.dynamics.transient_shaper.config),
+              "dynamics.transientShaper");
+  }
+
+  // 4. dynamics.compressor
   if (config_.dynamics.compressor.enabled) {
     add_stage(std::make_unique<mastering::dynamics::Compressor>(config_.dynamics.compressor.config),
               "dynamics.compressor");
   }
 
-  // 3. saturation.tape
+  // 5. dynamics.multibandComp
+  if (config_.dynamics.multiband_comp.enabled) {
+    add_stage(std::make_unique<mastering::multiband::MultibandCompressor>(
+                  config_.dynamics.multiband_comp.config),
+              "dynamics.multibandComp");
+  }
+
+  // 6. saturation.tape
   if (config_.saturation.tape.enabled) {
     add_stage(std::make_unique<mastering::saturation::Tape>(config_.saturation.tape.config),
               "saturation.tape");
   }
 
-  // 4. saturation.exciter
+  // 7. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     add_stage(std::make_unique<mastering::saturation::Exciter>(config_.saturation.exciter.config),
               "saturation.exciter");
   }
 
-  // 5. spectral.airBand
+  // 8. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     add_stage(std::make_unique<mastering::spectral::AirBand>(config_.spectral.air_band.config),
               "spectral.airBand");
   }
 
-  // 6. stereo.imager (stereo only)
+  // 9. stereo.imager (stereo only)
   if (num_channels == 2 && config_.stereo.imager.enabled) {
     add_stage(std::make_unique<mastering::stereo::Imager>(config_.stereo.imager.config),
               "stereo.imager");
   }
 
-  // 7. stereo.monoMaker (stereo only)
+  // 10. stereo.monoMaker (stereo only)
   if (num_channels == 2 && config_.stereo.mono_maker.enabled) {
     add_stage(std::make_unique<mastering::stereo::MonoMaker>(config_.stereo.mono_maker.config),
               "stereo.monoMaker");
   }
 
-  // 8. maximizer.truePeakLimiter
+  // 11. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
     add_stage(std::make_unique<mastering::maximizer::TruePeakLimiter>(
                   config_.maximizer.true_peak_limiter.config),

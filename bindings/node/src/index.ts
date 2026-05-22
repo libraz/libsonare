@@ -218,8 +218,36 @@ export class Audio {
     return addon.masteringProcess(processorName, this.getData(), this.getSampleRate(), params);
   }
 
-  masteringChain(config: Record<string, number | boolean> = {}): MasteringChainResult {
+  masteringChain(
+    config: Record<string, number | boolean> = {},
+    onProgress?: (progress: number, stage: string) => void,
+  ): MasteringChainResult {
+    if (onProgress) {
+      return addon.masteringChainWithProgress(
+        this.getData(),
+        this.getSampleRate(),
+        config,
+        onProgress,
+      );
+    }
     return addon.masteringChain(this.getData(), this.getSampleRate(), config);
+  }
+
+  masterAudio(
+    preset = 'pop',
+    overrides: Record<string, number | boolean> = {},
+    onProgress?: (progress: number, stage: string) => void,
+  ): MasteringChainResult {
+    if (onProgress) {
+      return addon.masterAudioWithProgress(
+        preset,
+        this.getData(),
+        this.getSampleRate(),
+        overrides,
+        onProgress,
+      );
+    }
+    return addon.masterAudio(preset, this.getData(), this.getSampleRate(), overrides);
   }
 
   trim(thresholdDb = -60.0): Float32Array {
@@ -508,7 +536,11 @@ export function masteringChain(
   samples: Float32Array,
   sampleRate = 22050,
   config: Record<string, number | boolean> = {},
+  onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
+  if (onProgress) {
+    return addon.masteringChainWithProgress(samples, sampleRate, config, onProgress);
+  }
   return addon.masteringChain(samples, sampleRate, config);
 }
 
@@ -517,7 +549,11 @@ export function masteringChainStereo(
   right: Float32Array,
   sampleRate = 22050,
   config: Record<string, number | boolean> = {},
+  onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
+  if (onProgress) {
+    return addon.masteringChainStereoWithProgress(left, right, sampleRate, config, onProgress);
+  }
   return addon.masteringChainStereo(left, right, sampleRate, config);
 }
 
@@ -591,7 +627,11 @@ export function masterAudio(
   sampleRate = 22050,
   preset = 'pop',
   overrides: Record<string, number | boolean> = {},
+  onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
+  if (onProgress) {
+    return addon.masterAudioWithProgress(preset, samples, sampleRate, overrides, onProgress);
+  }
   return addon.masterAudio(preset, samples, sampleRate, overrides);
 }
 
@@ -601,7 +641,18 @@ export function masterAudioStereo(
   sampleRate = 22050,
   preset = 'pop',
   overrides: Record<string, number | boolean> = {},
+  onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
+  if (onProgress) {
+    return addon.masterAudioStereoWithProgress(
+      preset,
+      left,
+      right,
+      sampleRate,
+      overrides,
+      onProgress,
+    );
+  }
   return addon.masterAudioStereo(preset, left, right, sampleRate, overrides);
 }
 

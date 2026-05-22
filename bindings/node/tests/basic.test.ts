@@ -32,6 +32,7 @@ import {
   hzToMidi,
   hzToNote,
   mastering,
+  masteringChain,
   masteringPairAnalysisNames,
   masteringPairAnalyze,
   masteringPairProcess,
@@ -723,6 +724,29 @@ describe('sonare native binding', () => {
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('progress callback', () => {
+    it('masteringChain invokes onProgress for each enabled stage', () => {
+      const samples = new Float32Array(22050).fill(0.1);
+      const stages: string[] = [];
+      const progresses: number[] = [];
+      masteringChain(
+        samples,
+        22050,
+        {
+          'eq.tilt.tiltDb': 1.0,
+          'dynamics.compressor.thresholdDb': -24,
+        },
+        (progress, stage) => {
+          progresses.push(progress);
+          stages.push(stage);
+        },
+      );
+      expect(stages).toContain('eq.tilt');
+      expect(stages).toContain('dynamics.compressor');
+      expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
     });
   });
 });
