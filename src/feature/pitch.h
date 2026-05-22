@@ -93,6 +93,39 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config = PitchConfi
 /// decoding for more robust pitch tracking than standard YIN.
 PitchResult pyin(const Audio& audio, const PitchConfig& config = PitchConfig());
 
+/// @brief Result of piptrack pitch tracking.
+struct PiptrackResult {
+  std::vector<float> pitches;     ///< [n_bins x n_frames] estimated frequencies (0 = no peak)
+  std::vector<float> magnitudes;  ///< [n_bins x n_frames] interpolated magnitudes
+  int n_bins = 0;
+  int n_frames = 0;
+};
+
+/// @brief Tracks spectral peaks per frame (librosa.piptrack equivalent).
+/// @param audio Input audio
+/// @param n_fft FFT size
+/// @param hop_length Hop length between frames
+/// @param fmin Minimum frequency (Hz) considered
+/// @param fmax Maximum frequency (Hz) considered
+/// @param threshold Relative magnitude threshold (per frame, fraction of max)
+/// @return Pitch + magnitude grid aligned with the STFT bins.
+PiptrackResult piptrack(const Audio& audio, int n_fft = 2048, int hop_length = 512,
+                        float fmin = 150.0f, float fmax = 4000.0f, float threshold = 0.1f);
+
+/// @brief Estimates a per-octave tuning offset from a list of detected pitches.
+/// @param frequencies Detected pitch frequencies (Hz). Non-positive values are ignored.
+/// @param resolution Tuning resolution in fractions of a bin (default 0.01 = 1 cent).
+/// @param bins_per_octave Number of pitch bins per octave (default 12).
+/// @return Tuning offset in fractions of a bin (range (-0.5, 0.5]).
+float pitch_tuning(const std::vector<float>& frequencies, float resolution = 0.01f,
+                   int bins_per_octave = 12);
+
+/// @brief Estimates global tuning offset of an audio signal.
+/// @details Uses piptrack to find spectral peaks, then aggregates with
+/// pitch_tuning. Mirrors librosa.estimate_tuning.
+float estimate_tuning(const Audio& audio, int n_fft = 2048, int hop_length = 512,
+                      float resolution = 0.01f, int bins_per_octave = 12);
+
 /// @brief Converts frequency to MIDI note number.
 /// @param freq Frequency in Hz
 /// @return MIDI note number (A4 = 69)

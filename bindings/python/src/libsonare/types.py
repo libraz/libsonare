@@ -1,4 +1,8 @@
-"""Public type definitions for libsonare."""
+"""Public type definitions for libsonare.
+
+camelCase property aliases mirror the JS binding's public API so users moving
+between languages see the same names. They intentionally violate PEP8 N802.
+"""
 
 from __future__ import annotations
 
@@ -67,7 +71,7 @@ class Key:
         return f"{self.root}{'' if self.mode == Mode.MAJOR else 'm'}"
 
     @property
-    def shortName(self) -> str:
+    def shortName(self) -> str:  # noqa: N802
         return self.short_name
 
     def __str__(self) -> str:
@@ -105,15 +109,15 @@ class AnalysisResult:
     beat_times: list[float]
 
     @property
-    def bpmConfidence(self) -> float:
+    def bpmConfidence(self) -> float:  # noqa: N802
         return self.bpm_confidence
 
     @property
-    def timeSignature(self) -> TimeSignature:
+    def timeSignature(self) -> TimeSignature:  # noqa: N802
         return self.time_signature
 
     @property
-    def beatTimes(self) -> list[float]:
+    def beatTimes(self) -> list[float]:  # noqa: N802
         return self.beat_times
 
     @property
@@ -153,23 +157,23 @@ class RhythmResult:
     beat_intervals: list[float]
 
     @property
-    def timeSignature(self) -> TimeSignature:
+    def timeSignature(self) -> TimeSignature:  # noqa: N802
         return self.time_signature
 
     @property
-    def grooveType(self) -> str:
+    def grooveType(self) -> str:  # noqa: N802
         return self.groove_type
 
     @property
-    def patternRegularity(self) -> float:
+    def patternRegularity(self) -> float:  # noqa: N802
         return self.pattern_regularity
 
     @property
-    def tempoStability(self) -> float:
+    def tempoStability(self) -> float:  # noqa: N802
         return self.tempo_stability
 
     @property
-    def beatIntervals(self) -> list[float]:
+    def beatIntervals(self) -> list[float]:  # noqa: N802
         return self.beat_intervals
 
 
@@ -187,35 +191,35 @@ class DynamicsResult:
     loudness_rms_db: list[float]
 
     @property
-    def dynamicRangeDb(self) -> float:
+    def dynamicRangeDb(self) -> float:  # noqa: N802
         return self.dynamic_range_db
 
     @property
-    def peakDb(self) -> float:
+    def peakDb(self) -> float:  # noqa: N802
         return self.peak_db
 
     @property
-    def rmsDb(self) -> float:
+    def rmsDb(self) -> float:  # noqa: N802
         return self.rms_db
 
     @property
-    def crestFactor(self) -> float:
+    def crestFactor(self) -> float:  # noqa: N802
         return self.crest_factor
 
     @property
-    def loudnessRangeDb(self) -> float:
+    def loudnessRangeDb(self) -> float:  # noqa: N802
         return self.loudness_range_db
 
     @property
-    def isCompressed(self) -> bool:
+    def isCompressed(self) -> bool:  # noqa: N802
         return self.is_compressed
 
     @property
-    def loudnessTimes(self) -> list[float]:
+    def loudnessTimes(self) -> list[float]:  # noqa: N802
         return self.loudness_times
 
     @property
-    def loudnessRmsDb(self) -> list[float]:
+    def loudnessRmsDb(self) -> list[float]:  # noqa: N802
         return self.loudness_rms_db
 
 
@@ -233,15 +237,15 @@ class TimbreResult:
     spectral_rolloff: list[float]
 
     @property
-    def spectralCentroid(self) -> list[float]:
+    def spectralCentroid(self) -> list[float]:  # noqa: N802
         return self.spectral_centroid
 
     @property
-    def spectralFlatness(self) -> list[float]:
+    def spectralFlatness(self) -> list[float]:  # noqa: N802
         return self.spectral_flatness
 
     @property
-    def spectralRolloff(self) -> list[float]:
+    def spectralRolloff(self) -> list[float]:  # noqa: N802
         return self.spectral_rolloff
 
 
@@ -352,13 +356,50 @@ class HpssResult:
 
 
 @dataclass(frozen=True, slots=True)
-class TtsQualityResult:
-    """Objective TTS audio quality measurements."""
+class MasteringResult:
+    """Mastering loudness/true-peak processing result."""
 
-    duration_sec: float
-    peak_db: float
-    rms_db: float
-    silence_ratio: float
-    clipping_ratio: float
-    leading_silence_sec: float
-    trailing_silence_sec: float
+    samples: list[float]
+    sample_rate: int
+    input_lufs: float
+    output_lufs: float
+    applied_gain_db: float
+    latency_samples: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringStereoResult:
+    """Stereo mastering processing result."""
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    input_lufs: float
+    output_lufs: float
+    applied_gain_db: float
+    latency_samples: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringChainResult:
+    """Result of running a configurable mastering chain on mono audio."""
+
+    samples: list[float]
+    sample_rate: int
+    input_lufs: float
+    output_lufs: float
+    applied_gain_db: float
+    stages: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringChainStereoResult:
+    """Result of running a configurable mastering chain on stereo audio."""
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    input_lufs: float
+    output_lufs: float
+    applied_gain_db: float
+    stages: list[str]

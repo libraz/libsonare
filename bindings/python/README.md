@@ -54,6 +54,143 @@ bpm = audio.detect_bpm()
 bpm = libsonare.detect_bpm(samples, sample_rate=sr)
 ```
 
+### Mastering
+
+The Python binding exposes the same mastering processors as the C, CLI, Node,
+and WASM APIs.
+
+```python
+import libsonare
+
+names = libsonare.mastering_processor_names()  # e.g. "dynamics.compressor"
+
+compressed = libsonare.mastering_process(
+    "dynamics.compressor",
+    samples,
+    sample_rate=sr,
+    params={"thresholdDb": -24.0, "ratio": 1.5},
+)
+
+widened = libsonare.mastering_process_stereo(
+    "stereo.imager",
+    left,
+    right,
+    sample_rate=sr,
+    params={"width": 1.1},
+)
+
+pair_names = libsonare.mastering_pair_processor_names()  # e.g. "match.abCrossfade"
+crossfaded = libsonare.mastering_pair_process(
+    "match.abCrossfade",
+    source,
+    reference,
+    sample_rate=sr,
+    params={"mix": 0.25},
+)
+
+loudness_json = libsonare.mastering_pair_analyze(
+    "match.referenceLoudness",
+    source,
+    reference,
+    sample_rate=sr,
+)
+mono_compat_json = libsonare.mastering_stereo_analyze(
+    "stereo.monoCompatCheck",
+    left,
+    right,
+    sample_rate=sr,
+)
+```
+
+### Mastering chain
+
+`mastering_chain` runs the full configurable mastering pipeline (EQ, dynamics,
+saturation, repair, stereo, loudness, ...). The Python binding accepts **flat
+dot-notation keys** for the config dict — addressing any module parameter
+directly — and an optional `on_progress(progress, stage)` callback that is
+invoked after each stage (progress in ``[0, 1]``).
+
+```python
+import libsonare
+
+result = libsonare.mastering_chain(
+    samples,
+    sample_rate=sr,
+    config={
+        "eq.tilt.tiltDb": 0.5,
+        "dynamics.compressor.thresholdDb": -24.0,
+        "dynamics.compressor.ratio": 1.5,
+        "dynamics.transientShaper.attackGainDb": 2.0,
+        "repair.declick.enabled": True,
+        "loudness.targetLufs": -14.0,
+        "loudness.ceilingDb": -1.0,
+    },
+    on_progress=lambda p, stage: print(f"[{p * 100:5.1f}%] {stage}"),
+)
+
+stereo_result = libsonare.mastering_chain_stereo(
+    left, right, sample_rate=sr,
+    config={"stereo.imager.width": 1.1, "loudness.targetLufs": -14.0},
+)
+```
+
+`MasteringChainResult` exposes the rendered samples plus loudness telemetry
+(`input_lufs`, `output_lufs`, `applied_gain_db`, `latency_samples`).
+
+### Mastering presets
+
+Named presets ship sensible defaults for common targets. `master_audio`
+applies a preset and lets you override any individual parameter using the
+same flat dot-notation keys as `mastering_chain`.
+
+```python
+import libsonare
+
+libsonare.mastering_preset_names()
+# -> ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+
+result = libsonare.master_audio(
+    samples,
+    sample_rate=sr,
+    preset="aiMusic",
+    overrides={
+        "loudness.targetLufs": -13.0,
+        "dynamics.multibandComp.enabled": True,
+    },
+)
+
+# Audio shortcut
+audio = libsonare.Audio.from_file("song.wav")
+pop_mastered = audio.master_audio("pop")
+```
+
+### Streaming mastering chain
+
+`StreamingMasteringChain` runs the same pipeline block-by-block for real-time
+or chunked workflows. The constructor takes the same flat dot-notation config
+as `mastering_chain`; non-streamable stages (`repair.denoise`, `loudness`)
+cause the constructor to raise, so omit those keys for streaming use. The
+object is also a context manager.
+
+```python
+import libsonare
+
+with libsonare.StreamingMasteringChain({
+    "eq.tilt.tiltDb": 0.5,
+    "dynamics.compressor.thresholdDb": -20.0,
+    "dynamics.transientShaper.attackGainDb": 1.5,
+}) as chain:
+    chain.prepare(sample_rate=48000, max_block_size=512, num_channels=1)
+    print(chain.stage_names())
+    print(f"latency = {chain.latency_samples()} samples")
+
+    out_block = chain.process_mono([0.0] * 512)
+    # Stereo:
+    # chain.prepare(48000, 512, 2)
+    # out_l, out_r = chain.process_stereo(left_block, right_block)
+    chain.reset()
+```
+
 ### Library version
 
 ```python
@@ -146,6 +283,12 @@ sonare spectral song.mp3         # Spectral features table
 sonare pitch song.mp3            # Pitch tracking (pYIN)
 sonare mel song.mp3              # Mel spectrogram shape
 sonare chroma song.mp3           # Chromagram with visualization
+
+sonare mastering song.wav -o mastered.wav --target-lufs -14
+sonare mastering-processor song.wav --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5
+sonare mastering-pair-processor source.wav --reference reference.wav --processor match.abCrossfade
+sonare mastering-pair-analyze source.wav --reference reference.wav --analysis match.referenceLoudness
+sonare mastering-stereo-analyze left.wav --reference right.wav --analysis stereo.monoCompatCheck
 ```
 
 ## Features

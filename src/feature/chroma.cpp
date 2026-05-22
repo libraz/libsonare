@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
+#include "util/vector_normalize.h"
 
 namespace sonare {
 
@@ -184,6 +187,143 @@ float Chroma::at(int chroma, int frame) const {
   SONARE_CHECK(chroma >= 0 && chroma < n_chroma_, ErrorCode::InvalidParameter);
   SONARE_CHECK(frame >= 0 && frame < n_frames_, ErrorCode::InvalidParameter);
   return features_[chroma * n_frames_ + frame];
+}
+
+namespace {
+
+/// @brief Wraps CQT magnitude bins onto @p n_chroma pitch classes.
+std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames,
+                                      int bins_per_octave, int n_chroma) {
+  std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
+  // librosa.feature.chroma_cqt expects bins_per_octave to be a multiple of n_chroma.
+  // Each chroma bin gets the mean of all CQT bins falling onto that pitch class.
+  std::vector<int> counts(n_chroma, 0);
+  for (int b = 0; b < n_bins; ++b) {
+    int idx = ((b % bins_per_octave) * n_chroma) / bins_per_octave;
+    if (idx < 0) idx += n_chroma;
+    counts[idx] += 1;
+    for (int t = 0; t < n_frames; ++t) {
+      chroma[idx * n_frames + t] += mag[b * n_frames + t];
+    }
+  }
+  for (int c = 0; c < n_chroma; ++c) {
+    if (counts[c] > 0) {
+      float denom = static_cast<float>(counts[c]);
+      for (int t = 0; t < n_frames; ++t) {
+        chroma[c * n_frames + t] /= denom;
+      }
+    }
+  }
+  return chroma;
+}
+
+/// @brief Applies a centered Hann smoothing kernel of length @p win along axis=time.
+std::vector<float> smooth_rows_hann(const std::vector<float>& m, int rows, int cols, int win) {
+  if (win <= 1 || cols == 0) return m;
+  std::vector<float> kernel(win);
+  double sum = 0.0;
+  for (int i = 0; i < win; ++i) {
+    // periodic Hann (matches scipy/librosa default sym=False inside windows.get_window).
+    kernel[i] =
+        0.5f - 0.5f * std::cos(constants::kTwoPi * static_cast<float>(i) / static_cast<float>(win));
+    sum += kernel[i];
+  }
+  if (sum > 0.0) {
+    for (int i = 0; i < win; ++i) kernel[i] /= static_cast<float>(sum);
+  }
+  std::vector<float> out(static_cast<size_t>(rows) * cols, 0.0f);
+  int half = win / 2;
+  for (int r = 0; r < rows; ++r) {
+    for (int t = 0; t < cols; ++t) {
+      float acc = 0.0f;
+      for (int k = 0; k < win; ++k) {
+        int src = t + k - half;
+        if (src < 0)
+          src = -src;
+        else if (src >= cols)
+          src = 2 * cols - src - 2;
+        if (src < 0) src = 0;
+        if (src >= cols) src = cols - 1;
+        acc += kernel[k] * m[r * cols + src];
+      }
+      out[r * cols + t] = acc;
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
+
+  CqtResult result = cqt(audio, config.cqt);
+  const std::vector<float>& mag = result.magnitude();
+  int n_bins = result.n_bins();
+  int n_frames = result.n_frames();
+
+  std::vector<float> chroma =
+      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma);
+
+  if (config.threshold > 0.0f) {
+    for (int t = 0; t < n_frames; ++t) {
+      float maxv = 0.0f;
+      for (int c = 0; c < config.n_chroma; ++c) {
+        maxv = std::max(maxv, chroma[c * n_frames + t]);
+      }
+      float gate = config.threshold * maxv;
+      for (int c = 0; c < config.n_chroma; ++c) {
+        if (chroma[c * n_frames + t] < gate) chroma[c * n_frames + t] = 0.0f;
+      }
+    }
+  }
+
+  if (config.normalize_frames && n_frames > 0) {
+    chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);
+  }
+
+  return Chroma(std::move(chroma), config.n_chroma, n_frames, audio.sample_rate(),
+                config.cqt.hop_length);
+}
+
+Chroma chroma_cens(const Audio& audio, const ChromaCensConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+
+  // Step 1: chroma_cqt without per-frame normalization (CENS uses L1 then quantization).
+  ChromaCqtConfig base = config.base;
+  base.normalize_frames = false;
+  Chroma cq = chroma_cqt(audio, base);
+  int n_chroma = cq.n_chroma();
+  int n_frames = cq.n_frames();
+
+  // Step 2: L1 normalize each frame (librosa.feature.chroma_cens default norm=2 + L1 before).
+  std::vector<float> data(cq.data(), cq.data() + static_cast<size_t>(n_chroma) * n_frames);
+  data = normalize_matrix(data.data(), n_chroma, n_frames, /*axis=*/0, NormType::L1);
+
+  // Step 3: quantize using librosa thresholds and weights.
+  const float kThresholds[5] = {0.0f, 0.05f, 0.1f, 0.2f, 0.4f};
+  const float kWeights[5] = {0.25f, 0.25f, 0.25f, 0.25f, 0.0f};
+  for (size_t i = 0; i < data.size(); ++i) {
+    float v = data[i];
+    float q = 0.0f;
+    for (int s = 0; s < 5; ++s) {
+      if (v > kThresholds[s]) q += kWeights[s];
+    }
+    data[i] = q;
+  }
+
+  // Step 4: Hann smoothing across time, then final L2 normalize.
+  if (config.win_len_smooth > 1) {
+    data = smooth_rows_hann(data, n_chroma, n_frames, config.win_len_smooth);
+  }
+  if (n_frames > 0) {
+    data = normalize_matrix(data.data(), n_chroma, n_frames, /*axis=*/0, NormType::L2);
+  }
+
+  return Chroma(std::move(data), n_chroma, n_frames, audio.sample_rate(),
+                config.base.cqt.hop_length);
 }
 
 }  // namespace sonare

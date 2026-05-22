@@ -14,7 +14,6 @@
 
 using namespace sonare;
 using namespace sonare::test;
-using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
@@ -63,10 +62,15 @@ TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
       mag_max = std::max(mag_max, v);
     }
 
+    // librosa runs CQT iteratively per octave with downsampling + sparsification;
+    // we use a single-pass full-rate FFT instead. The residual gap (~0.85%) is
+    // dominated by the long low-frequency filters at native sr — peak magnitude
+    // matches librosa to ~1e-4, only the spread of energy across many low-freq
+    // bins differs slightly.
     REQUIRE_THAT(static_cast<double>(mag_sum),
-                 WithinRel(static_cast<double>(data["magnitude_sum"].as_float()), 1.9e-2));
+                 WithinRel(static_cast<double>(data["magnitude_sum"].as_float()), 9e-3));
     REQUIRE_THAT(static_cast<double>(mag_max),
-                 WithinRel(static_cast<double>(data["magnitude_max"].as_float()), 1.6e-2));
+                 WithinRel(static_cast<double>(data["magnitude_max"].as_float()), 1e-4));
   }
 
   SECTION("stored frames") {
@@ -97,8 +101,8 @@ TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
     }
     mean_abs_diff /= static_cast<float>(ref_frames.size());
 
-    REQUIRE(mean_abs_diff < 0.025f);
-    REQUIRE(max_abs_diff < 0.3f);
+    REQUIRE(mean_abs_diff < 1.5e-2f);
+    REQUIRE(max_abs_diff < 0.15f);
   }
 
   SECTION("frequencies") {

@@ -62,6 +62,15 @@ For WebAssembly build:
 source /path/to/emsdk/emsdk_env.sh
 emcmake cmake -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build-wasm --parallel
+# Output lands in bindings/wasm/dist/
+```
+
+For the published npm binding (`@libraz/libsonare`):
+```bash
+cd bindings/wasm
+yarn install --immutable
+yarn build      # runs emcmake + tsc
+yarn test       # Vitest against built dist/
 ```
 
 ## Coding Notes

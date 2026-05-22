@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from ._ffi import SONARE_OK, load_library
-from .analyzer import (
-    analyze_tts_quality as _analyze_tts_quality,
-)
-from .analyzer import (
-    analyze as _analyze,
-)
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -29,28 +23,25 @@ from .analyzer import (
     chroma as _chroma,
 )
 from .analyzer import (
-    compress_pauses as _compress_pauses,
-)
-from .analyzer import (
-    detect_beats as _detect_beats,
-)
-from .analyzer import (
-    detect_bpm as _detect_bpm,
-)
-from .analyzer import (
     detect_chords as _detect_chords,
-)
-from .analyzer import (
-    detect_key as _detect_key,
-)
-from .analyzer import (
-    detect_onsets as _detect_onsets,
 )
 from .analyzer import (
     harmonic as _harmonic,
 )
 from .analyzer import (
     hpss as _hpss,
+)
+from .analyzer import (
+    master_audio as _master_audio,
+)
+from .analyzer import (
+    mastering as _mastering,
+)
+from .analyzer import (
+    mastering_chain as _mastering_chain,
+)
+from .analyzer import (
+    mastering_process as _mastering_process,
 )
 from .analyzer import (
     mel_spectrogram as _mel_spectrogram,
@@ -72,9 +63,6 @@ from .analyzer import (
 )
 from .analyzer import (
     pitch_yin as _pitch_yin,
-)
-from .analyzer import (
-    prepare_tts as _prepare_tts,
 )
 from .analyzer import (
     resample as _resample,
@@ -117,13 +105,14 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    MasteringChainResult,
+    MasteringResult,
     MelSpectrogramResult,
     MfccResult,
     PitchResult,
     RhythmResult,
     StftResult,
     TimbreResult,
-    TtsQualityResult,
 )
 
 if TYPE_CHECKING:
@@ -469,38 +458,57 @@ class Audio:
         """Normalize audio to a target dB level."""
         return _normalize(self.data, self.sample_rate, target_db)
 
+    def mastering(
+        self,
+        target_lufs: float = -14.0,
+        ceiling_db: float = -1.0,
+        true_peak_oversample: int = 4,
+    ) -> MasteringResult:
+        """Apply mastering loudness normalization with a true-peak ceiling."""
+        return _mastering(
+            self.data,
+            self.sample_rate,
+            target_lufs,
+            ceiling_db,
+            true_peak_oversample,
+        )
+
+    def mastering_process(
+        self, processor_name: str, params: dict[str, float | int | bool] | None = None
+    ) -> MasteringResult:
+        """Apply a named mastering processor."""
+        return _mastering_process(processor_name, self.data, self.sample_rate, params)
+
+    def mastering_chain(
+        self,
+        config: dict | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
+    ) -> MasteringChainResult:
+        """Apply a configurable mastering chain (EQ, dynamics, saturation, etc.).
+
+        See :func:`libsonare.mastering_chain` for the ``config`` schema and
+        ``on_progress`` semantics.
+        """
+        return _mastering_chain(self.data, self.sample_rate, config, on_progress=on_progress)
+
+    def master_audio(
+        self,
+        preset: str = "pop",
+        overrides: dict | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
+    ) -> MasteringChainResult:
+        """Apply a named mastering preset chain to this audio.
+
+        See :func:`libsonare.master_audio` for the ``preset``, ``overrides``,
+        and ``on_progress`` semantics.
+        """
+        return _master_audio(
+            self.data, self.sample_rate, preset, overrides, on_progress=on_progress
+        )
+
     def trim(self, threshold_db: float = -60.0) -> list[float]:
         """Trim silence from the beginning and end."""
         return _trim(self.data, self.sample_rate, threshold_db)
-
-    def analyze_tts_quality(self, silence_threshold_db: float = -45.0) -> TtsQualityResult:
-        """Measure objective TTS audio properties."""
-        return _analyze_tts_quality(self.data, self.sample_rate, silence_threshold_db)
-
-    def prepare_tts(
-        self,
-        target_rms_db: float = -20.0,
-        silence_threshold_db: float = -45.0,
-        peak_limit_db: float = -1.0,
-        fade_sec: float = 0.005,
-    ) -> list[float]:
-        """Trim, normalize, peak-limit, and lightly fade TTS audio."""
-        return _prepare_tts(
-            self.data,
-            self.sample_rate,
-            target_rms_db,
-            silence_threshold_db,
-            peak_limit_db,
-            fade_sec,
-        )
-
-    def compress_pauses(
-        self,
-        max_pause_sec: float = 0.6,
-        silence_threshold_db: float = -45.0,
-    ) -> list[float]:
-        """Shorten contiguous low-level pauses."""
-        return _compress_pauses(self.data, self.sample_rate, max_pause_sec, silence_threshold_db)
 
     # --- Features - Spectrogram ---
 

@@ -7,6 +7,7 @@
 #include <cstring>
 #include <vector>
 #ifndef __EMSCRIPTEN__
+#include <future>
 #include <thread>
 #endif
 
@@ -96,16 +97,16 @@ void parallel_for(int total, F&& fn) {
     return;
   }
   n_threads = std::min(n_threads, total);
-  std::vector<std::thread> threads;
-  threads.reserve(n_threads);
+  std::vector<std::future<void>> futures;
+  futures.reserve(n_threads);
   int chunk = (total + n_threads - 1) / n_threads;
   for (int i = 0; i < n_threads; ++i) {
     int start = i * chunk;
     int end = std::min(start + chunk, total);
     if (start >= end) break;
-    threads.emplace_back(std::forward<F>(fn), start, end);
+    futures.emplace_back(std::async(std::launch::async, std::forward<F>(fn), start, end));
   }
-  for (auto& t : threads) t.join();
+  for (auto& f : futures) f.get();
 }
 #endif
 

@@ -126,6 +126,7 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
 // Memory management
 void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);
+void sonare_free_string(char* ptr);
 void sonare_free_result(SonareAnalysisResult* result);
 
 // Error handling
@@ -208,17 +209,6 @@ typedef struct {
   int sample_rate;
 } SonareHpssResult;
 
-// TTS quality result
-typedef struct {
-  float duration_sec;
-  float peak_db;
-  float rms_db;
-  float silence_ratio;
-  float clipping_ratio;
-  float leading_silence_sec;
-  float trailing_silence_sec;
-} SonareTtsQualityResult;
-
 typedef struct {
   float bpm;
   float confidence;
@@ -286,6 +276,215 @@ typedef struct {
 } SonareChordAnalysisResult;
 
 // ============================================================================
+// Mastering
+// ============================================================================
+
+typedef struct {
+  float target_lufs;
+  float ceiling_db;
+  int true_peak_oversample;
+} SonareMasteringConfig;
+
+typedef struct {
+  float* samples;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  int latency_samples;
+} SonareMasteringResult;
+
+typedef struct {
+  const char* key;
+  double value;
+} SonareMasteringParam;
+
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  int latency_samples;
+} SonareMasteringStereoResult;
+
+/// @brief Progress callback type. Called per chain stage completion.
+/// @param progress Progress value (0.0 to 1.0).
+/// @param stage    Stage identifier C string (e.g. "dynamics.compressor"). Valid
+///                 only during the callback invocation; copy if needed later.
+/// @param user_data Opaque pointer passed at registration.
+typedef void (*SonareMasteringProgressCallback)(float progress, const char* stage, void* user_data);
+
+// Result of running the MasteringChain on a mono buffer.
+// Memory for @c samples and @c stages (and each char* entry inside it) is
+// allocated by libsonare with @c new[]; free with
+// @c sonare_free_mastering_chain_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  char** stages;  // newline-free stage identifiers, e.g. "dynamics.compressor"
+  size_t stages_count;
+} SonareMasteringChainResult;
+
+// Result of running the MasteringChain on stereo buffers. Same ownership
+// rules as @c SonareMasteringChainResult; free with
+// @c sonare_free_mastering_chain_stereo_result.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  char** stages;
+  size_t stages_count;
+} SonareMasteringChainStereoResult;
+
+SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
+                                     const SonareMasteringConfig* config,
+                                     SonareMasteringResult* out);
+SonareError sonare_mastering_apply_processor(const char* processor_name, const float* samples,
+                                             size_t length, int sample_rate,
+                                             const SonareMasteringParam* params, size_t param_count,
+                                             SonareMasteringResult* out);
+SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, const float* left,
+                                                    const float* right, size_t length,
+                                                    int sample_rate,
+                                                    const SonareMasteringParam* params,
+                                                    size_t param_count,
+                                                    SonareMasteringStereoResult* out);
+
+/// @brief Run the full mastering chain on a mono buffer.
+/// @details @p params is a flat (key/value) view of the
+///   @c MasteringChainConfig hierarchy using dot-notation keys (see
+///   @c parse_chain_config_params). Unknown keys cause
+///   @c SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_mastering_chain(const float* samples, size_t length, int sample_rate,
+                                   const SonareMasteringParam* params, size_t param_count,
+                                   SonareMasteringChainResult* out);
+
+/// @brief Run the full mastering chain on stereo buffers.
+SonareError sonare_mastering_chain_stereo(const float* left, const float* right, size_t length,
+                                          int sample_rate, const SonareMasteringParam* params,
+                                          size_t param_count,
+                                          SonareMasteringChainStereoResult* out);
+
+/// @brief Same as sonare_mastering_chain but reports per-stage progress.
+SonareError sonare_mastering_chain_with_progress(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareMasteringParam* params,
+                                                 size_t param_count,
+                                                 SonareMasteringProgressCallback callback,
+                                                 void* user_data, SonareMasteringChainResult* out);
+
+/// @brief Same as sonare_mastering_chain_stereo but reports per-stage progress.
+SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
+                                                        size_t length, int sample_rate,
+                                                        const SonareMasteringParam* params,
+                                                        size_t param_count,
+                                                        SonareMasteringProgressCallback callback,
+                                                        void* user_data,
+                                                        SonareMasteringChainStereoResult* out);
+
+/// @brief Returns built-in preset identifiers, separated by '\n'.
+/// @details Pointer is owned by libsonare and remains valid for the program lifetime.
+const char* sonare_mastering_preset_names(void);
+
+/// @brief Apply a preset chain to mono audio.
+/// @param preset_name e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
+/// @param overrides   Optional Param overrides (same flat dot-notation as
+///                    @c sonare_mastering_chain). Pass NULL/0 for preset defaults.
+SonareError sonare_master_audio(const char* preset_name, const float* samples, size_t length,
+                                int sample_rate, const SonareMasteringParam* overrides,
+                                size_t override_count, SonareMasteringChainResult* out);
+
+/// @brief Stereo equivalent of @c sonare_master_audio.
+SonareError sonare_master_audio_stereo(const char* preset_name, const float* left,
+                                       const float* right, size_t length, int sample_rate,
+                                       const SonareMasteringParam* overrides, size_t override_count,
+                                       SonareMasteringChainStereoResult* out);
+
+/// @brief Same as sonare_master_audio but reports per-stage progress.
+SonareError sonare_master_audio_with_progress(const char* preset_name, const float* samples,
+                                              size_t length, int sample_rate,
+                                              const SonareMasteringParam* overrides,
+                                              size_t override_count,
+                                              SonareMasteringProgressCallback callback,
+                                              void* user_data, SonareMasteringChainResult* out);
+
+/// @brief Same as sonare_master_audio_stereo but reports per-stage progress.
+SonareError sonare_master_audio_stereo_with_progress(
+    const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* overrides, size_t override_count,
+    SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out);
+
+const char* sonare_mastering_processor_names(void);
+const char* sonare_mastering_pair_processor_names(void);
+const char* sonare_mastering_pair_analysis_names(void);
+const char* sonare_mastering_stereo_analysis_names(void);
+SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
+                                                  const float* reference, size_t length,
+                                                  int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, SonareMasteringResult* out);
+SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
+                                          const float* reference, size_t length, int sample_rate,
+                                          const SonareMasteringParam* params, size_t param_count,
+                                          char** json_out);
+SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
+                                            const float* right, size_t length, int sample_rate,
+                                            const SonareMasteringParam* params, size_t param_count,
+                                            char** json_out);
+void sonare_free_mastering_result(SonareMasteringResult* result);
+void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);
+void sonare_free_mastering_chain_result(SonareMasteringChainResult* result);
+void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result);
+
+// ----------------------------------------------------------------------------
+// Streaming mastering chain
+// ----------------------------------------------------------------------------
+
+/// @brief Opaque streaming mastering chain handle.
+typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
+
+/// @brief Create a streaming chain from flat params. Returns NULL on error
+/// (e.g. unknown key, non-streaming stage enabled).
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
+    const SonareMasteringParam* params, size_t param_count);
+
+/// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
+SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
+                                                     int sample_rate, int max_block_size,
+                                                     int num_channels);
+
+/// @brief Process one mono block in place. @p samples length must be <= max_block_size.
+SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
+                                                          float* samples, size_t num_samples);
+
+/// @brief Process one stereo block in place. @p left, @p right same length.
+SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
+                                                            float* left, float* right,
+                                                            size_t num_samples);
+
+/// @brief Reset processor state without rebuilding.
+SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle);
+
+/// @brief Returns total latency in samples (0 if not prepared).
+int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle);
+
+/// @brief Destroy and free the handle.
+void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);
+
+// ============================================================================
 // Effects
 // ============================================================================
 
@@ -303,14 +502,6 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
-SonareError sonare_analyze_tts_quality(const float* samples, size_t length, int sample_rate,
-                                       float silence_threshold_db, SonareTtsQualityResult* out);
-SonareError sonare_prepare_tts(const float* samples, size_t length, int sample_rate,
-                               float target_rms_db, float silence_threshold_db, float peak_limit_db,
-                               float fade_sec, float** out, size_t* out_length);
-SonareError sonare_compress_pauses(const float* samples, size_t length, int sample_rate,
-                                   float max_pause_sec, float silence_threshold_db, float** out,
-                                   size_t* out_length);
 
 // ============================================================================
 // Detailed analysis primitives
@@ -405,6 +596,56 @@ const char* sonare_hz_to_note(float hz);
 float sonare_note_to_hz(const char* note);
 float sonare_frames_to_time(int frames, int sr, int hop_length);
 int sonare_time_to_frames(float time, int sr, int hop_length);
+
+int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
+int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
+
+SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,
+                               float top_db, float** out, size_t* out_length);
+SonareError sonare_amplitude_to_db(const float* values, size_t length, float ref, float amin,
+                                   float top_db, float** out, size_t* out_length);
+SonareError sonare_db_to_power(const float* values, size_t length, float ref, float** out,
+                               size_t* out_length);
+SonareError sonare_db_to_amplitude(const float* values, size_t length, float ref, float** out,
+                                   size_t* out_length);
+
+SonareError sonare_preemphasis(const float* samples, size_t length, float coef, float zi,
+                               int use_zi, float** out, size_t* out_length);
+SonareError sonare_deemphasis(const float* samples, size_t length, float coef, float zi, int use_zi,
+                              float** out, size_t* out_length);
+
+SonareError sonare_trim_silence(const float* samples, size_t length, float top_db, int frame_length,
+                                int hop_length, float** out, size_t* out_length, int* start_sample,
+                                int* end_sample);
+SonareError sonare_split_silence(const float* samples, size_t length, float top_db,
+                                 int frame_length, int hop_length, int** out_intervals,
+                                 size_t* out_interval_count);
+
+SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
+                                int hop_length, float** out, size_t* out_length, int* out_n_frames);
+SonareError sonare_pad_center(const float* values, size_t length, size_t target_size,
+                              float pad_value, float** out, size_t* out_length);
+SonareError sonare_fix_length(const float* values, size_t length, size_t target_size,
+                              float pad_value, float** out, size_t* out_length);
+SonareError sonare_fix_frames(const int* frames, size_t length, int x_min, int x_max, int pad,
+                              int** out, size_t* out_length);
+SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, int post_max,
+                             int pre_avg, int post_avg, float delta, int wait, int** out,
+                             size_t* out_length);
+SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
+                                    float threshold, float** out, size_t* out_length);
+
+SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,
+                        int hop_length, float time_constant, float gain, float bias, float power,
+                        float eps, float** out, size_t* out_length);
+SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, float** out,
+                           size_t* out_length);
+SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
+                             int hop_length, int win_length, int center, int norm, float** out,
+                             size_t* out_length, int* out_n_frames);
+SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
+                       float tempo_min, float tempo_max, int win_length, float** out,
+                       size_t* out_length);
 
 // ============================================================================
 // Core - Resample

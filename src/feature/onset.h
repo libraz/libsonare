@@ -41,6 +41,15 @@ std::vector<float> compute_onset_strength(const Audio& audio,
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands = 3,
                                         const OnsetConfig& config = OnsetConfig());
 
+/// @brief Backtracks each onset event to the most recent local minimum of an
+///        energy-like signal (librosa.onset.onset_backtrack).
+/// @param events Indices of detected onsets (frame indices)
+/// @param energy Reference energy curve aligned with @p events (typically the
+///        onset envelope or short-time energy)
+/// @return Adjusted onset indices, each shifted to the nearest preceding local
+///         minimum of @p energy. Returned values are clipped to [0, energy.size()).
+std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vector<float>& energy);
+
 /// @brief Computes spectral flux (unsigned L1 norm of spectral difference).
 /// @param spec Spectrogram
 /// @param lag Time lag for computing differences

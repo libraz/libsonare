@@ -8,6 +8,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 namespace {
@@ -45,10 +47,13 @@ float mel_to_hz_htk(float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f)
 
 float hz_to_midi(float hz) {
   if (hz <= 0) return 0.0f;
-  return 12.0f * std::log2(hz / 440.0f) + 69.0f;
+  return constants::kSemitonesPerOctave * std::log2(hz / constants::kA4Hz) + constants::kMidiA4;
 }
 
-float midi_to_hz(float midi) { return 440.0f * std::pow(2.0f, (midi - 69.0f) / 12.0f); }
+float midi_to_hz(float midi) {
+  return constants::kA4Hz *
+         std::pow(2.0f, (midi - constants::kMidiA4) / constants::kSemitonesPerOctave);
+}
 
 std::string hz_to_note(float hz) {
   if (hz <= 0) return "?";
@@ -126,6 +131,37 @@ int time_to_frames(float time, int sr, int hop_length) {
 float samples_to_time(int samples, int sr) { return static_cast<float>(samples) / sr; }
 
 int time_to_samples(float time, int sr) { return static_cast<int>(time * sr); }
+
+int frames_to_samples(int frames, int hop_length, int n_fft) {
+  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  return frames * hop_length + offset;
+}
+
+std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_length, int n_fft) {
+  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  std::vector<int> out;
+  out.reserve(frames.size());
+  for (int f : frames) out.push_back(f * hop_length + offset);
+  return out;
+}
+
+int samples_to_frames(int samples, int hop_length, int n_fft) {
+  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  // Use floor for deterministic behavior with negative numerators.
+  const int adjusted = samples - offset;
+  if (adjusted >= 0) {
+    return adjusted / hop_length;
+  }
+  // Mirror Python floor-division on negatives.
+  return -((-adjusted + hop_length - 1) / hop_length);
+}
+
+std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_length, int n_fft) {
+  std::vector<int> out;
+  out.reserve(samples.size());
+  for (int s : samples) out.push_back(samples_to_frames(s, hop_length, n_fft));
+  return out;
+}
 
 float bin_to_hz(int bin, int sr, int n_fft) { return static_cast<float>(bin * sr) / n_fft; }
 

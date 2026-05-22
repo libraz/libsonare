@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <string>
+#include <vector>
 
 namespace sonare {
 
@@ -76,6 +77,29 @@ float samples_to_time(int samples, int sr);
 /// @param sr Sample rate
 /// @return Number of samples
 int time_to_samples(float time, int sr);
+
+/// @brief Converts a frame index to a sample index (librosa compatible).
+/// @param frames Frame index
+/// @param hop_length Hop length in samples
+/// @param n_fft FFT size used to center frames. If > 0, n_fft/2 is added to
+///        the result (mirrors librosa's `n_fft` argument, default behavior is
+///        no centering offset).
+/// @return Sample index of the frame's hop start (+ n_fft/2 when applicable).
+int frames_to_samples(int frames, int hop_length, int n_fft = 0);
+
+/// @brief Vector variant of frames_to_samples.
+std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_length, int n_fft = 0);
+
+/// @brief Converts a sample index to a frame index (floor).
+/// @param samples Sample index
+/// @param hop_length Hop length in samples
+/// @param n_fft FFT size. If > 0, n_fft/2 is subtracted before dividing by
+///        hop_length (mirrors librosa).
+/// @return Frame index.
+int samples_to_frames(int samples, int hop_length, int n_fft = 0);
+
+/// @brief Vector variant of samples_to_frames.
+std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_length, int n_fft = 0);
 
 /// @brief Converts FFT bin index to Hz.
 /// @param bin Bin index

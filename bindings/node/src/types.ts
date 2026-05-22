@@ -95,6 +95,44 @@ export interface HpssResult {
   sampleRate: number;
 }
 
+export interface MasteringResult {
+  samples: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples?: number;
+}
+
+export interface MasteringStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples: number;
+}
+
+export interface MasteringChainResult {
+  samples: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  stages: string[];
+}
+
+export interface MasteringChainStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  stages: string[];
+}
+
 export interface StftResult {
   nBins: number;
   nFrames: number;
@@ -142,14 +180,4 @@ export interface PitchResult {
   nFrames: number;
   medianF0: number;
   meanF0: number;
-}
-
-export interface TtsQualityResult {
-  durationSec: number;
-  peakDb: number;
-  rmsDb: number;
-  silenceRatio: number;
-  clippingRatio: number;
-  leadingSilenceSec: number;
-  trailingSilenceSec: number;
 }

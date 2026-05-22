@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.4.4"
+  },
+  "data": {
+    "sr": 22050,
+    "top_db": 20,
+    "frame_length": 2048,
+    "hop_length": 512,
+    "input_length": 26460,
+    "trim_start_sample": 3584,
+    "trim_end_sample": 23552,
+    "split_intervals": [
+      [
+        3584,
+        12288
+      ],
+      [
+        14848,
+        23552
+      ]
+    ]
+  }
+}

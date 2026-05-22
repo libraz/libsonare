@@ -1,10 +1,12 @@
 #include "feature/spectral.h"
 
 #include <Eigen/Core>
+#include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -266,6 +268,50 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   return contrast;
 }
 
+std::vector<float> poly_features(const Spectrogram& spec, int sr, int order) {
+  return poly_features(spec.magnitude().data(), spec.n_bins(), spec.n_frames(), sr, spec.n_fft(),
+                       order);
+}
+
+std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frames, int sr,
+                                 int n_fft, int order) {
+  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_bins > 0 && n_frames > 0 && sr > 0 && n_fft > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(order >= 0, ErrorCode::InvalidParameter);
+
+  // librosa.feature.poly_features computes np.polyfit(freqs, S[:, t], order).
+  // Output is [order + 1, n_frames] with coefficients ordered highest-degree first.
+  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+
+  // Build Vandermonde matrix A [n_bins x (order + 1)] with columns x^order, x^(order-1), ..., 1.
+  Eigen::MatrixXd A(n_bins, order + 1);
+  for (int k = 0; k < n_bins; ++k) {
+    double x = static_cast<double>(freqs[k]);
+    double v = 1.0;
+    for (int p = order; p >= 0; --p) {
+      A(k, p) = v;
+      v *= x;
+    }
+  }
+
+  // Solve A * c = y in least squares sense. Use SVD for numerical robustness
+  // (matches numpy.linalg.lstsq used internally by np.polyfit).
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+  std::vector<float> out(static_cast<size_t>(order + 1) * static_cast<size_t>(n_frames), 0.0f);
+  Eigen::VectorXd y(n_bins);
+  for (int t = 0; t < n_frames; ++t) {
+    for (int k = 0; k < n_bins; ++k) {
+      y(k) = static_cast<double>(magnitude[k * n_frames + t]);
+    }
+    Eigen::VectorXd c = svd.solve(y);
+    for (int p = 0; p <= order; ++p) {
+      out[p * n_frames + t] = static_cast<float>(c(p));
+    }
+  }
+  return out;
+}
+
 std::vector<float> zero_crossing_rate(const Audio& audio, int frame_length, int hop_length) {
   return zero_crossing_rate(audio.data(), audio.size(), frame_length, hop_length);
 }
@@ -325,17 +371,64 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 
   for (int t = 0; t < n_frames; ++t) {
     size_t start = static_cast<size_t>(t) * hop_length;
-    float sum_sq = 0.0f;
-
-    for (int i = 0; i < frame_length; ++i) {
-      float sample = padded_samples[start + i];
-      sum_sq += sample * sample;
-    }
-
-    rms[t] = std::sqrt(sum_sq / static_cast<float>(frame_length));
+    rms[t] = sonare::rms(padded_samples + start, static_cast<size_t>(frame_length));
   }
 
   return rms;
+}
+
+std::vector<int> zero_crossings(const float* y, size_t n, float threshold, bool ref_magnitude,
+                                bool pad, bool zero_pos) {
+  if (n > 0 && y == nullptr) {
+    throw std::invalid_argument("zero_crossings: null input with non-zero length");
+  }
+  if (!(threshold >= 0.0f)) {
+    throw std::invalid_argument("zero_crossings: threshold must be non-negative");
+  }
+
+  std::vector<int> indices;
+  if (n == 0) return indices;
+
+  float effective_threshold = threshold;
+  if (ref_magnitude) {
+    float max_abs = 0.0f;
+    for (size_t i = 0; i < n; ++i) {
+      float a = std::abs(y[i]);
+      if (a > max_abs) max_abs = a;
+    }
+    effective_threshold *= max_abs;
+  }
+
+  auto sample_sign = [&](float v) -> int {
+    // Returns sign with the requested zero handling.
+    if (v >= -effective_threshold && v <= effective_threshold) v = 0.0f;
+    if (zero_pos) {
+      // std::signbit semantics: negative -> 1, others (incl. +0) -> 0
+      return std::signbit(v) ? -1 : +1;
+    }
+    if (v > 0.0f) return +1;
+    if (v < 0.0f) return -1;
+    return 0;
+  };
+
+  if (pad) {
+    indices.push_back(0);
+  }
+
+  int prev_sign = sample_sign(y[0]);
+  for (size_t i = 1; i < n; ++i) {
+    int cur_sign = sample_sign(y[i]);
+    if (cur_sign != prev_sign) {
+      indices.push_back(static_cast<int>(i));
+    }
+    prev_sign = cur_sign;
+  }
+  return indices;
+}
+
+std::vector<int> zero_crossings(const std::vector<float>& y, float threshold, bool ref_magnitude,
+                                bool pad, bool zero_pos) {
+  return zero_crossings(y.data(), y.size(), threshold, ref_magnitude, pad, zero_pos);
 }
 
 }  // namespace sonare

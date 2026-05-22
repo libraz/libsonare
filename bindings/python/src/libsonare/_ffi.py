@@ -212,18 +212,93 @@ class SonareHpssResult(ctypes.Structure):
     ]
 
 
-class SonareTtsQualityResult(ctypes.Structure):
-    """Maps to SonareTtsQualityResult in sonare_c.h."""
+class SonareMasteringConfig(ctypes.Structure):
+    """Maps to SonareMasteringConfig in sonare_c.h."""
 
     _fields_ = [
-        ("duration_sec", ctypes.c_float),
-        ("peak_db", ctypes.c_float),
-        ("rms_db", ctypes.c_float),
-        ("silence_ratio", ctypes.c_float),
-        ("clipping_ratio", ctypes.c_float),
-        ("leading_silence_sec", ctypes.c_float),
-        ("trailing_silence_sec", ctypes.c_float),
+        ("target_lufs", ctypes.c_float),
+        ("ceiling_db", ctypes.c_float),
+        ("true_peak_oversample", ctypes.c_int32),
     ]
+
+
+class SonareMasteringResult(ctypes.Structure):
+    """Maps to SonareMasteringResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("sample_rate", ctypes.c_int32),
+        ("input_lufs", ctypes.c_float),
+        ("output_lufs", ctypes.c_float),
+        ("applied_gain_db", ctypes.c_float),
+        ("latency_samples", ctypes.c_int32),
+    ]
+
+
+class SonareMasteringParam(ctypes.Structure):
+    """Maps to SonareMasteringParam in sonare_c.h."""
+
+    _fields_ = [
+        ("key", ctypes.c_char_p),
+        ("value", ctypes.c_double),
+    ]
+
+
+class SonareMasteringStereoResult(ctypes.Structure):
+    """Maps to SonareMasteringStereoResult in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("sample_rate", ctypes.c_int32),
+        ("input_lufs", ctypes.c_float),
+        ("output_lufs", ctypes.c_float),
+        ("applied_gain_db", ctypes.c_float),
+        ("latency_samples", ctypes.c_int32),
+    ]
+
+
+class SonareMasteringChainResult(ctypes.Structure):
+    """Maps to SonareMasteringChainResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("sample_rate", ctypes.c_int32),
+        ("input_lufs", ctypes.c_float),
+        ("output_lufs", ctypes.c_float),
+        ("applied_gain_db", ctypes.c_float),
+        ("stages", ctypes.POINTER(ctypes.c_char_p)),
+        ("stages_count", ctypes.c_size_t),
+    ]
+
+
+class SonareMasteringChainStereoResult(ctypes.Structure):
+    """Maps to SonareMasteringChainStereoResult in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("sample_rate", ctypes.c_int32),
+        ("input_lufs", ctypes.c_float),
+        ("output_lufs", ctypes.c_float),
+        ("applied_gain_db", ctypes.c_float),
+        ("stages", ctypes.POINTER(ctypes.c_char_p)),
+        ("stages_count", ctypes.c_size_t),
+    ]
+
+
+# Progress callback: void(float progress, const char* stage, void* user_data).
+# Maps to SonareMasteringProgressCallback in sonare_c.h.
+SonareMasteringProgressCallback = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_float,
+    ctypes.c_char_p,
+    ctypes.c_void_p,
+)
 
 
 # --- Error codes ---
@@ -501,9 +576,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     lib.sonare_free_timbre_result.argtypes = [ctypes.POINTER(SonareTimbreResult)]
 
     lib.sonare_free_chord_analysis_result.restype = None
-    lib.sonare_free_chord_analysis_result.argtypes = [
-        ctypes.POINTER(SonareChordAnalysisResult)
-    ]
+    lib.sonare_free_chord_analysis_result.argtypes = [ctypes.POINTER(SonareChordAnalysisResult)]
 
     # --- Error handling ---
 
@@ -600,39 +673,6 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    lib.sonare_analyze_tts_quality.restype = ctypes.c_int32
-    lib.sonare_analyze_tts_quality.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.POINTER(SonareTtsQualityResult),
-    ]
-
-    lib.sonare_prepare_tts.restype = ctypes.c_int32
-    lib.sonare_prepare_tts.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.c_float,
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    lib.sonare_compress_pauses.restype = ctypes.c_int32
-    lib.sonare_compress_pauses.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
-        ctypes.c_int,
-        ctypes.c_float,
         ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
@@ -835,6 +875,189 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     lib.sonare_time_to_frames.restype = ctypes.c_int32
     lib.sonare_time_to_frames.argtypes = [ctypes.c_float, ctypes.c_int, ctypes.c_int]
 
+    lib.sonare_frames_to_samples.restype = ctypes.c_int32
+    lib.sonare_frames_to_samples.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
+
+    lib.sonare_samples_to_frames.restype = ctypes.c_int32
+    lib.sonare_samples_to_frames.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
+
+    for name in (
+        "sonare_power_to_db",
+        "sonare_amplitude_to_db",
+    ):
+        fn = getattr(lib, name)
+        fn.restype = ctypes.c_int32
+        fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    for name in (
+        "sonare_db_to_power",
+        "sonare_db_to_amplitude",
+    ):
+        fn = getattr(lib, name)
+        fn.restype = ctypes.c_int32
+        fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_float,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    for name in ("sonare_preemphasis", "sonare_deemphasis"):
+        fn = getattr(lib, name)
+        fn.restype = ctypes.c_int32
+        fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    lib.sonare_trim_silence.restype = ctypes.c_int32
+    lib.sonare_trim_silence.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    lib.sonare_split_silence.restype = ctypes.c_int32
+    lib.sonare_split_silence.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_frame_signal.restype = ctypes.c_int32
+    lib.sonare_frame_signal.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    for name in ("sonare_pad_center", "sonare_fix_length"):
+        fn = getattr(lib, name)
+        fn.restype = ctypes.c_int32
+        fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+            ctypes.c_float,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    lib.sonare_fix_frames.restype = ctypes.c_int32
+    lib.sonare_fix_frames.argtypes = [
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_peak_pick.restype = ctypes.c_int32
+    lib.sonare_peak_pick.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_vector_normalize.restype = ctypes.c_int32
+    lib.sonare_vector_normalize.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_pcen.restype = ctypes.c_int32
+    lib.sonare_pcen.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_tonnetz.restype = ctypes.c_int32
+    lib.sonare_tonnetz.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_tempogram.restype = ctypes.c_int32
+    lib.sonare_tempogram.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    lib.sonare_plp.restype = ctypes.c_int32
+    lib.sonare_plp.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     # --- Core - Resample ---
 
     lib.sonare_resample.restype = ctypes.c_int32
@@ -846,6 +1069,221 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+
+    if hasattr(lib, "sonare_mastering_process"):
+        lib.sonare_mastering_process.restype = ctypes.c_int32
+        lib.sonare_mastering_process.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMasteringConfig),
+            ctypes.POINTER(SonareMasteringResult),
+        ]
+        lib.sonare_free_mastering_result.restype = None
+        lib.sonare_free_mastering_result.argtypes = [ctypes.POINTER(SonareMasteringResult)]
+        lib.sonare_mastering_apply_processor.restype = ctypes.c_int32
+        lib.sonare_mastering_apply_processor.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMasteringParam),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareMasteringResult),
+        ]
+        lib.sonare_mastering_apply_processor_stereo.restype = ctypes.c_int32
+        lib.sonare_mastering_apply_processor_stereo.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMasteringParam),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareMasteringStereoResult),
+        ]
+        lib.sonare_mastering_processor_names.restype = ctypes.c_char_p
+        lib.sonare_mastering_processor_names.argtypes = []
+        lib.sonare_mastering_pair_processor_names.restype = ctypes.c_char_p
+        lib.sonare_mastering_pair_processor_names.argtypes = []
+        lib.sonare_mastering_pair_analysis_names.restype = ctypes.c_char_p
+        lib.sonare_mastering_pair_analysis_names.argtypes = []
+        lib.sonare_mastering_stereo_analysis_names.restype = ctypes.c_char_p
+        lib.sonare_mastering_stereo_analysis_names.argtypes = []
+        lib.sonare_mastering_apply_pair_processor.restype = ctypes.c_int32
+        lib.sonare_mastering_apply_pair_processor.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMasteringParam),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareMasteringResult),
+        ]
+        lib.sonare_mastering_analyze_pair.restype = ctypes.c_int32
+        lib.sonare_mastering_analyze_pair.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMasteringParam),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_mastering_analyze_stereo.restype = ctypes.c_int32
+        lib.sonare_mastering_analyze_stereo.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMasteringParam),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_free_mastering_stereo_result.restype = None
+        lib.sonare_free_mastering_stereo_result.argtypes = [
+            ctypes.POINTER(SonareMasteringStereoResult)
+        ]
+        lib.sonare_free_string.restype = None
+        lib.sonare_free_string.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_mastering_chain"):
+            lib.sonare_mastering_chain.restype = ctypes.c_int32
+            lib.sonare_mastering_chain.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareMasteringChainResult),
+            ]
+            lib.sonare_mastering_chain_stereo.restype = ctypes.c_int32
+            lib.sonare_mastering_chain_stereo.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareMasteringChainStereoResult),
+            ]
+            lib.sonare_free_mastering_chain_result.restype = None
+            lib.sonare_free_mastering_chain_result.argtypes = [
+                ctypes.POINTER(SonareMasteringChainResult)
+            ]
+            lib.sonare_free_mastering_chain_stereo_result.restype = None
+            lib.sonare_free_mastering_chain_stereo_result.argtypes = [
+                ctypes.POINTER(SonareMasteringChainStereoResult)
+            ]
+        if hasattr(lib, "sonare_streaming_mastering_chain_create"):
+            lib.sonare_streaming_mastering_chain_create.restype = ctypes.c_void_p
+            lib.sonare_streaming_mastering_chain_create.argtypes = [
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+            ]
+            lib.sonare_streaming_mastering_chain_prepare.restype = ctypes.c_int32
+            lib.sonare_streaming_mastering_chain_prepare.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_streaming_mastering_chain_process_mono.restype = ctypes.c_int32
+            lib.sonare_streaming_mastering_chain_process_mono.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+            ]
+            lib.sonare_streaming_mastering_chain_process_stereo.restype = ctypes.c_int32
+            lib.sonare_streaming_mastering_chain_process_stereo.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+            ]
+            lib.sonare_streaming_mastering_chain_reset.restype = ctypes.c_int32
+            lib.sonare_streaming_mastering_chain_reset.argtypes = [ctypes.c_void_p]
+            lib.sonare_streaming_mastering_chain_latency_samples.restype = ctypes.c_int
+            lib.sonare_streaming_mastering_chain_latency_samples.argtypes = [ctypes.c_void_p]
+            lib.sonare_streaming_mastering_chain_destroy.restype = None
+            lib.sonare_streaming_mastering_chain_destroy.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_mastering_preset_names"):
+            lib.sonare_mastering_preset_names.restype = ctypes.c_char_p
+            lib.sonare_mastering_preset_names.argtypes = []
+        if hasattr(lib, "sonare_master_audio"):
+            lib.sonare_master_audio.restype = ctypes.c_int32
+            lib.sonare_master_audio.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareMasteringChainResult),
+            ]
+            lib.sonare_master_audio_stereo.restype = ctypes.c_int32
+            lib.sonare_master_audio_stereo.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareMasteringChainStereoResult),
+            ]
+        if hasattr(lib, "sonare_mastering_chain_with_progress"):
+            lib.sonare_mastering_chain_with_progress.restype = ctypes.c_int32
+            lib.sonare_mastering_chain_with_progress.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainResult),
+            ]
+            lib.sonare_mastering_chain_stereo_with_progress.restype = ctypes.c_int32
+            lib.sonare_mastering_chain_stereo_with_progress.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainStereoResult),
+            ]
+        if hasattr(lib, "sonare_master_audio_with_progress"):
+            lib.sonare_master_audio_with_progress.restype = ctypes.c_int32
+            lib.sonare_master_audio_with_progress.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainResult),
+            ]
+            lib.sonare_master_audio_stereo_with_progress.restype = ctypes.c_int32
+            lib.sonare_master_audio_stereo_with_progress.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                SonareMasteringProgressCallback,
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMasteringChainStereoResult),
+            ]
 
     # --- Free functions for result types ---
 

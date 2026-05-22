@@ -1,8 +1,8 @@
 #include "streaming/stream_analyzer.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 #include "analysis/chord_analyzer.h"
 #include "analysis/chord_templates.h"
@@ -13,287 +13,12 @@
 #include "feature/chroma.h"
 #include "filters/chroma.h"
 #include "filters/mel.h"
+#include "streaming/stream_analyzer_utils.h"
 #include "util/math_utils.h"
 
 namespace sonare {
 
-namespace {
-
-constexpr float kLogAmin = 1e-10f;
-
-/// @brief Computes bin frequencies.
-std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft) {
-  std::vector<float> freqs(n_bins);
-  float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
-  for (int i = 0; i < n_bins; ++i) {
-    freqs[i] = static_cast<float>(i) * bin_width;
-  }
-  return freqs;
-}
-
-/// @brief Computes spectral centroid for a single frame.
-float compute_centroid_frame(const float* magnitude, int n_bins, const float* frequencies) {
-  float sum_weighted = 0.0f;
-  float sum_mag = 0.0f;
-  for (int k = 0; k < n_bins; ++k) {
-    sum_weighted += frequencies[k] * magnitude[k];
-    sum_mag += magnitude[k];
-  }
-  return sum_mag > kEpsilon ? sum_weighted / sum_mag : 0.0f;
-}
-
-/// @brief Computes spectral flatness for a single frame.
-/// @details Flatness = geometric_mean / arithmetic_mean.
-float compute_flatness_frame(const float* magnitude, int n_bins) {
-  float sum = 0.0f;
-  float log_sum = 0.0f;
-  int count = 0;
-
-  for (int k = 0; k < n_bins; ++k) {
-    float val = magnitude[k];
-    if (val > kEpsilon) {
-      sum += val;
-      log_sum += std::log(val);
-      ++count;
-    }
-  }
-
-  if (count == 0 || sum < kEpsilon) {
-    return 0.0f;
-  }
-
-  float arithmetic_mean = sum / static_cast<float>(count);
-  float geometric_mean = std::exp(log_sum / static_cast<float>(count));
-
-  return geometric_mean / arithmetic_mean;
-}
-
-/// @brief Computes RMS for a single frame.
-float compute_rms_frame(const float* samples, int n_fft) {
-  float sum_sq = 0.0f;
-  for (int i = 0; i < n_fft; ++i) {
-    sum_sq += samples[i] * samples[i];
-  }
-  return std::sqrt(sum_sq / static_cast<float>(n_fft));
-}
-
-/// @brief BPM detection constants for streaming.
-constexpr float kBpmMin = 60.0f;
-constexpr float kBpmMax = 200.0f;
-constexpr int kMinOnsetFrames = 100;  ///< Minimum frames for BPM estimation (~2-3 seconds)
-
-/// @brief Converts lag (in frames) to BPM.
-/// @param lag Lag in frames
-/// @param sr Sample rate
-/// @param hop_length Hop length
-/// @return BPM value
-float lag_to_bpm(int lag, int sr, int hop_length) {
-  if (lag <= 0) return 0.0f;
-  float seconds_per_beat = static_cast<float>(lag * hop_length) / static_cast<float>(sr);
-  return 60.0f / seconds_per_beat;
-}
-
-/// @brief Converts BPM to lag (in frames).
-/// @param bpm BPM value
-/// @param sr Sample rate
-/// @param hop_length Hop length
-/// @return Lag in frames
-int bpm_to_lag(float bpm, int sr, int hop_length) {
-  if (bpm <= 0.0f) return 0;
-  float seconds_per_beat = 60.0f / bpm;
-  return static_cast<int>(seconds_per_beat * static_cast<float>(sr) /
-                          static_cast<float>(hop_length));
-}
-
-/// @brief Computes autocorrelation using FFT (Wiener-Khinchin theorem).
-/// @param signal Input signal
-/// @param max_lag Maximum lag to compute
-/// @return Normalized autocorrelation values [0, max_lag)
-std::vector<float> compute_autocorrelation_streaming(const std::vector<float>& signal,
-                                                     int max_lag) {
-  std::vector<float> autocorr(max_lag, 0.0f);
-  compute_autocorrelation(signal.data(), static_cast<int>(signal.size()), max_lag, autocorr.data());
-  return autocorr;
-}
-
-/// @brief Finds the best tempo peak in autocorrelation.
-/// @param autocorr Autocorrelation values
-/// @param sr Sample rate
-/// @param hop_length Hop length
-/// @param bpm_min Minimum BPM
-/// @param bpm_max Maximum BPM
-/// @return Pair of (bpm, confidence)
-std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
-                                        float bpm_min, float bpm_max) {
-  int lag_min = bpm_to_lag(bpm_max, sr, hop_length);
-  int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
-
-  lag_min = std::max(1, lag_min);
-  lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
-
-  if (lag_min >= lag_max) {
-    return {120.0f, 0.0f};  // Default
-  }
-
-  // Find all local maxima and their weights
-  std::vector<std::pair<float, float>> candidates;  // (bpm, weight)
-
-  for (int lag = lag_min + 1; lag < lag_max - 1; ++lag) {
-    if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1] &&
-        autocorr[lag] > 0.0f) {
-      float bpm = lag_to_bpm(lag, sr, hop_length);
-      if (bpm >= bpm_min && bpm <= bpm_max) {
-        candidates.emplace_back(bpm, autocorr[lag]);
-      }
-    }
-  }
-
-  if (candidates.empty()) {
-    return {120.0f, 0.0f};
-  }
-
-  // Find maximum weight
-  float max_weight = 0.0f;
-  for (const auto& c : candidates) {
-    max_weight = std::max(max_weight, c.second);
-  }
-
-  // Prefer BPM in common range (80-180) with reasonable weight
-  constexpr float kCommonBpmMin = 80.0f;
-  constexpr float kCommonBpmMax = 180.0f;
-  constexpr float kWeightThreshold = 0.3f;
-
-  float best_bpm = 0.0f;
-  float best_weight = 0.0f;
-
-  // First, look for candidates in common range
-  for (const auto& [bpm, weight] : candidates) {
-    if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax && weight >= kWeightThreshold * max_weight) {
-      if (weight > best_weight) {
-        best_bpm = bpm;
-        best_weight = weight;
-      }
-    }
-  }
-
-  // If no good candidate in common range, take the best overall
-  if (best_bpm == 0.0f) {
-    for (const auto& [bpm, weight] : candidates) {
-      if (weight > best_weight) {
-        best_bpm = bpm;
-        best_weight = weight;
-      }
-    }
-  }
-
-  // Confidence is the relative weight
-  float confidence = (max_weight > 0.0f) ? best_weight / max_weight : 0.0f;
-
-  return {best_bpm, confidence};
-}
-
-/// @brief Quantizes a float value to uint8 (0-255).
-/// @param value Input value
-/// @param min_val Minimum expected value (maps to 0)
-/// @param max_val Maximum expected value (maps to 255)
-/// @return Quantized value
-inline uint8_t quantize_to_u8(float value, float min_val, float max_val) {
-  float normalized = (value - min_val) / (max_val - min_val);
-  normalized = std::max(0.0f, std::min(1.0f, normalized));
-  return static_cast<uint8_t>(normalized * 255.0f + 0.5f);
-}
-
-/// @brief Quantizes a float value to int16 (-32768 to 32767).
-/// @param value Input value
-/// @param min_val Minimum expected value (maps to -32768)
-/// @param max_val Maximum expected value (maps to 32767)
-/// @return Quantized value
-inline int16_t quantize_to_i16(float value, float min_val, float max_val) {
-  float normalized = (value - min_val) / (max_val - min_val);
-  normalized = std::max(0.0f, std::min(1.0f, normalized));
-  return static_cast<int16_t>(normalized * 65535.0f - 32768.0f + 0.5f);
-}
-
-/// @brief Converts a single mel power value to dB scale.
-/// @param power_val Mel power value
-/// @param ref Reference value (typically 1.0)
-/// @param amin Minimum amplitude for clipping
-/// @return dB value
-inline float single_power_to_db(float power_val, float ref = 1.0f, float amin = 1e-10f) {
-  float result;
-  power_to_db(&power_val, 1, ref, amin, -1.0f, &result);
-  return result;
-}
-
-/// @brief Counts shared notes between two triads.
-/// @param root1, quality1 First chord (root 0-11, quality 0=Major, 1=Minor)
-/// @param root2, quality2 Second chord
-/// @return Number of shared notes (0-3)
-int count_shared_notes(int root1, int quality1, int root2, int quality2) {
-  // Build note sets for each chord
-  // Major: root, root+4, root+7
-  // Minor: root, root+3, root+7
-  auto get_notes = [](int root, int quality) -> std::array<int, 3> {
-    int third = (quality == 1) ? 3 : 4;  // Minor has minor 3rd
-    return {{root % 12, (root + third) % 12, (root + 7) % 12}};
-  };
-
-  auto notes1 = get_notes(root1, quality1);
-  auto notes2 = get_notes(root2, quality2);
-
-  int shared = 0;
-  for (int n1 : notes1) {
-    for (int n2 : notes2) {
-      if (n1 == n2) {
-        ++shared;
-        break;
-      }
-    }
-  }
-  return shared;
-}
-
-/// @brief Checks if two chords are "confusable" (share 2+ notes).
-/// @details Am(A,C,E) and F(F,A,C) share A and C - easily confused.
-bool are_chords_confusable(int root1, int quality1, int root2, int quality2) {
-  return count_shared_notes(root1, quality1, root2, quality2) >= 2;
-}
-
-/// @brief Computes median-filtered chroma from history.
-/// @details For each chroma bin, computes the median across all frames in history.
-///          This is more robust to outliers than simple averaging.
-/// @param history Deque of chroma arrays [n_frames][12]
-/// @return Median-filtered chroma array [12]
-std::array<float, 12> compute_median_chroma(const std::deque<std::array<float, 12>>& history) {
-  std::array<float, 12> result = {};
-  if (history.empty()) {
-    return result;
-  }
-
-  size_t n_frames = history.size();
-  std::vector<float> values(n_frames);
-
-  for (int c = 0; c < 12; ++c) {
-    // Collect values for this chroma bin
-    for (size_t f = 0; f < n_frames; ++f) {
-      values[f] = history[f][c];
-    }
-
-    // Sort to find median
-    std::sort(values.begin(), values.end());
-
-    // Compute median
-    if (n_frames % 2 == 0) {
-      result[c] = (values[n_frames / 2 - 1] + values[n_frames / 2]) * 0.5f;
-    } else {
-      result[c] = values[n_frames / 2];
-    }
-  }
-
-  return result;
-}
-
-}  // namespace
+using namespace streaming_detail;
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// Determine if resampling is needed for high sample rates
@@ -321,7 +46,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     mel_config.n_mels = config_.n_mels;
     mel_config.fmin = config_.fmin;
     mel_config.fmax = needs_resampling_ ? std::min(config_.effective_fmax(),
-                                                   static_cast<float>(internal_sample_rate_ / 2))
+                                                   static_cast<float>(internal_sample_rate_) * 0.5f)
                                         : config_.effective_fmax();
     mel_filterbank_ = create_mel_filterbank(internal_sample_rate_, config_.n_fft, mel_config);
   }
@@ -332,7 +57,8 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     chroma_config.n_chroma = 12;
     /// Convert tuning_ref_hz to semitone offset: tuning = 12 * log2(ref/440)
     /// Positive tuning means audio is sharp, so we subtract to correct
-    chroma_config.tuning = 12.0f * std::log2(config_.tuning_ref_hz / 440.0f);
+    chroma_config.tuning =
+        constants::kSemitonesPerOctave * std::log2(config_.tuning_ref_hz / constants::kA4Hz);
     /// Use C3 (~130 Hz) as minimum frequency to skip very low bass
     /// This helps avoid interference from sub-bass and low-frequency noise
     chroma_config.fmin = 65.0f;
@@ -568,18 +294,19 @@ void StreamAnalyzer::compute_stft(const float* frame_start) {
 }
 
 void StreamAnalyzer::compute_mel() {
-  /// Apply mel filterbank: mel = filterbank @ power
-  int n_mels = config_.n_mels;
-  int n_bins = config_.n_bins();
+  /// Apply mel filterbank GEMV: mel = filterbank @ power
+  /// Eigen GEMV is ~10x faster than scalar at M=128, N=1025 (see Phase 0 §10.2.4)
+  const int n_mels = config_.n_mels;
+  const int n_bins = config_.n_bins();
+
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
+      mel_filterbank_.data(), n_mels, n_bins);
+  Eigen::Map<const Eigen::VectorXf> power_map(power_.data(), n_bins);
+  Eigen::Map<Eigen::VectorXf> mel_map(mel_buffer_.data(), n_mels);
+  mel_map.noalias() = fb_map * power_map;
 
   for (int m = 0; m < n_mels; ++m) {
-    float sum = 0.0f;
-    const float* filter_row = mel_filterbank_.data() + m * n_bins;
-    for (int k = 0; k < n_bins; ++k) {
-      sum += filter_row[k] * power_[k];
-    }
-    mel_buffer_[m] = sum;
-    mel_log_[m] = std::log(std::max(sum, kLogAmin));
+    mel_log_[m] = std::log(std::max(mel_buffer_[m], kLogAmin));
   }
 }
 
@@ -1390,223 +1117,6 @@ void StreamAnalyzer::detect_progression_pattern() {
     // Only clear if not already set by pattern-based correction
     current_estimate_.detected_pattern_score = best_score;
   }
-}
-
-size_t StreamAnalyzer::available_frames() const { return output_buffer_.size(); }
-
-std::vector<StreamFrame> StreamAnalyzer::read_frames(size_t max_frames) {
-  size_t count = std::min(max_frames, output_buffer_.size());
-  std::vector<StreamFrame> result;
-  result.reserve(count);
-
-  for (size_t i = 0; i < count; ++i) {
-    result.push_back(std::move(output_buffer_.front()));
-    output_buffer_.pop_front();
-  }
-
-  return result;
-}
-
-void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
-  buffer.clear();
-
-  size_t count = std::min(max_frames, output_buffer_.size());
-  buffer.n_frames = count;
-
-  if (count == 0) {
-    return;
-  }
-
-  buffer.reserve(count, config_.n_mels);
-
-  for (size_t i = 0; i < count; ++i) {
-    StreamFrame& frame = output_buffer_.front();
-
-    buffer.timestamps.push_back(frame.timestamp);
-    buffer.onset_strength.push_back(frame.onset_strength);
-    buffer.rms_energy.push_back(frame.rms_energy);
-    buffer.spectral_centroid.push_back(frame.spectral_centroid);
-    buffer.spectral_flatness.push_back(frame.spectral_flatness);
-    buffer.chord_root.push_back(frame.chord_root);
-    buffer.chord_quality.push_back(frame.chord_quality);
-    buffer.chord_confidence.push_back(frame.chord_confidence);
-
-    // Append mel (row-major)
-    buffer.mel.insert(buffer.mel.end(), frame.mel.begin(), frame.mel.end());
-
-    // Append chroma (row-major)
-    buffer.chroma.insert(buffer.chroma.end(), frame.chroma.begin(), frame.chroma.end());
-
-    output_buffer_.pop_front();
-  }
-}
-
-void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameBufferU8& buffer,
-                                              const QuantizeConfig& qconfig) {
-  buffer.clear();
-
-  size_t count = std::min(max_frames, output_buffer_.size());
-  buffer.n_frames = count;
-
-  if (count == 0) {
-    return;
-  }
-
-  buffer.reserve(count, config_.n_mels);
-
-  for (size_t i = 0; i < count; ++i) {
-    StreamFrame& frame = output_buffer_.front();
-
-    buffer.timestamps.push_back(frame.timestamp);
-
-    // Quantize mel (convert to dB first)
-    for (float mel_power : frame.mel) {
-      float db = single_power_to_db(mel_power);
-      buffer.mel.push_back(quantize_to_u8(db, qconfig.mel_db_min, qconfig.mel_db_max));
-    }
-
-    // Quantize chroma (already 0-1)
-    for (float c : frame.chroma) {
-      buffer.chroma.push_back(quantize_to_u8(c, 0.0f, 1.0f));
-    }
-
-    // Quantize scalar features
-    buffer.onset_strength.push_back(quantize_to_u8(frame.onset_strength, 0.0f, qconfig.onset_max));
-    buffer.rms_energy.push_back(quantize_to_u8(frame.rms_energy, 0.0f, qconfig.rms_max));
-    buffer.spectral_centroid.push_back(
-        quantize_to_u8(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
-    buffer.spectral_flatness.push_back(quantize_to_u8(frame.spectral_flatness, 0.0f, 1.0f));
-
-    output_buffer_.pop_front();
-  }
-}
-
-void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
-                                               const QuantizeConfig& qconfig) {
-  buffer.clear();
-
-  size_t count = std::min(max_frames, output_buffer_.size());
-  buffer.n_frames = count;
-
-  if (count == 0) {
-    return;
-  }
-
-  buffer.reserve(count, config_.n_mels);
-
-  for (size_t i = 0; i < count; ++i) {
-    StreamFrame& frame = output_buffer_.front();
-
-    buffer.timestamps.push_back(frame.timestamp);
-
-    // Quantize mel (convert to dB first)
-    for (float mel_power : frame.mel) {
-      float db = single_power_to_db(mel_power);
-      buffer.mel.push_back(quantize_to_i16(db, qconfig.mel_db_min, qconfig.mel_db_max));
-    }
-
-    // Quantize chroma (already 0-1)
-    for (float c : frame.chroma) {
-      buffer.chroma.push_back(quantize_to_i16(c, 0.0f, 1.0f));
-    }
-
-    // Quantize scalar features
-    buffer.onset_strength.push_back(quantize_to_i16(frame.onset_strength, 0.0f, qconfig.onset_max));
-    buffer.rms_energy.push_back(quantize_to_i16(frame.rms_energy, 0.0f, qconfig.rms_max));
-    buffer.spectral_centroid.push_back(
-        quantize_to_i16(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
-    buffer.spectral_flatness.push_back(quantize_to_i16(frame.spectral_flatness, 0.0f, 1.0f));
-
-    output_buffer_.pop_front();
-  }
-}
-
-void StreamAnalyzer::reset(size_t base_sample_offset) {
-  cumulative_samples_ = base_sample_offset;
-  frame_count_ = 0;
-  emitted_frame_count_ = 0;
-
-  overlap_buffer_.clear();
-  output_buffer_.clear();
-
-  /// Reset mel state
-  if (config_.compute_mel) {
-    std::fill(prev_mel_log_.begin(), prev_mel_log_.end(), 0.0f);
-  }
-  has_prev_frame_ = false;
-
-  /// Reset progressive estimation
-  onset_accumulator_.clear();
-  chroma_sum_.fill(0.0f);
-  chroma_frame_count_ = 0;
-  accumulated_chroma_.clear();
-  last_key_update_time_ = 0.0f;
-  last_bpm_update_time_ = 0.0f;
-  last_chord_analysis_time_ = 0.0f;
-  current_estimate_ = ProgressiveEstimate();
-
-  /// Reset chord progression tracking
-  prev_chord_root_ = -1;
-  prev_chord_quality_ = -1;
-  chord_stable_time_ = 0.0f;
-  chroma_history_.clear();
-  full_chroma_history_.clear();
-
-  /// Reset bar tracking state
-  bar_tracking_active_ = false;
-  bar_duration_ = 0.0f;
-  current_bar_index_ = -1;
-  bar_start_time_ = 0.0f;
-  bar_chroma_sum_.fill(0.0f);
-  bar_chroma_count_ = 0;
-  bar_chord_votes_.fill(0);
-  bar_vote_count_ = 0;
-
-  /// Reset pattern lock (but keep expected_duration_)
-  pattern_locked_ = false;
-}
-
-void StreamAnalyzer::set_expected_duration(float duration_seconds) {
-  expected_duration_ = duration_seconds;
-}
-
-void StreamAnalyzer::set_normalization_gain(float gain) {
-  // Clamp to reasonable range to avoid extreme values
-  normalization_gain_ = std::clamp(gain, 0.01f, 100.0f);
-}
-
-void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
-  // Clamp to reasonable tuning range (A3 to A5)
-  ref_hz = std::clamp(ref_hz, 220.0f, 880.0f);
-  config_.tuning_ref_hz = ref_hz;
-
-  // Recreate chroma filterbank with new tuning
-  if (config_.compute_chroma) {
-    ChromaFilterConfig chroma_config;
-    chroma_config.n_chroma = 12;
-    chroma_config.tuning = 12.0f * std::log2(ref_hz / 440.0f);
-    chroma_config.fmin = 65.0f;  // Skip very low bass
-    chroma_filterbank_ =
-        create_chroma_filterbank(internal_sample_rate_, config_.n_fft, chroma_config);
-  }
-}
-
-AnalyzerStats StreamAnalyzer::stats() {
-  /// Compute final pattern detection before returning stats
-  compute_voted_pattern(4);
-  detect_progression_pattern();
-
-  AnalyzerStats stats;
-  stats.total_frames = frame_count_;
-  stats.total_samples = cumulative_samples_;
-  stats.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
-  stats.estimate = current_estimate_;
-
-  return stats;
-}
-
-float StreamAnalyzer::current_time() const {
-  return static_cast<float>(cumulative_samples_) / static_cast<float>(config_.sample_rate);
 }
 
 }  // namespace sonare

@@ -29,6 +29,7 @@ set_property(CACHE SONARE_WITH_FFMPEG PROPERTY STRINGS ON OFF AUTO)
 # Core library sources (built inline as static)
 set(SONARE_SOURCES
   ${SONARE_ROOT}/src/util/math_utils.cpp
+  ${SONARE_ROOT}/src/util/nnls.cpp
   ${SONARE_ROOT}/src/core/convert.cpp
   ${SONARE_ROOT}/src/core/window.cpp
   ${SONARE_ROOT}/src/core/fft.cpp
@@ -36,23 +37,53 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/core/audio.cpp
   ${SONARE_ROOT}/src/core/resample.cpp
   ${SONARE_ROOT}/src/core/spectrum.cpp
+  ${SONARE_ROOT}/src/core/db_convert.cpp
+  ${SONARE_ROOT}/src/core/iirt.cpp
+  ${SONARE_ROOT}/src/core/pcen.cpp
+  ${SONARE_ROOT}/src/core/weighting.cpp
+  ${SONARE_ROOT}/src/core/synthesis.cpp
+  ${SONARE_ROOT}/src/core/audio_ops.cpp
+  ${SONARE_ROOT}/src/core/harmonic.cpp
   ${SONARE_ROOT}/src/filters/mel.cpp
   ${SONARE_ROOT}/src/filters/chroma.cpp
   ${SONARE_ROOT}/src/filters/dct.cpp
   ${SONARE_ROOT}/src/filters/iir.cpp
+  ${SONARE_ROOT}/src/filters/wavelet.cpp
   ${SONARE_ROOT}/src/feature/mel_spectrogram.cpp
   ${SONARE_ROOT}/src/feature/chroma.cpp
   ${SONARE_ROOT}/src/feature/spectral.cpp
   ${SONARE_ROOT}/src/feature/onset.cpp
   ${SONARE_ROOT}/src/feature/pitch.cpp
   ${SONARE_ROOT}/src/feature/cqt.cpp
+  ${SONARE_ROOT}/src/feature/inverse.cpp
   ${SONARE_ROOT}/src/feature/vqt.cpp
+  ${SONARE_ROOT}/src/feature/rhythm.cpp
+  ${SONARE_ROOT}/src/feature/tonnetz.cpp
+  ${SONARE_ROOT}/src/feature/segment.cpp
   ${SONARE_ROOT}/src/effects/hpss.cpp
   ${SONARE_ROOT}/src/effects/phase_vocoder.cpp
   ${SONARE_ROOT}/src/effects/time_stretch.cpp
   ${SONARE_ROOT}/src/effects/pitch_shift.cpp
   ${SONARE_ROOT}/src/effects/normalize.cpp
-  ${SONARE_ROOT}/src/effects/tts.cpp
+  ${SONARE_ROOT}/src/effects/decompose.cpp
+  ${SONARE_ROOT}/src/effects/preemphasis.cpp
+  ${SONARE_ROOT}/src/effects/remix.cpp
+  ${SONARE_ROOT}/src/effects/silence.cpp
+  ${SONARE_ROOT}/src/util/frame.cpp
+  ${SONARE_ROOT}/src/util/padding.cpp
+  ${SONARE_ROOT}/src/util/peak.cpp
+  ${SONARE_ROOT}/src/util/sequence.cpp
+  ${SONARE_ROOT}/src/util/vector_normalize.cpp
+  ${SONARE_ROOT}/src/mastering/maximizer/loudness_optimize.cpp
+  ${SONARE_ROOT}/src/analysis/meter/basic.cpp
+  ${SONARE_ROOT}/src/analysis/meter/clipping.cpp
+  ${SONARE_ROOT}/src/analysis/meter/dynamic_range.cpp
+  ${SONARE_ROOT}/src/analysis/meter/lufs.cpp
+  ${SONARE_ROOT}/src/analysis/meter/phase_scope.cpp
+  ${SONARE_ROOT}/src/analysis/meter/spectrum.cpp
+  ${SONARE_ROOT}/src/analysis/meter/spectrogram.cpp
+  ${SONARE_ROOT}/src/analysis/meter/stereo.cpp
+  ${SONARE_ROOT}/src/analysis/meter/true_peak.cpp
   ${SONARE_ROOT}/src/analysis/key_profiles.cpp
   ${SONARE_ROOT}/src/analysis/chord_templates.cpp
   ${SONARE_ROOT}/src/analysis/bpm_analyzer.cpp
@@ -68,9 +99,22 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/analysis/section_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/music_analyzer.cpp
   ${SONARE_ROOT}/src/streaming/stream_analyzer.cpp
+  ${SONARE_ROOT}/src/streaming/stream_analyzer_output.cpp
+  ${SONARE_ROOT}/src/streaming/stream_analyzer_utils.cpp
   ${SONARE_ROOT}/src/quick.cpp
   ${SONARE_ROOT}/src/sonare_c.cpp
+  ${SONARE_ROOT}/src/sonare_c_effects.cpp
+  ${SONARE_ROOT}/src/sonare_c_features.cpp
+  ${SONARE_ROOT}/src/sonare_c_compat.cpp
+  ${SONARE_ROOT}/src/sonare_c_internal.cpp
+  ${SONARE_ROOT}/src/sonare_c_memory.cpp
 )
+
+file(GLOB_RECURSE SONARE_MASTERING_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/mastering/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_MASTERING_SOURCES})
+list(REMOVE_DUPLICATES SONARE_SOURCES)
 
 # KissFFT sources
 set(KISSFFT_SOURCES
@@ -82,6 +126,11 @@ set(KISSFFT_SOURCES
 set(ADDON_SOURCES
   src/addon/addon.cpp
   src/addon/sonare_wrap.cpp
+  src/addon/sonare_wrap_analysis.cpp
+  src/addon/sonare_wrap_effects.cpp
+  src/addon/sonare_wrap_features.cpp
+  src/addon/sonare_wrap_streaming.cpp
+  src/addon/sonare_wrap_utils.cpp
 )
 
 # Find Eigen3

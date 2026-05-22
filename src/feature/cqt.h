@@ -117,6 +117,9 @@ class CqtKernel {
   /// @brief Returns filter lengths for each bin.
   const std::vector<int>& lengths() const { return lengths_; }
 
+  /// @brief Returns raw fractional filter lengths from `wavelet_lengths`.
+  const std::vector<float>& raw_lengths() const { return raw_lengths_; }
+
  private:
   CqtKernel() = default;
 
@@ -124,7 +127,8 @@ class CqtKernel {
   int n_bins_ = 0;
   std::vector<float> frequencies_;
   std::vector<std::complex<float>> kernel_;  ///< [n_bins * fft_length]
-  std::vector<int> lengths_;                 ///< Filter length for each bin
+  std::vector<int> lengths_;                 ///< Effective integer length per bin
+  std::vector<float> raw_lengths_;           ///< Raw fractional lengths (librosa)
 };
 
 /// @brief Computes Constant-Q Transform.
@@ -155,6 +159,31 @@ Audio icqt(const CqtResult& cqt_result, int length = 0);
 /// @param bins_per_octave Bins per octave
 /// @return Vector of center frequencies
 std::vector<float> cqt_frequencies(float fmin, int n_bins, int bins_per_octave);
+
+/// @brief Hybrid CQT: uses CQT for high-Q bins and STFT for low-Q bins.
+/// @details Mirrors librosa.hybrid_cqt. Bins whose filter length exceeds the
+/// chosen FFT size fall back to the regular CQT, while the remaining bins are
+/// computed via STFT and summed onto a single CQT-aligned bin grid.
+/// @param audio Input audio.
+/// @param config CQT configuration.
+/// @return CqtResult with magnitudes only (phase fields are zero).
+CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config = CqtConfig());
+
+/// @brief Pseudo-CQT: a faster single-FFT approximation of the CQT magnitude.
+/// @details Mirrors librosa.pseudo_cqt. Lower fidelity than @ref cqt at the
+/// very low octaves, but ~10x faster.
+CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config = CqtConfig());
+
+/// @brief Reconstructs audio from a CQT magnitude via Griffin-Lim.
+/// @param magnitude CQT magnitude [n_bins x n_frames] row-major.
+/// @param n_bins Number of CQT bins.
+/// @param n_frames Number of time frames.
+/// @param config CQT configuration that produced the magnitude.
+/// @param sr Sample rate of the original signal.
+/// @param n_iter Number of Griffin-Lim iterations.
+/// @return Reconstructed audio.
+Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
+                     int sr, int n_iter = 32);
 
 /// @brief Converts CQT to chroma features.
 /// @param cqt_result CQT result

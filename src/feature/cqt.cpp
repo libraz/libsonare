@@ -8,7 +8,8 @@
 #include <unordered_map>
 
 #include "core/fft.h"
-#include "core/window.h"
+#include "core/spectrum.h"
+#include "filters/wavelet.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -70,7 +71,7 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   }
 
   // Create kernel
-  auto kernel = std::shared_ptr<CqtKernel>(CqtKernel::create(sr, config).release());
+  std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
 
   // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
   int fft_length = kernel->fft_length();
@@ -100,40 +101,6 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
 /// @brief Computes Q factor for CQT.
 float compute_q(int bins_per_octave, float filter_scale) {
   return filter_scale / (std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f);
-}
-
-std::vector<float> create_cqt_window(WindowType type, int length) {
-  if (length <= 1) {
-    return std::vector<float>(length, 1.0f);
-  }
-
-  std::vector<float> window(length, 1.0f);
-  switch (type) {
-    case WindowType::Hann:
-      for (int i = 0; i < length; ++i) {
-        window[i] = 0.5f * (1.0f - std::cos(kTwoPi * i / length));
-      }
-      break;
-    case WindowType::Hamming:
-      for (int i = 0; i < length; ++i) {
-        window[i] = 0.54f - 0.46f * std::cos(kTwoPi * i / length);
-      }
-      break;
-    case WindowType::Blackman: {
-      constexpr float a0 = 0.42f;
-      constexpr float a1 = 0.5f;
-      constexpr float a2 = 0.08f;
-      for (int i = 0; i < length; ++i) {
-        float t = static_cast<float>(i) / length;
-        window[i] = a0 - a1 * std::cos(kTwoPi * t) + a2 * std::cos(2.0f * kTwoPi * t);
-      }
-      break;
-    }
-    case WindowType::Rectangular:
-      break;
-  }
-
-  return window;
 }
 
 }  // namespace
@@ -174,10 +141,12 @@ const std::vector<float>& CqtResult::magnitude() const {
 const std::vector<float>& CqtResult::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     power_cache_.resize(data_.size());
-    // Use Eigen abs2() to compute re² + im² without sqrt
-    Eigen::Map<const Eigen::ArrayXcf> data_map(data_.data(), data_.size());
-    Eigen::Map<Eigen::ArrayXf> power_map(power_cache_.data(), data_.size());
-    power_map = data_map.abs2();
+    // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
+    for (size_t i = 0; i < data_.size(); ++i) {
+      const float re = data_[i].real();
+      const float im = data_[i].imag();
+      power_cache_[i] = re * re + im * im;
+    }
   }
   return power_cache_;
 }
@@ -199,69 +168,73 @@ const std::complex<float>& CqtResult::at(int bin, int frame) const {
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
   auto kernel = std::unique_ptr<CqtKernel>(new CqtKernel());
 
-  float Q = compute_q(config.bins_per_octave, config.filter_scale);
-
-  // Compute center frequencies for all bins
+  // Center frequencies for all bins.
   kernel->frequencies_ = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
   kernel->n_bins_ = config.n_bins;
 
-  // Compute filter lengths for each bin
-  kernel->lengths_.resize(config.n_bins);
-  int max_length = 0;
+  // Raw fractional lengths from librosa's wavelet_lengths (bpo-based).
+  std::vector<float> raw_lengths = wavelet_lengths(kernel->frequencies_, sr, config.filter_scale);
 
-  for (int k = 0; k < config.n_bins; ++k) {
-    float freq = kernel->frequencies_[k];
-    int length = static_cast<int>(std::ceil(Q * sr / freq));
-    kernel->lengths_[k] = length;
-    max_length = std::max(max_length, length);
+  // Build the time-domain wavelet basis (Hann window * complex sinusoid,
+  // L1-normalised, pad-centred to a common length n_fft = next_pow2(ceil(max))).
+  int n_fft_basis = 0;
+  std::vector<std::complex<float>> basis =
+      wavelet(kernel->frequencies_, sr, config.filter_scale, /*is_cqt=*/true,
+              /*pad_fft=*/true, /*Q=*/0.0f, &n_fft_basis);
+  int n_fft = n_fft_basis;
+
+  // librosa widens n_fft when it is shorter than 2 * next_pow2(hop_length).
+  if (config.hop_length > 0) {
+    int min_n_fft = 2 * next_power_of_2(config.hop_length);
+    if (n_fft < min_n_fft) {
+      // Re-pad each kernel into a wider slot.
+      const int new_nfft = min_n_fft;
+      std::vector<std::complex<float>> wider(static_cast<size_t>(config.n_bins) * new_nfft,
+                                             std::complex<float>(0.0f, 0.0f));
+      const int pad = (new_nfft - n_fft) / 2;
+      for (int k = 0; k < config.n_bins; ++k) {
+        for (int i = 0; i < n_fft; ++i) {
+          wider[k * new_nfft + (pad + i)] = basis[k * n_fft + i];
+        }
+      }
+      basis.swap(wider);
+      n_fft = new_nfft;
+    }
   }
 
-  // FFT length is next power of 2 of max filter length
-  kernel->fft_length_ = next_power_of_2(max_length);
-
-  // Create FFT processor
-  FFT fft(kernel->fft_length_);
-
-  // Generate kernels in frequency domain
-  kernel->kernel_.resize(config.n_bins * kernel->fft_length_);
-
-  std::vector<std::complex<float>> complex_time_kernel(kernel->fft_length_, {0.0f, 0.0f});
-  std::vector<std::complex<float>> complex_freq_kernel(kernel->fft_length_);
-
+  // Effective integer lengths (for backward-compatible reporting).
+  kernel->lengths_.resize(config.n_bins);
   for (int k = 0; k < config.n_bins; ++k) {
-    float freq = kernel->frequencies_[k];
-    int length = kernel->lengths_[k];
-    int offset = (kernel->fft_length_ - length + 1) / 2;
-    float center = 0.5f * static_cast<float>(length);
+    const float ilen = raw_lengths[k];
+    const int s = static_cast<int>(std::floor(-ilen * 0.5f));
+    const int e = static_cast<int>(std::floor(ilen * 0.5f));
+    kernel->lengths_[k] = e - s;
+  }
+  kernel->fft_length_ = n_fft;
 
-    // Create window
-    std::vector<float> window = create_cqt_window(config.window, length);
+  // Scale each row by raw_length / n_fft (librosa.__vqt_filter_fft step).
+  for (int k = 0; k < config.n_bins; ++k) {
+    const float scale = raw_lengths[k] / static_cast<float>(n_fft);
+    auto* row = basis.data() + static_cast<size_t>(k) * n_fft;
+    for (int i = 0; i < n_fft; ++i) row[i] *= scale;
+  }
+  kernel->raw_lengths_ = std::move(raw_lengths);
 
-    // Compute normalization
-    float win_sum = 0.0f;
-    for (int i = 0; i < length; ++i) {
-      win_sum += window[i];
-    }
-    float norm = std::sqrt(static_cast<float>(length)) / win_sum;
-
-    // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*n/sr)
-    std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
-              std::complex<float>(0.0f, 0.0f));
-
-    for (int n = 0; n < length; ++n) {
-      float phase = kTwoPi * freq * (static_cast<float>(n) - center) / sr;
-      float scaled_win = window[n] * norm;
-      complex_time_kernel[offset + n] =
-          std::complex<float>(scaled_win * std::cos(phase), -scaled_win * std::sin(phase));
-    }
-
-    // Complex FFT of kernel
-    fft.forward_complex(complex_time_kernel.data(), complex_freq_kernel.data());
-
-    // Store conjugate over all fft_length bins (for correlation instead of convolution)
-    for (int i = 0; i < kernel->fft_length_; ++i) {
-      kernel->kernel_[k * kernel->fft_length_ + i] = std::conj(complex_freq_kernel[i]);
-    }
+  // FFT each kernel into frequency domain.
+  FFT fft(n_fft);
+  kernel->kernel_.assign(static_cast<size_t>(config.n_bins) * n_fft,
+                         std::complex<float>(0.0f, 0.0f));
+  std::vector<std::complex<float>> freq_kernel(n_fft);
+  for (int k = 0; k < config.n_bins; ++k) {
+    fft.forward_complex(basis.data() + static_cast<size_t>(k) * n_fft, freq_kernel.data());
+    // We use the conjugate so that `result = stored_basis * FFT(signal)` evaluates
+    // to a true cross-correlation at zero lag (i.e., the standard CQT inner
+    // product `<kernel, signal>`). librosa's pipeline uses the convention
+    // `fft_basis.dot(D)`, which is equivalent only because the wavelet is
+    // single-sided in frequency (energy concentrated at +ω). Storing the
+    // conjugate keeps our existing matmul path unchanged.
+    auto* dst = kernel->kernel_.data() + static_cast<size_t>(k) * n_fft;
+    for (int i = 0; i < n_fft; ++i) dst[i] = std::conj(freq_kernel[i]);
   }
 
   return kernel;
@@ -322,7 +295,15 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   VectorXcf result(n_bins);
 
   const float* data = padded_signal.data();
-  float norm_factor = 1.0f / static_cast<float>(fft_length);
+
+  // Per-bin /sqrt(L) factor for `scale=True` mode (the librosa default).
+  const auto& raw_lengths = kernel->raw_lengths();
+  std::vector<float> inv_sqrt_len(n_bins, 1.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    if (raw_lengths[k] > 0.0f) {
+      inv_sqrt_len[k] = 1.0f / std::sqrt(raw_lengths[k]);
+    }
+  }
 
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
@@ -346,13 +327,15 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
     // Complex FFT of frame (full spectrum)
     fft.forward_complex(complex_frame.data(), frame_fft.data());
 
-    // Compute all correlations at once using cached Eigen matrix
+    // Compute all correlations at once using cached Eigen matrix.
+    // The basis already absorbs the lengths/n_fft factor, so no extra 1/n_fft
+    // normalisation is needed here.
     Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_length);
-    result.noalias() = kernel_matrix * frame_vec * norm_factor;
+    result.noalias() = kernel_matrix * frame_vec;
 
-    // Copy to output
+    // Apply per-bin /sqrt(length) (librosa.vqt with scale=True).
     for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] = result(k);
+      output[k * n_frames + t] = result(k) * inv_sqrt_len[k];
     }
 
     // Report progress
@@ -393,7 +376,7 @@ Audio icqt(const CqtResult& cqt_result, int length) {
       float freq = frequencies[k];
 
       // Estimate filter length for this bin
-      float Q = 1.0f / (std::pow(2.0f, 1.0f / 12.0f) - 1.0f);
+      float Q = 1.0f / (std::pow(2.0f, 1.0f / constants::kSemitonesPerOctave) - 1.0f);
       int filter_length = static_cast<int>(Q * sr / freq);
       filter_length = std::min(filter_length, output_length);
 
@@ -421,6 +404,182 @@ Audio icqt(const CqtResult& cqt_result, int length) {
   }
 
   return Audio::from_vector(std::move(output), sr);
+}
+
+namespace {
+
+/// @brief Picks an n_fft consistent with the lowest CQT bin (long-filter regime).
+int choose_pseudo_cqt_nfft(const CqtConfig& config, int sr) {
+  const float Q = compute_q(config.bins_per_octave, config.filter_scale);
+  const int max_filter_len = static_cast<int>(std::ceil(Q * sr / std::max(config.fmin, 1.0f)));
+  int n_fft = next_power_of_2(std::max(max_filter_len, 32));
+  // Cap to avoid huge FFTs at extreme fmin values.
+  n_fft = std::min(n_fft, 16384);
+  return n_fft;
+}
+
+/// @brief Builds a CQT-shaped Gaussian magnitude projection matrix
+///        [n_bins x n_freq] mapping STFT magnitudes to CQT-bin magnitudes.
+///        Each row sums to 1.
+std::vector<float> build_cqt_projection(const std::vector<float>& freqs, int bins_per_octave,
+                                        int n_freq, float bin_to_hz) {
+  const int n_bins = static_cast<int>(freqs.size());
+  std::vector<float> P(static_cast<size_t>(n_bins) * n_freq, 0.0f);
+  const float semitone_ratio =
+      std::pow(2.0f, 1.0f / static_cast<float>(std::max(bins_per_octave, 1)));
+  for (int k = 0; k < n_bins; ++k) {
+    const float f = freqs[k];
+    // Bandwidth ~ one CQT bin in Hz (Gaussian sigma scales with frequency).
+    const float bandwidth = std::max(f * (semitone_ratio - 1.0f), bin_to_hz);
+    float row_sum = 0.0f;
+    for (int b = 0; b < n_freq; ++b) {
+      const float hz = static_cast<float>(b) * bin_to_hz;
+      const float d = (hz - f) / bandwidth;
+      const float v = std::exp(-0.5f * d * d);
+      P[k * n_freq + b] = v;
+      row_sum += v;
+    }
+    if (row_sum > 0.0f) {
+      for (int b = 0; b < n_freq; ++b) P[k * n_freq + b] /= row_sum;
+    }
+  }
+  return P;
+}
+
+}  // namespace
+
+CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
+
+  const int sr = audio.sample_rate();
+  std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+
+  // Single STFT magnitude at an n_fft chosen to capture the lowest bin's Q.
+  const int n_fft = choose_pseudo_cqt_nfft(config, sr);
+  StftConfig stft_cfg;
+  stft_cfg.n_fft = n_fft;
+  stft_cfg.hop_length = config.hop_length;
+  stft_cfg.window = config.window;
+  stft_cfg.center = true;
+  Spectrogram spec = Spectrogram::compute(audio, stft_cfg);
+  const std::vector<float>& mag = spec.magnitude();
+  const int n_freq = spec.n_bins();
+  const int n_frames = spec.n_frames();
+
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  std::vector<float> P = build_cqt_projection(freqs, config.bins_per_octave, n_freq, bin_to_hz);
+
+  // C = P @ |STFT|. Phase is not estimated (pseudo CQT yields magnitudes only;
+  // we store the result in the real part of the CqtResult so magnitude()
+  // returns it).
+  std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
+                                        std::complex<float>(0.0f, 0.0f));
+  for (int k = 0; k < config.n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      float acc = 0.0f;
+      for (int b = 0; b < n_freq; ++b) {
+        acc += P[k * n_freq + b] * mag[b * n_frames + t];
+      }
+      data[k * n_frames + t] = std::complex<float>(acc, 0.0f);
+    }
+  }
+  return CqtResult(std::move(data), config.n_bins, n_frames, std::move(freqs), config.hop_length,
+                   sr);
+}
+
+CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
+
+  const int sr = audio.sample_rate();
+  const float Q = compute_q(config.bins_per_octave, config.filter_scale);
+  std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+
+  // Split point: bins whose CQT filter is shorter than `short_threshold` use
+  // pseudo CQT (cheap STFT projection); longer-filter bins fall back to the
+  // full CQT (slow but accurate). librosa's threshold is roughly 2 * hop;
+  // 256 samples is a reasonable practical default.
+  const int short_threshold = std::max(256, 2 * config.hop_length);
+  int n_split = config.n_bins;
+  for (int k = 0; k < config.n_bins; ++k) {
+    const int len = static_cast<int>(std::ceil(Q * sr / std::max(freqs[k], 1.0f)));
+    if (len <= short_threshold) {
+      n_split = k;
+      break;
+    }
+  }
+
+  std::vector<std::complex<float>> data;
+  int n_frames = 0;
+
+  if (n_split > 0) {
+    CqtConfig low = config;
+    low.n_bins = n_split;
+    CqtResult low_result = cqt(audio, low);
+    n_frames = low_result.n_frames();
+    data.assign(static_cast<size_t>(config.n_bins) * n_frames, std::complex<float>(0.0f, 0.0f));
+    for (int k = 0; k < n_split; ++k) {
+      for (int t = 0; t < n_frames; ++t) {
+        data[k * n_frames + t] = low_result.at(k, t);
+      }
+    }
+  }
+  if (n_split < config.n_bins) {
+    CqtConfig high = config;
+    high.n_bins = config.n_bins - n_split;
+    high.fmin = freqs[n_split];
+    CqtResult high_result = pseudo_cqt(audio, high);
+    if (n_frames == 0) {
+      n_frames = high_result.n_frames();
+      data.assign(static_cast<size_t>(config.n_bins) * n_frames, std::complex<float>(0.0f, 0.0f));
+    }
+    const int copy_n = std::min(n_frames, high_result.n_frames());
+    for (int k = n_split; k < config.n_bins; ++k) {
+      for (int t = 0; t < copy_n; ++t) {
+        data[k * n_frames + t] = high_result.at(k - n_split, t);
+      }
+    }
+  }
+  if (n_frames == 0) return CqtResult();
+  return CqtResult(std::move(data), config.n_bins, n_frames, std::move(freqs), config.hop_length,
+                   sr);
+}
+
+Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
+                     int sr, int n_iter) {
+  if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
+
+  std::vector<float> freqs = cqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
+  const int n_fft = choose_pseudo_cqt_nfft(config, sr);
+  const int n_freq = n_fft / 2 + 1;
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+
+  // Build the same Gaussian projection as pseudo_cqt and use its transpose to
+  // smear CQT magnitudes back onto an STFT magnitude grid. This is a smoother
+  // seed for Griffin-Lim than the naive nearest-bin projection.
+  std::vector<float> P = build_cqt_projection(freqs, config.bins_per_octave, n_freq, bin_to_hz);
+
+  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
+  for (int b = 0; b < n_freq; ++b) {
+    for (int t = 0; t < n_frames; ++t) {
+      float acc = 0.0f;
+      for (int k = 0; k < n_bins; ++k) {
+        acc += P[k * n_freq + b] * magnitude[k * n_frames + t];
+      }
+      stft_mag[b * n_frames + t] = acc;
+    }
+  }
+
+  GriffinLimConfig gcfg;
+  gcfg.n_iter = n_iter;
+  return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
 }
 
 std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {

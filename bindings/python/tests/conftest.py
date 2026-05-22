@@ -15,12 +15,16 @@ def _find_lib_path() -> str:
 
     project_root = Path(__file__).parent.parent.parent.parent
     lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    build_path = project_root / "build" / "lib" / lib_name
-    if build_path.exists():
-        return str(build_path)
+    for build_dir in ("build", "build-mastering-api", "build-mastering"):
+        build_path = project_root / build_dir / "lib" / lib_name
+        if build_path.exists():
+            return str(build_path)
 
-    pytest.skip(f"libsonare not found at {build_path}")
+    pytest.skip(f"libsonare not found under {project_root}/build*/lib")
     return ""  # unreachable
+
+
+os.environ.setdefault("SONARE_LIB_PATH", _find_lib_path())
 
 
 @pytest.fixture()

@@ -1,5 +1,6 @@
-.PHONY: all build release test test-librosa-live clean rebuild format wasm coverage \
-       coverage-build coverage-clean build-shared build-node test-python test-node
+.PHONY: all build release test test-librosa-live clean rebuild format lint wasm coverage \
+       coverage-build coverage-clean build-shared build-node build-wasm-binding \
+       test-python test-node test-wasm
 
 BUILD_DIR := build
 RYE ?= rye
@@ -27,6 +28,7 @@ release:
 wasm:
 	emcmake $(CMAKE) -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build build-wasm -j
+	cd bindings/wasm && yarn build:js
 
 test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure
@@ -43,7 +45,18 @@ clean:
 rebuild: clean build
 
 format:
-	find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format -i
+	find src tests bindings/node/src bindings/node/tests \( -name '*.cpp' -o -name '*.h' \) | xargs clang-format -i
+	cd bindings/wasm && yarn format
+	cd bindings/node && yarn format
+	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
+	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
+
+lint:
+	cd bindings/wasm && yarn lint
+	cd bindings/node && yarn lint
+	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
 
 # Binding targets
 build-shared:
@@ -57,12 +70,18 @@ endif
 build-node:
 	cd bindings/node && yarn install && yarn build
 
+build-wasm-binding:
+	cd bindings/wasm && yarn install --immutable && yarn build
+
 test-python: build-shared
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
 	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v
 
 test-node: build-node
 	cd bindings/node && yarn test
+
+test-wasm: build-wasm-binding
+	cd bindings/wasm && yarn test
 
 # Coverage targets
 coverage-build:

@@ -93,7 +93,7 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
     g_vqt_cache.erase(oldest_key);
   }
 
-  CachedVqtKernel cached{std::shared_ptr<VqtKernel>(kernel.release()), eigen_matrix};
+  CachedVqtKernel cached{std::shared_ptr<VqtKernel>(std::move(kernel)), eigen_matrix};
   g_vqt_cache[key] = cached;
   g_vqt_cache_lru.push_front(key);
   return cached;

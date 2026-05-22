@@ -30,8 +30,10 @@ def _lib_available() -> bool:
 
     project_root = Path(__file__).parent.parent.parent.parent
     lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    build_path = project_root / "build" / "lib" / lib_name
-    return build_path.exists()
+    return any(
+        (project_root / build_dir / "lib" / lib_name).exists()
+        for build_dir in ("build-mastering-api", "build", "build-mastering")
+    )
 
 
 pytestmark = pytest.mark.skipif(not _lib_available(), reason="libsonare shared library not found")
@@ -87,17 +89,30 @@ def test_audio_from_file_decodes_m4a() -> None:
         m4a_path = os.path.join(tmpdir, "tone.m4a")
         subprocess.run(
             [
-                ffmpeg, "-f", "lavfi", "-i",
+                ffmpeg,
+                "-f",
+                "lavfi",
+                "-i",
                 "sine=frequency=440:duration=0.5:sample_rate=22050",
-                "-ac", "1", "-y", wav_path,
+                "-ac",
+                "1",
+                "-y",
+                wav_path,
             ],
             check=True,
             capture_output=True,
         )
         subprocess.run(
             [
-                ffmpeg, "-i", wav_path, "-c:a", "aac", "-b:a", "64k",
-                "-y", m4a_path,
+                ffmpeg,
+                "-i",
+                wav_path,
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                "-y",
+                m4a_path,
             ],
             check=True,
             capture_output=True,
@@ -183,6 +198,64 @@ def test_analyze_with_silence() -> None:
     assert isinstance(result.beat_times, list)
 
 
+def test_compat_numeric_and_signal_utilities() -> None:
+    """Compatibility utilities are available through Python."""
+    import libsonare
+
+    assert libsonare.frames_to_samples(4, hop_length=512) == 2048
+    assert libsonare.samples_to_frames(2048, hop_length=512) == 4
+
+    power_db = libsonare.power_to_db([1.0, 0.01], ref=1.0, amin=1e-10, top_db=80.0)
+    assert power_db[0] == pytest.approx(0.0, abs=1e-5)
+    assert power_db[1] == pytest.approx(-20.0, abs=1e-4)
+    assert libsonare.db_to_power(power_db, ref=1.0)[1] == pytest.approx(0.01, rel=1e-5)
+
+    amp_db = libsonare.amplitude_to_db([1.0, 0.5], ref=1.0, amin=1e-5, top_db=80.0)
+    assert amp_db[0] == pytest.approx(0.0, abs=1e-5)
+    assert libsonare.db_to_amplitude(amp_db, ref=1.0)[1] == pytest.approx(0.5, rel=1e-5)
+
+    emphasized = libsonare.preemphasis([1.0, 1.0, 1.0], coef=0.5, zi=0.0)
+    assert emphasized == pytest.approx([1.0, 0.5, 0.5])
+    assert libsonare.deemphasis(emphasized, coef=0.5, zi=0.0)[2] == pytest.approx(1.0, abs=1e-5)
+
+    framed = libsonare.frame_signal([1.0, 2.0, 3.0, 4.0], frame_length=2, hop_length=1)
+    assert framed[0] == 3
+    assert framed[1] == pytest.approx([1.0, 2.0, 2.0, 3.0, 3.0, 4.0])
+    assert libsonare.fix_length([1.0, 2.0], size=4, pad_value=-1.0) == pytest.approx(
+        [1.0, 2.0, -1.0, -1.0]
+    )
+    assert libsonare.fix_frames([2, 4], x_min=0, x_max=5, pad=True) == [0, 2, 4, 5]
+    assert libsonare.peak_pick([0.0, 1.0, 0.0, 2.0, 0.0], 1, 1, 1, 1, 0.0, 0) == [1, 3]
+    assert libsonare.vector_normalize([3.0, 4.0], norm_type=2) == pytest.approx([0.6, 0.8])
+
+
+def test_compat_silence_and_rhythm_utilities() -> None:
+    """Silence/rhythm compatibility utilities are available through Python."""
+    import libsonare
+
+    samples = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
+    trimmed = libsonare.trim_silence(samples, top_db=20.0, frame_length=2, hop_length=1)
+    assert len(trimmed[0]) > 0
+    assert trimmed[2] > trimmed[1]
+    intervals = libsonare.split_silence(samples, top_db=20.0, frame_length=2, hop_length=1)
+    assert isinstance(intervals, list)
+
+    pcen_values = libsonare.pcen([1.0, 2.0, 3.0, 4.0], n_bins=2, n_frames=2)
+    assert len(pcen_values) == 4
+
+    chroma = [0.0] * 24
+    chroma[0] = 1.0
+    chroma[12] = 1.0
+    tonnetz_values = libsonare.tonnetz(chroma, n_chroma=12, n_frames=2)
+    assert len(tonnetz_values) == 12
+
+    onset = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
+    temp = libsonare.tempogram(onset, sample_rate=22050, hop_length=512, win_length=4)
+    assert temp[0] == len(onset)
+    assert len(temp[1]) == 4 * len(onset)
+    assert len(libsonare.plp(onset, sample_rate=22050, hop_length=512, win_length=4)) == len(onset)
+
+
 def test_audio_detect_bpm() -> None:
     """Audio.detect_bpm returns a float."""
     from libsonare import Audio
@@ -220,6 +293,101 @@ def test_audio_detect_onsets() -> None:
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     onsets = audio.detect_onsets()
     assert isinstance(onsets, list)
+
+
+def test_mastering_returns_audio_and_loudness_metadata() -> None:
+    """mastering is exposed as a standalone function and Audio method."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
+
+    result = libsonare.mastering(samples, sample_rate=sr, target_lufs=-18.0)
+    assert isinstance(result.samples, list)
+    assert len(result.samples) == len(samples)
+    assert result.sample_rate == sr
+    assert math.isfinite(result.input_lufs)
+    assert math.isfinite(result.output_lufs)
+    assert math.isfinite(result.applied_gain_db)
+    assert result.output_lufs == pytest.approx(-18.0, abs=0.1)
+
+    audio = libsonare.Audio.from_buffer(samples, sample_rate=sr)
+    try:
+        audio_result = audio.mastering(target_lufs=-18.0)
+        assert len(audio_result.samples) == len(samples)
+        assert audio_result.sample_rate == sr
+    finally:
+        audio.close()
+
+
+def test_named_mastering_processors() -> None:
+    """Named mastering processors are exposed through the shared API."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 2)]
+
+    names = libsonare.mastering_processor_names()
+    assert "dynamics.compressor" in names
+    assert "stereo.imager" in names
+
+    result = libsonare.mastering_process(
+        "dynamics.compressor",
+        samples,
+        sample_rate=sr,
+        params={"thresholdDb": -24.0, "ratio": 1.5},
+    )
+    assert len(result.samples) == len(samples)
+    assert math.isfinite(result.output_lufs)
+
+    stereo = libsonare.mastering_process_stereo(
+        "stereo.imager",
+        samples,
+        samples,
+        sample_rate=sr,
+        params={"width": 1.1},
+    )
+    assert len(stereo.left) == len(samples)
+    assert len(stereo.right) == len(samples)
+
+
+def test_mastering_pair_and_stereo_analysis() -> None:
+    """Pair and stereo mastering APIs return shared processor output/JSON."""
+    import libsonare
+
+    sr = 44100
+    samples = [0.18 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 4)]
+    reference = [0.12 * math.sin(2 * math.pi * 880 * i / sr) for i in range(sr // 4)]
+
+    assert "match.abCrossfade" in libsonare.mastering_pair_processor_names()
+    assert "match.referenceLoudness" in libsonare.mastering_pair_analysis_names()
+    assert "stereo.monoCompatCheck" in libsonare.mastering_stereo_analysis_names()
+
+    paired = libsonare.mastering_pair_process(
+        "match.abCrossfade",
+        samples,
+        reference,
+        sample_rate=sr,
+        params={"mix": 0.25},
+    )
+    assert len(paired.samples) == len(samples)
+
+    pair_json = libsonare.mastering_pair_analyze(
+        "match.referenceLoudness",
+        samples,
+        reference,
+        sample_rate=sr,
+    )
+    assert '"sourceLufs"' in pair_json
+    assert '"referenceLufs"' in pair_json
+
+    stereo_json = libsonare.mastering_stereo_analyze(
+        "stereo.monoCompatCheck",
+        samples,
+        reference,
+        sample_rate=sr,
+    )
+    assert '"correlation"' in stereo_json
 
 
 def test_audio_analyze() -> None:
@@ -373,28 +541,6 @@ def test_trim() -> None:
     result = trim(samples, sample_rate=22050, threshold_db=-40.0)
     assert len(result) < len(samples)
     assert len(result) > 0
-
-
-def test_tts_utilities() -> None:
-    """TTS utilities measure, prepare, and shorten pauses."""
-    from libsonare import analyze_tts_quality, compress_pauses, prepare_tts
-
-    sr = 22050
-    tone = [0.2 * x for x in _generate_sine(440, sr, 0.4)]
-    samples = [0.0] * int(sr * 0.2) + tone + [0.0] * int(sr * 1.0) + tone
-
-    quality = analyze_tts_quality(samples, sample_rate=sr)
-    assert quality.duration_sec > 1.5
-    assert quality.silence_ratio > 0.2
-    assert quality.clipping_ratio == 0.0
-
-    prepared = prepare_tts(samples, sample_rate=sr)
-    assert len(prepared) < len(samples)
-    assert len(prepared) > 0
-
-    compressed = compress_pauses(samples, sample_rate=sr, max_pause_sec=0.25)
-    assert len(compressed) < len(samples)
-    assert len(compressed) > len(tone)
 
 
 ## Feature tests
@@ -880,11 +1026,6 @@ def test_audio_effects() -> None:
     assert len(trimmed) > 0
     assert len(trimmed) <= len(samples)
 
-    quality = audio.analyze_tts_quality()
-    assert quality.duration_sec > 0
-    assert len(audio.prepare_tts()) > 0
-    assert len(audio.compress_pauses()) > 0
-
 
 def test_audio_stft_db() -> None:
     """Audio.stft_db returns dB spectrogram."""
@@ -986,6 +1127,27 @@ def test_analysis_result_types() -> None:
         assert isinstance(t, float)
 
 
+def test_streaming_mastering_chain_processes_mono_block() -> None:
+    """StreamingMasteringChain processes a 512-sample mono block in place."""
+    from libsonare import StreamingMasteringChain
+
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
+    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+    block = [0.1] * 512
+    out = chain.process_mono(block)
+    assert len(out) == len(block)
+    assert any(abs(out[i] - block[i]) > 1e-6 for i in range(len(out)))
+    chain.reset()
+
+
+def test_streaming_mastering_chain_rejects_denoise() -> None:
+    """StreamingMasteringChain refuses configurations enabling repair.denoise."""
+    from libsonare import StreamingMasteringChain
+
+    with pytest.raises(RuntimeError):
+        StreamingMasteringChain({"repair.denoise.enabled": 1})
+
+
 def test_stft_result_types() -> None:
     """StftResult fields have correct types and shapes."""
     from libsonare import stft
@@ -1003,3 +1165,27 @@ def test_stft_result_types() -> None:
     assert result.hop_length == 512
     assert len(result.magnitude) == result.n_bins * result.n_frames
     assert len(result.power) == result.n_bins * result.n_frames
+
+
+def test_mastering_chain_invokes_progress_callback() -> None:
+    """mastering_chain forwards per-stage progress to on_progress callback."""
+    from libsonare import mastering_chain
+
+    calls: list[tuple[float, str]] = []
+
+    def on_progress(progress: float, stage: str) -> None:
+        calls.append((progress, stage))
+
+    result = mastering_chain(
+        samples=[0.1] * 22050,
+        sample_rate=22050,
+        config={"eq.tilt.tiltDb": 1.0, "dynamics.compressor.thresholdDb": -24.0},
+        on_progress=on_progress,
+    )
+    assert len(result.samples) == 22050
+    assert len(calls) >= 2
+    stages = [s for _, s in calls]
+    assert "eq.tilt" in stages
+    assert "dynamics.compressor" in stages
+    # Final progress reaches 1.0.
+    assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)

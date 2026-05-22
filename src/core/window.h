@@ -28,6 +28,12 @@ const std::vector<float>& get_window_cached(WindowType type, int length);
 /// @return Vector containing window coefficients
 std::vector<float> hann_window(int length);
 
+/// @brief Returns one Hann (raised cosine) window coefficient.
+/// @param index Coefficient index
+/// @param length Window length in samples
+/// @return Window coefficient
+float hann_value(int index, int length);
+
 /// @brief Creates a Hamming window.
 /// @param length Window length in samples
 /// @return Vector containing window coefficients

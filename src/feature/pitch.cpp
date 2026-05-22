@@ -5,6 +5,9 @@
 #include <limits>
 #include <numeric>
 
+#include "core/convert.h"
+#include "core/spectrum.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -364,7 +367,7 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
           float prev_freq = static_cast<float>(sr) / frame_candidates[i - 1][k].period;
           float curr_freq = static_cast<float>(sr) / frame_candidates[i][j].period;
           float ratio = curr_freq / prev_freq;
-          float cents = 1200.0f * std::log2(ratio);
+          float cents = constants::kCentsPerOctave * std::log2(ratio);
           float jump_penalty = std::exp(-cents * cents / (2.0f * 50.0f * 50.0f));
           trans_prob = kSelfTransition * jump_penalty;
         } else if (!prev_voiced && !curr_voiced) {
@@ -430,13 +433,131 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   return result;
 }
 
-float freq_to_midi(float freq) {
-  if (freq <= 0.0f) {
-    return 0.0f;
+float freq_to_midi(float freq) { return hz_to_midi(freq); }
+
+float midi_to_freq(float midi) { return midi_to_hz(midi); }
+
+PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmin, float fmax,
+                        float threshold) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(fmin > 0.0f && fmax > fmin, ErrorCode::InvalidParameter);
+  SONARE_CHECK(threshold >= 0.0f, ErrorCode::InvalidParameter);
+
+  StftConfig cfg;
+  cfg.n_fft = n_fft;
+  cfg.hop_length = hop_length;
+  cfg.win_length = n_fft;
+  cfg.center = true;
+  Spectrogram spec = Spectrogram::compute(audio, cfg);
+
+  const std::vector<float>& mag = spec.magnitude();
+  int n_bins = spec.n_bins();
+  int n_frames = spec.n_frames();
+  int sr = audio.sample_rate();
+
+  // Frequency at each FFT bin.
+  std::vector<float> bin_freq(n_bins);
+  for (int k = 0; k < n_bins; ++k) {
+    bin_freq[k] = static_cast<float>(k) * static_cast<float>(sr) / static_cast<float>(n_fft);
   }
-  return 12.0f * std::log2(freq / 440.0f) + 69.0f;
+
+  PiptrackResult out;
+  out.n_bins = n_bins;
+  out.n_frames = n_frames;
+  out.pitches.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  out.magnitudes.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+
+  for (int t = 0; t < n_frames; ++t) {
+    float maxm = 0.0f;
+    for (int k = 0; k < n_bins; ++k) maxm = std::max(maxm, mag[k * n_frames + t]);
+    float gate = threshold * maxm;
+
+    for (int k = 1; k < n_bins - 1; ++k) {
+      if (bin_freq[k] < fmin || bin_freq[k] > fmax) continue;
+      float a = mag[(k - 1) * n_frames + t];
+      float b = mag[k * n_frames + t];
+      float c = mag[(k + 1) * n_frames + t];
+      if (b <= a || b <= c || b < gate) continue;
+      float shift = parabolic_interp(a, b, c);
+      float freq =
+          (static_cast<float>(k) + shift) * static_cast<float>(sr) / static_cast<float>(n_fft);
+      out.pitches[k * n_frames + t] = freq;
+      // Quadratic max value at vertex.
+      float denom = a - 2.0f * b + c;
+      float peak_mag = b;
+      if (std::abs(denom) > 1e-10f) {
+        peak_mag = b - 0.25f * (a - c) * shift;
+      }
+      out.magnitudes[k * n_frames + t] = peak_mag;
+    }
+  }
+  return out;
 }
 
-float midi_to_freq(float midi) { return 440.0f * std::pow(2.0f, (midi - 69.0f) / 12.0f); }
+float pitch_tuning(const std::vector<float>& frequencies, float resolution, int bins_per_octave) {
+  SONARE_CHECK(resolution > 0.0f && resolution < 1.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(bins_per_octave > 0, ErrorCode::InvalidParameter);
+
+  // Convert to log-frequency bin offsets relative to A4.
+  // librosa: residual = mod(bins_per_octave * log2(freq/440) + 0.5, 1.0) - 0.5
+  std::vector<float> residuals;
+  residuals.reserve(frequencies.size());
+  for (float f : frequencies) {
+    if (f <= 0.0f || !std::isfinite(f)) continue;
+    float r = static_cast<float>(bins_per_octave) * std::log2(f / constants::kA4Hz);
+    float frac = r - std::floor(r);
+    if (frac >= 0.5f) frac -= 1.0f;
+    residuals.push_back(frac);
+  }
+  if (residuals.empty()) return 0.0f;
+
+  // Histogram with resolution bin width spanning (-0.5, 0.5].
+  int n_bins = static_cast<int>(std::round(1.0f / resolution));
+  if (n_bins <= 0) n_bins = 1;
+  std::vector<int> hist(n_bins, 0);
+  for (float v : residuals) {
+    int idx = static_cast<int>(std::floor((v + 0.5f) * n_bins));
+    if (idx < 0) idx = 0;
+    if (idx >= n_bins) idx = n_bins - 1;
+    hist[idx] += 1;
+  }
+  int peak = 0;
+  int peak_count = hist[0];
+  for (int i = 1; i < n_bins; ++i) {
+    if (hist[i] > peak_count) {
+      peak_count = hist[i];
+      peak = i;
+    }
+  }
+  return (static_cast<float>(peak) + 0.5f) / static_cast<float>(n_bins) - 0.5f;
+}
+
+float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resolution,
+                      int bins_per_octave) {
+  PiptrackResult pp = piptrack(audio, n_fft, hop_length);
+  std::vector<float> freqs;
+  freqs.reserve(pp.pitches.size());
+  // Filter: keep peaks above the per-frame median magnitude (librosa default).
+  for (int t = 0; t < pp.n_frames; ++t) {
+    float thresh = 0.0f;
+    std::vector<float> col_mags;
+    col_mags.reserve(pp.n_bins);
+    for (int k = 0; k < pp.n_bins; ++k) {
+      float m = pp.magnitudes[k * pp.n_frames + t];
+      if (m > 0.0f) col_mags.push_back(m);
+    }
+    if (!col_mags.empty()) {
+      std::sort(col_mags.begin(), col_mags.end());
+      thresh = col_mags[col_mags.size() / 2];
+    }
+    for (int k = 0; k < pp.n_bins; ++k) {
+      float p = pp.pitches[k * pp.n_frames + t];
+      float m = pp.magnitudes[k * pp.n_frames + t];
+      if (p > 0.0f && m >= thresh) freqs.push_back(p);
+    }
+  }
+  return pitch_tuning(freqs, resolution, bins_per_octave);
+}
 
 }  // namespace sonare

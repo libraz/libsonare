@@ -297,10 +297,10 @@ TEST_CASE("CQT phase correctness", "[cqt]") {
   // Find the bin closest to 440Hz
   int target_bin = find_bin_for_freq(result.frequencies(), freq);
 
-  // Verify that the phase progresses across frames.
-  // For a pure tone, the phase difference between consecutive frames should be
-  // approximately -2*pi*freq*hop_length/sr (modulo 2*pi).
-  float expected_phase_diff = -2.0f * M_PI * freq * config.hop_length / sr;
+  // Verify that the phase progresses across frames. librosa's CQT (and our
+  // matching implementation) uses a positive-phasor kernel exp(+jω n), which
+  // means the bin phase advances by +ω·hop/sr per frame for a pure tone.
+  float expected_phase_diff = 2.0f * M_PI * freq * config.hop_length / sr;
 
   // Normalize expected_phase_diff to [-pi, pi]
   while (expected_phase_diff > M_PI) expected_phase_diff -= 2.0f * M_PI;

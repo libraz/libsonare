@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from ._ffi import (
     SONARE_OK,
@@ -14,13 +15,19 @@ from ._ffi import (
     SonareDynamicsResult,
     SonareHpssResult,
     SonareKey,
+    SonareMasteringChainResult,
+    SonareMasteringChainStereoResult,
+    SonareMasteringConfig,
+    SonareMasteringParam,
+    SonareMasteringProgressCallback,
+    SonareMasteringResult,
+    SonareMasteringStereoResult,
     SonareMelResult,
     SonareMfccResult,
     SonarePitchResult,
     SonareRhythmResult,
     SonareStftResult,
     SonareTimbreResult,
-    SonareTtsQualityResult,
     load_library,
 )
 from .types import (
@@ -33,6 +40,10 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    MasteringChainResult,
+    MasteringChainStereoResult,
+    MasteringResult,
+    MasteringStereoResult,
     MelSpectrogramResult,
     MfccResult,
     Mode,
@@ -42,7 +53,6 @@ from .types import (
     StftResult,
     TimbreResult,
     TimeSignature,
-    TtsQualityResult,
 )
 
 _lib: ctypes.CDLL | None = None
@@ -79,6 +89,20 @@ def _to_c_float_array(
     length = len(samples)
     c_array = (ctypes.c_float * length)(*samples)
     return c_array, length
+
+
+def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int], int]:
+    length = len(values)
+    c_array = (ctypes.c_int * length)(*values)
+    return c_array, length
+
+
+def _float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+    return [float(out[i]) for i in range(count)]
+
+
+def _int_array_result(out: ctypes.POINTER(ctypes.c_int), count: int) -> list[int]:
+    return [int(out[i]) for i in range(count)]
 
 
 def detect_bpm(
@@ -351,9 +375,7 @@ def analyze_rhythm(
             syncopation=float(out.syncopation),
             pattern_regularity=float(out.pattern_regularity),
             tempo_stability=float(out.tempo_stability),
-            beat_intervals=[
-                float(out.beat_intervals[i]) for i in range(out.beat_interval_count)
-            ],
+            beat_intervals=[float(out.beat_intervals[i]) for i in range(out.beat_interval_count)],
         )
     finally:
         lib.sonare_free_rhythm_result(ctypes.byref(out))
@@ -388,12 +410,8 @@ def analyze_dynamics(
             crest_factor=float(out.crest_factor),
             loudness_range_db=float(out.loudness_range_db),
             is_compressed=bool(out.is_compressed),
-            loudness_times=[
-                float(out.loudness_times[i]) for i in range(out.loudness_count)
-            ],
-            loudness_rms_db=[
-                float(out.loudness_rms_db[i]) for i in range(out.loudness_count)
-            ],
+            loudness_times=[float(out.loudness_times[i]) for i in range(out.loudness_count)],
+            loudness_rms_db=[float(out.loudness_rms_db[i]) for i in range(out.loudness_count)],
         )
     finally:
         lib.sonare_free_dynamics_result(ctypes.byref(out))
@@ -432,16 +450,13 @@ def analyze_timbre(
             roughness=float(out.roughness),
             complexity=float(out.complexity),
             spectral_centroid=[
-                float(out.spectral_centroid[i])
-                for i in range(out.spectral_centroid_count)
+                float(out.spectral_centroid[i]) for i in range(out.spectral_centroid_count)
             ],
             spectral_flatness=[
-                float(out.spectral_flatness[i])
-                for i in range(out.spectral_flatness_count)
+                float(out.spectral_flatness[i]) for i in range(out.spectral_flatness_count)
             ],
             spectral_rolloff=[
-                float(out.spectral_rolloff[i])
-                for i in range(out.spectral_rolloff_count)
+                float(out.spectral_rolloff[i]) for i in range(out.spectral_rolloff_count)
             ],
         )
     finally:
@@ -735,6 +750,758 @@ def normalize(
     return result
 
 
+def mastering(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    target_lufs: float = -14.0,
+    ceiling_db: float = -1.0,
+    true_peak_oversample: int = 4,
+) -> MasteringResult:
+    """Apply mastering loudness normalization with a true-peak ceiling."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_process"):
+        raise RuntimeError("libsonare was built without mastering support")
+
+    c_array, length = _to_c_float_array(samples)
+    config = SonareMasteringConfig(
+        target_lufs=target_lufs,
+        ceiling_db=ceiling_db,
+        true_peak_oversample=true_peak_oversample,
+    )
+    out = SonareMasteringResult()
+    rc = lib.sonare_mastering_process(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        processed = [float(out.samples[i]) for i in range(out.length)]
+        return MasteringResult(
+            samples=processed,
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+def _mastering_params(params: dict[str, float | int | bool] | None):
+    items = list((params or {}).items())
+    array_type = SonareMasteringParam * len(items)
+    key_buffers = [str(key).encode("utf-8") for key, _ in items]
+    array = array_type(
+        *[
+            SonareMasteringParam(key=key_buffers[index], value=float(value))
+            for index, (_, value) in enumerate(items)
+        ]
+    )
+    return array, len(items)
+
+
+def mastering_processor_names() -> list[str]:
+    """Return supported mastering processor names shared by CLI/Node/WASM/Python."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_processor_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_processor_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_pair_processor_names() -> list[str]:
+    """Return supported two-input mastering processor names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_pair_processor_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_pair_processor_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_pair_analysis_names() -> list[str]:
+    """Return supported two-input mastering analysis names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_pair_analysis_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_pair_analysis_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_stereo_analysis_names() -> list[str]:
+    """Return supported stereo mastering analysis names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_stereo_analysis_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_stereo_analysis_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_process(
+    processor_name: str,
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringResult:
+    """Apply a named mastering processor using the shared cross-language API."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_processor"):
+        raise RuntimeError("libsonare was built without mastering support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _mastering_params(params)
+    out = SonareMasteringResult()
+    rc = lib.sonare_mastering_apply_processor(
+        processor_name.encode("utf-8"),
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+def mastering_process_stereo(
+    processor_name: str,
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringStereoResult:
+    """Apply a named stereo mastering processor using the shared cross-language API."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_processor_stereo"):
+        raise RuntimeError("libsonare was built without mastering support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _mastering_params(params)
+    out = SonareMasteringStereoResult()
+    rc = lib.sonare_mastering_apply_processor_stereo(
+        processor_name.encode("utf-8"),
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
+
+
+def _flatten_chain_config(
+    config: dict | None,
+    prefix: str = "",
+) -> dict[str, float]:
+    """Flatten a nested chain config dict using dot-notation keys.
+
+    Accepts both nested (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``)
+    and flat (``{"dynamics.compressor.thresholdDb": -24}``) representations.
+    Booleans are coerced to 0.0/1.0; other values are coerced via ``float``.
+    """
+    flat: dict[str, float] = {}
+    if not config:
+        return flat
+    for key, value in config.items():
+        full_key = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
+        if isinstance(value, dict):
+            flat.update(_flatten_chain_config(value, full_key))
+        elif isinstance(value, bool):
+            flat[full_key] = 1.0 if value else 0.0
+        else:
+            flat[full_key] = float(value)
+    return flat
+
+
+def _chain_params(config: dict | None):
+    flat = _flatten_chain_config(config)
+    items = list(flat.items())
+    array_type = SonareMasteringParam * len(items)
+    key_buffers = [str(key).encode("utf-8") for key, _ in items]
+    array = array_type(
+        *[
+            SonareMasteringParam(key=key_buffers[index], value=float(value))
+            for index, (_, value) in enumerate(items)
+        ]
+    )
+    return array, len(items)
+
+
+def _extract_stages(stages_ptr, count: int) -> list[str]:
+    if not stages_ptr or count == 0:
+        return []
+    result: list[str] = []
+    for i in range(count):
+        raw = stages_ptr[i]
+        result.append(raw.decode("utf-8") if raw else "")
+    return result
+
+
+def _make_progress_trampoline(
+    on_progress: Callable[[float, str], None],
+) -> SonareMasteringProgressCallback:
+    """Wrap a Python callback for use as a C SonareMasteringProgressCallback.
+
+    The returned object MUST be kept alive across the C call to avoid GC
+    collecting the underlying ctypes closure.
+    """
+
+    def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
+        try:
+            stage = stage_cstr.decode("utf-8") if stage_cstr else ""
+            on_progress(float(progress), stage)
+        except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
+            pass
+
+    return SonareMasteringProgressCallback(_trampoline)
+
+
+def mastering_chain(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    config: dict | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
+) -> MasteringChainResult:
+    """Apply a configurable mastering chain to mono audio.
+
+    The chain composes (in fixed order) repair, EQ, dynamics, saturation,
+    spectral, maximizer, and loudness stages. Each stage is enabled either
+    by passing ``"<stage>.enabled": True`` or by setting any field under
+    ``"<stage>.*"``. Unknown keys raise ``RuntimeError``.
+
+    Args:
+        samples: Mono audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        config: Either a flat dict using dot-notation keys (e.g.
+            ``{"dynamics.compressor.thresholdDb": -24}``) or a nested dict
+            (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``). The
+            two forms can be freely mixed.
+        on_progress: Optional callback ``(progress, stage)`` invoked after
+            each enabled stage completes. ``progress`` is in ``[0.0, 1.0]``
+            and ``stage`` is the stage identifier (e.g.
+            ``"dynamics.compressor"``). Exceptions raised inside the
+            callback are swallowed.
+
+    Returns:
+        :class:`MasteringChainResult` with processed samples, LUFS info,
+        and the ordered list of stages that ran.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_chain"):
+        raise RuntimeError("libsonare was built without mastering chain support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _chain_params(config)
+    out = SonareMasteringChainResult()
+    if on_progress is None:
+        rc = lib.sonare_mastering_chain(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            ctypes.byref(out),
+        )
+    else:
+        if not hasattr(lib, "sonare_mastering_chain_with_progress"):
+            raise RuntimeError("libsonare was built without mastering progress support")
+        cb = _make_progress_trampoline(on_progress)  # keep alive across the C call
+        rc = lib.sonare_mastering_chain_with_progress(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            cb,
+            None,
+            ctypes.byref(out),
+        )
+    _check(rc)
+    try:
+        return MasteringChainResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_result(ctypes.byref(out))
+
+
+def mastering_chain_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    config: dict | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
+) -> MasteringChainStereoResult:
+    """Apply a configurable mastering chain to stereo audio.
+
+    See :func:`mastering_chain` for ``config`` and ``on_progress`` semantics.
+    The stereo path also recognises ``stereo.imager.*`` and
+    ``stereo.monoMaker.*`` stages.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_chain_stereo"):
+        raise RuntimeError("libsonare was built without mastering chain support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _chain_params(config)
+    out = SonareMasteringChainStereoResult()
+    if on_progress is None:
+        rc = lib.sonare_mastering_chain_stereo(
+            left_array,
+            right_array,
+            ctypes.c_size_t(left_length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            ctypes.byref(out),
+        )
+    else:
+        if not hasattr(lib, "sonare_mastering_chain_stereo_with_progress"):
+            raise RuntimeError("libsonare was built without mastering progress support")
+        cb = _make_progress_trampoline(on_progress)  # keep alive across the C call
+        rc = lib.sonare_mastering_chain_stereo_with_progress(
+            left_array,
+            right_array,
+            ctypes.c_size_t(left_length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            cb,
+            None,
+            ctypes.byref(out),
+        )
+    _check(rc)
+    try:
+        return MasteringChainStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
+
+
+def mastering_preset_names() -> list[str]:
+    """Return built-in mastering preset identifiers (e.g. ``"pop"``, ``"aiMusic"``)."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_preset_names"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    raw = lib.sonare_mastering_preset_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def master_audio(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    preset: str = "pop",
+    overrides: dict[str, float | int | bool] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
+) -> MasteringChainResult:
+    """Apply a named mastering preset chain to mono audio.
+
+    Args:
+        samples: Mono audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        preset: Preset identifier from :func:`mastering_preset_names`.
+        overrides: Optional flat / nested overrides applied on top of the preset
+            defaults. Keys use the same dot-notation as :func:`mastering_chain`.
+        on_progress: Optional callback ``(progress, stage)`` invoked after each
+            enabled stage completes. See :func:`mastering_chain` for details.
+
+    Returns:
+        :class:`MasteringChainResult` with processed samples, LUFS info, and the
+        ordered list of stages that ran.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_master_audio"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _chain_params(overrides)
+    out = SonareMasteringChainResult()
+    if on_progress is None:
+        rc = lib.sonare_master_audio(
+            preset.encode("utf-8"),
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            ctypes.byref(out),
+        )
+    else:
+        if not hasattr(lib, "sonare_master_audio_with_progress"):
+            raise RuntimeError("libsonare was built without mastering progress support")
+        cb = _make_progress_trampoline(on_progress)  # keep alive across the C call
+        rc = lib.sonare_master_audio_with_progress(
+            preset.encode("utf-8"),
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            cb,
+            None,
+            ctypes.byref(out),
+        )
+    _check(rc)
+    try:
+        return MasteringChainResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_result(ctypes.byref(out))
+
+
+def master_audio_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    preset: str = "pop",
+    overrides: dict[str, float | int | bool] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
+) -> MasteringChainStereoResult:
+    """Apply a named mastering preset chain to stereo audio.
+
+    See :func:`master_audio` for the ``preset``, ``overrides`` and
+    ``on_progress`` semantics.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_master_audio_stereo"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _chain_params(overrides)
+    out = SonareMasteringChainStereoResult()
+    if on_progress is None:
+        rc = lib.sonare_master_audio_stereo(
+            preset.encode("utf-8"),
+            left_array,
+            right_array,
+            ctypes.c_size_t(left_length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            ctypes.byref(out),
+        )
+    else:
+        if not hasattr(lib, "sonare_master_audio_stereo_with_progress"):
+            raise RuntimeError("libsonare was built without mastering progress support")
+        cb = _make_progress_trampoline(on_progress)  # keep alive across the C call
+        rc = lib.sonare_master_audio_stereo_with_progress(
+            preset.encode("utf-8"),
+            left_array,
+            right_array,
+            ctypes.c_size_t(left_length),
+            ctypes.c_int(sample_rate),
+            param_array,
+            ctypes.c_size_t(param_count),
+            cb,
+            None,
+            ctypes.byref(out),
+        )
+    _check(rc)
+    try:
+        return MasteringChainStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            stages=_extract_stages(out.stages, int(out.stages_count)),
+        )
+    finally:
+        lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
+
+
+class StreamingMasteringChain:
+    """Block-by-block streaming variant of :func:`mastering_chain`.
+
+    Maintains processor state across :meth:`process_mono`/:meth:`process_stereo`
+    calls. Only ProcessorBase-backed stages (eq.tilt, dynamics.compressor,
+    saturation.tape, saturation.exciter, spectral.airBand, stereo.imager,
+    stereo.monoMaker, maximizer.truePeakLimiter) are supported. Configurations
+    that enable ``repair.denoise`` or ``loudness`` raise :class:`RuntimeError`.
+
+    Example::
+
+        chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
+        chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+        out = chain.process_mono([0.1] * 512)
+        chain.reset()
+
+    Can also be used as a context manager to ensure the underlying handle is
+    released::
+
+        with StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}) as chain:
+            chain.prepare(44100, 512, 1)
+            ...
+    """
+
+    def __init__(self, config: dict | None = None) -> None:
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
+            raise RuntimeError("libsonare was built without streaming mastering chain support")
+        param_array, param_count = _chain_params(config)
+        handle = lib.sonare_streaming_mastering_chain_create(
+            param_array, ctypes.c_size_t(param_count)
+        )
+        if not handle:
+            detail = ""
+            if hasattr(lib, "sonare_last_error_message"):
+                raw = lib.sonare_last_error_message()
+                if raw:
+                    detail = raw.decode("utf-8", errors="replace")
+            message = "failed to create StreamingMasteringChain"
+            if detail:
+                message = f"{message}: {detail}"
+            raise RuntimeError(message)
+        self._lib = lib
+        self._handle = ctypes.c_void_p(handle)
+        self._prepared_channels = 0
+
+    def prepare(self, sample_rate: int, max_block_size: int, num_channels: int) -> None:
+        """Initialize processors for the given sample rate and block layout.
+
+        Args:
+            sample_rate: Sample rate in Hz.
+            max_block_size: Maximum block size in samples per
+                :meth:`process_mono` / :meth:`process_stereo` call.
+            num_channels: 1 (mono) or 2 (stereo). Stereo-only stages
+                (imager, monoMaker) are skipped when ``num_channels`` is 1.
+        """
+        self._ensure_open()
+        rc = self._lib.sonare_streaming_mastering_chain_prepare(
+            self._handle,
+            ctypes.c_int(int(sample_rate)),
+            ctypes.c_int(int(max_block_size)),
+            ctypes.c_int(int(num_channels)),
+        )
+        _check(rc)
+        self._prepared_channels = int(num_channels)
+
+    def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
+        """Process one mono block, returning the processed samples (length unchanged)."""
+        self._ensure_open()
+        c_array, length = _to_c_float_array(samples)
+        rc = self._lib.sonare_streaming_mastering_chain_process_mono(
+            self._handle, c_array, ctypes.c_size_t(length)
+        )
+        _check(rc)
+        return [float(c_array[i]) for i in range(length)]
+
+    def process_stereo(
+        self,
+        left: Sequence[float] | list[float],
+        right: Sequence[float] | list[float],
+    ) -> tuple[list[float], list[float]]:
+        """Process one stereo block, returning the processed (left, right) channels."""
+        self._ensure_open()
+        left_array, left_length = _to_c_float_array(left)
+        right_array, right_length = _to_c_float_array(right)
+        if left_length != right_length:
+            raise ValueError("left and right channel lengths must match")
+        rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
+            self._handle, left_array, right_array, ctypes.c_size_t(left_length)
+        )
+        _check(rc)
+        return (
+            [float(left_array[i]) for i in range(left_length)],
+            [float(right_array[i]) for i in range(right_length)],
+        )
+
+    def reset(self) -> None:
+        """Reset all processor state without rebuilding."""
+        self._ensure_open()
+        rc = self._lib.sonare_streaming_mastering_chain_reset(self._handle)
+        _check(rc)
+
+    @property
+    def latency_samples(self) -> int:
+        """Total reported latency in samples across all active processors."""
+        if self._handle is None or not self._handle:
+            return 0
+        return int(self._lib.sonare_streaming_mastering_chain_latency_samples(self._handle))
+
+    def close(self) -> None:
+        """Release the underlying C handle. Safe to call multiple times."""
+        if self._handle is not None and self._handle:
+            self._lib.sonare_streaming_mastering_chain_destroy(self._handle)
+            self._handle = ctypes.c_void_p(0)
+
+    def __enter__(self) -> StreamingMasteringChain:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        # Defensive: __del__ must not raise
+        with contextlib.suppress(Exception):
+            self.close()
+
+    def _ensure_open(self) -> None:
+        if self._handle is None or not self._handle:
+            raise RuntimeError("StreamingMasteringChain is closed")
+
+
+def mastering_pair_process(
+    processor_name: str,
+    source: Sequence[float] | list[float],
+    reference: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringResult:
+    """Apply a named two-input mastering processor."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_pair_processor"):
+        raise RuntimeError("libsonare was built without mastering support")
+    source_array, source_length = _to_c_float_array(source)
+    reference_array, reference_length = _to_c_float_array(reference)
+    if source_length != reference_length:
+        raise ValueError("source and reference lengths must match")
+    param_array, param_count = _mastering_params(params)
+    out = SonareMasteringResult()
+    rc = lib.sonare_mastering_apply_pair_processor(
+        processor_name.encode("utf-8"),
+        source_array,
+        reference_array,
+        ctypes.c_size_t(source_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+def mastering_pair_analyze(
+    analysis_name: str,
+    source: Sequence[float] | list[float],
+    reference: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> str:
+    """Run a named two-input mastering analysis and return shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_analyze_pair"):
+        raise RuntimeError("libsonare was built without mastering support")
+    source_array, source_length = _to_c_float_array(source)
+    reference_array, reference_length = _to_c_float_array(reference)
+    if source_length != reference_length:
+        raise ValueError("source and reference lengths must match")
+    param_array, param_count = _mastering_params(params)
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_analyze_pair(
+        analysis_name.encode("utf-8"),
+        source_array,
+        reference_array,
+        ctypes.c_size_t(source_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def mastering_stereo_analyze(
+    analysis_name: str,
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> str:
+    """Run a named stereo mastering analysis and return shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_analyze_stereo"):
+        raise RuntimeError("libsonare was built without mastering support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _mastering_params(params)
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_analyze_stereo(
+        analysis_name.encode("utf-8"),
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
 def trim(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -759,92 +1526,6 @@ def trim(
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
         ctypes.c_float(threshold_db),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    result = [float(out[i]) for i in range(out_length.value)]
-    if out and out_length.value > 0:
-        lib.sonare_free_floats(out)
-    return result
-
-
-def analyze_tts_quality(
-    samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    silence_threshold_db: float = -45.0,
-) -> TtsQualityResult:
-    """Measure objective TTS audio properties without heuristic labels."""
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out = SonareTtsQualityResult()
-    rc = lib.sonare_analyze_tts_quality(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_float(silence_threshold_db),
-        ctypes.byref(out),
-    )
-    _check(rc)
-    return TtsQualityResult(
-        duration_sec=float(out.duration_sec),
-        peak_db=float(out.peak_db),
-        rms_db=float(out.rms_db),
-        silence_ratio=float(out.silence_ratio),
-        clipping_ratio=float(out.clipping_ratio),
-        leading_silence_sec=float(out.leading_silence_sec),
-        trailing_silence_sec=float(out.trailing_silence_sec),
-    )
-
-
-def prepare_tts(
-    samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    target_rms_db: float = -20.0,
-    silence_threshold_db: float = -45.0,
-    peak_limit_db: float = -1.0,
-    fade_sec: float = 0.005,
-) -> list[float]:
-    """Trim, RMS-normalize, peak-limit, and lightly fade TTS audio."""
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_prepare_tts(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_float(target_rms_db),
-        ctypes.c_float(silence_threshold_db),
-        ctypes.c_float(peak_limit_db),
-        ctypes.c_float(fade_sec),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    result = [float(out[i]) for i in range(out_length.value)]
-    if out and out_length.value > 0:
-        lib.sonare_free_floats(out)
-    return result
-
-
-def compress_pauses(
-    samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    max_pause_sec: float = 0.6,
-    silence_threshold_db: float = -45.0,
-) -> list[float]:
-    """Shorten contiguous low-level pauses to at most max_pause_sec."""
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_compress_pauses(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_float(max_pause_sec),
-        ctypes.c_float(silence_threshold_db),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )
@@ -1486,6 +2167,425 @@ def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
     lib = _get_lib()
     return int(
         lib.sonare_time_to_frames(ctypes.c_float(time), ctypes.c_int(sr), ctypes.c_int(hop_length))
+    )
+
+
+def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int = 0) -> int:
+    """Convert frame count to sample index."""
+    lib = _get_lib()
+    return int(
+        lib.sonare_frames_to_samples(
+            ctypes.c_int(frames), ctypes.c_int(hop_length), ctypes.c_int(n_fft)
+        )
+    )
+
+
+def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int = 0) -> int:
+    """Convert sample index to frame count."""
+    lib = _get_lib()
+    return int(
+        lib.sonare_samples_to_frames(
+            ctypes.c_int(samples), ctypes.c_int(hop_length), ctypes.c_int(n_fft)
+        )
+    )
+
+
+def _call_float_transform(
+    fn_name: str, values: Sequence[float] | list[float], *args: object
+) -> list[float]:
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(values)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = getattr(lib, fn_name)(
+        c_array,
+        ctypes.c_size_t(length),
+        *args,
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def power_to_db(
+    values: Sequence[float] | list[float],
+    ref: float = 1.0,
+    amin: float = 1e-10,
+    top_db: float = 80.0,
+) -> list[float]:
+    """Convert power values to dB."""
+    return _call_float_transform(
+        "sonare_power_to_db",
+        values,
+        ctypes.c_float(ref),
+        ctypes.c_float(amin),
+        ctypes.c_float(top_db),
+    )
+
+
+def amplitude_to_db(
+    values: Sequence[float] | list[float],
+    ref: float = 1.0,
+    amin: float = 1e-5,
+    top_db: float = 80.0,
+) -> list[float]:
+    """Convert amplitude values to dB."""
+    return _call_float_transform(
+        "sonare_amplitude_to_db",
+        values,
+        ctypes.c_float(ref),
+        ctypes.c_float(amin),
+        ctypes.c_float(top_db),
+    )
+
+
+def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
+    """Convert dB values back to power."""
+    return _call_float_transform("sonare_db_to_power", values, ctypes.c_float(ref))
+
+
+def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
+    """Convert dB values back to amplitude."""
+    return _call_float_transform("sonare_db_to_amplitude", values, ctypes.c_float(ref))
+
+
+def preemphasis(
+    samples: Sequence[float] | list[float],
+    coef: float = 0.97,
+    zi: float | None = None,
+) -> list[float]:
+    """Apply librosa-compatible pre-emphasis."""
+    return _call_float_transform(
+        "sonare_preemphasis",
+        samples,
+        ctypes.c_float(coef),
+        ctypes.c_float(0.0 if zi is None else zi),
+        ctypes.c_int(0 if zi is None else 1),
+    )
+
+
+def deemphasis(
+    samples: Sequence[float] | list[float],
+    coef: float = 0.97,
+    zi: float | None = None,
+) -> list[float]:
+    """Apply inverse pre-emphasis."""
+    return _call_float_transform(
+        "sonare_deemphasis",
+        samples,
+        ctypes.c_float(coef),
+        ctypes.c_float(0.0 if zi is None else zi),
+        ctypes.c_int(0 if zi is None else 1),
+    )
+
+
+def trim_silence(
+    samples: Sequence[float] | list[float],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> tuple[list[float], int, int]:
+    """Trim leading/trailing silence and return (audio, start_sample, end_sample)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    start = ctypes.c_int()
+    end = ctypes.c_int()
+    rc = lib.sonare_trim_silence(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_float(top_db),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(start),
+        ctypes.byref(end),
+    )
+    _check(rc)
+    try:
+        return (_float_array_result(out, out_length.value), int(start.value), int(end.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def split_silence(
+    samples: Sequence[float] | list[float],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> list[tuple[int, int]]:
+    """Return non-silent intervals as (start_sample, end_sample)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_count = ctypes.c_size_t()
+    rc = lib.sonare_split_silence(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_float(top_db),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
+    _check(rc)
+    try:
+        flat = _int_array_result(out, out_count.value)
+        return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def frame_signal(
+    samples: Sequence[float] | list[float],
+    frame_length: int,
+    hop_length: int,
+) -> tuple[int, list[float]]:
+    """Slice a signal into frames. Returns (n_frames, row-major frames)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_frame_signal(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def pad_center(
+    values: Sequence[float] | list[float],
+    size: int,
+    pad_value: float = 0.0,
+) -> list[float]:
+    """Pad an array by centering it within target size."""
+    return _call_float_transform(
+        "sonare_pad_center", values, ctypes.c_size_t(size), ctypes.c_float(pad_value)
+    )
+
+
+def fix_length(
+    values: Sequence[float] | list[float],
+    size: int,
+    pad_value: float = 0.0,
+) -> list[float]:
+    """Crop or pad an array to exact length."""
+    return _call_float_transform(
+        "sonare_fix_length", values, ctypes.c_size_t(size), ctypes.c_float(pad_value)
+    )
+
+
+def fix_frames(
+    frames: Sequence[int] | list[int],
+    x_min: int = 0,
+    x_max: int = -1,
+    pad: bool = True,
+) -> list[int]:
+    """Adjust frame indices to fit within bounds."""
+    lib = _get_lib()
+    c_array, length = _to_c_int_array(frames)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_fix_frames(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(x_min),
+        ctypes.c_int(x_max),
+        ctypes.c_int(1 if pad else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _int_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def peak_pick(
+    values: Sequence[float] | list[float],
+    pre_max: int,
+    post_max: int,
+    pre_avg: int,
+    post_avg: int,
+    delta: float,
+    wait: int,
+) -> list[int]:
+    """Pick peaks using librosa.util.peak_pick-compatible parameters."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(values)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_peak_pick(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(pre_max),
+        ctypes.c_int(post_max),
+        ctypes.c_int(pre_avg),
+        ctypes.c_int(post_avg),
+        ctypes.c_float(delta),
+        ctypes.c_int(wait),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _int_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def vector_normalize(
+    values: Sequence[float] | list[float],
+    norm_type: int = 0,
+    threshold: float = 0.0,
+) -> list[float]:
+    """Normalize a vector. norm_type: 0=inf, 1=L1, 2=L2, 3=power."""
+    return _call_float_transform(
+        "sonare_vector_normalize",
+        values,
+        ctypes.c_int(norm_type),
+        ctypes.c_float(threshold),
+    )
+
+
+def pcen(
+    values: Sequence[float] | list[float],
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    time_constant: float = 0.4,
+    gain: float = 0.98,
+    bias: float = 2.0,
+    power: float = 0.5,
+    eps: float = 1e-6,
+) -> list[float]:
+    """Apply per-channel energy normalization to a row-major spectrogram."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(values)
+    if length != n_bins * n_frames:
+        raise ValueError("values length must equal n_bins * n_frames")
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_pcen(
+        c_array,
+        ctypes.c_int(n_bins),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(time_constant),
+        ctypes.c_float(gain),
+        ctypes.c_float(bias),
+        ctypes.c_float(power),
+        ctypes.c_float(eps),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: int) -> list[float]:
+    """Compute Tonnetz from row-major chromagram data."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(chromagram)
+    if length != n_chroma * n_frames:
+        raise ValueError("chromagram length must equal n_chroma * n_frames")
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_tonnetz(
+        c_array,
+        ctypes.c_int(n_chroma),
+        ctypes.c_int(n_frames),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def tempogram(
+    onset_envelope: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    win_length: int = 384,
+    center: bool = True,
+    norm: bool = True,
+) -> tuple[int, list[float]]:
+    """Compute autocorrelation tempogram. Returns (n_frames, row-major matrix)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(onset_envelope)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_tempogram(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(win_length),
+        ctypes.c_int(1 if center else 0),
+        ctypes.c_int(1 if norm else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def plp(
+    onset_envelope: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    tempo_min: float = 30.0,
+    tempo_max: float = 300.0,
+    win_length: int = 384,
+) -> list[float]:
+    """Compute predominant local pulse from an onset envelope."""
+    return _call_float_transform(
+        "sonare_plp",
+        onset_envelope,
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(tempo_min),
+        ctypes.c_float(tempo_max),
+        ctypes.c_int(win_length),
     )
 
 

@@ -1,0 +1,109 @@
+#include "mastering/saturation/waveshaper.h"
+
+#include <cmath>
+#include <stdexcept>
+
+#include "util/constants.h"
+#include "util/db.h"
+
+namespace sonare::mastering::saturation {
+
+namespace {
+
+using sonare::constants::kPi;
+
+}  // namespace
+
+Waveshaper::Waveshaper(WaveshaperConfig config) : config_(config) { validate_config(config_); }
+
+void Waveshaper::prepare(double sample_rate, int max_block_size) {
+  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
+  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  prepared_ = true;
+}
+
+void Waveshaper::process(float* const* channels, int num_channels, int num_samples) {
+  if (!prepared_) throw std::logic_error("Waveshaper must be prepared before processing");
+  if (num_channels < 0 || num_samples < 0) {
+    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+  }
+  if (num_channels == 0 || num_samples == 0) return;
+  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  ensure_state(num_channels);
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    for (int i = 0; i < num_samples; ++i) channels[ch][i] = shape_sample(channels[ch][i], ch);
+  }
+}
+
+void Waveshaper::reset() {
+  for (auto& state : tanh_adaa_) state.reset();
+  for (auto& state : arctan_adaa_) state.reset();
+}
+
+void Waveshaper::set_config(const WaveshaperConfig& config) {
+  validate_config(config);
+  const bool reset_state = config_.curve != config.curve || config_.aliasing != config.aliasing ||
+                           config_.bias != config.bias;
+  config_ = config;
+  if (reset_state) reset();
+}
+
+float Waveshaper::db_to_linear(float db) { return ::sonare::db_to_linear(db); }
+
+float Waveshaper::shape(float sample, const WaveshaperConfig& config) {
+  const float driven = sample * db_to_linear(config.drive_db) + config.bias;
+  float wet = driven;
+  switch (config.curve) {
+    case WaveshaperCurve::Tanh:
+      wet = std::tanh(driven);
+      break;
+    case WaveshaperCurve::Arctan:
+      wet = (2.0f / kPi) * std::atan(driven);
+      break;
+    case WaveshaperCurve::Asymmetric:
+      wet = std::tanh(driven + 0.35f * driven * driven);
+      break;
+  }
+  wet *= db_to_linear(config.output_gain_db);
+  return sample * (1.0f - config.mix) + wet * config.mix;
+}
+
+void Waveshaper::validate_config(const WaveshaperConfig& config) {
+  if (config.mix < 0.0f || config.mix > 1.0f) {
+    throw std::invalid_argument("waveshaper mix must be in [0, 1]");
+  }
+}
+
+void Waveshaper::ensure_state(int num_channels) {
+  if (tanh_adaa_.size() != static_cast<size_t>(num_channels)) {
+    tanh_adaa_.clear();
+    arctan_adaa_.clear();
+    tanh_adaa_.resize(static_cast<size_t>(num_channels));
+    arctan_adaa_.resize(static_cast<size_t>(num_channels));
+  }
+}
+
+float Waveshaper::shape_sample(float sample, int channel) {
+  if (config_.aliasing != common::AliasingControl::Adaa1 ||
+      config_.curve == WaveshaperCurve::Asymmetric) {
+    return shape(sample, config_);
+  }
+
+  const float driven = sample * db_to_linear(config_.drive_db) + config_.bias;
+  float wet = driven;
+  switch (config_.curve) {
+    case WaveshaperCurve::Tanh:
+      wet = tanh_adaa_[static_cast<size_t>(channel)].process(driven);
+      break;
+    case WaveshaperCurve::Arctan:
+      wet = (2.0f / kPi) * arctan_adaa_[static_cast<size_t>(channel)].process(driven);
+      break;
+    case WaveshaperCurve::Asymmetric:
+      break;
+  }
+  wet *= db_to_linear(config_.output_gain_db);
+  return sample * (1.0f - config_.mix) + wet * config_.mix;
+}
+
+}  // namespace sonare::mastering::saturation

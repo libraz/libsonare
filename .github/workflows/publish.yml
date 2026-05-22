@@ -28,9 +28,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            .yarn/cache
-            node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+            bindings/wasm/.yarn/cache
+            bindings/wasm/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('bindings/wasm/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
 
@@ -43,10 +43,18 @@ jobs:
           cmake --build build --parallel
           ctest --test-dir build --output-on-failure
 
-      - run: yarn install --immutable
-      - run: yarn build
-      - run: yarn lint
-      - run: yarn test
+      - name: Install Node deps (WASM binding)
+        working-directory: bindings/wasm
+        run: yarn install --immutable
+      - name: Build WASM binding
+        working-directory: bindings/wasm
+        run: yarn build
+      - name: Lint WASM binding
+        working-directory: bindings/wasm
+        run: yarn lint
+      - name: Test WASM binding
+        working-directory: bindings/wasm
+        run: yarn test
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -57,7 +65,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: npm publish --access public --provenance
+      - name: Publish to npm
+        working-directory: bindings/wasm
+        run: npm publish --access public --provenance
 
   python-wheels:
     strategy:

@@ -3,7 +3,6 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 #include "util/exception.h"
 
@@ -141,6 +140,25 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
   return onset_multi;
 }
 
+std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vector<float>& energy) {
+  // librosa.onset.onset_backtrack walks each event backwards in time while the
+  // energy curve is strictly decreasing, snapping to the nearest local minimum.
+  std::vector<int> out;
+  out.reserve(events.size());
+  if (energy.empty()) {
+    return out;
+  }
+  const int n = static_cast<int>(energy.size());
+  for (int e : events) {
+    int i = std::min(std::max(e, 0), n - 1);
+    while (i > 0 && energy[i - 1] <= energy[i]) {
+      --i;
+    }
+    out.push_back(i);
+  }
+  return out;
+}
+
 std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(lag >= 1, ErrorCode::InvalidParameter);
@@ -153,16 +171,16 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 
   if (n_frames > lag) {
     int diff_frames = n_frames - lag;
-
-    // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
-    Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
-        magnitude.data(), n_bins, n_frames);
-
-    // Compute difference and absolute sum
-    Eigen::MatrixXf diff = mag_map.rightCols(diff_frames) - mag_map.leftCols(diff_frames);
-
-    Eigen::Map<Eigen::VectorXf> flux_map(flux.data() + lag, diff_frames);
-    flux_map = diff.array().abs().colwise().sum();
+    // Sum of |mag[:, f+lag] - mag[:, f]| over bins (auto-vectorized — TIE with Eigen per §10.2.2).
+    // magnitude is row-major [n_bins x n_frames].
+    for (int f = 0; f < diff_frames; ++f) {
+      float sum = 0.0f;
+      for (int b = 0; b < n_bins; ++b) {
+        const float d = magnitude[b * n_frames + (f + lag)] - magnitude[b * n_frames + f];
+        sum += std::abs(d);
+      }
+      flux[f + lag] = sum;
+    }
   }
 
   return flux;

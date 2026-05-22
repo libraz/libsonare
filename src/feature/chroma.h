@@ -8,6 +8,7 @@
 
 #include "core/audio.h"
 #include "core/spectrum.h"
+#include "feature/cqt.h"
 #include "filters/chroma.h"
 #include "util/types.h"
 
@@ -38,6 +39,33 @@ struct ChromaConfig {
     return ChromaFilterConfig{n_chroma, tuning, fmin, n_octaves};
   }
 };
+
+/// @brief Configuration for chroma_cqt / chroma_cens.
+struct ChromaCqtConfig {
+  CqtConfig cqt;
+  int n_chroma = 12;
+  float threshold = 0.0f;  ///< Magnitudes below this fraction of the per-frame max are zeroed.
+  bool normalize_frames = true;  ///< L-inf normalize per frame (matches librosa default norm=Inf).
+};
+
+/// @brief Configuration for chroma_cens (Energy Normalized Statistics).
+struct ChromaCensConfig {
+  ChromaCqtConfig base;
+  int win_len_smooth = 41;  ///< Hann smoothing window length (0 disables smoothing).
+};
+
+class Chroma;  // forward declaration; full definition below.
+
+/// @brief Computes a chromagram from a Constant-Q Transform of the audio.
+/// @details Implements `librosa.feature.chroma_cqt`. The signal is mapped to
+/// CQT, magnitudes are wrapped to chroma classes, optionally thresholded, then
+/// L-inf normalized per frame.
+Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config = ChromaCqtConfig());
+
+/// @brief Computes CENS (Chroma Energy Normalized Statistics).
+/// @details Implements `librosa.feature.chroma_cens`. Builds chroma_cqt, then
+/// applies quantization steps and an optional Hann smoothing window across time.
+Chroma chroma_cens(const Audio& audio, const ChromaCensConfig& config = ChromaCensConfig());
 
 /// @brief Chromagram representation for harmonic analysis.
 /// @details Computes and caches chromagram from audio or STFT.
