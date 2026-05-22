@@ -313,7 +313,8 @@ void Crossover::install_coefficients() {
            ++k) {
         const auto& section = sections[k];
         const double lp_w0 =
-            2.0 * kPiD * scaled_digital_frequency(f, section.lowpass_frequency_scale, sample_rate_) /
+            2.0 * kPiD *
+            scaled_digital_frequency(f, section.lowpass_frequency_scale, sample_rate_) /
             sample_rate_;
         const double lp_cos_w0 = std::cos(lp_w0);
         const double lp_sin_w0 = std::sin(lp_w0);

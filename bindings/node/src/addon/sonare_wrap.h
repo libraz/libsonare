@@ -11,6 +11,12 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   explicit SonareWrap(const Napi::CallbackInfo& info);
   ~SonareWrap();
 
+  // Non-copyable, non-movable: audio_ has unique ownership semantics
+  SonareWrap(const SonareWrap&) = delete;
+  SonareWrap& operator=(const SonareWrap&) = delete;
+  SonareWrap(SonareWrap&&) = delete;
+  SonareWrap& operator=(SonareWrap&&) = delete;
+
  private:
   // Instance methods (Audio object)
   Napi::Value GetData(const Napi::CallbackInfo& info);
@@ -50,6 +56,16 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value TimeStretch(const Napi::CallbackInfo& info);
   static Napi::Value PitchShift(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);
+  static Napi::Value Mastering(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringProcess(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringProcessStereo(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringProcessorNames(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPairProcessorNames(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPairAnalysisNames(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringStereoAnalysisNames(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPairProcess(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPairAnalyze(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringStereoAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeTtsQuality(const Napi::CallbackInfo& info);
   static Napi::Value PrepareTts(const Napi::CallbackInfo& info);

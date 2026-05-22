@@ -14,9 +14,9 @@
 namespace sonare {
 
 // Re-export universal constants for backward compatibility.
+using constants::kEpsilon;
 using constants::kPi;
 using constants::kTwoPi;
-using constants::kEpsilon;
 
 /// @brief Clamps a value between min and max.
 /// @tparam T Numeric type

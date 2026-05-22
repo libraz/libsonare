@@ -78,8 +78,8 @@ BiquadCoeffs rbj_lowpass(float w0, float q) {
   const double cos_w0 = std::cos(w0);
   const double sin_w0 = std::sin(w0);
   const double alpha = sin_w0 / (2.0 * q_value);
-  return normalize((1.0 - cos_w0) * 0.5, 1.0 - cos_w0, (1.0 - cos_w0) * 0.5,
-                   1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha);
+  return normalize((1.0 - cos_w0) * 0.5, 1.0 - cos_w0, (1.0 - cos_w0) * 0.5, 1.0 + alpha,
+                   -2.0 * cos_w0, 1.0 - alpha);
 }
 
 BiquadCoeffs rbj_highpass(float w0, float q) {
@@ -87,8 +87,8 @@ BiquadCoeffs rbj_highpass(float w0, float q) {
   const double cos_w0 = std::cos(w0);
   const double sin_w0 = std::sin(w0);
   const double alpha = sin_w0 / (2.0 * q_value);
-  return normalize((1.0 + cos_w0) * 0.5, -(1.0 + cos_w0), (1.0 + cos_w0) * 0.5,
-                   1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha);
+  return normalize((1.0 + cos_w0) * 0.5, -(1.0 + cos_w0), (1.0 + cos_w0) * 0.5, 1.0 + alpha,
+                   -2.0 * cos_w0, 1.0 - alpha);
 }
 
 BiquadCoeffs rbj_bandpass(float w0, float q) {
@@ -113,8 +113,8 @@ BiquadCoeffs rbj_peak(float w0, float q, float gain_db) {
   const double sin_w0 = std::sin(w0);
   const double alpha = sin_w0 / (2.0 * q_value);
   const double a = std::pow(10.0, static_cast<double>(gain_db) / 40.0);
-  return normalize(1.0 + alpha * a, -2.0 * cos_w0, 1.0 - alpha * a, 1.0 + alpha / a,
-                   -2.0 * cos_w0, 1.0 - alpha / a);
+  return normalize(1.0 + alpha * a, -2.0 * cos_w0, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * cos_w0,
+                   1.0 - alpha / a);
 }
 
 BiquadCoeffs rbj_low_shelf(float w0, float q, float gain_db) {

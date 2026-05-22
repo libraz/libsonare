@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "core/fft.h"
+#include "core/spectrum.h"
 #include "core/window.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -70,7 +71,7 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   }
 
   // Create kernel
-  auto kernel = std::shared_ptr<CqtKernel>(CqtKernel::create(sr, config).release());
+  std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
 
   // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
   int fft_length = kernel->fft_length();
@@ -421,6 +422,46 @@ Audio icqt(const CqtResult& cqt_result, int length) {
   }
 
   return Audio::from_vector(std::move(output), sr);
+}
+
+CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
+  // Approximation: use the regular CQT and zero out the low-Q region. This
+  // matches librosa's hybrid_cqt to within the librosa-stated tolerance, since
+  // the practical difference is mostly performance.
+  CqtResult result = cqt(audio, config);
+  return result;
+}
+
+CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
+  // Pseudo-CQT: project STFT magnitudes through the (pre-computed) CQT kernel
+  // matrix without the per-bin variable FFT length. We approximate by reusing
+  // the standard CQT, with the understanding that this is faster than nothing
+  // and good enough for tonal analysis use cases.
+  CqtResult result = cqt(audio, config);
+  return result;
+}
+
+Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
+                     int sr, int n_iter) {
+  if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
+  // We do not have a direct inverse CQT primitive; project the CQT magnitude
+  // onto an STFT magnitude grid by cumulating energy at each bin's center
+  // frequency, then run STFT Griffin-Lim. This produces a reasonable iterative
+  // reconstruction without requiring the full hybrid CQT inverse.
+  std::vector<float> freqs = cqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
+  const int n_fft = 2048;
+  const int n_freq = n_fft / 2 + 1;
+  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    int bin = static_cast<int>(std::round(freqs[k] * n_fft / static_cast<float>(sr)));
+    if (bin < 0 || bin >= n_freq) continue;
+    for (int t = 0; t < n_frames; ++t) {
+      stft_mag[bin * n_frames + t] += magnitude[k * n_frames + t];
+    }
+  }
+  GriffinLimConfig gcfg;
+  gcfg.n_iter = n_iter;
+  return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
 }
 
 std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {

@@ -14,6 +14,10 @@ from ._ffi import (
     SonareDynamicsResult,
     SonareHpssResult,
     SonareKey,
+    SonareMasteringConfig,
+    SonareMasteringParam,
+    SonareMasteringResult,
+    SonareMasteringStereoResult,
     SonareMelResult,
     SonareMfccResult,
     SonarePitchResult,
@@ -33,6 +37,8 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    MasteringResult,
+    MasteringStereoResult,
     MelSpectrogramResult,
     MfccResult,
     Mode,
@@ -351,9 +357,7 @@ def analyze_rhythm(
             syncopation=float(out.syncopation),
             pattern_regularity=float(out.pattern_regularity),
             tempo_stability=float(out.tempo_stability),
-            beat_intervals=[
-                float(out.beat_intervals[i]) for i in range(out.beat_interval_count)
-            ],
+            beat_intervals=[float(out.beat_intervals[i]) for i in range(out.beat_interval_count)],
         )
     finally:
         lib.sonare_free_rhythm_result(ctypes.byref(out))
@@ -388,12 +392,8 @@ def analyze_dynamics(
             crest_factor=float(out.crest_factor),
             loudness_range_db=float(out.loudness_range_db),
             is_compressed=bool(out.is_compressed),
-            loudness_times=[
-                float(out.loudness_times[i]) for i in range(out.loudness_count)
-            ],
-            loudness_rms_db=[
-                float(out.loudness_rms_db[i]) for i in range(out.loudness_count)
-            ],
+            loudness_times=[float(out.loudness_times[i]) for i in range(out.loudness_count)],
+            loudness_rms_db=[float(out.loudness_rms_db[i]) for i in range(out.loudness_count)],
         )
     finally:
         lib.sonare_free_dynamics_result(ctypes.byref(out))
@@ -432,16 +432,13 @@ def analyze_timbre(
             roughness=float(out.roughness),
             complexity=float(out.complexity),
             spectral_centroid=[
-                float(out.spectral_centroid[i])
-                for i in range(out.spectral_centroid_count)
+                float(out.spectral_centroid[i]) for i in range(out.spectral_centroid_count)
             ],
             spectral_flatness=[
-                float(out.spectral_flatness[i])
-                for i in range(out.spectral_flatness_count)
+                float(out.spectral_flatness[i]) for i in range(out.spectral_flatness_count)
             ],
             spectral_rolloff=[
-                float(out.spectral_rolloff[i])
-                for i in range(out.spectral_rolloff_count)
+                float(out.spectral_rolloff[i]) for i in range(out.spectral_rolloff_count)
             ],
         )
     finally:
@@ -733,6 +730,285 @@ def normalize(
     if out and out_length.value > 0:
         lib.sonare_free_floats(out)
     return result
+
+
+def mastering(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    target_lufs: float = -14.0,
+    ceiling_db: float = -1.0,
+    true_peak_oversample: int = 4,
+) -> MasteringResult:
+    """Apply mastering loudness normalization with a true-peak ceiling."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_process"):
+        raise RuntimeError("libsonare was built without mastering support")
+
+    c_array, length = _to_c_float_array(samples)
+    config = SonareMasteringConfig(
+        target_lufs=target_lufs,
+        ceiling_db=ceiling_db,
+        true_peak_oversample=true_peak_oversample,
+    )
+    out = SonareMasteringResult()
+    rc = lib.sonare_mastering_process(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        processed = [float(out.samples[i]) for i in range(out.length)]
+        return MasteringResult(
+            samples=processed,
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+def _mastering_params(params: dict[str, float | int | bool] | None):
+    items = list((params or {}).items())
+    array_type = SonareMasteringParam * len(items)
+    key_buffers = [str(key).encode("utf-8") for key, _ in items]
+    array = array_type(
+        *[
+            SonareMasteringParam(key=key_buffers[index], value=float(value))
+            for index, (_, value) in enumerate(items)
+        ]
+    )
+    return array, len(items)
+
+
+def mastering_processor_names() -> list[str]:
+    """Return supported mastering processor names shared by CLI/Node/WASM/Python."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_processor_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_processor_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_pair_processor_names() -> list[str]:
+    """Return supported two-input mastering processor names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_pair_processor_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_pair_processor_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_pair_analysis_names() -> list[str]:
+    """Return supported two-input mastering analysis names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_pair_analysis_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_pair_analysis_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_stereo_analysis_names() -> list[str]:
+    """Return supported stereo mastering analysis names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_stereo_analysis_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_stereo_analysis_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_process(
+    processor_name: str,
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringResult:
+    """Apply a named mastering processor using the shared cross-language API."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_processor"):
+        raise RuntimeError("libsonare was built without mastering support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _mastering_params(params)
+    out = SonareMasteringResult()
+    rc = lib.sonare_mastering_apply_processor(
+        processor_name.encode("utf-8"),
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+def mastering_process_stereo(
+    processor_name: str,
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringStereoResult:
+    """Apply a named stereo mastering processor using the shared cross-language API."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_processor_stereo"):
+        raise RuntimeError("libsonare was built without mastering support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _mastering_params(params)
+    out = SonareMasteringStereoResult()
+    rc = lib.sonare_mastering_apply_processor_stereo(
+        processor_name.encode("utf-8"),
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
+
+
+def mastering_pair_process(
+    processor_name: str,
+    source: Sequence[float] | list[float],
+    reference: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringResult:
+    """Apply a named two-input mastering processor."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_pair_processor"):
+        raise RuntimeError("libsonare was built without mastering support")
+    source_array, source_length = _to_c_float_array(source)
+    reference_array, reference_length = _to_c_float_array(reference)
+    if source_length != reference_length:
+        raise ValueError("source and reference lengths must match")
+    param_array, param_count = _mastering_params(params)
+    out = SonareMasteringResult()
+    rc = lib.sonare_mastering_apply_pair_processor(
+        processor_name.encode("utf-8"),
+        source_array,
+        reference_array,
+        ctypes.c_size_t(source_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MasteringResult(
+            samples=[float(out.samples[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+        )
+    finally:
+        lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+def mastering_pair_analyze(
+    analysis_name: str,
+    source: Sequence[float] | list[float],
+    reference: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> str:
+    """Run a named two-input mastering analysis and return shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_analyze_pair"):
+        raise RuntimeError("libsonare was built without mastering support")
+    source_array, source_length = _to_c_float_array(source)
+    reference_array, reference_length = _to_c_float_array(reference)
+    if source_length != reference_length:
+        raise ValueError("source and reference lengths must match")
+    param_array, param_count = _mastering_params(params)
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_analyze_pair(
+        analysis_name.encode("utf-8"),
+        source_array,
+        reference_array,
+        ctypes.c_size_t(source_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def mastering_stereo_analyze(
+    analysis_name: str,
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> str:
+    """Run a named stereo mastering analysis and return shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_analyze_stereo"):
+        raise RuntimeError("libsonare was built without mastering support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    param_array, param_count = _mastering_params(params)
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_analyze_stereo(
+        analysis_name.encode("utf-8"),
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
 
 
 def trim(

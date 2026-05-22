@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <stdexcept>
 
 #include "core/fft.h"
 #include "core/window.h"
@@ -53,8 +54,8 @@ std::vector<float> create_fft_window(WindowType type, int length) {
       constexpr double a2 = 0.08;
       for (int i = 0; i < length; ++i) {
         double t = static_cast<double>(i) / static_cast<double>(length);
-        window[i] = static_cast<float>(a0 - a1 * std::cos(kTwoPiD * t) +
-                                       a2 * std::cos(2.0 * kTwoPiD * t));
+        window[i] =
+            static_cast<float>(a0 - a1 * std::cos(kTwoPiD * t) + a2 * std::cos(2.0 * kTwoPiD * t));
       }
       break;
     }
@@ -391,6 +392,167 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft,
                   int hop_length, int sample_rate, const GriffinLimConfig& config) {
   return griffin_lim(magnitude.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, config);
+}
+
+MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power) {
+  if (power <= 0.0f) {
+    throw std::invalid_argument("magphase: power must be > 0");
+  }
+  if (n > 0 && spec == nullptr) {
+    throw std::invalid_argument("magphase: null input with non-zero length");
+  }
+  MagPhase out;
+  out.magnitude.resize(n);
+  out.phase.resize(n);
+  // Use a tiny epsilon so we never divide by exactly zero. librosa returns 1+0j
+  // for zero-magnitude bins; using a small eps keeps the same effect when the
+  // magnitude is recombined later.
+  constexpr float kPhaseEps = 1e-20f;
+  for (std::size_t i = 0; i < n; ++i) {
+    const float mag = std::abs(spec[i]);
+    if (mag <= kPhaseEps) {
+      out.phase[i] = std::complex<float>(1.0f, 0.0f);
+    } else {
+      out.phase[i] = spec[i] / mag;
+    }
+    out.magnitude[i] = (power == 1.0f) ? mag : std::pow(mag, power);
+  }
+  return out;
+}
+
+MagPhase magphase(const Spectrogram& spec, float power) {
+  const std::size_t n =
+      static_cast<std::size_t>(spec.n_bins()) * static_cast<std::size_t>(spec.n_frames());
+  return magphase(spec.complex_data(), n, power);
+}
+
+namespace {
+
+/// @brief Computes STFT of @p signal with an arbitrary precomputed window.
+std::vector<std::complex<float>> stft_with_window(const float* signal, size_t signal_length,
+                                                  const std::vector<float>& padded_window,
+                                                  int n_fft, int hop_length, bool center,
+                                                  int* out_n_frames) {
+  std::vector<float> padded_signal;
+  if (center) {
+    int pad_length = n_fft / 2;
+    padded_signal = pad_center(signal, signal_length, pad_length);
+    signal = padded_signal.data();
+    signal_length = padded_signal.size();
+  }
+  int n_frames = 1;
+  if (signal_length >= static_cast<size_t>(n_fft)) {
+    n_frames = 1 + static_cast<int>((signal_length - n_fft) / hop_length);
+  }
+  const int n_bins = n_fft / 2 + 1;
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_bins) * n_frames);
+  FFT fft(n_fft);
+  std::vector<float> frame(n_fft);
+  std::vector<std::complex<float>> frame_spectrum(n_bins);
+  for (int t = 0; t < n_frames; ++t) {
+    int start = t * hop_length;
+    int valid = std::min(n_fft, static_cast<int>(signal_length) - start);
+    if (valid >= n_fft) {
+      for (int i = 0; i < n_fft; ++i) frame[i] = signal[start + i] * padded_window[i];
+    } else if (valid > 0) {
+      for (int i = 0; i < valid; ++i) frame[i] = signal[start + i] * padded_window[i];
+      std::fill(frame.begin() + valid, frame.end(), 0.0f);
+    } else {
+      std::fill(frame.begin(), frame.end(), 0.0f);
+    }
+    fft.forward(frame.data(), frame_spectrum.data());
+    for (int f = 0; f < n_bins; ++f) {
+      spectrum[static_cast<size_t>(f) * n_frames + t] = frame_spectrum[f];
+    }
+  }
+  *out_n_frames = n_frames;
+  return spectrum;
+}
+
+}  // namespace
+
+ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfig& config,
+                                             float ref_power, bool fill_nan) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  const int n_fft = config.n_fft;
+  const int hop_length = config.hop_length;
+  const int win_length = config.actual_win_length();
+  SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
+
+  // Build three windows: standard, time-weighted, and derivative.
+  std::vector<float> window = create_fft_window(config.window, win_length);
+  std::vector<float> padded_window(n_fft, 0.0f);
+  int win_offset = (n_fft - win_length) / 2;
+  std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
+
+  std::vector<float> t_window(n_fft, 0.0f);
+  std::vector<float> dw_window(n_fft, 0.0f);
+  const double half_n = 0.5 * static_cast<double>(win_length - 1);
+  for (int i = 0; i < win_length; ++i) {
+    double t_sample = static_cast<double>(i) - half_n;
+    t_window[win_offset + i] = static_cast<float>(t_sample * window[i]);
+  }
+  // Numerical derivative of the window (central difference).
+  for (int i = 0; i < win_length; ++i) {
+    int idx = win_offset + i;
+    float prev = (i > 0) ? window[i - 1] : 0.0f;
+    float next = (i + 1 < win_length) ? window[i + 1] : 0.0f;
+    dw_window[idx] = 0.5f * (next - prev);
+  }
+
+  const int sr = audio.sample_rate();
+  const float* signal = audio.data();
+  const size_t signal_len = audio.size();
+
+  int n_frames = 0;
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       &n_frames);
+  int n_frames_t = 0;
+  std::vector<std::complex<float>> Stw =
+      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center,
+                       &n_frames_t);
+  int n_frames_d = 0;
+  std::vector<std::complex<float>> Sdw =
+      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
+                       &n_frames_d);
+  SONARE_CHECK(n_frames == n_frames_t && n_frames == n_frames_d, ErrorCode::InvalidParameter);
+
+  const int n_bins = n_fft / 2 + 1;
+  ReassignedSpectrogram out;
+  out.magnitude.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  out.times.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  out.frequencies.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  const float sample_to_sec = 1.0f / static_cast<float>(sr);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t idx = static_cast<size_t>(k) * n_frames + t;
+      const std::complex<float> S = Sw[idx];
+      const float power = std::norm(S);
+      out.magnitude[idx] = std::sqrt(power);
+      const float center_time =
+          (static_cast<float>(t * hop_length) + (config.center ? 0.0f : half_n)) * sample_to_sec;
+      const float center_freq = static_cast<float>(k) * bin_to_hz;
+      if (power < ref_power) {
+        out.times[idx] = fill_nan ? nan : center_time;
+        out.frequencies[idx] = fill_nan ? nan : center_freq;
+        continue;
+      }
+      // Time correction: Re(Stw / Sw) -- in samples.
+      const std::complex<float> r_time = Stw[idx] / S;
+      const float dt_samples = r_time.real();
+      out.times[idx] = center_time + dt_samples * sample_to_sec;
+      // Frequency correction: -Im(Sdw / Sw) * sr / (2*pi)
+      const std::complex<float> r_freq = Sdw[idx] / S;
+      const float df_hz = -r_freq.imag() * static_cast<float>(sr) /
+                          static_cast<float>(constants::kTwoPi);
+      out.frequencies[idx] = center_freq + df_hz;
+    }
+  }
+  return out;
 }
 
 }  // namespace sonare

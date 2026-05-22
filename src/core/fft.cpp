@@ -13,16 +13,27 @@ extern "C" {
 namespace sonare {
 
 struct FFT::Impl {
-  kiss_fftr_cfg forward_cfg;
-  kiss_fftr_cfg inverse_cfg;
-  kiss_fft_cfg forward_complex_cfg;
+  kiss_fftr_cfg forward_cfg = nullptr;
+  kiss_fftr_cfg inverse_cfg = nullptr;
+  kiss_fft_cfg forward_complex_cfg = nullptr;
 
   explicit Impl(int n_fft) {
     forward_cfg = kiss_fftr_alloc(n_fft, 0, nullptr, nullptr);
+    if (!forward_cfg) {
+      throw SonareException(ErrorCode::OutOfMemory, "Failed to allocate KissFFT forward config");
+    }
     inverse_cfg = kiss_fftr_alloc(n_fft, 1, nullptr, nullptr);
+    if (!inverse_cfg) {
+      kiss_fft_free(forward_cfg);
+      throw SonareException(ErrorCode::OutOfMemory, "Failed to allocate KissFFT inverse config");
+    }
     forward_complex_cfg = kiss_fft_alloc(n_fft, 0, nullptr, nullptr);
-    SONARE_CHECK_MSG(forward_cfg && inverse_cfg && forward_complex_cfg, ErrorCode::OutOfMemory,
-                     "Failed to allocate KissFFT config");
+    if (!forward_complex_cfg) {
+      kiss_fft_free(forward_cfg);
+      kiss_fft_free(inverse_cfg);
+      throw SonareException(ErrorCode::OutOfMemory,
+                            "Failed to allocate KissFFT forward complex config");
+    }
   }
 
   ~Impl() {

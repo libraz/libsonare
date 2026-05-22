@@ -134,13 +134,9 @@ float PultecEq::process_component_sample(float input, int channel) {
   if (component_model_ == PultecComponentModel::Eqp1aWdf) {
     auto& state = component_state_[static_cast<size_t>(channel)];
     const float low_alpha =
-        std::clamp(kTwoPi * low_frequency_hz_ /
-                       static_cast<float>(sample_rate_),
-                   0.0001f, 0.25f);
-    const float high_alpha =
-        std::clamp(kTwoPi * high_attenuation_frequency_hz_ /
-                       static_cast<float>(sample_rate_),
-                   0.0001f, 0.75f);
+        std::clamp(kTwoPi * low_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.25f);
+    const float high_alpha = std::clamp(
+        kTwoPi * high_attenuation_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.75f);
     state.low_charge += low_alpha * (output - state.low_charge);
     state.high_charge += high_alpha * (output - state.high_charge);
     const float low_reactive = state.low_charge;

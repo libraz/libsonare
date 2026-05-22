@@ -294,8 +294,8 @@ TEST_CASE("DereverbClassical WPE mode further suppresses predictable late reverb
   const Audio input = Audio::from_vector(samples, 48000);
   const auto spectral =
       dereverb_classical(input, {0.05f, 0.5f, 1024, 256, 0.4f, 50.0f, 0.8f, 0.05f});
-  const auto wpe =
-      dereverb_classical(input, {0.05f, 0.5f, 1024, 256, 0.4f, 50.0f, 0.8f, 0.05f, true, 2, 3, 0.5f});
+  const auto wpe = dereverb_classical(
+      input, {0.05f, 0.5f, 1024, 256, 0.4f, 50.0f, 0.8f, 0.05f, true, 2, 3, 0.5f});
 
   REQUIRE(wpe.size() == input.size());
   REQUIRE(rms(wpe) < rms(spectral));
@@ -311,8 +311,8 @@ TEST_CASE("Repair helpers validate inputs", "[mastering][repair]") {
   REQUIRE_THROWS(decrackle(make_audio({0.0f}), {0.1f, DecrackleMode::WaveletShrinkage, 0}));
   REQUIRE_THROWS(declip(make_audio({0.0f}), {2.0f}));
   REQUIRE_THROWS(declip(make_audio({0.0f}), {0.98f, -1, 2}));
-  REQUIRE_THROWS(dereverb_classical(
-      make_audio({0.0f, 0.1f}), {0.05f, 0.5f, 1024, 256, 0.4f, 50.0f, 0.8f, 0.05f, true, 0, 3, 0.5f}));
+  REQUIRE_THROWS(dereverb_classical(make_audio({0.0f, 0.1f}), {0.05f, 0.5f, 1024, 256, 0.4f, 50.0f,
+                                                               0.8f, 0.05f, true, 0, 3, 0.5f}));
   REQUIRE_THROWS(dehum(make_audio({0.0f}), {0.0f, 1, 10.0f}));
   DenoiseClassicalConfig bad_config{};
   bad_config.n_fft = 0;

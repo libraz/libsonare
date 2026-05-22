@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.4.4"
+  },
+  "data": {
+    "hop_length": 512,
+    "n_fft": 2048,
+    "frames_to_samples_no_nfft": [
+      {
+        "frames": 0,
+        "samples": 0
+      },
+      {
+        "frames": 1,
+        "samples": 512
+      },
+      {
+        "frames": 5,
+        "samples": 2560
+      },
+      {
+        "frames": 10,
+        "samples": 5120
+      },
+      {
+        "frames": 100,
+        "samples": 51200
+      }
+    ],
+    "frames_to_samples_with_nfft": [
+      {
+        "frames": 0,
+        "samples": 1024
+      },
+      {
+        "frames": 1,
+        "samples": 1536
+      },
+      {
+        "frames": 5,
+        "samples": 3584
+      },
+      {
+        "frames": 10,
+        "samples": 6144
+      },
+      {
+        "frames": 100,
+        "samples": 52224
+      }
+    ],
+    "samples_to_frames_no_nfft": [
+      {
+        "samples": 0,
+        "frames": 0
+      },
+      {
+        "samples": 256,
+        "frames": 0
+      },
+      {
+        "samples": 1024,
+        "frames": 2
+      },
+      {
+        "samples": 2048,
+        "frames": 4
+      },
+      {
+        "samples": 51200,
+        "frames": 100
+      }
+    ],
+    "samples_to_frames_with_nfft": [
+      {
+        "samples": 0,
+        "frames": -2
+      },
+      {
+        "samples": 256,
+        "frames": -2
+      },
+      {
+        "samples": 1024,
+        "frames": 0
+      },
+      {
+        "samples": 2048,
+        "frames": 2
+      },
+      {
+        "samples": 51200,
+        "frames": 98
+      }
+    ]
+  }
+}

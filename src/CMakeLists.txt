@@ -15,29 +15,51 @@ endif()
 # Source files
 set(SONARE_SOURCES
   util/math_utils.cpp
+  util/frame.cpp
+  util/nnls.cpp
+  util/padding.cpp
+  util/peak.cpp
+  util/sequence.cpp
+  util/vector_normalize.cpp
   core/convert.cpp
   core/window.cpp
   core/fft.cpp
   core/audio_io.cpp
   core/audio.cpp
+  core/db_convert.cpp
+  core/iirt.cpp
+  core/pcen.cpp
   core/resample.cpp
   core/spectrum.cpp
+  core/weighting.cpp
+  core/synthesis.cpp
+  core/audio_ops.cpp
+  core/harmonic.cpp
   filters/mel.cpp
   filters/chroma.cpp
   filters/dct.cpp
   filters/iir.cpp
+  filters/wavelet.cpp
   feature/mel_spectrogram.cpp
   feature/chroma.cpp
   feature/spectral.cpp
   feature/onset.cpp
   feature/pitch.cpp
   feature/cqt.cpp
+  feature/inverse.cpp
+  feature/tonnetz.cpp
+  feature/segment.cpp
   feature/vqt.cpp
+  feature/rhythm.cpp
   effects/hpss.cpp
   effects/phase_vocoder.cpp
   effects/time_stretch.cpp
   effects/pitch_shift.cpp
   effects/normalize.cpp
+  effects/decompose.cpp
+  effects/preemphasis.cpp
+  effects/remix.cpp
+  effects/silence.cpp
   analysis/meter/basic.cpp
   analysis/meter/clipping.cpp
   analysis/meter/dynamic_range.cpp
@@ -150,6 +172,7 @@ endif()
 
 if(BUILD_MASTERING)
   add_library(sonare_mastering STATIC
+    mastering/api/named_processor.cpp
     mastering/common/biquad_design.cpp
     mastering/common/param_smoother.cpp
     mastering/common/envelope_follower.cpp
@@ -244,11 +267,16 @@ if(BUILD_MASTERING)
   )
   target_link_libraries(sonare_mastering PUBLIC sonare_core)
   target_compile_options(sonare_mastering PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_mastering PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # Shared library for language bindings (Python ctypes, etc.)
 if(BUILD_SHARED)
-  add_library(sonare_shared SHARED ${SONARE_SOURCES})
+  set(SONARE_SHARED_SOURCES ${SONARE_SOURCES})
+  if(BUILD_MASTERING)
+    list(APPEND SONARE_SHARED_SOURCES sonare_c_mastering.cpp)
+  endif()
+  add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
     VERSION ${PROJECT_VERSION}
@@ -263,6 +291,10 @@ if(BUILD_SHARED)
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen kissfft)
+  if(BUILD_MASTERING)
+    target_link_libraries(sonare_shared PUBLIC sonare_mastering)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MASTERING=1)
+  endif()
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
     target_link_libraries(sonare_shared PUBLIC Threads::Threads)
@@ -277,6 +309,12 @@ endif()
 if(BUILD_WASM)
   add_executable(sonare wasm/bindings.cpp)
   target_link_libraries(sonare PRIVATE sonare_core)
+  if(BUILD_MASTERING)
+    target_link_libraries(sonare PRIVATE sonare_mastering)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_MASTERING=1)
+  else()
+    target_sources(sonare PRIVATE mastering/maximizer/loudness_optimize.cpp)
+  endif()
   target_link_options(sonare PRIVATE
     -sEXPORT_NAME='Sonare'
     -sEXPORTED_RUNTIME_METHODS=['UTF8ToString']

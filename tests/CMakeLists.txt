@@ -11,6 +11,29 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(sonare_tests
   test_main.cpp
   util/math_utils_test.cpp
+  util/frame_test.cpp
+  util/padding_test.cpp
+  util/peak_test.cpp
+  util/vector_normalize_test.cpp
+  util/poly_features_test.cpp
+  util/onset_backtrack_test.cpp
+  util/chroma_cqt_test.cpp
+  util/pitch_utilities_test.cpp
+  util/plp_test.cpp
+  util/iirt_test.cpp
+  util/inverse_features_test.cpp
+  util/zero_crossings_test.cpp
+  util/weighting_test.cpp
+  util/synthesis_test.cpp
+  util/remix_test.cpp
+  util/audio_ops_test.cpp
+  util/nnls_test.cpp
+  util/harmonic_test.cpp
+  util/wavelet_test.cpp
+  util/segment_test.cpp
+  util/sequence_test.cpp
+  util/decompose_test.cpp
+  util/reassigned_test.cpp
   core/convert_test.cpp
   core/window_test.cpp
   core/fft_test.cpp
@@ -65,6 +88,20 @@ add_executable(sonare_tests
   librosa/cqt_test.cpp
   librosa/pitch_test.cpp
   librosa/hpss_test.cpp
+  librosa/db_convert_test.cpp
+  librosa/frames_samples_test.cpp
+  librosa/magphase_test.cpp
+  librosa/preemphasis_test.cpp
+  librosa/silence_test.cpp
+  librosa/tempogram_test.cpp
+  librosa/poly_features_test.cpp
+  librosa/tonnetz_test.cpp
+  librosa/pcen_test.cpp
+  librosa/pitch_utilities_test.cpp
+  librosa/zero_crossings_test.cpp
+  librosa/weighting_test.cpp
+  librosa/remix_test.cpp
+  librosa/audio_ops_test.cpp
   cli/cli_test.cpp
 )
 
@@ -87,6 +124,8 @@ if(BUILD_MASTERING)
     mastering/stereo_test.cpp
   )
   target_link_libraries(sonare_tests PRIVATE sonare_mastering)
+  target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering.cpp)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
 endif()
 
 include(CTest)

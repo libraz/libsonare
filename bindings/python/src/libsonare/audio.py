@@ -8,12 +8,6 @@ from typing import TYPE_CHECKING
 
 from ._ffi import SONARE_OK, load_library
 from .analyzer import (
-    analyze_tts_quality as _analyze_tts_quality,
-)
-from .analyzer import (
-    analyze as _analyze,
-)
-from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
 from .analyzer import (
@@ -26,31 +20,28 @@ from .analyzer import (
     analyze_timbre as _analyze_timbre,
 )
 from .analyzer import (
+    analyze_tts_quality as _analyze_tts_quality,
+)
+from .analyzer import (
     chroma as _chroma,
 )
 from .analyzer import (
     compress_pauses as _compress_pauses,
 )
 from .analyzer import (
-    detect_beats as _detect_beats,
-)
-from .analyzer import (
-    detect_bpm as _detect_bpm,
-)
-from .analyzer import (
     detect_chords as _detect_chords,
-)
-from .analyzer import (
-    detect_key as _detect_key,
-)
-from .analyzer import (
-    detect_onsets as _detect_onsets,
 )
 from .analyzer import (
     harmonic as _harmonic,
 )
 from .analyzer import (
     hpss as _hpss,
+)
+from .analyzer import (
+    mastering as _mastering,
+)
+from .analyzer import (
+    mastering_process as _mastering_process,
 )
 from .analyzer import (
     mel_spectrogram as _mel_spectrogram,
@@ -117,6 +108,7 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    MasteringResult,
     MelSpectrogramResult,
     MfccResult,
     PitchResult,
@@ -468,6 +460,27 @@ class Audio:
     def normalize(self, target_db: float = -3.0) -> list[float]:
         """Normalize audio to a target dB level."""
         return _normalize(self.data, self.sample_rate, target_db)
+
+    def mastering(
+        self,
+        target_lufs: float = -14.0,
+        ceiling_db: float = -1.0,
+        true_peak_oversample: int = 4,
+    ) -> MasteringResult:
+        """Apply mastering loudness normalization with a true-peak ceiling."""
+        return _mastering(
+            self.data,
+            self.sample_rate,
+            target_lufs,
+            ceiling_db,
+            true_peak_oversample,
+        )
+
+    def mastering_process(
+        self, processor_name: str, params: dict[str, float | int | bool] | None = None
+    ) -> MasteringResult:
+        """Apply a named mastering processor."""
+        return _mastering_process(processor_name, self.data, self.sample_rate, params)
 
     def trim(self, threshold_db: float = -60.0) -> list[float]:
         """Trim silence from the beginning and end."""

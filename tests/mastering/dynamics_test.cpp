@@ -137,8 +137,7 @@ TEST_CASE("Compressor sidechain HPF ignores low-frequency detector energy",
   auto hpf_keyed = input;
 
   Compressor full({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak});
-  Compressor hpf({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak, true,
-                  120.0f});
+  Compressor hpf({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak, true, 120.0f});
   full.prepare(48000.0, 1024);
   hpf.prepare(48000.0, 1024);
 
@@ -386,8 +385,7 @@ TEST_CASE("TransientShaper validates configuration", "[mastering][dynamics]") {
 }
 
 TEST_CASE("TransientShaper supports lookahead and gain smoothing", "[mastering][dynamics]") {
-  TransientShaper shaper({6.0f, 0.0f, 0.0f, 20.0f, 20.0f, 200.0f, 1.0f, 12.0f, 1.0f,
-                          1.0f});
+  TransientShaper shaper({6.0f, 0.0f, 0.0f, 20.0f, 20.0f, 200.0f, 1.0f, 12.0f, 1.0f, 1.0f});
   shaper.prepare(1000.0, 8);
 
   std::vector<float> impulse(8, 0.0f);

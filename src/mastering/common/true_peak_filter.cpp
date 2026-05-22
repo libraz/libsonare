@@ -109,8 +109,8 @@ void TruePeakFilter::upsample(const float* const* input, float* const* output_ov
 }
 
 void TruePeakFilter::upsample_with_history(const float* const* input,
-                                           float* const* output_oversampled,
-                                           int num_channels, int num_samples,
+                                           float* const* output_oversampled, int num_channels,
+                                           int num_samples,
                                            std::vector<std::vector<float>>& history) const {
   validate_buffers(input, num_channels, num_samples);
   if (num_channels == 0 || num_samples == 0) return;
@@ -138,8 +138,8 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
     for (int i = 0; i < num_samples; ++i) {
       const size_t index = history_size + static_cast<size_t>(i);
       for (int phase = 0; phase < factor_; ++phase) {
-        output_oversampled[ch][i * factor_ + phase] = interpolate_polyphase_sample(
-            extended.data(), extended.size(), index, phase, fir_);
+        output_oversampled[ch][i * factor_ + phase] =
+            interpolate_polyphase_sample(extended.data(), extended.size(), index, phase, fir_);
       }
     }
 
@@ -147,8 +147,8 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
     std::copy(extended.end() - static_cast<std::ptrdiff_t>(keep), extended.end(),
               channel_history.end() - static_cast<std::ptrdiff_t>(keep));
     if (keep < history_size) {
-      std::fill(channel_history.begin(),
-                channel_history.end() - static_cast<std::ptrdiff_t>(keep), 0.0f);
+      std::fill(channel_history.begin(), channel_history.end() - static_cast<std::ptrdiff_t>(keep),
+                0.0f);
     }
   }
 }

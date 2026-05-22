@@ -10,6 +10,18 @@ import {
   detectKey,
   init,
   isInitialized,
+  mastering,
+  masteringChain,
+  masteringChainStereo,
+  masteringPairAnalysisNames,
+  masteringPairAnalyze,
+  masteringPairProcess,
+  masteringPairProcessorNames,
+  masteringProcess,
+  masteringProcessorNames,
+  masteringProcessStereo,
+  masteringStereoAnalysisNames,
+  masteringStereoAnalyze,
   version,
 } from '../../js/index';
 
@@ -127,6 +139,187 @@ describe('Sonare WASM Module', () => {
       expect(result.sections).toBeDefined();
       expect(result.timbre).toBeDefined();
       expect(result.dynamics).toBeDefined();
+    });
+  });
+
+  describe('mastering', () => {
+    it('should return processed samples and loudness metadata', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+      }
+
+      const result = mastering(samples, sampleRate, -18.0, -1.0, 4);
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(samples.length);
+      expect(result.sampleRate).toBe(sampleRate);
+      expect(Number.isFinite(result.inputLufs)).toBe(true);
+      expect(Number.isFinite(result.outputLufs)).toBe(true);
+      expect(Number.isFinite(result.appliedGainDb)).toBe(true);
+      expect(result.outputLufs).toBeCloseTo(-18.0, 1);
+    });
+
+    it('should run a configurable mastering chain in WASM', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        const tone = Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+        const overtone = 0.4 * Math.sin((2 * Math.PI * 880 * i) / sampleRate);
+        samples[i] = 0.18 * (tone + overtone);
+      }
+
+      const result = masteringChain(samples, sampleRate, {
+        eq: { tiltDb: 1.5, pivotHz: 1200 },
+        dynamics: {
+          compressor: {
+            thresholdDb: -22,
+            ratio: 1.6,
+            attackMs: 15,
+            releaseMs: 120,
+            kneeDb: 3,
+          },
+        },
+        saturation: {
+          tape: { driveDb: 1.5, saturation: 0.25, hysteresis: 0.1 },
+          exciter: { amount: 0.05, driveDb: 2 },
+        },
+        spectral: { airBand: { amount: 0.08 } },
+        maximizer: {
+          truePeakLimiter: {
+            ceilingDb: -1,
+            oversampleFactor: 4,
+            applyGainAtInputRate: true,
+          },
+        },
+        loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
+      });
+
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(samples.length);
+      expect(result.sampleRate).toBe(sampleRate);
+      expect(result.stages).toContain('eq.tilt');
+      expect(result.stages).toContain('dynamics.compressor');
+      expect(result.stages).toContain('saturation.tape');
+      expect(result.stages).toContain('maximizer.truePeakLimiter');
+      expect(result.stages).toContain('loudness.optimize');
+      expect(Number.isFinite(result.inputLufs)).toBe(true);
+      expect(Number.isFinite(result.outputLufs)).toBe(true);
+    });
+
+    it('should run a stereo mastering chain in WASM', () => {
+      const sampleRate = 22050;
+      const left = new Float32Array(sampleRate);
+      const right = new Float32Array(sampleRate);
+      for (let i = 0; i < left.length; i++) {
+        left[i] = 0.18 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+        right[i] = 0.16 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
+      }
+
+      const result = masteringChainStereo(left, right, sampleRate, {
+        eq: { tiltDb: 1.0 },
+        dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
+        saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
+        stereo: {
+          imager: { width: 1.15, decorrelationAmount: 0.05 },
+          monoMaker: { amount: 0.2 },
+        },
+        loudness: {
+          targetLufs: -18,
+          ceilingDb: -1,
+          truePeakOversample: 4,
+          applyGainAtInputRate: true,
+        },
+      });
+
+      expect(result.left).toBeInstanceOf(Float32Array);
+      expect(result.right).toBeInstanceOf(Float32Array);
+      expect(result.left.length).toBe(left.length);
+      expect(result.right.length).toBe(right.length);
+      expect(result.sampleRate).toBe(sampleRate);
+      expect(result.stages).toContain('eq.tilt');
+      expect(result.stages).toContain('stereo.imager');
+      expect(result.stages).toContain('stereo.monoMaker');
+      expect(result.stages).toContain('loudness.optimize');
+      expect(Number.isFinite(result.inputLufs)).toBe(true);
+      expect(Number.isFinite(result.outputLufs)).toBe(true);
+    });
+
+    it('should expose named mastering processors in WASM', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate / 2);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+      }
+
+      const names = masteringProcessorNames();
+      expect(names).toContain('dynamics.compressor');
+      expect(names).toContain('saturation.tape');
+      expect(names).toContain('stereo.imager');
+
+      const mono = masteringProcess('dynamics.compressor', samples, sampleRate, {
+        thresholdDb: -24,
+        ratio: 1.5,
+      });
+      expect(mono.samples).toBeInstanceOf(Float32Array);
+      expect(mono.samples.length).toBe(samples.length);
+      expect(Number.isFinite(mono.outputLufs)).toBe(true);
+    });
+
+    it('should expose named stereo mastering processors in WASM', () => {
+      const sampleRate = 22050;
+      const left = new Float32Array(sampleRate / 2);
+      const right = new Float32Array(sampleRate / 2);
+      for (let i = 0; i < left.length; i++) {
+        left[i] = 0.2 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+        right[i] = 0.2 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
+      }
+
+      const result = masteringProcessStereo('stereo.imager', left, right, sampleRate, {
+        width: 1.1,
+      });
+      expect(result.left).toBeInstanceOf(Float32Array);
+      expect(result.right).toBeInstanceOf(Float32Array);
+      expect(result.left.length).toBe(left.length);
+      expect(result.right.length).toBe(right.length);
+      expect(Number.isFinite(result.outputLufs)).toBe(true);
+    });
+
+    it('should expose pair and stereo mastering APIs in WASM', () => {
+      const sampleRate = 44100;
+      const source = new Float32Array(sampleRate / 4);
+      const reference = new Float32Array(sampleRate / 4);
+      for (let i = 0; i < source.length; i++) {
+        source[i] = 0.18 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+        reference[i] = 0.12 * Math.sin((2 * Math.PI * 880 * i) / sampleRate);
+      }
+
+      expect(masteringPairProcessorNames()).toContain('match.abCrossfade');
+      expect(masteringPairAnalysisNames()).toContain('match.referenceLoudness');
+      expect(masteringStereoAnalysisNames()).toContain('stereo.monoCompatCheck');
+
+      const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
+        mix: 0.25,
+      });
+      expect(paired.samples).toBeInstanceOf(Float32Array);
+      expect(paired.samples.length).toBe(source.length);
+
+      const pairJson = masteringPairAnalyze(
+        'match.referenceLoudness',
+        source,
+        reference,
+        sampleRate,
+      );
+      expect(pairJson).toContain('"sourceLufs"');
+      expect(pairJson).toContain('"referenceLufs"');
+
+      const stereoJson = masteringStereoAnalyze(
+        'stereo.monoCompatCheck',
+        source,
+        reference,
+        sampleRate,
+      );
+      expect(stereoJson).toContain('"correlation"');
     });
   });
 });

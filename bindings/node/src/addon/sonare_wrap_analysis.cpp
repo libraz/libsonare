@@ -1,8 +1,8 @@
-#include "sonare_wrap.h"
-#include "sonare_wrap_utils.h"
-
 #include <cstring>
 #include <string>
+
+#include "sonare_wrap.h"
+#include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
 
@@ -165,26 +165,20 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sample_rate = info.Length() >= 2 && info[1].IsNumber()
-                        ? info[1].As<Napi::Number>().Int32Value()
-                        : 22050;
-  float bpm_min = info.Length() >= 3 && info[2].IsNumber()
-                      ? info[2].As<Napi::Number>().FloatValue()
-                      : 30.0f;
-  float bpm_max = info.Length() >= 4 && info[3].IsNumber()
-                      ? info[3].As<Napi::Number>().FloatValue()
-                      : 300.0f;
-  float start_bpm = info.Length() >= 5 && info[4].IsNumber()
-                        ? info[4].As<Napi::Number>().FloatValue()
-                        : 120.0f;
-  int n_fft = info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value()
-                                                       : 2048;
-  int hop_length = info.Length() >= 7 && info[6].IsNumber()
-                       ? info[6].As<Napi::Number>().Int32Value()
-                       : 512;
-  int max_candidates = info.Length() >= 8 && info[7].IsNumber()
-                           ? info[7].As<Napi::Number>().Int32Value()
-                           : 5;
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  float bpm_min =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 30.0f;
+  float bpm_max =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 300.0f;
+  float start_bpm =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 120.0f;
+  int n_fft =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 2048;
+  int hop_length =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 512;
+  int max_candidates =
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().Int32Value() : 5;
 
   SonareBpmAnalysisResult analysis{};
   SonareError err = sonare_analyze_bpm(data, length, sample_rate, bpm_min, bpm_max, start_bpm,
@@ -235,23 +229,18 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sample_rate = info.Length() >= 2 && info[1].IsNumber()
-                        ? info[1].As<Napi::Number>().Int32Value()
-                        : 22050;
-  float bpm_min = info.Length() >= 3 && info[2].IsNumber()
-                      ? info[2].As<Napi::Number>().FloatValue()
-                      : 60.0f;
-  float bpm_max = info.Length() >= 4 && info[3].IsNumber()
-                      ? info[3].As<Napi::Number>().FloatValue()
-                      : 200.0f;
-  float start_bpm = info.Length() >= 5 && info[4].IsNumber()
-                        ? info[4].As<Napi::Number>().FloatValue()
-                        : 120.0f;
-  int n_fft = info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value()
-                                                       : 2048;
-  int hop_length = info.Length() >= 7 && info[6].IsNumber()
-                       ? info[6].As<Napi::Number>().Int32Value()
-                       : 512;
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  float bpm_min =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 60.0f;
+  float bpm_max =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 200.0f;
+  float start_bpm =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 120.0f;
+  int n_fft =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 2048;
+  int hop_length =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 512;
 
   SonareRhythmResult rhythm{};
   SonareError err = sonare_analyze_rhythm(data, length, sample_rate, bpm_min, bpm_max, start_bpm,
@@ -299,18 +288,14 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sample_rate = info.Length() >= 2 && info[1].IsNumber()
-                        ? info[1].As<Napi::Number>().Int32Value()
-                        : 22050;
-  float window_sec = info.Length() >= 3 && info[2].IsNumber()
-                         ? info[2].As<Napi::Number>().FloatValue()
-                         : 0.4f;
-  int hop_length = info.Length() >= 4 && info[3].IsNumber()
-                       ? info[3].As<Napi::Number>().Int32Value()
-                       : 512;
-  float compression_threshold = info.Length() >= 5 && info[4].IsNumber()
-                                    ? info[4].As<Napi::Number>().FloatValue()
-                                    : 6.0f;
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  float window_sec =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.4f;
+  int hop_length =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  float compression_threshold =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 6.0f;
 
   SonareDynamicsResult dynamics{};
   SonareError err = sonare_analyze_dynamics(data, length, sample_rate, window_sec, hop_length,
@@ -352,21 +337,18 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sample_rate = info.Length() >= 2 && info[1].IsNumber()
-                        ? info[1].As<Napi::Number>().Int32Value()
-                        : 22050;
-  int n_fft = info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value()
-                                                       : 2048;
-  int hop_length = info.Length() >= 4 && info[3].IsNumber()
-                       ? info[3].As<Napi::Number>().Int32Value()
-                       : 512;
-  int n_mels = info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value()
-                                                        : 128;
-  int n_mfcc = info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value()
-                                                        : 13;
-  float window_sec = info.Length() >= 7 && info[6].IsNumber()
-                         ? info[6].As<Napi::Number>().FloatValue()
-                         : 0.5f;
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int n_fft =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
+  int hop_length =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int n_mels =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 128;
+  int n_mfcc =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 13;
+  float window_sec =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.5f;
 
   SonareTimbreResult timbre{};
   SonareError err = sonare_analyze_timbre(data, length, sample_rate, n_fft, hop_length, n_mels,
@@ -419,34 +401,27 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sample_rate = info.Length() >= 2 && info[1].IsNumber()
-                        ? info[1].As<Napi::Number>().Int32Value()
-                        : 22050;
-  float min_duration = info.Length() >= 3 && info[2].IsNumber()
-                           ? info[2].As<Napi::Number>().FloatValue()
-                           : 0.3f;
-  float smoothing_window = info.Length() >= 4 && info[3].IsNumber()
-                               ? info[3].As<Napi::Number>().FloatValue()
-                               : 2.0f;
-  float threshold = info.Length() >= 5 && info[4].IsNumber()
-                        ? info[4].As<Napi::Number>().FloatValue()
-                        : 0.5f;
-  bool use_triads_only = info.Length() >= 6 && info[5].IsBoolean()
-                             ? info[5].As<Napi::Boolean>().Value()
-                             : false;
-  int n_fft = info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value()
-                                                       : 2048;
-  int hop_length = info.Length() >= 8 && info[7].IsNumber()
-                       ? info[7].As<Napi::Number>().Int32Value()
-                       : 512;
-  bool use_beat_sync = info.Length() >= 9 && info[8].IsBoolean()
-                           ? info[8].As<Napi::Boolean>().Value()
-                           : true;
+  int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  float min_duration =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.3f;
+  float smoothing_window =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 2.0f;
+  float threshold =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.5f;
+  bool use_triads_only =
+      info.Length() >= 6 && info[5].IsBoolean() ? info[5].As<Napi::Boolean>().Value() : false;
+  int n_fft =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 2048;
+  int hop_length =
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().Int32Value() : 512;
+  bool use_beat_sync =
+      info.Length() >= 9 && info[8].IsBoolean() ? info[8].As<Napi::Boolean>().Value() : true;
 
   SonareChordAnalysisResult analysis{};
-  SonareError err = sonare_detect_chords(data, length, sample_rate, min_duration,
-                                         smoothing_window, threshold, use_triads_only ? 1 : 0,
-                                         n_fft, hop_length, use_beat_sync ? 1 : 0, &analysis);
+  SonareError err = sonare_detect_chords(data, length, sample_rate, min_duration, smoothing_window,
+                                         threshold, use_triads_only ? 1 : 0, n_fft, hop_length,
+                                         use_beat_sync ? 1 : 0, &analysis);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -461,7 +436,8 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
     chord.Set("quality", Napi::String::New(env, quality));
     chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
     chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));
-    chord.Set("duration", Napi::Number::New(env, analysis.chords[i].end - analysis.chords[i].start));
+    chord.Set("duration",
+              Napi::Number::New(env, analysis.chords[i].end - analysis.chords[i].start));
     chord.Set("confidence", Napi::Number::New(env, analysis.chords[i].confidence));
     chords.Set(static_cast<uint32_t>(i), chord);
   }
@@ -481,4 +457,3 @@ Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);
 }
-

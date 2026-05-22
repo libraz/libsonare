@@ -10,7 +10,7 @@ option(BUILD_WASM "Build for WebAssembly" OFF)
 option(BUILD_SHARED "Build shared library" OFF)
 option(BUILD_CLI "Build CLI tool" ON)
 option(BUILD_BENCH "Build C++ benchmark binary" OFF)
-option(BUILD_MASTERING "Build the optional mastering library" OFF)
+option(BUILD_MASTERING "Build the mastering library" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
 set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
     "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")
@@ -78,7 +78,7 @@ if(BUILD_CLI AND NOT BUILD_WASM)
   add_subdirectory(tools)
 endif()
 
-if(BUILD_BENCH AND NOT BUILD_WASM)
+if(BUILD_BENCH)
   add_subdirectory(benchmarks)
 endif()
 

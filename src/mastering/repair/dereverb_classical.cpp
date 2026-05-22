@@ -13,10 +13,8 @@ namespace {
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
-
 std::vector<std::complex<float>> solve_linear_system(
-    std::vector<std::vector<std::complex<double>>> matrix,
-    std::vector<std::complex<double>> rhs) {
+    std::vector<std::vector<std::complex<double>>> matrix, std::vector<std::complex<double>> rhs) {
   const size_t n = rhs.size();
   for (size_t col = 0; col < n; ++col) {
     size_t pivot = col;
@@ -73,8 +71,7 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
       config.hop_length > config.n_fft || !(config.t60_sec > 0.0f) || config.late_delay_ms < 0.0f ||
       config.over_subtraction < 0.0f || config.spectral_floor < 0.0f ||
       config.spectral_floor > 1.0f || config.wpe_iterations < 1 || config.wpe_taps < 1 ||
-      config.wpe_strength < 0.0f ||
-      config.wpe_strength > 1.0f) {
+      config.wpe_strength < 0.0f || config.wpe_strength > 1.0f) {
     throw std::invalid_argument("invalid dereverb configuration");
   }
 
@@ -150,7 +147,8 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
           }
         }
         for (int i = 0; i < taps; ++i) {
-          covariance[static_cast<size_t>(i)][static_cast<size_t>(i)] += std::complex<double>{1.0e-8, 0.0};
+          covariance[static_cast<size_t>(i)][static_cast<size_t>(i)] +=
+              std::complex<double>{1.0e-8, 0.0};
         }
         auto predictors = solve_linear_system(std::move(covariance), std::move(cross));
         double predictor_norm = 0.0;

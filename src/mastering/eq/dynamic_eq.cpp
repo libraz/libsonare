@@ -149,7 +149,8 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
     throw std::invalid_argument("ratio must be at least 1");
   }
   if (!(band.sidechain_q > 0.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
-      band.lookahead_ms < 0.0f || (band.sidechain_freq_hz != -1.0f && band.sidechain_freq_hz <= 0.0f)) {
+      band.lookahead_ms < 0.0f ||
+      (band.sidechain_freq_hz != -1.0f && band.sidechain_freq_hz <= 0.0f)) {
     throw std::invalid_argument("invalid dynamic EQ sidechain configuration");
   }
 }
@@ -187,8 +188,8 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
     }
   };
 
-  const double detector_frequency = band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz
-                                                                  : band.frequency_hz;
+  const double detector_frequency =
+      band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz : band.frequency_hz;
   const double frequency =
       std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate * 0.5 - 1.0);
   const double omega = kTwoPiD * frequency / sample_rate;

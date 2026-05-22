@@ -51,9 +51,8 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
     for (int i = 0; i < num_samples; ++i) {
       float linked_level = 0.0f;
       for (int ch = 0; ch < num_channels; ++ch) {
-        linked_level = std::max(
-            linked_level,
-            followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
+        linked_level =
+            std::max(linked_level, followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
       }
       const float level_db = linear_to_db(linked_level);
       float ride_db = 0.0f;
@@ -61,8 +60,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         const float target_gain_db = config_.target_db - level_db;
         ride_db = std::clamp(target_gain_db, -config_.max_cut_db, config_.max_boost_db);
       }
-      linked_gain_state_db_ =
-          smoothing * linked_gain_state_db_ + (1.0f - smoothing) * ride_db;
+      linked_gain_state_db_ = smoothing * linked_gain_state_db_ + (1.0f - smoothing) * ride_db;
       const float gain_db = linked_gain_state_db_ + config_.output_gain_db;
       const float gain = db_to_linear(gain_db);
       for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
@@ -119,7 +117,9 @@ void VocalRider::validate_config(const VocalRiderConfig& config) {
   }
 }
 
-float VocalRider::coeff(double sample_rate, float ms) { return time_to_coefficient(sample_rate, ms); }
+float VocalRider::coeff(double sample_rate, float ms) {
+  return time_to_coefficient(sample_rate, ms);
+}
 
 void VocalRider::ensure_followers(int num_channels) {
   if (followers_.size() == static_cast<size_t>(num_channels)) {

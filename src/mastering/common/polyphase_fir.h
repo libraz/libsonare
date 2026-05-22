@@ -45,10 +45,10 @@ inline std::vector<float> design_windowed_sinc_lowpass(int total_taps, int overs
   const double i0_beta = use_kaiser ? modified_bessel_i0(kaiser_beta) : 1.0;
   for (int n = 0; n < total_taps; ++n) {
     const double m = static_cast<double>(n) - center;
-    const double sinc_value = std::abs(m) < 1.0e-9 ? cutoff
-                                                    : std::sin(::sonare::constants::kPiD * cutoff *
-                                                               m) /
-                                                          (::sonare::constants::kPiD * m);
+    const double sinc_value =
+        std::abs(m) < 1.0e-9
+            ? cutoff
+            : std::sin(::sonare::constants::kPiD * cutoff * m) / (::sonare::constants::kPiD * m);
     double window = 1.0;
     if (total_taps > 1) {
       if (use_kaiser) {

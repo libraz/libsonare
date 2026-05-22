@@ -16,7 +16,7 @@ float sample_loudness_db(const Audio& audio, size_t center, size_t radius) {
   const size_t end = std::min(audio.size(), center + radius + 1);
   const float window_rms = rms(audio.data() + begin, std::max<size_t>(1, end - begin));
   return window_rms <= 1.0e-12f ? sonare::constants::kFloorDb
-                                 : static_cast<float>(20.0 * std::log10(window_rms));
+                                : static_cast<float>(20.0 * std::log10(window_rms));
 }
 
 bool is_active_sample(const Audio& audio, size_t index, const TrimSilenceConfig& config,

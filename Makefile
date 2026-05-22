@@ -43,7 +43,11 @@ clean:
 rebuild: clean build
 
 format:
-	find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format -i
+	find src tests bindings/node/src bindings/node/tests \( -name '*.cpp' -o -name '*.h' \) | xargs clang-format -i
+	yarn format
+	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
+	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
 
 # Binding targets
 build-shared:

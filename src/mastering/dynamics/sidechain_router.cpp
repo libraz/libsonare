@@ -171,7 +171,8 @@ float SidechainRouter::detector_sample(float* const* channels, int channel, int 
   float detector = 0.0f;
   int detector_channel = std::min(channel, sidechain_num_channels_ - 1);
   if (config_.mono_summing) {
-    for (int ch = 0; ch < sidechain_num_channels_; ++ch) detector += sidechain_channels_[ch][sample];
+    for (int ch = 0; ch < sidechain_num_channels_; ++ch)
+      detector += sidechain_channels_[ch][sample];
     detector /= static_cast<float>(sidechain_num_channels_);
     detector_channel = 0;
   } else {

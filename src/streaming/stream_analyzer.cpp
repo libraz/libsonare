@@ -57,8 +57,8 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     chroma_config.n_chroma = 12;
     /// Convert tuning_ref_hz to semitone offset: tuning = 12 * log2(ref/440)
     /// Positive tuning means audio is sharp, so we subtract to correct
-    chroma_config.tuning = constants::kSemitonesPerOctave *
-                           std::log2(config_.tuning_ref_hz / constants::kA4Hz);
+    chroma_config.tuning =
+        constants::kSemitonesPerOctave * std::log2(config_.tuning_ref_hz / constants::kA4Hz);
     /// Use C3 (~130 Hz) as minimum frequency to skip very low bass
     /// This helps avoid interference from sub-bass and low-frequency noise
     chroma_config.fmin = 65.0f;

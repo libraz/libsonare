@@ -100,11 +100,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     pdr_state_db_ = pdr_coeff_ * pdr_state_db_ + (1.0f - pdr_coeff_) * target_db;
     const float pdr_amount =
         config_.pdr_time_ms > 0.0f ? std::clamp(-pdr_state_db_ / 24.0f, 0.0f, 1.0f) : 0.0f;
-    const float release_coeff =
-        time_to_coefficient(sample_rate_, config_.release_ms *
-                                           (1.0f + pdr_amount *
-                                                       std::max(config_.pdr_release_scale - 1.0f,
-                                                                0.0f)));
+    const float release_coeff = time_to_coefficient(
+        sample_rate_, config_.release_ms *
+                          (1.0f + pdr_amount * std::max(config_.pdr_release_scale - 1.0f, 0.0f)));
     const float reduction_state_db =
         reduction_smoother_.smooth_bidirectional(target_db, release_coeff, true);
 

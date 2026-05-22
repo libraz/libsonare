@@ -19,3 +19,4 @@ pluggy==1.6.0
 pygments==2.19.2
     # via pytest
 pytest==9.0.2
+ruff==0.15.14

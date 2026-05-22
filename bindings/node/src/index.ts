@@ -7,6 +7,8 @@ import type {
   DynamicsResult,
   HpssResult,
   Key,
+  MasteringResult,
+  MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
   PitchResult,
@@ -196,6 +198,23 @@ export class Audio {
 
   normalize(targetDb = 0.0): Float32Array {
     return addon.normalize(this.getData(), this.getSampleRate(), targetDb);
+  }
+
+  mastering(targetLufs = -14.0, ceilingDb = -1.0, truePeakOversample = 4): MasteringResult {
+    return addon.mastering(
+      this.getData(),
+      this.getSampleRate(),
+      targetLufs,
+      ceilingDb,
+      truePeakOversample,
+    );
+  }
+
+  masteringProcess(
+    processorName: string,
+    params: Record<string, number | boolean> = {},
+  ): MasteringResult {
+    return addon.masteringProcess(processorName, this.getData(), this.getSampleRate(), params);
   }
 
   trim(thresholdDb = -60.0): Float32Array {
@@ -478,6 +497,81 @@ export function pitchShift(
 
 export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 0.0): Float32Array {
   return addon.normalize(samples, sampleRate, targetDb);
+}
+
+export function mastering(
+  samples: Float32Array,
+  sampleRate = 22050,
+  targetLufs = -14.0,
+  ceilingDb = -1.0,
+  truePeakOversample = 4,
+): MasteringResult {
+  return addon.mastering(samples, sampleRate, targetLufs, ceilingDb, truePeakOversample);
+}
+
+export function masteringProcess(
+  processorName: string,
+  samples: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): MasteringResult {
+  return addon.masteringProcess(processorName, samples, sampleRate, params);
+}
+
+export function masteringProcessStereo(
+  processorName: string,
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): MasteringStereoResult {
+  return addon.masteringProcessStereo(processorName, left, right, sampleRate, params);
+}
+
+export function masteringProcessorNames(): string[] {
+  return addon.masteringProcessorNames();
+}
+
+export function masteringPairProcessorNames(): string[] {
+  return addon.masteringPairProcessorNames();
+}
+
+export function masteringPairAnalysisNames(): string[] {
+  return addon.masteringPairAnalysisNames();
+}
+
+export function masteringStereoAnalysisNames(): string[] {
+  return addon.masteringStereoAnalysisNames();
+}
+
+export function masteringPairProcess(
+  processorName: string,
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): MasteringResult {
+  return addon.masteringPairProcess(processorName, source, reference, sampleRate, params);
+}
+
+export function masteringPairAnalyze(
+  analysisName: string,
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): string {
+  return addon.masteringPairAnalyze(analysisName, source, reference, sampleRate, params);
+}
+
+export function masteringStereoAnalyze(
+  analysisName: string,
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): string {
+  return addon.masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
 }
 
 export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -60.0): Float32Array {

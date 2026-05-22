@@ -52,6 +52,48 @@ const key = detectKey(samples, sampleRate);  // { name: "C major", confidence: 0
 const result = analyze(samples, sampleRate);
 ```
 
+The npm package is WebAssembly-based and includes mastering DSP in the default
+build:
+
+```typescript
+import {
+  init,
+  masteringChain,
+  masteringChainStereo,
+  masteringPairAnalyze,
+  masteringPairProcess,
+  masteringProcess,
+} from '@libraz/libsonare';
+
+await init();
+
+const mastered = masteringChain(samples, sampleRate, {
+  eq: { tiltDb: 1.0 },
+  dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
+  saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
+  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
+});
+
+const stereo = masteringChainStereo(left, right, sampleRate, {
+  stereo: { imager: { width: 1.1 }, monoMaker: { amount: 0.2 } },
+  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
+});
+
+const compressed = masteringProcess('dynamics.compressor', samples, sampleRate, {
+  thresholdDb: -24,
+  ratio: 1.5,
+});
+const matched = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
+  mix: 0.25,
+});
+const loudnessJson = masteringPairAnalyze(
+  'match.referenceLoudness',
+  source,
+  reference,
+  sampleRate,
+);
+```
+
 ### Python
 
 `pip install libsonare` ships a **WAV/MP3-only wheel** (matching librosa / pydub /
@@ -87,6 +129,10 @@ sonare analyze song.mp3
 
 sonare bpm song.mp3 --json
 # {"bpm": 161.0}
+
+sonare mastering song.wav -o mastered.wav --target-lufs -14
+sonare mastering-processor song.wav --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5
+sonare mastering-pair-analyze source.wav --reference reference.wav --analysis match.referenceLoudness
 ```
 
 ### C++
@@ -107,10 +153,10 @@ std::cout << "BPM: " << result.bpm << ", Key: " << result.key.to_string() << std
 | Key Detection | Mel Spectrogram | Time Stretch |
 | Beat Tracking | MFCC | Pitch Shift |
 | Chord Recognition | Chroma | Normalize / Trim |
-| Section Detection | CQT / VQT | |
-| Timbre / Dynamics | Spectral Features | |
-| Pitch Tracking (YIN/pYIN) | Onset Detection | |
-| Real-time Streaming | Resample | |
+| Section Detection | CQT / VQT | Mastering chain |
+| Timbre / Dynamics | Spectral Features | True-peak limiting |
+| Pitch Tracking (YIN/pYIN) | Onset Detection | Loudness optimization |
+| Real-time Streaming | Resample | Stereo imaging |
 
 ## Performance
 

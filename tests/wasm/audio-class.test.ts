@@ -167,6 +167,33 @@ describe('Audio class', () => {
       expect(normalized.length).toBe(audio.length);
     });
 
+    it('should master to target loudness', () => {
+      const audio = Audio.fromBuffer(sine(), SR);
+      const result = audio.mastering(-18.0, -1.0, 4);
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(audio.length);
+      expect(result.sampleRate).toBe(SR);
+      expect(Number.isFinite(result.inputLufs)).toBe(true);
+      expect(Number.isFinite(result.outputLufs)).toBe(true);
+      expect(Number.isFinite(result.appliedGainDb)).toBe(true);
+    });
+
+    it('should run a mastering chain', () => {
+      const audio = Audio.fromBuffer(sine(), SR);
+      const result = audio.masteringChain({
+        eq: { tiltDb: 1.0 },
+        dynamics: { compressor: { thresholdDb: -24.0, ratio: 1.5 } },
+        saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
+        loudness: { targetLufs: -18.0, ceilingDb: -1.0, truePeakOversample: 4 },
+      });
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(audio.length);
+      expect(result.stages).toContain('eq.tilt');
+      expect(result.stages).toContain('dynamics.compressor');
+      expect(result.stages).toContain('saturation.tape');
+      expect(result.stages).toContain('loudness.optimize');
+    });
+
     it('should trim', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const trimmed = audio.trim(-60.0);

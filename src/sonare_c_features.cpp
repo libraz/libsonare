@@ -62,6 +62,8 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
+  *out_db = nullptr;
+
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   StftConfig config;
@@ -72,8 +74,9 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
   *out_n_bins = spec.n_bins();
   *out_n_frames = spec.n_frames();
   std::vector<float> db = spec.to_db();
-  *out_db = new float[db.size()];
-  std::memcpy(*out_db, db.data(), db.size() * sizeof(float));
+  std::unique_ptr<float[]> db_out(new float[db.size()]);
+  std::memcpy(db_out.get(), db.data(), db.size() * sizeof(float));
+  *out_db = release_array(db_out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -135,8 +138,9 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
 
   out->n_mfcc = n_mfcc;
   out->n_frames = mel.n_frames();
-  out->coefficients = new float[mfcc_data.size()];
-  std::memcpy(out->coefficients, mfcc_data.data(), mfcc_data.size() * sizeof(float));
+  std::unique_ptr<float[]> coeffs(new float[mfcc_data.size()]);
+  std::memcpy(coeffs.get(), mfcc_data.data(), mfcc_data.size() * sizeof(float));
+  out->coefficients = release_array(coeffs);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -285,12 +289,15 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
+  *out = nullptr;
+
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   std::vector<float> result = rms_energy(audio, frame_length, hop_length);
   *out_count = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  std::unique_ptr<float[]> tmp(new float[result.size()]);
+  std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
+  *out = release_array(tmp);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -303,15 +310,19 @@ SonareError fill_pitch_result(const PitchResult& result, SonarePitchResult* out)
   out->mean_f0 = result.mean_f0();
 
   size_t n = static_cast<size_t>(result.n_frames());
-  out->f0 = new float[n];
-  out->voiced_prob = new float[n];
-  out->voiced_flag = new int[n];
+  std::unique_ptr<float[]> f0(new float[n]);
+  std::unique_ptr<float[]> voiced_prob(new float[n]);
+  std::unique_ptr<int[]> voiced_flag(new int[n]);
 
-  std::memcpy(out->f0, result.f0.data(), n * sizeof(float));
-  std::memcpy(out->voiced_prob, result.voiced_prob.data(), n * sizeof(float));
+  std::memcpy(f0.get(), result.f0.data(), n * sizeof(float));
+  std::memcpy(voiced_prob.get(), result.voiced_prob.data(), n * sizeof(float));
   for (size_t i = 0; i < n; ++i) {
-    out->voiced_flag[i] = result.voiced_flag[i] ? 1 : 0;
+    voiced_flag[i] = result.voiced_flag[i] ? 1 : 0;
   }
+
+  out->f0 = release_array(f0);
+  out->voiced_prob = release_array(voiced_prob);
+  out->voiced_flag = release_array(voiced_flag);
   return SONARE_OK;
 }
 
@@ -323,6 +334,10 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+
+  out->f0 = nullptr;
+  out->voiced_prob = nullptr;
+  out->voiced_flag = nullptr;
 
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
@@ -343,6 +358,10 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
+
+  out->f0 = nullptr;
+  out->voiced_prob = nullptr;
+  out->voiced_flag = nullptr;
 
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);

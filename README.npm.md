@@ -94,10 +94,78 @@ const stats = analyzer.stats();
 console.log(`BPM: ${stats.estimate.bpm}, Key: ${stats.estimate.key}`);
 ```
 
+### Mastering (WASM)
+
+The npm package ships mastering DSP in the default WebAssembly build. Pass
+decoded `Float32Array` samples directly:
+
+```typescript
+import { init, masteringChain, masteringChainStereo } from '@libraz/libsonare';
+
+await init();
+
+const mastered = masteringChain(samples, sampleRate, {
+  eq: { tiltDb: 1.0 },
+  dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
+  saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
+  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
+});
+
+const stereo = masteringChainStereo(left, right, sampleRate, {
+  stereo: { imager: { width: 1.1 }, monoMaker: { amount: 0.2 } },
+  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
+});
+```
+
+Named mastering processors use the same names and behavior as the native,
+Python, C, and CLI APIs:
+
+```typescript
+import {
+  masteringPairAnalyze,
+  masteringPairProcess,
+  masteringPairProcessorNames,
+  masteringProcess,
+  masteringProcessStereo,
+  masteringProcessorNames,
+  masteringStereoAnalyze,
+} from '@libraz/libsonare';
+
+const names = masteringProcessorNames(); // e.g. "dynamics.compressor"
+const compressed = masteringProcess('dynamics.compressor', samples, sampleRate, {
+  thresholdDb: -24,
+  ratio: 1.5,
+});
+
+const widened = masteringProcessStereo('stereo.imager', left, right, sampleRate, {
+  width: 1.1,
+});
+
+const pairNames = masteringPairProcessorNames(); // e.g. "match.abCrossfade"
+const crossfaded = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
+  mix: 0.25,
+});
+
+const loudnessJson = masteringPairAnalyze(
+  'match.referenceLoudness',
+  source,
+  reference,
+  sampleRate,
+);
+const monoCompatJson = masteringStereoAnalyze(
+  'stereo.monoCompatCheck',
+  left,
+  right,
+  sampleRate,
+);
+```
+
 ## Features
 
 - **Detection**: BPM, key, beats, onsets, chords, sections
 - **Effects**: HPSS, time stretch, pitch shift, normalize, trim
+- **Mastering**: EQ, compressor, tape/exciter, air band, stereo imaging,
+  true-peak limiting, loudness optimization
 - **Features**: STFT, mel spectrogram, MFCC, chroma, CQT/VQT, spectral features
 - **Pitch**: YIN, pYIN algorithms
 - **Streaming**: Real-time analysis with progressive estimates

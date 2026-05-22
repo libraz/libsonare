@@ -132,8 +132,7 @@ void TransientShaper::ensure_followers(int num_channels) {
   gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
   const size_t lookahead_samples =
       static_cast<size_t>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
-  lookahead_.assign(static_cast<size_t>(num_channels),
-                    std::vector<float>(lookahead_samples, 0.0f));
+  lookahead_.assign(static_cast<size_t>(num_channels), std::vector<float>(lookahead_samples, 0.0f));
   lookahead_index_.assign(static_cast<size_t>(num_channels), 0);
   for (auto& follower : fast_followers_) {
     follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);

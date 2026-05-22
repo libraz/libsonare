@@ -1,17 +1,18 @@
 #include "sonare_wrap.h"
-#include "sonare_wrap_utils.h"
 
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
 
 Napi::FunctionReference SonareWrap::constructor_;
 
 const char* SonareWrap::PitchClassName(SonarePitchClass pc) {
-  static const char* names[] = {
-      "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+  static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
   int idx = static_cast<int>(pc);
   if (idx < 0 || idx > 11) return "C";
   return names[idx];
@@ -30,23 +31,23 @@ Napi::Float32Array SonareWrap::VecToFloat32(Napi::Env env, const std::vector<flo
 }
 
 Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func = DefineClass(
-      env, "Audio",
-      {
-          InstanceMethod<&SonareWrap::GetData>("getData"),
-          InstanceMethod<&SonareWrap::GetLength>("getLength"),
-          InstanceMethod<&SonareWrap::GetSampleRate>("getSampleRate"),
-          InstanceMethod<&SonareWrap::GetDuration>("getDuration"),
-          InstanceMethod<&SonareWrap::DetectBpmInstance>("detectBpm"),
-          InstanceMethod<&SonareWrap::DetectKeyInstance>("detectKey"),
-          InstanceMethod<&SonareWrap::DetectBeatsInstance>("detectBeats"),
-          InstanceMethod<&SonareWrap::DetectOnsetsInstance>("detectOnsets"),
-          InstanceMethod<&SonareWrap::AnalyzeInstance>("analyze"),
-          InstanceMethod<&SonareWrap::Destroy>("destroy"),
-          StaticMethod<&SonareWrap::FromFile>("fromFile"),
-          StaticMethod<&SonareWrap::FromBuffer>("fromBuffer"),
-          StaticMethod<&SonareWrap::FromMemory>("fromMemory"),
-      });
+  Napi::Function func =
+      DefineClass(env, "Audio",
+                  {
+                      InstanceMethod<&SonareWrap::GetData>("getData"),
+                      InstanceMethod<&SonareWrap::GetLength>("getLength"),
+                      InstanceMethod<&SonareWrap::GetSampleRate>("getSampleRate"),
+                      InstanceMethod<&SonareWrap::GetDuration>("getDuration"),
+                      InstanceMethod<&SonareWrap::DetectBpmInstance>("detectBpm"),
+                      InstanceMethod<&SonareWrap::DetectKeyInstance>("detectKey"),
+                      InstanceMethod<&SonareWrap::DetectBeatsInstance>("detectBeats"),
+                      InstanceMethod<&SonareWrap::DetectOnsetsInstance>("detectOnsets"),
+                      InstanceMethod<&SonareWrap::AnalyzeInstance>("analyze"),
+                      InstanceMethod<&SonareWrap::Destroy>("destroy"),
+                      StaticMethod<&SonareWrap::FromFile>("fromFile"),
+                      StaticMethod<&SonareWrap::FromBuffer>("fromBuffer"),
+                      StaticMethod<&SonareWrap::FromMemory>("fromMemory"),
+                  });
 
   constructor_ = Napi::Persistent(func);
   constructor_.SuppressDestruct();
@@ -57,8 +58,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("detectBpm", Napi::Function::New(env, &SonareWrap::DetectBpm, "detectBpm"));
   exports.Set("detectKey", Napi::Function::New(env, &SonareWrap::DetectKey, "detectKey"));
   exports.Set("detectBeats", Napi::Function::New(env, &SonareWrap::DetectBeats, "detectBeats"));
-  exports.Set("detectOnsets",
-              Napi::Function::New(env, &SonareWrap::DetectOnsets, "detectOnsets"));
+  exports.Set("detectOnsets", Napi::Function::New(env, &SonareWrap::DetectOnsets, "detectOnsets"));
   exports.Set("analyze", Napi::Function::New(env, &SonareWrap::Analyze, "analyze"));
   exports.Set("analyzeBpm", Napi::Function::New(env, &SonareWrap::AnalyzeBpm, "analyzeBpm"));
   exports.Set("analyzeRhythm",
@@ -67,12 +67,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::AnalyzeDynamics, "analyzeDynamics"));
   exports.Set("analyzeTimbre",
               Napi::Function::New(env, &SonareWrap::AnalyzeTimbre, "analyzeTimbre"));
-  exports.Set("detectChords",
-              Napi::Function::New(env, &SonareWrap::DetectChords, "detectChords"));
+  exports.Set("detectChords", Napi::Function::New(env, &SonareWrap::DetectChords, "detectChords"));
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
-  exports.Set(
-      "hasFfmpegSupport",
-      Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
+  exports.Set("hasFfmpegSupport",
+              Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
 
   // Effects
   exports.Set("hpss", Napi::Function::New(env, &SonareWrap::Hpss, "hpss"));
@@ -81,6 +79,31 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("timeStretch", Napi::Function::New(env, &SonareWrap::TimeStretch, "timeStretch"));
   exports.Set("pitchShift", Napi::Function::New(env, &SonareWrap::PitchShift, "pitchShift"));
   exports.Set("normalize", Napi::Function::New(env, &SonareWrap::Normalize, "normalize"));
+  exports.Set("mastering", Napi::Function::New(env, &SonareWrap::Mastering, "mastering"));
+  exports.Set("masteringProcess",
+              Napi::Function::New(env, &SonareWrap::MasteringProcess, "masteringProcess"));
+  exports.Set(
+      "masteringProcessStereo",
+      Napi::Function::New(env, &SonareWrap::MasteringProcessStereo, "masteringProcessStereo"));
+  exports.Set(
+      "masteringProcessorNames",
+      Napi::Function::New(env, &SonareWrap::MasteringProcessorNames, "masteringProcessorNames"));
+  exports.Set("masteringPairProcessorNames",
+              Napi::Function::New(env, &SonareWrap::MasteringPairProcessorNames,
+                                  "masteringPairProcessorNames"));
+  exports.Set("masteringPairAnalysisNames",
+              Napi::Function::New(env, &SonareWrap::MasteringPairAnalysisNames,
+                                  "masteringPairAnalysisNames"));
+  exports.Set("masteringStereoAnalysisNames",
+              Napi::Function::New(env, &SonareWrap::MasteringStereoAnalysisNames,
+                                  "masteringStereoAnalysisNames"));
+  exports.Set("masteringPairProcess",
+              Napi::Function::New(env, &SonareWrap::MasteringPairProcess, "masteringPairProcess"));
+  exports.Set("masteringPairAnalyze",
+              Napi::Function::New(env, &SonareWrap::MasteringPairAnalyze, "masteringPairAnalyze"));
+  exports.Set(
+      "masteringStereoAnalyze",
+      Napi::Function::New(env, &SonareWrap::MasteringStereoAnalyze, "masteringStereoAnalyze"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
   exports.Set("analyzeTtsQuality",
               Napi::Function::New(env, &SonareWrap::AnalyzeTtsQuality, "analyzeTtsQuality"));
@@ -124,10 +147,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("midiToHz", Napi::Function::New(env, &SonareWrap::MidiToHz, "midiToHz"));
   exports.Set("hzToNote", Napi::Function::New(env, &SonareWrap::HzToNote, "hzToNote"));
   exports.Set("noteToHz", Napi::Function::New(env, &SonareWrap::NoteToHz, "noteToHz"));
-  exports.Set("framesToTime",
-              Napi::Function::New(env, &SonareWrap::FramesToTime, "framesToTime"));
-  exports.Set("timeToFrames",
-              Napi::Function::New(env, &SonareWrap::TimeToFrames, "timeToFrames"));
+  exports.Set("framesToTime", Napi::Function::New(env, &SonareWrap::FramesToTime, "framesToTime"));
+  exports.Set("timeToFrames", Napi::Function::New(env, &SonareWrap::TimeToFrames, "timeToFrames"));
 
   // Core - Resample
   exports.Set("resample", Napi::Function::New(env, &SonareWrap::Resample, "resample"));
@@ -162,15 +183,19 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
 
   std::string path = info[0].As<Napi::String>().Utf8Value();
 
-  SonareAudio* audio = nullptr;
-  SonareError err = sonare_audio_from_file(path.c_str(), &audio);
+  SonareAudio* audio_raw = nullptr;
+  SonareError err = sonare_audio_from_file(path.c_str(), &audio_raw);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
+                                                                         sonare_audio_free);
 
-  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio);
-  return constructor_.New({external});
+  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
+  auto result = constructor_.New({external});
+  audio_guard.release();
+  return result;
 }
 
 Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
@@ -190,15 +215,19 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
     sample_rate = info[1].As<Napi::Number>().Int32Value();
   }
 
-  SonareAudio* audio = nullptr;
-  SonareError err = sonare_audio_from_buffer(data, length, sample_rate, &audio);
+  SonareAudio* audio_raw = nullptr;
+  SonareError err = sonare_audio_from_buffer(data, length, sample_rate, &audio_raw);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
+                                                                         sonare_audio_free);
 
-  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio);
-  return constructor_.New({external});
+  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
+  auto result = constructor_.New({external});
+  audio_guard.release();
+  return result;
 }
 
 Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
@@ -208,7 +237,8 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   size_t len = 0;
 
   if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -221,19 +251,24 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
     data = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
-  SonareAudio* audio = nullptr;
-  SonareError err = sonare_audio_from_memory(data, len, &audio);
+  SonareAudio* audio_raw = nullptr;
+  SonareError err = sonare_audio_from_memory(data, len, &audio_raw);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
+                                                                         sonare_audio_free);
 
-  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio);
-  return constructor_.New({external});
+  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
+  auto result = constructor_.New({external});
+  audio_guard.release();
+  return result;
 }
 
 // --- Instance methods ---
@@ -397,4 +432,3 @@ void SonareWrap::Destroy(const Napi::CallbackInfo& /*info*/) {
     audio_ = nullptr;
   }
 }
-

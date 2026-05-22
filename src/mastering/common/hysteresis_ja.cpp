@@ -90,7 +90,6 @@ namespace jiles_atherton_presets {
 // ferric oxide tape constants summarized in figure 6. Values here are
 // normalized for audio-rate use while preserving the equation structure.
 
-
 JilesAthertonConfig oxide_tape() { return {1.0f, 0.3f, 0.1f, 1.6e-3f, 0.4f}; }
 
 JilesAthertonConfig tape() { return oxide_tape(); }

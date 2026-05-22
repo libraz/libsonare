@@ -74,7 +74,8 @@ std::pair<int, std::string> exec_command(const std::string& cmd) {
 /// @brief Gets the path to the sonare CLI executable.
 std::string get_cli_path() {
   // Try common build paths
-  std::vector<std::string> paths = {"./build/bin/sonare", "./bin/sonare", "../bin/sonare"};
+  std::vector<std::string> paths = {"./build-mastering-api/bin/sonare", "./build/bin/sonare",
+                                    "./bin/sonare", "../bin/sonare"};
 
   for (const auto& path : paths) {
     std::ifstream f(path);
@@ -595,6 +596,82 @@ TEST_CASE("CLI hpss command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("requires output"));
   }
 }
+
+#ifdef SONARE_WITH_MASTERING
+TEST_CASE("CLI mastering command", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  const std::string ref = unique_temp_path("_reference.wav");
+  create_test_wav(ref, 3.0f, 880.0f);
+  const std::string out = unique_temp_path("_mastered.wav");
+  std::remove(out.c_str());
+
+  SECTION("writes mastered wav and reports metadata") {
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " -o " + out +
+                                       " --target-lufs -18 --ceiling-db -1 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"input_lufs\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"output_lufs\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"applied_gain_db\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"target_lufs\": -18"));
+
+    std::ifstream f(out);
+    REQUIRE(f.good());
+  }
+
+  SECTION("lists named processors") {
+    auto [code, output] = exec_command(CLI + " mastering-processors --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("dynamics.compressor"));
+    REQUIRE_THAT(output, ContainsSubstring("stereo.imager"));
+
+    auto [pair_code, pair_output] = exec_command(CLI + " mastering-pair-processors --json");
+    REQUIRE(pair_code == 0);
+    REQUIRE_THAT(pair_output, ContainsSubstring("match.abCrossfade"));
+
+    auto [pair_analysis_code, pair_analysis_output] =
+        exec_command(CLI + " mastering-pair-analyses --json");
+    REQUIRE(pair_analysis_code == 0);
+    REQUIRE_THAT(pair_analysis_output, ContainsSubstring("match.referenceLoudness"));
+
+    auto [stereo_analysis_code, stereo_analysis_output] =
+        exec_command(CLI + " mastering-stereo-analyses --json");
+    REQUIRE(stereo_analysis_code == 0);
+    REQUIRE_THAT(stereo_analysis_output, ContainsSubstring("stereo.monoCompatCheck"));
+  }
+
+  SECTION("runs named processor") {
+    auto [code, output] =
+        exec_command(CLI + " mastering-processor " + TEST_WAV +
+                     " --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"processor\": \"dynamics.compressor\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
+  }
+
+  SECTION("runs pair processor and analysis") {
+    auto [pair_code, pair_output] =
+        exec_command(CLI + " mastering-pair-processor " + TEST_WAV + " --reference " + ref +
+                     " --processor match.abCrossfade --params mix=0.25 --json -q");
+    REQUIRE(pair_code == 0);
+    REQUIRE_THAT(pair_output, ContainsSubstring("\"processor\": \"match.abCrossfade\""));
+
+    auto [analysis_code, analysis_output] =
+        exec_command(CLI + " mastering-pair-analyze " + TEST_WAV + " --reference " + ref +
+                     " --analysis match.referenceLoudness -q");
+    REQUIRE(analysis_code == 0);
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"sourceLufs\""));
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"referenceLufs\""));
+  }
+
+  SECTION("runs stereo analysis") {
+    auto [code, output] =
+        exec_command(CLI + " mastering-stereo-analyze " + TEST_WAV + " --reference " + ref +
+                     " --analysis stereo.monoCompatCheck -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+}
+#endif
 
 TEST_CASE("CLI error handling", "[cli]") {
   SECTION("unknown command") {

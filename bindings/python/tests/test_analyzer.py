@@ -30,8 +30,10 @@ def _lib_available() -> bool:
 
     project_root = Path(__file__).parent.parent.parent.parent
     lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    build_path = project_root / "build" / "lib" / lib_name
-    return build_path.exists()
+    return any(
+        (project_root / build_dir / "lib" / lib_name).exists()
+        for build_dir in ("build-mastering-api", "build", "build-mastering")
+    )
 
 
 pytestmark = pytest.mark.skipif(not _lib_available(), reason="libsonare shared library not found")
@@ -87,17 +89,30 @@ def test_audio_from_file_decodes_m4a() -> None:
         m4a_path = os.path.join(tmpdir, "tone.m4a")
         subprocess.run(
             [
-                ffmpeg, "-f", "lavfi", "-i",
+                ffmpeg,
+                "-f",
+                "lavfi",
+                "-i",
                 "sine=frequency=440:duration=0.5:sample_rate=22050",
-                "-ac", "1", "-y", wav_path,
+                "-ac",
+                "1",
+                "-y",
+                wav_path,
             ],
             check=True,
             capture_output=True,
         )
         subprocess.run(
             [
-                ffmpeg, "-i", wav_path, "-c:a", "aac", "-b:a", "64k",
-                "-y", m4a_path,
+                ffmpeg,
+                "-i",
+                wav_path,
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                "-y",
+                m4a_path,
             ],
             check=True,
             capture_output=True,
@@ -220,6 +235,101 @@ def test_audio_detect_onsets() -> None:
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     onsets = audio.detect_onsets()
     assert isinstance(onsets, list)
+
+
+def test_mastering_returns_audio_and_loudness_metadata() -> None:
+    """mastering is exposed as a standalone function and Audio method."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
+
+    result = libsonare.mastering(samples, sample_rate=sr, target_lufs=-18.0)
+    assert isinstance(result.samples, list)
+    assert len(result.samples) == len(samples)
+    assert result.sample_rate == sr
+    assert math.isfinite(result.input_lufs)
+    assert math.isfinite(result.output_lufs)
+    assert math.isfinite(result.applied_gain_db)
+    assert result.output_lufs == pytest.approx(-18.0, abs=0.1)
+
+    audio = libsonare.Audio.from_buffer(samples, sample_rate=sr)
+    try:
+        audio_result = audio.mastering(target_lufs=-18.0)
+        assert len(audio_result.samples) == len(samples)
+        assert audio_result.sample_rate == sr
+    finally:
+        audio.close()
+
+
+def test_named_mastering_processors() -> None:
+    """Named mastering processors are exposed through the shared API."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 2)]
+
+    names = libsonare.mastering_processor_names()
+    assert "dynamics.compressor" in names
+    assert "stereo.imager" in names
+
+    result = libsonare.mastering_process(
+        "dynamics.compressor",
+        samples,
+        sample_rate=sr,
+        params={"thresholdDb": -24.0, "ratio": 1.5},
+    )
+    assert len(result.samples) == len(samples)
+    assert math.isfinite(result.output_lufs)
+
+    stereo = libsonare.mastering_process_stereo(
+        "stereo.imager",
+        samples,
+        samples,
+        sample_rate=sr,
+        params={"width": 1.1},
+    )
+    assert len(stereo.left) == len(samples)
+    assert len(stereo.right) == len(samples)
+
+
+def test_mastering_pair_and_stereo_analysis() -> None:
+    """Pair and stereo mastering APIs return shared processor output/JSON."""
+    import libsonare
+
+    sr = 44100
+    samples = [0.18 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 4)]
+    reference = [0.12 * math.sin(2 * math.pi * 880 * i / sr) for i in range(sr // 4)]
+
+    assert "match.abCrossfade" in libsonare.mastering_pair_processor_names()
+    assert "match.referenceLoudness" in libsonare.mastering_pair_analysis_names()
+    assert "stereo.monoCompatCheck" in libsonare.mastering_stereo_analysis_names()
+
+    paired = libsonare.mastering_pair_process(
+        "match.abCrossfade",
+        samples,
+        reference,
+        sample_rate=sr,
+        params={"mix": 0.25},
+    )
+    assert len(paired.samples) == len(samples)
+
+    pair_json = libsonare.mastering_pair_analyze(
+        "match.referenceLoudness",
+        samples,
+        reference,
+        sample_rate=sr,
+    )
+    assert '"sourceLufs"' in pair_json
+    assert '"referenceLufs"' in pair_json
+
+    stereo_json = libsonare.mastering_stereo_analyze(
+        "stereo.monoCompatCheck",
+        samples,
+        reference,
+        sample_rate=sr,
+    )
+    assert '"correlation"' in stereo_json
 
 
 def test_audio_analyze() -> None:

@@ -19,7 +19,6 @@ namespace {
 using sonare::constants::kPiD;
 using sonare::constants::kTwoPiD;
 
-
 float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   if (spectrum.frequencies.empty() || spectrum.db.empty()) {
     throw std::invalid_argument("spectrum must not be empty");

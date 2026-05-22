@@ -24,6 +24,12 @@ import type {
   ChromaResult,
   HpssResult,
   Key,
+  MasteringChainConfig,
+  MasteringChainResult,
+  MasteringProcessorParams,
+  MasteringResult,
+  MasteringStereoChainResult,
+  MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
   Mode,
@@ -48,6 +54,12 @@ export type {
   Dynamics,
   HpssResult,
   Key,
+  MasteringChainConfig,
+  MasteringChainResult,
+  MasteringProcessorParams,
+  MasteringResult,
+  MasteringStereoChainResult,
+  MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
   PitchResult,
@@ -377,6 +389,167 @@ export function normalize(samples: Float32Array, sampleRate: number, targetDb = 
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.normalize(samples, sampleRate, targetDb);
+}
+
+/**
+ * Apply mastering loudness normalization with a true-peak ceiling.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param targetLufs - Target integrated LUFS (default: -14)
+ * @param ceilingDb - True/sample peak ceiling in dBFS (default: -1)
+ * @param truePeakOversample - Oversampling factor used for peak estimation
+ * @returns Processed audio and loudness metadata
+ */
+export function mastering(
+  samples: Float32Array,
+  sampleRate: number,
+  targetLufs = -14.0,
+  ceilingDb = -1.0,
+  truePeakOversample = 4,
+): MasteringResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.mastering(samples, sampleRate, targetLufs, ceilingDb, truePeakOversample);
+}
+
+export function masteringProcessorNames(): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringProcessorNames();
+}
+
+export function masteringPairProcessorNames(): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringPairProcessorNames();
+}
+
+export function masteringPairAnalysisNames(): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringPairAnalysisNames();
+}
+
+export function masteringStereoAnalysisNames(): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringStereoAnalysisNames();
+}
+
+export function masteringProcess(
+  processorName: string,
+  samples: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): MasteringResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringProcess(processorName, samples, sampleRate, params);
+}
+
+export function masteringProcessStereo(
+  processorName: string,
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): MasteringStereoResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  if (left.length !== right.length) {
+    throw new Error('Stereo channel lengths must match.');
+  }
+  return module.masteringProcessStereo(processorName, left, right, sampleRate, params);
+}
+
+export function masteringPairProcess(
+  processorName: string,
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): MasteringResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringPairProcess(processorName, source, reference, sampleRate, params);
+}
+
+export function masteringPairAnalyze(
+  analysisName: string,
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringPairAnalyze(analysisName, source, reference, sampleRate, params);
+}
+
+export function masteringStereoAnalyze(
+  analysisName: string,
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
+}
+
+/**
+ * Apply a configurable mastering chain in WASM.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param config - Chain stage configuration
+ * @returns Processed audio, loudness metadata, and applied stage names
+ */
+export function masteringChain(
+  samples: Float32Array,
+  sampleRate: number,
+  config: MasteringChainConfig,
+): MasteringChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringChain(samples, sampleRate, config as Record<string, unknown>);
+}
+
+/**
+ * Apply a configurable stereo mastering chain in WASM.
+ *
+ * @param left - Left channel samples
+ * @param right - Right channel samples
+ * @param sampleRate - Sample rate in Hz
+ * @param config - Chain stage configuration
+ * @returns Processed stereo audio, loudness metadata, and applied stage names
+ */
+export function masteringChainStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config: MasteringChainConfig,
+): MasteringStereoChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  if (left.length !== right.length) {
+    throw new Error('Stereo channel lengths must match.');
+  }
+  return module.masteringChainStereo(left, right, sampleRate, config as Record<string, unknown>);
 }
 
 /**
@@ -942,6 +1115,18 @@ export class Audio {
 
   normalize(targetDb = 0.0): Float32Array {
     return normalize(this._samples, this._sampleRate, targetDb);
+  }
+
+  mastering(targetLufs = -14.0, ceilingDb = -1.0, truePeakOversample = 4): MasteringResult {
+    return mastering(this._samples, this._sampleRate, targetLufs, ceilingDb, truePeakOversample);
+  }
+
+  masteringChain(config: MasteringChainConfig): MasteringChainResult {
+    return masteringChain(this._samples, this._sampleRate, config);
+  }
+
+  masteringProcess(processorName: string, params: MasteringProcessorParams = {}): MasteringResult {
+    return masteringProcess(processorName, this._samples, this._sampleRate, params);
   }
 
   trim(thresholdDb = -60.0): Float32Array {

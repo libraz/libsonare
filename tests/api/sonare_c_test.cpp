@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,18 @@ std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
   }
   return samples;
 }
+
+#ifdef SONARE_WITH_MASTERING
+std::vector<std::string> split_lines(const char* text) {
+  std::vector<std::string> lines;
+  std::stringstream stream(text ? text : "");
+  std::string line;
+  while (std::getline(stream, line)) {
+    if (!line.empty()) lines.push_back(line);
+  }
+  return lines;
+}
+#endif
 
 // Generate click track
 std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
@@ -394,6 +407,192 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
     REQUIRE(result.chord_count == 0);
   }
 }
+
+#ifdef SONARE_WITH_MASTERING
+TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
+  SECTION("returns processed samples and loudness metadata") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    for (auto& sample : samples) {
+      sample *= 0.2f;
+    }
+
+    SonareMasteringConfig config{};
+    config.target_lufs = -18.0f;
+    config.ceiling_db = -1.0f;
+    config.true_peak_oversample = 4;
+
+    SonareMasteringResult result{};
+    SonareError err =
+        sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length == samples.size());
+    REQUIRE(result.sample_rate == 22050);
+    REQUIRE(std::isfinite(result.input_lufs));
+    REQUIRE(std::isfinite(result.output_lufs));
+    REQUIRE(std::isfinite(result.applied_gain_db));
+    REQUIRE(result.output_lufs > -18.2f);
+    REQUIRE(result.output_lufs < -17.8f);
+
+    sonare_free_mastering_result(&result);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    SonareMasteringConfig config{};
+    config.target_lufs = -18.0f;
+    config.ceiling_db = -1.0f;
+    config.true_peak_oversample = 4;
+    SonareMasteringResult result{};
+
+    REQUIRE(sonare_mastering_process(nullptr, samples.size(), 22050, &config, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("applies named mono and stereo processors") {
+    auto samples = generate_sine(440.0f, 22050, 0.5f);
+    for (auto& sample : samples) sample *= 0.2f;
+
+    SonareMasteringParam params[] = {{"thresholdDb", -24.0}, {"ratio", 1.5}};
+    SonareMasteringResult mono{};
+    REQUIRE(sonare_mastering_apply_processor("dynamics.compressor", samples.data(), samples.size(),
+                                             22050, params, 2, &mono) == SONARE_OK);
+    REQUIRE(mono.samples != nullptr);
+    REQUIRE(mono.length == samples.size());
+    REQUIRE(std::isfinite(mono.output_lufs));
+    sonare_free_mastering_result(&mono);
+
+    SonareMasteringParam stereo_params[] = {{"width", 1.1}};
+    SonareMasteringStereoResult stereo{};
+    REQUIRE(sonare_mastering_apply_processor_stereo("stereo.imager", samples.data(), samples.data(),
+                                                    samples.size(), 22050, stereo_params, 1,
+                                                    &stereo) == SONARE_OK);
+    REQUIRE(stereo.left != nullptr);
+    REQUIRE(stereo.right != nullptr);
+    REQUIRE(stereo.length == samples.size());
+    REQUIRE(std::isfinite(stereo.output_lufs));
+    sonare_free_mastering_stereo_result(&stereo);
+
+    const char* names = sonare_mastering_processor_names();
+    REQUIRE(names != nullptr);
+    REQUIRE(std::strstr(names, "dynamics.compressor") != nullptr);
+    REQUIRE(std::strstr(names, "stereo.imager") != nullptr);
+  }
+
+  SECTION("applies pair processors and analyses") {
+    auto source = generate_sine(440.0f, 44100, 0.25f);
+    auto reference = generate_sine(880.0f, 44100, 0.25f);
+    for (auto& sample : source) sample *= 0.18f;
+    for (auto& sample : reference) sample *= 0.12f;
+
+    SonareMasteringParam pair_params[] = {{"mix", 0.25}};
+    SonareMasteringResult paired{};
+    REQUIRE(sonare_mastering_apply_pair_processor(
+                "match.abCrossfade", source.data(), reference.data(), source.size(), 44100,
+                pair_params, 1, &paired) == SONARE_OK);
+    REQUIRE(paired.samples != nullptr);
+    REQUIRE(paired.length == source.size());
+    sonare_free_mastering_result(&paired);
+
+    char* pair_json = nullptr;
+    REQUIRE(sonare_mastering_analyze_pair("match.referenceLoudness", source.data(),
+                                          reference.data(), source.size(), 44100, nullptr, 0,
+                                          &pair_json) == SONARE_OK);
+    REQUIRE(pair_json != nullptr);
+    REQUIRE(std::strstr(pair_json, "sourceLufs") != nullptr);
+    REQUIRE(std::strstr(pair_json, "referenceLufs") != nullptr);
+    sonare_free_string(pair_json);
+
+    char* stereo_json = nullptr;
+    REQUIRE(sonare_mastering_analyze_stereo("stereo.monoCompatCheck", source.data(),
+                                            reference.data(), source.size(), 44100, nullptr, 0,
+                                            &stereo_json) == SONARE_OK);
+    REQUIRE(stereo_json != nullptr);
+    REQUIRE(std::strstr(stereo_json, "correlation") != nullptr);
+    sonare_free_string(stereo_json);
+
+    REQUIRE(std::strstr(sonare_mastering_pair_processor_names(), "match.abCrossfade") != nullptr);
+    REQUIRE(std::strstr(sonare_mastering_pair_analysis_names(), "match.referenceLoudness") !=
+            nullptr);
+    REQUIRE(std::strstr(sonare_mastering_stereo_analysis_names(), "stereo.monoCompatCheck") !=
+            nullptr);
+  }
+
+  SECTION("all listed processors execute through the shared stereo entrypoint") {
+    auto left = generate_sine(440.0f, 44100, 0.25f);
+    auto right = generate_sine(660.0f, 44100, 0.25f);
+    for (auto& sample : left) sample *= 0.18f;
+    for (auto& sample : right) sample *= 0.12f;
+
+    const auto names = split_lines(sonare_mastering_processor_names());
+    REQUIRE_FALSE(names.empty());
+    for (const auto& name : names) {
+      INFO("processor: " << name);
+      SonareMasteringStereoResult result{};
+      REQUIRE(sonare_mastering_apply_processor_stereo(name.c_str(), left.data(), right.data(),
+                                                      left.size(), 44100, nullptr, 0,
+                                                      &result) == SONARE_OK);
+      REQUIRE(result.left != nullptr);
+      REQUIRE(result.right != nullptr);
+      REQUIRE(result.length == left.size());
+      REQUIRE(std::isfinite(result.output_lufs));
+      sonare_free_mastering_stereo_result(&result);
+    }
+  }
+
+  SECTION("all listed pair processors and analyses execute") {
+    auto source = generate_sine(440.0f, 44100, 0.25f);
+    auto reference = generate_sine(880.0f, 44100, 0.25f);
+    for (auto& sample : source) sample *= 0.18f;
+    for (auto& sample : reference) sample *= 0.12f;
+
+    const auto processors = split_lines(sonare_mastering_pair_processor_names());
+    REQUIRE_FALSE(processors.empty());
+    for (const auto& name : processors) {
+      INFO("pair processor: " << name);
+      SonareMasteringResult result{};
+      REQUIRE(sonare_mastering_apply_pair_processor(name.c_str(), source.data(), reference.data(),
+                                                    source.size(), 44100, nullptr, 0,
+                                                    &result) == SONARE_OK);
+      REQUIRE(result.samples != nullptr);
+      REQUIRE(result.length == source.size());
+      sonare_free_mastering_result(&result);
+    }
+
+    const auto pair_analyses = split_lines(sonare_mastering_pair_analysis_names());
+    REQUIRE_FALSE(pair_analyses.empty());
+    for (const auto& name : pair_analyses) {
+      INFO("pair analysis: " << name);
+      SonareMasteringParam params[] = {{"highHz", 18000.0}};
+      char* json = nullptr;
+      REQUIRE(sonare_mastering_analyze_pair(name.c_str(), source.data(), reference.data(),
+                                            source.size(), 44100, params, 1, &json) == SONARE_OK);
+      REQUIRE(json != nullptr);
+      REQUIRE(std::strlen(json) > 2);
+      sonare_free_string(json);
+    }
+
+    const auto stereo_analyses = split_lines(sonare_mastering_stereo_analysis_names());
+    REQUIRE_FALSE(stereo_analyses.empty());
+    for (const auto& name : stereo_analyses) {
+      INFO("stereo analysis: " << name);
+      SonareMasteringParam params[] = {{"highHz", 18000.0}};
+      char* json = nullptr;
+      REQUIRE(sonare_mastering_analyze_stereo(name.c_str(), source.data(), reference.data(),
+                                              source.size(), 44100, params, 1,
+                                              &json) == SONARE_OK);
+      REQUIRE(json != nullptr);
+      REQUIRE(std::strlen(json) > 2);
+      sonare_free_string(json);
+    }
+  }
+}
+#endif
 
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {

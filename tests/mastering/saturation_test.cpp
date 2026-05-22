@@ -76,7 +76,8 @@ float legacy_langevin_derivative(float x) {
 }
 
 float dafx19_reference_ja_process(LegacyJaState& state,
-                        const sonare::mastering::common::JilesAthertonConfig& config, float field) {
+                                  const sonare::mastering::common::JilesAthertonConfig& config,
+                                  float field) {
   const float He = field + config.mean_field_coupling * state.M;
   const float x = He / config.anhysteretic_shape;
   const float M_an = config.saturation_magnetization * legacy_langevin(x);
@@ -90,8 +91,8 @@ float dafx19_reference_ja_process(LegacyJaState& state,
 
   const float diff = M_an - state.M;
   const float delta_m = delta * diff >= 0.0f ? 1.0f : 0.0f;
-  const float denom = (1.0f - config.reversibility) * delta * config.coercivity -
-                      config.mean_field_coupling * diff;
+  const float denom =
+      (1.0f - config.reversibility) * delta * config.coercivity - config.mean_field_coupling * diff;
   float dM_hyst_dH = 0.0f;
   if (std::abs(denom) > 1e-9f) {
     dM_hyst_dH = (1.0f - config.reversibility) * delta_m * diff / denom;
@@ -408,8 +409,7 @@ TEST_CASE("Exciter adds high-frequency enhancement", "[mastering][saturation]") 
   REQUIRE(rms_tail(signal, 4096) > before * 1.1f);
 }
 
-TEST_CASE("Exciter focuses harmonic generation around resonant band",
-          "[mastering][saturation]") {
+TEST_CASE("Exciter focuses harmonic generation around resonant band", "[mastering][saturation]") {
   auto center = sine(4000.0f, 48000, 48000, 0.2f);
   auto low = sine(300.0f, 48000, 48000, 0.2f);
   const float center_before = rms_tail(center, 4096);

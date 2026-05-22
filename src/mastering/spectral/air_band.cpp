@@ -119,9 +119,9 @@ void AirBand::rebuild_filters(int num_channels) {
   if (num_channels <= 0) return;
   shelf_.assign(static_cast<size_t>(num_channels),
                 make_high_shelf(config_.shelf_frequency_hz, sample_rate_, 0.0f));
-  detector_.assign(static_cast<size_t>(num_channels),
-                   make_highpass(config_.shelf_frequency_hz, sample_rate_,
-                                 sonare::constants::kButterworthQD));
+  detector_.assign(
+      static_cast<size_t>(num_channels),
+      make_highpass(config_.shelf_frequency_hz, sample_rate_, sonare::constants::kButterworthQD));
 }
 
 float AirBand::Biquad::process(float x) {

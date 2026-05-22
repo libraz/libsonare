@@ -25,6 +25,16 @@ import {
   hzToMel,
   hzToMidi,
   hzToNote,
+  mastering,
+  masteringPairAnalysisNames,
+  masteringPairAnalyze,
+  masteringPairProcess,
+  masteringPairProcessorNames,
+  masteringProcess,
+  masteringProcessorNames,
+  masteringProcessStereo,
+  masteringStereoAnalysisNames,
+  masteringStereoAnalyze,
   melSpectrogram,
   melToHz,
   mfcc,
@@ -167,6 +177,39 @@ describe('sonare native binding', () => {
     it('converts invalid native arguments into JS exceptions', () => {
       expect(() => timeStretch(new Float32Array(SR), -1, 2.0)).toThrow(/Invalid parameter/);
     });
+
+    it('exposes pair and stereo mastering APIs', () => {
+      const sampleRate = 44100;
+      const source = generateSine(440, sampleRate, 0.25);
+      const reference = generateSine(880, sampleRate, 0.25);
+
+      expect(masteringPairProcessorNames()).toContain('match.abCrossfade');
+      expect(masteringPairAnalysisNames()).toContain('match.referenceLoudness');
+      expect(masteringStereoAnalysisNames()).toContain('stereo.monoCompatCheck');
+
+      const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
+        mix: 0.25,
+      });
+      expect(paired.samples).toBeInstanceOf(Float32Array);
+      expect(paired.samples.length).toBe(source.length);
+
+      const pairJson = masteringPairAnalyze(
+        'match.referenceLoudness',
+        source,
+        reference,
+        sampleRate,
+      );
+      expect(pairJson).toContain('"sourceLufs"');
+      expect(pairJson).toContain('"referenceLufs"');
+
+      const stereoJson = masteringStereoAnalyze(
+        'stereo.monoCompatCheck',
+        source,
+        reference,
+        sampleRate,
+      );
+      expect(stereoJson).toContain('"correlation"');
+    });
   });
 
   describe('effects', () => {
@@ -219,6 +262,53 @@ describe('sonare native binding', () => {
       }
       expect(peak).toBeGreaterThan(0.8);
       expect(peak).toBeLessThanOrEqual(1.01);
+    });
+
+    it('mastering returns processed samples and loudness metadata', () => {
+      const quiet = new Float32Array(SR);
+      for (let i = 0; i < quiet.length; i++) {
+        quiet[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / SR);
+      }
+
+      const result = mastering(quiet, SR, -18.0, -1.0, 4);
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(quiet.length);
+      expect(result.sampleRate).toBe(SR);
+      expect(Number.isFinite(result.inputLufs)).toBe(true);
+      expect(Number.isFinite(result.outputLufs)).toBe(true);
+      expect(Number.isFinite(result.appliedGainDb)).toBe(true);
+      expect(result.outputLufs).toBeCloseTo(-18.0, 1);
+
+      const audio = Audio.fromBuffer(quiet, SR);
+      try {
+        const fromAudio = audio.mastering(-18.0, -1.0, 4);
+        expect(fromAudio.samples.length).toBe(quiet.length);
+        expect(fromAudio.sampleRate).toBe(SR);
+      } finally {
+        audio.destroy();
+      }
+    });
+
+    it('named mastering processors are available', () => {
+      const quiet = new Float32Array(SR / 2);
+      for (let i = 0; i < quiet.length; i++) {
+        quiet[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / SR);
+      }
+
+      const names = masteringProcessorNames();
+      expect(names).toContain('dynamics.compressor');
+      expect(names).toContain('stereo.imager');
+
+      const result = masteringProcess('dynamics.compressor', quiet, SR, {
+        thresholdDb: -24,
+        ratio: 1.5,
+      });
+      expect(result.samples).toBeInstanceOf(Float32Array);
+      expect(result.samples.length).toBe(quiet.length);
+
+      const stereo = masteringProcessStereo('stereo.imager', quiet, quiet, SR, { width: 1.1 });
+      expect(stereo.left).toBeInstanceOf(Float32Array);
+      expect(stereo.right.length).toBe(quiet.length);
     });
 
     it('trim removes silence', () => {

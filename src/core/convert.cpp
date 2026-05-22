@@ -132,6 +132,37 @@ float samples_to_time(int samples, int sr) { return static_cast<float>(samples) 
 
 int time_to_samples(float time, int sr) { return static_cast<int>(time * sr); }
 
+int frames_to_samples(int frames, int hop_length, int n_fft) {
+  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  return frames * hop_length + offset;
+}
+
+std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_length, int n_fft) {
+  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  std::vector<int> out;
+  out.reserve(frames.size());
+  for (int f : frames) out.push_back(f * hop_length + offset);
+  return out;
+}
+
+int samples_to_frames(int samples, int hop_length, int n_fft) {
+  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  // Use floor for deterministic behavior with negative numerators.
+  const int adjusted = samples - offset;
+  if (adjusted >= 0) {
+    return adjusted / hop_length;
+  }
+  // Mirror Python floor-division on negatives.
+  return -((-adjusted + hop_length - 1) / hop_length);
+}
+
+std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_length, int n_fft) {
+  std::vector<int> out;
+  out.reserve(samples.size());
+  for (int s : samples) out.push_back(samples_to_frames(s, hop_length, n_fft));
+  return out;
+}
+
 float bin_to_hz(int bin, int sr, int n_fft) { return static_cast<float>(bin * sr) / n_fft; }
 
 int hz_to_bin(float hz, int sr, int n_fft) { return static_cast<int>(std::round(hz * n_fft / sr)); }

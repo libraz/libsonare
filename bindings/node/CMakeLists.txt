@@ -52,6 +52,7 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/effects/time_stretch.cpp
   ${SONARE_ROOT}/src/effects/pitch_shift.cpp
   ${SONARE_ROOT}/src/effects/normalize.cpp
+  ${SONARE_ROOT}/src/mastering/maximizer/loudness_optimize.cpp
   ${SONARE_ROOT}/src/analysis/meter/basic.cpp
   ${SONARE_ROOT}/src/analysis/meter/clipping.cpp
   ${SONARE_ROOT}/src/analysis/meter/dynamic_range.cpp
@@ -86,6 +87,12 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/sonare_c_internal.cpp
   ${SONARE_ROOT}/src/sonare_c_memory.cpp
 )
+
+file(GLOB_RECURSE SONARE_MASTERING_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/mastering/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_MASTERING_SOURCES})
+list(REMOVE_DUPLICATES SONARE_SOURCES)
 
 # KissFFT sources
 set(KISSFFT_SOURCES

@@ -170,6 +170,122 @@ export interface HpssResult {
 }
 
 /**
+ * Mastering loudness/true-peak processing result
+ */
+export interface MasteringResult {
+  samples: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples?: number;
+}
+
+export type MasteringProcessorParams = Record<string, number | boolean>;
+
+export interface MasteringChainConfig {
+  repair?: {
+    denoise?: boolean;
+    nFft?: number;
+    hopLength?: number;
+    ddAlpha?: number;
+    gainFloor?: number;
+  };
+  eq?: {
+    tiltDb?: number;
+    pivotHz?: number;
+  };
+  dynamics?: {
+    compressor?: {
+      thresholdDb?: number;
+      ratio?: number;
+      attackMs?: number;
+      releaseMs?: number;
+      kneeDb?: number;
+      makeupGainDb?: number;
+      autoMakeup?: boolean;
+    };
+  };
+  saturation?: {
+    tape?: {
+      driveDb?: number;
+      saturation?: number;
+      hysteresis?: number;
+      outputGainDb?: number;
+      speedIps?: number;
+      headBumpDb?: number;
+      bias?: number;
+      gapLoss?: number;
+    };
+    exciter?: {
+      frequencyHz?: number;
+      driveDb?: number;
+      amount?: number;
+      q?: number;
+      evenOddMix?: number;
+    };
+  };
+  spectral?: {
+    airBand?: {
+      amount?: number;
+      shelfFrequencyHz?: number;
+      dynamicThresholdDb?: number;
+      dynamicRangeDb?: number;
+    };
+  };
+  stereo?: {
+    imager?: {
+      width?: number;
+      outputGainDb?: number;
+      decorrelationAmount?: number;
+      preserveEnergy?: boolean;
+    };
+    monoMaker?: {
+      amount?: number;
+    };
+  };
+  maximizer?: {
+    truePeakLimiter?: {
+      ceilingDb?: number;
+      lookaheadMs?: number;
+      releaseMs?: number;
+      oversampleFactor?: number;
+      applyGainAtInputRate?: boolean;
+    };
+  };
+  loudness?: {
+    targetLufs?: number;
+    ceilingDb?: number;
+    truePeakOversample?: number;
+  };
+}
+
+export interface MasteringChainResult extends MasteringResult {
+  stages: string[];
+}
+
+export interface MasteringStereoChainResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  stages: string[];
+  latencySamples?: number;
+}
+
+export interface MasteringStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples: number;
+}
+
+/**
  * STFT (Short-Time Fourier Transform) result
  */
 export interface StftResult {

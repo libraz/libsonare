@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.4.4"
+  },
+  "data": {
+    "signal": "440+660+880Hz_mix",
+    "sr": 22050,
+    "n_fft": 2048,
+    "hop_length": 512,
+    "piptrack_shape": [
+      1025,
+      44
+    ],
+    "piptrack_nonzero_count": 132,
+    "known_frequencies": [
+      440.0,
+      660.0,
+      880.0
+    ],
+    "pitch_tuning": 0.0,
+    "estimate_tuning": 0.010000000000000009
+  }
+}

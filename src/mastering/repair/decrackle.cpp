@@ -67,8 +67,7 @@ void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
     if (level == 0) {
       noise_sigma = median_abs(details) / 0.67448975f;
     }
-    const float level_threshold =
-        bayes_shrink_threshold(details, noise_sigma, threshold);
+    const float level_threshold = bayes_shrink_threshold(details, noise_sigma, threshold);
     for (size_t i = 0; i < pairs; ++i) {
       temp[pairs + i] = soft_threshold(details[i], level_threshold);
     }

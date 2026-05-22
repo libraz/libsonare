@@ -3,10 +3,10 @@
 /// @file pultec.h
 /// @brief Pultec EQP-1A inspired program equalizer.
 
+#include <vector>
+
 #include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
-
-#include <vector>
 
 namespace sonare::mastering::eq {
 

@@ -162,6 +162,23 @@ class Spectrogram {
   mutable std::vector<float> power_cache_;
 };
 
+/// @brief Magnitude + phase decomposition of a complex spectrum.
+struct MagPhase {
+  std::vector<float> magnitude;            ///< |D|^power, length n_bins * n_frames (row-major)
+  std::vector<std::complex<float>> phase;  ///< D / |D|, unit-modulus complex, same layout
+};
+
+/// @brief Separate a complex spectrogram into magnitude (^power) and phase.
+/// @param spec Complex spectrum, row-major [n_bins x n_frames]
+/// @param n Total number of complex entries (n_bins * n_frames)
+/// @param power Exponent applied to magnitude (default 1.0; e.g. 2.0 for power)
+/// @return MagPhase. phase[i] = spec[i] / max(|spec[i]|, eps); magnitude[i] = |spec[i]|^power.
+/// @throw std::invalid_argument if n > 0 and spec is null, or power <= 0.
+MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power = 1.0f);
+
+/// @brief Convenience overload accepting a Spectrogram.
+MagPhase magphase(const Spectrogram& spec, float power = 1.0f);
+
 /// @brief Reconstructs audio from magnitude spectrogram using Griffin-Lim algorithm.
 /// @param magnitude Magnitude spectrum [n_bins x n_frames]
 /// @param n_bins Number of frequency bins
@@ -184,5 +201,28 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft,
                   int hop_length, int sample_rate,
                   const GriffinLimConfig& config = GriffinLimConfig());
+
+/// @brief Output of @ref reassigned_spectrogram.
+struct ReassignedSpectrogram {
+  std::vector<float> magnitude;    ///< [n_bins x n_frames] row-major
+  std::vector<float> times;        ///< [n_bins x n_frames] reassigned times (seconds)
+  std::vector<float> frequencies;  ///< [n_bins x n_frames] reassigned frequencies (Hz)
+};
+
+/// @brief Computes the reassigned spectrogram of @p audio.
+/// @details Implements an Auger-Flandrin style reassignment: STFTs are computed
+/// with a Hann window, a time-weighted Hann (t*w(t)), and a derivative window
+/// (dw/dt). The reassigned time/frequency for each bin is derived from those
+/// three transforms. When `S * conj(S)` falls below @p ref_power, the affected
+/// bin's time/frequency entries are set to the un-reassigned values (or NaN
+/// if @p fill_nan is true), matching `librosa.reassigned_spectrogram`.
+/// @param audio Input audio (mono).
+/// @param config STFT configuration (n_fft, hop_length, window).
+/// @param ref_power Power threshold below which bins are not reassigned.
+/// @param fill_nan If true, low-power bins are filled with NaN.
+ReassignedSpectrogram reassigned_spectrogram(const Audio& audio,
+                                             const StftConfig& config = StftConfig(),
+                                             float ref_power = 1e-6f,
+                                             bool fill_nan = false);
 
 }  // namespace sonare

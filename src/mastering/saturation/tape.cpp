@@ -112,8 +112,8 @@ void Tape::ensure_state(int num_channels) {
 
 void Tape::update_filters(double sample_rate) {
   const float speed_scale = 15.0f / std::max(config_.speed_ips, 1.0f);
-  const float frequency = std::clamp(80.0f * speed_scale, 20.0f,
-                                    static_cast<float>(sample_rate * 0.45));
+  const float frequency =
+      std::clamp(80.0f * speed_scale, 20.0f, static_cast<float>(sample_rate * 0.45));
   const float gain = db_to_linear(config_.head_bump_db) - 1.0f;
   const float q = 1.0f;
   const float w0 = static_cast<float>(kTwoPiD * frequency / sample_rate);
@@ -133,9 +133,8 @@ void Tape::update_filters(double sample_rate) {
     filter.z2 = z2;
   }
   const float gap_cutoff = std::clamp(18000.0f * config_.speed_ips / 15.0f, 1000.0f,
-                                     static_cast<float>(sample_rate * 0.45));
-  gap_loss_coeff_ =
-      static_cast<float>(1.0 - std::exp(-kTwoPiD * gap_cutoff / sample_rate));
+                                      static_cast<float>(sample_rate * 0.45));
+  gap_loss_coeff_ = static_cast<float>(1.0 - std::exp(-kTwoPiD * gap_cutoff / sample_rate));
 }
 
 }  // namespace sonare::mastering::saturation

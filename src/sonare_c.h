@@ -126,6 +126,7 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
 // Memory management
 void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);
+void sonare_free_string(char* ptr);
 void sonare_free_result(SonareAnalysisResult* result);
 
 // Error handling
@@ -284,6 +285,74 @@ typedef struct {
   SonareChord* chords;
   size_t chord_count;
 } SonareChordAnalysisResult;
+
+// ============================================================================
+// Mastering
+// ============================================================================
+
+typedef struct {
+  float target_lufs;
+  float ceiling_db;
+  int true_peak_oversample;
+} SonareMasteringConfig;
+
+typedef struct {
+  float* samples;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  int latency_samples;
+} SonareMasteringResult;
+
+typedef struct {
+  const char* key;
+  double value;
+} SonareMasteringParam;
+
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  int sample_rate;
+  float input_lufs;
+  float output_lufs;
+  float applied_gain_db;
+  int latency_samples;
+} SonareMasteringStereoResult;
+
+SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
+                                     const SonareMasteringConfig* config,
+                                     SonareMasteringResult* out);
+SonareError sonare_mastering_apply_processor(const char* processor_name, const float* samples,
+                                             size_t length, int sample_rate,
+                                             const SonareMasteringParam* params, size_t param_count,
+                                             SonareMasteringResult* out);
+SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, const float* left,
+                                                    const float* right, size_t length,
+                                                    int sample_rate,
+                                                    const SonareMasteringParam* params,
+                                                    size_t param_count,
+                                                    SonareMasteringStereoResult* out);
+const char* sonare_mastering_processor_names(void);
+const char* sonare_mastering_pair_processor_names(void);
+const char* sonare_mastering_pair_analysis_names(void);
+const char* sonare_mastering_stereo_analysis_names(void);
+SonareError sonare_mastering_apply_pair_processor(
+    const char* processor_name, const float* source, const float* reference, size_t length,
+    int sample_rate, const SonareMasteringParam* params, size_t param_count,
+    SonareMasteringResult* out);
+SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
+                                          const float* reference, size_t length, int sample_rate,
+                                          const SonareMasteringParam* params, size_t param_count,
+                                          char** json_out);
+SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
+                                            const float* right, size_t length, int sample_rate,
+                                            const SonareMasteringParam* params,
+                                            size_t param_count, char** json_out);
+void sonare_free_mastering_result(SonareMasteringResult* result);
+void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);
 
 // ============================================================================
 // Effects

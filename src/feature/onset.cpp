@@ -141,6 +141,25 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
   return onset_multi;
 }
 
+std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vector<float>& energy) {
+  // librosa.onset.onset_backtrack walks each event backwards in time while the
+  // energy curve is strictly decreasing, snapping to the nearest local minimum.
+  std::vector<int> out;
+  out.reserve(events.size());
+  if (energy.empty()) {
+    return out;
+  }
+  const int n = static_cast<int>(energy.size());
+  for (int e : events) {
+    int i = std::min(std::max(e, 0), n - 1);
+    while (i > 0 && energy[i - 1] <= energy[i]) {
+      --i;
+    }
+    out.push_back(i);
+  }
+  return out;
+}
+
 std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(lag >= 1, ErrorCode::InvalidParameter);

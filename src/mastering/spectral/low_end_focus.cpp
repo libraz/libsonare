@@ -38,19 +38,16 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
 
-  const float low_alpha = std::clamp(
-      static_cast<float>(kTwoPiD * config_.cutoff_hz /
-                         (kTwoPiD * config_.cutoff_hz + sample_rate_)),
-      0.0f, 1.0f);
+  const float low_alpha =
+      std::clamp(static_cast<float>(kTwoPiD * config_.cutoff_hz /
+                                    (kTwoPiD * config_.cutoff_hz + sample_rate_)),
+                 0.0f, 1.0f);
   const float sub_alpha =
-      std::clamp(static_cast<float>(
-                     kTwoPiD * (config_.cutoff_hz * 0.5f) /
-                     (kTwoPiD * (config_.cutoff_hz * 0.5f) + sample_rate_)),
+      std::clamp(static_cast<float>(kTwoPiD * (config_.cutoff_hz * 0.5f) /
+                                    (kTwoPiD * (config_.cutoff_hz * 0.5f) + sample_rate_)),
                  0.0f, 1.0f);
   const float transient_alpha =
-      std::clamp(static_cast<float>(kTwoPiD * 25.0 /
-                                    (kTwoPiD * 25.0 + sample_rate_)),
-                 0.0f, 1.0f);
+      std::clamp(static_cast<float>(kTwoPiD * 25.0 / (kTwoPiD * 25.0 + sample_rate_)), 0.0f, 1.0f);
   for (int i = 0; i < num_samples; ++i) {
     for (int ch = 0; ch < num_channels; ++ch) {
       const auto index = static_cast<size_t>(ch);

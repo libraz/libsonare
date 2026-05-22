@@ -8,6 +8,8 @@ void sonare_free_floats(float* ptr) { delete[] ptr; }
 
 void sonare_free_ints(int* ptr) { delete[] ptr; }
 
+void sonare_free_string(char* ptr) { delete[] ptr; }
+
 void sonare_free_result(SonareAnalysisResult* result) {
   if (result != nullptr) {
     delete[] result->beat_times;

@@ -54,6 +54,54 @@ bpm = audio.detect_bpm()
 bpm = libsonare.detect_bpm(samples, sample_rate=sr)
 ```
 
+### Mastering
+
+The Python binding exposes the same mastering processors as the C, CLI, Node,
+and WASM APIs.
+
+```python
+import libsonare
+
+names = libsonare.mastering_processor_names()  # e.g. "dynamics.compressor"
+
+compressed = libsonare.mastering_process(
+    "dynamics.compressor",
+    samples,
+    sample_rate=sr,
+    params={"thresholdDb": -24.0, "ratio": 1.5},
+)
+
+widened = libsonare.mastering_process_stereo(
+    "stereo.imager",
+    left,
+    right,
+    sample_rate=sr,
+    params={"width": 1.1},
+)
+
+pair_names = libsonare.mastering_pair_processor_names()  # e.g. "match.abCrossfade"
+crossfaded = libsonare.mastering_pair_process(
+    "match.abCrossfade",
+    source,
+    reference,
+    sample_rate=sr,
+    params={"mix": 0.25},
+)
+
+loudness_json = libsonare.mastering_pair_analyze(
+    "match.referenceLoudness",
+    source,
+    reference,
+    sample_rate=sr,
+)
+mono_compat_json = libsonare.mastering_stereo_analyze(
+    "stereo.monoCompatCheck",
+    left,
+    right,
+    sample_rate=sr,
+)
+```
+
 ### Library version
 
 ```python
@@ -146,6 +194,12 @@ sonare spectral song.mp3         # Spectral features table
 sonare pitch song.mp3            # Pitch tracking (pYIN)
 sonare mel song.mp3              # Mel spectrogram shape
 sonare chroma song.mp3           # Chromagram with visualization
+
+sonare mastering song.wav -o mastered.wav --target-lufs -14
+sonare mastering-processor song.wav --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5
+sonare mastering-pair-processor source.wav --reference reference.wav --processor match.abCrossfade
+sonare mastering-pair-analyze source.wav --reference reference.wav --analysis match.referenceLoudness
+sonare mastering-stereo-analyze left.wav --reference right.wav --analysis stereo.monoCompatCheck
 ```
 
 ## Features

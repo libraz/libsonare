@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "librosa_version": "0.11.0",
+    "numpy_version": "2.4.4"
+  },
+  "data": {
+    "sr": 22050,
+    "bpm": 120,
+    "hop_length": 512,
+    "win_length": 384,
+    "length": 345,
+    "mean": 0.2799936830997467,
+    "std": 0.33923807740211487,
+    "max": 1.0,
+    "min": 0.0
+  }
+}

@@ -95,6 +95,25 @@ export interface HpssResult {
   sampleRate: number;
 }
 
+export interface MasteringResult {
+  samples: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples?: number;
+}
+
+export interface MasteringStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples: number;
+}
+
 export interface StftResult {
   nBins: number;
   nFrames: number;

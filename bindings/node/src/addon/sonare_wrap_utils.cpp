@@ -23,16 +23,13 @@ bool IsUint8Array(const Napi::Value& value) {
 }
 
 const char* PitchClassNameLocal(SonarePitchClass pc) {
-  static const char* names[] = {
-      "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+  static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
   int idx = static_cast<int>(pc);
   if (idx < 0 || idx > 11) return "C";
   return names[idx];
 }
 
-const char* ModeNameLocal(SonareMode mode) {
-  return mode == SONARE_MODE_MAJOR ? "major" : "minor";
-}
+const char* ModeNameLocal(SonareMode mode) { return mode == SONARE_MODE_MAJOR ? "major" : "minor"; }
 
 const char* ChordQualityName(SonareChordQuality quality) {
   switch (quality) {
@@ -75,9 +72,9 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));
-  result.Set("bpmConfidence",
-             Napi::Number::New(env, static_cast<double>(analysis.bpm_confidence)));
-  result.Set("key", KeyToObject(env, analysis.key.root, analysis.key.mode, analysis.key.confidence));
+  result.Set("bpmConfidence", Napi::Number::New(env, static_cast<double>(analysis.bpm_confidence)));
+  result.Set("key",
+             KeyToObject(env, analysis.key.root, analysis.key.mode, analysis.key.confidence));
 
   Napi::Object ts = Napi::Object::New(env);
   ts.Set("numerator", Napi::Number::New(env, analysis.time_signature.numerator));

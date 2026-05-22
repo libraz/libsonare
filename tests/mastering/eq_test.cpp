@@ -798,8 +798,8 @@ TEST_CASE("DynamicEq supports tunable sidechain frequency and timing", "[masteri
   constexpr int sample_rate = 48000;
   DynamicEq eq;
   eq.prepare(sample_rate, 1024);
-  eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f,
-                  true, 2.0f, 8000.0f, 0.1f, 20.0f, 0.5f});
+  eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f, true, 2.0f, 8000.0f,
+                  0.1f, 20.0f, 0.5f});
 
   auto program = sine(1000.0f, sample_rate, sample_rate, 0.2f);
   auto sidechain = sine(8000.0f, sample_rate, sample_rate, 0.8f);
@@ -822,8 +822,8 @@ TEST_CASE("DynamicEq validates band parameters", "[mastering][eq]") {
       eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 0.0f, -20.0f, 2.0f, -6.0f, true}));
   REQUIRE_THROWS(
       eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 1.0f, -20.0f, 0.5f, -6.0f, true}));
-  REQUIRE_THROWS(eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 1.0f, -20.0f, 2.0f,
-                                 -6.0f, true, 0.0f}));
+  REQUIRE_THROWS(
+      eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 1.0f, -20.0f, 2.0f, -6.0f, true, 0.0f}));
   std::vector<float> sidechain(4, 0.0f);
   const float* sidechain_channels[] = {sidechain.data()};
   eq.set_sidechain(sidechain_channels, 1, 4);

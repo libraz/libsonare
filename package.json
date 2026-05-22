@@ -21,7 +21,8 @@
   "scripts": {
     "prepare": "simple-git-hooks || true",
     "build": "yarn build:wasm && yarn build:js",
-    "build:wasm": "emcmake cmake -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build-wasm",
+    "build:wasm": "mkdir -p build-wasm/em-cache && EM_CACHE=$PWD/build-wasm/em-cache emcmake cmake -B build-wasm -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm/em-cache cmake --build build-wasm",
+    "bench:wasm:isp": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_mastering_isp_bench && cp build-wasm-bench/bin/sonare_mastering_isp_bench.js /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs && cp build-wasm-bench/bin/sonare_mastering_isp_bench.wasm /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs",
     "build:js": "tsc",
     "clean": "rm -rf dist build-wasm",
     "lint": "biome check js/ tests/wasm/ bindings/node/src/ bindings/node/tests/",

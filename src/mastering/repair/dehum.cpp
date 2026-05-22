@@ -1,7 +1,7 @@
 #include "mastering/repair/dehum.h"
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -58,9 +58,10 @@ struct PllTracker {
     const float detector = sample * std::cos(phase);
     const float pull = config.adaptation * 0.001f * (target_hz - frequency_hz);
     frequency_hz += config.pll_bandwidth * detector + pull;
-    frequency_hz = std::clamp(frequency_hz, std::max(1.0f, config.fundamental_hz - config.search_range_hz),
-                              std::min(static_cast<float>(sample_rate) * 0.49f,
-                                       config.fundamental_hz + config.search_range_hz));
+    frequency_hz =
+        std::clamp(frequency_hz, std::max(1.0f, config.fundamental_hz - config.search_range_hz),
+                   std::min(static_cast<float>(sample_rate) * 0.49f,
+                            config.fundamental_hz + config.search_range_hz));
     phase += kTwoPi * frequency_hz / static_cast<float>(sample_rate);
     if (phase > kTwoPi) {
       phase -= kTwoPi;
@@ -74,8 +75,8 @@ double projected_energy(const std::vector<float>& samples, size_t begin, size_t 
   double sin_sum = 0.0;
   double cos_sum = 0.0;
   for (size_t i = begin; i < end; ++i) {
-    const double phase = kTwoPiD * frequency_hz * static_cast<double>(i) /
-                         static_cast<double>(sample_rate);
+    const double phase =
+        kTwoPiD * frequency_hz * static_cast<double>(i) / static_cast<double>(sample_rate);
     sin_sum += samples[i] * std::sin(phase);
     cos_sum += samples[i] * std::cos(phase);
   }
@@ -118,9 +119,8 @@ Audio dehum(const Audio& audio, const DehumConfig& config) {
     PllTracker tracker{fundamental, 0.0f};
     std::vector<Notch> notches(static_cast<size_t>(config.harmonics));
     for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
-      notches[static_cast<size_t>(harmonic - 1)] =
-          make_notch(fundamental * static_cast<float>(harmonic),
-                     static_cast<float>(sample_rate), config.q);
+      notches[static_cast<size_t>(harmonic - 1)] = make_notch(
+          fundamental * static_cast<float>(harmonic), static_cast<float>(sample_rate), config.q);
     }
     for (size_t begin = 0; begin < samples.size();
          begin += static_cast<size_t>(config.frame_size)) {

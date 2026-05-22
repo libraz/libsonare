@@ -137,6 +137,39 @@ interface WasmPitchResult {
   meanF0: number;
 }
 
+interface WasmMasteringResult {
+  samples: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples?: number;
+}
+
+interface WasmMasteringChainResult extends WasmMasteringResult {
+  stages: string[];
+}
+
+interface WasmMasteringStereoChainResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  stages: string[];
+}
+
+interface WasmMasteringStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  inputLufs: number;
+  outputLufs: number;
+  appliedGainDb: number;
+  latencySamples: number;
+}
+
 type ProgressCallback = (progress: number, stage: string) => void;
 
 interface SonareModule {
@@ -165,6 +198,62 @@ interface SonareModule {
   timeStretch: (samples: Float32Array, sampleRate: number, rate: number) => Float32Array;
   pitchShift: (samples: Float32Array, sampleRate: number, semitones: number) => Float32Array;
   normalize: (samples: Float32Array, sampleRate: number, targetDb: number) => Float32Array;
+  mastering: (
+    samples: Float32Array,
+    sampleRate: number,
+    targetLufs: number,
+    ceilingDb: number,
+    truePeakOversample: number,
+  ) => WasmMasteringResult;
+  masteringProcessorNames: () => string[];
+  masteringPairProcessorNames: () => string[];
+  masteringPairAnalysisNames: () => string[];
+  masteringStereoAnalysisNames: () => string[];
+  masteringProcess: (
+    processorName: string,
+    samples: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => WasmMasteringResult;
+  masteringProcessStereo: (
+    processorName: string,
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => WasmMasteringStereoResult;
+  masteringPairProcess: (
+    processorName: string,
+    source: Float32Array,
+    reference: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => WasmMasteringResult;
+  masteringPairAnalyze: (
+    analysisName: string,
+    source: Float32Array,
+    reference: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
+  masteringStereoAnalyze: (
+    analysisName: string,
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
+  masteringChain: (
+    samples: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+  ) => WasmMasteringChainResult;
+  masteringChainStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+  ) => WasmMasteringStereoChainResult;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
 
   // Features - Spectrogram
