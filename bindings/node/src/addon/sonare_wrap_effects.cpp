@@ -6,7 +6,6 @@
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
-#include "effects/tts.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_wrap.h"
@@ -435,95 +434,6 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::trim(audio, threshold_db);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out_vec);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::AnalyzeTtsQuality(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
-  float silence_threshold_db =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -45.0f;
-
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::TtsQualityResult result = sonare::analyze_tts_quality(audio, silence_threshold_db);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("durationSec", Napi::Number::New(env, result.duration_sec));
-  out.Set("peakDb", Napi::Number::New(env, result.peak_db));
-  out.Set("rmsDb", Napi::Number::New(env, result.rms_db));
-  out.Set("silenceRatio", Napi::Number::New(env, result.silence_ratio));
-  out.Set("clippingRatio", Napi::Number::New(env, result.clipping_ratio));
-  out.Set("leadingSilenceSec", Napi::Number::New(env, result.leading_silence_sec));
-  out.Set("trailingSilenceSec", Napi::Number::New(env, result.trailing_silence_sec));
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::PrepareTts(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
-  float target_rms_db =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -20.0f;
-  float silence_threshold_db =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : -45.0f;
-  float peak_limit_db =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : -1.0f;
-  float fade_sec =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 0.005f;
-
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::Audio result =
-      sonare::prepare_tts(audio, target_rms_db, silence_threshold_db, peak_limit_db, fade_sec);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out_vec);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::CompressPauses(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
-  float max_pause_sec =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.6f;
-  float silence_threshold_db =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : -45.0f;
-
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::Audio result = sonare::compress_pauses(audio, max_pause_sec, silence_threshold_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)

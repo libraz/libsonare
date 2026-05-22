@@ -67,9 +67,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringPairAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStereoAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
-  static Napi::Value AnalyzeTtsQuality(const Napi::CallbackInfo& info);
-  static Napi::Value PrepareTts(const Napi::CallbackInfo& info);
-  static Napi::Value CompressPauses(const Napi::CallbackInfo& info);
 
   // Features - Spectrogram
   static Napi::Value Stft(const Napi::CallbackInfo& info);
@@ -103,6 +100,26 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value NoteToHz(const Napi::CallbackInfo& info);
   static Napi::Value FramesToTime(const Napi::CallbackInfo& info);
   static Napi::Value TimeToFrames(const Napi::CallbackInfo& info);
+  static Napi::Value FramesToSamples(const Napi::CallbackInfo& info);
+  static Napi::Value SamplesToFrames(const Napi::CallbackInfo& info);
+  static Napi::Value PowerToDb(const Napi::CallbackInfo& info);
+  static Napi::Value AmplitudeToDb(const Napi::CallbackInfo& info);
+  static Napi::Value DbToPower(const Napi::CallbackInfo& info);
+  static Napi::Value DbToAmplitude(const Napi::CallbackInfo& info);
+  static Napi::Value Preemphasis(const Napi::CallbackInfo& info);
+  static Napi::Value Deemphasis(const Napi::CallbackInfo& info);
+  static Napi::Value TrimSilence(const Napi::CallbackInfo& info);
+  static Napi::Value SplitSilence(const Napi::CallbackInfo& info);
+  static Napi::Value FrameSignal(const Napi::CallbackInfo& info);
+  static Napi::Value PadCenter(const Napi::CallbackInfo& info);
+  static Napi::Value FixLength(const Napi::CallbackInfo& info);
+  static Napi::Value FixFrames(const Napi::CallbackInfo& info);
+  static Napi::Value PeakPick(const Napi::CallbackInfo& info);
+  static Napi::Value VectorNormalize(const Napi::CallbackInfo& info);
+  static Napi::Value Pcen(const Napi::CallbackInfo& info);
+  static Napi::Value Tonnetz(const Napi::CallbackInfo& info);
+  static Napi::Value Tempogram(const Napi::CallbackInfo& info);
+  static Napi::Value Plp(const Napi::CallbackInfo& info);
 
   // Core - Resample
   static Napi::Value Resample(const Napi::CallbackInfo& info);

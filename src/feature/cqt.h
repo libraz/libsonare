@@ -117,6 +117,9 @@ class CqtKernel {
   /// @brief Returns filter lengths for each bin.
   const std::vector<int>& lengths() const { return lengths_; }
 
+  /// @brief Returns raw fractional filter lengths from `wavelet_lengths`.
+  const std::vector<float>& raw_lengths() const { return raw_lengths_; }
+
  private:
   CqtKernel() = default;
 
@@ -124,7 +127,8 @@ class CqtKernel {
   int n_bins_ = 0;
   std::vector<float> frequencies_;
   std::vector<std::complex<float>> kernel_;  ///< [n_bins * fft_length]
-  std::vector<int> lengths_;                 ///< Filter length for each bin
+  std::vector<int> lengths_;                 ///< Effective integer length per bin
+  std::vector<float> raw_lengths_;           ///< Raw fractional lengths (librosa)
 };
 
 /// @brief Computes Constant-Q Transform.

@@ -7,7 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Audio, detectBpm, init, melSpectrogram, stft } from '../../js/index';
+import { Audio, detectBpm, init, melSpectrogram, stft } from '../dist/index.js';
 
 const SR = 22050;
 const DURATION = 2;

@@ -43,7 +43,10 @@ import type {
   ProgressCallback,
   SonareModule,
   WasmAnalysisResult,
+  WasmFrameResult,
   WasmStreamAnalyzer,
+  WasmTempogramResult,
+  WasmTrimResult,
 } from './wasm_types';
 
 export type {
@@ -990,6 +993,199 @@ export function timeToFrames(time: number, sr: number, hopLength: number): numbe
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.timeToFrames(time, sr, hopLength);
+}
+
+export function framesToSamples(frames: number, hopLength = 512, nFft = 0): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.framesToSamples(frames, hopLength, nFft);
+}
+
+export function samplesToFrames(samples: number, hopLength = 512, nFft = 0): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.samplesToFrames(samples, hopLength, nFft);
+}
+
+export function powerToDb(
+  values: Float32Array,
+  ref = 1.0,
+  amin = 1e-10,
+  topDb = 80.0,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.powerToDb(values, ref, amin, topDb);
+}
+
+export function amplitudeToDb(
+  values: Float32Array,
+  ref = 1.0,
+  amin = 1e-5,
+  topDb = 80.0,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.amplitudeToDb(values, ref, amin, topDb);
+}
+
+export function dbToPower(values: Float32Array, ref = 1.0): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.dbToPower(values, ref);
+}
+
+export function dbToAmplitude(values: Float32Array, ref = 1.0): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.dbToAmplitude(values, ref);
+}
+
+export function preemphasis(samples: Float32Array, coef = 0.97, zi?: number): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.preemphasis(samples, coef, zi ?? null);
+}
+
+export function deemphasis(samples: Float32Array, coef = 0.97, zi?: number): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.deemphasis(samples, coef, zi ?? null);
+}
+
+export function trimSilence(
+  samples: Float32Array,
+  topDb = 60.0,
+  frameLength = 2048,
+  hopLength = 512,
+): WasmTrimResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.trimSilence(samples, topDb, frameLength, hopLength);
+}
+
+export function splitSilence(
+  samples: Float32Array,
+  topDb = 60.0,
+  frameLength = 2048,
+  hopLength = 512,
+): Int32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.splitSilence(samples, topDb, frameLength, hopLength);
+}
+
+export function frameSignal(
+  samples: Float32Array,
+  frameLength: number,
+  hopLength: number,
+): WasmFrameResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.frameSignal(samples, frameLength, hopLength);
+}
+
+export function padCenter(values: Float32Array, size: number, padValue = 0.0): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.padCenter(values, size, padValue);
+}
+
+export function fixLength(values: Float32Array, size: number, padValue = 0.0): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.fixLength(values, size, padValue);
+}
+
+export function fixFrames(frames: Int32Array, xMin = 0, xMax = -1, pad = true): Int32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.fixFrames(frames, xMin, xMax, pad);
+}
+
+export function peakPick(
+  values: Float32Array,
+  preMax: number,
+  postMax: number,
+  preAvg: number,
+  postAvg: number,
+  delta: number,
+  wait: number,
+): Int32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.peakPick(values, preMax, postMax, preAvg, postAvg, delta, wait);
+}
+
+export function vectorNormalize(
+  values: Float32Array,
+  normType = 0,
+  threshold = 1e-12,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.vectorNormalize(values, normType, threshold);
+}
+
+export function pcen(
+  values: Float32Array,
+  nBins: number,
+  nFrames: number,
+  options: Record<string, number> = {},
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.pcen(values, nBins, nFrames, options);
+}
+
+export function tonnetz(chromagram: Float32Array, nChroma: number, nFrames: number): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.tonnetz(chromagram, nChroma, nFrames);
+}
+
+export function tempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate: number,
+  hopLength = 512,
+  winLength = 384,
+): WasmTempogramResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+}
+
+export function plp(
+  onsetEnvelope: Float32Array,
+  sampleRate: number,
+  hopLength = 512,
+  tempoMin = 30.0,
+  tempoMax = 300.0,
+  winLength = 384,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.plp(onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength);
 }
 
 // ============================================================================

@@ -8,8 +8,6 @@
 #include <cmath>
 #include <vector>
 
-#include "util/constants.h"
-
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -19,19 +17,22 @@ TEST_CASE("wavelet_lengths is decreasing with frequency", "[util][wavelet]") {
   REQUIRE(L.size() == 3);
   REQUIRE(L[0] > L[1]);
   REQUIRE(L[1] > L[2]);
-  // All odd.
-  for (float v : L) {
-    int iv = static_cast<int>(v);
-    REQUIRE(iv % 2 == 1);
-  }
+  for (float v : L) REQUIRE(v > 0.0f);
 }
 
 TEST_CASE("wavelet returns complex kernels of expected total length", "[util][wavelet]") {
   std::vector<float> freqs{200.0f, 400.0f};
   auto L = wavelet_lengths(freqs, 22050, 1.0f);
   auto kernels = wavelet(freqs, 22050, 1.0f, true);
+  // Effective integer length L_k = floor(ilen/2) - floor(-ilen/2) which equals
+  // floor(ilen) for fractional ilen and exactly ilen for integer.
+  auto eff_len = [](float ilen) {
+    int s = static_cast<int>(std::floor(-ilen / 2.0f));
+    int e = static_cast<int>(std::floor(ilen / 2.0f));
+    return e - s;
+  };
   size_t total = 0;
-  for (float v : L) total += static_cast<size_t>(v);
+  for (float v : L) total += static_cast<size_t>(eff_len(v));
   REQUIRE(kernels.size() == total);
 }
 

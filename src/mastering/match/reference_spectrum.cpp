@@ -1,5 +1,6 @@
 #include "mastering/match/reference_spectrum.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -67,10 +68,9 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
   }
 
   std::vector<float> db(static_cast<size_t>(n_bins), sonare::constants::kFloorDb);
-  for (int bin = 0; bin < n_bins; ++bin) {
-    db[static_cast<size_t>(bin)] =
-        20.0f * std::log10(std::max(magnitude[static_cast<size_t>(bin)], 1e-10f));
-  }
+  Eigen::Map<const Eigen::ArrayXf> mag_map(magnitude.data(), n_bins);
+  Eigen::Map<Eigen::ArrayXf> db_map(db.data(), n_bins);
+  db_map = (mag_map.cwiseMax(1e-10f)).log10() * 20.0f;
   return {std::move(frequencies), std::move(db), audio.sample_rate()};
 }
 

@@ -25,15 +25,22 @@
 #include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "core/convert.h"
+#include "core/db_convert.h"
+#include "core/pcen.h"
 #include "effects/hpss.h"
 #include "effects/pitch_shift.h"
+#include "effects/preemphasis.h"
+#include "effects/silence.h"
 #include "effects/time_stretch.h"
 #include "feature/chroma.h"
 #include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/pitch.h"
+#include "feature/rhythm.h"
 #include "feature/spectral.h"
+#include "feature/tonnetz.h"
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/named_processor.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -41,10 +48,73 @@
 #include "cli_support.h"
 #include "quick.h"
 #include "sonare.h"
+#include "util/frame.h"
+#include "util/padding.h"
+#include "util/peak.h"
+#include "util/vector_normalize.h"
 
 using namespace sonare;
 
 using CommandHandler = std::function<int(const CliArgs&, const Audio&)>;
+
+std::vector<float> parse_float_list(const std::string& text) {
+  std::vector<float> values;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    if (!item.empty()) values.push_back(std::stof(item));
+  }
+  if (values.empty()) throw std::invalid_argument("--values must contain at least one number");
+  return values;
+}
+
+std::vector<int> parse_int_list(const std::string& text) {
+  std::vector<int> values;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    if (!item.empty()) values.push_back(std::stoi(item));
+  }
+  if (values.empty()) throw std::invalid_argument("--values must contain at least one integer");
+  return values;
+}
+
+void print_float_values(const CliArgs& args, const std::vector<float>& values) {
+  if (args.json_output) {
+    JsonBuilder().float_array(values).print();
+    return;
+  }
+  for (size_t i = 0; i < values.size(); ++i) {
+    if (i > 0) std::cout << ",";
+    std::cout << values[i];
+  }
+  std::cout << "\n";
+}
+
+void print_int_values(const CliArgs& args, const std::vector<int>& values) {
+  JsonBuilder json;
+  if (args.json_output) {
+    json.begin_array();
+    for (int value : values) json.value(value);
+    json.end_array().print();
+    return;
+  }
+  for (size_t i = 0; i < values.size(); ++i) {
+    if (i > 0) std::cout << ",";
+    std::cout << values[i];
+  }
+  std::cout << "\n";
+}
+
+std::vector<float> require_float_values(const CliArgs& args) {
+  if (!args.has("values")) throw std::invalid_argument("--values required");
+  return parse_float_list(args.get_string("values"));
+}
+
+std::vector<int> require_int_values(const CliArgs& args) {
+  if (!args.has("values")) throw std::invalid_argument("--values required");
+  return parse_int_list(args.get_string("values"));
+}
 
 // ============================================================================
 // Command Implementations
@@ -105,6 +175,134 @@ int cmd_system_info(const CliArgs& args) {
     std::cout << "  Workers: " << system_info::parallel_workers() << "\n";
     std::cout << "  Strategy: " << system_info::parallel_strategy() << "\n";
   }
+  return 0;
+}
+
+int cmd_frames_to_samples(const CliArgs& args, const Audio&) {
+  const int frames = args.get_int("frames", 0);
+  const int hop_length = args.get_int("hop-length", args.hop_length);
+  const int n_fft = args.get_int("n-fft", 0);
+  const int samples = frames_to_samples(frames, hop_length, n_fft);
+  if (args.json_output) {
+    JsonBuilder().begin_object().kv("samples", samples).end_object().print();
+  } else {
+    std::cout << samples << "\n";
+  }
+  return 0;
+}
+
+int cmd_samples_to_frames(const CliArgs& args, const Audio&) {
+  const int samples = args.get_int("samples", 0);
+  const int hop_length = args.get_int("hop-length", args.hop_length);
+  const int n_fft = args.get_int("n-fft", 0);
+  const int frames = samples_to_frames(samples, hop_length, n_fft);
+  if (args.json_output) {
+    JsonBuilder().begin_object().kv("frames", frames).end_object().print();
+  } else {
+    std::cout << frames << "\n";
+  }
+  return 0;
+}
+
+int cmd_power_to_db(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_float_values(args, power_to_db(values, args.get_float("ref", 1.0f),
+                                       args.get_float("amin", 1e-10f),
+                                       args.get_float("top-db", 80.0f)));
+  return 0;
+}
+
+int cmd_amplitude_to_db(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_float_values(args, amplitude_to_db(values, args.get_float("ref", 1.0f),
+                                           args.get_float("amin", 1e-5f),
+                                           args.get_float("top-db", 80.0f)));
+  return 0;
+}
+
+int cmd_db_to_power(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_float_values(args, db_to_power(values, args.get_float("ref", 1.0f)));
+  return 0;
+}
+
+int cmd_db_to_amplitude(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_float_values(args, db_to_amplitude(values, args.get_float("ref", 1.0f)));
+  return 0;
+}
+
+int cmd_frame_signal(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  const int frame_length = args.get_int("frame-length", args.n_fft);
+  const int hop_length = args.get_int("hop-length", args.hop_length);
+  auto frames = frame(values, frame_length, hop_length);
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("n_frames", frame_count(values.size(), frame_length, hop_length))
+        .key("frames")
+        .float_array(frames)
+        .end_object()
+        .print();
+  } else {
+    print_float_values(args, frames);
+  }
+  return 0;
+}
+
+int cmd_pad_center(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_float_values(args, pad_center(values, static_cast<size_t>(args.get_int("size", 0)),
+                                      args.get_float("pad-value", 0.0f)));
+  return 0;
+}
+
+int cmd_fix_length(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_float_values(args, fix_length(values, static_cast<size_t>(args.get_int("size", 0)),
+                                      args.get_float("pad-value", 0.0f)));
+  return 0;
+}
+
+int cmd_fix_frames(const CliArgs& args, const Audio&) {
+  auto values = require_int_values(args);
+  print_int_values(args, fix_frames(values, args.get_int("x-min", 0), args.get_int("x-max", -1),
+                                    !args.has("no-pad")));
+  return 0;
+}
+
+int cmd_peak_pick(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  print_int_values(args, peak_pick(values, args.get_int("pre-max", 1), args.get_int("post-max", 1),
+                                   args.get_int("pre-avg", 1), args.get_int("post-avg", 1),
+                                   args.get_float("delta", 0.0f), args.get_int("wait", 0)));
+  return 0;
+}
+
+int cmd_vector_normalize(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  const int norm_type = args.get_int("norm-type", 0);
+  NormType norm = NormType::Inf;
+  if (norm_type == 1) norm = NormType::L1;
+  if (norm_type == 2) norm = NormType::L2;
+  if (norm_type == 3) norm = NormType::Power;
+  print_float_values(args, normalize(values, norm, args.get_float("threshold", 1e-12f)));
+  return 0;
+}
+
+int cmd_pcen(const CliArgs& args, const Audio&) {
+  auto values = require_float_values(args);
+  PcenConfig config;
+  config.sr = args.get_int("sample-rate", config.sr);
+  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.time_constant = args.get_float("time-constant", config.time_constant);
+  config.gain = args.get_float("gain", config.gain);
+  config.bias = args.get_float("bias", config.bias);
+  config.power = args.get_float("power", config.power);
+  config.eps = args.get_float("eps", config.eps);
+  print_float_values(args, pcen(values, args.get_int("n-bins", 0), args.get_int("n-frames", 0),
+                                config));
   return 0;
 }
 
@@ -835,6 +1033,108 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_preemphasis(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: preemphasis requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  const float coef = args.get_float("coef", 0.97f);
+  std::vector<float> input(audio.begin(), audio.end());
+  std::vector<float> result = preemphasis(input, coef);
+  save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("coef", coef)
+        .kv("samples", result.size())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: deemphasis requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  const float coef = args.get_float("coef", 0.97f);
+  std::vector<float> input(audio.begin(), audio.end());
+  std::vector<float> result = deemphasis(input, coef);
+  save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("coef", coef)
+        .kv("samples", result.size())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
+  const float top_db = args.get_float("top-db", 60.0f);
+  std::vector<float> input(audio.begin(), audio.end());
+  TrimResult result = sonare::trim(input, top_db, args.n_fft, args.hop_length);
+
+  if (!args.output_file.empty()) {
+    save_wav(args.output_file, result.audio.data(), result.audio.size(), audio.sample_rate());
+  }
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("start_sample", result.start_sample)
+        .kv("end_sample", result.end_sample)
+        .kv("samples", result.audio.size())
+        .kv("top_db", top_db)
+        .kv("output", args.output_file)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Silence Trim:\n";
+    printf("  Range:   %d - %d\n", result.start_sample, result.end_sample);
+    printf("  Samples: %zu\n", result.audio.size());
+    if (!args.output_file.empty()) std::cout << "  Output:  " << args.output_file << "\n";
+  }
+  return 0;
+}
+
+int cmd_split_silence(const CliArgs& args, const Audio& audio) {
+  const float top_db = args.get_float("top-db", 60.0f);
+  std::vector<float> input(audio.begin(), audio.end());
+  auto ranges = sonare::split(input, top_db, args.n_fft, args.hop_length);
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_array();
+    for (const auto& range : ranges) {
+      json.begin_object()
+          .kv("start_sample", range.first)
+          .kv("end_sample", range.second)
+          .end_object();
+    }
+    json.end_array().print();
+  } else {
+    std::cout << "Non-silent intervals: " << ranges.size() << "\n";
+    for (const auto& range : ranges) {
+      printf("  %d - %d\n", range.first, range.second);
+    }
+  }
+  return 0;
+}
+
 #ifdef SONARE_WITH_MASTERING
 std::vector<mastering::api::Param> parse_mastering_params(const std::string& text) {
   std::vector<mastering::api::Param> params;
@@ -1145,6 +1445,37 @@ int cmd_chroma(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_tonnetz(const CliArgs& args, const Audio& audio) {
+  ChromaConfig config;
+  config.n_fft = args.n_fft;
+  config.hop_length = args.hop_length;
+  Chroma chroma = Chroma::compute(audio, config);
+  auto values = tonnetz(chroma);
+  Stats stats = Stats::compute(values);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("n_dims", 6)
+        .kv("n_frames", chroma.n_frames())
+        .key("stats")
+        .begin_object()
+        .kv("mean", stats.mean)
+        .kv("std", stats.std)
+        .kv("min", stats.min)
+        .kv("max", stats.max)
+        .end_object()
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Tonnetz:\n";
+    printf("  Shape: %d dims x %d frames\n", 6, chroma.n_frames());
+    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std,
+           stats.min, stats.max);
+  }
+  return 0;
+}
+
 int cmd_spectral(const CliArgs& args, const Audio& audio) {
   StftConfig stft{args.n_fft, args.hop_length};
   Spectrogram spec = Spectrogram::compute(audio, stft);
@@ -1285,6 +1616,71 @@ int cmd_onset_env(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_tempogram(const CliArgs& args, const Audio& audio) {
+  TempogramConfig config;
+  config.hop_length = args.hop_length;
+  config.win_length = args.get_int("win-length", 384);
+  auto values = tempogram(audio, config);
+  const int n_frames = config.win_length > 0 ? static_cast<int>(values.size()) / config.win_length : 0;
+  Stats stats = Stats::compute(values);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("win_length", config.win_length)
+        .kv("n_frames", n_frames)
+        .key("stats")
+        .begin_object()
+        .kv("mean", stats.mean)
+        .kv("std", stats.std)
+        .kv("min", stats.min)
+        .kv("max", stats.max)
+        .end_object()
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Tempogram:\n";
+    printf("  Shape: %d lags x %d frames\n", config.win_length, n_frames);
+    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std,
+           stats.min, stats.max);
+  }
+  return 0;
+}
+
+int cmd_plp(const CliArgs& args, const Audio& audio) {
+  PlpConfig config;
+  config.sr = audio.sample_rate();
+  config.hop_length = args.hop_length;
+  config.tempo_min = args.get_float("tempo-min", 30.0f);
+  config.tempo_max = args.get_float("tempo-max", 300.0f);
+  config.win_length = args.get_int("win-length", 384);
+  auto values = plp(audio, config);
+  Stats stats = Stats::compute(values);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("n_frames", values.size())
+        .kv("tempo_min", config.tempo_min)
+        .kv("tempo_max", config.tempo_max)
+        .key("stats")
+        .begin_object()
+        .kv("mean", stats.mean)
+        .kv("std", stats.std)
+        .kv("min", stats.min)
+        .kv("max", stats.max)
+        .end_object()
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Predominant Local Pulse:\n";
+    printf("  Frames: %zu\n", values.size());
+    printf("  Stats:  mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std,
+           stats.min, stats.max);
+  }
+  return 0;
+}
+
 int cmd_cqt(const CliArgs& args, const Audio& audio) {
   CqtConfig config;
   config.hop_length = args.hop_length;
@@ -1346,6 +1742,10 @@ const std::vector<CommandInfo>& get_commands() {
       {"pitch-shift", "Shift pitch by semitones", cmd_pitch_shift, true},
       {"time-stretch", "Time stretch audio", cmd_time_stretch, true},
       {"hpss", "Harmonic-percussive separation", cmd_hpss, true},
+      {"preemphasis", "Apply pre-emphasis filtering", cmd_preemphasis, true},
+      {"deemphasis", "Apply de-emphasis filtering", cmd_deemphasis, true},
+      {"trim-silence", "Trim leading/trailing silence", cmd_trim_silence, true},
+      {"split-silence", "List non-silent intervals", cmd_split_silence, true},
 #ifdef SONARE_WITH_MASTERING
       {"mastering", "Apply mastering loudness/true-peak processing", cmd_mastering, true},
       {"mastering-processor", "Apply a named mastering processor", cmd_mastering_processor, true},
@@ -1366,11 +1766,27 @@ const std::vector<CommandInfo>& get_commands() {
       // Features
       {"mel", "Compute mel spectrogram", cmd_mel, true},
       {"chroma", "Compute chromagram", cmd_chroma, true},
+      {"tonnetz", "Compute tonal centroid features", cmd_tonnetz, true},
       {"spectral", "Compute spectral features", cmd_spectral, true},
       {"pitch", "Track pitch (YIN/pYIN)", cmd_pitch, true},
       {"onset-env", "Compute onset strength envelope", cmd_onset_env, true},
+      {"tempogram", "Compute onset tempogram", cmd_tempogram, true},
+      {"plp", "Compute predominant local pulse", cmd_plp, true},
       {"cqt", "Compute Constant-Q Transform", cmd_cqt, true},
       // Utility
+      {"frames-to-samples", "Convert frame index to sample index", cmd_frames_to_samples, false},
+      {"samples-to-frames", "Convert sample index to frame index", cmd_samples_to_frames, false},
+      {"power-to-db", "Convert power values to dB", cmd_power_to_db, false},
+      {"amplitude-to-db", "Convert amplitude values to dB", cmd_amplitude_to_db, false},
+      {"db-to-power", "Convert dB values to power", cmd_db_to_power, false},
+      {"db-to-amplitude", "Convert dB values to amplitude", cmd_db_to_amplitude, false},
+      {"frame-signal", "Frame a value sequence", cmd_frame_signal, false},
+      {"pad-center", "Pad a value sequence symmetrically", cmd_pad_center, false},
+      {"fix-length", "Pad or trim a value sequence", cmd_fix_length, false},
+      {"fix-frames", "Pad and clamp frame indices", cmd_fix_frames, false},
+      {"peak-pick", "Pick local peaks from a value sequence", cmd_peak_pick, false},
+      {"vector-normalize", "Normalize a value sequence", cmd_vector_normalize, false},
+      {"pcen", "Apply per-channel energy normalization", cmd_pcen, false},
       {"info", "Show audio file information", cmd_info, true},
   };
   return commands;

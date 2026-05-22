@@ -162,13 +162,3 @@ export interface PitchResult {
   medianF0: number;
   meanF0: number;
 }
-
-export interface TtsQualityResult {
-  durationSec: number;
-  peakDb: number;
-  rmsDb: number;
-  silenceRatio: number;
-  clippingRatio: number;
-  leadingSilenceSec: number;
-  trailingSilenceSec: number;
-}

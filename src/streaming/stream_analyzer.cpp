@@ -1,8 +1,8 @@
 #include "streaming/stream_analyzer.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 #include "analysis/chord_analyzer.h"
 #include "analysis/chord_templates.h"
@@ -46,7 +46,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     mel_config.n_mels = config_.n_mels;
     mel_config.fmin = config_.fmin;
     mel_config.fmax = needs_resampling_ ? std::min(config_.effective_fmax(),
-                                                   static_cast<float>(internal_sample_rate_ / 2))
+                                                   static_cast<float>(internal_sample_rate_) * 0.5f)
                                         : config_.effective_fmax();
     mel_filterbank_ = create_mel_filterbank(internal_sample_rate_, config_.n_fft, mel_config);
   }
@@ -294,18 +294,19 @@ void StreamAnalyzer::compute_stft(const float* frame_start) {
 }
 
 void StreamAnalyzer::compute_mel() {
-  /// Apply mel filterbank: mel = filterbank @ power
-  int n_mels = config_.n_mels;
-  int n_bins = config_.n_bins();
+  /// Apply mel filterbank GEMV: mel = filterbank @ power
+  /// Eigen GEMV is ~10x faster than scalar at M=128, N=1025 (see Phase 0 §10.2.4)
+  const int n_mels = config_.n_mels;
+  const int n_bins = config_.n_bins();
+
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
+      mel_filterbank_.data(), n_mels, n_bins);
+  Eigen::Map<const Eigen::VectorXf> power_map(power_.data(), n_bins);
+  Eigen::Map<Eigen::VectorXf> mel_map(mel_buffer_.data(), n_mels);
+  mel_map.noalias() = fb_map * power_map;
 
   for (int m = 0; m < n_mels; ++m) {
-    float sum = 0.0f;
-    const float* filter_row = mel_filterbank_.data() + m * n_bins;
-    for (int k = 0; k < n_bins; ++k) {
-      sum += filter_row[k] * power_[k];
-    }
-    mel_buffer_[m] = sum;
-    mel_log_[m] = std::log(std::max(sum, kLogAmin));
+    mel_log_[m] = std::log(std::max(mel_buffer_[m], kLogAmin));
   }
 }
 

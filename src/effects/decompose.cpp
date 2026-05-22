@@ -210,52 +210,92 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
     norms[t] = std::sqrt(s);
   }
 
-  std::vector<float> out(static_cast<size_t>(n_features) * n_frames, 0.0f);
-  for (int t = 0; t < n_frames; ++t) {
-    std::vector<std::pair<float, int>> sims;
-    sims.reserve(static_cast<size_t>(n_frames));
-    for (int u = 0; u < n_frames; ++u) {
-      if (std::abs(u - t) < width) continue;
+  // Replicate librosa.segment.recurrence_matrix in mode="connectivity":
+  //   1. For each row i, get the top (k + 2*width) cosine neighbours,
+  //      including self.
+  //   2. Zero the |i-j| < width diagonal band (drops self and width-1
+  //      neighbours on each side).
+  //   3. Among the remaining neighbours, keep the `k` entries with the
+  //      smallest *column indices* (librosa uses a stable argsort of an all-
+  //      ones connectivity row, which boils down to column-index ordering).
+  //   4. Transpose the matrix so column t lists the points that selected t.
+  // librosa's nn_filter then reads this column-major view to perform non-local
+  // means: for output column t, aggregate every column i for which R[i, t] is
+  // set. We accumulate `selectors_for[t] = {i : R[i, t] != 0}` directly.
+  std::vector<std::vector<int>> selectors_for(n_frames);
+  std::vector<std::pair<float, int>> sims;
+  sims.reserve(static_cast<size_t>(n_frames));
+  const int n_neighbors = std::min(n_frames - 1, k + 2 * width);
+  for (int i = 0; i < n_frames; ++i) {
+    sims.clear();
+    for (int j = 0; j < n_frames; ++j) {
+      if (j == i) continue;  // sklearn excludes self automatically
       float dot = 0.0f;
       for (int f = 0; f < n_features; ++f) {
-        dot += S[f * n_frames + t] * S[f * n_frames + u];
+        dot += S[f * n_frames + i] * S[f * n_frames + j];
       }
-      const float sim = (norms[t] > 0.0f && norms[u] > 0.0f) ? dot / (norms[t] * norms[u]) : 0.0f;
-      sims.push_back({sim, u});
+      const float sim = (norms[i] > 0.0f && norms[j] > 0.0f) ? dot / (norms[i] * norms[j]) : 0.0f;
+      sims.push_back({sim, j});
     }
-    int kk = std::min<int>(k, static_cast<int>(sims.size()));
-    if (kk == 0) {
-      for (int f = 0; f < n_features; ++f) {
-        out[f * n_frames + t] = S[f * n_frames + t];
-      }
+    if (sims.empty()) continue;
+    // (1) Top (k+2*width) by cosine similarity (largest similarity = smallest
+    // cosine distance).
+    const int nn = std::min(n_neighbors, static_cast<int>(sims.size()));
+    std::partial_sort(sims.begin(), sims.begin() + nn, sims.end(),
+                      [](const auto& a, const auto& b) { return a.first > b.first; });
+    // (2) Drop those falling inside |i-j| < width (self already excluded).
+    std::vector<int> kept;
+    kept.reserve(static_cast<size_t>(nn));
+    for (int q = 0; q < nn; ++q) {
+      const int j = sims[q].second;
+      if (std::abs(i - j) < width) continue;
+      kept.push_back(j);
+    }
+    // (3) Among the survivors, keep the `k` smallest column indices —
+    // librosa's stable argsort of an all-ones connectivity row picks the
+    // lowest-index columns first.
+    std::sort(kept.begin(), kept.end());
+    const int kk = std::min<int>(k, static_cast<int>(kept.size()));
+    // After the final `.T`, column i of the recurrence matrix lists i's k-NN
+    // — exactly what librosa's `nn_filter` aggregates when emitting output
+    // column i.
+    auto& dst = selectors_for[i];
+    for (int q = 0; q < kk; ++q) dst.push_back(kept[q]);
+  }
+
+  std::vector<float> out(static_cast<size_t>(n_features) * n_frames, 0.0f);
+  for (int t = 0; t < n_frames; ++t) {
+    const auto& selectors = selectors_for[t];
+    if (selectors.empty()) {
+      for (int f = 0; f < n_features; ++f) out[f * n_frames + t] = S[f * n_frames + t];
       continue;
     }
-    std::partial_sort(sims.begin(), sims.begin() + kk, sims.end(),
-                      [](const auto& a, const auto& b) { return a.first > b.first; });
     if (aggregate == "median") {
       for (int f = 0; f < n_features; ++f) {
-        std::vector<float> vals(static_cast<size_t>(kk));
-        for (int q = 0; q < kk; ++q) vals[q] = S[f * n_frames + sims[q].second];
-        std::nth_element(vals.begin(), vals.begin() + kk / 2, vals.end());
-        out[f * n_frames + t] = vals[kk / 2];
+        std::vector<float> vals(selectors.size());
+        for (size_t q = 0; q < selectors.size(); ++q) vals[q] = S[f * n_frames + selectors[q]];
+        const auto mid = vals.begin() + vals.size() / 2;
+        std::nth_element(vals.begin(), mid, vals.end());
+        out[f * n_frames + t] = *mid;
       }
     } else if (aggregate == "min") {
       for (int f = 0; f < n_features; ++f) {
         float m = std::numeric_limits<float>::infinity();
-        for (int q = 0; q < kk; ++q) m = std::min(m, S[f * n_frames + sims[q].second]);
+        for (int i : selectors) m = std::min(m, S[f * n_frames + i]);
         out[f * n_frames + t] = m;
       }
     } else if (aggregate == "max") {
       for (int f = 0; f < n_features; ++f) {
         float m = -std::numeric_limits<float>::infinity();
-        for (int q = 0; q < kk; ++q) m = std::max(m, S[f * n_frames + sims[q].second]);
+        for (int i : selectors) m = std::max(m, S[f * n_frames + i]);
         out[f * n_frames + t] = m;
       }
     } else {  // "mean"
+      const float inv_count = 1.0f / static_cast<float>(selectors.size());
       for (int f = 0; f < n_features; ++f) {
         float s = 0.0f;
-        for (int q = 0; q < kk; ++q) s += S[f * n_frames + sims[q].second];
-        out[f * n_frames + t] = s / static_cast<float>(kk);
+        for (int i : selectors) s += S[f * n_frames + i];
+        out[f * n_frames + t] = s * inv_count;
       }
     }
   }

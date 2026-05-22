@@ -1,5 +1,4 @@
-# Source
-src/
+# Source (src/ is included for source maps; tests are not)
 tests/
 
 # Build

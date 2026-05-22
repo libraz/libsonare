@@ -105,11 +105,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
       "masteringStereoAnalyze",
       Napi::Function::New(env, &SonareWrap::MasteringStereoAnalyze, "masteringStereoAnalyze"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
-  exports.Set("analyzeTtsQuality",
-              Napi::Function::New(env, &SonareWrap::AnalyzeTtsQuality, "analyzeTtsQuality"));
-  exports.Set("prepareTts", Napi::Function::New(env, &SonareWrap::PrepareTts, "prepareTts"));
-  exports.Set("compressPauses",
-              Napi::Function::New(env, &SonareWrap::CompressPauses, "compressPauses"));
 
   // Features - Spectrogram
   exports.Set("stft", Napi::Function::New(env, &SonareWrap::Stft, "stft"));
@@ -149,6 +144,31 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("noteToHz", Napi::Function::New(env, &SonareWrap::NoteToHz, "noteToHz"));
   exports.Set("framesToTime", Napi::Function::New(env, &SonareWrap::FramesToTime, "framesToTime"));
   exports.Set("timeToFrames", Napi::Function::New(env, &SonareWrap::TimeToFrames, "timeToFrames"));
+  exports.Set("framesToSamples",
+              Napi::Function::New(env, &SonareWrap::FramesToSamples, "framesToSamples"));
+  exports.Set("samplesToFrames",
+              Napi::Function::New(env, &SonareWrap::SamplesToFrames, "samplesToFrames"));
+  exports.Set("powerToDb", Napi::Function::New(env, &SonareWrap::PowerToDb, "powerToDb"));
+  exports.Set("amplitudeToDb",
+              Napi::Function::New(env, &SonareWrap::AmplitudeToDb, "amplitudeToDb"));
+  exports.Set("dbToPower", Napi::Function::New(env, &SonareWrap::DbToPower, "dbToPower"));
+  exports.Set("dbToAmplitude",
+              Napi::Function::New(env, &SonareWrap::DbToAmplitude, "dbToAmplitude"));
+  exports.Set("preemphasis", Napi::Function::New(env, &SonareWrap::Preemphasis, "preemphasis"));
+  exports.Set("deemphasis", Napi::Function::New(env, &SonareWrap::Deemphasis, "deemphasis"));
+  exports.Set("trimSilence", Napi::Function::New(env, &SonareWrap::TrimSilence, "trimSilence"));
+  exports.Set("splitSilence", Napi::Function::New(env, &SonareWrap::SplitSilence, "splitSilence"));
+  exports.Set("frameSignal", Napi::Function::New(env, &SonareWrap::FrameSignal, "frameSignal"));
+  exports.Set("padCenter", Napi::Function::New(env, &SonareWrap::PadCenter, "padCenter"));
+  exports.Set("fixLength", Napi::Function::New(env, &SonareWrap::FixLength, "fixLength"));
+  exports.Set("fixFrames", Napi::Function::New(env, &SonareWrap::FixFrames, "fixFrames"));
+  exports.Set("peakPick", Napi::Function::New(env, &SonareWrap::PeakPick, "peakPick"));
+  exports.Set("vectorNormalize",
+              Napi::Function::New(env, &SonareWrap::VectorNormalize, "vectorNormalize"));
+  exports.Set("pcen", Napi::Function::New(env, &SonareWrap::Pcen, "pcen"));
+  exports.Set("tonnetz", Napi::Function::New(env, &SonareWrap::Tonnetz, "tonnetz"));
+  exports.Set("tempogram", Napi::Function::New(env, &SonareWrap::Tempogram, "tempogram"));
+  exports.Set("plp", Napi::Function::New(env, &SonareWrap::Plp, "plp"));
 
   // Core - Resample
   exports.Set("resample", Napi::Function::New(env, &SonareWrap::Resample, "resample"));

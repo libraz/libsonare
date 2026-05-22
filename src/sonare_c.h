@@ -209,17 +209,6 @@ typedef struct {
   int sample_rate;
 } SonareHpssResult;
 
-// TTS quality result
-typedef struct {
-  float duration_sec;
-  float peak_db;
-  float rms_db;
-  float silence_ratio;
-  float clipping_ratio;
-  float leading_silence_sec;
-  float trailing_silence_sec;
-} SonareTtsQualityResult;
-
 typedef struct {
   float bpm;
   float confidence;
@@ -373,14 +362,6 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
-SonareError sonare_analyze_tts_quality(const float* samples, size_t length, int sample_rate,
-                                       float silence_threshold_db, SonareTtsQualityResult* out);
-SonareError sonare_prepare_tts(const float* samples, size_t length, int sample_rate,
-                               float target_rms_db, float silence_threshold_db, float peak_limit_db,
-                               float fade_sec, float** out, size_t* out_length);
-SonareError sonare_compress_pauses(const float* samples, size_t length, int sample_rate,
-                                   float max_pause_sec, float silence_threshold_db, float** out,
-                                   size_t* out_length);
 
 // ============================================================================
 // Detailed analysis primitives
@@ -475,6 +456,56 @@ const char* sonare_hz_to_note(float hz);
 float sonare_note_to_hz(const char* note);
 float sonare_frames_to_time(int frames, int sr, int hop_length);
 int sonare_time_to_frames(float time, int sr, int hop_length);
+
+int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
+int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
+
+SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,
+                               float top_db, float** out, size_t* out_length);
+SonareError sonare_amplitude_to_db(const float* values, size_t length, float ref, float amin,
+                                   float top_db, float** out, size_t* out_length);
+SonareError sonare_db_to_power(const float* values, size_t length, float ref, float** out,
+                               size_t* out_length);
+SonareError sonare_db_to_amplitude(const float* values, size_t length, float ref, float** out,
+                                   size_t* out_length);
+
+SonareError sonare_preemphasis(const float* samples, size_t length, float coef, float zi,
+                               int use_zi, float** out, size_t* out_length);
+SonareError sonare_deemphasis(const float* samples, size_t length, float coef, float zi, int use_zi,
+                              float** out, size_t* out_length);
+
+SonareError sonare_trim_silence(const float* samples, size_t length, float top_db, int frame_length,
+                                int hop_length, float** out, size_t* out_length, int* start_sample,
+                                int* end_sample);
+SonareError sonare_split_silence(const float* samples, size_t length, float top_db,
+                                 int frame_length, int hop_length, int** out_intervals,
+                                 size_t* out_interval_count);
+
+SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
+                                int hop_length, float** out, size_t* out_length, int* out_n_frames);
+SonareError sonare_pad_center(const float* values, size_t length, size_t target_size,
+                              float pad_value, float** out, size_t* out_length);
+SonareError sonare_fix_length(const float* values, size_t length, size_t target_size,
+                              float pad_value, float** out, size_t* out_length);
+SonareError sonare_fix_frames(const int* frames, size_t length, int x_min, int x_max, int pad,
+                              int** out, size_t* out_length);
+SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, int post_max,
+                             int pre_avg, int post_avg, float delta, int wait, int** out,
+                             size_t* out_length);
+SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
+                                    float threshold, float** out, size_t* out_length);
+
+SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,
+                        int hop_length, float time_constant, float gain, float bias, float power,
+                        float eps, float** out, size_t* out_length);
+SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, float** out,
+                           size_t* out_length);
+SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
+                             int hop_length, int win_length, int center, int norm, float** out,
+                             size_t* out_length, int* out_n_frames);
+SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
+                       float tempo_min, float tempo_max, int win_length, float** out,
+                       size_t* out_length);
 
 // ============================================================================
 // Core - Resample

@@ -198,6 +198,64 @@ def test_analyze_with_silence() -> None:
     assert isinstance(result.beat_times, list)
 
 
+def test_compat_numeric_and_signal_utilities() -> None:
+    """Compatibility utilities are available through Python."""
+    import libsonare
+
+    assert libsonare.frames_to_samples(4, hop_length=512) == 2048
+    assert libsonare.samples_to_frames(2048, hop_length=512) == 4
+
+    power_db = libsonare.power_to_db([1.0, 0.01], ref=1.0, amin=1e-10, top_db=80.0)
+    assert power_db[0] == pytest.approx(0.0, abs=1e-5)
+    assert power_db[1] == pytest.approx(-20.0, abs=1e-4)
+    assert libsonare.db_to_power(power_db, ref=1.0)[1] == pytest.approx(0.01, rel=1e-5)
+
+    amp_db = libsonare.amplitude_to_db([1.0, 0.5], ref=1.0, amin=1e-5, top_db=80.0)
+    assert amp_db[0] == pytest.approx(0.0, abs=1e-5)
+    assert libsonare.db_to_amplitude(amp_db, ref=1.0)[1] == pytest.approx(0.5, rel=1e-5)
+
+    emphasized = libsonare.preemphasis([1.0, 1.0, 1.0], coef=0.5, zi=0.0)
+    assert emphasized == pytest.approx([1.0, 0.5, 0.5])
+    assert libsonare.deemphasis(emphasized, coef=0.5, zi=0.0)[2] == pytest.approx(1.0, abs=1e-5)
+
+    framed = libsonare.frame_signal([1.0, 2.0, 3.0, 4.0], frame_length=2, hop_length=1)
+    assert framed[0] == 3
+    assert framed[1] == pytest.approx([1.0, 2.0, 2.0, 3.0, 3.0, 4.0])
+    assert libsonare.fix_length([1.0, 2.0], size=4, pad_value=-1.0) == pytest.approx(
+        [1.0, 2.0, -1.0, -1.0]
+    )
+    assert libsonare.fix_frames([2, 4], x_min=0, x_max=5, pad=True) == [0, 2, 4, 5]
+    assert libsonare.peak_pick([0.0, 1.0, 0.0, 2.0, 0.0], 1, 1, 1, 1, 0.0, 0) == [1, 3]
+    assert libsonare.vector_normalize([3.0, 4.0], norm_type=2) == pytest.approx([0.6, 0.8])
+
+
+def test_compat_silence_and_rhythm_utilities() -> None:
+    """Silence/rhythm compatibility utilities are available through Python."""
+    import libsonare
+
+    samples = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
+    trimmed = libsonare.trim_silence(samples, top_db=20.0, frame_length=2, hop_length=1)
+    assert len(trimmed[0]) > 0
+    assert trimmed[2] > trimmed[1]
+    intervals = libsonare.split_silence(samples, top_db=20.0, frame_length=2, hop_length=1)
+    assert isinstance(intervals, list)
+
+    pcen_values = libsonare.pcen([1.0, 2.0, 3.0, 4.0], n_bins=2, n_frames=2)
+    assert len(pcen_values) == 4
+
+    chroma = [0.0] * 24
+    chroma[0] = 1.0
+    chroma[12] = 1.0
+    tonnetz_values = libsonare.tonnetz(chroma, n_chroma=12, n_frames=2)
+    assert len(tonnetz_values) == 12
+
+    onset = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
+    temp = libsonare.tempogram(onset, sample_rate=22050, hop_length=512, win_length=4)
+    assert temp[0] == len(onset)
+    assert len(temp[1]) == 4 * len(onset)
+    assert len(libsonare.plp(onset, sample_rate=22050, hop_length=512, win_length=4)) == len(onset)
+
+
 def test_audio_detect_bpm() -> None:
     """Audio.detect_bpm returns a float."""
     from libsonare import Audio
@@ -483,28 +541,6 @@ def test_trim() -> None:
     result = trim(samples, sample_rate=22050, threshold_db=-40.0)
     assert len(result) < len(samples)
     assert len(result) > 0
-
-
-def test_tts_utilities() -> None:
-    """TTS utilities measure, prepare, and shorten pauses."""
-    from libsonare import analyze_tts_quality, compress_pauses, prepare_tts
-
-    sr = 22050
-    tone = [0.2 * x for x in _generate_sine(440, sr, 0.4)]
-    samples = [0.0] * int(sr * 0.2) + tone + [0.0] * int(sr * 1.0) + tone
-
-    quality = analyze_tts_quality(samples, sample_rate=sr)
-    assert quality.duration_sec > 1.5
-    assert quality.silence_ratio > 0.2
-    assert quality.clipping_ratio == 0.0
-
-    prepared = prepare_tts(samples, sample_rate=sr)
-    assert len(prepared) < len(samples)
-    assert len(prepared) > 0
-
-    compressed = compress_pauses(samples, sample_rate=sr, max_pause_sec=0.25)
-    assert len(compressed) < len(samples)
-    assert len(compressed) > len(tone)
 
 
 ## Feature tests
@@ -989,11 +1025,6 @@ def test_audio_effects() -> None:
     trimmed = audio.trim()
     assert len(trimmed) > 0
     assert len(trimmed) <= len(samples)
-
-    quality = audio.analyze_tts_quality()
-    assert quality.duration_sec > 0
-    assert len(audio.prepare_tts()) > 0
-    assert len(audio.compress_pauses()) > 0
 
 
 def test_audio_stft_db() -> None:

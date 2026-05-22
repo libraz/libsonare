@@ -31,16 +31,14 @@ TEST_CASE("wavelet_lengths matches librosa", "[librosa][wavelet]") {
   const auto& expected = d["lengths"].as_array();
   REQUIRE(got.size() == expected.size());
   for (size_t i = 0; i < got.size(); ++i) {
-    // librosa returns raw float lengths. We round up to the next odd integer
-    // (analogous to numpy.ceil + (1 if even)) so values should match within
-    // 2 samples.
     const float ref = expected[i].as_float();
     CAPTURE(i, got[i], ref);
-    REQUIRE(std::abs(got[i] - ref) <= 2.0f);
+    // Raw fractional lengths now agree with librosa to float precision.
+    REQUIRE(std::abs(got[i] - ref) / std::max(ref, 1.0f) < 1e-5f);
   }
 }
 
-TEST_CASE("wavelet (padded) has matching n_fft and total length", "[librosa][wavelet]") {
+TEST_CASE("wavelet (padded) kernel values match librosa", "[librosa][wavelet]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/wavelet_filters.json");
   const auto& d = json["data"];
   const int sr = d["sr"].as_int();
@@ -52,21 +50,33 @@ TEST_CASE("wavelet (padded) has matching n_fft and total length", "[librosa][wav
                          /*pad_fft=*/true, /*Q=*/0.0f, &n_fft_out);
   REQUIRE(n_fft_out == expected_n_fft);
   REQUIRE(kernels.size() == static_cast<size_t>(freqs.size()) * static_cast<size_t>(n_fft_out));
-  // Sanity: each kernel slot is centered, so the maximum |kernel| should sit
-  // near the middle of its slot for typical Morlet wavelets.
+
+  const auto& ref_real = d["filters_real"].as_array();
+  const auto& ref_imag = d["filters_imag"].as_array();
+  REQUIRE(ref_real.size() == freqs.size());
+  REQUIRE(ref_imag.size() == freqs.size());
+
+  double max_abs_diff = 0.0;
+  double sum_sq_diff = 0.0;
+  double sum_sq_ref = 0.0;
   for (size_t i = 0; i < freqs.size(); ++i) {
-    float max_abs = 0.0f;
-    int max_idx = 0;
+    const auto& row_real = ref_real[i].as_array();
+    const auto& row_imag = ref_imag[i].as_array();
+    REQUIRE(static_cast<int>(row_real.size()) == n_fft_out);
     for (int n = 0; n < n_fft_out; ++n) {
       const auto& v = kernels[i * n_fft_out + n];
-      const float a = std::abs(v);
-      if (a > max_abs) {
-        max_abs = a;
-        max_idx = n;
-      }
+      const double rr = row_real[n].as_float();
+      const double ri = row_imag[n].as_float();
+      const double dr = static_cast<double>(v.real()) - rr;
+      const double di = static_cast<double>(v.imag()) - ri;
+      const double d2 = dr * dr + di * di;
+      max_abs_diff = std::max(max_abs_diff, std::sqrt(d2));
+      sum_sq_diff += d2;
+      sum_sq_ref += rr * rr + ri * ri;
     }
-    CAPTURE(i, max_idx, n_fft_out);
-    // Allow some asymmetry; centre is at (n_fft - L)/2 + (L-1)/2 ~= n_fft/2 - 1.
-    REQUIRE(std::abs(max_idx - n_fft_out / 2) <= n_fft_out / 4);
   }
+  const double rel_frob = std::sqrt(sum_sq_diff / std::max(sum_sq_ref, 1e-12));
+  CAPTURE(max_abs_diff, rel_frob);
+  REQUIRE(max_abs_diff < 1e-4);
+  REQUIRE(rel_frob < 1e-4);
 }

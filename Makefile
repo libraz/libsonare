@@ -1,4 +1,4 @@
-.PHONY: all build release test test-librosa-live clean rebuild format wasm coverage \
+.PHONY: all build release test test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-node test-wasm
 
@@ -50,6 +50,12 @@ format:
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
 	$(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
 	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
+
+lint:
+	cd bindings/wasm && yarn lint
+	cd bindings/node && yarn lint
+	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
 
 # Binding targets
 build-shared:

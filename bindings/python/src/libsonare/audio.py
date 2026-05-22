@@ -20,13 +20,7 @@ from .analyzer import (
     analyze_timbre as _analyze_timbre,
 )
 from .analyzer import (
-    analyze_tts_quality as _analyze_tts_quality,
-)
-from .analyzer import (
     chroma as _chroma,
-)
-from .analyzer import (
-    compress_pauses as _compress_pauses,
 )
 from .analyzer import (
     detect_chords as _detect_chords,
@@ -63,9 +57,6 @@ from .analyzer import (
 )
 from .analyzer import (
     pitch_yin as _pitch_yin,
-)
-from .analyzer import (
-    prepare_tts as _prepare_tts,
 )
 from .analyzer import (
     resample as _resample,
@@ -115,7 +106,6 @@ from .types import (
     RhythmResult,
     StftResult,
     TimbreResult,
-    TtsQualityResult,
 )
 
 if TYPE_CHECKING:
@@ -485,35 +475,6 @@ class Audio:
     def trim(self, threshold_db: float = -60.0) -> list[float]:
         """Trim silence from the beginning and end."""
         return _trim(self.data, self.sample_rate, threshold_db)
-
-    def analyze_tts_quality(self, silence_threshold_db: float = -45.0) -> TtsQualityResult:
-        """Measure objective TTS audio properties."""
-        return _analyze_tts_quality(self.data, self.sample_rate, silence_threshold_db)
-
-    def prepare_tts(
-        self,
-        target_rms_db: float = -20.0,
-        silence_threshold_db: float = -45.0,
-        peak_limit_db: float = -1.0,
-        fade_sec: float = 0.005,
-    ) -> list[float]:
-        """Trim, normalize, peak-limit, and lightly fade TTS audio."""
-        return _prepare_tts(
-            self.data,
-            self.sample_rate,
-            target_rms_db,
-            silence_threshold_db,
-            peak_limit_db,
-            fade_sec,
-        )
-
-    def compress_pauses(
-        self,
-        max_pause_sec: float = 0.6,
-        silence_threshold_db: float = -45.0,
-    ) -> list[float]:
-        """Shorten contiguous low-level pauses."""
-        return _compress_pauses(self.data, self.sample_rate, max_pause_sec, silence_threshold_db)
 
     # --- Features - Spectrogram ---
 

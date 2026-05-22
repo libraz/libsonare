@@ -137,6 +137,23 @@ interface WasmPitchResult {
   meanF0: number;
 }
 
+interface WasmTrimResult {
+  audio: Float32Array;
+  startSample: number;
+  endSample: number;
+}
+
+interface WasmFrameResult {
+  nFrames: number;
+  frames: Float32Array;
+}
+
+interface WasmTempogramResult {
+  nFrames: number;
+  winLength: number;
+  data: Float32Array;
+}
+
 interface WasmMasteringResult {
   samples: Float32Array;
   sampleRate: number;
@@ -363,6 +380,61 @@ interface SonareModule {
   noteToHz: (note: string) => number;
   framesToTime: (frames: number, sr: number, hopLength: number) => number;
   timeToFrames: (time: number, sr: number, hopLength: number) => number;
+  framesToSamples: (frames: number, hopLength: number, nFft: number) => number;
+  samplesToFrames: (samples: number, hopLength: number, nFft: number) => number;
+  powerToDb: (values: Float32Array, ref: number, amin: number, topDb: number) => Float32Array;
+  amplitudeToDb: (values: Float32Array, ref: number, amin: number, topDb: number) => Float32Array;
+  dbToPower: (values: Float32Array, ref: number) => Float32Array;
+  dbToAmplitude: (values: Float32Array, ref: number) => Float32Array;
+  preemphasis: (samples: Float32Array, coef: number, zi?: number | null) => Float32Array;
+  deemphasis: (samples: Float32Array, coef: number, zi?: number | null) => Float32Array;
+  trimSilence: (
+    samples: Float32Array,
+    topDb: number,
+    frameLength: number,
+    hopLength: number,
+  ) => WasmTrimResult;
+  splitSilence: (
+    samples: Float32Array,
+    topDb: number,
+    frameLength: number,
+    hopLength: number,
+  ) => Int32Array;
+  frameSignal: (samples: Float32Array, frameLength: number, hopLength: number) => WasmFrameResult;
+  padCenter: (values: Float32Array, size: number, padValue: number) => Float32Array;
+  fixLength: (values: Float32Array, size: number, padValue: number) => Float32Array;
+  fixFrames: (frames: Int32Array, xMin: number, xMax: number, pad: boolean) => Int32Array;
+  peakPick: (
+    values: Float32Array,
+    preMax: number,
+    postMax: number,
+    preAvg: number,
+    postAvg: number,
+    delta: number,
+    wait: number,
+  ) => Int32Array;
+  vectorNormalize: (values: Float32Array, normType: number, threshold: number) => Float32Array;
+  pcen: (
+    values: Float32Array,
+    nBins: number,
+    nFrames: number,
+    options?: Record<string, number> | null,
+  ) => Float32Array;
+  tonnetz: (chromagram: Float32Array, nChroma: number, nFrames: number) => Float32Array;
+  tempogram: (
+    onsetEnvelope: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    winLength: number,
+  ) => WasmTempogramResult;
+  plp: (
+    onsetEnvelope: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    tempoMin: number,
+    tempoMax: number,
+    winLength: number,
+  ) => Float32Array;
 
   // Core - Resample
   resample: (samples: Float32Array, srcSr: number, targetSr: number) => Float32Array;

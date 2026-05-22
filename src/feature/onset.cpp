@@ -3,7 +3,6 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 #include "util/exception.h"
 
@@ -172,16 +171,16 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 
   if (n_frames > lag) {
     int diff_frames = n_frames - lag;
-
-    // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
-    Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
-        magnitude.data(), n_bins, n_frames);
-
-    // Compute difference and absolute sum
-    Eigen::MatrixXf diff = mag_map.rightCols(diff_frames) - mag_map.leftCols(diff_frames);
-
-    Eigen::Map<Eigen::VectorXf> flux_map(flux.data() + lag, diff_frames);
-    flux_map = diff.array().abs().colwise().sum();
+    // Sum of |mag[:, f+lag] - mag[:, f]| over bins (auto-vectorized — TIE with Eigen per §10.2.2).
+    // magnitude is row-major [n_bins x n_frames].
+    for (int f = 0; f < diff_frames; ++f) {
+      float sum = 0.0f;
+      for (int b = 0; b < n_bins; ++b) {
+        const float d = magnitude[b * n_frames + (f + lag)] - magnitude[b * n_frames + f];
+        sum += std::abs(d);
+      }
+      flux[f + lag] = sum;
+    }
   }
 
   return flux;

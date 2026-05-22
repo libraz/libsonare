@@ -3,7 +3,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, StreamAnalyzer } from '../../js/index';
+import { init, StreamAnalyzer } from '../dist/index.js';
 
 describe('StreamAnalyzer', () => {
   beforeAll(async () => {

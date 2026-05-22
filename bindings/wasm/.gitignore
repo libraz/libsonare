@@ -2,6 +2,7 @@ node_modules/
 dist/
 build-wasm/
 build-wasm-bench/
+LICENSE
 .yarn/*
 !.yarn/patches
 !.yarn/plugins

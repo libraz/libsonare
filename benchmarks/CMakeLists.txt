@@ -28,6 +28,20 @@ target_include_directories(sonare_transcendental_bench PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
 
+add_executable(sonare_streaming_mel_chroma_bench streaming_mel_chroma_bench.cpp)
+target_link_libraries(sonare_streaming_mel_chroma_bench PRIVATE sonare_core)
+target_compile_options(sonare_streaming_mel_chroma_bench PRIVATE ${SONARE_WARNING_FLAGS})
+target_include_directories(sonare_streaming_mel_chroma_bench PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+)
+
+add_executable(sonare_log10_bench log10_bench.cpp)
+target_link_libraries(sonare_log10_bench PRIVATE sonare_core)
+target_compile_options(sonare_log10_bench PRIVATE ${SONARE_WARNING_FLAGS})
+target_include_directories(sonare_log10_bench PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+)
+
 if(BUILD_MASTERING)
   add_executable(sonare_mastering_isp_bench mastering_isp_bench.cpp)
   target_link_libraries(sonare_mastering_isp_bench PRIVATE sonare_mastering)

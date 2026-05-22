@@ -43,12 +43,10 @@ void check_nnls_case(const JsonValue& case_data, float tol) {
 
 TEST_CASE("nnls (overdetermined, non-negative LS) matches scipy", "[librosa][nnls]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/nnls.json");
-  check_nnls_case(json["data"]["case_a"], 1e-3f);
+  check_nnls_case(json["data"]["case_a"], 1e-4f);
 }
 
 TEST_CASE("nnls (active-set constrained) matches scipy", "[librosa][nnls]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/nnls.json");
-  // Active-set NNLS with a perturbed RHS: looser tolerance because exact
-  // active-set selection can differ at numerical boundaries.
-  check_nnls_case(json["data"]["case_b"], 5e-3f);
+  check_nnls_case(json["data"]["case_b"], 1e-3f);
 }

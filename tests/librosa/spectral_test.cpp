@@ -103,26 +103,40 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
     REQUIRE(result.size() == ref.size());
     REQUIRE(result.size() == static_cast<size_t>(n_bands_plus_one * n_frames));
 
+    // Per-band tolerance: high-energy bands containing the 440/880 Hz tones
+    // (bands 2 and 3) match librosa to ~0.1 dB. Low-energy bands depend on FFT
+    // numerical noise (band magnitudes near 1e-6) and drift more due to
+    // KissFFT float32 vs NumPy float32 accumulator differences propagating
+    // through the 10*log10 inside power_to_db.
+    double max_diff_signal = 0.0;  // bands 2 and 3 (contain the tones)
+    double max_diff_other = 0.0;   // all other bands
     double mean_abs_diff = 0.0;
-    double max_abs_diff = 0.0;
     size_t count = 0;
     for (int b = 0; b < n_bands_plus_one; ++b) {
+      const bool signal_band = (b == 2 || b == 3);
       for (int t = skip_boundary; t < n_frames - skip_boundary; ++t) {
         size_t i = static_cast<size_t>(b * n_frames + t);
-        float ref_val = ref[i].as_float();
-        float res_val = result[i];
-        double diff = std::abs(static_cast<double>(res_val) - static_cast<double>(ref_val));
+        double ref_val = static_cast<double>(ref[i].as_float());
+        double diff = std::abs(static_cast<double>(result[i]) - ref_val);
+        if (signal_band)
+          max_diff_signal = std::max(max_diff_signal, diff);
+        else
+          max_diff_other = std::max(max_diff_other, diff);
         mean_abs_diff += diff;
-        max_abs_diff = std::max(max_abs_diff, diff);
         ++count;
       }
     }
     mean_abs_diff /= static_cast<double>(count);
 
-    // Threshold has small platform-dependent slack: macOS observed ~0.9 dB,
-    // Linux observed ~1.01 dB. libm differences (cos/log10) and float ordering
-    // in std::sort propagate through power_to_db to produce sub-dB drift.
-    REQUIRE(mean_abs_diff < 1.2);
-    REQUIRE(max_abs_diff < 9.0);
+    CAPTURE(mean_abs_diff, max_diff_signal, max_diff_other);
+    // High-energy bands (containing the 440/880 Hz tones) match librosa to
+    // ~0.04 dB — these dominate practical signals.
+    REQUIRE(max_diff_signal < 0.1);
+    // Mean diff over all bands stays under 1 dB; low-energy bands drift up to
+    // ~7.5 dB because they sit at the float32 FFT noise floor (KissFFT vs
+    // NumPy accumulator differences). Tightening further requires migrating
+    // the STFT to double precision.
+    REQUIRE(mean_abs_diff < 1.0);
+    REQUIRE(max_diff_other < 8.0);
   }
 }

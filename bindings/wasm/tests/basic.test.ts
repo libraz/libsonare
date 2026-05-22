@@ -4,10 +4,18 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  amplitudeToDb,
   analyze,
+  dbToAmplitude,
+  dbToPower,
+  deemphasis,
   detectBeats,
   detectBpm,
   detectKey,
+  fixFrames,
+  fixLength,
+  frameSignal,
+  framesToSamples,
   init,
   isInitialized,
   mastering,
@@ -22,8 +30,19 @@ import {
   masteringProcessStereo,
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
+  pcen,
+  peakPick,
+  plp,
+  powerToDb,
+  preemphasis,
+  samplesToFrames,
+  splitSilence,
+  tempogram,
+  tonnetz,
+  trimSilence,
+  vectorNormalize,
   version,
-} from '../../js/index';
+} from '../dist/index.js';
 
 describe('Sonare WASM Module', () => {
   beforeAll(async () => {
@@ -42,7 +61,7 @@ describe('Sonare WASM Module', () => {
 
     it('should allow retry after failed init', async () => {
       vi.resetModules();
-      const fresh = await import('../../js/index');
+      const fresh = await import('../dist/index.js');
 
       await expect(
         fresh.init({
@@ -77,6 +96,64 @@ describe('Sonare WASM Module', () => {
       // Allow ±10% tolerance
       expect(detectedBpm).toBeGreaterThan(bpm * 0.9);
       expect(detectedBpm).toBeLessThan(bpm * 1.1);
+    });
+  });
+
+  describe('compatibility utilities', () => {
+    it('exposes numeric and signal utility functions', () => {
+      expect(framesToSamples(4, 512, 0)).toBe(2048);
+      expect(samplesToFrames(2048, 512, 0)).toBe(4);
+
+      const powerDb = powerToDb(new Float32Array([1, 0.01]), 1, 1e-10, 80);
+      expect(powerDb[0]).toBeCloseTo(0, 5);
+      expect(powerDb[1]).toBeCloseTo(-20, 4);
+      expect(dbToPower(powerDb, 1)[1]).toBeCloseTo(0.01, 5);
+
+      const ampDb = amplitudeToDb(new Float32Array([1, 0.5]), 1, 1e-5, 80);
+      expect(ampDb[0]).toBeCloseTo(0, 5);
+      expect(dbToAmplitude(ampDb, 1)[1]).toBeCloseTo(0.5, 5);
+
+      const emphasized = preemphasis(new Float32Array([1, 1, 1]), 0.5, 0);
+      expect(Array.from(emphasized)).toEqual([1, 0.5, 0.5]);
+      expect(deemphasis(emphasized, 0.5, 0)[2]).toBeCloseTo(1, 5);
+
+      const framed = frameSignal(new Float32Array([1, 2, 3, 4]), 2, 1);
+      expect(framed.nFrames).toBe(3);
+      expect(Array.from(framed.frames)).toEqual([1, 2, 2, 3, 3, 4]);
+      expect(Array.from(fixLength(new Float32Array([1, 2]), 4, -1))).toEqual([1, 2, -1, -1]);
+      expect(Array.from(fixFrames(new Int32Array([2, 4]), 0, 5, true))).toEqual([0, 2, 4, 5]);
+      expect(Array.from(peakPick(new Float32Array([0, 1, 0, 2, 0]), 1, 1, 1, 1, 0, 0))).toEqual([
+        1, 3,
+      ]);
+
+      const normalized = vectorNormalize(new Float32Array([3, 4]), 2, 1e-12);
+      expect(normalized[0]).toBeCloseTo(0.6, 5);
+      expect(normalized[1]).toBeCloseTo(0.8, 5);
+    });
+
+    it('exposes silence and rhythm utility functions', () => {
+      const samples = new Float32Array([0, 0, 1, 1, 0, 0]);
+      const trimmed = trimSilence(samples, 20, 2, 1);
+      expect(trimmed.audio.length).toBeGreaterThan(0);
+      expect(trimmed.endSample).toBeGreaterThan(trimmed.startSample);
+      expect(splitSilence(samples, 20, 2, 1)).toBeInstanceOf(Int32Array);
+
+      const pcenValues = pcen(new Float32Array([1, 2, 3, 4]), 2, 2);
+      expect(pcenValues).toBeInstanceOf(Float32Array);
+      expect(pcenValues.length).toBe(4);
+
+      const chromaValues = new Float32Array(12 * 2);
+      chromaValues[0] = 1;
+      chromaValues[12] = 1;
+      const tonnetzValues = tonnetz(chromaValues, 12, 2);
+      expect(tonnetzValues).toBeInstanceOf(Float32Array);
+      expect(tonnetzValues.length).toBe(12);
+
+      const onset = new Float32Array([0, 1, 0, 1, 0, 1, 0, 1]);
+      const temp = tempogram(onset, 22050, 512, 4);
+      expect(temp.data).toBeInstanceOf(Float32Array);
+      expect(temp.winLength).toBe(4);
+      expect(plp(onset, 22050, 512, 30, 300, 4)).toBeInstanceOf(Float32Array);
     });
   });
 

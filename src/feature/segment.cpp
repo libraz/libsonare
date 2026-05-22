@@ -43,13 +43,112 @@ float euclidean_dist(const float* X, int rows, int X_cols, const float* Y, int Y
 
 }  // namespace
 
+namespace {
+
+// Compute pairwise distance matrix [X_cols x Y_cols] using the given metric.
+// "cosine" returns 1 - cos_sim (range [0, 2]); "euclidean" returns L2.
+std::vector<float> pairwise_distance(const float* X, int X_rows, int X_cols, const float* Y,
+                                     int Y_cols, const std::string& metric) {
+  const bool use_cosine = (metric == "cosine");
+  std::vector<float> D(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
+  for (int i = 0; i < X_cols; ++i) {
+    for (int j = 0; j < Y_cols; ++j) {
+      if (use_cosine) {
+        D[i * Y_cols + j] = 1.0f - cosine_sim(X, X_rows, X_cols, Y, Y_cols, i, j);
+      } else {
+        D[i * Y_cols + j] = euclidean_dist(X, X_rows, X_cols, Y, Y_cols, i, j);
+      }
+    }
+  }
+  return D;
+}
+
+// Per-row affinity helpers: pick top-k smallest distances per row, optionally
+// excluding self-pairs / width bands, then form `exp(-d / median(kth_dist))`
+// and transpose. Mirrors librosa.segment.cross_similarity / recurrence_matrix
+// with mode="affinity" and bandwidth="med_k_scalar".
+std::vector<float> apply_affinity_kernel(const std::vector<float>& D, int n_rows, int n_cols, int k,
+                                         bool exclude_self, int width) {
+  // Gather candidates per row: (distance, column-index) excluding self / width band.
+  std::vector<std::vector<std::pair<float, int>>> top_per_row(n_rows);
+  std::vector<float> kth_dist;
+  kth_dist.reserve(n_rows);
+  for (int i = 0; i < n_rows; ++i) {
+    std::vector<std::pair<float, int>> cands;
+    cands.reserve(n_cols);
+    for (int j = 0; j < n_cols; ++j) {
+      if (exclude_self && i == j) continue;
+      if (width > 0 && std::abs(i - j) < width) continue;
+      cands.emplace_back(D[static_cast<size_t>(i) * n_cols + j], j);
+    }
+    const int take = std::min<int>(k, static_cast<int>(cands.size()));
+    if (take <= 0) continue;
+    std::partial_sort(cands.begin(), cands.begin() + take, cands.end());
+    top_per_row[i].assign(cands.begin(), cands.begin() + take);
+    kth_dist.push_back(top_per_row[i].back().first);
+  }
+
+  // bandwidth = median of (k-th smallest distance per row). librosa uses
+  // nanmedian; rows with no neighbours are skipped here (matching the
+  // "med_k_scalar" code path's nanmedian behaviour).
+  float bw = 1.0f;
+  if (!kth_dist.empty()) {
+    std::sort(kth_dist.begin(), kth_dist.end());
+    const size_t m = kth_dist.size();
+    bw = (m % 2 == 1) ? kth_dist[m / 2] : 0.5f * (kth_dist[m / 2 - 1] + kth_dist[m / 2]);
+    if (bw <= 0.0f) bw = 1.0f;  // degenerate: avoid div-by-zero (matches "self" pairs all 0)
+  }
+
+  // Build pre-transpose matrix.
+  std::vector<float> pre(static_cast<size_t>(n_rows) * n_cols, 0.0f);
+  for (int i = 0; i < n_rows; ++i) {
+    for (const auto& dj : top_per_row[i]) {
+      pre[static_cast<size_t>(i) * n_cols + dj.second] = std::exp(-dj.first / bw);
+    }
+  }
+
+  // Transpose (librosa returns the transpose).
+  std::vector<float> out(static_cast<size_t>(n_cols) * n_rows, 0.0f);
+  for (int i = 0; i < n_rows; ++i) {
+    for (int j = 0; j < n_cols; ++j) {
+      out[static_cast<size_t>(j) * n_rows + i] = pre[static_cast<size_t>(i) * n_cols + j];
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
 std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, const float* Y,
-                                    int Y_rows, int Y_cols, int k, const std::string& metric) {
+                                    int Y_rows, int Y_cols, int k, const std::string& metric,
+                                    const std::string& mode) {
   if (X == nullptr || Y == nullptr) throw std::invalid_argument("cross_similarity: null input");
   if (X_rows != Y_rows) throw std::invalid_argument("cross_similarity: feature dims must match");
+  if (mode != "connectivity" && mode != "affinity") {
+    throw std::invalid_argument("cross_similarity: mode must be 'connectivity' or 'affinity'");
+  }
   if (X_cols <= 0 || Y_cols <= 0) return {};
+
+  if (mode == "affinity") {
+    // librosa default: k = min(n_ref, 2*ceil(sqrt(n_ref))).
+    int kk = k;
+    if (kk <= 0) {
+      kk =
+          std::min(Y_cols, static_cast<int>(2 * std::ceil(std::sqrt(static_cast<double>(Y_cols)))));
+    }
+    const bool exclude_self = (X == Y);
+    // When self-similar, librosa's sklearn kNN search returns top-k INCLUDING
+    // the self-pair (distance 0). After `eliminate_zeros` this leaves at most
+    // (k-1) non-self entries per row, which is also what drives bandwidth.
+    // Use kk-1 effective neighbours to match that behaviour.
+    const int kk_eff = exclude_self ? std::max(0, kk - 1) : kk;
+    auto D = pairwise_distance(X, X_rows, X_cols, Y, Y_cols, metric);
+    return apply_affinity_kernel(D, X_cols, Y_cols, kk_eff, exclude_self, /*width=*/0);
+  }
+
+  // mode == "connectivity": raw similarity (cosine sim or -euclidean), top-k trimmed.
   std::vector<float> out(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
-  bool use_cosine = (metric == "cosine");
+  const bool use_cosine = (metric == "cosine");
   for (int i = 0; i < X_cols; ++i) {
     for (int j = 0; j < Y_cols; ++j) {
       float sim = use_cosine ? cosine_sim(X, X_rows, X_cols, Y, Y_cols, i, j)
@@ -58,7 +157,6 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
     }
   }
   if (k > 0 && k < Y_cols) {
-    // Keep only top-k per row.
     std::vector<size_t> order(Y_cols);
     for (int i = 0; i < X_cols; ++i) {
       std::iota(order.begin(), order.end(), size_t{0});
@@ -74,7 +172,36 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
 }
 
 std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int k, int width,
-                                     bool sym, const std::string& metric) {
+                                     bool sym, const std::string& metric, const std::string& mode) {
+  if (mode != "connectivity" && mode != "affinity") {
+    throw std::invalid_argument("recurrence_matrix: mode must be 'connectivity' or 'affinity'");
+  }
+  if (data == nullptr) throw std::invalid_argument("recurrence_matrix: null input");
+  if (cols <= 0) return {};
+  if (width < 1) width = 1;
+
+  if (mode == "affinity") {
+    int kk = k;
+    if (kk <= 0) {
+      const int eff = std::max(1, cols - 2 * width + 1);
+      kk = std::min(cols - 1, 2 * static_cast<int>(std::ceil(std::sqrt(static_cast<double>(eff)))));
+    }
+    auto D = pairwise_distance(data, rows, cols, data, cols, metric);
+    auto out = apply_affinity_kernel(D, cols, cols, kk, /*exclude_self=*/true, width);
+    if (sym) {
+      for (int i = 0; i < cols; ++i) {
+        for (int j = i + 1; j < cols; ++j) {
+          const float a = out[i * cols + j];
+          const float b = out[j * cols + i];
+          const float v = std::min(a, b);
+          out[i * cols + j] = v;
+          out[j * cols + i] = v;
+        }
+      }
+    }
+    return out;
+  }
+
   std::vector<float> out = cross_similarity(data, rows, cols, data, rows, cols, 0, metric);
   // Zero out the central diagonal band.
   for (int i = 0; i < cols; ++i) {
@@ -83,7 +210,6 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
     }
   }
   if (k > 0 && k < cols) {
-    // Per-row top-k filtering (replicates librosa's `mode="affinity"` k-NN).
     std::vector<size_t> order(cols);
     for (int i = 0; i < cols; ++i) {
       std::iota(order.begin(), order.end(), size_t{0});

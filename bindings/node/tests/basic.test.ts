@@ -5,19 +5,25 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  amplitudeToDb,
   analyze,
   analyzeBpm,
   analyzeDynamics,
   analyzeRhythm,
   analyzeTimbre,
-  analyzeTtsQuality,
   chroma,
-  compressPauses,
+  dbToAmplitude,
+  dbToPower,
+  deemphasis,
   detectBeats,
   detectBpm,
   detectChords,
   detectKey,
   detectOnsets,
+  fixFrames,
+  fixLength,
+  frameSignal,
+  framesToSamples,
   framesToTime,
   harmonic,
   hasFfmpegSupport,
@@ -41,22 +47,32 @@ import {
   midiToHz,
   normalize,
   noteToHz,
+  pcen,
+  peakPick,
   percussive,
   pitchPyin,
   pitchShift,
   pitchYin,
-  prepareTts,
+  plp,
+  powerToDb,
+  preemphasis,
   resample,
   rmsEnergy,
+  samplesToFrames,
   spectralBandwidth,
   spectralCentroid,
   spectralFlatness,
   spectralRolloff,
+  splitSilence,
   stft,
   stftDb,
+  tempogram,
   timeStretch,
   timeToFrames,
+  tonnetz,
   trim,
+  trimSilence,
+  vectorNormalize,
   version,
   zeroCrossingRate,
 } from '../src/index.js';
@@ -176,6 +192,64 @@ describe('sonare native binding', () => {
 
     it('converts invalid native arguments into JS exceptions', () => {
       expect(() => timeStretch(new Float32Array(SR), -1, 2.0)).toThrow(/Invalid parameter/);
+    });
+
+    it('exposes compatibility numeric and signal utilities', () => {
+      expect(framesToSamples(4, 512, 0)).toBe(2048);
+      expect(samplesToFrames(2048, 512, 0)).toBe(4);
+
+      const powerDb = powerToDb(new Float32Array([1, 0.01]), 1, 1e-10, 80);
+      expect(powerDb[0]).toBeCloseTo(0, 5);
+      expect(powerDb[1]).toBeCloseTo(-20, 4);
+      expect(dbToPower(powerDb, 1)[1]).toBeCloseTo(0.01, 5);
+
+      const ampDb = amplitudeToDb(new Float32Array([1, 0.5]), 1, 1e-5, 80);
+      expect(ampDb[0]).toBeCloseTo(0, 5);
+      expect(dbToAmplitude(ampDb, 1)[1]).toBeCloseTo(0.5, 5);
+
+      const emphasized = preemphasis(new Float32Array([1, 1, 1]), 0.5, 0);
+      expect(Array.from(emphasized)).toEqual([1, 0.5, 0.5]);
+      const deemphasized = deemphasis(emphasized, 0.5, 0);
+      expect(deemphasized[2]).toBeCloseTo(1, 5);
+
+      const framed = frameSignal(new Float32Array([1, 2, 3, 4]), 2, 1);
+      expect(framed.nFrames).toBe(3);
+      expect(Array.from(framed.frames)).toEqual([1, 2, 2, 3, 3, 4]);
+      expect(Array.from(fixLength(new Float32Array([1, 2]), 4, -1))).toEqual([1, 2, -1, -1]);
+      expect(Array.from(fixFrames(new Int32Array([2, 4]), 0, 5, true))).toEqual([0, 2, 4, 5]);
+      expect(Array.from(peakPick(new Float32Array([0, 1, 0, 2, 0]), 1, 1, 1, 1, 0, 0))).toEqual([
+        1, 3,
+      ]);
+
+      const normalized = vectorNormalize(new Float32Array([3, 4]), 2, 1e-12);
+      expect(normalized[0]).toBeCloseTo(0.6, 5);
+      expect(normalized[1]).toBeCloseTo(0.8, 5);
+    });
+
+    it('exposes silence and rhythm compatibility utilities', () => {
+      const samples = new Float32Array([0, 0, 1, 1, 0, 0]);
+      const trimmed = trimSilence(samples, 20, 2, 1);
+      expect(trimmed.audio.length).toBeGreaterThan(0);
+      expect(trimmed.startSample).toBeGreaterThanOrEqual(0);
+      expect(trimmed.endSample).toBeGreaterThan(trimmed.startSample);
+      expect(splitSilence(samples, 20, 2, 1)).toBeInstanceOf(Int32Array);
+
+      const pcenValues = pcen(new Float32Array([1, 2, 3, 4]), 2, 2);
+      expect(pcenValues).toBeInstanceOf(Float32Array);
+      expect(pcenValues.length).toBe(4);
+
+      const chromaValues = new Float32Array(12 * 2);
+      chromaValues[0] = 1;
+      chromaValues[12] = 1;
+      const tonnetzValues = tonnetz(chromaValues, 12, 2);
+      expect(tonnetzValues).toBeInstanceOf(Float32Array);
+      expect(tonnetzValues.length).toBe(12);
+
+      const onset = new Float32Array([0, 1, 0, 1, 0, 1, 0, 1]);
+      const temp = tempogram(onset, SR, 512, 4);
+      expect(temp.data).toBeInstanceOf(Float32Array);
+      expect(temp.winLength).toBe(4);
+      expect(plp(onset, SR, 512, 30, 300, 4)).toBeInstanceOf(Float32Array);
     });
 
     it('exposes pair and stereo mastering APIs', () => {
@@ -321,29 +395,6 @@ describe('sonare native binding', () => {
       const result = trim(samples, SR, -40.0);
       expect(result.length).toBeLessThan(samples.length);
       expect(result.length).toBeGreaterThan(0);
-    });
-
-    it('TTS utilities measure, prepare, and shorten pauses', () => {
-      const tone = generateSine(440, SR, 0.4);
-      for (let i = 0; i < tone.length; i++) {
-        tone[i] *= 0.2;
-      }
-      const samples = new Float32Array(Math.floor(SR * 1.6));
-      samples.set(tone, Math.floor(SR * 0.2));
-      samples.set(tone, Math.floor(SR * 1.2));
-
-      const quality = analyzeTtsQuality(samples, SR);
-      expect(quality.durationSec).toBeGreaterThan(1.5);
-      expect(quality.silenceRatio).toBeGreaterThan(0.2);
-      expect(quality.clippingRatio).toBe(0);
-
-      const prepared = prepareTts(samples, SR);
-      expect(prepared.length).toBeLessThan(samples.length);
-      expect(prepared.length).toBeGreaterThan(0);
-
-      const compressed = compressPauses(samples, SR, 0.25);
-      expect(compressed.length).toBeLessThan(samples.length);
-      expect(compressed.length).toBeGreaterThan(tone.length);
     });
   });
 
@@ -559,16 +610,6 @@ describe('sonare native binding', () => {
       const result = audio.hpss();
       expect(result.harmonic).toBeInstanceOf(Float32Array);
       expect(result.percussive).toBeInstanceOf(Float32Array);
-      audio.destroy();
-    });
-
-    it('TTS utilities work via class', () => {
-      const samples = new Float32Array(SR);
-      samples.set(generateSine(440, SR, 0.4), Math.floor(SR * 0.3));
-      const audio = Audio.fromBuffer(samples, SR);
-      expect(audio.analyzeTtsQuality().durationSec).toBeGreaterThan(0);
-      expect(audio.prepareTts().length).toBeGreaterThan(0);
-      expect(audio.compressPauses().length).toBeGreaterThan(0);
       audio.destroy();
     });
 

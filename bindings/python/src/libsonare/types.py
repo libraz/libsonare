@@ -378,16 +378,3 @@ class MasteringStereoResult:
     output_lufs: float
     applied_gain_db: float
     latency_samples: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class TtsQualityResult:
-    """Objective TTS audio quality measurements."""
-
-    duration_sec: float
-    peak_db: float
-    rms_db: float
-    silence_ratio: float
-    clipping_ratio: float
-    leading_silence_sec: float
-    trailing_silence_sec: float

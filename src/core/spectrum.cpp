@@ -1,13 +1,11 @@
 #include "core/spectrum.h"
 
-#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <random>
 #include <stdexcept>
 
 #include "core/fft.h"
-#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -221,10 +219,12 @@ const std::vector<float>& Spectrogram::magnitude() const {
 const std::vector<float>& Spectrogram::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     power_cache_.resize(data_.size());
-    // Use Eigen abs2() to compute re² + im² without sqrt
-    Eigen::Map<const Eigen::ArrayXcf> data_map(data_.data(), data_.size());
-    Eigen::Map<Eigen::ArrayXf> power_map(power_cache_.data(), data_.size());
-    power_map = data_map.abs2();
+    // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
+    for (size_t i = 0; i < data_.size(); ++i) {
+      const float re = data_[i].real();
+      const float im = data_[i].imag();
+      power_cache_[i] = re * re + im * im;
+    }
   }
   return power_cache_;
 }

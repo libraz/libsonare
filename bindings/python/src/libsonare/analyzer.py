@@ -24,7 +24,6 @@ from ._ffi import (
     SonareRhythmResult,
     SonareStftResult,
     SonareTimbreResult,
-    SonareTtsQualityResult,
     load_library,
 )
 from .types import (
@@ -48,7 +47,6 @@ from .types import (
     StftResult,
     TimbreResult,
     TimeSignature,
-    TtsQualityResult,
 )
 
 _lib: ctypes.CDLL | None = None
@@ -85,6 +83,20 @@ def _to_c_float_array(
     length = len(samples)
     c_array = (ctypes.c_float * length)(*samples)
     return c_array, length
+
+
+def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int], int]:
+    length = len(values)
+    c_array = (ctypes.c_int * length)(*values)
+    return c_array, length
+
+
+def _float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+    return [float(out[i]) for i in range(count)]
+
+
+def _int_array_result(out: ctypes.POINTER(ctypes.c_int), count: int) -> list[int]:
+    return [int(out[i]) for i in range(count)]
 
 
 def detect_bpm(
@@ -1045,92 +1057,6 @@ def trim(
     return result
 
 
-def analyze_tts_quality(
-    samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    silence_threshold_db: float = -45.0,
-) -> TtsQualityResult:
-    """Measure objective TTS audio properties without heuristic labels."""
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out = SonareTtsQualityResult()
-    rc = lib.sonare_analyze_tts_quality(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_float(silence_threshold_db),
-        ctypes.byref(out),
-    )
-    _check(rc)
-    return TtsQualityResult(
-        duration_sec=float(out.duration_sec),
-        peak_db=float(out.peak_db),
-        rms_db=float(out.rms_db),
-        silence_ratio=float(out.silence_ratio),
-        clipping_ratio=float(out.clipping_ratio),
-        leading_silence_sec=float(out.leading_silence_sec),
-        trailing_silence_sec=float(out.trailing_silence_sec),
-    )
-
-
-def prepare_tts(
-    samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    target_rms_db: float = -20.0,
-    silence_threshold_db: float = -45.0,
-    peak_limit_db: float = -1.0,
-    fade_sec: float = 0.005,
-) -> list[float]:
-    """Trim, RMS-normalize, peak-limit, and lightly fade TTS audio."""
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_prepare_tts(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_float(target_rms_db),
-        ctypes.c_float(silence_threshold_db),
-        ctypes.c_float(peak_limit_db),
-        ctypes.c_float(fade_sec),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    result = [float(out[i]) for i in range(out_length.value)]
-    if out and out_length.value > 0:
-        lib.sonare_free_floats(out)
-    return result
-
-
-def compress_pauses(
-    samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    max_pause_sec: float = 0.6,
-    silence_threshold_db: float = -45.0,
-) -> list[float]:
-    """Shorten contiguous low-level pauses to at most max_pause_sec."""
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_compress_pauses(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_float(max_pause_sec),
-        ctypes.c_float(silence_threshold_db),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    result = [float(out[i]) for i in range(out_length.value)]
-    if out and out_length.value > 0:
-        lib.sonare_free_floats(out)
-    return result
-
-
 # ============================================================================
 # Features - Spectrogram
 # ============================================================================
@@ -1762,6 +1688,425 @@ def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
     lib = _get_lib()
     return int(
         lib.sonare_time_to_frames(ctypes.c_float(time), ctypes.c_int(sr), ctypes.c_int(hop_length))
+    )
+
+
+def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int = 0) -> int:
+    """Convert frame count to sample index."""
+    lib = _get_lib()
+    return int(
+        lib.sonare_frames_to_samples(
+            ctypes.c_int(frames), ctypes.c_int(hop_length), ctypes.c_int(n_fft)
+        )
+    )
+
+
+def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int = 0) -> int:
+    """Convert sample index to frame count."""
+    lib = _get_lib()
+    return int(
+        lib.sonare_samples_to_frames(
+            ctypes.c_int(samples), ctypes.c_int(hop_length), ctypes.c_int(n_fft)
+        )
+    )
+
+
+def _call_float_transform(
+    fn_name: str, values: Sequence[float] | list[float], *args: object
+) -> list[float]:
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(values)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = getattr(lib, fn_name)(
+        c_array,
+        ctypes.c_size_t(length),
+        *args,
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def power_to_db(
+    values: Sequence[float] | list[float],
+    ref: float = 1.0,
+    amin: float = 1e-10,
+    top_db: float = 80.0,
+) -> list[float]:
+    """Convert power values to dB."""
+    return _call_float_transform(
+        "sonare_power_to_db",
+        values,
+        ctypes.c_float(ref),
+        ctypes.c_float(amin),
+        ctypes.c_float(top_db),
+    )
+
+
+def amplitude_to_db(
+    values: Sequence[float] | list[float],
+    ref: float = 1.0,
+    amin: float = 1e-5,
+    top_db: float = 80.0,
+) -> list[float]:
+    """Convert amplitude values to dB."""
+    return _call_float_transform(
+        "sonare_amplitude_to_db",
+        values,
+        ctypes.c_float(ref),
+        ctypes.c_float(amin),
+        ctypes.c_float(top_db),
+    )
+
+
+def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
+    """Convert dB values back to power."""
+    return _call_float_transform("sonare_db_to_power", values, ctypes.c_float(ref))
+
+
+def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
+    """Convert dB values back to amplitude."""
+    return _call_float_transform("sonare_db_to_amplitude", values, ctypes.c_float(ref))
+
+
+def preemphasis(
+    samples: Sequence[float] | list[float],
+    coef: float = 0.97,
+    zi: float | None = None,
+) -> list[float]:
+    """Apply librosa-compatible pre-emphasis."""
+    return _call_float_transform(
+        "sonare_preemphasis",
+        samples,
+        ctypes.c_float(coef),
+        ctypes.c_float(0.0 if zi is None else zi),
+        ctypes.c_int(0 if zi is None else 1),
+    )
+
+
+def deemphasis(
+    samples: Sequence[float] | list[float],
+    coef: float = 0.97,
+    zi: float | None = None,
+) -> list[float]:
+    """Apply inverse pre-emphasis."""
+    return _call_float_transform(
+        "sonare_deemphasis",
+        samples,
+        ctypes.c_float(coef),
+        ctypes.c_float(0.0 if zi is None else zi),
+        ctypes.c_int(0 if zi is None else 1),
+    )
+
+
+def trim_silence(
+    samples: Sequence[float] | list[float],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> tuple[list[float], int, int]:
+    """Trim leading/trailing silence and return (audio, start_sample, end_sample)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    start = ctypes.c_int()
+    end = ctypes.c_int()
+    rc = lib.sonare_trim_silence(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_float(top_db),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(start),
+        ctypes.byref(end),
+    )
+    _check(rc)
+    try:
+        return (_float_array_result(out, out_length.value), int(start.value), int(end.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def split_silence(
+    samples: Sequence[float] | list[float],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> list[tuple[int, int]]:
+    """Return non-silent intervals as (start_sample, end_sample)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_count = ctypes.c_size_t()
+    rc = lib.sonare_split_silence(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_float(top_db),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
+    _check(rc)
+    try:
+        flat = _int_array_result(out, out_count.value)
+        return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def frame_signal(
+    samples: Sequence[float] | list[float],
+    frame_length: int,
+    hop_length: int,
+) -> tuple[int, list[float]]:
+    """Slice a signal into frames. Returns (n_frames, row-major frames)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_frame_signal(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def pad_center(
+    values: Sequence[float] | list[float],
+    size: int,
+    pad_value: float = 0.0,
+) -> list[float]:
+    """Pad an array by centering it within target size."""
+    return _call_float_transform(
+        "sonare_pad_center", values, ctypes.c_size_t(size), ctypes.c_float(pad_value)
+    )
+
+
+def fix_length(
+    values: Sequence[float] | list[float],
+    size: int,
+    pad_value: float = 0.0,
+) -> list[float]:
+    """Crop or pad an array to exact length."""
+    return _call_float_transform(
+        "sonare_fix_length", values, ctypes.c_size_t(size), ctypes.c_float(pad_value)
+    )
+
+
+def fix_frames(
+    frames: Sequence[int] | list[int],
+    x_min: int = 0,
+    x_max: int = -1,
+    pad: bool = True,
+) -> list[int]:
+    """Adjust frame indices to fit within bounds."""
+    lib = _get_lib()
+    c_array, length = _to_c_int_array(frames)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_fix_frames(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(x_min),
+        ctypes.c_int(x_max),
+        ctypes.c_int(1 if pad else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _int_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def peak_pick(
+    values: Sequence[float] | list[float],
+    pre_max: int,
+    post_max: int,
+    pre_avg: int,
+    post_avg: int,
+    delta: float,
+    wait: int,
+) -> list[int]:
+    """Pick peaks using librosa.util.peak_pick-compatible parameters."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(values)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_peak_pick(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(pre_max),
+        ctypes.c_int(post_max),
+        ctypes.c_int(pre_avg),
+        ctypes.c_int(post_avg),
+        ctypes.c_float(delta),
+        ctypes.c_int(wait),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _int_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def vector_normalize(
+    values: Sequence[float] | list[float],
+    norm_type: int = 0,
+    threshold: float = 0.0,
+) -> list[float]:
+    """Normalize a vector. norm_type: 0=inf, 1=L1, 2=L2, 3=power."""
+    return _call_float_transform(
+        "sonare_vector_normalize",
+        values,
+        ctypes.c_int(norm_type),
+        ctypes.c_float(threshold),
+    )
+
+
+def pcen(
+    values: Sequence[float] | list[float],
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    time_constant: float = 0.4,
+    gain: float = 0.98,
+    bias: float = 2.0,
+    power: float = 0.5,
+    eps: float = 1e-6,
+) -> list[float]:
+    """Apply per-channel energy normalization to a row-major spectrogram."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(values)
+    if length != n_bins * n_frames:
+        raise ValueError("values length must equal n_bins * n_frames")
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_pcen(
+        c_array,
+        ctypes.c_int(n_bins),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(time_constant),
+        ctypes.c_float(gain),
+        ctypes.c_float(bias),
+        ctypes.c_float(power),
+        ctypes.c_float(eps),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: int) -> list[float]:
+    """Compute Tonnetz from row-major chromagram data."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(chromagram)
+    if length != n_chroma * n_frames:
+        raise ValueError("chromagram length must equal n_chroma * n_frames")
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_tonnetz(
+        c_array,
+        ctypes.c_int(n_chroma),
+        ctypes.c_int(n_frames),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def tempogram(
+    onset_envelope: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    win_length: int = 384,
+    center: bool = True,
+    norm: bool = True,
+) -> tuple[int, list[float]]:
+    """Compute autocorrelation tempogram. Returns (n_frames, row-major matrix)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(onset_envelope)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_tempogram(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(win_length),
+        ctypes.c_int(1 if center else 0),
+        ctypes.c_int(1 if norm else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def plp(
+    onset_envelope: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    tempo_min: float = 30.0,
+    tempo_max: float = 300.0,
+    win_length: int = 384,
+) -> list[float]:
+    """Compute predominant local pulse from an onset envelope."""
+    return _call_float_transform(
+        "sonare_plp",
+        onset_envelope,
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(tempo_min),
+        ctypes.c_float(tempo_max),
+        ctypes.c_int(win_length),
     )
 
 

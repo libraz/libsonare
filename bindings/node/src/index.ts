@@ -16,7 +16,6 @@ import type {
   StftDbResult,
   StftResult,
   TimbreResult,
-  TtsQualityResult,
 } from './types.js';
 
 const require = createRequire(import.meta.url);
@@ -219,35 +218,6 @@ export class Audio {
 
   trim(thresholdDb = -60.0): Float32Array {
     return addon.trim(this.getData(), this.getSampleRate(), thresholdDb);
-  }
-
-  analyzeTtsQuality(silenceThresholdDb = -45.0): TtsQualityResult {
-    return addon.analyzeTtsQuality(this.getData(), this.getSampleRate(), silenceThresholdDb);
-  }
-
-  prepareTts(
-    targetRmsDb = -20.0,
-    silenceThresholdDb = -45.0,
-    peakLimitDb = -1.0,
-    fadeSec = 0.005,
-  ): Float32Array {
-    return addon.prepareTts(
-      this.getData(),
-      this.getSampleRate(),
-      targetRmsDb,
-      silenceThresholdDb,
-      peakLimitDb,
-      fadeSec,
-    );
-  }
-
-  compressPauses(maxPauseSec = 0.6, silenceThresholdDb = -45.0): Float32Array {
-    return addon.compressPauses(
-      this.getData(),
-      this.getSampleRate(),
-      maxPauseSec,
-      silenceThresholdDb,
-    );
   }
 
   // -- Features --
@@ -578,41 +548,6 @@ export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -6
   return addon.trim(samples, sampleRate, thresholdDb);
 }
 
-export function analyzeTtsQuality(
-  samples: Float32Array,
-  sampleRate = 22050,
-  silenceThresholdDb = -45.0,
-): TtsQualityResult {
-  return addon.analyzeTtsQuality(samples, sampleRate, silenceThresholdDb);
-}
-
-export function prepareTts(
-  samples: Float32Array,
-  sampleRate = 22050,
-  targetRmsDb = -20.0,
-  silenceThresholdDb = -45.0,
-  peakLimitDb = -1.0,
-  fadeSec = 0.005,
-): Float32Array {
-  return addon.prepareTts(
-    samples,
-    sampleRate,
-    targetRmsDb,
-    silenceThresholdDb,
-    peakLimitDb,
-    fadeSec,
-  );
-}
-
-export function compressPauses(
-  samples: Float32Array,
-  sampleRate = 22050,
-  maxPauseSec = 0.6,
-  silenceThresholdDb = -45.0,
-): Float32Array {
-  return addon.compressPauses(samples, sampleRate, maxPauseSec, silenceThresholdDb);
-}
-
 // -- Features --
 
 export function stft(
@@ -776,6 +711,140 @@ export function timeToFrames(time: number, sr: number, hopLength: number): numbe
   return addon.timeToFrames(time, sr, hopLength);
 }
 
+export function framesToSamples(frames: number, hopLength = 512, nFft = 0): number {
+  return addon.framesToSamples(frames, hopLength, nFft);
+}
+
+export function samplesToFrames(samples: number, hopLength = 512, nFft = 0): number {
+  return addon.samplesToFrames(samples, hopLength, nFft);
+}
+
+export function powerToDb(
+  values: Float32Array,
+  ref = 1.0,
+  amin = 1e-10,
+  topDb = 80.0,
+): Float32Array {
+  return addon.powerToDb(values, ref, amin, topDb);
+}
+
+export function amplitudeToDb(
+  values: Float32Array,
+  ref = 1.0,
+  amin = 1e-5,
+  topDb = 80.0,
+): Float32Array {
+  return addon.amplitudeToDb(values, ref, amin, topDb);
+}
+
+export function dbToPower(values: Float32Array, ref = 1.0): Float32Array {
+  return addon.dbToPower(values, ref);
+}
+
+export function dbToAmplitude(values: Float32Array, ref = 1.0): Float32Array {
+  return addon.dbToAmplitude(values, ref);
+}
+
+export function preemphasis(samples: Float32Array, coef = 0.97, zi?: number): Float32Array {
+  return zi === undefined ? addon.preemphasis(samples, coef) : addon.preemphasis(samples, coef, zi);
+}
+
+export function deemphasis(samples: Float32Array, coef = 0.97, zi?: number): Float32Array {
+  return zi === undefined ? addon.deemphasis(samples, coef) : addon.deemphasis(samples, coef, zi);
+}
+
+export function trimSilence(
+  samples: Float32Array,
+  topDb = 60.0,
+  frameLength = 2048,
+  hopLength = 512,
+): { audio: Float32Array; startSample: number; endSample: number } {
+  return addon.trimSilence(samples, topDb, frameLength, hopLength);
+}
+
+export function splitSilence(
+  samples: Float32Array,
+  topDb = 60.0,
+  frameLength = 2048,
+  hopLength = 512,
+): Int32Array {
+  return addon.splitSilence(samples, topDb, frameLength, hopLength);
+}
+
+export function frameSignal(
+  samples: Float32Array,
+  frameLength: number,
+  hopLength: number,
+): { nFrames: number; frames: Float32Array } {
+  return addon.frameSignal(samples, frameLength, hopLength);
+}
+
+export function padCenter(values: Float32Array, size: number, padValue = 0.0): Float32Array {
+  return addon.padCenter(values, size, padValue);
+}
+
+export function fixLength(values: Float32Array, size: number, padValue = 0.0): Float32Array {
+  return addon.fixLength(values, size, padValue);
+}
+
+export function fixFrames(
+  frames: Int32Array | number[],
+  xMin = 0,
+  xMax = -1,
+  pad = true,
+): Int32Array {
+  return addon.fixFrames(frames, xMin, xMax, pad);
+}
+
+export function peakPick(
+  values: Float32Array,
+  preMax: number,
+  postMax: number,
+  preAvg: number,
+  postAvg: number,
+  delta: number,
+  wait: number,
+): Int32Array {
+  return addon.peakPick(values, preMax, postMax, preAvg, postAvg, delta, wait);
+}
+
+export function vectorNormalize(values: Float32Array, normType = 0, threshold = 0.0): Float32Array {
+  return addon.vectorNormalize(values, normType, threshold);
+}
+
+export function pcen(
+  values: Float32Array,
+  nBins: number,
+  nFrames: number,
+  options: Record<string, number> = {},
+): Float32Array {
+  return addon.pcen(values, nBins, nFrames, options);
+}
+
+export function tonnetz(chromagram: Float32Array, nChroma: number, nFrames: number): Float32Array {
+  return addon.tonnetz(chromagram, nChroma, nFrames);
+}
+
+export function tempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  winLength = 384,
+): { nFrames: number; winLength: number; data: Float32Array } {
+  return addon.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+}
+
+export function plp(
+  onsetEnvelope: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  tempoMin = 30.0,
+  tempoMax = 300.0,
+  winLength = 384,
+): Float32Array {
+  return addon.plp(onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength);
+}
+
 export function resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array {
   return addon.resample(samples, srcSr, targetSr);
 }
@@ -798,5 +867,4 @@ export type {
   StftResult,
   TimbreResult,
   TimeSignature,
-  TtsQualityResult,
 } from './types.js';

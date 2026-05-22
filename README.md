@@ -8,9 +8,17 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**librosa-like audio analysis for C++, Python, and browsers.** Fast, dependency-free, runs anywhere.
+**Audio analysis + commercial-grade mastering DSP for C++, Python, and browsers.**
+Apache-2.0, dependency-free, runs anywhere — including the browser via WebAssembly.
 
-Tens of times faster than librosa/Python.
+- **Analysis** — BPM, key, chord, beat, section, timbre, dynamics, pitch
+  (librosa-compatible defaults; tens of times faster than librosa/Python).
+- **Mastering** — EQ, dynamics, multiband, stereo, saturation, repair, maximizer,
+  reference matching. 90+ DSP modules built around published standards
+  (ITU-R BS.1770-4 loudness/true-peak, Vicanek biquads, ADAA nonlinearities,
+  Lemire sliding max, polyphase FIR oversampling).
+- **One permissive license** — Apache-2.0 across the entire stack. No LGPL/GPL
+  surface, no proprietary algorithms, no SaaS dependencies.
 
 ## Installation
 
@@ -40,7 +48,9 @@ SONARE_FFMPEG=1 yarn build  # require FFmpeg (fails if dev libs missing)
 ### JavaScript / TypeScript (WASM)
 
 `@libraz/libsonare` accepts decoded `Float32Array` samples — use the Web Audio
-API or a JS decoder to obtain them.
+API or a JS decoder to obtain them. Mastering DSP is included in the default WASM build.
+
+**Analysis**
 
 ```typescript
 import { init, detectBpm, detectKey, analyze } from '@libraz/libsonare';
@@ -52,8 +62,7 @@ const key = detectKey(samples, sampleRate);  // { name: "C major", confidence: 0
 const result = analyze(samples, sampleRate);
 ```
 
-The npm package is WebAssembly-based and includes mastering DSP in the default
-build:
+**Mastering**
 
 ```typescript
 import {
@@ -79,18 +88,18 @@ const stereo = masteringChainStereo(left, right, sampleRate, {
   loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
 });
 
+// Apply a single named processor
 const compressed = masteringProcess('dynamics.compressor', samples, sampleRate, {
   thresholdDb: -24,
   ratio: 1.5,
 });
+
+// Reference-based mastering
 const matched = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
   mix: 0.25,
 });
 const loudnessJson = masteringPairAnalyze(
-  'match.referenceLoudness',
-  source,
-  reference,
-  sampleRate,
+  'match.referenceLoudness', source, reference, sampleRate,
 );
 ```
 
@@ -108,14 +117,23 @@ SONARE_FFMPEG=1 pip install libsonare --no-binary libsonare
 ```python
 import libsonare
 
-# Recommended: Audio class for file input
 audio = libsonare.Audio.from_file("song.mp3")
 print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
 
-# Or pass numpy / list samples to the functional API
-bpm = libsonare.detect_bpm(samples, sample_rate=22050)
-key = libsonare.detect_key(samples, sample_rate=22050)
-result = libsonare.analyze(samples, sample_rate=22050)
+# Mastering chain — returns MasteringResult(samples, sample_rate,
+# input_lufs, output_lufs, applied_gain_db, latency_samples)
+result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
+print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS "
+      f"(gain {result.applied_gain_db:+.2f} dB)")
+
+# Single processor / reference matching
+compressed = libsonare.mastering_process(
+    "dynamics.compressor", samples, sample_rate=44100,
+    params={"thresholdDb": -24, "ratio": 1.5},
+)
+loudness_json = libsonare.mastering_pair_analyze(
+    "match.referenceLoudness", source, reference, sample_rate=44100,
+)
 ```
 
 ### Python CLI
@@ -123,44 +141,73 @@ result = libsonare.analyze(samples, sample_rate=22050)
 ```bash
 pip install libsonare
 
+# Analysis
 sonare analyze song.mp3
 # > Estimated BPM : 161.00 BPM  (conf 75.0%)
 # > Estimated Key : C major  (conf 100.0%)
 
 sonare bpm song.mp3 --json
-# {"bpm": 161.0}
 
+# Mastering
 sonare mastering song.wav -o mastered.wav --target-lufs -14
-sonare mastering-processor song.wav --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5
-sonare mastering-pair-analyze source.wav --reference reference.wav --analysis match.referenceLoudness
+sonare mastering-processor song.wav --processor dynamics.compressor \
+    --params thresholdDb=-24,ratio=1.5
+sonare mastering-pair-analyze source.wav --reference reference.wav \
+    --analysis match.referenceLoudness
 ```
 
 ### C++
 
 ```cpp
-#include <sonare/sonare.h>
+#include <sonare/sonare.h>           // analysis + features + effects
+#include <sonare/mastering/master.h> // mastering chain & processors
 
 auto audio = sonare::Audio::from_file("music.mp3");
 auto result = sonare::MusicAnalyzer(audio).analyze();
-std::cout << "BPM: " << result.bpm << ", Key: " << result.key.to_string() << std::endl;
+std::cout << "BPM: " << result.bpm
+          << ", Key: " << result.key.to_string() << std::endl;
 ```
 
 ## Features
 
-| Analysis | DSP | Effects |
-|----------|-----|---------|
-| BPM / Tempo | STFT / iSTFT | HPSS |
-| Key Detection | Mel Spectrogram | Time Stretch |
-| Beat Tracking | MFCC | Pitch Shift |
-| Chord Recognition | Chroma | Normalize / Trim |
-| Section Detection | CQT / VQT | Mastering chain |
-| Timbre / Dynamics | Spectral Features | True-peak limiting |
-| Pitch Tracking (YIN/pYIN) | Onset Detection | Loudness optimization |
-| Real-time Streaming | Resample | Stereo imaging |
+### Analysis (librosa-compatible)
+
+| Music              | Spectral / Pitch     | Streaming           |
+|--------------------|----------------------|---------------------|
+| BPM / Tempo        | STFT / iSTFT         | Real-time analyzer  |
+| Key Detection      | Mel Spectrogram      | Incremental BPM     |
+| Beat Tracking      | MFCC                 | Incremental key     |
+| Chord Recognition  | Chroma               | Onset events        |
+| Section Detection  | CQT / VQT            |                     |
+| Timbre / Dynamics  | Spectral Features    |                     |
+| Pitch (YIN / pYIN) | Onset Detection      |                     |
+
+### Mastering (90+ DSP modules)
+
+| Dynamics                  | EQ                        | Multiband / Stereo            |
+|---------------------------|---------------------------|-------------------------------|
+| Compressor                | Parametric / Graphic      | Multiband comp / EQ / limiter |
+| Limiter / Brickwall       | Linear / Minimum phase    | Stereo imager / M-S           |
+| Expander / Gate           | Dynamic EQ                | Haas / phase align            |
+| De-esser                  | Pultec / API style        | Mono maker / compat           |
+| Transient shaper          | Tilt / shelving           |                               |
+
+| Saturation / Repair               | Maximizer / Match                       | Building blocks            |
+|-----------------------------------|-----------------------------------------|----------------------------|
+| Tape / Tube / Transformer         | True-peak limiter (ITU-R BS.1770-4)     | Polyphase FIR oversampler  |
+| Exciter / Bitcrusher              | Loudness optimizer (LUFS target)        | ADAA nonlinearities        |
+| Declick / Declip / Decrackle      | Adaptive release                        | Vicanek biquad design      |
+| Denoise / Dereverb / Dehum        | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+
+Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
+`cmake -DBUILD_MASTERING=OFF` to ship analysis-only builds.
 
 ## Performance
 
-Dramatically faster than Python-based alternatives. Parallelized analysis with automatic CPU detection, optimized HPSS with multi-threaded median filter.
+Dramatically faster than Python-based alternatives. Parallelized analysis with
+automatic CPU detection, optimized HPSS with multi-threaded median filter.
+Mastering processors use ITU-spec polyphase oversampling, antiderivative
+anti-aliasing (ADAA), and SIMD-friendly Eigen GEMM for hot paths.
 
 See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for detailed comparisons.
 
@@ -195,10 +242,13 @@ the Web Audio API or another JS decoder.
 ## Build from Source
 
 ```bash
-# Native (auto-detects FFmpeg; pass -DSONARE_WITH_FFMPEG=ON to require, =OFF to disable)
+# Native (auto-detects FFmpeg; mastering on by default)
 make build && make test
 
-# WebAssembly
+# Analysis-only (smaller binary)
+cmake -B build -DBUILD_MASTERING=OFF && cmake --build build
+
+# WebAssembly (mastering included)
 make wasm
 
 # Release (optimized)

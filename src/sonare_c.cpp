@@ -24,7 +24,6 @@
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
-#include "effects/tts.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/pitch.h"

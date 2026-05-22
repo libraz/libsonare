@@ -3,6 +3,7 @@
 
 #include "util/math_utils.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -86,9 +87,9 @@ void power_to_db(const float* power, size_t n, float ref, float amin, float top_
 
   float ref_val = std::max(amin, ref);
   float log_ref = 10.0f * std::log10(ref_val);
-  for (size_t i = 0; i < n; ++i) {
-    out[i] = 10.0f * std::log10(std::max(amin, power[i])) - log_ref;
-  }
+  Eigen::Map<const Eigen::ArrayXf> power_map(power, static_cast<Eigen::Index>(n));
+  Eigen::Map<Eigen::ArrayXf> out_map(out, static_cast<Eigen::Index>(n));
+  out_map = (power_map.cwiseMax(amin)).log10() * 10.0f - log_ref;
   if (top_db >= 0.0f) {
     float max_val = *std::max_element(out, out + n);
     for (size_t i = 0; i < n; ++i) {

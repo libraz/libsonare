@@ -69,7 +69,6 @@ set(SONARE_SOURCES
   analysis/meter/spectrogram.cpp
   analysis/meter/stereo.cpp
   analysis/meter/true_peak.cpp
-  tts/tts.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
   analysis/bpm_analyzer.cpp
@@ -91,6 +90,7 @@ set(SONARE_SOURCES
   sonare_c.cpp
   sonare_c_effects.cpp
   sonare_c_features.cpp
+  sonare_c_compat.cpp
   sonare_c_internal.cpp
   sonare_c_memory.cpp
 )

@@ -3,7 +3,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -39,9 +39,17 @@ import {
   timeToFrames,
   trim,
   zeroCrossingRate,
-} from '../../js/index';
+} from '../dist/index.js';
 
-const refDir = resolve(fileURLToPath(import.meta.url), '..', '..', 'librosa', 'reference');
+const refDir = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  'tests',
+  'librosa',
+  'reference',
+);
 
 function loadRef(filename: string) {
   return JSON.parse(readFileSync(resolve(refDir, filename), 'utf-8'));

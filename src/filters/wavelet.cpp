@@ -8,12 +8,6 @@
 
 namespace sonare {
 
-namespace {
-
-constexpr float kBesselCorrection = 5.0f;  // librosa default cutoff in std devs.
-
-}  // namespace
-
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
                                    float Q) {
   if (sr <= 0) throw std::invalid_argument("wavelet_lengths: sr must be positive");
@@ -27,9 +21,7 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
   // librosa.filters._relative_bandwidth). For each interior k:
   //   bpo[k] = 2 / (log2(freqs[k+1]) - log2(freqs[k-1]))
   //   alpha[k] = (2^(2/bpo) - 1) / (2^(2/bpo) + 1)
-  // Edge bins reflect using a one-sided log difference. When fewer than two
-  // frequencies are supplied we fall back to the legacy
-  // `filter_scale * sr / freq` rule.
+  // Edge bins reflect using a one-sided log difference.
   std::vector<float> alpha;
   if (!use_Q && freqs.size() >= 2) {
     alpha.assign(freqs.size(), 0.0f);
@@ -49,26 +41,23 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
     }
   }
 
+  // Return raw fractional lengths to match librosa exactly. Callers that need
+  // integer kernel sizes can floor/ceil as appropriate.
   std::vector<float> lengths(freqs.size(), 0.0f);
   for (size_t i = 0; i < freqs.size(); ++i) {
     if (freqs[i] <= 0.0f) {
       lengths[i] = 0.0f;
       continue;
     }
-    float n;
     if (use_Q) {
-      n = Q * static_cast<float>(sr) / freqs[i];
+      lengths[i] = Q * static_cast<float>(sr) / freqs[i];
     } else if (!alpha.empty()) {
       // librosa: Q = filter_scale / alpha; length = Q * sr / freq.
       const float a = std::max(alpha[i], 1e-6f);
-      n = (window_param / a) * static_cast<float>(sr) / freqs[i];
+      lengths[i] = (window_param / a) * static_cast<float>(sr) / freqs[i];
     } else {
-      // Single-frequency fallback (no alpha available).
-      n = window_param * static_cast<float>(sr) / freqs[i];
+      lengths[i] = window_param * static_cast<float>(sr) / freqs[i];
     }
-    int n_int = static_cast<int>(std::ceil(n));
-    if (n_int % 2 == 0) ++n_int;
-    lengths[i] = static_cast<float>(n_int);
   }
   return lengths;
 }
@@ -81,19 +70,36 @@ int next_pow2(int n) {
   return p;
 }
 
+// Replicates Python's floor-division semantics for floats: `floor(x / 2)`.
+int python_floordiv_by2(float x) { return static_cast<int>(std::floor(x * 0.5f)); }
+
 }  // namespace
 
 std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
                                          float window_param, bool is_cqt, bool pad_fft, float Q,
                                          int* n_fft_out) {
   std::vector<float> lengths = wavelet_lengths(freqs, sr, window_param, Q);
-
   const size_t n_filters = freqs.size();
+
+  // Compute the effective integer length L_k of each kernel using librosa's
+  // index range  n in [floor(-ilen/2), floor(ilen/2)).
+  std::vector<int> L(n_filters, 0);
+  std::vector<int> n_start(n_filters, 0);
+  float max_ilen = 0.0f;
+  for (size_t i = 0; i < n_filters; ++i) {
+    const float ilen = lengths[i];
+    if (ilen <= 0.0f) continue;
+    const int s = python_floordiv_by2(-ilen);
+    const int e = python_floordiv_by2(ilen);
+    L[i] = e - s;
+    n_start[i] = s;
+    max_ilen = std::max(max_ilen, ilen);
+  }
+
   size_t n_fft = 0;
   if (pad_fft) {
-    int max_len = 0;
-    for (float L : lengths) max_len = std::max(max_len, static_cast<int>(L));
-    n_fft = static_cast<size_t>(next_pow2(std::max(max_len, 1)));
+    const int max_ceil = std::max(1, static_cast<int>(std::ceil(max_ilen)));
+    n_fft = static_cast<size_t>(next_pow2(max_ceil));
   }
   const size_t per_kernel = pad_fft ? n_fft : 0;
 
@@ -101,33 +107,51 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
   if (pad_fft) {
     total = n_filters * n_fft;
   } else {
-    for (float L : lengths) total += static_cast<size_t>(L);
+    for (int Lk : L) total += static_cast<size_t>(Lk);
   }
   std::vector<std::complex<float>> out(total, std::complex<float>(0.0f, 0.0f));
 
   size_t cursor = 0;
   for (size_t i = 0; i < n_filters; ++i) {
-    const int L = static_cast<int>(lengths[i]);
-    if (L <= 0) {
+    const int Lk = L[i];
+    if (Lk <= 0) {
       if (pad_fft) cursor += per_kernel;
       continue;
     }
     const float f = freqs[i];
-    const float half = 0.5f * static_cast<float>(L - 1);
-    const float sigma = static_cast<float>(L) / (kBesselCorrection * window_param);
-    // When padding, center the kernel inside its n_fft slot.
+    const int s = n_start[i];
+
+    // librosa.util.pad_center: left_pad = (max_len - L) // 2.
     const size_t slot_offset =
-        pad_fft ? (cursor + (per_kernel - static_cast<size_t>(L)) / 2) : cursor;
-    for (int n = 0; n < L; ++n) {
-      const float t = (static_cast<float>(n) - half) / static_cast<float>(sr);
-      const float envelope = std::exp(-0.5f * (static_cast<float>(n) - half) *
-                                      (static_cast<float>(n) - half) / (sigma * sigma));
-      const float angle = constants::kTwoPi * f * t;
-      std::complex<float> v(envelope * std::cos(angle), envelope * std::sin(angle));
-      if (!is_cqt) v /= std::sqrt(static_cast<float>(L));
+        pad_fft ? (cursor + (per_kernel - static_cast<size_t>(Lk)) / 2) : cursor;
+
+    // Build windowed complex sinusoid:
+    //   sig[i] = exp(j * 2π * f * (s + i) / sr) * hann(L)[i]
+    // Hann is the scipy.signal.get_window default (periodic / fftbins=True):
+    //   w[n] = 0.5 * (1 - cos(2π n / L)).
+    float l1 = 0.0f;
+    for (int n = 0; n < Lk; ++n) {
+      const int idx = s + n;
+      const float angle = constants::kTwoPi * f * static_cast<float>(idx) / static_cast<float>(sr);
+      const float w =
+          0.5f *
+          (1.0f - std::cos(constants::kTwoPi * static_cast<float>(n) / static_cast<float>(Lk)));
+      const std::complex<float> v(w * std::cos(angle), w * std::sin(angle));
       out[slot_offset + n] = v;
+      l1 += std::abs(v);
     }
-    cursor += pad_fft ? per_kernel : static_cast<size_t>(L);
+    // L1-normalize each filter (librosa.util.normalize with norm=1).
+    if (l1 > 0.0f) {
+      const float inv = 1.0f / l1;
+      for (int n = 0; n < Lk; ++n) out[slot_offset + n] *= inv;
+    }
+    // The legacy `is_cqt=false` path historically rescaled by 1/sqrt(L); keep
+    // that behaviour for callers that still rely on it.
+    if (!is_cqt) {
+      const float scale = 1.0f / std::sqrt(static_cast<float>(Lk));
+      for (int n = 0; n < Lk; ++n) out[slot_offset + n] *= scale;
+    }
+    cursor += pad_fft ? per_kernel : static_cast<size_t>(Lk);
   }
   if (n_fft_out) *n_fft_out = pad_fft ? static_cast<int>(n_fft) : 0;
   return out;
