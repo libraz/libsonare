@@ -2,8 +2,10 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libsonare/ci.yml?branch=main&label=CI)](https://github.com/libraz/libsonare/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
-[![PyPI](https://img.shields.io/pypi/v/libsonare)](https://pypi.org/project/libsonare/)
+[![npm downloads](https://img.shields.io/npm/dm/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
+[![types](https://img.shields.io/npm/types/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/github/license/libraz/libsonare)](https://github.com/libraz/libsonare/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
 Fast, dependency-free audio analysis library for browser and Node.js via WebAssembly.
 
@@ -169,8 +171,8 @@ await init();
 
 masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
 
-const result = masterAudio('aiMusic', samples, sampleRate, {
-  // optional flat overrides applied on top of the preset
+const result = masterAudio(samples, sampleRate, 'aiMusic', {
+  // optional flat overrides applied on top of the preset (dot notation)
   'loudness.targetLufs': -13,
 });
 console.log(result.outputLufs, result.appliedGainDb);
@@ -178,26 +180,28 @@ console.log(result.outputLufs, result.appliedGainDb);
 
 ### Progress callback
 
+`masteringChainWithProgress` (and its stereo variant) is `masteringChain` with
+an extra `(progress, stage) => void` callback invoked after each enabled stage:
+
 ```typescript
-import { init, masteringChain } from '@libraz/libsonare';
+import { init, masteringChainWithProgress } from '@libraz/libsonare';
 
 await init();
 
-masteringChain(samples, sampleRate,
-  { 'dynamics.compressor.thresholdDb': -24 },
+masteringChainWithProgress(
+  samples,
+  sampleRate,
+  { dynamics: { compressor: { thresholdDb: -24 } } },
   (progress, stage) => console.log(`${stage}: ${(progress * 100).toFixed(0)}%`),
 );
 ```
 
-The same `(progress, stage) => void` callback is accepted as the final argument
-of `masterAudio`.
-
 ### Streaming mastering chain
 
-`StreamingMasteringChain` processes interleaved blocks in place and only
-supports modules whose state depends solely on the sample rate. It cannot
-include `repair.denoise` or `loudness` (those require offline / look-ahead
-analysis).
+`StreamingMasteringChain` processes blocks while maintaining per-stage state
+across calls. It only supports modules whose state depends solely on the
+sample rate — it cannot include `repair.denoise` or `loudness` (those require
+offline / look-ahead analysis) and throws at construction if they are enabled.
 
 ```typescript
 import { init, StreamingMasteringChain } from '@libraz/libsonare';
@@ -205,8 +209,8 @@ import { init, StreamingMasteringChain } from '@libraz/libsonare';
 await init();
 
 const chain = new StreamingMasteringChain({
-  'eq.tilt.tiltDb': 0.5,
-  'dynamics.compressor.thresholdDb': -20,
+  eq: { tiltDb: 0.5 },
+  dynamics: { compressor: { thresholdDb: -20 } },
 });
 chain.prepare(48000, 512, 2);
 

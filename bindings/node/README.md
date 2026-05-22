@@ -1,7 +1,12 @@
 # libsonare (Node native)
 
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/libsonare/ci.yml?branch=main&label=CI)](https://github.com/libraz/libsonare/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
+[![npm downloads](https://img.shields.io/npm/dm/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
+[![types](https://img.shields.io/npm/types/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
+[![Node](https://img.shields.io/node/v/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
 Fast audio analysis and mastering DSP for Node.js, exposed as a native N-API
 addon built on the libsonare C++ core.
@@ -141,6 +146,88 @@ masteringProcessorNames();        // e.g. ['dynamics.compressor', 'eq.parametric
 masteringPairProcessorNames();    // e.g. ['match.abCrossfade', ...]
 masteringPairAnalysisNames();     // e.g. ['match.referenceLoudness', ...]
 masteringStereoAnalysisNames();   // e.g. ['stereo.monoCompatCheck', ...]
+```
+
+### Mastering chain
+
+`masteringChain` runs the full configurable mastering pipeline (EQ, dynamics,
+saturation, repair, stereo, loudness, ...). The Node binding uses **flat
+dot-notation keys** for the config object — addressing any module parameter
+directly — and accepts an optional `onProgress(progress, stage)` callback that
+is invoked after each stage (progress in `[0, 1]`).
+
+```typescript
+import { masteringChain, masteringChainStereo } from '@libraz/libsonare-native';
+
+const mastered = masteringChain(samples, sampleRate, {
+  'eq.tilt.tiltDb': 0.5,
+  'dynamics.compressor.thresholdDb': -24,
+  'dynamics.compressor.ratio': 1.5,
+  'dynamics.transientShaper.attackGainDb': 2.0,
+  'repair.declick.enabled': true,
+  'loudness.targetLufs': -14,
+  'loudness.ceilingDb': -1,
+});
+
+const stereo = masteringChainStereo(left, right, sampleRate, {
+  'stereo.imager.width': 1.1,
+  'loudness.targetLufs': -14,
+}, (progress, stage) => {
+  console.log(`[${(progress * 100).toFixed(0)}%] ${stage}`);
+});
+```
+
+`MasteringChainResult` contains the rendered samples (`samples` for mono,
+`left`/`right` for stereo) plus loudness telemetry
+(`inputLufs`, `outputLufs`, `appliedGainDb`, `latencySamples`).
+
+### Mastering presets
+
+Named presets ship sensible defaults for common targets. `masterAudio` applies
+a preset and lets you override any individual parameter with the same flat
+dot-notation keys as `masteringChain`.
+
+```typescript
+import { masterAudio, masteringPresetNames } from '@libraz/libsonare-native';
+
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+
+const result = masterAudio(samples, sampleRate, 'aiMusic', {
+  'loudness.targetLufs': -13,
+  'dynamics.multibandComp.enabled': true,
+});
+
+// Audio class shortcut
+const audio = Audio.fromFile('song.wav');
+const popMastered = audio.masterAudio('pop');
+```
+
+### Streaming mastering chain
+
+`StreamingMasteringChain` runs the same pipeline block-by-block for real-time
+or chunked workflows. The constructor takes the same flat dot-notation config
+as `masteringChain`; non-streamable stages (`repair.denoise`, `loudness`) cause
+the constructor to throw, so omit those keys for streaming use.
+
+```typescript
+import { StreamingMasteringChain } from '@libraz/libsonare-native';
+
+const chain = new StreamingMasteringChain({
+  'eq.tilt.tiltDb': 0.5,
+  'dynamics.compressor.thresholdDb': -20,
+  'dynamics.transientShaper.attackGainDb': 1.5,
+});
+
+chain.prepare(48000, 512, 1);   // sampleRate, maxBlockSize, numChannels
+console.log(chain.stageNames());
+console.log(`latency = ${chain.latencySamples()} samples`);
+
+const out = chain.processMono(new Float32Array(512));
+// Or for stereo:
+chain.prepare(48000, 512, 2);
+const { left: outL, right: outR } = chain.processStereo(left, right);
+
+chain.reset();
 ```
 
 ### Audio class

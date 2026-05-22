@@ -631,7 +631,7 @@ export function masteringPresetNames(): string[] {
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
  * @param presetName - Preset identifier from {@link masteringPresetNames}
- * @param overrides - Reserved for future overrides; currently only `null` is supported
+ * @param overrides - Optional flat overrides (dot-notation, e.g. `'loudness.targetLufs'`) applied on top of the preset. Pass `null` for preset defaults.
  * @returns Processed audio, loudness metadata, and applied stage names
  */
 export function masterAudio(
@@ -653,7 +653,7 @@ export function masterAudio(
  * @param right - Right channel samples
  * @param sampleRate - Sample rate in Hz
  * @param presetName - Preset identifier from {@link masteringPresetNames}
- * @param overrides - Reserved for future overrides; currently only `null` is supported
+ * @param overrides - Optional flat overrides (dot-notation, e.g. `'loudness.targetLufs'`) applied on top of the preset. Pass `null` for preset defaults.
  * @returns Processed stereo audio, loudness metadata, and applied stage names
  */
 export function masterAudioStereo(

@@ -109,6 +109,23 @@ masteringProcessorNames();     // ['dynamics.compressor', 'eq.parametric', ...]
 masteringPairProcessorNames(); // ['match.abCrossfade', ...]
 ```
 
+プリセットを使った一括マスタリングと、ブロック単位のストリーミング版も
+利用できます。WASMでは `masteringChain` / `StreamingMasteringChain` の
+config が**ネスト形式**、`masterAudio` の overrides のみ **フラットな
+ドット記法キー**（Node / Python の overrides と同じ）になります:
+
+```typescript
+// プリセット適用（一括）とストリーミング版
+import { masterAudio, masteringPresetNames, StreamingMasteringChain } from '@libraz/libsonare';
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+const out = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
+
+const chain = new StreamingMasteringChain({ eq: { tiltDb: 0.5 } });
+chain.prepare(48000, 512, 1);
+const block = chain.processMono(new Float32Array(512));
+chain.delete();
+```
+
 ### Python
 
 `pip install libsonare` で提供されるホイールは **WAV/MP3のみ対応** です
@@ -145,6 +162,15 @@ loudness_json = libsonare.mastering_pair_analyze(
 # 利用可能なプロセッサ名を取得
 libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
 libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
+
+# プリセットを使った一括マスタリング + ストリーミング
+libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
+                                 overrides={'loudness.targetLufs': -13})
+
+with libsonare.StreamingMasteringChain({'eq.tilt.tiltDb': 0.5}) as chain:
+    chain.prepare(44100, 512, 1)
+    out = chain.process_mono([0.0] * 512)
 ```
 
 ### Python CLI

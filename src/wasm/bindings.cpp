@@ -816,8 +816,9 @@ val js_mastering_processor_names() {
 
 // ---------------------------------------------------------------------------
 // Mastering presets (high-level master_audio API).
-// TODO: Support flat / nested overrides objects. For now only null/undefined
-// overrides are accepted; a non-null overrides argument throws.
+// Overrides accept a flat object whose keys match `parse_chain_config_params`
+// dot-notation (e.g. "loudness.targetLufs"). Numeric and boolean values are
+// supported. Pass null/undefined for "preset only".
 // ---------------------------------------------------------------------------
 
 val js_mastering_preset_names() {
@@ -830,15 +831,12 @@ val js_mastering_preset_names() {
 }
 
 val js_master_audio(std::string preset_name, val samples, int sample_rate, val overrides) {
-  if (!overrides.isNull() && !overrides.isUndefined()) {
-    // TODO: convert overrides val into a flat Param vector and pass it to
-    // mastering::api::master_audio_mono(); see masteringChainConfigFromVal for
-    // the existing dispatch shape.
-    throw std::invalid_argument("masterAudio overrides are not yet supported; pass null");
-  }
   std::vector<float> data = float32ArrayToVector(samples);
   auto preset = mastering::api::preset_from_string(preset_name);
-  auto result = mastering::api::master_audio_mono(preset, data.data(), data.size(), sample_rate);
+  auto overrides_vec = masteringParamsFromObject(overrides);
+  auto result = mastering::api::master_audio_mono(
+      preset, data.data(), data.size(), sample_rate,
+      overrides_vec.empty() ? nullptr : overrides_vec.data(), overrides_vec.size());
 
   val out = val::object();
   out.set("samples", vectorToFloat32Array(result.samples));
@@ -856,18 +854,16 @@ val js_master_audio(std::string preset_name, val samples, int sample_rate, val o
 
 val js_master_audio_stereo(std::string preset_name, val left_samples, val right_samples,
                            int sample_rate, val overrides) {
-  if (!overrides.isNull() && !overrides.isUndefined()) {
-    // TODO: see js_master_audio above.
-    throw std::invalid_argument("masterAudioStereo overrides are not yet supported; pass null");
-  }
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
   if (left.size() != right.size()) {
     throw std::invalid_argument("stereo channel lengths must match");
   }
   auto preset = mastering::api::preset_from_string(preset_name);
-  auto result = mastering::api::master_audio_stereo(preset, left.data(), right.data(), left.size(),
-                                                    sample_rate);
+  auto overrides_vec = masteringParamsFromObject(overrides);
+  auto result = mastering::api::master_audio_stereo(
+      preset, left.data(), right.data(), left.size(), sample_rate,
+      overrides_vec.empty() ? nullptr : overrides_vec.data(), overrides_vec.size());
 
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left));

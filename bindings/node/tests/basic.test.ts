@@ -59,13 +59,13 @@ import {
   preemphasis,
   resample,
   rmsEnergy,
+  StreamingMasteringChain,
   samplesToFrames,
   spectralBandwidth,
   spectralCentroid,
   spectralFlatness,
   spectralRolloff,
   splitSilence,
-  StreamingMasteringChain,
   stft,
   stftDb,
   tempogram,
@@ -747,6 +747,28 @@ describe('sonare native binding', () => {
       expect(stages).toContain('eq.tilt');
       expect(stages).toContain('dynamics.compressor');
       expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
+    });
+  });
+
+  describe('StreamingMasteringChain', () => {
+    it('processes mono blocks and reports stage names', () => {
+      const chain = new StreamingMasteringChain({
+        'eq.tilt.tiltDb': 0.5,
+        'dynamics.compressor.thresholdDb': -20,
+      });
+      chain.prepare(48000, 512, 1);
+      expect(chain.stageNames()).toEqual(
+        expect.arrayContaining(['eq.tilt', 'dynamics.compressor']),
+      );
+      const out = chain.processMono(new Float32Array(512).fill(0.1));
+      expect(out.length).toBe(512);
+      expect(Number.isFinite(out[0])).toBe(true);
+      chain.reset();
+    });
+
+    it('rejects denoise and loudness stages', () => {
+      expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).toThrow();
+      expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
     });
   });
 });

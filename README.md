@@ -109,6 +109,23 @@ masteringProcessorNames();     // ['dynamics.compressor', 'eq.parametric', ...]
 masteringPairProcessorNames(); // ['match.abCrossfade', ...]
 ```
 
+Preset-driven mastering and the block-by-block streaming variant are also
+exposed. WASM uses **nested** config for `masteringChain` /
+`StreamingMasteringChain`, while `masterAudio` overrides use **flat
+dot-notation keys** (mirroring the Node and Python overrides API):
+
+```typescript
+// Mastering presets (one-shot) and streaming variant
+import { masterAudio, masteringPresetNames, StreamingMasteringChain } from '@libraz/libsonare';
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+const out = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
+
+const chain = new StreamingMasteringChain({ eq: { tiltDb: 0.5 } });
+chain.prepare(48000, 512, 1);
+const block = chain.processMono(new Float32Array(512));
+chain.delete();
+```
+
 ### Python
 
 `pip install libsonare` ships a **WAV/MP3-only wheel** (matching librosa / pydub /
@@ -144,6 +161,15 @@ loudness_json = libsonare.mastering_pair_analyze(
 # Discover available processors
 libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
 libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
+
+# Preset-based chain (one-shot) + streaming
+libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
+                                 overrides={'loudness.targetLufs': -13})
+
+with libsonare.StreamingMasteringChain({'eq.tilt.tiltDb': 0.5}) as chain:
+    chain.prepare(44100, 512, 1)
+    out = chain.process_mono([0.0] * 512)
 ```
 
 ### Python CLI
