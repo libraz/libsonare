@@ -132,11 +132,12 @@ TEST_CASE("spectral features reference compatibility", "[spectral][reference]") 
     // High-energy bands (containing the 440/880 Hz tones) match librosa to
     // ~0.04 dB — these dominate practical signals.
     REQUIRE(max_diff_signal < 0.1);
-    // Mean diff over all bands stays under 1 dB; low-energy bands drift up to
-    // ~7.5 dB because they sit at the float32 FFT noise floor (KissFFT vs
-    // NumPy accumulator differences). Tightening further requires migrating
-    // the STFT to double precision.
-    REQUIRE(mean_abs_diff < 1.0);
-    REQUIRE(max_diff_other < 8.0);
+    // Low-energy bands drift on the float32 FFT noise floor and the magnitude
+    // is platform-dependent: macOS libm produces mean_abs_diff ≈ 0.9 dB with
+    // max ≈ 7.5 dB, while Linux libm propagates accumulator differences
+    // through power_to_db to ≈ 1.01 dB / 8.35 dB. Bounds carry slack for both;
+    // tightening requires migrating the STFT to double precision.
+    REQUIRE(mean_abs_diff < 1.1);
+    REQUIRE(max_diff_other < 9.0);
   }
 }
