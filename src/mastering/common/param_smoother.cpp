@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::common {
 
 ParamSmoother::ParamSmoother(float initial_value, float time_ms, double sample_rate)
@@ -38,8 +40,7 @@ void ParamSmoother::update_coefficient() {
     return;
   }
 
-  const double samples = sample_rate_ * static_cast<double>(clamped_ms) * 0.001;
-  coefficient_ = static_cast<float>(1.0 - std::exp(-1.0 / samples));
+  coefficient_ = 1.0f - time_to_coefficient(sample_rate_, clamped_ms);
 }
 
 }  // namespace sonare::mastering::common

@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+
 namespace sonare::mastering::dynamics {
 
 UpwardCompressor::UpwardCompressor(UpwardCompressorConfig config) : config_(config) {
@@ -83,15 +85,6 @@ void UpwardCompressor::validate_config(const UpwardCompressorConfig& config) {
     throw std::invalid_argument("invalid upward compressor configuration");
   }
 }
-
-float UpwardCompressor::linear_to_db(float value) {
-  if (value <= 0.0f) {
-    return -120.0f;
-  }
-  return 20.0f * std::log10(value);
-}
-
-float UpwardCompressor::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 float UpwardCompressor::gain_db(float input_db, const UpwardCompressorConfig& config) {
   if (input_db >= config.threshold_db || config.ratio <= 1.0f) {

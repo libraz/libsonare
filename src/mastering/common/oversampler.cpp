@@ -1,7 +1,5 @@
 #include "mastering/common/oversampler.h"
 
-#include <algorithm>
-
 #include "util/exception.h"
 
 namespace sonare::mastering::common {
@@ -16,6 +14,8 @@ Oversampler::Oversampler(int factor) { set_factor(factor); }
 void Oversampler::set_factor(int factor) {
   SONARE_CHECK(is_supported_factor(factor), ErrorCode::InvalidParameter);
   factor_ = factor;
+  decimation_taps_ = design_windowed_sinc_lowpass(12 * factor_, factor_, 7.85726, true);
+  fir_ = build_polyphase(decimation_taps_, factor_);
 }
 
 std::vector<float> Oversampler::upsample(const float* input, size_t size) const {
@@ -23,22 +23,12 @@ std::vector<float> Oversampler::upsample(const float* input, size_t size) const 
   SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
 
   std::vector<float> output(size * static_cast<size_t>(factor_));
-  if (size == 1) {
-    std::fill(output.begin(), output.end(), input[0]);
-    return output;
-  }
-
-  for (size_t i = 0; i < size - 1; ++i) {
-    const float a = input[i];
-    const float b = input[i + 1];
+  for (size_t i = 0; i < size; ++i) {
     for (int phase = 0; phase < factor_; ++phase) {
-      const float t = static_cast<float>(phase) / static_cast<float>(factor_);
-      output[i * static_cast<size_t>(factor_) + static_cast<size_t>(phase)] = a + (b - a) * t;
+      output[i * static_cast<size_t>(factor_) + static_cast<size_t>(phase)] =
+          interpolate_polyphase_sample(input, size, i, phase, fir_);
     }
   }
-
-  const size_t last_base = (size - 1) * static_cast<size_t>(factor_);
-  std::fill(output.begin() + static_cast<long>(last_base), output.end(), input[size - 1]);
   return output;
 }
 
@@ -53,8 +43,19 @@ std::vector<float> Oversampler::downsample(const float* input, size_t size) cons
 
   const size_t out_size = size / static_cast<size_t>(factor_);
   std::vector<float> output(out_size);
+  const int half = static_cast<int>(decimation_taps_.size() / 2);
   for (size_t i = 0; i < out_size; ++i) {
-    output[i] = input[i * static_cast<size_t>(factor_)];
+    const long center = static_cast<long>(i * static_cast<size_t>(factor_));
+    double accum = 0.0;
+    for (size_t tap = 0; tap < decimation_taps_.size(); ++tap) {
+      const long src = center + static_cast<long>(tap) - static_cast<long>(half);
+      if (src < 0 || src >= static_cast<long>(size)) {
+        continue;
+      }
+      accum += static_cast<double>(input[static_cast<size_t>(src)]) *
+               static_cast<double>(decimation_taps_[tap]);
+    }
+    output[i] = static_cast<float>(accum / static_cast<double>(factor_));
   }
   return output;
 }

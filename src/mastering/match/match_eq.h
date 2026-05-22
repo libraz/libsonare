@@ -21,6 +21,11 @@ struct MatchEqConfig {
   int smoothing_bins = 2;
 };
 
+enum class MatchEqFirPhase {
+  LinearPhase,
+  MinimumPhase,
+};
+
 struct MatchEqCurve {
   std::vector<float> frequencies;
   std::vector<float> gain_db;
@@ -29,6 +34,9 @@ struct MatchEqCurve {
 struct MatchEqFirConfig {
   int fft_size = 2048;
   int kernel_size = 513;
+  MatchEqFirPhase phase = MatchEqFirPhase::LinearPhase;
+  /// 0 selects a reasonable default for offline partitioned convolution.
+  int partition_size = 0;
 };
 
 MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpectrum& reference,
@@ -38,6 +46,9 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
 Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
                      const ReferenceSpectrum& reference, const MatchEqConfig& match_config = {},
                      const MatchEqFirConfig& fir_config = {});
+float estimate_reference_delay_samples(const Audio& source, const Audio& reference,
+                                       int max_abs_delay);
+Audio align_reference_to_source(const Audio& source, const Audio& reference, int max_abs_delay);
 std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
                                        const ReferenceSpectrum& reference,
                                        const MatchEqConfig& config = {});

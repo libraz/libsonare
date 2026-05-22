@@ -4,13 +4,14 @@
 
 #include "core/resample.h"
 #include "effects/time_stretch.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
 
 Audio pitch_shift(const Audio& audio, float semitones, const PitchShiftConfig& config) {
   /// Convert semitones to frequency ratio
-  float ratio = std::pow(2.0f, semitones / 12.0f);
+  float ratio = std::pow(2.0f, semitones / constants::kSemitonesPerOctave);
   return pitch_shift_ratio(audio, ratio, config);
 }
 

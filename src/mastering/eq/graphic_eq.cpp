@@ -14,6 +14,9 @@ constexpr std::array<float, GraphicEq::kNumBands> kCenterFrequencies = {
     800.0f,  1000.0f, 1250.0f, 1600.0f,  2000.0f,  2500.0f,  3150.0f, 4000.0f,
     5000.0f, 6300.0f, 8000.0f, 10000.0f, 12500.0f, 16000.0f, 20000.0f};
 
+constexpr float kBaseQ = 3.2f;
+constexpr float kMaxQ = 7.5f;
+
 }  // namespace
 
 void GraphicEq::prepare(double sample_rate, int max_block_size) {
@@ -74,20 +77,26 @@ size_t GraphicEq::nearest_band(float frequency_hz) const {
   return best_index;
 }
 
+float GraphicEq::band_q_for_gain_db(float gain_db) {
+  const float amount = std::min(std::abs(gain_db), 12.0f) / 12.0f;
+  return kBaseQ + (kMaxQ - kBaseQ) * amount;
+}
+
 void GraphicEq::rebuild_bands() {
   low_eq_.clear();
   high_eq_.clear();
 
   for (size_t i = 0; i < ParametricEq::kMaxBands; ++i) {
     const bool enabled = gains_db_[i] != 0.0f;
-    low_eq_.set_band(i, {EqBandType::Peak, kCenterFrequencies[i], gains_db_[i], 4.318f, enabled});
+    low_eq_.set_band(i, {EqBandType::Peak, kCenterFrequencies[i], gains_db_[i],
+                         band_q_for_gain_db(gains_db_[i]), enabled});
   }
 
   for (size_t i = ParametricEq::kMaxBands; i < kCenterFrequencies.size(); ++i) {
     const size_t high_index = i - ParametricEq::kMaxBands;
     const bool enabled = gains_db_[i] != 0.0f;
-    high_eq_.set_band(high_index,
-                      {EqBandType::Peak, kCenterFrequencies[i], gains_db_[i], 4.318f, enabled});
+    high_eq_.set_band(high_index, {EqBandType::Peak, kCenterFrequencies[i], gains_db_[i],
+                                   band_q_for_gain_db(gains_db_[i]), enabled});
   }
 }
 

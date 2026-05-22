@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+
 namespace sonare::mastering::dynamics {
 
 Expander::Expander(ExpanderConfig config) : config_(config) { validate_config(config_); }
@@ -83,15 +85,6 @@ void Expander::validate_config(const ExpanderConfig& config) {
     throw std::invalid_argument("invalid expander configuration");
   }
 }
-
-float Expander::linear_to_db(float value) {
-  if (value <= 0.0f) {
-    return -120.0f;
-  }
-  return 20.0f * std::log10(value);
-}
-
-float Expander::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 float Expander::gain_reduction_db(float input_db, const ExpanderConfig& config) {
   if (input_db >= config.threshold_db || config.ratio <= 1.0f) {

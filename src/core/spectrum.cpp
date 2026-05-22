@@ -7,6 +7,7 @@
 
 #include "core/fft.h"
 #include "core/window.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -14,7 +15,7 @@ namespace sonare {
 
 namespace {
 
-constexpr double kTwoPiDouble = 6.28318530717958647692;
+using constants::kTwoPiD;
 
 /// @brief Pads signal with zeros for centered STFT.
 /// @details Uses constant zero padding.
@@ -36,13 +37,13 @@ std::vector<float> create_fft_window(WindowType type, int length) {
   switch (type) {
     case WindowType::Hann:
       for (int i = 0; i < length; ++i) {
-        double phase = kTwoPiDouble * static_cast<double>(i) / static_cast<double>(length);
+        double phase = kTwoPiD * static_cast<double>(i) / static_cast<double>(length);
         window[i] = static_cast<float>(0.5 * (1.0 - std::cos(phase)));
       }
       break;
     case WindowType::Hamming:
       for (int i = 0; i < length; ++i) {
-        double phase = kTwoPiDouble * static_cast<double>(i) / static_cast<double>(length);
+        double phase = kTwoPiD * static_cast<double>(i) / static_cast<double>(length);
         window[i] = static_cast<float>(0.54 - 0.46 * std::cos(phase));
       }
       break;
@@ -52,8 +53,8 @@ std::vector<float> create_fft_window(WindowType type, int length) {
       constexpr double a2 = 0.08;
       for (int i = 0; i < length; ++i) {
         double t = static_cast<double>(i) / static_cast<double>(length);
-        window[i] = static_cast<float>(a0 - a1 * std::cos(kTwoPiDouble * t) +
-                                       a2 * std::cos(2.0 * kTwoPiDouble * t));
+        window[i] = static_cast<float>(a0 - a1 * std::cos(kTwoPiD * t) +
+                                       a2 * std::cos(2.0 * kTwoPiD * t));
       }
       break;
     }
@@ -289,9 +290,8 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   }
 
   // Normalize by window sum (COLA condition)
-  constexpr float kEpsilon = 1e-8f;
   for (int i = 0; i < full_length; ++i) {
-    if (window_sum[i] > kEpsilon) {
+    if (window_sum[i] > sonare::constants::kSpectrumEpsilon) {
       output[i] /= window_sum[i];
     }
   }

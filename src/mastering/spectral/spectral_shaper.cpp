@@ -4,20 +4,26 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+#include "util/db.h"
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::spectral {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
+using sonare::constants::kPiD;
 
 float one_pole_alpha(float frequency_hz, double sample_rate) {
   return std::clamp(
-      static_cast<float>(2.0 * kPi * frequency_hz / (2.0 * kPi * frequency_hz + sample_rate)), 0.0f,
-      1.0f);
+      static_cast<float>(2.0 * kPiD * frequency_hz / (2.0 * kPiD * frequency_hz + sample_rate)),
+      0.0f, 1.0f);
 }
 
-float db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
-
-float linear_to_db(float value) { return value <= 0.0f ? -120.0f : 20.0f * std::log10(value); }
+float smoothing_coeff(double sample_rate, float time_ms) {
+  if (time_ms <= 0.0f) return 1.0f;
+  if (sample_rate <= 0.0) return 0.0f;
+  return 1.0f - time_to_coefficient(sample_rate, time_ms);
+}
 
 }  // namespace
 
@@ -56,6 +62,8 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
 
   const float low_alpha = one_pole_alpha(config_.frequency_hz, sample_rate_);
   const float high_alpha = one_pole_alpha(config_.high_frequency_hz, sample_rate_);
+  const float attack_coeff = smoothing_coeff(sample_rate_, config_.attack_ms);
+  const float release_coeff = smoothing_coeff(sample_rate_, config_.release_ms);
   float min_gain = 1.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     float low = low_state_[static_cast<size_t>(ch)];
@@ -77,7 +85,7 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
         const float proportional_gain = std::clamp(1.0f - over * config_.amount, 0.0f, 1.0f);
         target_gain = std::max(proportional_gain, db_to_linear(-config_.range_db));
       }
-      const float coeff = target_gain < gain_state ? 0.25f : 0.02f;
+      const float coeff = target_gain < gain_state ? attack_coeff : release_coeff;
       gain_state += coeff * (target_gain - gain_state);
       min_gain = std::min(min_gain, gain_state);
       channels[ch][i] = remainder + target_band * gain_state;

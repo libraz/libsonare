@@ -3,6 +3,7 @@
 /// @file stream_config.h
 /// @brief Configuration for streaming audio analysis.
 
+#include "util/constants.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -35,7 +36,7 @@ struct StreamConfig {
   float fmax = 0.0f;  ///< Maximum frequency (0 = sr/2)
 
   // Tuning configuration
-  float tuning_ref_hz = 440.0f;  ///< Reference frequency for A4
+  float tuning_ref_hz = constants::kA4Hz;  ///< Reference frequency for A4
 
   // Output configuration
   OutputFormat output_format = OutputFormat::Float32;

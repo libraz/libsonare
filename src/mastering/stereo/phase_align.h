@@ -12,6 +12,7 @@ namespace sonare::mastering::stereo {
 struct PhaseAlignConfig {
   int delay_samples = 0;
   bool delay_right = true;
+  float fractional_delay_samples = 0.0f;
 };
 
 class PhaseAlign : public common::ProcessorBase {
@@ -24,11 +25,14 @@ class PhaseAlign : public common::ProcessorBase {
 
   void set_config(const PhaseAlignConfig& config);
   const PhaseAlignConfig& config() const { return config_; }
+  static float estimate_delay_samples(const float* reference, const float* target, int num_samples,
+                                      int max_abs_delay);
 
  private:
   static void validate_config(const PhaseAlignConfig& config);
   void rebuild_delay();
   float process_delay(float input);
+  float total_delay_samples() const noexcept;
 
   PhaseAlignConfig config_{};
   size_t delay_index_ = 0;

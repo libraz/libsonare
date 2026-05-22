@@ -3,6 +3,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+
 namespace sonare::mastering::maximizer {
 
 Maximizer::Maximizer(MaximizerConfig config) : config_(config) { validate_config(config_); }
@@ -43,7 +45,5 @@ void Maximizer::validate_config(const MaximizerConfig& config) {
     throw std::invalid_argument("maximizer timing values must be non-negative");
   }
 }
-
-float Maximizer::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 }  // namespace sonare::mastering::maximizer

@@ -18,6 +18,7 @@ struct AdaptiveReleaseConfig {
   float crest_window_ms = 30.0f;
   float crest_low = 2.0f;    // crest factor at/below which release is at minimum
   float crest_high = 10.0f;  // crest factor at/above which release is at maximum
+  float release_smoothing_ms = 20.0f;
 };
 
 class AdaptiveRelease : public common::ProcessorBase {
@@ -35,7 +36,7 @@ class AdaptiveRelease : public common::ProcessorBase {
  private:
   static void validate_config(const AdaptiveReleaseConfig& config);
   void configure_limiter();
-  float compute_crest_factor(float* const* channels, int num_channels, int num_samples) const;
+  float compute_crest_factor(float* const* channels, int num_channels, int num_samples);
 
   AdaptiveReleaseConfig config_{};
   TruePeakLimiter limiter_;
@@ -44,6 +45,8 @@ class AdaptiveRelease : public common::ProcessorBase {
   bool prepared_ = false;
   float current_release_ms_ = 20.0f;
   float current_crest_factor_ = 0.0f;
+  float peak_envelope_ = 0.0f;
+  float rms_square_envelope_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::maximizer

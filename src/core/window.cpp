@@ -57,9 +57,16 @@ std::vector<float> hann_window(int length) {
   }
   std::vector<float> window(length);
   for (int i = 0; i < length; ++i) {
-    window[i] = 0.5f * (1.0f - std::cos(kTwoPi * i / (length - 1)));
+    window[i] = hann_value(i, length);
   }
   return window;
+}
+
+float hann_value(int index, int length) {
+  if (length <= 1) {
+    return 1.0f;
+  }
+  return 0.5f * (1.0f - std::cos(kTwoPi * index / (length - 1)));
 }
 
 std::vector<float> hamming_window(int length) {

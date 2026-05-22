@@ -393,7 +393,7 @@ Audio icqt(const CqtResult& cqt_result, int length) {
       float freq = frequencies[k];
 
       // Estimate filter length for this bin
-      float Q = 1.0f / (std::pow(2.0f, 1.0f / 12.0f) - 1.0f);
+      float Q = 1.0f / (std::pow(2.0f, 1.0f / constants::kSemitonesPerOctave) - 1.0f);
       int filter_length = static_cast<int>(Q * sr / freq);
       filter_length = std::min(filter_length, output_length);
 

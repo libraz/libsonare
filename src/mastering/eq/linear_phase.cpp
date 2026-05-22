@@ -6,15 +6,15 @@
 #include <stdexcept>
 
 #include "core/fft.h"
+#include "core/window.h"
+#include "util/db.h"
 
 namespace sonare::mastering::eq {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
-float db_to_gain(float db) { return std::pow(10.0f, db / 20.0f); }
+float db_to_gain(float db) { return db_to_linear(db); }
 
 double clamp_frequency(double frequency_hz, double sample_rate) {
   return std::clamp(frequency_hz, 1.0, sample_rate * 0.5 - 1.0);
@@ -61,22 +61,16 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
     }
   }
 
-  const size_t kernel_size = kernel_.size();
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
     float* samples = channels[ch];
-    for (int i = 0; i < num_samples; ++i) {
-      state.history[state.write_index] = samples[i];
-
-      double y = 0.0;
-      size_t read = state.write_index;
-      for (size_t k = 0; k < kernel_size; ++k) {
-        y += static_cast<double>(kernel_[k]) * state.history[read];
-        read = (read == 0) ? kernel_size - 1 : read - 1;
+    const int partition_size = active_partition_size();
+    if (state.convolver && partition_size > 0 && (num_samples % partition_size) == 0) {
+      for (int offset = 0; offset < num_samples; offset += partition_size) {
+        state.convolver->process_block(samples + offset, samples + offset);
       }
-
-      samples[i] = static_cast<float>(y);
-      state.write_index = (state.write_index + 1) % kernel_size;
+    } else {
+      process_direct(samples, num_samples, state);
     }
   }
 }
@@ -85,6 +79,7 @@ void LinearPhaseEq::reset() {
   for (auto& state : states_) {
     std::fill(state.history.begin(), state.history.end(), 0.0f);
     state.write_index = 0;
+    if (state.convolver) state.convolver->reset();
   }
 }
 
@@ -156,7 +151,7 @@ void LinearPhaseEq::rebuild_kernel() {
   for (int i = 0; i < config_.kernel_size; ++i) {
     const int source = (i - half + config_.fft_size) % config_.fft_size;
     kernel_[static_cast<size_t>(i)] =
-        zero_phase[static_cast<size_t>(source)] * hann(static_cast<size_t>(i), kernel_size);
+        zero_phase[static_cast<size_t>(source)] * hann_value(i, config_.kernel_size);
   }
 
   latency_samples_ = half;
@@ -171,14 +166,54 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
     return;
   }
   if (states_.size() == static_cast<size_t>(num_channels)) {
+    const int partition_size = active_partition_size();
+    for (auto& state : states_) {
+      if (config_.use_partitioned_convolution && partition_size > 0) {
+        if (!state.convolver) {
+          state.convolver = std::make_unique<common::PartitionedConvolver>(
+              common::PartitionedConvolverConfig{partition_size});
+        }
+        state.convolver->set_impulse_response(kernel_);
+      } else {
+        state.convolver.reset();
+      }
+    }
     return;
   }
 
-  states_.assign(static_cast<size_t>(num_channels), {});
+  states_.clear();
+  states_.resize(static_cast<size_t>(num_channels));
   for (auto& state : states_) {
     state.history.assign(kernel_.size(), 0.0f);
     state.write_index = 0;
+    const int partition_size = active_partition_size();
+    if (config_.use_partitioned_convolution && partition_size > 0) {
+      state.convolver = std::make_unique<common::PartitionedConvolver>(
+          common::PartitionedConvolverConfig{partition_size});
+      state.convolver->set_impulse_response(kernel_);
+    }
   }
+}
+
+void LinearPhaseEq::process_direct(float* samples, int num_samples, ChannelState& state) const {
+  const size_t kernel_size = kernel_.size();
+  for (int i = 0; i < num_samples; ++i) {
+    state.history[state.write_index] = samples[i];
+
+    double y = 0.0;
+    size_t read = state.write_index;
+    for (size_t k = 0; k < kernel_size; ++k) {
+      y += static_cast<double>(kernel_[k]) * state.history[read];
+      read = (read == 0) ? kernel_size - 1 : read - 1;
+    }
+
+    samples[i] = static_cast<float>(y);
+    state.write_index = (state.write_index + 1) % kernel_size;
+  }
+}
+
+int LinearPhaseEq::active_partition_size() const noexcept {
+  return config_.partition_size > 0 ? config_.partition_size : max_block_size_;
 }
 
 void LinearPhaseEq::validate_config() const {
@@ -190,6 +225,9 @@ void LinearPhaseEq::validate_config() const {
   }
   if ((config_.kernel_size % 2) == 0) {
     throw std::invalid_argument("LinearPhaseEq kernel_size must be odd");
+  }
+  if (config_.partition_size < 0) {
+    throw std::invalid_argument("LinearPhaseEq partition_size must be non-negative");
   }
 }
 
@@ -247,14 +285,6 @@ float LinearPhaseEq::band_magnitude(const EqBand& band, double frequency_hz, dou
   }
 
   return 1.0f;
-}
-
-float LinearPhaseEq::hann(size_t index, size_t length) {
-  if (length <= 1) {
-    return 1.0f;
-  }
-  return static_cast<float>(0.5 - 0.5 * std::cos(2.0 * kPi * static_cast<double>(index) /
-                                                 static_cast<double>(length - 1)));
 }
 
 }  // namespace sonare::mastering::eq

@@ -4,10 +4,13 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/biquad_design.h"
+#include "util/constants.h"
+
 namespace sonare::mastering::eq {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
+using sonare::constants::kPiD;
 
 float safe_q(float q) {
   if (!(q > 0.0f)) {
@@ -130,70 +133,56 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
   }
 
   const double q = safe_q(band.q);
-  const double w0 = 2.0 * kPi * static_cast<double>(band.frequency_hz) / sample_rate;
-  const double cos_w0 = std::cos(w0);
-  const double sin_w0 = std::sin(w0);
-  const double alpha = sin_w0 / (2.0 * q);
-  const double a = std::pow(10.0, static_cast<double>(band.gain_db) / 40.0);
+  const double w0 = 2.0 * kPiD * static_cast<double>(band.frequency_hz) / sample_rate;
+  const float w0f = static_cast<float>(w0);
+  const float qf = static_cast<float>(q);
+  const auto from_common = [](const common::BiquadCoeffs& c) {
+    return Coefficients{c.b0, c.b1, c.b2, c.a1, c.a2};
+  };
+
+  if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
+    switch (band.type) {
+      case EqBandType::Peak:
+        return from_common(common::vicanek_peak(w0f, qf, band.gain_db));
+      case EqBandType::LowPass:
+        return from_common(common::vicanek_lowpass(w0f, qf));
+      case EqBandType::HighPass:
+        return from_common(common::vicanek_highpass(w0f, qf));
+      case EqBandType::BandPass:
+        return from_common(common::vicanek_bandpass(w0f, qf));
+      case EqBandType::Notch:
+        return from_common(common::vicanek_notch(w0f, qf));
+      case EqBandType::LowShelf:
+        return from_common(common::vicanek_low_shelf(w0f, band.gain_db));
+      case EqBandType::HighShelf:
+        return from_common(common::vicanek_high_shelf(w0f, band.gain_db));
+    }
+  }
 
   switch (band.type) {
     case EqBandType::Peak:
-      return ParametricEq::normalize(1.0 + alpha * a, -2.0 * cos_w0, 1.0 - alpha * a,
-                                     1.0 + alpha / a, -2.0 * cos_w0, 1.0 - alpha / a);
-
-    case EqBandType::LowShelf: {
-      const double sqrt_a = std::sqrt(a);
-      const double two_sqrt_a_alpha = 2.0 * sqrt_a * alpha;
-      return ParametricEq::normalize(a * ((a + 1.0) - (a - 1.0) * cos_w0 + two_sqrt_a_alpha),
-                                     2.0 * a * ((a - 1.0) - (a + 1.0) * cos_w0),
-                                     a * ((a + 1.0) - (a - 1.0) * cos_w0 - two_sqrt_a_alpha),
-                                     (a + 1.0) + (a - 1.0) * cos_w0 + two_sqrt_a_alpha,
-                                     -2.0 * ((a - 1.0) + (a + 1.0) * cos_w0),
-                                     (a + 1.0) + (a - 1.0) * cos_w0 - two_sqrt_a_alpha);
-    }
-
-    case EqBandType::HighShelf: {
-      const double sqrt_a = std::sqrt(a);
-      const double two_sqrt_a_alpha = 2.0 * sqrt_a * alpha;
-      return ParametricEq::normalize(a * ((a + 1.0) + (a - 1.0) * cos_w0 + two_sqrt_a_alpha),
-                                     -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0),
-                                     a * ((a + 1.0) + (a - 1.0) * cos_w0 - two_sqrt_a_alpha),
-                                     (a + 1.0) - (a - 1.0) * cos_w0 + two_sqrt_a_alpha,
-                                     2.0 * ((a - 1.0) - (a + 1.0) * cos_w0),
-                                     (a + 1.0) - (a - 1.0) * cos_w0 - two_sqrt_a_alpha);
-    }
+      return from_common(common::rbj_peak(w0f, qf, band.gain_db));
 
     case EqBandType::LowPass:
-      return ParametricEq::normalize((1.0 - cos_w0) * 0.5, 1.0 - cos_w0, (1.0 - cos_w0) * 0.5,
-                                     1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha);
+      return from_common(common::rbj_lowpass(w0f, qf));
 
     case EqBandType::HighPass:
-      return ParametricEq::normalize((1.0 + cos_w0) * 0.5, -(1.0 + cos_w0), (1.0 + cos_w0) * 0.5,
-                                     1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha);
+      return from_common(common::rbj_highpass(w0f, qf));
 
     case EqBandType::BandPass:
-      return ParametricEq::normalize(alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha);
+      return from_common(common::rbj_bandpass(w0f, qf));
 
     case EqBandType::Notch:
-      return ParametricEq::normalize(1.0, -2.0 * cos_w0, 1.0, 1.0 + alpha, -2.0 * cos_w0,
-                                     1.0 - alpha);
+      return from_common(common::rbj_notch(w0f, qf));
+
+    case EqBandType::LowShelf:
+      return from_common(common::rbj_low_shelf(w0f, qf, band.gain_db));
+
+    case EqBandType::HighShelf:
+      return from_common(common::rbj_high_shelf(w0f, qf, band.gain_db));
   }
 
   return {};
-}
-
-ParametricEq::Coefficients ParametricEq::normalize(double b0, double b1, double b2, double a0,
-                                                   double a1, double a2) {
-  if (!(std::abs(a0) > 0.0)) {
-    throw std::runtime_error("invalid EQ coefficient normalization");
-  }
-
-  const double inv_a0 = 1.0 / a0;
-  return {
-      static_cast<float>(b0 * inv_a0), static_cast<float>(b1 * inv_a0),
-      static_cast<float>(b2 * inv_a0), static_cast<float>(a1 * inv_a0),
-      static_cast<float>(a2 * inv_a0),
-  };
 }
 
 void ParametricEq::update_coefficients(size_t index) {

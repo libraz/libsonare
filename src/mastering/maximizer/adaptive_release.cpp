@@ -17,6 +17,8 @@ void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   current_release_ms_ = config_.min_release_ms;
   current_crest_factor_ = 0.0f;
+  peak_envelope_ = 0.0f;
+  rms_square_envelope_ = 0.0f;
   configure_limiter();
   limiter_.prepare(sample_rate_, max_block_size_);
   prepared_ = true;
@@ -40,8 +42,15 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
   const float crest_span = std::max(0.0001f, config_.crest_high - config_.crest_low);
   const float norm =
       std::clamp((current_crest_factor_ - config_.crest_low) / crest_span, 0.0f, 1.0f);
-  current_release_ms_ =
+  const float target_release_ms =
       config_.min_release_ms + (config_.max_release_ms - config_.min_release_ms) * (1.0f - norm);
+  const float smoothing_seconds = config_.release_smoothing_ms * 0.001f;
+  const float smoothing =
+      smoothing_seconds <= 0.0f
+          ? 1.0f
+          : 1.0f - std::exp(-static_cast<float>(num_samples) /
+                            static_cast<float>(sample_rate_ * smoothing_seconds));
+  current_release_ms_ += smoothing * (target_release_ms - current_release_ms_);
 
   limiter_.set_release_ms(current_release_ms_);
   limiter_.process(channels, num_channels, num_samples);
@@ -51,6 +60,8 @@ void AdaptiveRelease::reset() {
   limiter_.reset();
   current_release_ms_ = config_.min_release_ms;
   current_crest_factor_ = 0.0f;
+  peak_envelope_ = 0.0f;
+  rms_square_envelope_ = 0.0f;
 }
 
 void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
@@ -62,7 +73,8 @@ void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
   if (config.lookahead_ms < 0.0f || config.min_release_ms < 0.0f ||
       config.max_release_ms < config.min_release_ms || config.crest_window_ms <= 0.0f ||
-      config.crest_low <= 0.0f || config.crest_high <= config.crest_low) {
+      config.crest_low <= 0.0f || config.crest_high <= config.crest_low ||
+      config.release_smoothing_ms < 0.0f) {
     throw std::invalid_argument("invalid adaptive release configuration");
   }
 }
@@ -72,21 +84,13 @@ void AdaptiveRelease::configure_limiter() {
 }
 
 float AdaptiveRelease::compute_crest_factor(float* const* channels, int num_channels,
-                                            int num_samples) const {
-  // Use the most recent crest_window_ms slice of the buffer (or the whole block
-  // if it is shorter than the window).
-  const int window_samples =
-      std::max(1, static_cast<int>(sample_rate_ * config_.crest_window_ms * 0.001));
-  const int start = std::max(0, num_samples - window_samples);
-  const int length = num_samples - start;
-  if (length <= 0) return 0.0f;
-
+                                            int num_samples) {
   float peak = 0.0f;
   double sum_sq = 0.0;
   long count = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) continue;
-    for (int i = start; i < num_samples; ++i) {
+    for (int i = 0; i < num_samples; ++i) {
       const float s = channels[ch][i];
       peak = std::max(peak, std::abs(s));
       sum_sq += static_cast<double>(s) * static_cast<double>(s);
@@ -94,9 +98,20 @@ float AdaptiveRelease::compute_crest_factor(float* const* channels, int num_chan
     }
   }
   if (count == 0) return 0.0f;
-  const double rms = std::sqrt(sum_sq / static_cast<double>(count));
-  if (rms < 1e-9) return 0.0f;
-  return static_cast<float>(peak / rms);
+  const float block_rms_square = static_cast<float>(sum_sq / static_cast<double>(count));
+
+  const float window_seconds = config_.crest_window_ms * 0.001f;
+  const float alpha =
+      1.0f - std::exp(-static_cast<float>(num_samples) /
+                      static_cast<float>(std::max(1.0, sample_rate_ * window_seconds)));
+  peak_envelope_ = std::max(peak, peak_envelope_ * (1.0f - alpha));
+  rms_square_envelope_ += alpha * (block_rms_square - rms_square_envelope_);
+
+  const float block_rms = std::sqrt(std::max(block_rms_square, 0.0f));
+  const float running_rms = std::sqrt(std::max(rms_square_envelope_, 0.0f));
+  const float block_crest = block_rms < 1.0e-9f ? 0.0f : peak / block_rms;
+  const float running_crest = running_rms < 1.0e-9f ? 0.0f : peak_envelope_ / running_rms;
+  return std::max(block_crest, running_crest);
 }
 
 }  // namespace sonare::mastering::maximizer

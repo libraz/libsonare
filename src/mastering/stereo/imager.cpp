@@ -1,11 +1,25 @@
 #include "mastering/stereo/imager.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 #include "mastering/stereo/mid_side.h"
+#include "util/db.h"
 
 namespace sonare::mastering::stereo {
+
+float Imager::Allpass::process(float input) noexcept {
+  const float output = -coefficient * input + x1 + coefficient * y1;
+  x1 = input;
+  y1 = output;
+  return output;
+}
+
+void Imager::Allpass::reset() noexcept {
+  x1 = 0.0f;
+  y1 = 0.0f;
+}
 
 Imager::Imager(ImagerConfig config) : config_(config) { validate_config(config_); }
 
@@ -16,7 +30,12 @@ void Imager::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) {
     throw std::invalid_argument("max_block_size must be non-negative");
   }
+  allpass_[0].coefficient = 0.63f;
+  allpass_[1].coefficient = -0.51f;
+  allpass_[2].coefficient = 0.42f;
+  allpass_[3].coefficient = -0.34f;
   prepared_ = true;
+  reset();
 }
 
 void Imager::process(float* const* channels, int num_channels, int num_samples) {
@@ -44,14 +63,36 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
   const float output = db_to_linear(config_.output_gain_db);
   for (int i = 0; i < num_samples; ++i) {
     auto ms = encode_sample(channels[0][i], channels[1][i]);
-    ms.side *= config_.width;
+    const float original_energy = ms.mid * ms.mid + ms.side * ms.side;
+    float decorated_side = ms.side;
+    for (auto& stage : allpass_) {
+      decorated_side = stage.process(decorated_side);
+    }
+    ms.side = ms.side * config_.width;
+    if (config_.decorrelation_amount > 0.0f && config_.width > 1.0f) {
+      const float extra_width = std::min(config_.width - 1.0f, 1.0f);
+      const float mix = config_.decorrelation_amount * extra_width;
+      ms.side = (1.0f - mix) * ms.side + mix * decorated_side * config_.width;
+    }
+    if (config_.preserve_energy && config_.width > 1.0f) {
+      const float widened_energy = ms.mid * ms.mid + ms.side * ms.side;
+      if (widened_energy > 0.0f && original_energy > 0.0f) {
+        const float scale = std::sqrt(original_energy / widened_energy);
+        ms.mid *= scale;
+        ms.side *= scale;
+      }
+    }
     const auto lr = decode_sample(ms.mid, ms.side);
     channels[0][i] = lr.mid * output;
     channels[1][i] = lr.side * output;
   }
 }
 
-void Imager::reset() {}
+void Imager::reset() {
+  for (auto& stage : allpass_) {
+    stage.reset();
+  }
+}
 
 void Imager::set_config(const ImagerConfig& config) {
   validate_config(config);
@@ -59,11 +100,10 @@ void Imager::set_config(const ImagerConfig& config) {
 }
 
 void Imager::validate_config(const ImagerConfig& config) {
-  if (config.width < 0.0f) {
+  if (config.width < 0.0f || config.decorrelation_amount < 0.0f ||
+      config.decorrelation_amount > 1.0f) {
     throw std::invalid_argument("imager width must be non-negative");
   }
 }
-
-float Imager::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 }  // namespace sonare::mastering::stereo

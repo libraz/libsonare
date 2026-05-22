@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -54,6 +55,12 @@ float peak_abs(const std::vector<float>& samples, size_t skip = 0) {
 void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
+}
+
+void process_stereo(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& left,
+                    std::vector<float>& right) {
+  float* channels[] = {left.data(), right.data()};
+  processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
 }
 
 }  // namespace
@@ -123,6 +130,24 @@ TEST_CASE("Compressor links detection across stereo channels", "[mastering][dyna
   REQUIRE(rms_tail(right, 4096) < 0.018f);
 }
 
+TEST_CASE("Compressor sidechain HPF ignores low-frequency detector energy",
+          "[mastering][dynamics]") {
+  auto input = sine(40.0f, 48000, 48000, 0.8f);
+  auto full_band = input;
+  auto hpf_keyed = input;
+
+  Compressor full({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak});
+  Compressor hpf({-24.0f, 6.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Peak, true,
+                  120.0f});
+  full.prepare(48000.0, 1024);
+  hpf.prepare(48000.0, 1024);
+
+  process(full, full_band);
+  process(hpf, hpf_keyed);
+
+  REQUIRE(rms_tail(hpf_keyed, 4096) > rms_tail(full_band, 4096) * 1.5f);
+}
+
 TEST_CASE("Limiter delays audio and limits peaks", "[mastering][dynamics]") {
   Limiter limiter({-6.0f, 1.0f, 5.0f});
   limiter.prepare(1000.0, 128);
@@ -164,11 +189,33 @@ TEST_CASE("BrickwallLimiter guarantees ceiling", "[mastering][dynamics]") {
 
   REQUIRE(peak_abs(signal) <= 0.502f);
   REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
+  REQUIRE(limiter.latency_samples() == 0);
+  REQUIRE(limiter.hard_clip_count() == 0);
+}
+
+TEST_CASE("BrickwallLimiter sanitizes non-finite output before the hard ceiling",
+          "[mastering][dynamics]") {
+  BrickwallLimiter limiter({-6.0f, 0.0f, 0.0f});
+  limiter.prepare(48000.0, 128);
+
+  std::vector<float> signal = {std::numeric_limits<float>::infinity(),
+                               -std::numeric_limits<float>::infinity(),
+                               std::numeric_limits<float>::quiet_NaN(), 2.0f};
+  process(limiter, signal);
+
+  for (float sample : signal) {
+    REQUIRE(std::isfinite(sample));
+    REQUIRE(std::abs(sample) <= 0.502f);
+  }
+  REQUIRE_THAT(signal[2], WithinAbs(0.0f, 0.0001f));
+  REQUIRE(limiter.last_gain_reduction_db() <= -120.0f);
+  REQUIRE(limiter.hard_clip_count() == 3);
 }
 
 TEST_CASE("BrickwallLimiter validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(BrickwallLimiter({-1.0f, -1.0f, 10.0f}));
   REQUIRE_THROWS(BrickwallLimiter({-1.0f, 1.0f, -10.0f}));
+  REQUIRE_THROWS(BrickwallLimiter({std::numeric_limits<float>::infinity(), 1.0f, 10.0f}));
 }
 
 TEST_CASE("Expander reduces signal below threshold and preserves louder signal",
@@ -211,6 +258,18 @@ TEST_CASE("Gate strongly attenuates noise below threshold", "[mastering][dynamic
 
   REQUIRE(rms_tail(noise, 4096) / noise_before < 0.05f);
   REQUIRE(rms_tail(signal, 4096) / signal_before > 0.95f);
+}
+
+TEST_CASE("Gate hold and hysteresis keep the gate open briefly", "[mastering][dynamics]") {
+  Gate gate({-30.0f, 0.0f, 0.0f, -80.0f, 10.0f, -40.0f, 0.0f});
+  gate.prepare(1000.0, 64);
+
+  std::vector<float> signal(32, 0.001f);
+  signal[0] = 0.5f;
+  process(gate, signal);
+
+  REQUIRE(signal[1] > 0.0008f);
+  REQUIRE(std::abs(signal.back()) < 0.0002f);
 }
 
 TEST_CASE("Gate validates configuration", "[mastering][dynamics]") {
@@ -278,12 +337,13 @@ TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[masterin
   const float low_before = rms_tail(low, 4096);
 
   process(deesser, high);
+  const float high_reduction_db = deesser.last_gain_reduction_db();
   deesser.reset();
   process(deesser, low);
 
   REQUIRE(rms_tail(high, 4096) / high_before < 0.65f);
   REQUIRE(rms_tail(low, 4096) / low_before > 0.75f);
-  REQUIRE(deesser.last_gain_reduction_db() < -1.0f);
+  REQUIRE(high_reduction_db < -1.0f);
 }
 
 TEST_CASE("DeEsser validates configuration", "[mastering][dynamics]") {
@@ -325,6 +385,19 @@ TEST_CASE("TransientShaper validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(TransientShaper({3.0f, 0.0f, 0.0f, 20.0f, 15.0f, 200.0f, 1.0f, -1.0f}));
 }
 
+TEST_CASE("TransientShaper supports lookahead and gain smoothing", "[mastering][dynamics]") {
+  TransientShaper shaper({6.0f, 0.0f, 0.0f, 20.0f, 20.0f, 200.0f, 1.0f, 12.0f, 1.0f,
+                          1.0f});
+  shaper.prepare(1000.0, 8);
+
+  std::vector<float> impulse(8, 0.0f);
+  impulse[1] = 0.5f;
+  process(shaper, impulse);
+
+  REQUIRE_THAT(impulse[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE(peak_abs(impulse) > 0.5f);
+}
+
 TEST_CASE("ParallelComp blends dry and compressed signals", "[mastering][dynamics]") {
   auto dry = sine(1000.0f, 48000, 48000, 0.8f);
   auto half = dry;
@@ -345,6 +418,29 @@ TEST_CASE("ParallelComp blends dry and compressed signals", "[mastering][dynamic
   REQUIRE(half_rms > wet_rms);
   REQUIRE(half_rms < dry_rms);
   REQUIRE(wet_comp.last_gain_reduction_db() < -6.0f);
+}
+
+TEST_CASE("ParallelComp attack detector operates in amplitude domain", "[mastering][dynamics]") {
+  std::vector<float> transient = {1.0f};
+  ParallelComp compressor({-18.0f, 20.0f, 10.0f, 20.0f, 0.0f, 1.0f});
+  compressor.prepare(1000.0, 1);
+
+  process(compressor, transient);
+
+  REQUIRE(transient[0] > 0.95f);
+  REQUIRE_THAT(compressor.last_gain_reduction_db(), WithinAbs(0.0f, 0.0001f));
+}
+
+TEST_CASE("ParallelComp links stereo detection and limits wet output", "[mastering][dynamics]") {
+  ParallelComp compressor({-18.0f, 20.0f, 0.0f, 20.0f, 12.0f, 1.0f, true, true, -3.0f});
+  compressor.prepare(48000.0, 1024);
+
+  std::vector<float> left(48000, 0.9f);
+  std::vector<float> right(48000, 0.05f);
+  process_stereo(compressor, left, right);
+
+  REQUIRE(rms_tail(right, 4096) < 0.04f);
+  REQUIRE(peak_abs(left, 4096) <= 0.708f);
 }
 
 TEST_CASE("ParallelComp validates configuration", "[mastering][dynamics]") {
@@ -369,6 +465,22 @@ TEST_CASE("VocalRider boosts quiet material and cuts loud material", "[mastering
   REQUIRE(rms_tail(quiet, 4096) > quiet_before * 1.7f);
   REQUIRE(rms_tail(loud, 4096) < loud_before * 0.45f);
   REQUIRE(rider.last_gain_db() < -6.0f);
+}
+
+TEST_CASE("VocalRider links stereo detection and respects noise floor", "[mastering][dynamics]") {
+  VocalRider rider({-18.0f, 9.0f, 9.0f, 0.0f, 50.0f, 0.0f, 0.0f, -50.0f, true});
+  rider.prepare(48000.0, 1024);
+
+  std::vector<float> left(48000, 0.8f);
+  std::vector<float> right(48000, 0.02f);
+  process_stereo(rider, left, right);
+  REQUIRE(rms_tail(right, 4096) < 0.01f);
+
+  rider.reset();
+  std::vector<float> noise(48000, 0.0001f);
+  const float before = rms_tail(noise, 4096);
+  process(rider, noise);
+  REQUIRE(rms_tail(noise, 4096) < before * 1.1f);
 }
 
 TEST_CASE("VocalRider validates configuration", "[mastering][dynamics]") {
@@ -404,4 +516,34 @@ TEST_CASE("SidechainRouter validates configuration and sidechain buffers",
 
   SidechainRouter router;
   REQUIRE_THROWS(router.set_sidechain(nullptr, 1, 128));
+}
+
+TEST_CASE("SidechainRouter treats empty sidechain as cleared", "[mastering][dynamics]") {
+  SidechainRouter router({-30.0f, 4.0f, 0.0f, 20.0f, 18.0f});
+  router.prepare(48000.0, 1024);
+
+  std::vector<float> sidechain(128, 1.0f);
+  const float* sidechain_channels[] = {sidechain.data()};
+  router.set_sidechain(sidechain_channels, 1, static_cast<int>(sidechain.size()));
+  router.set_sidechain(nullptr, 0, 0);
+
+  std::vector<float> target(128, 0.01f);
+  process(router, target);
+
+  REQUIRE(rms_tail(target, 0) > 0.009f);
+  REQUIRE_THAT(router.last_gain_reduction_db(), WithinAbs(0.0f, 0.0001f));
+}
+
+TEST_CASE("SidechainRouter supports HPF mono key and key listen", "[mastering][dynamics]") {
+  SidechainRouter listen({-30.0f, 4.0f, 0.0f, 20.0f, 18.0f, true, 120.0f, true, true});
+  listen.prepare(48000.0, 1024);
+
+  std::vector<float> target(1024, 0.0f);
+  std::vector<float> low = sine(40.0f, 48000, 1024, 1.0f);
+  std::vector<float> high = sine(1000.0f, 48000, 1024, 1.0f);
+  const float* sidechain[] = {low.data(), high.data()};
+  listen.set_sidechain(sidechain, 2, static_cast<int>(target.size()));
+  process(listen, target);
+
+  REQUIRE(rms_tail(target, 128) > 0.1f);
 }

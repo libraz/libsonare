@@ -5,8 +5,9 @@
 #include <vector>
 
 #include "analysis/meter/basic.h"
+#include "util/db.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -17,7 +18,7 @@ float rms_db(const Audio& audio) { return analysis::meter::rms_db(audio); }
 Audio apply_gain(const Audio& audio, float gain_db) {
   if (audio.empty()) return audio;
 
-  float gain_linear = std::pow(10.0f, gain_db / 20.0f);
+  float gain_linear = db_to_linear(gain_db);
 
   std::vector<float> samples(audio.size());
   const float* data = audio.data();
@@ -61,7 +62,7 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
                                                     int frame_length, int hop_length) {
   if (audio.empty()) return {0, 0};
 
-  float threshold_linear = std::pow(10.0f, threshold_db / 20.0f);
+  float threshold_linear = db_to_linear(threshold_db);
   const float* data = audio.data();
   size_t n_samples = audio.size();
 
@@ -142,11 +143,9 @@ Audio apply_fade(const Audio& audio, float duration_sec, bool is_fade_in) {
   for (size_t i = 0; i < audio.size(); ++i) {
     float gain = 1.0f;
     if (is_fade_in && i < fade_samples) {
-      float t = static_cast<float>(i) / static_cast<float>(fade_samples);
-      gain = 0.5f * (1.0f - std::cos(kPi * t));
+      gain = cosine_fade_in_gain(i, fade_samples);
     } else if (!is_fade_in && i >= fade_start) {
-      float t = static_cast<float>(i - fade_start) / static_cast<float>(fade_samples);
-      gain = 0.5f * (1.0f + std::cos(kPi * t));
+      gain = cosine_fade_out_gain(i - fade_start, fade_samples);
     }
     samples[i] = data[i] * gain;
   }

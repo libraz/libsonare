@@ -17,6 +17,9 @@ struct VocalRiderConfig {
   float attack_ms = 50.0f;
   float release_ms = 500.0f;
   float output_gain_db = 0.0f;
+  float gain_smoothing_ms = 100.0f;
+  float noise_floor_db = -60.0f;
+  bool linked_detection = true;
 };
 
 class VocalRider : public common::ProcessorBase {
@@ -33,14 +36,14 @@ class VocalRider : public common::ProcessorBase {
 
  private:
   static void validate_config(const VocalRiderConfig& config);
-  static float linear_to_db(float value);
-  static float db_to_linear(float db);
+  static float coeff(double sample_rate, float ms);
   void ensure_followers(int num_channels);
 
   VocalRiderConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
   std::vector<common::EnvelopeFollower> followers_;
+  float linked_gain_state_db_ = 0.0f;
   float last_gain_db_ = 0.0f;
 };
 

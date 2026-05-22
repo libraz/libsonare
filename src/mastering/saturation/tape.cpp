@@ -4,23 +4,42 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+#include "util/db.h"
+
 namespace sonare::mastering::saturation {
+
+using sonare::constants::kTwoPiD;
 
 namespace {
 
-// Jiles-Atherton parameters that stay constant; the user-facing `saturation`
-// and `hysteresis` knobs modulate `a_` and `k_` inside process_sample.
 constexpr float kMs = 1.0f;        // saturation magnetization
 constexpr float kAlpha = 1.6e-3f;  // inter-domain mean-field coupling
 constexpr float kC = 0.4f;         // reversibility ratio in [0, 1]
 
 }  // namespace
 
-Tape::Tape(TapeConfig config) : config_(config) { validate_config(config_); }
+float Tape::Biquad::process(float x) {
+  const float y = b0 * x + z1;
+  z1 = b1 * x - a1 * y + z2;
+  z2 = b2 * x - a2 * y;
+  return y;
+}
+
+void Tape::Biquad::reset() {
+  z1 = 0.0f;
+  z2 = 0.0f;
+}
+
+Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(config_)) {
+  validate_config(config_);
+}
 
 void Tape::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
   if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  sample_rate_ = sample_rate;
+  update_filters(sample_rate_);
   prepared_ = true;
   reset();
 }
@@ -36,109 +55,87 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
     auto& state = states_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
-      channels[ch][i] = process_sample(state, channels[ch][i]);
+      float y = process_sample(state, channels[ch][i]);
+      y += head_bump_[static_cast<size_t>(ch)].process(y);
+      auto& gap = gap_state_[static_cast<size_t>(ch)];
+      gap += gap_loss_coeff_ * (y - gap);
+      channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
     }
   }
 }
 
 void Tape::reset() {
   for (auto& s : states_) {
-    s.M = 0.0f;
-    s.H_prev = 0.0f;
+    common::JilesAtherton::reset(s);
   }
+  for (auto& filter : head_bump_) filter.reset();
+  std::fill(gap_state_.begin(), gap_state_.end(), 0.0f);
 }
 
 void Tape::set_config(const TapeConfig& config) {
   validate_config(config);
   config_ = config;
+  hysteresis_.set_config(make_ja_config(config_));
+  if (prepared_) update_filters(sample_rate_);
 }
 
 void Tape::validate_config(const TapeConfig& config) {
   if (config.saturation < 0.0f || config.saturation > 1.0f || config.hysteresis < 0.0f ||
-      config.hysteresis > 1.0f) {
+      config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||
+      config.gap_loss < 0.0f || config.gap_loss > 1.0f) {
     throw std::invalid_argument("invalid tape configuration");
   }
 }
 
-float Tape::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
-
-float Tape::langevin(float x) {
-  // L(x) = coth(x) - 1/x. Taylor expansion near 0 avoids the 0/0 singularity.
-  const float ax = std::abs(x);
-  if (ax < 1e-4f) {
-    // Truncated Maclaurin: L(x) = x/3 - x^3/45 + ...
-    return x * (1.0f / 3.0f - x * x / 45.0f);
-  }
-  return 1.0f / std::tanh(x) - 1.0f / x;
-}
-
-float Tape::langevin_derivative(float x) {
-  // L'(x) = 1/x^2 - csch^2(x). Taylor near 0: L'(x) = 1/3 - x^2/15 + ...
-  const float ax = std::abs(x);
-  if (ax < 1e-4f) {
-    return 1.0f / 3.0f - x * x / 15.0f;
-  }
-  const float sinh_x = std::sinh(x);
-  return 1.0f / (x * x) - 1.0f / (sinh_x * sinh_x);
-}
-
-float Tape::process_sample(JaState& state, float input) const {
+common::JilesAthertonConfig Tape::make_ja_config(const TapeConfig& config) {
   // Map user controls to J-A parameters:
   //   a (anhysteretic shape) is smaller when saturation is large → earlier saturation.
   //   k (loss/coercivity)    is larger when hysteresis is large → wider loop.
-  const float a = std::max(0.05f, 0.5f - 0.4f * config_.saturation);
-  const float k = std::max(0.01f, 0.05f + 0.30f * config_.hysteresis);
+  const float a = std::max(0.05f, 0.5f - 0.4f * config.saturation);
+  const float k = std::max(0.01f, 0.05f + 0.30f * config.hysteresis);
+  return {kMs, a, k, kAlpha, kC};
+}
 
+float Tape::process_sample(common::JilesAthertonState& state, float input) const {
   const float drive = db_to_linear(config_.drive_db);
-  const float H = input * drive;
-
-  const float He = H + kAlpha * state.M;
-  const float x = He / a;
-
-  // Anhysteretic (lossless) magnetization curve.
-  const float M_an = kMs * langevin(x);
-
-  // Direction of field change. The irreversible component only updates when
-  // moving in the direction that the bulk magnetization "wants" to follow.
-  const float dH = H - state.H_prev;
-  if (std::abs(dH) < 1e-9f) {
-    state.H_prev = H;
-    return state.M * db_to_linear(config_.output_gain_db);
-  }
-  const float delta = dH >= 0.0f ? 1.0f : -1.0f;
-
-  // dM_irr/dH = (M_an - M) / (k*delta - alpha*(M_an - M)).
-  const float diff = M_an - state.M;
-  const float denom = k * delta - kAlpha * diff;
-  float dM_irr_dH = 0.0f;
-  if (std::abs(denom) > 1e-9f) {
-    dM_irr_dH = diff / denom;
-    // Suppress irreversible updates whose sign opposes the field direction —
-    // this enforces the J-A "wiping out" property and prevents instability.
-    if (dM_irr_dH * delta < 0.0f) dM_irr_dH = 0.0f;
-  }
-
-  // Reversible component follows the anhysteretic derivative.
-  const float dL = langevin_derivative(x);
-  const float dM_an_dHe = kMs * dL / a;
-  // Chain rule through He = H + alpha*M; for small kAlpha this is ~ dM_an_dHe.
-  const float dM_an_dH = dM_an_dHe / std::max(1.0f - kAlpha * dM_an_dHe, 1e-6f);
-
-  const float dM_dH = (1.0f - kC) * dM_irr_dH + kC * dM_an_dH;
-
-  // Forward-Euler integration. dH is bounded since input is in [-1, 1] and
-  // drive is bounded, so a single step is stable for typical audio.
-  state.M += dM_dH * dH;
-  state.M = std::clamp(state.M, -1.2f * kMs, 1.2f * kMs);
-  state.H_prev = H;
-
-  return state.M * db_to_linear(config_.output_gain_db);
+  const float H = input * drive + config_.bias * 0.1f;
+  return hysteresis_.process(state, H) * db_to_linear(config_.output_gain_db);
 }
 
 void Tape::ensure_state(int num_channels) {
   if (states_.size() != static_cast<size_t>(num_channels)) {
-    states_.assign(static_cast<size_t>(num_channels), JaState{});
+    states_.assign(static_cast<size_t>(num_channels), common::JilesAthertonState{});
+    head_bump_.assign(static_cast<size_t>(num_channels), head_bump_coeffs_);
+    gap_state_.assign(static_cast<size_t>(num_channels), 0.0f);
   }
+}
+
+void Tape::update_filters(double sample_rate) {
+  const float speed_scale = 15.0f / std::max(config_.speed_ips, 1.0f);
+  const float frequency = std::clamp(80.0f * speed_scale, 20.0f,
+                                    static_cast<float>(sample_rate * 0.45));
+  const float gain = db_to_linear(config_.head_bump_db) - 1.0f;
+  const float q = 1.0f;
+  const float w0 = static_cast<float>(kTwoPiD * frequency / sample_rate);
+  const float alpha = std::sin(w0) / (2.0f * q);
+  const float cosw = std::cos(w0);
+  const float a0 = 1.0f + alpha;
+  head_bump_coeffs_.b0 = alpha * gain / a0;
+  head_bump_coeffs_.b1 = 0.0f;
+  head_bump_coeffs_.b2 = -alpha * gain / a0;
+  head_bump_coeffs_.a1 = -2.0f * cosw / a0;
+  head_bump_coeffs_.a2 = (1.0f - alpha) / a0;
+  for (auto& filter : head_bump_) {
+    const float z1 = filter.z1;
+    const float z2 = filter.z2;
+    filter = head_bump_coeffs_;
+    filter.z1 = z1;
+    filter.z2 = z2;
+  }
+  const float gap_cutoff = std::clamp(18000.0f * config_.speed_ips / 15.0f, 1000.0f,
+                                     static_cast<float>(sample_rate * 0.45));
+  gap_loss_coeff_ =
+      static_cast<float>(1.0 - std::exp(-kTwoPiD * gap_cutoff / sample_rate));
 }
 
 }  // namespace sonare::mastering::saturation

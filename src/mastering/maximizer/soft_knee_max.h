@@ -23,7 +23,6 @@ class SoftKneeMax : public common::ProcessorBase {
 
  private:
   static void validate_config(const SoftKneeMaxConfig& config);
-  static float db_to_linear(float db);
 
   SoftKneeMaxConfig config_{};
   Maximizer maximizer_;

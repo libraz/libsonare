@@ -3,6 +3,11 @@
 /// @file waveshaper.h
 /// @brief Configurable static waveshaper.
 
+#include <vector>
+
+#include "mastering/common/adaa.h"
+#include "mastering/common/aliasing_control.h"
+#include "mastering/common/nonlinearities.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -19,6 +24,7 @@ struct WaveshaperConfig {
   float output_gain_db = 0.0f;
   float bias = 0.0f;
   WaveshaperCurve curve = WaveshaperCurve::Tanh;
+  common::AliasingControl aliasing = common::AliasingControl::None;
 };
 
 class Waveshaper : public common::ProcessorBase {
@@ -37,9 +43,13 @@ class Waveshaper : public common::ProcessorBase {
 
  private:
   static void validate_config(const WaveshaperConfig& config);
+  void ensure_state(int num_channels);
+  float shape_sample(float sample, int channel);
 
   WaveshaperConfig config_{};
   bool prepared_ = false;
+  std::vector<common::Adaa1<common::TanhNonlinearity>> tanh_adaa_;
+  std::vector<common::Adaa1<common::ArctanNonlinearity>> arctan_adaa_;
 };
 
 }  // namespace sonare::mastering::saturation

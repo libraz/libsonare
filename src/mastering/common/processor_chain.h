@@ -1,0 +1,58 @@
+#pragma once
+
+/// @file processor_chain.h
+/// @brief Helpers for processor-chain level accounting.
+
+#include <initializer_list>
+#include <stdexcept>
+#include <vector>
+
+#include "mastering/common/processor_base.h"
+
+namespace sonare::mastering::common {
+
+inline int total_latency_samples(std::initializer_list<const ProcessorBase*> processors) {
+  int total = 0;
+  for (const ProcessorBase* processor : processors) {
+    if (processor == nullptr) {
+      throw std::invalid_argument("processor must not be null");
+    }
+    total += processor->latency_samples();
+  }
+  return total;
+}
+
+inline int total_latency_samples_q8(std::initializer_list<const ProcessorBase*> processors) {
+  int total = 0;
+  for (const ProcessorBase* processor : processors) {
+    if (processor == nullptr) {
+      throw std::invalid_argument("processor must not be null");
+    }
+    total += processor->latency_samples_q8();
+  }
+  return total;
+}
+
+inline int total_latency_samples(const std::vector<const ProcessorBase*>& processors) {
+  int total = 0;
+  for (const ProcessorBase* processor : processors) {
+    if (processor == nullptr) {
+      throw std::invalid_argument("processor must not be null");
+    }
+    total += processor->latency_samples();
+  }
+  return total;
+}
+
+inline int total_latency_samples_q8(const std::vector<const ProcessorBase*>& processors) {
+  int total = 0;
+  for (const ProcessorBase* processor : processors) {
+    if (processor == nullptr) {
+      throw std::invalid_argument("processor must not be null");
+    }
+    total += processor->latency_samples_q8();
+  }
+  return total;
+}
+
+}  // namespace sonare::mastering::common

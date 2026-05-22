@@ -3,6 +3,8 @@
 #include <cmath>
 #include <numeric>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 namespace {
@@ -70,7 +72,7 @@ std::array<float, 12> normalize_profile(const std::array<float, 12>& profile) {
       normalized[i] = profile[i] / sum;
     }
   } else {
-    normalized.fill(1.0f / 12.0f);
+    normalized.fill(1.0f / constants::kSemitonesPerOctave);
   }
 
   return normalized;
@@ -89,8 +91,8 @@ float profile_correlation(const float* chroma, const std::array<float, 12>& prof
     chroma_mean += chroma[i];
     profile_mean += profile[i];
   }
-  chroma_mean /= 12.0f;
-  profile_mean /= 12.0f;
+  chroma_mean /= constants::kSemitonesPerOctave;
+  profile_mean /= constants::kSemitonesPerOctave;
 
   // Compute Pearson correlation
   float numerator = 0.0f;

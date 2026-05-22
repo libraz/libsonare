@@ -1,5 +1,3 @@
-#include "sonare_c.h"
-
 #include <cstring>
 #include <memory>
 #include <string>
@@ -13,6 +11,7 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;

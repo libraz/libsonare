@@ -10,6 +10,8 @@ struct ExciterConfig {
   float frequency_hz = 3000.0f;
   float drive_db = 6.0f;
   float amount = 0.25f;
+  float q = 1.0f;
+  float even_odd_mix = 0.5f;
 };
 
 class Exciter : public common::ProcessorBase {
@@ -23,15 +25,27 @@ class Exciter : public common::ProcessorBase {
 
  private:
   static void validate_config(const ExciterConfig& config);
-  static float db_to_linear(float db);
   void update_coeff();
   void ensure_state(int num_channels);
+  struct Biquad {
+    float b0 = 1.0f;
+    float b1 = 0.0f;
+    float b2 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float z1 = 0.0f;
+    float z2 = 0.0f;
+    float process(float x);
+    void reset();
+  };
 
   ExciterConfig config_{};
   double sample_rate_ = 48000.0;
-  float lowpass_coeff_ = 0.0f;
+  Biquad bandpass_coeffs_;
+  Biquad allpass_coeffs_;
   bool prepared_ = false;
-  std::vector<float> lowpass_state_;
+  std::vector<Biquad> bandpass_;
+  std::vector<Biquad> allpass_;
 };
 
 }  // namespace sonare::mastering::saturation

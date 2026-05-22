@@ -1,6 +1,5 @@
-#include "sonare_c.h"
-
 #include "sonare.h"
+#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare_c_detail;
@@ -36,9 +35,7 @@ const char* sonare_error_message(SonareError error) {
   }
 }
 
-const char* sonare_last_error_message(void) {
-  return last_error_storage().c_str();
-}
+const char* sonare_last_error_message(void) { return last_error_storage().c_str(); }
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
 

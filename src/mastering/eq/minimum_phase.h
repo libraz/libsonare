@@ -1,7 +1,10 @@
 #pragma once
 
 /// @file minimum_phase.h
-/// @brief Low-latency minimum-phase IIR equalizer.
+/// @brief Low-latency IIR equalizer with minimum-phase-style behavior.
+///
+/// This class currently delegates to ParametricEq. It is not a general
+/// arbitrary-magnitude minimum-phase FIR reconstruction engine.
 
 #include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
@@ -21,7 +24,7 @@ class MinimumPhaseEq : public common::ProcessorBase {
   void clear();
 
   const EqBand& band(size_t index) const;
-  int latency_samples() const { return 0; }
+  int latency_samples() const noexcept override { return 0; }
 
  private:
   ParametricEq eq_;

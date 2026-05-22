@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::multiband {
 
 MultibandDynamicEq::MultibandDynamicEq(MultibandDynamicEqConfig config)
@@ -83,7 +85,7 @@ void MultibandDynamicEq::reset() {
   for (auto& processor : processors_) {
     processor.reset();
   }
-  std::fill(last_detector_db_.begin(), last_detector_db_.end(), -120.0f);
+  std::fill(last_detector_db_.begin(), last_detector_db_.end(), sonare::constants::kFloorDb);
   for (auto& gains : last_applied_gain_db_) {
     std::fill(gains.begin(), gains.end(), 0.0f);
   }
@@ -113,7 +115,7 @@ void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config)
 
 void MultibandDynamicEq::rebuild_processors() {
   processors_.assign(config_.bands.size(), {});
-  last_detector_db_.assign(config_.bands.size(), -120.0f);
+  last_detector_db_.assign(config_.bands.size(), sonare::constants::kFloorDb);
   last_applied_gain_db_.assign(config_.bands.size(),
                                std::vector<float>(eq::DynamicEq::kMaxBands, 0.0f));
 }

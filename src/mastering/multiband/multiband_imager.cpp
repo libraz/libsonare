@@ -1,10 +1,23 @@
 #include "mastering/multiband/multiband_imager.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 
 namespace sonare::mastering::multiband {
+
+float MultibandImager::Allpass::process(float input) noexcept {
+  const float output = -coefficient * input + x1 + coefficient * y1;
+  x1 = input;
+  y1 = output;
+  return output;
+}
+
+void MultibandImager::Allpass::reset() noexcept {
+  x1 = 0.0f;
+  y1 = 0.0f;
+}
 
 MultibandImager::MultibandImager(MultibandImagerConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
@@ -23,6 +36,13 @@ void MultibandImager::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
+  allpass_.resize(config_.bands.size());
+  for (auto& band_stages : allpass_) {
+    band_stages[0].coefficient = 0.63f;
+    band_stages[1].coefficient = -0.51f;
+    band_stages[2].coefficient = 0.42f;
+    band_stages[3].coefficient = -0.34f;
+  }
   reset();
 }
 
@@ -58,9 +78,30 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
       for (int i = 0; i < num_samples; ++i) {
         const size_t index = static_cast<size_t>(i);
         const float mid = 0.5f * (left[index] + right[index]);
-        const float side = 0.5f * (left[index] - right[index]) * band_config.width;
-        left[index] = mid + side;
-        right[index] = mid - side;
+        const float input_side = 0.5f * (left[index] - right[index]);
+        const float original_energy = mid * mid + input_side * input_side;
+        float decorated_side = input_side;
+        auto& stages = allpass_[static_cast<size_t>(band)];
+        for (auto& stage : stages) {
+          decorated_side = stage.process(decorated_side);
+        }
+        float side = input_side * band_config.width;
+        if (band_config.decorrelation_amount > 0.0f && band_config.width > 1.0f) {
+          const float extra_width = std::min(band_config.width - 1.0f, 1.0f);
+          const float mix = band_config.decorrelation_amount * extra_width;
+          side = (1.0f - mix) * side + mix * decorated_side * band_config.width;
+        }
+        float out_mid = mid;
+        if (band_config.preserve_energy && band_config.width > 1.0f) {
+          const float widened_energy = out_mid * out_mid + side * side;
+          if (widened_energy > 0.0f && original_energy > 0.0f) {
+            const float scale = std::sqrt(original_energy / widened_energy);
+            out_mid *= scale;
+            side *= scale;
+          }
+        }
+        left[index] = out_mid + side;
+        right[index] = out_mid - side;
       }
     }
   }
@@ -76,7 +117,14 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
   }
 }
 
-void MultibandImager::reset() { crossover_.reset(); }
+void MultibandImager::reset() {
+  crossover_.reset();
+  for (auto& band_stages : allpass_) {
+    for (auto& stage : band_stages) {
+      stage.reset();
+    }
+  }
+}
 
 void MultibandImager::set_config(const MultibandImagerConfig& config) {
   validate_config(config);
@@ -93,7 +141,7 @@ void MultibandImager::validate_config(const MultibandImagerConfig& config) {
     throw std::invalid_argument("multiband imager band count must match crossover");
   }
   for (const auto& band : config.bands) {
-    if (band.width < 0.0f) {
+    if (band.width < 0.0f || band.decorrelation_amount < 0.0f || band.decorrelation_amount > 1.0f) {
       throw std::invalid_argument("imager width must be non-negative");
     }
   }

@@ -4,16 +4,19 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "core/window.h"
+#include "util/constants.h"
+
 namespace sonare::mastering::multiband {
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
+using sonare::constants::kPiD;
 
 struct SectionSpec {
   double lowpass_frequency_scale = 1.0;
   double highpass_frequency_scale = 1.0;
-  double q = 0.7071067811865475;
+  double q = sonare::constants::kButterworthQD;
 };
 
 bool is_lr2_linkwitz_riley(CrossoverSlope slope, CrossoverMode mode) {
@@ -26,16 +29,16 @@ bool uses_linkwitz_riley_compensation(CrossoverMode mode) {
 
 double scaled_digital_frequency(double base_hz, double scale, double sample_rate) {
   const double base = std::clamp(base_hz, 1.0, sample_rate * 0.49);
-  const double warped = std::tan(kPi * base / sample_rate);
+  const double warped = std::tan(kPiD * base / sample_rate);
   const double scaled = std::max(scale, 1.0e-9) * warped;
-  return std::clamp(sample_rate * std::atan(scaled) / kPi, 1.0, sample_rate * 0.49);
+  return std::clamp(sample_rate * std::atan(scaled) / kPiD, 1.0, sample_rate * 0.49);
 }
 
 std::vector<SectionSpec> butterworth_section_specs(int order) {
   std::vector<SectionSpec> sections;
   const int pairs = order / 2;
   for (int k = 0; k < pairs; ++k) {
-    const double theta = kPi * (2 * k + 1) / (2.0 * order);
+    const double theta = kPiD * (2 * k + 1) / (2.0 * order);
     sections.push_back({1.0, 1.0, 1.0 / (2.0 * std::sin(theta))});
   }
   return sections;
@@ -77,7 +80,12 @@ void Crossover::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
-  rebuild_state(states_.empty() ? 0 : static_cast<int>(states_[0].size()));
+  if (config_.mode == CrossoverMode::FirLinearPhase) {
+    rebuild_fir_kernels();
+    rebuild_fir_state(fir_delay_history_.empty() ? 0 : static_cast<int>(fir_delay_history_.size()));
+  } else {
+    rebuild_state(states_.empty() ? 0 : static_cast<int>(states_[0].size()));
+  }
   reset();
 }
 
@@ -103,6 +111,9 @@ CrossoverOutput Crossover::split(float* const* channels, int num_channels, int n
     if (channels[ch] == nullptr) {
       throw std::invalid_argument("channel buffer must not be null");
     }
+  }
+  if (config_.mode == CrossoverMode::FirLinearPhase) {
+    return split_fir(channels, num_channels, num_samples);
   }
 
   rebuild_state(num_channels);
@@ -153,6 +164,18 @@ void Crossover::reset() {
       }
     }
   }
+  for (auto& split_history : fir_history_) {
+    for (auto& channel_history : split_history) {
+      std::fill(channel_history.begin(), channel_history.end(), 0.0f);
+    }
+  }
+  for (auto& split_indices : fir_history_index_) {
+    std::fill(split_indices.begin(), split_indices.end(), 0);
+  }
+  for (auto& channel_history : fir_delay_history_) {
+    std::fill(channel_history.begin(), channel_history.end(), 0.0f);
+  }
+  std::fill(fir_delay_index_.begin(), fir_delay_index_.end(), 0);
 }
 
 void Crossover::set_config(const CrossoverConfig& config) {
@@ -174,6 +197,10 @@ void Crossover::validate_config(const CrossoverConfig& config, double sample_rat
     if (sample_rate > 0.0 && !(config.cutoffs_hz[i] < static_cast<float>(sample_rate * 0.5))) {
       throw std::invalid_argument("crossover cutoffs must be below Nyquist");
     }
+  }
+  if (config.mode == CrossoverMode::FirLinearPhase &&
+      (config.fir_kernel_size < 3 || config.fir_kernel_size % 2 == 0)) {
+    throw std::invalid_argument("linear-phase crossover FIR kernel size must be odd and >= 3");
   }
 }
 
@@ -236,7 +263,7 @@ void Crossover::install_coefficients() {
     const double f =
         std::clamp(static_cast<double>(config_.cutoffs_hz[split_index]), 1.0, sample_rate_ * 0.49);
     if (is_lr2_linkwitz_riley(config_.slope, config_.mode)) {
-      const double k = std::tan(kPi * f / sample_rate_);
+      const double k = std::tan(kPiD * f / sample_rate_);
       const double inv = 1.0 / (1.0 + k);
       const double lp_b = k * inv;
       const double hp_b = inv;
@@ -286,7 +313,7 @@ void Crossover::install_coefficients() {
            ++k) {
         const auto& section = sections[k];
         const double lp_w0 =
-            2.0 * kPi * scaled_digital_frequency(f, section.lowpass_frequency_scale, sample_rate_) /
+            2.0 * kPiD * scaled_digital_frequency(f, section.lowpass_frequency_scale, sample_rate_) /
             sample_rate_;
         const double lp_cos_w0 = std::cos(lp_w0);
         const double lp_sin_w0 = std::sin(lp_w0);
@@ -308,7 +335,7 @@ void Crossover::install_coefficients() {
         lp.a2 = static_cast<float>(lp_a2 * lp_inv);
 
         const double hp_w0 =
-            2.0 * kPi *
+            2.0 * kPiD *
             scaled_digital_frequency(f, section.highpass_frequency_scale, sample_rate_) /
             sample_rate_;
         const double hp_cos_w0 = std::cos(hp_w0);
@@ -336,7 +363,7 @@ void Crossover::install_coefficients() {
         auto& allpass_stages = channel_states.allpass_by_split[split_index];
         for (size_t k = 0; k < sections.size() && k < allpass_stages.size(); ++k) {
           const double w0 =
-              2.0 * kPi *
+              2.0 * kPiD *
               scaled_digital_frequency(f, sections[k].lowpass_frequency_scale, sample_rate_) /
               sample_rate_;
           const double cos_w0 = std::cos(w0);
@@ -358,6 +385,115 @@ void Crossover::install_coefficients() {
       }
     }
   }
+}
+
+CrossoverOutput Crossover::split_fir(float* const* channels, int num_channels, int num_samples) {
+  rebuild_fir_state(num_channels);
+
+  CrossoverOutput output;
+  output.bands.assign(static_cast<size_t>(num_bands()),
+                      std::vector<std::vector<float>>(static_cast<size_t>(num_channels),
+                                                      std::vector<float>(num_samples, 0.0f)));
+
+  const int splits = static_cast<int>(config_.cutoffs_hz.size());
+  std::vector<float> lowpasses(static_cast<size_t>(splits), 0.0f);
+  for (int ch = 0; ch < num_channels; ++ch) {
+    for (int i = 0; i < num_samples; ++i) {
+      const float sample = channels[ch][i];
+      for (int split_index = 0; split_index < splits; ++split_index) {
+        lowpasses[static_cast<size_t>(split_index)] = process_fir_lowpass(sample, split_index, ch);
+      }
+      const float delayed = process_fir_delay(sample, ch);
+      if (splits == 0) {
+        output.bands[0][static_cast<size_t>(ch)][static_cast<size_t>(i)] = delayed;
+        continue;
+      }
+
+      output.bands[0][static_cast<size_t>(ch)][static_cast<size_t>(i)] = lowpasses[0];
+      for (int band = 1; band < splits; ++band) {
+        output.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+            lowpasses[static_cast<size_t>(band)] - lowpasses[static_cast<size_t>(band - 1)];
+      }
+      output.bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+          delayed - lowpasses.back();
+    }
+  }
+  return output;
+}
+
+void Crossover::rebuild_fir_state(int num_channels) {
+  rebuild_fir_kernels();
+  const size_t splits = config_.cutoffs_hz.size();
+  const size_t kernel_size = static_cast<size_t>(config_.fir_kernel_size);
+  const size_t delay_size = static_cast<size_t>(config_.fir_kernel_size / 2 + 1);
+  const bool shape_matches =
+      fir_history_.size() == splits &&
+      (splits == 0 || fir_history_[0].size() == static_cast<size_t>(num_channels)) &&
+      (splits == 0 || num_channels == 0 || fir_history_[0][0].size() == kernel_size) &&
+      fir_delay_history_.size() == static_cast<size_t>(num_channels) &&
+      (num_channels == 0 || fir_delay_history_[0].size() == delay_size);
+  if (shape_matches) {
+    return;
+  }
+
+  fir_history_.assign(splits,
+                      std::vector<std::vector<float>>(static_cast<size_t>(num_channels),
+                                                      std::vector<float>(kernel_size, 0.0f)));
+  fir_history_index_.assign(splits, std::vector<size_t>(static_cast<size_t>(num_channels), 0));
+  fir_delay_history_.assign(static_cast<size_t>(num_channels),
+                            std::vector<float>(delay_size, 0.0f));
+  fir_delay_index_.assign(static_cast<size_t>(num_channels), 0);
+}
+
+void Crossover::rebuild_fir_kernels() {
+  const size_t kernel_size = static_cast<size_t>(config_.fir_kernel_size);
+  fir_kernels_.assign(config_.cutoffs_hz.size(), std::vector<float>(kernel_size, 0.0f));
+  const int center = config_.fir_kernel_size / 2;
+  for (size_t split_index = 0; split_index < config_.cutoffs_hz.size(); ++split_index) {
+    const double cutoff =
+        std::clamp(static_cast<double>(config_.cutoffs_hz[split_index]), 1.0, sample_rate_ * 0.49);
+    const double normalized = cutoff / sample_rate_;
+    double sum = 0.0;
+    auto& kernel = fir_kernels_[split_index];
+    for (int i = 0; i < config_.fir_kernel_size; ++i) {
+      const int n = i - center;
+      const double sinc =
+          n == 0 ? 2.0 * normalized : std::sin(2.0 * kPiD * normalized * n) / (kPiD * n);
+      const double window = hann_value(i, config_.fir_kernel_size);
+      kernel[static_cast<size_t>(i)] = static_cast<float>(sinc * window);
+      sum += kernel[static_cast<size_t>(i)];
+    }
+    if (std::abs(sum) > 1.0e-12) {
+      for (auto& tap : kernel) {
+        tap = static_cast<float>(tap / sum);
+      }
+    }
+  }
+}
+
+float Crossover::process_fir_lowpass(float sample, int split_index, int channel) {
+  auto& history = fir_history_[static_cast<size_t>(split_index)][static_cast<size_t>(channel)];
+  auto& write_index =
+      fir_history_index_[static_cast<size_t>(split_index)][static_cast<size_t>(channel)];
+  history[write_index] = sample;
+  double output = 0.0;
+  const size_t size = history.size();
+  const auto& kernel = fir_kernels_[static_cast<size_t>(split_index)];
+  for (size_t tap = 0; tap < size; ++tap) {
+    const size_t history_index = (write_index + size - tap) % size;
+    output += static_cast<double>(kernel[tap]) * history[history_index];
+  }
+  write_index = (write_index + 1) % size;
+  return static_cast<float>(output);
+}
+
+float Crossover::process_fir_delay(float sample, int channel) {
+  auto& history = fir_delay_history_[static_cast<size_t>(channel)];
+  auto& write_index = fir_delay_index_[static_cast<size_t>(channel)];
+  history[write_index] = sample;
+  const float output = history[(write_index + 1) % history.size()];
+  write_index = (write_index + 1) % history.size();
+  return output;
 }
 
 void Crossover::rebuild_state(int num_channels) {

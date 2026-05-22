@@ -5,6 +5,7 @@
 
 #include "core/fft.h"
 #include "filters/mel.h"
+#include "util/dsp_primitives.h"
 #include "util/math_utils.h"
 
 namespace sonare::streaming_detail {
@@ -52,11 +53,7 @@ float compute_flatness_frame(const float* magnitude, int n_bins) {
 }
 
 float compute_rms_frame(const float* samples, int n_fft) {
-  float sum_sq = 0.0f;
-  for (int i = 0; i < n_fft; ++i) {
-    sum_sq += samples[i] * samples[i];
-  }
-  return std::sqrt(sum_sq / static_cast<float>(n_fft));
+  return rms(samples, static_cast<size_t>(std::max(n_fft, 0)));
 }
 
 float lag_to_bpm(int lag, int sr, int hop_length) {
@@ -183,8 +180,7 @@ bool are_chords_confusable(int root1, int quality1, int root2, int quality2) {
   return count_shared_notes(root1, quality1, root2, quality2) >= 2;
 }
 
-std::array<float, 12> compute_median_chroma(
-    const std::deque<std::array<float, 12>>& history) {
+std::array<float, 12> compute_median_chroma(const std::deque<std::array<float, 12>>& history) {
   std::array<float, 12> result = {};
   if (history.empty()) {
     return result;

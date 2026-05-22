@@ -32,8 +32,6 @@ class UpwardCompressor : public common::ProcessorBase {
 
  private:
   static void validate_config(const UpwardCompressorConfig& config);
-  static float linear_to_db(float value);
-  static float db_to_linear(float db);
   static float gain_db(float input_db, const UpwardCompressorConfig& config);
   void ensure_followers(int num_channels);
 

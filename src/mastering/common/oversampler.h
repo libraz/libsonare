@@ -5,6 +5,8 @@
 
 #include <vector>
 
+#include "mastering/common/polyphase_fir.h"
+
 namespace sonare::mastering::common {
 
 class Oversampler {
@@ -13,6 +15,7 @@ class Oversampler {
 
   void set_factor(int factor);
   int factor() const { return factor_; }
+  int latency_samples() const noexcept { return fir_.taps_per_phase / 2; }
 
   std::vector<float> upsample(const float* input, size_t size) const;
   std::vector<float> upsample(const std::vector<float>& input) const;
@@ -21,6 +24,8 @@ class Oversampler {
 
  private:
   int factor_ = 2;
+  PolyphaseFir fir_;
+  std::vector<float> decimation_taps_;
 };
 
 }  // namespace sonare::mastering::common

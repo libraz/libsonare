@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "util/db.h"
+
 namespace sonare::mastering::multiband {
 
 MultibandSaturation::MultibandSaturation(MultibandSaturationConfig config)
@@ -90,8 +92,6 @@ void MultibandSaturation::validate_config(const MultibandSaturationConfig& confi
     }
   }
 }
-
-float MultibandSaturation::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 float MultibandSaturation::saturate_sample(float sample, const SaturationBandConfig& config) {
   if (!config.enabled || config.mix == 0.0f) {

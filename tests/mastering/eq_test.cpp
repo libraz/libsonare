@@ -43,6 +43,12 @@ float rms_tail(const std::vector<float>& samples, size_t skip) {
   return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
+float peak_abs(const std::vector<float>& samples) {
+  float peak = 0.0f;
+  for (float sample : samples) peak = std::max(peak, std::abs(sample));
+  return peak;
+}
+
 void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
@@ -113,6 +119,87 @@ TEST_CASE("ParametricEq high-pass attenuates low frequencies", "[mastering][eq]"
 
   REQUIRE(low_gain < 0.08f);
   REQUIRE(high_gain > 0.9f);
+}
+
+TEST_CASE("ParametricEq Vicanek mode filters common band types", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+
+  ParametricEq lowpass;
+  lowpass.prepare(sample_rate, 1024);
+  lowpass.set_band(
+      0, {EqBandType::LowPass, 1000.0f, 0.0f, 0.70710678f, true, BiquadCoeffMode::Vicanek});
+  auto low = sine(200.0f, sample_rate, sample_rate);
+  auto high = sine(8000.0f, sample_rate, sample_rate);
+  const float low_before = rms_tail(low, 4096);
+  const float high_before = rms_tail(high, 4096);
+  process(lowpass, low);
+  lowpass.reset();
+  process(lowpass, high);
+  REQUIRE(rms_tail(low, 4096) / low_before > 0.75f);
+  REQUIRE(rms_tail(high, 4096) / high_before < 0.35f);
+
+  ParametricEq highpass;
+  highpass.prepare(sample_rate, 1024);
+  highpass.set_band(
+      0, {EqBandType::HighPass, 1000.0f, 0.0f, 0.70710678f, true, BiquadCoeffMode::Vicanek});
+  low = sine(200.0f, sample_rate, sample_rate);
+  high = sine(8000.0f, sample_rate, sample_rate);
+  process(highpass, low);
+  highpass.reset();
+  process(highpass, high);
+  REQUIRE(rms_tail(low, 4096) / low_before < 0.35f);
+  REQUIRE(rms_tail(high, 4096) / high_before > 0.75f);
+}
+
+TEST_CASE("ParametricEq Vicanek peak boosts its center frequency", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  ParametricEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_band(0, {EqBandType::Peak, 6000.0f, 6.0f, 1.0f, true, BiquadCoeffMode::Vicanek});
+
+  auto center = sine(6000.0f, sample_rate, sample_rate);
+  auto off_center = sine(500.0f, sample_rate, sample_rate);
+  const float center_before = rms_tail(center, 4096);
+  const float off_before = rms_tail(off_center, 4096);
+
+  process(eq, center);
+  eq.reset();
+  process(eq, off_center);
+
+  REQUIRE(rms_tail(center, 4096) / center_before > 1.5f);
+  REQUIRE(rms_tail(off_center, 4096) / off_before < 1.2f);
+}
+
+TEST_CASE("ParametricEq Vicanek shelves match low and high shelf intent", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+
+  ParametricEq low_shelf;
+  low_shelf.prepare(sample_rate, 1024);
+  low_shelf.set_band(
+      0, {EqBandType::LowShelf, 1000.0f, 6.0f, 0.70710678f, true, BiquadCoeffMode::Vicanek});
+  auto low = sine(100.0f, sample_rate, sample_rate);
+  auto high = sine(8000.0f, sample_rate, sample_rate);
+  const float low_before = rms_tail(low, 4096);
+  const float high_before = rms_tail(high, 4096);
+  process(low_shelf, low);
+  low_shelf.reset();
+  process(low_shelf, high);
+  REQUIRE(rms_tail(low, 4096) / low_before > 1.7f);
+  REQUIRE(rms_tail(high, 4096) / high_before < 1.15f);
+
+  ParametricEq high_shelf;
+  high_shelf.prepare(sample_rate, 1024);
+  high_shelf.set_band(
+      0, {EqBandType::HighShelf, 6000.0f, 6.0f, 0.70710678f, true, BiquadCoeffMode::Vicanek});
+  low = sine(100.0f, sample_rate, sample_rate);
+  high = sine(12000.0f, sample_rate, sample_rate);
+  const float low2_before = rms_tail(low, 4096);
+  const float high2_before = rms_tail(high, 4096);
+  process(high_shelf, low);
+  high_shelf.reset();
+  process(high_shelf, high);
+  REQUIRE(rms_tail(low, 4096) / low2_before < 1.15f);
+  REQUIRE(rms_tail(high, 4096) / high2_before > 1.6f);
 }
 
 TEST_CASE("ParametricEq disabled band is bypassed", "[mastering][eq]") {
@@ -225,6 +312,26 @@ TEST_CASE("LinearPhaseEq high-pass attenuates lows while preserving highs", "[ma
 
   REQUIRE(low_gain < 0.35f);
   REQUIRE(high_gain > 0.85f);
+}
+
+TEST_CASE("LinearPhaseEq partitioned convolution matches direct convolution", "[mastering][eq]") {
+  LinearPhaseEq direct({1024, 257, false});
+  LinearPhaseEq partitioned({1024, 257, true, 128});
+  direct.prepare(48000.0, 128);
+  partitioned.prepare(48000.0, 128);
+
+  const EqBand band{EqBandType::Peak, 2500.0f, 4.0f, 1.2f, true};
+  direct.set_band(0, band);
+  partitioned.set_band(0, band);
+
+  auto direct_signal = sine(700.0f, 48000, 1024, 0.25f);
+  auto partitioned_signal = direct_signal;
+  process(direct, direct_signal);
+  process(partitioned, partitioned_signal);
+
+  for (size_t i = 0; i < direct_signal.size(); ++i) {
+    REQUIRE_THAT(partitioned_signal[i], WithinAbs(direct_signal[i], 0.00001f));
+  }
 }
 
 TEST_CASE("LinearPhaseEq validates configuration and bands", "[mastering][eq]") {
@@ -470,6 +577,9 @@ TEST_CASE("GraphicEq exposes 31 bands and nearest band lookup", "[mastering][eq]
   REQUIRE_THAT(eq.center_frequency(17), WithinAbs(1000.0f, 0.0001f));
   REQUIRE_THAT(eq.center_frequency(30), WithinAbs(20000.0f, 0.0001f));
   REQUIRE(eq.nearest_band(990.0f) == 17);
+  REQUIRE(GraphicEq::band_q_for_gain_db(12.0f) > GraphicEq::band_q_for_gain_db(3.0f));
+  REQUIRE_THAT(GraphicEq::band_q_for_gain_db(12.0f),
+               WithinAbs(GraphicEq::band_q_for_gain_db(-12.0f), 0.0001f));
   REQUIRE_THROWS(eq.center_frequency(31));
   REQUIRE_THROWS(eq.nearest_band(0.0f));
 }
@@ -559,6 +669,26 @@ TEST_CASE("PultecEq clear bypasses processing", "[mastering][eq]") {
   }
 }
 
+TEST_CASE("PultecEq component model adds passive loss and output nonlinearity", "[mastering][eq]") {
+  PultecEq curve;
+  PultecEq component;
+  curve.prepare(48000.0, 512);
+  component.prepare(48000.0, 512);
+  curve.set_low_boost(5.0f);
+  component.set_low_boost(5.0f);
+  component.set_component_model(PultecComponentModel::Eqp1aWdf);
+  component.set_output_drive(6.0f);
+
+  auto curve_audio = sine(60.0f, 48000, 4096, 0.8f);
+  auto component_audio = curve_audio;
+  process(curve, curve_audio);
+  process(component, component_audio);
+
+  REQUIRE(rms_tail(component_audio, 512) < rms_tail(curve_audio, 512));
+  REQUIRE(peak_abs(component_audio) <= 1.1f);
+  REQUIRE(component.component_model() == PultecComponentModel::Eqp1aWdf);
+}
+
 TEST_CASE("ApiStyleEq snaps frequency and gain to stepped controls", "[mastering][eq]") {
   ApiStyleEq eq;
   eq.prepare(48000.0, 512);
@@ -629,6 +759,59 @@ TEST_CASE("DynamicEq supports upward dynamic boost", "[mastering][eq]") {
   REQUIRE(rms_tail(loud, 4096) / before > 1.45f);
 }
 
+TEST_CASE("DynamicEq detects each band from its own frequency region", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  DynamicEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f, true});
+  eq.set_band(1, {EqBandType::Peak, 8000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f, true});
+
+  auto low = sine(1000.0f, sample_rate, sample_rate, 0.5f);
+  process(eq, low);
+
+  REQUIRE(eq.last_band_detector_db(0) > -10.0f);
+  REQUIRE(eq.last_band_detector_db(1) < -40.0f);
+  REQUIRE(eq.last_applied_gain_db(0) < -6.0f);
+  REQUIRE_THAT(eq.last_applied_gain_db(1), WithinAbs(0.0f, 0.001f));
+}
+
+TEST_CASE("DynamicEq supports external sidechain for dynamic bands", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  DynamicEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f, true});
+
+  auto program = sine(1000.0f, sample_rate, sample_rate, 0.02f);
+  auto sidechain = sine(1000.0f, sample_rate, sample_rate, 0.8f);
+  const float before = rms_tail(program, 4096);
+  const float* sidechain_channels[] = {sidechain.data()};
+
+  eq.set_sidechain(sidechain_channels, 1, static_cast<int>(sidechain.size()));
+  process(eq, program);
+
+  REQUIRE(eq.last_band_detector_db(0) > -6.0f);
+  REQUIRE(eq.last_applied_gain_db(0) < -6.0f);
+  REQUIRE(rms_tail(program, 4096) / before < 0.7f);
+}
+
+TEST_CASE("DynamicEq supports tunable sidechain frequency and timing", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  DynamicEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f,
+                  true, 2.0f, 8000.0f, 0.1f, 20.0f, 0.5f});
+
+  auto program = sine(1000.0f, sample_rate, sample_rate, 0.2f);
+  auto sidechain = sine(8000.0f, sample_rate, sample_rate, 0.8f);
+  const float* sidechain_channels[] = {sidechain.data()};
+
+  eq.set_sidechain(sidechain_channels, 1, static_cast<int>(sidechain.size()));
+  process(eq, program);
+
+  REQUIRE(eq.last_band_detector_db(0) > -8.0f);
+  REQUIRE(eq.last_applied_gain_db(0) < -6.0f);
+}
+
 TEST_CASE("DynamicEq validates band parameters", "[mastering][eq]") {
   DynamicEq eq;
   eq.prepare(48000.0, 512);
@@ -639,4 +822,12 @@ TEST_CASE("DynamicEq validates band parameters", "[mastering][eq]") {
       eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 0.0f, -20.0f, 2.0f, -6.0f, true}));
   REQUIRE_THROWS(
       eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 1.0f, -20.0f, 0.5f, -6.0f, true}));
+  REQUIRE_THROWS(eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 1.0f, -20.0f, 2.0f,
+                                 -6.0f, true, 0.0f}));
+  std::vector<float> sidechain(4, 0.0f);
+  const float* sidechain_channels[] = {sidechain.data()};
+  eq.set_sidechain(sidechain_channels, 1, 4);
+  std::vector<float> program(3, 0.0f);
+  float* program_channels[] = {program.data()};
+  REQUIRE_THROWS(eq.process(program_channels, 1, 3));
 }

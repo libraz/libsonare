@@ -5,6 +5,12 @@
 #include <stdexcept>
 
 namespace sonare::mastering::saturation {
+namespace {
+
+constexpr std::array<float, 9> kNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
+                                                      -2.205f, 1.281f,  -0.569f, 0.0847f};
+
+}  // namespace
 
 BitCrusher::BitCrusher(BitCrusherConfig config) : config_(config) { validate_config(config_); }
 
@@ -25,7 +31,7 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) {
       if (counters_[static_cast<size_t>(ch)] == 0) {
-        held_[static_cast<size_t>(ch)] = quantize(channels[ch][i], config_.bit_depth);
+        held_[static_cast<size_t>(ch)] = quantize(channels[ch][i], config_.bit_depth, ch);
       }
       counters_[static_cast<size_t>(ch)] =
           (counters_[static_cast<size_t>(ch)] + 1) % config_.downsample_factor;
@@ -38,6 +44,12 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
 void BitCrusher::reset() {
   std::fill(held_.begin(), held_.end(), 0.0f);
   std::fill(counters_.begin(), counters_.end(), 0);
+  for (size_t ch = 0; ch < rng_state_.size(); ++ch) {
+    rng_state_[ch] = config_.dither_seed + static_cast<uint32_t>(ch * 747796405u);
+  }
+  for (auto& history : error_history_) {
+    history.fill(0.0f);
+  }
 }
 
 void BitCrusher::set_config(const BitCrusherConfig& config) {
@@ -52,15 +64,51 @@ void BitCrusher::validate_config(const BitCrusherConfig& config) {
   }
 }
 
-float BitCrusher::quantize(float sample, int bit_depth) {
+float BitCrusher::quantize(float sample, int bit_depth, int channel) {
   const float levels = std::pow(2.0f, static_cast<float>(bit_depth - 1)) - 1.0f;
-  return std::round(std::clamp(sample, -1.0f, 1.0f) * levels) / levels;
+  float shaped = 0.0f;
+  if (config_.dither_type == final::DitherType::NoiseShaped) {
+    auto& history = error_history_[static_cast<size_t>(channel)];
+    for (size_t i = 0; i < history.size(); ++i) {
+      shaped += kNoiseShapingCoeffs[i] * history[i];
+    }
+  }
+  const float dithered = sample + dither_noise(channel) / std::max(levels, 1.0f) + shaped / levels;
+  const float quantized = std::round(std::clamp(dithered, -1.0f, 1.0f) * levels) / levels;
+  if (config_.dither_type == final::DitherType::NoiseShaped) {
+    auto& history = error_history_[static_cast<size_t>(channel)];
+    const float error = (dithered - quantized) * levels;
+    for (size_t i = history.size() - 1; i > 0; --i) {
+      history[i] = history[i - 1];
+    }
+    history[0] = error;
+  }
+  return quantized;
+}
+
+float BitCrusher::dither_noise(int channel) {
+  if (config_.dither_type == final::DitherType::None) {
+    return 0.0f;
+  }
+  auto& state = rng_state_[static_cast<size_t>(channel)];
+  const auto uniform = [&state] {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>((state >> 8) & 0x00FFFFFFu) / 16777216.0f - 0.5f;
+  };
+  if (config_.dither_type == final::DitherType::Rpdf) {
+    return uniform();
+  }
+  return uniform() + uniform();
 }
 
 void BitCrusher::ensure_state(int num_channels) {
   if (held_.size() != static_cast<size_t>(num_channels)) {
-    held_.assign(static_cast<size_t>(num_channels), 0.0f);
-    counters_.assign(static_cast<size_t>(num_channels), 0);
+    const auto size = static_cast<size_t>(num_channels);
+    held_.assign(size, 0.0f);
+    counters_.assign(size, 0);
+    rng_state_.assign(size, 0);
+    error_history_.assign(size, {});
+    reset();
   }
 }
 

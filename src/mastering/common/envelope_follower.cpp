@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::common {
 
 void EnvelopeFollower::prepare(double sample_rate, float attack_ms, float release_ms) {
   sample_rate_ = sample_rate;
-  attack_coeff_ = coefficient(sample_rate_, attack_ms);
-  release_coeff_ = coefficient(sample_rate_, release_ms);
+  attack_coeff_ = time_to_coefficient(sample_rate_, attack_ms);
+  release_coeff_ = time_to_coefficient(sample_rate_, release_ms);
 }
 
 void EnvelopeFollower::reset(float value) { envelope_ = std::max(0.0f, value); }
@@ -20,12 +22,16 @@ float EnvelopeFollower::process(float input) {
   return envelope_;
 }
 
-float EnvelopeFollower::coefficient(double sample_rate, float time_ms) {
-  const float clamped_ms = std::max(time_ms, 0.0f);
-  if (clamped_ms == 0.0f || sample_rate <= 0.0) return 0.0f;
+float EnvelopeFollower::smooth_bidirectional(float target, bool attack_when_decreasing) {
+  return smooth_bidirectional(target, release_coeff_, attack_when_decreasing);
+}
 
-  const double samples = sample_rate * static_cast<double>(clamped_ms) * 0.001;
-  return static_cast<float>(std::exp(-1.0 / samples));
+float EnvelopeFollower::smooth_bidirectional(float target, float release_coeff,
+                                             bool attack_when_decreasing) {
+  const bool use_attack = attack_when_decreasing ? target < envelope_ : target > envelope_;
+  const float coeff = use_attack ? attack_coeff_ : release_coeff;
+  envelope_ = coeff * envelope_ + (1.0f - coeff) * target;
+  return envelope_;
 }
 
 }  // namespace sonare::mastering::common

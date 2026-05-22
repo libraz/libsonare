@@ -39,7 +39,6 @@ class MultibandSaturation : public common::ProcessorBase {
 
  private:
   static void validate_config(const MultibandSaturationConfig& config);
-  static float db_to_linear(float db);
   static float saturate_sample(float sample, const SaturationBandConfig& config);
 
   MultibandSaturationConfig config_{};

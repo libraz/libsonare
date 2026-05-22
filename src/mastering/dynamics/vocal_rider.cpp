@@ -4,6 +4,9 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::dynamics {
 
 VocalRider::VocalRider(VocalRiderConfig config) : config_(config) { validate_config(config_); }
@@ -41,19 +44,48 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   ensure_followers(num_channels);
   float largest_abs_gain = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
-    }
-
-    auto& follower = followers_[static_cast<size_t>(ch)];
+    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+  }
+  const float smoothing = coeff(sample_rate_, config_.gain_smoothing_ms);
+  if (config_.linked_detection) {
     for (int i = 0; i < num_samples; ++i) {
-      const float level = follower.process(channels[ch][i]);
-      const float target_gain_db = config_.target_db - linear_to_db(level);
-      const float ride_db = std::clamp(target_gain_db, -config_.max_cut_db, config_.max_boost_db);
-      const float gain_db = ride_db + config_.output_gain_db;
-      channels[ch][i] *= db_to_linear(gain_db);
-      if (std::abs(ride_db) > std::abs(largest_abs_gain)) {
-        largest_abs_gain = ride_db;
+      float linked_level = 0.0f;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        linked_level = std::max(
+            linked_level,
+            followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
+      }
+      const float level_db = linear_to_db(linked_level);
+      float ride_db = 0.0f;
+      if (level_db >= config_.noise_floor_db) {
+        const float target_gain_db = config_.target_db - level_db;
+        ride_db = std::clamp(target_gain_db, -config_.max_cut_db, config_.max_boost_db);
+      }
+      linked_gain_state_db_ =
+          smoothing * linked_gain_state_db_ + (1.0f - smoothing) * ride_db;
+      const float gain_db = linked_gain_state_db_ + config_.output_gain_db;
+      const float gain = db_to_linear(gain_db);
+      for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
+      if (std::abs(linked_gain_state_db_) > std::abs(largest_abs_gain)) {
+        largest_abs_gain = linked_gain_state_db_;
+      }
+    }
+  } else {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      auto& follower = followers_[static_cast<size_t>(ch)];
+      float gain_state = linked_gain_state_db_;
+      for (int i = 0; i < num_samples; ++i) {
+        const float level = follower.process(channels[ch][i]);
+        const float level_db = linear_to_db(level);
+        float ride_db = 0.0f;
+        if (level_db >= config_.noise_floor_db) {
+          const float target_gain_db = config_.target_db - level_db;
+          ride_db = std::clamp(target_gain_db, -config_.max_cut_db, config_.max_boost_db);
+        }
+        gain_state = smoothing * gain_state + (1.0f - smoothing) * ride_db;
+        const float gain_db = gain_state + config_.output_gain_db;
+        channels[ch][i] *= db_to_linear(gain_db);
+        if (std::abs(ride_db) > std::abs(largest_abs_gain)) largest_abs_gain = ride_db;
       }
     }
   }
@@ -65,6 +97,7 @@ void VocalRider::reset() {
   for (auto& follower : followers_) {
     follower.reset();
   }
+  linked_gain_state_db_ = 0.0f;
   last_gain_db_ = 0.0f;
 }
 
@@ -81,19 +114,12 @@ void VocalRider::set_config(const VocalRiderConfig& config) {
 
 void VocalRider::validate_config(const VocalRiderConfig& config) {
   if (config.max_boost_db < 0.0f || config.max_cut_db < 0.0f || config.attack_ms < 0.0f ||
-      config.release_ms < 0.0f) {
+      config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {
     throw std::invalid_argument("invalid vocal rider configuration");
   }
 }
 
-float VocalRider::linear_to_db(float value) {
-  if (value <= 0.0f) {
-    return -120.0f;
-  }
-  return 20.0f * std::log10(value);
-}
-
-float VocalRider::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
+float VocalRider::coeff(double sample_rate, float ms) { return time_to_coefficient(sample_rate, ms); }
 
 void VocalRider::ensure_followers(int num_channels) {
   if (followers_.size() == static_cast<size_t>(num_channels)) {

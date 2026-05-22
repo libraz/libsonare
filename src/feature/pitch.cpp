@@ -5,6 +5,8 @@
 #include <limits>
 #include <numeric>
 
+#include "core/convert.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -364,7 +366,7 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
           float prev_freq = static_cast<float>(sr) / frame_candidates[i - 1][k].period;
           float curr_freq = static_cast<float>(sr) / frame_candidates[i][j].period;
           float ratio = curr_freq / prev_freq;
-          float cents = 1200.0f * std::log2(ratio);
+          float cents = constants::kCentsPerOctave * std::log2(ratio);
           float jump_penalty = std::exp(-cents * cents / (2.0f * 50.0f * 50.0f));
           trans_prob = kSelfTransition * jump_penalty;
         } else if (!prev_voiced && !curr_voiced) {
@@ -431,12 +433,9 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
 }
 
 float freq_to_midi(float freq) {
-  if (freq <= 0.0f) {
-    return 0.0f;
-  }
-  return 12.0f * std::log2(freq / 440.0f) + 69.0f;
+  return hz_to_midi(freq);
 }
 
-float midi_to_freq(float midi) { return 440.0f * std::pow(2.0f, (midi - 69.0f) / 12.0f); }
+float midi_to_freq(float midi) { return midi_to_hz(midi); }
 
 }  // namespace sonare

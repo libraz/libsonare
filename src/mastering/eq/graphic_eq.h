@@ -26,6 +26,7 @@ class GraphicEq : public common::ProcessorBase {
   float gain_db(size_t index) const;
   float center_frequency(size_t index) const;
   size_t nearest_band(float frequency_hz) const;
+  static float band_q_for_gain_db(float gain_db);
 
  private:
   void rebuild_bands();

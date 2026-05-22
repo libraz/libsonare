@@ -4,9 +4,9 @@
 /// @brief Peak lookahead helper for limiter-style processors.
 
 #include <cstddef>
-#include <deque>
 
 #include "mastering/common/delay_line.h"
+#include "mastering/common/sliding_max.h"
 
 namespace sonare::mastering::common {
 
@@ -19,7 +19,7 @@ class LookaheadBuffer {
 
  private:
   DelayLine delay_;
-  std::deque<float> window_;
+  SlidingMax<float> window_peak_;
   size_t lookahead_samples_ = 0;
   float peak_ = 0.0f;
 };

@@ -1,13 +1,16 @@
 #include "mastering/eq/mid_side_eq.h"
 
 #include <stdexcept>
-#include <vector>
 
 namespace sonare::mastering::eq {
 
 void MidSideEq::prepare(double sample_rate, int max_block_size) {
   mid_eq_.prepare(sample_rate, max_block_size);
   side_eq_.prepare(sample_rate, max_block_size);
+  if (max_block_size > 0) {
+    mid_buffer_.assign(static_cast<size_t>(max_block_size), 0.0f);
+    side_buffer_.assign(static_cast<size_t>(max_block_size), 0.0f);
+  }
 }
 
 void MidSideEq::process(float* const* channels, int num_channels, int num_samples) {
@@ -24,23 +27,24 @@ void MidSideEq::process(float* const* channels, int num_channels, int num_sample
     throw std::invalid_argument("channels must not be null");
   }
 
-  std::vector<float> mid(static_cast<size_t>(num_samples));
-  std::vector<float> side(static_cast<size_t>(num_samples));
+  ensure_buffers(num_samples);
+  float* const mid = mid_buffer_.data();
+  float* const side = side_buffer_.data();
   for (int i = 0; i < num_samples; ++i) {
     const float left = channels[0][i];
     const float right = channels[1][i];
-    mid[static_cast<size_t>(i)] = (left + right) * 0.5f;
-    side[static_cast<size_t>(i)] = (left - right) * 0.5f;
+    mid[i] = (left + right) * 0.5f;
+    side[i] = (left - right) * 0.5f;
   }
 
-  float* mid_channels[] = {mid.data()};
-  float* side_channels[] = {side.data()};
+  float* mid_channels[] = {mid};
+  float* side_channels[] = {side};
   mid_eq_.process(mid_channels, 1, num_samples);
   side_eq_.process(side_channels, 1, num_samples);
 
   for (int i = 0; i < num_samples; ++i) {
-    channels[0][i] = mid[static_cast<size_t>(i)] + side[static_cast<size_t>(i)];
-    channels[1][i] = mid[static_cast<size_t>(i)] - side[static_cast<size_t>(i)];
+    channels[0][i] = mid[i] + side[i];
+    channels[1][i] = mid[i] - side[i];
   }
 }
 
@@ -65,5 +69,12 @@ void MidSideEq::clear() {
 const EqBand& MidSideEq::mid_band(size_t index) const { return mid_eq_.band(index); }
 
 const EqBand& MidSideEq::side_band(size_t index) const { return side_eq_.band(index); }
+
+void MidSideEq::ensure_buffers(int num_samples) {
+  if (mid_buffer_.size() < static_cast<size_t>(num_samples)) {
+    mid_buffer_.assign(static_cast<size_t>(num_samples), 0.0f);
+    side_buffer_.assign(static_cast<size_t>(num_samples), 0.0f);
+  }
+}
 
 }  // namespace sonare::mastering::eq

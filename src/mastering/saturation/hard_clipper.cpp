@@ -18,24 +18,53 @@ void HardClipper::process(float* const* channels, int num_channels, int num_samp
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  ensure_state(num_channels);
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) {
-      channels[ch][i] = std::clamp(channels[ch][i], -config_.ceiling, config_.ceiling);
+      channels[ch][i] = process_sample(channels[ch][i], ch);
     }
   }
 }
 
-void HardClipper::reset() {}
+void HardClipper::reset() {
+  for (auto& state : hard_clip_adaa_) state.reset();
+}
 
 void HardClipper::set_config(const HardClipperConfig& config) {
   validate_config(config);
+  const bool reset_state = config_.ceiling != config.ceiling || config_.aliasing != config.aliasing;
   config_ = config;
+  if (reset_state) {
+    const size_t channels = hard_clip_adaa_.size();
+    hard_clip_adaa_.clear();
+    hard_clip_adaa_.reserve(channels);
+    for (size_t i = 0; i < channels; ++i) {
+      hard_clip_adaa_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
+    }
+  }
 }
 
 void HardClipper::validate_config(const HardClipperConfig& config) {
   if (!(config.ceiling > 0.0f))
     throw std::invalid_argument("hard clipper ceiling must be positive");
+}
+
+void HardClipper::ensure_state(int num_channels) {
+  if (hard_clip_adaa_.size() != static_cast<size_t>(num_channels)) {
+    hard_clip_adaa_.clear();
+    hard_clip_adaa_.reserve(static_cast<size_t>(num_channels));
+    for (int i = 0; i < num_channels; ++i) {
+      hard_clip_adaa_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
+    }
+  }
+}
+
+float HardClipper::process_sample(float sample, int channel) {
+  if (config_.aliasing == common::AliasingControl::Adaa1) {
+    return hard_clip_adaa_[static_cast<size_t>(channel)].process(sample);
+  }
+  return std::clamp(sample, -config_.ceiling, config_.ceiling);
 }
 
 }  // namespace sonare::mastering::saturation

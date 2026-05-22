@@ -4,13 +4,28 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+#include "util/db.h"
+
 namespace sonare::mastering::dynamics {
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
+using sonare::constants::kPiD;
 
 }  // namespace
+
+float DeEsser::Biquad::process(float x) {
+  const float y = b0 * x + z1;
+  z1 = b1 * x - a1 * y + z2;
+  z2 = b2 * x - a2 * y;
+  return y;
+}
+
+void DeEsser::Biquad::reset() {
+  z1 = 0.0f;
+  z2 = 0.0f;
+}
 
 DeEsser::DeEsser(DeEsserConfig config) : config_(config) { validate_config(config_); }
 
@@ -52,15 +67,15 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
       throw std::invalid_argument("channel buffer must not be null");
     }
 
-    auto& low_state = lowpass_state_[static_cast<size_t>(ch)];
+    auto& filter = bandpass_[static_cast<size_t>(ch)];
+    auto& filter2 = bandpass2_[static_cast<size_t>(ch)];
     auto& follower = followers_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
       const float input = channels[ch][i];
-      low_state = lowpass_coeff_ * low_state + (1.0f - lowpass_coeff_) * input;
-      const float high = input - low_state;
-      const float envelope = follower.process(high);
+      const float sibilant = filter2.process(filter.process(input));
+      const float envelope = follower.process(sibilant);
       const float reduction_db = gain_reduction_db(linear_to_db(envelope), config_);
-      channels[ch][i] = low_state + high * db_to_linear(reduction_db);
+      channels[ch][i] = input * db_to_linear(reduction_db);
       max_reduction = std::min(max_reduction, reduction_db);
     }
   }
@@ -69,7 +84,8 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
 }
 
 void DeEsser::reset() {
-  std::fill(lowpass_state_.begin(), lowpass_state_.end(), 0.0f);
+  for (auto& filter : bandpass_) filter.reset();
+  for (auto& filter : bandpass2_) filter.reset();
   for (auto& follower : followers_) {
     follower.reset();
   }
@@ -95,15 +111,6 @@ void DeEsser::validate_config(const DeEsserConfig& config) {
   }
 }
 
-float DeEsser::linear_to_db(float value) {
-  if (value <= 0.0f) {
-    return -120.0f;
-  }
-  return 20.0f * std::log10(value);
-}
-
-float DeEsser::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
-
 float DeEsser::gain_reduction_db(float input_db, const DeEsserConfig& config) {
   if (input_db <= config.threshold_db || config.ratio <= 1.0f) {
     return 0.0f;
@@ -119,7 +126,8 @@ void DeEsser::ensure_state(int num_channels) {
     return;
   }
 
-  lowpass_state_.assign(static_cast<size_t>(num_channels), 0.0f);
+  bandpass_.assign(static_cast<size_t>(num_channels), filter_coeffs_);
+  bandpass2_.assign(static_cast<size_t>(num_channels), filter_coeffs_);
   followers_.assign(static_cast<size_t>(num_channels), {});
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
@@ -129,7 +137,29 @@ void DeEsser::ensure_state(int num_channels) {
 void DeEsser::update_filter_coeff() {
   const float nyquist = static_cast<float>(sample_rate_ * 0.5);
   const float cutoff = std::clamp(config_.frequency_hz, 10.0f, nyquist * 0.98f);
-  lowpass_coeff_ = static_cast<float>(std::exp(-2.0 * kPi * cutoff / sample_rate_));
+  const float q = 1.5f;
+  const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
+  const float alpha = std::sin(w0) / (2.0f * q);
+  const float a0 = 1.0f + alpha;
+  filter_coeffs_.b0 = alpha / a0;
+  filter_coeffs_.b1 = 0.0f;
+  filter_coeffs_.b2 = -alpha / a0;
+  filter_coeffs_.a1 = -2.0f * std::cos(w0) / a0;
+  filter_coeffs_.a2 = (1.0f - alpha) / a0;
+  for (auto& filter : bandpass_) {
+    const float z1 = filter.z1;
+    const float z2 = filter.z2;
+    filter = filter_coeffs_;
+    filter.z1 = z1;
+    filter.z2 = z2;
+  }
+  for (auto& filter : bandpass2_) {
+    const float z1 = filter.z1;
+    const float z2 = filter.z2;
+    filter = filter_coeffs_;
+    filter.z1 = z1;
+    filter.z2 = z2;
+  }
 }
 
 }  // namespace sonare::mastering::dynamics

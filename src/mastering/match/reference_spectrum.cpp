@@ -8,6 +8,8 @@
 
 #include "analysis/meter/spectrum.h"
 #include "core/fft.h"
+#include "core/window.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -17,12 +19,6 @@ std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
   const float bin_width = static_cast<float>(sample_rate) / static_cast<float>(n_fft);
   for (int i = 0; i < n_bins; ++i) frequencies[static_cast<size_t>(i)] = i * bin_width;
   return frequencies;
-}
-
-float hann(int index, int length) {
-  if (length <= 1) return 1.0f;
-  return 0.5f -
-         0.5f * std::cos(2.0f * 3.14159265358979323846f * index / static_cast<float>(length - 1));
 }
 
 }  // namespace
@@ -47,7 +43,7 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
     const size_t available = audio.size() - start;
     const size_t copy_count = std::min(static_cast<size_t>(config.n_fft), available);
     for (size_t i = 0; i < copy_count; ++i) {
-      frame[i] = audio[start + i] * hann(static_cast<int>(i), config.n_fft);
+      frame[i] = audio[start + i] * hann_value(static_cast<int>(i), config.n_fft);
     }
     fft.forward(frame.data(), bins.data());
     for (int bin = 0; bin < n_bins; ++bin) {
@@ -70,7 +66,7 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
         analysis::meter::smooth_fractional_octave(magnitude, frequencies, config.octave_fraction);
   }
 
-  std::vector<float> db(static_cast<size_t>(n_bins), -120.0f);
+  std::vector<float> db(static_cast<size_t>(n_bins), sonare::constants::kFloorDb);
   for (int bin = 0; bin < n_bins; ++bin) {
     db[static_cast<size_t>(bin)] =
         20.0f * std::log10(std::max(magnitude[static_cast<size_t>(bin)], 1e-10f));

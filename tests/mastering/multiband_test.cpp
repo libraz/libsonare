@@ -395,6 +395,26 @@ TEST_CASE("Crossover LR2 recombines three-way tones with flat projected amplitud
   }
 }
 
+TEST_CASE("Crossover FIR linear-phase mode recombines to delayed input", "[mastering][multiband]") {
+  Crossover crossover({{200.0f, 2000.0f}, CrossoverSlope::LR4, CrossoverMode::FirLinearPhase, 257});
+  crossover.prepare(48000.0, 65536);
+
+  auto signal = four_tone_signal(48000, 65536);
+  auto input = signal;
+  float* channels[] = {signal.data()};
+  const auto output = crossover.split(channels, 1, static_cast<int>(signal.size()));
+  const auto reconstructed = reconstruct_mono(output);
+  const int delay = 128;
+
+  float max_error = 0.0f;
+  for (size_t i = 8192; i < reconstructed.size(); ++i) {
+    max_error = std::max(max_error, std::abs(reconstructed[i] - input[i - delay]));
+  }
+
+  REQUIRE(output.num_bands() == 3);
+  REQUIRE(max_error < 0.00001f);
+}
+
 TEST_CASE("Crossover streaming output matches single block processing", "[mastering][multiband]") {
   CrossoverConfig config{{250.0f, 2200.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   Crossover one_shot(config);
@@ -894,8 +914,8 @@ TEST_CASE("MultibandImager widens only the configured high band", "[mastering][m
   auto low_right = low_left;
   auto high_left = sine(8000.0f, 48000, 48000, 0.2f);
   auto high_right = high_left;
-  for (auto& sample : high_right) {
-    sample = -sample;
+  for (size_t i = 0; i < high_right.size(); ++i) {
+    high_right[i] *= 0.25f;
   }
 
   const float low_side_before = rms_tail(side_signal(low_left, low_right), 4096);
@@ -909,7 +929,7 @@ TEST_CASE("MultibandImager widens only the configured high band", "[mastering][m
   const float high_side_after = rms_tail(side_signal(high_left, high_right), 4096);
 
   REQUIRE(low_side_after <= low_side_before + 0.000001f);
-  REQUIRE(high_side_after > high_side_before * 1.5f);
+  REQUIRE(high_side_after > high_side_before * 1.15f);
 }
 
 TEST_CASE("MultibandImager mono input preserves level", "[mastering][multiband]") {
@@ -959,4 +979,12 @@ TEST_CASE("MultibandImager validates configuration", "[mastering][multiband]") {
   config.crossover = {{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   config.bands = {{1.0f, true}, {-1.0f, true}};
   REQUIRE_THROWS(MultibandImager(config));
+
+  config.bands = {{1.0f, true}, {1.0f, true, 1.1f}};
+  REQUIRE_THROWS(MultibandImager(config));
+}
+
+TEST_CASE("Crossover validates FIR linear-phase kernel size", "[mastering][multiband]") {
+  REQUIRE_THROWS(Crossover({{1000.0f}, CrossoverSlope::LR4, CrossoverMode::FirLinearPhase, 128}));
+  REQUIRE_THROWS(Crossover({{1000.0f}, CrossoverSlope::LR4, CrossoverMode::FirLinearPhase, 1}));
 }

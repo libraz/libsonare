@@ -8,6 +8,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 namespace {
@@ -45,10 +47,13 @@ float mel_to_hz_htk(float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f)
 
 float hz_to_midi(float hz) {
   if (hz <= 0) return 0.0f;
-  return 12.0f * std::log2(hz / 440.0f) + 69.0f;
+  return constants::kSemitonesPerOctave * std::log2(hz / constants::kA4Hz) + constants::kMidiA4;
 }
 
-float midi_to_hz(float midi) { return 440.0f * std::pow(2.0f, (midi - 69.0f) / 12.0f); }
+float midi_to_hz(float midi) {
+  return constants::kA4Hz *
+         std::pow(2.0f, (midi - constants::kMidiA4) / constants::kSemitonesPerOctave);
+}
 
 std::string hz_to_note(float hz) {
   if (hz <= 0) return "?";

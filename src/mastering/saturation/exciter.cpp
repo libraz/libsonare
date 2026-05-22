@@ -4,10 +4,25 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+#include "util/db.h"
+
 namespace sonare::mastering::saturation {
 
 namespace {
-constexpr double kPi = 3.14159265358979323846;
+using sonare::constants::kPiD;
+}
+
+float Exciter::Biquad::process(float x) {
+  const float y = b0 * x + z1;
+  z1 = b1 * x - a1 * y + z2;
+  z2 = b2 * x - a2 * y;
+  return y;
+}
+
+void Exciter::Biquad::reset() {
+  z1 = 0.0f;
+  z2 = 0.0f;
 }
 
 Exciter::Exciter(ExciterConfig config) : config_(config) { validate_config(config_); }
@@ -30,43 +45,65 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
   const float drive = db_to_linear(config_.drive_db);
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
-    auto& low = lowpass_state_[static_cast<size_t>(ch)];
+    auto& bandpass = bandpass_[static_cast<size_t>(ch)];
+    auto& allpass = allpass_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
-      low = lowpass_coeff_ * low + (1.0f - lowpass_coeff_) * channels[ch][i];
-      const float high = channels[ch][i] - low;
-      channels[ch][i] += std::tanh(high * drive) * config_.amount;
+      const float band = bandpass.process(channels[ch][i]);
+      const float aligned = allpass.process(band);
+      const float even = (band * band) * (band < 0.0f ? -1.0f : 1.0f);
+      const float odd = std::tanh(band * drive);
+      const float harmonic =
+          (1.0f - config_.even_odd_mix) * even * drive + config_.even_odd_mix * odd;
+      channels[ch][i] += aligned * 0.05f * config_.amount + harmonic * config_.amount;
     }
   }
 }
 
-void Exciter::reset() { std::fill(lowpass_state_.begin(), lowpass_state_.end(), 0.0f); }
+void Exciter::reset() {
+  for (auto& filter : bandpass_) filter.reset();
+  for (auto& filter : allpass_) filter.reset();
+}
 
 void Exciter::set_config(const ExciterConfig& config) {
   validate_config(config);
   config_ = config;
   if (prepared_) {
     update_coeff();
-    reset();
   }
 }
 
 void Exciter::validate_config(const ExciterConfig& config) {
-  if (!(config.frequency_hz > 0.0f) || config.amount < 0.0f) {
+  if (!(config.frequency_hz > 0.0f) || config.amount < 0.0f || !(config.q > 0.0f) ||
+      config.even_odd_mix < 0.0f || config.even_odd_mix > 1.0f) {
     throw std::invalid_argument("invalid exciter configuration");
   }
 }
 
-float Exciter::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
-
 void Exciter::update_coeff() {
   const float cutoff =
       std::clamp(config_.frequency_hz, 10.0f, static_cast<float>(sample_rate_ * 0.49));
-  lowpass_coeff_ = static_cast<float>(std::exp(-2.0 * kPi * cutoff / sample_rate_));
+  const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
+  const float alpha = std::sin(w0) / (2.0f * config_.q);
+  const float cosw = std::cos(w0);
+  const float a0 = 1.0f + alpha;
+  bandpass_coeffs_.b0 = alpha / a0;
+  bandpass_coeffs_.b1 = 0.0f;
+  bandpass_coeffs_.b2 = -alpha / a0;
+  bandpass_coeffs_.a1 = -2.0f * cosw / a0;
+  bandpass_coeffs_.a2 = (1.0f - alpha) / a0;
+  allpass_coeffs_.b0 = (1.0f - alpha) / a0;
+  allpass_coeffs_.b1 = -2.0f * cosw / a0;
+  allpass_coeffs_.b2 = 1.0f;
+  allpass_coeffs_.a1 = -2.0f * cosw / a0;
+  allpass_coeffs_.a2 = (1.0f - alpha) / a0;
+  for (auto& filter : bandpass_) filter = bandpass_coeffs_;
+  for (auto& filter : allpass_) filter = allpass_coeffs_;
 }
 
 void Exciter::ensure_state(int num_channels) {
-  if (lowpass_state_.size() != static_cast<size_t>(num_channels)) {
-    lowpass_state_.assign(static_cast<size_t>(num_channels), 0.0f);
+  if (bandpass_.size() != static_cast<size_t>(num_channels)) {
+    bandpass_.assign(static_cast<size_t>(num_channels), bandpass_coeffs_);
+    allpass_.assign(static_cast<size_t>(num_channels), allpass_coeffs_);
   }
 }
 

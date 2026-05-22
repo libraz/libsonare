@@ -27,7 +27,6 @@ class Maximizer : public common::ProcessorBase {
 
  private:
   static void validate_config(const MaximizerConfig& config);
-  static float db_to_linear(float db);
 
   MaximizerConfig config_{};
   dynamics::BrickwallLimiter limiter_;

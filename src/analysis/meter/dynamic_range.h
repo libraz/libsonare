@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
 
 namespace sonare::analysis::meter {
 
@@ -21,7 +22,7 @@ struct DynamicRangeConfig {
   float hop_sec = 1.0f;
   float low_percentile = 0.10f;
   float high_percentile = 0.95f;
-  float floor_db = -120.0f;
+  float floor_db = sonare::constants::kFloorDb;
 };
 
 DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& config = {});

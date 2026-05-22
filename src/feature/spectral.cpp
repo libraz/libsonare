@@ -5,6 +5,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -325,14 +326,7 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 
   for (int t = 0; t < n_frames; ++t) {
     size_t start = static_cast<size_t>(t) * hop_length;
-    float sum_sq = 0.0f;
-
-    for (int i = 0; i < frame_length; ++i) {
-      float sample = padded_samples[start + i];
-      sum_sq += sample * sample;
-    }
-
-    rms[t] = std::sqrt(sum_sq / static_cast<float>(frame_length));
+    rms[t] = sonare::rms(padded_samples + start, static_cast<size_t>(frame_length));
   }
 
   return rms;

@@ -32,8 +32,6 @@ class Expander : public common::ProcessorBase {
 
  private:
   static void validate_config(const ExpanderConfig& config);
-  static float linear_to_db(float value);
-  static float db_to_linear(float db);
   static float gain_reduction_db(float input_db, const ExpanderConfig& config);
   void ensure_followers(int num_channels);
 

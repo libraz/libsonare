@@ -1,6 +1,5 @@
 #include "mastering/common/lookahead_buffer.h"
 
-#include <algorithm>
 #include <cmath>
 
 namespace sonare::mastering::common {
@@ -8,25 +7,19 @@ namespace sonare::mastering::common {
 void LookaheadBuffer::prepare(size_t lookahead_samples) {
   lookahead_samples_ = lookahead_samples;
   delay_.prepare(lookahead_samples_);
+  window_peak_.prepare(lookahead_samples_ + 1);
   reset();
 }
 
 void LookaheadBuffer::reset() {
   delay_.reset();
-  window_.clear();
+  window_peak_.reset();
   peak_ = 0.0f;
 }
 
 float LookaheadBuffer::process(float input) {
-  window_.push_back(std::abs(input));
-  if (window_.size() > lookahead_samples_ + 1) {
-    window_.pop_front();
-  }
-
-  peak_ = 0.0f;
-  for (float sample : window_) {
-    peak_ = std::max(peak_, sample);
-  }
+  window_peak_.push(std::abs(input));
+  peak_ = window_peak_.max();
 
   return delay_.process(input);
 }

@@ -5,6 +5,8 @@
 #include <utility>
 #include <vector>
 
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::match {
 
 namespace {
@@ -33,7 +35,7 @@ Audio ab_crossfade(const Audio& a, const Audio& b, float mix) {
   const size_t size = std::min(a.size(), b.size());
   std::vector<float> samples(size);
   for (size_t i = 0; i < size; ++i) {
-    samples[i] = a[i] * (1.0f - mix) + b[i] * mix;
+    samples[i] = linear_crossfade(a[i], b[i], mix);
   }
   return Audio::from_vector(std::move(samples), a.sample_rate());
 }

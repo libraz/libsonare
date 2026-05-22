@@ -4,6 +4,9 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::dynamics {
 
 TransientShaper::TransientShaper(TransientShaperConfig config) : config_(config) {
@@ -61,10 +64,18 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
       const float target_db = diff >= 0.0f ? config_.attack_gain_db : config_.sustain_gain_db;
       const float gain_db =
           std::clamp(target_db * amount, -config_.max_gain_db, config_.max_gain_db);
-
-      channels[ch][i] *= db_to_linear(gain_db);
-      if (std::abs(gain_db) > std::abs(largest_abs_gain)) {
-        largest_abs_gain = gain_db;
+      auto idx = static_cast<size_t>(ch);
+      const float smoothing = coeff(sample_rate_, config_.gain_smoothing_ms);
+      gain_state_db_[idx] = smoothing * gain_state_db_[idx] + (1.0f - smoothing) * gain_db;
+      float delayed = channels[ch][i];
+      if (!lookahead_[idx].empty()) {
+        delayed = lookahead_[idx][lookahead_index_[idx]];
+        lookahead_[idx][lookahead_index_[idx]] = channels[ch][i];
+        lookahead_index_[idx] = (lookahead_index_[idx] + 1) % lookahead_[idx].size();
+      }
+      channels[ch][i] = delayed * db_to_linear(gain_state_db_[idx]);
+      if (std::abs(gain_state_db_[idx]) > std::abs(largest_abs_gain)) {
+        largest_abs_gain = gain_state_db_[idx];
       }
     }
   }
@@ -79,6 +90,9 @@ void TransientShaper::reset() {
   for (auto& follower : slow_followers_) {
     follower.reset();
   }
+  std::fill(gain_state_db_.begin(), gain_state_db_.end(), 0.0f);
+  for (auto& delay : lookahead_) std::fill(delay.begin(), delay.end(), 0.0f);
+  std::fill(lookahead_index_.begin(), lookahead_index_.end(), 0);
   last_gain_db_ = 0.0f;
 }
 
@@ -99,12 +113,14 @@ void TransientShaper::set_config(const TransientShaperConfig& config) {
 void TransientShaper::validate_config(const TransientShaperConfig& config) {
   if (config.fast_attack_ms < 0.0f || config.fast_release_ms < 0.0f ||
       config.slow_attack_ms < 0.0f || config.slow_release_ms < 0.0f || config.sensitivity < 0.0f ||
-      config.max_gain_db < 0.0f) {
+      config.max_gain_db < 0.0f || config.gain_smoothing_ms < 0.0f || config.lookahead_ms < 0.0f) {
     throw std::invalid_argument("invalid transient shaper configuration");
   }
 }
 
-float TransientShaper::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
+float TransientShaper::coeff(double sample_rate, float ms) {
+  return time_to_coefficient(sample_rate, ms);
+}
 
 void TransientShaper::ensure_followers(int num_channels) {
   if (fast_followers_.size() == static_cast<size_t>(num_channels)) {
@@ -113,6 +129,12 @@ void TransientShaper::ensure_followers(int num_channels) {
 
   fast_followers_.assign(static_cast<size_t>(num_channels), {});
   slow_followers_.assign(static_cast<size_t>(num_channels), {});
+  gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
+  const size_t lookahead_samples =
+      static_cast<size_t>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
+  lookahead_.assign(static_cast<size_t>(num_channels),
+                    std::vector<float>(lookahead_samples, 0.0f));
+  lookahead_index_.assign(static_cast<size_t>(num_channels), 0);
   for (auto& follower : fast_followers_) {
     follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
   }

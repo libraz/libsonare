@@ -10,6 +10,8 @@ namespace sonare::mastering::stereo {
 struct ImagerConfig {
   float width = 1.0f;
   float output_gain_db = 0.0f;
+  float decorrelation_amount = 0.0f;
+  bool preserve_energy = true;
 };
 
 class Imager : public common::ProcessorBase {
@@ -24,11 +26,20 @@ class Imager : public common::ProcessorBase {
   const ImagerConfig& config() const { return config_; }
 
  private:
+  struct Allpass {
+    float coefficient = 0.0f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+
+    float process(float input) noexcept;
+    void reset() noexcept;
+  };
+
   static void validate_config(const ImagerConfig& config);
-  static float db_to_linear(float db);
 
   ImagerConfig config_{};
   bool prepared_ = false;
+  Allpass allpass_[4];
 };
 
 }  // namespace sonare::mastering::stereo

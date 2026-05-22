@@ -106,6 +106,18 @@ TEST_CASE("MatchEq FIR kernel is linear phase and follows curve gain", "[masteri
   REQUIRE_THAT(kernel[10], WithinAbs(kernel[kernel.size() - 11], 0.0001f));
 }
 
+TEST_CASE("MatchEq FIR kernel supports minimum-phase mode", "[mastering][match]") {
+  MatchEqCurve curve{{100.0f, 1000.0f, 10000.0f}, {0.0f, 6.0f, 0.0f}};
+
+  const auto linear = match_eq_fir_kernel(curve, 48000, {1024, 257});
+  const auto minimum =
+      match_eq_fir_kernel(curve, 48000, {1024, 257, MatchEqFirPhase::MinimumPhase});
+
+  REQUIRE(minimum.size() == 257);
+  REQUIRE(std::abs(minimum.front()) > std::abs(linear.front()) * 10.0f);
+  REQUIRE(std::abs(minimum.front() - minimum.back()) > 0.0001f);
+}
+
 TEST_CASE("ApplyMatchEq boosts material toward the reference spectrum", "[mastering][match]") {
   const Audio input = sine_audio(1000.0f, 0.1f);
   ReferenceSpectrum source{{100.0f, 1000.0f, 10000.0f}, {-20.0f, -20.0f, -20.0f}, 48000};
@@ -116,6 +128,45 @@ TEST_CASE("ApplyMatchEq boosts material toward the reference spectrum", "[master
 
   REQUIRE(output.size() == input.size());
   REQUIRE(rms(output, 512) > rms(input, 512) * 1.5f);
+}
+
+TEST_CASE("ApplyMatchEq uses partitioned FIR and minimum-phase options", "[mastering][match]") {
+  const Audio input = sine_audio(1000.0f, 0.1f);
+  ReferenceSpectrum source{{100.0f, 1000.0f, 10000.0f}, {-20.0f, -20.0f, -20.0f}, 48000};
+  ReferenceSpectrum reference{{100.0f, 1000.0f, 10000.0f}, {-20.0f, -14.0f, -20.0f}, 48000};
+
+  const auto linear = apply_match_eq(input, source, reference, {8, 6.0f, 100.0f, 10000.0f, 1.0f, 0},
+                                     {1024, 257, MatchEqFirPhase::LinearPhase, 128});
+  const auto minimum =
+      apply_match_eq(input, source, reference, {8, 6.0f, 100.0f, 10000.0f, 1.0f, 0},
+                     {1024, 257, MatchEqFirPhase::MinimumPhase, 128});
+
+  REQUIRE(linear.size() == input.size());
+  REQUIRE(minimum.size() == input.size());
+  REQUIRE(rms(linear, 512) > rms(input, 512) * 1.5f);
+  REQUIRE(rms(minimum, 512) > rms(input, 512) * 1.5f);
+}
+
+TEST_CASE("MatchEq can time-align reference audio by cross-correlation", "[mastering][match]") {
+  std::vector<float> source_samples(512, 0.0f);
+  for (size_t i = 0; i < source_samples.size(); ++i) {
+    source_samples[i] = static_cast<float>(std::sin(0.13 * static_cast<double>(i)) +
+                                           0.2 * std::sin(0.017 * static_cast<double>(i * i)));
+  }
+  std::vector<float> reference_samples(512, 0.0f);
+  for (size_t i = 0; i + 5 < reference_samples.size(); ++i) {
+    reference_samples[i + 5] = source_samples[i];
+  }
+
+  const auto source = Audio::from_vector(source_samples, 48000);
+  const auto reference = Audio::from_vector(reference_samples, 48000);
+
+  REQUIRE_THAT(estimate_reference_delay_samples(source, reference, 16), WithinAbs(5.0f, 0.01f));
+  const auto aligned = align_reference_to_source(source, reference, 16);
+
+  for (size_t i = 0; i + 5 < aligned.size(); ++i) {
+    REQUIRE_THAT(aligned[i], WithinAbs(source[i], 0.00001f));
+  }
 }
 
 TEST_CASE("TonalBalance summarizes broad band deviations", "[mastering][match]") {
@@ -131,6 +182,17 @@ TEST_CASE("TonalBalance summarizes broad band deviations", "[mastering][match]")
   REQUIRE_THAT(balance[1].deviation_db, WithinAbs(-2.0f, 0.001f));
   REQUIRE_THAT(balance[2].deviation_db, WithinAbs(5.0f, 0.001f));
   REQUIRE_THAT(balance[3].deviation_db, WithinAbs(-5.0f, 0.001f));
+}
+
+TEST_CASE("TonalBalance can summarize log-frequency bands", "[mastering][match]") {
+  ReferenceSpectrum source{{100.0f, 200.0f}, {-10.0f, -20.0f}, 48000};
+  ReferenceSpectrum reference{{100.0f, 200.0f}, {-15.0f, -18.0f}, 48000};
+
+  const auto balance = tonal_balance_log_bands(source, reference, 1, 100.0f, 400.0f);
+
+  REQUIRE(balance.size() == 2);
+  REQUIRE_THAT(balance[0].deviation_db, WithinAbs(5.0f, 0.001f));
+  REQUIRE_THAT(balance[1].deviation_db, WithinAbs(-2.0f, 0.001f));
 }
 
 TEST_CASE("ReferenceLoudness reports gain required to match reference", "[mastering][match]") {

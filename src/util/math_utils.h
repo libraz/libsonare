@@ -9,14 +9,14 @@
 #include <numeric>
 #include <vector>
 
+#include "constants.h"
+
 namespace sonare {
 
-/// @brief Pi constant.
-inline constexpr float kPi = 3.14159265358979323846f;
-/// @brief Two pi constant.
-inline constexpr float kTwoPi = 2.0f * kPi;
-/// @brief Default epsilon for near-zero comparisons in audio processing.
-inline constexpr float kEpsilon = 1e-10f;
+// Re-export universal constants for backward compatibility.
+using constants::kPi;
+using constants::kTwoPi;
+using constants::kEpsilon;
 
 /// @brief Clamps a value between min and max.
 /// @tparam T Numeric type

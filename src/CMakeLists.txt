@@ -150,11 +150,17 @@ endif()
 
 if(BUILD_MASTERING)
   add_library(sonare_mastering STATIC
+    mastering/common/biquad_design.cpp
     mastering/common/param_smoother.cpp
     mastering/common/envelope_follower.cpp
+    mastering/common/hysteresis_ja.cpp
     mastering/common/oversampler.cpp
+    mastering/common/partitioned_convolver.cpp
     mastering/common/delay_line.cpp
     mastering/common/lookahead_buffer.cpp
+    mastering/common/lpc.cpp
+    mastering/common/noise_tracker.cpp
+    mastering/common/true_peak_filter.cpp
     mastering/dynamics/brickwall_limiter.cpp
     mastering/dynamics/compressor.cpp
     mastering/dynamics/deesser.cpp

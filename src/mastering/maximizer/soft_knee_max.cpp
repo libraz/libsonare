@@ -3,6 +3,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+
 namespace sonare::mastering::maximizer {
 
 SoftKneeMax::SoftKneeMax(SoftKneeMaxConfig config) : config_(config) { validate_config(config_); }
@@ -52,7 +54,5 @@ void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
     throw std::invalid_argument("invalid soft knee maximizer configuration");
   }
 }
-
-float SoftKneeMax::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 }  // namespace sonare::mastering::maximizer

@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "analysis/meter/clipping.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -14,14 +15,9 @@ namespace {
 float frame_rms_db(const float* data, size_t start, size_t end) {
   if (start >= end) return -std::numeric_limits<float>::infinity();
 
-  double sum_sq = 0.0;
-  for (size_t i = start; i < end; ++i) {
-    sum_sq += static_cast<double>(data[i]) * static_cast<double>(data[i]);
-  }
-
-  const double rms = std::sqrt(sum_sq / static_cast<double>(end - start));
-  if (rms < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return 20.0f * std::log10(static_cast<float>(rms));
+  const float frame_rms = rms(data + start, end - start);
+  if (frame_rms < kEpsilon) return -std::numeric_limits<float>::infinity();
+  return 20.0f * std::log10(frame_rms);
 }
 
 }  // namespace
@@ -29,11 +25,8 @@ float frame_rms_db(const float* data, size_t start, size_t end) {
 float peak_db(const Audio& audio) {
   if (audio.empty()) return -std::numeric_limits<float>::infinity();
 
-  float peak = 0.0f;
   const float* data = audio.data();
-  for (size_t i = 0; i < audio.size(); ++i) {
-    peak = std::max(peak, std::abs(data[i]));
-  }
+  const float peak = peak_abs(data, audio.size());
 
   if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
   return 20.0f * std::log10(peak);
@@ -42,15 +35,10 @@ float peak_db(const Audio& audio) {
 float rms_db(const Audio& audio) {
   if (audio.empty()) return -std::numeric_limits<float>::infinity();
 
-  double sum_sq = 0.0;
   const float* data = audio.data();
-  for (size_t i = 0; i < audio.size(); ++i) {
-    sum_sq += static_cast<double>(data[i]) * static_cast<double>(data[i]);
-  }
-
-  const double rms = std::sqrt(sum_sq / static_cast<double>(audio.size()));
-  if (rms < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return 20.0f * std::log10(static_cast<float>(rms));
+  const float audio_rms = rms(data, audio.size());
+  if (audio_rms < kEpsilon) return -std::numeric_limits<float>::infinity();
+  return 20.0f * std::log10(audio_rms);
 }
 
 float crest_factor_db(const Audio& audio) {

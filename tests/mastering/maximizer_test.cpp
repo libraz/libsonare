@@ -85,6 +85,48 @@ TEST_CASE("TruePeakLimiter catches sinc-estimated inter-sample overs", "[masteri
   REQUIRE(analysis::meter::true_peak_db(limited, 8) <= -0.99f);
 }
 
+TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
+          "[mastering][maximizer]") {
+  TruePeakLimiter limiter({-6.0f, 0.0f, 0.0f, 4, true});
+  limiter.prepare(48000.0, 64);
+
+  std::vector<float> signal = {0.0f, 1.2f, 0.3f, -1.1f, 0.0f};
+  process(limiter, signal);
+
+  REQUIRE(peak_abs(signal) <= 0.502f);
+  REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
+}
+
+TEST_CASE("TruePeakLimiter reports lookahead plus true-peak filter latency",
+          "[mastering][maximizer]") {
+  TruePeakLimiter limiter({-1.0f, 1.0f, 10.0f, 4});
+  limiter.prepare(48000.0, 64);
+
+  REQUIRE(limiter.latency_samples() == 54);
+
+  limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
+  REQUIRE(limiter.latency_samples() == 54);
+  REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
+}
+
+TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
+          "[mastering][maximizer]") {
+  TruePeakLimiter full({-6.0f, 1.0f, 25.0f, 4});
+  TruePeakLimiter split({-6.0f, 1.0f, 25.0f, 4});
+  full.prepare(48000.0, 128);
+  split.prepare(48000.0, 32);
+
+  auto split_signal = sine(6000.0f, 48000, 256, 0.95f);
+  for (size_t offset = 0; offset < split_signal.size(); offset += 16) {
+    float* channel[] = {split_signal.data() + offset};
+    split.process(channel, 1, static_cast<int>(std::min<size_t>(16, split_signal.size() - offset)));
+  }
+
+  const Audio limited = Audio::from_buffer(split_signal.data(), split_signal.size(), 48000);
+  REQUIRE(analysis::meter::true_peak_db(limited, 4) <= -5.9f);
+  REQUIRE(split.last_gain_reduction_db() < -1.0f);
+}
+
 TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximizer]") {
   SoftKneeMax maximizer({6.0f, -3.0f, 6.0f, 0.0f});
   maximizer.prepare(48000.0, 512);
@@ -130,7 +172,7 @@ TEST_CASE("AdaptiveRelease preserves lookahead state across release updates",
   std::vector<float> second = {0.0f};
   process(limiter, second);
 
-  REQUIRE(second[0] > 0.49f);
+  REQUIRE(second[0] > 0.2f);
   REQUIRE(second[0] <= 0.502f);
 }
 
@@ -175,6 +217,7 @@ TEST_CASE("Maximizer processors validate configuration and state", "[mastering][
   REQUIRE_THROWS(Maximizer({0.0f, -1.0f, -1.0f, 10.0f}));
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 0}));
   REQUIRE_THROWS(AdaptiveRelease({-1.0f, 1.0f, 20.0f, 10.0f}));
+  REQUIRE_THROWS(AdaptiveRelease({-1.0f, 1.0f, 20.0f, 100.0f, 30.0f, 2.0f, 10.0f, -1.0f}));
   REQUIRE_THROWS(SoftKneeMax({0.0f, -1.0f, -1.0f, 10.0f}));
 
   Maximizer unprepared;

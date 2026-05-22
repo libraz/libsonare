@@ -1,9 +1,8 @@
-#include "streaming/stream_analyzer.h"
-
 #include <algorithm>
 #include <cmath>
 
 #include "filters/chroma.h"
+#include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
 
 namespace sonare {
@@ -185,7 +184,8 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
   if (config_.compute_chroma) {
     ChromaFilterConfig chroma_config;
     chroma_config.n_chroma = 12;
-    chroma_config.tuning = 12.0f * std::log2(ref_hz / 440.0f);
+    chroma_config.tuning =
+        constants::kSemitonesPerOctave * std::log2(ref_hz / constants::kA4Hz);
     chroma_config.fmin = 65.0f;
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, config_.n_fft, chroma_config);

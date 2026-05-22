@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -13,14 +14,9 @@ namespace {
 float rms_db_for_window(const float* data, size_t start, size_t length, float floor_db) {
   if (length == 0) return floor_db;
 
-  double sum_sq = 0.0;
-  for (size_t i = start; i < start + length; ++i) {
-    sum_sq += static_cast<double>(data[i]) * static_cast<double>(data[i]);
-  }
-
-  const double rms = std::sqrt(sum_sq / static_cast<double>(length));
-  if (rms < kEpsilon) return floor_db;
-  return std::max(floor_db, 20.0f * std::log10(static_cast<float>(rms)));
+  const float window_rms = rms(data + start, length);
+  if (window_rms < kEpsilon) return floor_db;
+  return std::max(floor_db, 20.0f * std::log10(window_rms));
 }
 
 float percentile_sorted(const std::vector<float>& sorted, float percentile) {

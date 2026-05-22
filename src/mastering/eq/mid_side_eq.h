@@ -3,6 +3,8 @@
 /// @file mid_side_eq.h
 /// @brief Independent mid/side parametric equalizer.
 
+#include <vector>
+
 #include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
 
@@ -26,8 +28,12 @@ class MidSideEq : public common::ProcessorBase {
   const EqBand& side_band(size_t index) const;
 
  private:
+  void ensure_buffers(int num_samples);
+
   ParametricEq mid_eq_;
   ParametricEq side_eq_;
+  std::vector<float> mid_buffer_;
+  std::vector<float> side_buffer_;
 };
 
 }  // namespace sonare::mastering::eq

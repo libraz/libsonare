@@ -7,9 +7,7 @@ std::string& last_error_storage() {
   return storage;
 }
 
-void set_last_error(const char* msg) {
-  last_error_storage().assign(msg != nullptr ? msg : "");
-}
+void set_last_error(const char* msg) { last_error_storage().assign(msg != nullptr ? msg : ""); }
 
 SonareError map_sonare_exception(const SonareException& e) {
   switch (e.code()) {

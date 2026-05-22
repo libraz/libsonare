@@ -3,12 +3,19 @@
 /// @file master.h
 /// @brief Optional mastering library umbrella header.
 
+#include "mastering/common/biquad_design.h"
 #include "mastering/common/delay_line.h"
 #include "mastering/common/envelope_follower.h"
+#include "mastering/common/hysteresis_ja.h"
 #include "mastering/common/lookahead_buffer.h"
+#include "mastering/common/lpc.h"
+#include "mastering/common/noise_tracker.h"
 #include "mastering/common/oversampler.h"
 #include "mastering/common/param_smoother.h"
+#include "mastering/common/partitioned_convolver.h"
 #include "mastering/common/processor_base.h"
+#include "mastering/common/processor_chain.h"
+#include "mastering/common/true_peak_filter.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"

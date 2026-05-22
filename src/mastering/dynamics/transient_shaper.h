@@ -19,6 +19,8 @@ struct TransientShaperConfig {
   float slow_release_ms = 200.0f;
   float sensitivity = 1.0f;
   float max_gain_db = 12.0f;
+  float gain_smoothing_ms = 0.0f;
+  float lookahead_ms = 0.0f;
 };
 
 class TransientShaper : public common::ProcessorBase {
@@ -35,7 +37,7 @@ class TransientShaper : public common::ProcessorBase {
 
  private:
   static void validate_config(const TransientShaperConfig& config);
-  static float db_to_linear(float db);
+  static float coeff(double sample_rate, float ms);
   void ensure_followers(int num_channels);
 
   TransientShaperConfig config_{};
@@ -43,6 +45,9 @@ class TransientShaper : public common::ProcessorBase {
   bool prepared_ = false;
   std::vector<common::EnvelopeFollower> fast_followers_;
   std::vector<common::EnvelopeFollower> slow_followers_;
+  std::vector<float> gain_state_db_;
+  std::vector<std::vector<float>> lookahead_;
+  std::vector<size_t> lookahead_index_;
   float last_gain_db_ = 0.0f;
 };
 

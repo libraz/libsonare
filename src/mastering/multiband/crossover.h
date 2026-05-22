@@ -5,6 +5,8 @@
 
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::multiband {
 
 enum class CrossoverSlope {
@@ -17,12 +19,14 @@ enum class CrossoverMode {
   LinkwitzRiley,
   Butterworth,
   Bessel,
+  FirLinearPhase,
 };
 
 struct CrossoverConfig {
   std::vector<float> cutoffs_hz{120.0f, 2000.0f};
   CrossoverSlope slope = CrossoverSlope::LR4;
   CrossoverMode mode = CrossoverMode::LinkwitzRiley;
+  int fir_kernel_size = 513;
 };
 
 struct CrossoverOutput {
@@ -75,11 +79,16 @@ class Crossover {
   struct FilterSection {
     double lowpass_frequency_scale = 1.0;
     double highpass_frequency_scale = 1.0;
-    double q = 0.7071067811865475;
+    double q = sonare::constants::kButterworthQD;
   };
   static std::vector<FilterSection> filter_sections(CrossoverSlope slope, CrossoverMode mode);
   void rebuild_state(int num_channels);
   void install_coefficients();
+  CrossoverOutput split_fir(float* const* channels, int num_channels, int num_samples);
+  void rebuild_fir_state(int num_channels);
+  void rebuild_fir_kernels();
+  float process_fir_lowpass(float sample, int split_index, int channel);
+  float process_fir_delay(float sample, int channel);
   float lowpass(float sample, int split_index, int channel);
   float highpass(float sample, int split_index, int channel);
   float allpass(float sample, int band_index, int split_index, int channel);
@@ -99,6 +108,11 @@ class Crossover {
   bool prepared_ = false;
   std::vector<std::vector<SplitChannelState>> states_;
   std::vector<std::vector<CompensationChannelState>> compensation_states_;
+  std::vector<std::vector<float>> fir_kernels_;
+  std::vector<std::vector<std::vector<float>>> fir_history_;
+  std::vector<std::vector<size_t>> fir_history_index_;
+  std::vector<std::vector<float>> fir_delay_history_;
+  std::vector<size_t> fir_delay_index_;
 };
 
 }  // namespace sonare::mastering::multiband

@@ -6,12 +6,13 @@
 
 #include "analysis/meter/basic.h"
 #include "effects/normalize.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::tts {
 namespace {
 
-float db_to_amplitude(float db) { return std::pow(10.0f, db / 20.0f); }
+float db_to_amplitude(float db) { return db_to_linear(db); }
 
 size_t leading_silent_samples(const Audio& audio, float threshold) {
   const float* data = audio.data();

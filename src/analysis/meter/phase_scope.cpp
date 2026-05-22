@@ -4,12 +4,14 @@
 #include <cmath>
 
 #include "analysis/meter/stereo.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::analysis::meter {
-namespace {
 
-constexpr float kInvSqrt2 = 0.7071067811865476f;
+using sonare::constants::kInvSqrt2;
+
+namespace {
 
 void validate_stereo_buffers(const float* left, const float* right, size_t length) {
   SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);

@@ -17,6 +17,9 @@ struct ParallelCompConfig {
   float release_ms = 100.0f;
   float makeup_gain_db = 0.0f;
   float mix = 0.5f;
+  bool linked_detection = true;
+  bool output_limiter = true;
+  float output_ceiling_db = 0.0f;
 };
 
 class ParallelComp : public common::ProcessorBase {
@@ -33,8 +36,6 @@ class ParallelComp : public common::ProcessorBase {
 
  private:
   static void validate_config(const ParallelCompConfig& config);
-  static float linear_to_db(float value);
-  static float db_to_linear(float db);
   static float gain_reduction_db(float input_db, const ParallelCompConfig& config);
   void ensure_followers(int num_channels);
 

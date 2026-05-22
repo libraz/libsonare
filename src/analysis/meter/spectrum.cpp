@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/fft.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -33,7 +34,7 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   result.frequencies = bin_frequencies(n_bins, audio.sample_rate(), config.n_fft);
   result.magnitude.assign(n_bins, 0.0f);
   result.power.assign(n_bins, 0.0f);
-  result.db.assign(n_bins, -120.0f);
+  result.db.assign(n_bins, sonare::constants::kFloorDb);
   if (audio.empty()) return result;
 
   std::vector<float> frame(static_cast<size_t>(config.n_fft), 0.0f);

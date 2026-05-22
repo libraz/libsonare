@@ -4,6 +4,9 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/db.h"
+#include "util/dsp_primitives.h"
+
 namespace sonare::mastering::dynamics {
 
 Limiter::Limiter(LimiterConfig config) : config_(config) { validate_config(config_); }
@@ -21,7 +24,7 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
   update_release_coeff();
   prepared_ = true;
   lookahead_.clear();
-  gains_.clear();
+  gain_smoothers_.clear();
   reset();
 }
 
@@ -59,12 +62,8 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
 
     const float target_gain = peak > ceiling && peak > 0.0f ? ceiling / peak : 1.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
-      auto& gain = gains_[static_cast<size_t>(ch)];
-      if (target_gain < gain) {
-        gain = target_gain;
-      } else {
-        gain = release_coeff_ * gain + (1.0f - release_coeff_) * target_gain;
-      }
+      auto& gain_smoother = gain_smoothers_[static_cast<size_t>(ch)];
+      const float gain = gain_smoother.smooth_bidirectional(target_gain, release_coeff_, true);
       channels[ch][i] = delayed[static_cast<size_t>(ch)] * gain;
       min_gain = std::min(min_gain, gain);
     }
@@ -77,7 +76,9 @@ void Limiter::reset() {
   for (auto& buffer : lookahead_) {
     buffer.reset();
   }
-  std::fill(gains_.begin(), gains_.end(), 1.0f);
+  for (auto& smoother : gain_smoothers_) {
+    smoother.reset(1.0f);
+  }
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -105,31 +106,24 @@ void Limiter::validate_config(const LimiterConfig& config) {
   }
 }
 
-float Limiter::db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
-
-float Limiter::linear_to_db(float value) {
-  if (value <= 0.0f) {
-    return -120.0f;
-  }
-  return 20.0f * std::log10(value);
-}
-
 void Limiter::prepare_buffers(int num_channels) {
   if (lookahead_.size() == static_cast<size_t>(num_channels)) {
     return;
   }
 
   lookahead_.assign(static_cast<size_t>(num_channels), {});
-  gains_.assign(static_cast<size_t>(num_channels), 1.0f);
+  gain_smoothers_.assign(static_cast<size_t>(num_channels), {});
   for (auto& buffer : lookahead_) {
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
+  }
+  for (auto& smoother : gain_smoothers_) {
+    smoother.prepare(sample_rate_, 0.0f, config_.release_ms);
+    smoother.reset(1.0f);
   }
 }
 
 void Limiter::update_release_coeff() {
-  const double release_samples = sample_rate_ * std::max(config_.release_ms, 0.0f) * 0.001;
-  release_coeff_ =
-      release_samples <= 0.0 ? 0.0f : static_cast<float>(std::exp(-1.0 / release_samples));
+  release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
 }
 
 }  // namespace sonare::mastering::dynamics

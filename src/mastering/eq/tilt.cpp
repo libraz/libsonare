@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::eq {
 
 void TiltEq::prepare(double sample_rate, int max_block_size) {
@@ -48,7 +50,7 @@ void TiltEq::set_pivot_hz(float pivot_hz) {
 void TiltEq::update_bands() {
   const bool enabled = tilt_db_ != 0.0f;
   const float half_tilt = tilt_db_ * 0.5f;
-  constexpr float q = 0.70710678f;
+  constexpr float q = sonare::constants::kButterworthQ;
 
   eq_.set_band(0, {EqBandType::LowShelf, pivot_hz_, -half_tilt, q, enabled});
   eq_.set_band(1, {EqBandType::HighShelf, pivot_hz_, half_tilt, q, enabled});

@@ -1,20 +1,46 @@
 #include "mastering/eq/pultec.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
+
+#include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::mastering::eq {
 
+using sonare::constants::kTwoPi;
+
 void PultecEq::prepare(double sample_rate, int max_block_size) {
+  if (!(sample_rate > 0.0)) {
+    throw std::invalid_argument("sample_rate must be positive");
+  }
+  sample_rate_ = sample_rate;
   eq_.prepare(sample_rate, max_block_size);
   rebuild();
 }
 
 void PultecEq::process(float* const* channels, int num_channels, int num_samples) {
   eq_.process(channels, num_channels, num_samples);
+  if (component_model_ == PultecComponentModel::CurveOnly && output_drive_ <= 0.0f) {
+    return;
+  }
+  if (num_channels <= 0 || num_samples <= 0 || channels == nullptr) {
+    return;
+  }
+  prepare_component_state(num_channels);
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (channels[ch] == nullptr) continue;
+    for (int i = 0; i < num_samples; ++i) {
+      channels[ch][i] = process_component_sample(channels[ch][i], ch);
+    }
+  }
 }
 
-void PultecEq::reset() { eq_.reset(); }
+void PultecEq::reset() {
+  eq_.reset();
+  for (auto& state : component_state_) state = {};
+}
 
 void PultecEq::set_low_frequency(float frequency_hz) {
   low_frequency_hz_ = validate_frequency(frequency_hz);
@@ -44,11 +70,24 @@ void PultecEq::set_high_attenuation(float frequency_hz, float amount) {
   rebuild();
 }
 
+void PultecEq::set_component_model(PultecComponentModel model) {
+  component_model_ = model;
+  rebuild();
+}
+
+void PultecEq::set_output_drive(float drive) {
+  if (drive < 0.0f) {
+    throw std::invalid_argument("Pultec output drive must be non-negative");
+  }
+  output_drive_ = std::min(drive, 10.0f);
+}
+
 void PultecEq::clear() {
   low_boost_ = 0.0f;
   low_attenuation_ = 0.0f;
   high_boost_ = 0.0f;
   high_attenuation_ = 0.0f;
+  output_drive_ = 0.0f;
   rebuild();
 }
 
@@ -60,10 +99,13 @@ void PultecEq::rebuild() {
   const bool high_boost_enabled = high_boost_ > 0.0f;
   const bool high_atten_enabled = high_attenuation_ > 0.0f;
 
-  eq_.set_band(
-      0, {EqBandType::LowShelf, low_frequency_hz_, low_boost_ * 1.7f, 0.65f, low_boost_enabled});
-  eq_.set_band(1, {EqBandType::Peak, low_frequency_hz_ * 1.45f, -low_attenuation_ * 1.2f, 0.75f,
-                   low_atten_enabled});
+  const float low_interaction = component_model_ == PultecComponentModel::Eqp1aWdf
+                                    ? std::min(low_boost_, low_attenuation_) * 0.12f
+                                    : 0.0f;
+  eq_.set_band(0, {EqBandType::LowShelf, low_frequency_hz_, low_boost_ * 1.7f - low_interaction,
+                   0.65f, low_boost_enabled});
+  eq_.set_band(1, {EqBandType::Peak, low_frequency_hz_ * 1.45f,
+                   -low_attenuation_ * 1.2f - low_interaction, 0.75f, low_atten_enabled});
 
   const float high_q = 0.6f + high_bandwidth_ * 3.0f;
   eq_.set_band(2, {EqBandType::Peak, high_boost_frequency_hz_, high_boost_ * 1.5f, high_q,
@@ -79,6 +121,45 @@ float PultecEq::validate_frequency(float frequency_hz) {
     throw std::invalid_argument("frequency_hz must be positive");
   }
   return frequency_hz;
+}
+
+void PultecEq::prepare_component_state(int num_channels) {
+  if (num_channels <= 0) return;
+  if (component_state_.size() == static_cast<size_t>(num_channels)) return;
+  component_state_.assign(static_cast<size_t>(num_channels), {});
+}
+
+float PultecEq::process_component_sample(float input, int channel) {
+  float output = input;
+  if (component_model_ == PultecComponentModel::Eqp1aWdf) {
+    auto& state = component_state_[static_cast<size_t>(channel)];
+    const float low_alpha =
+        std::clamp(kTwoPi * low_frequency_hz_ /
+                       static_cast<float>(sample_rate_),
+                   0.0001f, 0.25f);
+    const float high_alpha =
+        std::clamp(kTwoPi * high_attenuation_frequency_hz_ /
+                       static_cast<float>(sample_rate_),
+                   0.0001f, 0.75f);
+    state.low_charge += low_alpha * (output - state.low_charge);
+    state.high_charge += high_alpha * (output - state.high_charge);
+    const float low_reactive = state.low_charge;
+    const float high_reactive = output - state.high_charge;
+
+    const float knob_sum = low_boost_ + low_attenuation_ + high_boost_ + high_attenuation_;
+    const float insertion_loss_db = -1.0f - 0.06f * knob_sum;
+    const float makeup_db = 0.8f + 0.04f * knob_sum;
+    output *= db_to_linear(insertion_loss_db + makeup_db);
+    output += 0.004f * low_boost_ * low_reactive;
+    output -= 0.004f * low_attenuation_ * low_reactive;
+    output += 0.003f * high_boost_ * high_reactive;
+    output -= 0.003f * high_attenuation_ * high_reactive;
+  }
+  if (output_drive_ > 0.0f || component_model_ == PultecComponentModel::Eqp1aWdf) {
+    const float drive = 1.0f + 0.15f * output_drive_;
+    output = std::tanh(output * drive) / std::tanh(drive);
+  }
+  return output;
 }
 
 }  // namespace sonare::mastering::eq

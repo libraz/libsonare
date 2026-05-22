@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "mastering/common/hysteresis_ja.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -23,6 +24,10 @@ struct TapeConfig {
   float hysteresis = 0.2f;
   /// Post-saturation output trim in dB.
   float output_gain_db = 0.0f;
+  float speed_ips = 15.0f;
+  float head_bump_db = 1.5f;
+  float bias = 0.0f;
+  float gap_loss = 0.2f;
 };
 
 class Tape : public common::ProcessorBase {
@@ -35,22 +40,33 @@ class Tape : public common::ProcessorBase {
   const TapeConfig& config() const { return config_; }
 
  private:
-  /// Per-channel Jiles-Atherton state.
-  struct JaState {
-    float M = 0.0f;       // current magnetization (output)
-    float H_prev = 0.0f;  // previous input field
+  static void validate_config(const TapeConfig& config);
+  static common::JilesAthertonConfig make_ja_config(const TapeConfig& config);
+  float process_sample(common::JilesAthertonState& state, float input) const;
+  void ensure_state(int num_channels);
+  void update_filters(double sample_rate);
+
+  struct Biquad {
+    float b0 = 1.0f;
+    float b1 = 0.0f;
+    float b2 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float z1 = 0.0f;
+    float z2 = 0.0f;
+    float process(float x);
+    void reset();
   };
 
-  static void validate_config(const TapeConfig& config);
-  static float db_to_linear(float db);
-  static float langevin(float x);
-  static float langevin_derivative(float x);
-  float process_sample(JaState& state, float input) const;
-  void ensure_state(int num_channels);
-
   TapeConfig config_{};
+  common::JilesAtherton hysteresis_;
   bool prepared_ = false;
-  std::vector<JaState> states_;
+  double sample_rate_ = 48000.0;
+  Biquad head_bump_coeffs_;
+  float gap_loss_coeff_ = 0.0f;
+  std::vector<common::JilesAthertonState> states_;
+  std::vector<Biquad> head_bump_;
+  std::vector<float> gap_state_;
 };
 
 }  // namespace sonare::mastering::saturation

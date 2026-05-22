@@ -4,11 +4,14 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::stereo {
 
 namespace {
 
-constexpr float kHalfPi = 1.5707963267948966f;
+using sonare::constants::kHalfPi;
+using sonare::constants::kSqrt2;
 
 }  // namespace
 
@@ -74,8 +77,8 @@ void StereoBalance::gains(const StereoBalanceConfig& config, float& left, float&
   const float balance = std::clamp(config.balance, -1.0f, 1.0f);
   if (config.constant_power) {
     const float angle = (balance + 1.0f) * 0.5f * kHalfPi;
-    left = std::cos(angle) * 1.41421356237f;
-    right = std::sin(angle) * 1.41421356237f;
+    left = std::cos(angle) * kSqrt2;
+    right = std::sin(angle) * kSqrt2;
   } else {
     left = balance > 0.0f ? 1.0f - balance : 1.0f;
     right = balance < 0.0f ? 1.0f + balance : 1.0f;

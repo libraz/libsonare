@@ -1,5 +1,3 @@
-#include "sonare_c.h"
-
 #include <cstring>
 #include <memory>
 
@@ -9,6 +7,7 @@
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
 #include "effects/tts.h"
+#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;

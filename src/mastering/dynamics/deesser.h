@@ -33,17 +33,29 @@ class DeEsser : public common::ProcessorBase {
 
  private:
   static void validate_config(const DeEsserConfig& config);
-  static float linear_to_db(float value);
-  static float db_to_linear(float db);
   static float gain_reduction_db(float input_db, const DeEsserConfig& config);
   void ensure_state(int num_channels);
   void update_filter_coeff();
 
+  struct Biquad {
+    float b0 = 1.0f;
+    float b1 = 0.0f;
+    float b2 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float z1 = 0.0f;
+    float z2 = 0.0f;
+
+    float process(float x);
+    void reset();
+  };
+
   DeEsserConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
-  float lowpass_coeff_ = 0.0f;
-  std::vector<float> lowpass_state_;
+  Biquad filter_coeffs_;
+  std::vector<Biquad> bandpass_;
+  std::vector<Biquad> bandpass2_;
   std::vector<common::EnvelopeFollower> followers_;
   float last_gain_reduction_db_ = 0.0f;
 };

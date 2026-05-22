@@ -4,11 +4,13 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::stereo {
 
 namespace {
 
-constexpr double kTwoPi = 6.28318530717958647692;
+using sonare::constants::kTwoPiD;
 
 }  // namespace
 
@@ -51,7 +53,7 @@ void AutoPan::process(float* const* channels, int num_channels, int num_samples)
   const double increment = config_.rate_hz / sample_rate_;
   for (int i = 0; i < num_samples; ++i) {
     const float pan =
-        static_cast<float>(std::sin((phase_ + config_.phase) * kTwoPi)) * config_.depth;
+        static_cast<float>(std::sin((phase_ + config_.phase) * kTwoPiD)) * config_.depth;
     const float left_gain = std::sqrt((1.0f - pan) * 0.5f);
     const float right_gain = std::sqrt((1.0f + pan) * 0.5f);
     channels[0][i] *= left_gain;

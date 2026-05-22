@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/convert.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -29,9 +30,9 @@ float hz_to_chroma(float hz, float tuning) {
   float midi = hz_to_midi(hz) - tuning;
 
   // Extract fractional pitch class [0, 12)
-  float chroma = std::fmod(midi, 12.0f);
+  float chroma = std::fmod(midi, constants::kSemitonesPerOctave);
   if (chroma < 0.0f) {
-    chroma += 12.0f;
+    chroma += constants::kSemitonesPerOctave;
   }
   return chroma;
 }
@@ -67,7 +68,7 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
     }
 
     // Scale to n_chroma bins
-    float scaled_chroma = chroma * n_chroma / 12.0f;
+    float scaled_chroma = chroma * n_chroma / constants::kSemitonesPerOctave;
 
     // Distribute energy to neighboring chroma bins (using triangular window)
     int chroma_low = static_cast<int>(std::floor(scaled_chroma)) % n_chroma;

@@ -55,6 +55,18 @@ std::vector<float> side_signal(const std::vector<float>& left, const std::vector
   return side;
 }
 
+float stereo_rms_tail(const std::vector<float>& left, const std::vector<float>& right,
+                      size_t skip) {
+  double sum = 0.0;
+  size_t count = 0;
+  for (size_t i = std::min(skip, left.size()); i < left.size() && i < right.size(); ++i) {
+    sum +=
+        0.5 * (static_cast<double>(left[i]) * left[i] + static_cast<double>(right[i]) * right[i]);
+    ++count;
+  }
+  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
+}
+
 }  // namespace
 
 TEST_CASE("MidSide encode and decode round-trips stereo buffers", "[mastering][stereo]") {
@@ -75,17 +87,23 @@ TEST_CASE("MidSide encode and decode round-trips stereo buffers", "[mastering][s
 }
 
 TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") {
-  auto left = sine(1000.0f, 48000, 48000, 0.25f);
-  auto right = left;
-  for (auto& sample : right) {
-    sample *= -1.0f;
+  auto mid = sine(1000.0f, 48000, 48000, 0.25f);
+  auto side = sine(1500.0f, 48000, 48000, 0.05f);
+  auto left = mid;
+  auto right = mid;
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] += side[i];
+    right[i] -= side[i];
   }
   const float side_before = rms_tail(side_signal(left, right), 4096);
+  const float energy_before = stereo_rms_tail(left, right, 4096);
 
   Imager wide({2.0f, 0.0f});
   wide.prepare(48000.0, 1024);
   process_stereo(wide, left, right);
-  REQUIRE(rms_tail(side_signal(left, right), 4096) > side_before * 1.9f);
+  REQUIRE(rms_tail(side_signal(left, right), 4096) > side_before * 1.7f);
+  REQUIRE(stereo_rms_tail(left, right, 4096) > energy_before * 0.98f);
+  REQUIRE(stereo_rms_tail(left, right, 4096) < energy_before * 1.02f);
 
   Imager mono({0.0f, 0.0f});
   mono.prepare(48000.0, 1024);
@@ -93,8 +111,28 @@ TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") 
   REQUIRE(rms_tail(side_signal(left, right), 4096) < 0.000001f);
 }
 
+TEST_CASE("Imager decorrelates widened side signal", "[mastering][stereo]") {
+  auto left = sine(1000.0f, 48000, 48000, 0.25f);
+  auto right = sine(1000.0f, 48000, 48000, -0.25f);
+
+  Imager dry({1.5f, 0.0f, 0.0f, false});
+  Imager decorated({1.5f, 0.0f, 1.0f, false});
+  dry.prepare(48000.0, 1024);
+  decorated.prepare(48000.0, 1024);
+
+  auto dry_left = left;
+  auto dry_right = right;
+  process_stereo(dry, dry_left, dry_right);
+  process_stereo(decorated, left, right);
+
+  REQUIRE(rms_tail(side_signal(left, right), 4096) >
+          rms_tail(side_signal(dry_left, dry_right), 4096) * 0.85f);
+  REQUIRE(std::abs(left[4096] - dry_left[4096]) > 0.001f);
+}
+
 TEST_CASE("Imager validates width", "[mastering][stereo]") {
   REQUIRE_THROWS(Imager({-1.0f, 0.0f}));
+  REQUIRE_THROWS(Imager({1.0f, 0.0f, 1.1f}));
 }
 
 TEST_CASE("MonoMaker collapses stereo to identical channels", "[mastering][stereo]") {
@@ -182,8 +220,40 @@ TEST_CASE("PhaseAlign delays the selected channel by integer samples", "[masteri
   REQUIRE_THAT(right[2], WithinAbs(1.0f, 0.000001f));
 }
 
+TEST_CASE("PhaseAlign supports fractional sample delay", "[mastering][stereo]") {
+  std::vector<float> left(8, 0.0f);
+  std::vector<float> right = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+  PhaseAlign align({2, true, 0.5f});
+  align.prepare(48000.0, 8);
+  process_stereo(align, left, right);
+
+  REQUIRE(std::abs(right[2]) > 0.1f);
+  REQUIRE(std::abs(right[3]) > std::abs(right[2]));
+  REQUIRE(std::abs(right[6]) < 0.1f);
+}
+
+TEST_CASE("PhaseAlign estimates relative delay by cross-correlation", "[mastering][stereo]") {
+  std::vector<float> reference(256, 0.0f);
+  std::vector<float> delayed(256, 0.0f);
+  for (size_t i = 0; i < reference.size(); ++i) {
+    reference[i] = static_cast<float>(std::sin(0.17 * static_cast<double>(i)) +
+                                      0.3 * std::sin(0.031 * static_cast<double>(i * i)));
+  }
+  for (size_t i = 0; i + 3 < delayed.size(); ++i) {
+    delayed[i + 3] = reference[i];
+  }
+
+  const float estimate = PhaseAlign::estimate_delay_samples(reference.data(), delayed.data(),
+                                                            static_cast<int>(reference.size()), 12);
+
+  REQUIRE_THAT(estimate, WithinAbs(3.0f, 0.1f));
+}
+
 TEST_CASE("PhaseAlign validates configuration", "[mastering][stereo]") {
   REQUIRE_THROWS(PhaseAlign({-1, true}));
+  REQUIRE_THROWS(PhaseAlign({0, true, -0.1f}));
+  REQUIRE_THROWS(PhaseAlign({0, true, 1.0f}));
 }
 
 TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]") {
@@ -201,6 +271,24 @@ TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]
   REQUIRE(!result.likely_mono_compatible);
 }
 
+TEST_CASE("MonoCompatCheck reports log-band phase correlation", "[mastering][stereo]") {
+  auto left = sine(1000.0f, 48000, 48000, 0.5f);
+  auto right = left;
+  for (auto& sample : right) {
+    sample = -sample;
+  }
+
+  const auto bands = mono_compat_check_log_bands(left.data(), right.data(), left.size(), 48000.0, 1,
+                                                 700.0f, 1400.0f);
+
+  REQUIRE(bands.size() == 1);
+  REQUIRE(bands[0].correlation < -0.99f);
+  REQUIRE(bands[0].side_rms > 0.3f);
+}
+
 TEST_CASE("MonoCompatCheck validates buffers", "[mastering][stereo]") {
   REQUIRE_THROWS(mono_compat_check(nullptr, nullptr, 0));
+  std::vector<float> left(4, 0.0f);
+  std::vector<float> right(4, 0.0f);
+  REQUIRE_THROWS(mono_compat_check_log_bands(left.data(), right.data(), left.size(), 48000.0, 0));
 }

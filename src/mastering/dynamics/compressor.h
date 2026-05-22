@@ -3,6 +3,7 @@
 /// @file compressor.h
 /// @brief Feed-forward compressor with soft knee and makeup gain.
 
+#include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::dynamics {
@@ -22,6 +23,10 @@ struct CompressorConfig {
   float makeup_gain_db = 0.0f;
   bool auto_makeup = false;
   DetectorMode detector = DetectorMode::Rms;
+  bool sidechain_hpf_enabled = false;
+  float sidechain_hpf_hz = 100.0f;
+  float pdr_time_ms = 0.0f;
+  float pdr_release_scale = 1.0f;
 };
 
 class Compressor : public common::ProcessorBase {
@@ -38,10 +43,7 @@ class Compressor : public common::ProcessorBase {
 
  private:
   static void validate_config(const CompressorConfig& config);
-  static float linear_to_db(float value);
-  static float db_to_linear(float db);
   static float gain_reduction_db(float input_db, const CompressorConfig& config);
-  static float time_coefficient(double sample_rate, float time_ms);
   void update_coefficients();
 
   CompressorConfig config_{};
@@ -52,10 +54,13 @@ class Compressor : public common::ProcessorBase {
   float rms_state_ = 0.0f;
   float rms_coeff_ = 0.0f;
   float log_rms_coeff_ = 0.0f;
+  float hpf_coeff_ = 0.0f;
+  float hpf_x1_ = 0.0f;
+  float hpf_y1_ = 0.0f;
+  float pdr_state_db_ = 0.0f;
+  float pdr_coeff_ = 0.0f;
   // Log-domain attack/release smoothing on the gain-reduction signal (in dB).
-  float reduction_state_db_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
+  common::EnvelopeFollower reduction_smoother_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

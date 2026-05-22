@@ -9,16 +9,9 @@
 
 #include "analysis/meter/lufs.h"
 #include "analysis/meter/true_peak.h"
+#include "util/db.h"
 
 namespace sonare::mastering::maximizer {
-
-namespace {
-
-float db_to_linear(float db) { return std::pow(10.0f, db / 20.0f); }
-
-float linear_to_db(float value) { return value <= 0.0f ? -120.0f : 20.0f * std::log10(value); }
-
-}  // namespace
 
 LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptimizeConfig& config) {
   if (audio.empty()) throw std::invalid_argument("audio must not be empty");

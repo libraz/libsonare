@@ -551,4 +551,3 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   return SONARE_OK;
   SONARE_C_CATCH
 }
-

@@ -8,12 +8,14 @@
 #include <vector>
 
 #include "core/spectrum.h"
+#include "mastering/common/noise_tracker.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::repair {
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
+using sonare::constants::kPiD;
 
 void validate(const DenoiseClassicalConfig& config) {
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
@@ -39,7 +41,7 @@ void validate(const DenoiseClassicalConfig& config) {
   }
 }
 
-std::vector<double> estimate_noise_psd(const Spectrogram& spec, float quantile) {
+std::vector<double> estimate_quantile_noise_psd(const Spectrogram& spec, float quantile) {
   const int bins = spec.n_bins();
   const int frames = spec.n_frames();
   std::vector<double> noise(static_cast<size_t>(bins), 0.0);
@@ -67,6 +69,45 @@ std::vector<double> estimate_noise_psd(const Spectrogram& spec, float quantile) 
   }
   const double scale = 1.0 / static_cast<double>(noise_frames);
   for (auto& v : noise) v *= scale;
+  return noise;
+}
+
+std::vector<double> estimate_noise_psd_frames(const Spectrogram& spec,
+                                              const DenoiseClassicalConfig& config) {
+  const int bins = spec.n_bins();
+  const int frames = spec.n_frames();
+  std::vector<double> noise(static_cast<size_t>(bins * frames), 0.0);
+  if (frames == 0) return noise;
+
+  if (config.noise_estimator == DenoiseNoiseEstimator::Quantile) {
+    const auto stationary = estimate_quantile_noise_psd(spec, config.noise_estimation_quantile);
+    for (int b = 0; b < bins; ++b) {
+      for (int t = 0; t < frames; ++t) {
+        noise[static_cast<size_t>(b * frames + t)] = stationary[static_cast<size_t>(b)];
+      }
+    }
+    return noise;
+  }
+
+  common::NoiseTracker::Mode mode = common::NoiseTracker::Mode::Imcra;
+  if (config.noise_estimator == DenoiseNoiseEstimator::Mcra) {
+    mode = common::NoiseTracker::Mode::Mcra;
+  }
+  common::NoiseTracker tracker(bins, spec.sample_rate(), mode);
+  std::vector<float> frame_power(static_cast<size_t>(bins), 0.0f);
+  const auto& power = spec.power();
+
+  for (int t = 0; t < frames; ++t) {
+    for (int b = 0; b < bins; ++b) {
+      frame_power[static_cast<size_t>(b)] =
+          static_cast<float>(std::max(power[b * frames + t], 0.0f));
+    }
+    tracker.update(frame_power.data());
+    const auto& tracked = tracker.noise_psd();
+    for (int b = 0; b < bins; ++b) {
+      noise[static_cast<size_t>(b * frames + t)] = tracked[static_cast<size_t>(b)];
+    }
+  }
   return noise;
 }
 
@@ -121,18 +162,50 @@ float gain_mmse_stsa(double ksi, double gamma_post) {
     }
   }
   const double envelope = std::exp(-half_nu) * ((1.0 + nu) * i0 + nu * i1);
-  const double prefactor = std::sqrt(kPi) * 0.5 * std::sqrt(nu) / gamma_post;
+  const double prefactor = std::sqrt(kPiD) * 0.5 * std::sqrt(nu) / gamma_post;
   return static_cast<float>(prefactor * envelope);
 }
 
+double speech_presence_probability(double ksi, double gamma_post) {
+  constexpr double q = 0.05;  // Cohen OM-LSA default speech-absence prior.
+  const double v = ksi * gamma_post / (1.0 + ksi);
+  const double odds = (q / (1.0 - q)) * (1.0 + ksi) * std::exp(-v);
+  const double p = 1.0 / (1.0 + odds);
+  return std::clamp(p, 0.05, 1.0);
+}
+
+std::vector<double> smooth_gain_3x3(const std::vector<double>& gains, int bins, int frames) {
+  std::vector<double> smoothed = gains;
+  std::vector<double> window;
+  window.reserve(9);
+  for (int b = 0; b < bins; ++b) {
+    for (int t = 0; t < frames; ++t) {
+      window.clear();
+      for (int db = -1; db <= 1; ++db) {
+        const int bb = b + db;
+        if (bb < 0 || bb >= bins) continue;
+        for (int dt = -1; dt <= 1; ++dt) {
+          const int tt = t + dt;
+          if (tt < 0 || tt >= frames) continue;
+          window.push_back(gains[static_cast<size_t>(bb * frames + tt)]);
+        }
+      }
+      std::nth_element(window.begin(), window.begin() + window.size() / 2, window.end());
+      smoothed[static_cast<size_t>(b * frames + t)] = window[window.size() / 2];
+    }
+  }
+  return smoothed;
+}
+
 Audio denoise_ephraim_malah(const Audio& audio, const Spectrogram& spec,
-                            const std::vector<double>& noise_psd,
+                            const std::vector<double>& noise_psd_frames,
                             const DenoiseClassicalConfig& config) {
   const int bins = spec.n_bins();
   const int frames = spec.n_frames();
   const auto* complex_data = spec.complex_data();
 
   std::vector<std::complex<float>> denoised_data(static_cast<size_t>(bins * frames));
+  std::vector<double> gains(static_cast<size_t>(bins * frames), 1.0);
   // Decision-directed a priori SNR uses the previous frame's clean estimate.
   std::vector<double> prev_clean_power(static_cast<size_t>(bins), 0.0);
   const double alpha = config.dd_alpha;
@@ -144,7 +217,7 @@ Audio denoise_ephraim_malah(const Audio& audio, const Spectrogram& spec,
       const std::complex<float>& bin = complex_data[idx];
       const double mag = std::abs(bin);
       const double power = mag * mag;
-      const double noise = std::max(noise_psd[static_cast<size_t>(b)], 1e-12);
+      const double noise = std::max(noise_psd_frames[idx], 1e-12);
 
       // a posteriori SNR.
       const double gamma_post = std::max(power / noise, 1e-6);
@@ -160,12 +233,29 @@ Audio denoise_ephraim_malah(const Audio& audio, const Spectrogram& spec,
       } else {
         gain = gain_mmse_stsa(ksi, gamma_post);
       }
+      if (config.speech_presence_gain) {
+        const double presence = speech_presence_probability(ksi, gamma_post);
+        gain = std::pow(std::max(gain, floor_gain), presence) *
+               std::pow(std::max(floor_gain, 1.0e-6), 1.0 - presence);
+      }
       gain = std::max(gain, floor_gain);
       gain = std::min(gain, 1.0);
 
-      const float gf = static_cast<float>(gain);
-      denoised_data[idx] = {bin.real() * gf, bin.imag() * gf};
+      gains[idx] = gain;
       prev_clean_power[static_cast<size_t>(b)] = power * gain * gain;
+    }
+  }
+
+  if (config.gain_smoothing) {
+    gains = smooth_gain_3x3(gains, bins, frames);
+  }
+
+  for (int b = 0; b < bins; ++b) {
+    for (int t = 0; t < frames; ++t) {
+      const size_t idx = static_cast<size_t>(b * frames + t);
+      const std::complex<float>& bin = complex_data[idx];
+      const float gf = static_cast<float>(std::clamp(gains[idx], floor_gain, 1.0));
+      denoised_data[idx] = {bin.real() * gf, bin.imag() * gf};
     }
   }
 
@@ -176,7 +266,8 @@ Audio denoise_ephraim_malah(const Audio& audio, const Spectrogram& spec,
 }
 
 Audio denoise_berouti(const Audio& audio, const Spectrogram& spec,
-                      const std::vector<double>& noise_psd, const DenoiseClassicalConfig& config) {
+                      const std::vector<double>& noise_psd_frames,
+                      const DenoiseClassicalConfig& config) {
   const int bins = spec.n_bins();
   const int frames = spec.n_frames();
   const auto* complex_data = spec.complex_data();
@@ -186,13 +277,13 @@ Audio denoise_berouti(const Audio& audio, const Spectrogram& spec,
   const double beta = static_cast<double>(config.spectral_floor);
 
   for (int b = 0; b < bins; ++b) {
-    const double noise_pow = noise_psd[static_cast<size_t>(b)];
-    const double floor_pow = beta * noise_pow;
     for (int t = 0; t < frames; ++t) {
       const size_t idx = static_cast<size_t>(b * frames + t);
       const std::complex<float>& bin = complex_data[idx];
       const double mag = std::abs(bin);
       const double power = mag * mag;
+      const double noise_pow = std::max(noise_psd_frames[idx], 1e-12);
+      const double floor_pow = beta * noise_pow;
       const double clean_power = std::max(power - alpha * noise_pow, floor_pow);
       const double gain = mag > 1e-12 ? std::sqrt(clean_power) / mag : 0.0;
       denoised_data[idx] = {static_cast<float>(bin.real() * gain),
@@ -225,7 +316,7 @@ Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config
   const Spectrogram spec = Spectrogram::compute(audio, stft_config);
   if (spec.empty()) return audio;
 
-  const auto noise_psd = estimate_noise_psd(spec, config.noise_estimation_quantile);
+  const auto noise_psd = estimate_noise_psd_frames(spec, config);
 
   switch (config.mode) {
     case DenoiseMode::LogMmse:
