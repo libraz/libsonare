@@ -1,0 +1,7 @@
+# filename	integrated_lufs	lra	max_true_peak_db	tolerance_lu	tolerance_db
+# Values are checked only when the corresponding audio file exists.
+seq-3341-1-16bit.wav	-23.0	-	-	0.1	0.1
+seq-3341-2-16bit.wav	-33.0	-	-	0.1	0.1
+seq-3341-3-16bit-v02.wav	-23.0	-	-	0.1	0.1
+seq-3341-4-16bit-v02.wav	-23.0	-	-	0.1	0.1
+seq-3341-5-16bit-v02.wav	-23.0	-	-	0.1	0.1

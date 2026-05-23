@@ -74,7 +74,7 @@ std::pair<int, std::string> exec_command(const std::string& cmd) {
 /// @brief Gets the path to the sonare CLI executable.
 std::string get_cli_path() {
   // Try common build paths
-  std::vector<std::string> paths = {"./build-mastering-api/bin/sonare", "./build/bin/sonare",
+  std::vector<std::string> paths = {"./build/bin/sonare", "./build-mastering-api/bin/sonare",
                                     "./bin/sonare", "../bin/sonare"};
 
   for (const auto& path : paths) {
@@ -193,6 +193,38 @@ TEST_CASE("CLI key command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"root\""));
     REQUIRE_THAT(output, ContainsSubstring("\"mode\""));
   }
+
+  SECTION("json candidates output") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --json --candidates 3 -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"candidates\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+
+  SECTION("json candidates output with key options") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV +
+                                       " --json --candidates 3 --use-hpss "
+                                       "--loudness-weighted --high-pass-hz 40 "
+                                       "--genre-hint edm --profile edma -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"candidates\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+
+  SECTION("json modal candidates output") {
+    auto [code, output] =
+        exec_command(CLI + " key " + TEST_WAV + " --json --candidates 14 --modes all -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"candidates\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": 2"));
+  }
+
+  SECTION("text candidates output") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --candidates 3 -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("Key candidates"));
+    REQUIRE_THAT(output, ContainsSubstring("corr"));
+  }
 }
 
 TEST_CASE("CLI beats command", "[cli]") {
@@ -206,6 +238,22 @@ TEST_CASE("CLI beats command", "[cli]") {
 
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " beats " + TEST_WAV + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("["));
+  }
+}
+
+TEST_CASE("CLI downbeats command", "[cli]") {
+  create_test_wav(TEST_WAV);
+
+  SECTION("text output") {
+    auto [code, output] = exec_command(CLI + " downbeats " + TEST_WAV + " -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("Downbeat times"));
+  }
+
+  SECTION("json output") {
+    auto [code, output] = exec_command(CLI + " downbeats " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("["));
   }
@@ -241,6 +289,21 @@ TEST_CASE("CLI chords command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
     REQUIRE_THAT(output, ContainsSubstring("\"progression\""));
+  }
+
+  SECTION("json output with advanced chord options") {
+    auto [code, output] = exec_command(CLI + " chords " + TEST_WAV +
+                                       " --json --nnls --use-hmm --detect-inversions --key-context "
+                                       "--key-root C --key-mode major --hmm-beam-width 12 -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"bass\""));
+  }
+
+  SECTION("boolean flag before positional input is not swallowed") {
+    auto [code, output] = exec_command(CLI + " chords --nnls " + TEST_WAV + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
   }
 }
 

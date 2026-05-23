@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -11,16 +12,58 @@
 using Catch::Matchers::WithinAbs;
 
 namespace sonare::mastering::api {
+namespace {
 
-TEST_CASE("preset_names returns all 6 presets", "[mastering][preset]") {
+std::vector<float> create_preset_fixture(int sample_rate, float seconds) {
+  const int count = static_cast<int>(static_cast<float>(sample_rate) * seconds);
+  std::vector<float> samples(static_cast<std::size_t>(count));
+  for (int index = 0; index < count; ++index) {
+    const float t = static_cast<float>(index) / static_cast<float>(sample_rate);
+    const float env = 0.55f + 0.35f * std::sin(2.0f * static_cast<float>(M_PI) * 1.7f * t);
+    samples[static_cast<std::size_t>(index)] =
+        env * (0.18f * std::sin(2.0f * static_cast<float>(M_PI) * 110.0f * t) +
+               0.10f * std::sin(2.0f * static_cast<float>(M_PI) * 440.0f * t) +
+               0.04f * std::sin(2.0f * static_cast<float>(M_PI) * 1760.0f * t));
+  }
+  return samples;
+}
+
+float mean_abs(const std::vector<float>& samples) {
+  double sum = 0.0;
+  for (float value : samples) {
+    sum += std::abs(value);
+  }
+  return static_cast<float>(sum / static_cast<double>(samples.size()));
+}
+
+float rms(const std::vector<float>& samples) {
+  double sum = 0.0;
+  for (float value : samples) {
+    sum += static_cast<double>(value) * static_cast<double>(value);
+  }
+  return static_cast<float>(std::sqrt(sum / static_cast<double>(samples.size())));
+}
+
+float peak_abs(const std::vector<float>& samples) {
+  float peak = 0.0f;
+  for (float value : samples) {
+    peak = std::max(peak, std::abs(value));
+  }
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("preset_names returns all 16 presets", "[mastering][preset]") {
   auto names = preset_names();
-  REQUIRE(names.size() == 6);
-  REQUIRE(std::find(names.begin(), names.end(), "pop") != names.end());
-  REQUIRE(std::find(names.begin(), names.end(), "edm") != names.end());
-  REQUIRE(std::find(names.begin(), names.end(), "acoustic") != names.end());
-  REQUIRE(std::find(names.begin(), names.end(), "hipHop") != names.end());
-  REQUIRE(std::find(names.begin(), names.end(), "aiMusic") != names.end());
-  REQUIRE(std::find(names.begin(), names.end(), "speech") != names.end());
+  REQUIRE(names.size() == 16);
+  const std::vector<std::string> expected = {"pop",       "edm",     "acoustic",  "hipHop",
+                                             "aiMusic",   "speech",  "streaming", "youtube",
+                                             "broadcast", "podcast", "audiobook", "cinema",
+                                             "jpop",      "ambient", "lofi",      "classical"};
+  for (const auto& name : expected) {
+    REQUIRE(std::find(names.begin(), names.end(), name) != names.end());
+  }
 }
 
 TEST_CASE("preset_from_string maps known names", "[mastering][preset]") {
@@ -30,6 +73,16 @@ TEST_CASE("preset_from_string maps known names", "[mastering][preset]") {
   REQUIRE(preset_from_string("hipHop") == Preset::HipHop);
   REQUIRE(preset_from_string("aiMusic") == Preset::AIMusic);
   REQUIRE(preset_from_string("speech") == Preset::Speech);
+  REQUIRE(preset_from_string("streaming") == Preset::Streaming);
+  REQUIRE(preset_from_string("youtube") == Preset::YouTube);
+  REQUIRE(preset_from_string("broadcast") == Preset::Broadcast);
+  REQUIRE(preset_from_string("podcast") == Preset::Podcast);
+  REQUIRE(preset_from_string("audiobook") == Preset::Audiobook);
+  REQUIRE(preset_from_string("cinema") == Preset::Cinema);
+  REQUIRE(preset_from_string("jpop") == Preset::JPop);
+  REQUIRE(preset_from_string("ambient") == Preset::Ambient);
+  REQUIRE(preset_from_string("lofi") == Preset::Lofi);
+  REQUIRE(preset_from_string("classical") == Preset::Classical);
   REQUIRE_THROWS_AS(preset_from_string("invalid"), std::invalid_argument);
 }
 
@@ -59,6 +112,73 @@ TEST_CASE("preset_config(Speech) enables denoise and loudness target=-16", "[mas
   REQUIRE(config.repair.denoise.enabled);
   REQUIRE(config.loudness.enabled);
   REQUIRE_THAT(config.loudness.target_lufs, WithinAbs(-16.0f, 1e-6f));
+}
+
+TEST_CASE("new platform and genre presets expose planned loudness targets", "[mastering][preset]") {
+  struct ExpectedPreset {
+    Preset preset;
+    float lufs;
+    float ceiling;
+  };
+  const ExpectedPreset expected[] = {
+      {Preset::Streaming, -14.0f, -1.0f}, {Preset::YouTube, -14.0f, -1.0f},
+      {Preset::Broadcast, -23.0f, -1.0f}, {Preset::Podcast, -16.0f, -1.5f},
+      {Preset::Audiobook, -18.0f, -3.0f}, {Preset::Cinema, -27.0f, -2.0f},
+      {Preset::JPop, -9.0f, -0.5f},       {Preset::Ambient, -18.0f, -1.0f},
+      {Preset::Lofi, -11.0f, -1.0f},      {Preset::Classical, -23.0f, -2.0f},
+  };
+
+  for (const auto& item : expected) {
+    auto config = preset_config(item.preset);
+    REQUIRE(config.loudness.enabled);
+    REQUIRE(config.maximizer.true_peak_limiter.enabled);
+    REQUIRE_THAT(config.loudness.target_lufs, WithinAbs(item.lufs, 1e-6f));
+    REQUIRE_THAT(config.loudness.ceiling_db, WithinAbs(item.ceiling, 1e-6f));
+  }
+}
+
+TEST_CASE("new presets enable characteristic stages", "[mastering][preset]") {
+  REQUIRE(preset_config(Preset::Podcast).dynamics.deesser.enabled);
+  REQUIRE(preset_config(Preset::Audiobook).repair.declick.enabled);
+  REQUIRE(preset_config(Preset::Ambient).stereo.imager.config.width > 1.0f);
+  REQUIRE(preset_config(Preset::Lofi).saturation.tape.enabled);
+  REQUIRE(preset_config(Preset::Classical).dynamics.compressor.config.ratio < 1.3f);
+}
+
+TEST_CASE("all 16 presets process a deterministic fixture with valid output",
+          "[mastering][preset]") {
+  constexpr int sample_rate = 44100;
+  const auto fixture = create_preset_fixture(sample_rate, 1.25f);
+
+  const auto names = preset_names();
+  REQUIRE(names.size() == 16);
+  for (const auto& name : names) {
+    CAPTURE(name);
+    auto result =
+        master_audio_mono(preset_from_string(name), fixture.data(), fixture.size(), sample_rate);
+
+    REQUIRE(result.samples.size() == fixture.size());
+    REQUIRE_FALSE(result.stages.empty());
+    REQUIRE(std::isfinite(result.input_lufs));
+    REQUIRE(std::isfinite(result.output_lufs));
+    REQUIRE(std::isfinite(result.applied_gain_db));
+
+    const float output_mean_abs = mean_abs(result.samples);
+    const float output_rms = rms(result.samples);
+    const float output_peak = peak_abs(result.samples);
+    REQUIRE(std::isfinite(output_mean_abs));
+    REQUIRE(std::isfinite(output_rms));
+    REQUIRE(std::isfinite(output_peak));
+    REQUIRE(output_mean_abs > 1e-4f);
+    REQUIRE(output_rms > 1e-4f);
+    REQUIRE(output_peak <= 1.05f);
+
+    bool all_samples_finite = true;
+    for (float sample : result.samples) {
+      all_samples_finite = all_samples_finite && std::isfinite(sample);
+    }
+    REQUIRE(all_samples_finite);
+  }
 }
 
 TEST_CASE("master_audio_mono runs Pop preset on dummy signal", "[mastering][preset]") {

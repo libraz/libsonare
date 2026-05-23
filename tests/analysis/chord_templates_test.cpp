@@ -61,6 +61,30 @@ TEST_CASE("create_dominant7_template", "[chord_templates]") {
   REQUIRE_THAT(g7.pattern[5], WithinAbs(1.0f, 0.001f));   // F
 }
 
+TEST_CASE("create_extended_chord_templates", "[chord_templates]") {
+  auto c_add9 = create_add9_template(PitchClass::C);
+  REQUIRE(c_add9.quality == ChordQuality::Add9);
+  REQUIRE_THAT(c_add9.pattern[0], WithinAbs(1.0f, 0.001f));  // C
+  REQUIRE_THAT(c_add9.pattern[2], WithinAbs(1.0f, 0.001f));  // D
+  REQUIRE_THAT(c_add9.pattern[4], WithinAbs(1.0f, 0.001f));  // E
+  REQUIRE_THAT(c_add9.pattern[7], WithinAbs(1.0f, 0.001f));  // G
+
+  auto b_half_dim = create_half_dim7_template(PitchClass::B);
+  REQUIRE(b_half_dim.quality == ChordQuality::HalfDim7);
+  REQUIRE_THAT(b_half_dim.pattern[11], WithinAbs(1.0f, 0.001f));  // B
+  REQUIRE_THAT(b_half_dim.pattern[2], WithinAbs(1.0f, 0.001f));   // D
+  REQUIRE_THAT(b_half_dim.pattern[5], WithinAbs(1.0f, 0.001f));   // F
+  REQUIRE_THAT(b_half_dim.pattern[9], WithinAbs(1.0f, 0.001f));   // A
+
+  auto g9 = create_dominant9_template(PitchClass::G);
+  REQUIRE(g9.quality == ChordQuality::Dominant9);
+  REQUIRE_THAT(g9.pattern[7], WithinAbs(1.0f, 0.001f));   // G
+  REQUIRE_THAT(g9.pattern[9], WithinAbs(1.0f, 0.001f));   // A
+  REQUIRE_THAT(g9.pattern[11], WithinAbs(1.0f, 0.001f));  // B
+  REQUIRE_THAT(g9.pattern[2], WithinAbs(1.0f, 0.001f));   // D
+  REQUIRE_THAT(g9.pattern[5], WithinAbs(1.0f, 0.001f));   // F
+}
+
 TEST_CASE("ChordTemplate to_string", "[chord_templates]") {
   auto c_major = create_major_template(PitchClass::C);
   REQUIRE(c_major.to_string() == "Cmaj");
@@ -73,6 +97,12 @@ TEST_CASE("ChordTemplate to_string", "[chord_templates]") {
 
   auto fs_dim = create_diminished_template(PitchClass::Fs);
   REQUIRE(fs_dim.to_string() == "F#dim");
+
+  auto d_add9 = create_add9_template(PitchClass::D);
+  REQUIRE(d_add9.to_string() == "Dadd9");
+
+  auto b_half_dim = create_half_dim7_template(PitchClass::B);
+  REQUIRE(b_half_dim.to_string() == "Bm7b5");
 }
 
 TEST_CASE("transpose_template", "[chord_templates]") {
@@ -103,8 +133,8 @@ TEST_CASE("transpose_template negative", "[chord_templates]") {
 TEST_CASE("generate_all_chord_templates", "[chord_templates]") {
   auto templates = generate_all_chord_templates();
 
-  // 12 roots × 9 qualities = 108 templates
-  REQUIRE(templates.size() == 108);
+  // 12 roots × 16 qualities = 192 templates
+  REQUIRE(templates.size() == 192);
 
   // Check that all roots are represented
   int root_counts[12] = {};
@@ -113,7 +143,7 @@ TEST_CASE("generate_all_chord_templates", "[chord_templates]") {
   }
 
   for (int i = 0; i < 12; ++i) {
-    REQUIRE(root_counts[i] == 9);
+    REQUIRE(root_counts[i] == 16);
   }
 }
 
@@ -172,6 +202,24 @@ TEST_CASE("find_best_chord A minor", "[chord_templates]") {
   REQUIRE(score > 0.5f);
 }
 
+TEST_CASE("find_best_chord extended qualities", "[chord_templates]") {
+  auto templates = generate_all_chord_templates();
+
+  std::array<float, 12> c_add9 = {1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+                                  0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  auto [best_add9, add9_score] = find_best_chord(c_add9, templates);
+  REQUIRE(best_add9.root == PitchClass::C);
+  REQUIRE(best_add9.quality == ChordQuality::Add9);
+  REQUIRE(add9_score > 0.5f);
+
+  std::array<float, 12> b_half_dim = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                                      0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f};
+  auto [best_half_dim, half_dim_score] = find_best_chord(b_half_dim, templates);
+  REQUIRE(best_half_dim.root == PitchClass::B);
+  REQUIRE(best_half_dim.quality == ChordQuality::HalfDim7);
+  REQUIRE(half_dim_score > 0.5f);
+}
+
 TEST_CASE("pitch_class_to_string", "[chord_templates]") {
   REQUIRE(pitch_class_to_string(PitchClass::C) == "C");
   REQUIRE(pitch_class_to_string(PitchClass::Cs) == "C#");
@@ -186,4 +234,7 @@ TEST_CASE("chord_quality_to_string", "[chord_templates]") {
   REQUIRE(chord_quality_to_string(ChordQuality::Diminished) == "dim");
   REQUIRE(chord_quality_to_string(ChordQuality::Dominant7) == "7");
   REQUIRE(chord_quality_to_string(ChordQuality::Major7) == "maj7");
+  REQUIRE(chord_quality_to_string(ChordQuality::Add9) == "add9");
+  REQUIRE(chord_quality_to_string(ChordQuality::HalfDim7) == "m7b5");
+  REQUIRE(chord_quality_to_string(ChordQuality::Dominant9) == "9");
 }

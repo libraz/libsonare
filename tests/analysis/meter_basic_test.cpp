@@ -242,6 +242,34 @@ TEST_CASE("LUFS curves expose momentary and short term blocks", "[meter]") {
   REQUIRE(std::isfinite(short_term.front()));
 }
 
+TEST_CASE("LUFS interleaved overlapped short-term path stays finite", "[meter]") {
+  // Synthetic mono signal with a clear loud-then-quiet level change over a few
+  // seconds. With the default config (block_overlap = 0.75) the momentary and
+  // short-term blocks are overlapped (ITEM 4 regression guard): the measurement
+  // must run and produce finite, sane statistics.
+  const int sample_rate = 48000;
+  const int n_samples = sample_rate * 5;
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float amplitude = i < n_samples / 2 ? 0.8f : 0.1f;
+    samples[static_cast<size_t>(i)] =
+        amplitude * std::sin(2.0f * static_cast<float>(M_PI) * 1000.0f * t);
+  }
+
+  analysis::meter::LufsConfig config;  // default block_overlap = 0.75
+  REQUIRE(config.block_overlap > 0.0f);
+
+  const auto result = analysis::meter::lufs_interleaved(
+      samples.data(), static_cast<size_t>(n_samples), 1, sample_rate, config);
+
+  REQUIRE(std::isfinite(result.integrated_lufs));
+  REQUIRE(std::isfinite(result.momentary_lufs));
+  REQUIRE(std::isfinite(result.short_term_lufs));
+  REQUIRE(std::isfinite(result.loudness_range));
+  REQUIRE(result.loudness_range >= 0.0f);
+}
+
 TEST_CASE("dynamic range reports zero for steady signal", "[meter]") {
   const Audio audio = make_sine(0.5f, 48000, 4.0f);
 

@@ -65,6 +65,30 @@ std::vector<float> generate_chord(const std::vector<float>& freqs, int sample_ra
   return samples;
 }
 
+std::vector<float> generate_harmonic_chord(const std::vector<float>& freqs, int sample_rate,
+                                           float duration) {
+  size_t n_samples = static_cast<size_t>(sample_rate * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    for (float freq : freqs) {
+      samples[i] += 0.5f * std::sin(2.0f * static_cast<float>(M_PI) * freq * t);
+      samples[i] += 0.25f * std::sin(4.0f * static_cast<float>(M_PI) * freq * t);
+      samples[i] += 0.125f * std::sin(6.0f * static_cast<float>(M_PI) * freq * t);
+    }
+  }
+  float peak = 0.0f;
+  for (float sample : samples) {
+    peak = std::max(peak, std::abs(sample));
+  }
+  if (peak > 0.0f) {
+    for (float& sample : samples) {
+      sample /= peak;
+    }
+  }
+  return samples;
+}
+
 }  // namespace
 
 TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
@@ -148,6 +172,152 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     SonareError err = sonare_detect_key(nullptr, 100, 22050, &key);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("detects key with explicit analysis options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_options(samples.data(), samples.size(), 22050, 4096,
+                                                     512, 0, 0, 80.0f, &key);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(key.root >= SONARE_PITCH_C);
+    REQUIRE(key.root <= SONARE_PITCH_B);
+    REQUIRE(key.confidence >= 0.0f);
+    REQUIRE(key.confidence <= 1.0f);
+  }
+
+  SECTION("returns error for invalid explicit key options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_options(samples.data(), samples.size(), 22050, 0, 512,
+                                                     0, 0, 0.0f, &key);
+
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("returns sorted key candidates with correlations") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    SonareError err = sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512,
+                                                   0, 0, 0.0f, &candidates, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(candidates != nullptr);
+    REQUIRE(count == 24);
+    for (size_t i = 1; i < count; ++i) {
+      REQUIRE(candidates[i - 1].correlation >= candidates[i].correlation);
+    }
+    REQUIRE(candidates[0].key.root >= SONARE_PITCH_C);
+    REQUIRE(candidates[0].key.root <= SONARE_PITCH_B);
+    REQUIRE(candidates[0].key.confidence >= 0.0f);
+    REQUIRE(candidates[0].key.confidence <= 1.0f);
+    sonare_free_key_candidates(candidates);
+  }
+
+  SECTION("returns modal key candidates when modes are explicit") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR, SONARE_MODE_DORIAN,
+                                SONARE_MODE_LYDIAN};
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    SonareError err =
+        sonare_detect_key_candidates_with_modes(samples.data(), samples.size(), 22050, 4096, 512, 0,
+                                                0, 0.0f, modes, 4, &candidates, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(candidates != nullptr);
+    REQUIRE(count == 48);
+    bool saw_dorian = false;
+    bool saw_lydian = false;
+    for (size_t i = 0; i < count; ++i) {
+      saw_dorian = saw_dorian || candidates[i].key.mode == SONARE_MODE_DORIAN;
+      saw_lydian = saw_lydian || candidates[i].key.mode == SONARE_MODE_LYDIAN;
+    }
+    REQUIRE(saw_dorian);
+    REQUIRE(saw_lydian);
+    sonare_free_key_candidates(candidates);
+  }
+
+  SECTION("detects key with explicit modal options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR, SONARE_MODE_DORIAN};
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_options_and_modes(
+        samples.data(), samples.size(), 22050, 4096, 512, 0, 0, 0.0f, modes, 3, &key);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(key.root >= SONARE_PITCH_C);
+    REQUIRE(key.root <= SONARE_PITCH_B);
+    REQUIRE(key.mode >= SONARE_MODE_MAJOR);
+    REQUIRE(key.mode <= SONARE_MODE_LOCRIAN);
+  }
+
+  SECTION("detects key with explicit profile and genre options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR};
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_extended_options(
+        samples.data(), samples.size(), 22050, 4096, 512, 1, 1, 80.0f, modes, 2,
+        SONARE_KEY_PROFILE_FARALDO_EDMA, "edm", &key);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(key.root >= SONARE_PITCH_C);
+    REQUIRE(key.root <= SONARE_PITCH_B);
+    REQUIRE((key.mode == SONARE_MODE_MAJOR || key.mode == SONARE_MODE_MINOR));
+  }
+
+  SECTION("returns candidates with explicit profile and genre options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    SonareError err = sonare_detect_key_candidates_with_extended_options(
+        samples.data(), samples.size(), 22050, 4096, 512, 0, 0, 0.0f, nullptr, 0,
+        SONARE_KEY_PROFILE_TEMPERLEY, "pop", &candidates, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(candidates != nullptr);
+    REQUIRE(count == 24);
+    sonare_free_key_candidates(candidates);
+  }
+
+  SECTION("returns error for null key candidate outputs") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
+                                         0.0f, nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
+                                         0.0f, &candidates,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("returns error for invalid modal options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode bad_modes[] = {static_cast<SonareMode>(99)};
+    SonareKey key = {};
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_detect_key_with_options_and_modes(samples.data(), samples.size(), 22050, 4096,
+                                                     512, 0, 0, 0.0f, bad_modes, 1,
+                                                     &key) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_candidates_with_modes(samples.data(), samples.size(), 22050, 4096,
+                                                    512, 0, 0, 0.0f, bad_modes, 1, &candidates,
+                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_with_extended_options(samples.data(), samples.size(), 22050, 4096,
+                                                    512, 0, 0, 0.0f, nullptr, 0,
+                                                    static_cast<SonareKeyProfileType>(99), nullptr,
+                                                    &key) == SONARE_ERROR_INVALID_PARAMETER);
+  }
 }
 
 TEST_CASE("sonare_detect_beats", "[c_api]") {
@@ -168,6 +338,59 @@ TEST_CASE("sonare_detect_beats", "[c_api]") {
       }
       sonare_free_floats(times);
     }
+  }
+}
+
+TEST_CASE("sonare_detect_downbeats", "[c_api]") {
+  SECTION("detects downbeats from samples") {
+    auto samples = generate_clicks(120.0f, 22050, 8.0f);
+    float* times = nullptr;
+    size_t count = 0;
+
+    SonareError err =
+        sonare_detect_downbeats(samples.data(), samples.size(), 22050, &times, &count);
+
+    REQUIRE(err == SONARE_OK);
+    if (count > 0) {
+      REQUIRE(times != nullptr);
+      for (size_t i = 1; i < count; ++i) {
+        REQUIRE(times[i] > times[i - 1]);
+      }
+      sonare_free_floats(times);
+    }
+  }
+
+  SECTION("audio wrapper detects downbeats") {
+    auto samples = generate_clicks(120.0f, 22050, 8.0f);
+    SonareAudio* audio = nullptr;
+    REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio) == SONARE_OK);
+
+    float* times = nullptr;
+    size_t count = 0;
+    SonareError err = sonare_audio_detect_downbeats(audio, &times, &count);
+
+    REQUIRE(err == SONARE_OK);
+    if (count > 0) {
+      REQUIRE(times != nullptr);
+      sonare_free_floats(times);
+    }
+
+    sonare_audio_free(audio);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
+    float* times = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_detect_downbeats(nullptr, samples.size(), 22050, &times, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_downbeats(samples.data(), samples.size(), 22050, nullptr, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_downbeats(samples.data(), samples.size(), 22050, &times, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_audio_detect_downbeats(nullptr, &times, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -278,6 +501,89 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
+  const int sample_rate = 48000;
+  const float expected_rt60 = 1.0f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t);
+  }
+
+  SonareAcousticResult result = {};
+  SonareError err =
+      sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6, &result);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(std::isfinite(result.rt60));
+  REQUIRE(std::isfinite(result.edt));
+  REQUIRE(result.rt60 > 0.95f);
+  REQUIRE(result.rt60 < 1.05f);
+  REQUIRE(result.band_count == 6);
+  REQUIRE(result.rt60_bands != nullptr);
+  REQUIRE(result.edt_bands != nullptr);
+  REQUIRE(result.c50_bands != nullptr);
+  REQUIRE(result.c80_bands != nullptr);
+
+  sonare_free_acoustic_result(&result);
+  REQUIRE(result.rt60_bands == nullptr);
+  REQUIRE(result.band_count == 0);
+}
+
+TEST_CASE("sonare_detect_acoustic", "[c_api][acoustic]") {
+  const int sample_rate = 48000;
+  const float expected_rt60 = 0.7f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t);
+  }
+
+  SonareAcousticResult result = {};
+  SonareError err = sonare_detect_acoustic(samples.data(), samples.size(), sample_rate, 6, 24,
+                                           30.0f, 10.0f, &result);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(result.is_blind == 1);
+  REQUIRE(std::isfinite(result.rt60));
+  REQUIRE(result.rt60 > 0.55f);
+  REQUIRE(result.rt60 < 0.85f);
+  REQUIRE(result.band_count == 6);
+  REQUIRE(result.rt60_bands != nullptr);
+  // Blind mode does not compute clarity bands; they are exposed as null so that
+  // "not computed" is distinguishable from "computed-but-invalid".
+  REQUIRE(result.c50_bands == nullptr);
+  REQUIRE(result.c80_bands == nullptr);
+
+  sonare_free_acoustic_result(&result);
+}
+
+TEST_CASE("sonare_detect_acoustic blind mode exposes null clarity bands", "[c_api][acoustic]") {
+  const int sample_rate = 48000;
+  const float expected_rt60 = 0.7f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t);
+  }
+
+  SonareAcousticResult result = {};
+  SonareError err = sonare_detect_acoustic(samples.data(), samples.size(), sample_rate, 6, 24,
+                                           30.0f, 10.0f, &result);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(result.is_blind == 1);
+  REQUIRE(result.band_count > 0);
+  REQUIRE(result.rt60_bands != nullptr);
+  REQUIRE(result.c50_bands == nullptr);
+  REQUIRE(result.c80_bands == nullptr);
+
+  sonare_free_acoustic_result(&result);
+}
+
 TEST_CASE("sonare_analyze_timbre", "[c_api]") {
   SECTION("returns timbre scalars and spectral curves") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
@@ -367,7 +673,7 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
     REQUIRE(result.chords[0].root >= SONARE_PITCH_C);
     REQUIRE(result.chords[0].root <= SONARE_PITCH_B);
     REQUIRE(result.chords[0].quality >= SONARE_CHORD_MAJOR);
-    REQUIRE(result.chords[0].quality <= SONARE_CHORD_UNKNOWN);
+    REQUIRE(result.chords[0].quality <= SONARE_CHORD_SUS2_ADD4);
     REQUIRE(result.chords[0].end >= result.chords[0].start);
     REQUIRE(result.chords[0].confidence >= 0.0f);
 
@@ -396,9 +702,41 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
                                  512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
+  SECTION("extended options enable HMM and inversion detection without changing legacy ABI") {
+    auto samples = generate_harmonic_chord({82.41f, 261.63f, 329.63f, 392.00f}, 22050, 1.0f);
+    SonareChordAnalysisResult result = {};
+    SonareChordDetectionOptions options{};
+    options.min_duration = 0.0f;
+    options.smoothing_window = 2.0f;
+    options.threshold = 0.5f;
+    options.use_triads_only = 1;
+    options.n_fft = 2048;
+    options.hop_length = 512;
+    options.use_beat_sync = 0;
+    options.use_hmm = 1;
+    options.hmm_beam_width = 8;
+    options.use_key_context = 1;
+    options.key_root = SONARE_PITCH_C;
+    options.key_mode = SONARE_MODE_MAJOR;
+    options.detect_inversions = 1;
+    options.chroma_method = 1;
+
+    SonareError err =
+        sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.chord_count > 0);
+    REQUIRE(result.chords != nullptr);
+    REQUIRE(result.chords[0].root == SONARE_PITCH_C);
+    REQUIRE(result.chords[0].bass == SONARE_PITCH_E);
+
+    sonare_free_chord_analysis_result(&result);
+  }
+
   SECTION("free is safe on partially initialized struct") {
     SonareChordAnalysisResult result = {};
-    result.chords = new SonareChord[1]{{SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f}};
+    result.chords =
+        new SonareChord[1]{{SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f, SONARE_PITCH_C}};
     result.chord_count = 1;
 
     sonare_free_chord_analysis_result(&result);
@@ -482,6 +820,21 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(names != nullptr);
     REQUIRE(std::strstr(names, "dynamics.compressor") != nullptr);
     REQUIRE(std::strstr(names, "stereo.imager") != nullptr);
+  }
+
+  SECTION("named processor validation includes processor and parameter name") {
+    auto samples = generate_sine(440.0f, 22050, 0.5f);
+    SonareMasteringParam params[] = {{"width", 3.5}};
+    SonareMasteringStereoResult stereo{};
+
+    REQUIRE(sonare_mastering_apply_processor_stereo("stereo.imager", samples.data(), samples.data(),
+                                                    samples.size(), 22050, params, 1,
+                                                    &stereo) == SONARE_ERROR_INVALID_PARAMETER);
+    const char* msg = sonare_last_error_message();
+    REQUIRE(msg != nullptr);
+    REQUIRE(std::string(msg).find("stereo.imager.width must be in [0, 2], got 3.5") !=
+            std::string::npos);
+    sonare_free_mastering_stereo_result(&stereo);
   }
 
   SECTION("applies pair processors and analyses") {

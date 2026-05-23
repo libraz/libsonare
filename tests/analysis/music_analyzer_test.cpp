@@ -106,6 +106,19 @@ TEST_CASE("MusicAnalyzer chords", "[music_analyzer]") {
   }
 }
 
+TEST_CASE("MusicAnalyzer refines downbeats after chord analysis", "[music_analyzer]") {
+  Audio audio = create_test_audio();
+
+  MusicAnalyzer analyzer(audio);
+  auto& beat = analyzer.beat_analyzer();
+  const size_t initial_downbeats = beat.downbeat_indices().size();
+
+  (void)analyzer.chord_analyzer().count();
+
+  REQUIRE(!beat.downbeat_indices().empty());
+  REQUIRE(beat.downbeat_indices().size() == initial_downbeats);
+}
+
 TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {
   Audio audio = create_test_audio();
 
@@ -174,11 +187,39 @@ TEST_CASE("MusicAnalyzer config", "[music_analyzer]") {
   config.bpm_min = 80.0f;
   config.bpm_max = 160.0f;
   config.start_bpm = 120.0f;
+  config.use_chord_hmm = true;
+  config.use_chord_key_context = true;
+  config.chord_hmm_beam_width = 8;
+  config.detect_chord_inversions = true;
 
   MusicAnalyzer analyzer(audio, config);
 
   REQUIRE(analyzer.config().bpm_min == 80.0f);
   REQUIRE(analyzer.config().bpm_max == 160.0f);
+  REQUIRE(analyzer.config().use_chord_hmm);
+  REQUIRE(analyzer.config().use_chord_key_context);
+  REQUIRE(analyzer.config().chord_hmm_beam_width == 8);
+  REQUIRE(analyzer.config().detect_chord_inversions);
+}
+
+TEST_CASE("MusicAnalyzer can opt into chord HMM, key context, and inversion detection",
+          "[music_analyzer][chord_analyzer]") {
+  Audio audio = create_test_audio();
+
+  MusicAnalyzerConfig config;
+  config.use_chord_hmm = true;
+  config.use_chord_key_context = true;
+  config.chord_hmm_beam_width = 8;
+  config.detect_chord_inversions = true;
+
+  MusicAnalyzer analyzer(audio, config);
+  const auto chords = analyzer.chords();
+
+  for (const auto& chord : chords) {
+    REQUIRE(chord.confidence >= 0.0f);
+    REQUIRE(chord.confidence <= 1.0f);
+    REQUIRE(chord.end > chord.start);
+  }
 }
 
 TEST_CASE("MusicAnalyzer melody analyzer", "[music_analyzer]") {

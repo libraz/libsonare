@@ -119,6 +119,20 @@ TEST_CASE("Chroma A440 detection", "[chroma]") {
   REQUIRE(max_idx == 9);
 }
 
+TEST_CASE("Chroma weighted_mean_energy emphasizes weighted frames", "[chroma]") {
+  std::vector<float> features(12 * 2, 0.0f);
+  features[0 * 2 + 0] = 1.0f;  // C in frame 0
+  features[7 * 2 + 1] = 1.0f;  // G in frame 1
+
+  Chroma chroma(std::move(features), 12, 2, 22050, 512);
+  auto unweighted = chroma.mean_energy();
+  auto weighted = chroma.weighted_mean_energy({0.1f, 1.0f});
+
+  REQUIRE_THAT(unweighted[0], WithinAbs(0.5f, 0.001f));
+  REQUIRE_THAT(unweighted[7], WithinAbs(0.5f, 0.001f));
+  REQUIRE(weighted[7] > weighted[0]);
+}
+
 TEST_CASE("Chroma C major chord detection", "[chroma]") {
   // C major chord: C4 (261.63), E4 (329.63), G4 (392.00)
   std::vector<float> freqs = {261.63f, 329.63f, 392.00f};
@@ -147,6 +161,21 @@ TEST_CASE("Chroma C major chord detection", "[chroma]") {
   REQUIRE(mean_energy[0] > threshold);  // C
   REQUIRE(mean_energy[4] > threshold);  // E
   REQUIRE(mean_energy[7] > threshold);  // G
+}
+
+TEST_CASE("bass_chroma emphasizes low-frequency pitch class", "[chroma]") {
+  Audio audio = create_sine_audio(65.41f, 22050, 1.0f);
+
+  BassChromaConfig config;
+  config.cqt.hop_length = 512;
+  Chroma chroma = bass_chroma(audio, config);
+
+  REQUIRE(!chroma.empty());
+  auto mean_energy = chroma.mean_energy();
+  int max_idx = static_cast<int>(std::max_element(mean_energy.begin(), mean_energy.end()) -
+                                 mean_energy.begin());
+
+  REQUIRE(max_idx == static_cast<int>(PitchClass::C));
 }
 
 TEST_CASE("Chroma features matrix view", "[chroma]") {

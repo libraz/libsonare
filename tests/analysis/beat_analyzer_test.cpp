@@ -9,7 +9,6 @@
 #include <vector>
 
 using namespace sonare;
-using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
@@ -56,6 +55,16 @@ Audio create_drum_pattern(float bpm, int beats_per_bar, int sr = 22050, float du
   }
 
   return Audio::from_vector(std::move(samples), sr);
+}
+
+float average_interval(const std::vector<int>& frames, size_t begin, size_t end) {
+  if (end <= begin + 1) return 0.0f;
+
+  float total = 0.0f;
+  for (size_t i = begin + 1; i < end; ++i) {
+    total += static_cast<float>(frames[i] - frames[i - 1]);
+  }
+  return total / static_cast<float>(end - begin - 1);
 }
 
 }  // namespace
@@ -143,11 +152,13 @@ TEST_CASE("BeatAnalyzer 90 BPM tracking", "[beat_analyzer]") {
   config.start_bpm = 90.0f;
   BeatAnalyzer analyzer(audio, config);
 
-  // Should detect BPM close to 90 or octave-related
+  // Should detect BPM within 5% of 90 or its double-tempo octave (180).
+  // Each branch is a tight 5% relative bound rather than a wide absolute union.
   float detected = analyzer.bpm();
-  bool close_to_90 = std::abs(detected - 90.0f) < 15.0f;
-  bool close_to_180 = std::abs(detected - 180.0f) < 15.0f;
+  bool close_to_90 = std::abs(detected - 90.0f) <= 0.05f * 90.0f;
+  bool close_to_180 = std::abs(detected - 180.0f) <= 0.05f * 180.0f;
 
+  CAPTURE(detected);
   REQUIRE((close_to_90 || close_to_180));
 }
 
@@ -174,8 +185,11 @@ TEST_CASE("BeatAnalyzer time signature 3/4", "[beat_analyzer]") {
 
   TimeSignature ts = analyzer.time_signature();
 
-  // Should detect 3 or 6 beats per bar
-  REQUIRE((ts.numerator == 3 || ts.numerator == 6 || ts.numerator == 4));
+  // Must detect a triple meter: 3 beats per bar, or 6 as its compound
+  // equivalent. Accepting 4 was removed so a detector that always returns 4/4
+  // can no longer pass.
+  CAPTURE(ts.numerator, ts.denominator);
+  REQUIRE((ts.numerator == 3 || ts.numerator == 6));
   REQUIRE(ts.denominator == 4);
 }
 
@@ -201,6 +215,93 @@ TEST_CASE("BeatAnalyzer from onset strength", "[beat_analyzer]") {
 
   // Both should detect similar BPM
   REQUIRE_THAT(analyzer2.bpm(), WithinRel(analyzer1.bpm(), 0.2f));
+}
+
+TEST_CASE("BeatAnalyzer prepends a missed initial grid beat", "[beat_analyzer]") {
+  std::vector<float> onset(45, 0.0f);
+  for (int frame = 10; frame <= 30; frame += 10) {
+    onset[static_cast<size_t>(frame)] = 1.0f;
+  }
+
+  BeatConfig config;
+  config.start_bpm = 60.0f;
+  config.bpm_min = 50.0f;
+  config.bpm_max = 70.0f;
+  config.trim = false;
+
+  BeatAnalyzer analyzer(onset, 100, 10, config);
+
+  REQUIRE(analyzer.count() >= 4);
+  REQUIRE(analyzer.beat_frames().front() == 0);
+}
+
+TEST_CASE("BeatAnalyzer adaptive tempo follows synthetic tempo change", "[beat_analyzer]") {
+  std::vector<float> onset(220, 0.0f);
+  int frame = 5;
+  for (int beat = 0; beat < 8; ++beat) {
+    onset[static_cast<size_t>(frame)] = 1.0f;
+    frame += 10;
+  }
+  for (int beat = 0; beat < 16 && frame < static_cast<int>(onset.size()); ++beat) {
+    onset[static_cast<size_t>(frame)] = 1.0f;
+    frame += 6;
+  }
+
+  BeatConfig config;
+  config.start_bpm = 60.0f;
+  config.bpm_min = 50.0f;
+  config.bpm_max = 130.0f;
+  config.tightness = 25.0f;
+  config.trim = false;
+  config.adaptive_tempo = true;
+  config.tempo_update_interval_beats = 4;
+
+  BeatAnalyzer analyzer(onset, 100, 10, config);
+  const auto frames = analyzer.beat_frames();
+
+  REQUIRE(frames.size() >= 12);
+
+  const size_t midpoint = frames.size() / 2;
+  const float early_interval = average_interval(frames, 1, midpoint);
+  const float late_interval = average_interval(frames, midpoint, frames.size() - 1);
+
+  REQUIRE(early_interval > 0.0f);
+  REQUIRE(late_interval > 0.0f);
+  REQUIRE(late_interval < early_interval);
+  REQUIRE(late_interval < 8.0f);
+}
+
+TEST_CASE("BeatAnalyzer refines downbeats from beat-level observations", "[beat_analyzer]") {
+  std::vector<float> onset(96, 0.0f);
+  for (int frame = 4; frame < static_cast<int>(onset.size()); frame += 8) {
+    onset[static_cast<size_t>(frame)] = 1.0f;
+  }
+
+  BeatConfig config;
+  config.start_bpm = 75.0f;
+  config.bpm_min = 60.0f;
+  config.bpm_max = 90.0f;
+  config.trim = false;
+
+  BeatAnalyzer analyzer(onset, 100, 10, config);
+  REQUIRE(analyzer.count() >= 8);
+
+  const int numerator = std::max(2, analyzer.time_signature().numerator);
+  const int observed_phase = std::min(2, numerator - 1);
+  std::vector<float> low_frequency(analyzer.count(), 0.0f);
+  for (size_t i = static_cast<size_t>(observed_phase); i < low_frequency.size();
+       i += static_cast<size_t>(numerator)) {
+    low_frequency[i] = 1.0f;
+  }
+
+  analyzer.refine_downbeats(low_frequency);
+  const auto& downbeat_indices = analyzer.downbeat_indices();
+
+  REQUIRE(!downbeat_indices.empty());
+  REQUIRE(downbeat_indices.front() == observed_phase);
+  for (int index : downbeat_indices) {
+    REQUIRE(index % numerator == observed_phase);
+  }
 }
 
 TEST_CASE("BeatAnalyzer beat strength", "[beat_analyzer]") {

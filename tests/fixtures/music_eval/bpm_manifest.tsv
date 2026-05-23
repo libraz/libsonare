@@ -1,0 +1,4 @@
+# dataset	file	expected_bpm	tolerance_rel
+# Optional extra columns after tolerance_rel: confidence	report_only	notes
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# with present audio files are available.

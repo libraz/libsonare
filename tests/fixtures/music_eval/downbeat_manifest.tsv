@@ -1,0 +1,5 @@
+# dataset	file	annotation	min_fmeasure	tolerance_sec	mode
+# Optional extra columns after mode: time_sig=4/4	confidence	report_only	notes
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# with present audio and downbeat annotation files are available.
+# Use mode "adaptive" to enable BeatConfig::adaptive_tempo for rubato fixtures.
