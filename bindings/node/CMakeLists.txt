@@ -63,6 +63,7 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/feature/segment.cpp
   ${SONARE_ROOT}/src/effects/hpss.cpp
   ${SONARE_ROOT}/src/effects/phase_vocoder.cpp
+  ${SONARE_ROOT}/src/effects/native_spectral_stretch.cpp
   ${SONARE_ROOT}/src/effects/time_stretch.cpp
   ${SONARE_ROOT}/src/effects/pitch_shift.cpp
   ${SONARE_ROOT}/src/effects/normalize.cpp
@@ -119,6 +120,15 @@ file(GLOB_RECURSE SONARE_MASTERING_SOURCES CONFIGURE_DEPENDS
   ${SONARE_ROOT}/src/mastering/*.cpp
 )
 list(APPEND SONARE_SOURCES ${SONARE_MASTERING_SOURCES})
+file(GLOB_RECURSE SONARE_MIXING_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/mixing/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_MIXING_SOURCES})
+file(GLOB_RECURSE SONARE_RT_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/rt/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_RT_SOURCES})
+list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/sonare_c_mixing.cpp)
 list(REMOVE_DUPLICATES SONARE_SOURCES)
 
 # KissFFT sources

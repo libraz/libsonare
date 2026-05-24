@@ -301,6 +301,9 @@ endif()
 if(BUILD_MIXING)
   add_library(sonare_mixing STATIC
     mixing/alignment_delay.cpp
+    mixing/api/presets.cpp
+    mixing/api/scene_json.cpp
+    mixing/automation_lane.cpp
     mixing/bus.cpp
     mixing/channel_strip.cpp
     mixing/fx_bus.cpp
@@ -418,6 +421,9 @@ if(BUILD_SHARED)
   if(BUILD_MASTERING)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mastering.cpp)
   endif()
+  if(BUILD_MIXING)
+    list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
+  endif()
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
@@ -437,6 +443,10 @@ if(BUILD_SHARED)
     target_link_libraries(sonare_shared PUBLIC sonare_mastering)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MASTERING=1)
   endif()
+  if(BUILD_MIXING)
+    target_link_libraries(sonare_shared PUBLIC sonare_mixing)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING=1)
+  endif()
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
     target_link_libraries(sonare_shared PUBLIC Threads::Threads)
@@ -453,8 +463,12 @@ if(BUILD_WASM)
   # binding shim). -msimd128 must be set both on compile and link for Eigen
   # vectorization to actually map onto v128 ops in the emitted .wasm.
   target_compile_options(sonare_core PUBLIC -msimd128)
+  target_compile_options(sonare_rt PUBLIC -msimd128)
   if(BUILD_MASTERING)
     target_compile_options(sonare_mastering PUBLIC -msimd128)
+  endif()
+  if(BUILD_MIXING)
+    target_compile_options(sonare_mixing PUBLIC -msimd128)
   endif()
 
   add_executable(sonare wasm/bindings.cpp)
@@ -470,6 +484,10 @@ if(BUILD_WASM)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_MASTERING=1)
   else()
     target_sources(sonare PRIVATE mastering/maximizer/loudness_optimize.cpp)
+  endif()
+  if(BUILD_MIXING)
+    target_link_libraries(sonare PRIVATE sonare_mixing)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING=1)
   endif()
   target_compile_options(sonare PRIVATE -msimd128)
   target_link_options(sonare PRIVATE

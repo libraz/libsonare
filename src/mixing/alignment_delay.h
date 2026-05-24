@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file alignment_delay.h
-/// @brief Integer-sample channel alignment delay.
+/// @brief Integer and fractional-sample channel alignment delay.
 
 #include <vector>
 
@@ -9,6 +9,11 @@
 #include "rt/processor_base.h"
 
 namespace sonare::mixing {
+
+enum class FractionalDelayMode {
+  None,
+  Lagrange3,
+};
 
 class AlignmentDelay : public rt::ProcessorBase {
  public:
@@ -18,14 +23,30 @@ class AlignmentDelay : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override { return delay_samples_; }
+  int latency_samples_q8() const noexcept override { return delay_samples_q8_; }
 
   void set_delay_samples(int delay_samples);
+  void set_delay_samples_q8(int delay_samples_q8,
+                            FractionalDelayMode mode = FractionalDelayMode::Lagrange3);
   int delay_samples() const noexcept { return delay_samples_; }
+  int delay_samples_q8() const noexcept { return delay_samples_q8_; }
+  FractionalDelayMode fractional_mode() const noexcept { return fractional_mode_; }
 
  private:
+  struct FractionalState {
+    std::vector<float> buffer{0.0f};
+    size_t write_index = 0;
+  };
+
+  void prepare_storage();
+  float process_fractional(FractionalState& state, float input) const noexcept;
+
   int delay_samples_ = 0;
+  int delay_samples_q8_ = 0;
   int prepared_channels_ = 0;
+  FractionalDelayMode fractional_mode_ = FractionalDelayMode::None;
   std::vector<rt::DelayLine> delays_;
+  std::vector<FractionalState> fractional_;
 };
 
 }  // namespace sonare::mixing

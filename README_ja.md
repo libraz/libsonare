@@ -8,7 +8,7 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**オーディオ解析とマスタリングDSPを、C++・Python・ブラウザで。**
+**オーディオ解析、マスタリングDSP、ミキサー基本機能を、C++・Python・ブラウザで。**
 Apache-2.0、ランタイム依存ライブラリなし、ネイティブとWebAssemblyの両方でビルドできます。
 
 - **解析（Analysis）** — BPM・キー・コード（HMM平滑化・転回形・キーコンテキスト）・
@@ -24,6 +24,9 @@ Apache-2.0、ランタイム依存ライブラリなし、ネイティブとWebA
   公開された規格・論文に基づく実装です。
   リペア系は意図的に古典的DSPに限定し、デノイズは spectral subtraction /
   MMSE-STSA / LogMMSE によるノイズ低減です。DNN音源分離やスペクトル修復は対象外です。
+- **ミキシング（Mixing）** — チャンネルストリップ、パンモード、幅、センド、FXバス、
+  ゴニオメーター／トゥルーピーク計測、シーンプリセット、C++ / C / Python / Node /
+  WASM / CLI からのオフラインステレオレンダリング。
 - **ライセンス** — スタック全体（C++・Python・Node・WASM）が Apache-2.0。
 
 ## インストール
@@ -192,6 +195,22 @@ const block = chain.processMono(new Float32Array(512));
 chain.delete();
 ```
 
+**ミキシング**
+
+```typescript
+import { mixStereo, mixingScenePresetJson, mixingScenePresetNames } from '@libraz/libsonare';
+
+mixingScenePresetNames(); // ['vocalReverbSend', ...]
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+
+const mix = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+// { left, right, meters }
+```
+
 ### Python
 
 `pip install libsonare` で提供されるホイールは **WAV/MP3のみ対応** です
@@ -270,6 +289,17 @@ result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
 with libsonare.StreamingMasteringChain({'eq.tilt.tiltDb': 0.5}) as chain:
     chain.prepare(44100, 512, 1)
     out = chain.process_mono([0.0] * 512)
+
+# ミキシングプリセットとオフラインステレオレンダリング
+libsonare.mixing_scene_preset_names()  # ['vocalReverbSend', ...]
+scene_json = libsonare.mixing_scene_preset_json("vocalReverbSend")
+mix = libsonare.mix_stereo(
+    [(vocal_l, vocal_r), (music_l, music_r)],
+    sample_rate=sr,
+    fader_db=[-3.0, -12.0],
+    pan=[0.0, -0.2],
+    width=[1.0, 0.9],
+)
 ```
 
 ### Python CLI
@@ -300,6 +330,11 @@ sonare mastering-processor song.wav --processor dynamics.compressor \
 sonare mastering-pair-analyze source.wav --reference reference.wav \
     --analysis match.referenceLoudness
 sonare mastering-processors                 # 利用可能なプロセッサ一覧
+
+# ミキシング
+sonare mixing-presets
+sonare mixing-preset --preset vocalReverbSend
+sonare mix input.wav -o mix.wav --fader-db -3 --pan 0.1 --pan-mode stereo-pan --width 1.1
 ```
 
 ### C++
@@ -355,6 +390,19 @@ DNN復元、音源分離、RX級のスペクトル修復はスコープ外です
 マスタリングはデフォルトでビルドされます（`BUILD_MASTERING=ON`）。
 `cmake -DBUILD_MASTERING=OFF` で解析専用ビルド（バイナリを小さく）にもできます。
 
+### ミキシング / ルーティング
+
+| チャンネルストリップ       | ルーティング / シーンAPI      | メーター / QA                 |
+|----------------------------|-------------------------------|-------------------------------|
+| フェーダー / mute / 極性   | センドとFXバス                | Peak / RMS / true peak        |
+| Balance / stereo / dual pan| JSONシーンプリセット          | 相関 / mono width             |
+| 幅とゲインオートメーション | C / Node / Python / WASM / CLI| Golden hash とRTテスト        |
+| Insert processor hosting   | Graph統合                     | process中のno-allocation検証  |
+
+ミキシングはデフォルトでビルドされます（`BUILD_MIXING=ON`）。
+インサートホスティングにはマスタリングのプロセッサインターフェースを利用します。
+解析／マスタリング専用ビルドにする場合は `cmake -DBUILD_MIXING=OFF` を指定してください。
+
 ## パフォーマンス
 
 ネイティブ実行速度を意識した設計です。CPU自動検出による並列解析、
@@ -395,11 +443,11 @@ Web Audio APIなどでデコードした `Float32Array` を渡してください
 ## ソースからビルド
 
 ```bash
-# ネイティブ（FFmpeg自動検出。マスタリングはデフォルトでON）
+# ネイティブ（FFmpeg自動検出。マスタリングとミキシングはデフォルトでON）
 make build && make test
 
 # 解析専用（バイナリを小さくしたいとき）
-cmake -B build -DBUILD_MASTERING=OFF && cmake --build build
+cmake -B build -DBUILD_MASTERING=OFF -DBUILD_MIXING=OFF && cmake --build build
 
 # WebAssembly（マスタリング同梱）
 make wasm
@@ -420,13 +468,13 @@ make release
 
 libsonare は意図的に次の機能を含めません。
 
-- **クリエイティブ系エフェクト**（リバーブ、ディレイ、コーラス、フランジャー、フェイザー）— Tone.js や DAW を使ってください
+- **プラグイン級の楽器／クリエイティブエフェクト** — Tone.js、プラグインホスト、DAW を使ってください
 - **音声合成**（オシレーター、サンプラー、MIDI 再生）— スコープ外です
 - **リアルタイム I/O 抽象化**（PortAudio/JACK ラッパー）— 呼び出し側が I/O を扱います
 - **DAW ワークフロー**（プラグインホスト、オートメーション、MIDI 編集）— 別の製品カテゴリです
 - **深層学習モデル**（同梱 weights なし、推論ランタイムなし）— 依存ゼロと Apache-2.0 の純度を保つためです
 
-この境界により、libsonare は **解析 + マスタリング DSP** に集中し、
+この境界により、libsonare は **解析 + マスタリング + ミキサーDSP** に集中し、
 依存ゼロの性質を維持できます。
 
 ## ライセンス

@@ -28,6 +28,7 @@ from ._ffi import (
     SonareMasteringStereoResult,
     SonareMelResult,
     SonareMfccResult,
+    SonareMixMeterSnapshot,
     SonarePitchResult,
     SonareRhythmResult,
     SonareStftResult,
@@ -54,6 +55,8 @@ from .types import (
     MasteringStereoResult,
     MelSpectrogramResult,
     MfccResult,
+    MixMeterSnapshot,
+    MixResult,
     Mode,
     PitchClass,
     PitchResult,
@@ -62,6 +65,10 @@ from .types import (
     TimbreResult,
     TimeSignature,
 )
+
+PAN_MODE_BALANCE = 0
+PAN_MODE_STEREO_PAN = 1
+PAN_MODE_DUAL_PAN = 2
 
 _lib: ctypes.CDLL | None = None
 
@@ -103,6 +110,41 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
     length = len(values)
     c_array = (ctypes.c_int32 * length)(*values)
     return c_array, length
+
+
+def _pan_mode_value(value: str | int) -> int:
+    if isinstance(value, int):
+        return value
+    key = value.replace("_", "-").lower()
+    if key == "balance":
+        return PAN_MODE_BALANCE
+    if key in ("stereo-pan", "stereopan", "pan"):
+        return PAN_MODE_STEREO_PAN
+    if key in ("dual-pan", "dualpan"):
+        return PAN_MODE_DUAL_PAN
+    raise ValueError(f"unknown pan mode: {value}")
+
+
+def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
+    return MixMeterSnapshot(
+        peak_db_l=float(snapshot.peak_db_l),
+        peak_db_r=float(snapshot.peak_db_r),
+        rms_db_l=float(snapshot.rms_db_l),
+        rms_db_r=float(snapshot.rms_db_r),
+        correlation=float(snapshot.correlation),
+        mono_compat_width=float(snapshot.mono_compat_width),
+        mono_compat_peak=float(snapshot.mono_compat_peak),
+        mono_compat_side_rms=float(snapshot.mono_compat_side_rms),
+        likely_mono_compatible=bool(snapshot.likely_mono_compatible),
+        momentary_lufs=float(snapshot.momentary_lufs),
+        short_term_lufs=float(snapshot.short_term_lufs),
+        integrated_lufs=float(snapshot.integrated_lufs),
+        gain_reduction_db=float(snapshot.gain_reduction_db),
+        true_peak_db_l=float(snapshot.true_peak_db_l),
+        true_peak_db_r=float(snapshot.true_peak_db_r),
+        max_true_peak_db=float(snapshot.max_true_peak_db),
+        seq=int(snapshot.seq),
+    )
 
 
 def _mode_values(modes: Sequence[Mode | str] | str | None) -> list[int]:
@@ -1426,6 +1468,149 @@ def mastering_preset_names() -> list[str]:
         raise RuntimeError("libsonare was built without mastering preset support")
     raw = lib.sonare_mastering_preset_names()
     return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mixing_scene_preset_names() -> list[str]:
+    """Return built-in mixer scene preset identifiers."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mixing_scene_preset_names"):
+        raise RuntimeError("libsonare was built without mixing support")
+    raw = lib.sonare_mixing_scene_preset_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mixing_scene_preset_json(preset: str) -> str:
+    """Return the JSON scene template for a built-in mixer preset."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mixing_scene_preset_json"):
+        raise RuntimeError("libsonare was built without mixing support")
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mixing_scene_preset_json(preset.encode("utf-8"), ctypes.byref(json_ptr))
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def mix_stereo(
+    strips: Sequence[tuple[Sequence[float], Sequence[float]]],
+    sample_rate: int = 48000,
+    fader_db: Sequence[float] | None = None,
+    pan: Sequence[float] | None = None,
+    pan_mode: Sequence[str | int] | str | int = "balance",
+    width: Sequence[float] | None = None,
+    muted: Sequence[bool] | None = None,
+) -> MixResult:
+    """Render a small stereo mixer scene from per-strip left/right buffers.
+
+    Args:
+        strips: Sequence of ``(left, right)`` sample buffers. All buffers must
+            have the same length.
+        sample_rate: Sample rate in Hz.
+        fader_db: Optional per-strip fader values in dB.
+        pan: Optional per-strip pan values in ``[-1, 1]``.
+        pan_mode: Either one mode for all strips or per-strip modes:
+            ``"balance"``, ``"stereoPan"``, or ``"dualPan"``.
+        width: Optional per-strip stereo width values.
+        muted: Optional per-strip mute flags.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mixer_create"):
+        raise RuntimeError("libsonare was built without mixing support")
+    if not strips:
+        raise ValueError("at least one strip is required")
+
+    left_arrays: list[ctypes.Array[ctypes.c_float]] = []
+    right_arrays: list[ctypes.Array[ctypes.c_float]] = []
+    length: int | None = None
+    for left, right in strips:
+        left_array, left_length = _to_c_float_array(left)
+        right_array, right_length = _to_c_float_array(right)
+        if left_length != right_length:
+            raise ValueError("left and right channel lengths must match")
+        if length is None:
+            length = left_length
+        elif left_length != length:
+            raise ValueError("all strips must have the same length")
+        left_arrays.append(left_array)
+        right_arrays.append(right_array)
+
+    assert length is not None
+    mixer = lib.sonare_mixer_create(ctypes.c_int(sample_rate), ctypes.c_int(max(1, length)))
+    if not mixer:
+        raise RuntimeError("failed to create mixer")
+
+    try:
+        strip_handles: list[ctypes.c_void_p] = []
+        for index in range(len(strips)):
+            handle = lib.sonare_mixer_add_strip(mixer, f"strip{index}".encode())
+            if not handle:
+                raise RuntimeError("failed to add mixer strip")
+            strip_handles.append(ctypes.c_void_p(handle))
+
+            if fader_db is not None:
+                _check(
+                    lib.sonare_strip_set_fader_db(
+                        strip_handles[-1], ctypes.c_float(fader_db[index])
+                    )
+                )
+            if pan is not None:
+                mode = (
+                    pan_mode[index]
+                    if isinstance(pan_mode, Sequence) and not isinstance(pan_mode, str)
+                    else pan_mode
+                )
+                _check(
+                    lib.sonare_strip_set_pan(
+                        strip_handles[-1],
+                        ctypes.c_float(pan[index]),
+                        ctypes.c_int(_pan_mode_value(mode)),
+                    )
+                )
+            if width is not None:
+                _check(lib.sonare_strip_set_width(strip_handles[-1], ctypes.c_float(width[index])))
+            if muted is not None:
+                _check(
+                    lib.sonare_strip_set_muted(
+                        strip_handles[-1], ctypes.c_int(1 if muted[index] else 0)
+                    )
+                )
+
+        left_ptrs = (ctypes.POINTER(ctypes.c_float) * len(left_arrays))(
+            *[ctypes.cast(arr, ctypes.POINTER(ctypes.c_float)) for arr in left_arrays]
+        )
+        right_ptrs = (ctypes.POINTER(ctypes.c_float) * len(right_arrays))(
+            *[ctypes.cast(arr, ctypes.POINTER(ctypes.c_float)) for arr in right_arrays]
+        )
+        out_left = (ctypes.c_float * length)()
+        out_right = (ctypes.c_float * length)()
+        rc = lib.sonare_mixer_process_stereo(
+            mixer,
+            left_ptrs,
+            right_ptrs,
+            ctypes.c_size_t(len(strips)),
+            out_left,
+            out_right,
+            ctypes.c_size_t(length),
+        )
+        _check(rc)
+
+        meters: list[MixMeterSnapshot] = []
+        for handle in strip_handles:
+            snapshot = SonareMixMeterSnapshot()
+            _check(lib.sonare_strip_meter(handle, ctypes.byref(snapshot)))
+            meters.append(_mix_meter_from_c(snapshot))
+
+        return MixResult(
+            left=[float(out_left[i]) for i in range(length)],
+            right=[float(out_right[i]) for i in range(length)],
+            sample_rate=int(sample_rate),
+            meters=meters,
+        )
+    finally:
+        lib.sonare_mixer_destroy(mixer)
 
 
 def master_audio(

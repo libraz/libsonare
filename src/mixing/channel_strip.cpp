@@ -1,6 +1,9 @@
 #include "mixing/channel_strip.h"
 
 #include <algorithm>
+#include <array>
+#include <stdexcept>
+#include <utility>
 
 namespace sonare::mixing {
 
@@ -14,16 +17,73 @@ void zero_taps(std::vector<std::vector<float>>& taps, int num_channels, int num_
   }
 }
 
+void zero_taps(std::vector<std::vector<float>>& taps, int num_channels, int start,
+               int num_samples) {
+  const int rows = std::min<int>(num_channels, static_cast<int>(taps.size()));
+  for (int ch = 0; ch < rows; ++ch) {
+    const int begin = std::min<int>(start, static_cast<int>(taps[ch].size()));
+    const int end = std::min<int>(start + num_samples, static_cast<int>(taps[ch].size()));
+    if (begin < end) {
+      std::fill(taps[ch].begin() + begin, taps[ch].begin() + end, 0.0f);
+    }
+  }
+}
+
 void copy_to_taps(float* const* channels, std::vector<std::vector<float>>& taps, int num_channels,
-                  int num_samples) {
+                  int num_samples, int tap_offset = 0) {
   const int rows = std::min<int>(num_channels, static_cast<int>(taps.size()));
   for (int ch = 0; ch < rows; ++ch) {
     if (channels[ch] == nullptr) {
       continue;
     }
-    const int n = std::min<int>(num_samples, static_cast<int>(taps[ch].size()));
-    std::copy(channels[ch], channels[ch] + n, taps[ch].begin());
+    const int begin = std::min<int>(tap_offset, static_cast<int>(taps[ch].size()));
+    const int end = std::min<int>(tap_offset + num_samples, static_cast<int>(taps[ch].size()));
+    if (begin < end) {
+      std::copy(channels[ch], channels[ch] + (end - begin), taps[ch].begin() + begin);
+    }
   }
+}
+
+void process_inserts(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
+                     float* const* channels, int num_channels, int num_samples) {
+  for (auto& insert : inserts) {
+    insert->process(channels, num_channels, num_samples);
+  }
+}
+
+int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
+  int total = 0;
+  for (const auto& insert : inserts) {
+    total += insert->latency_samples_q8();
+  }
+  return total;
+}
+
+float aggregate_gain_reduction_db(
+    const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
+  float reduction_db = 0.0f;
+  for (const auto& insert : inserts) {
+    reduction_db = std::min(reduction_db, insert->last_gain_reduction_db());
+  }
+  return reduction_db;
+}
+
+template <typename Lane, size_t Capacity>
+size_t consume_events(Lane& lane, int64_t block_start, int num_samples,
+                      std::array<AutomationBlockEvent, Capacity>& dest) {
+  size_t count = 0;
+  lane.consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
+    if (count < dest.size()) {
+      dest[count++] = event;
+    }
+  });
+  return count;
+}
+
+template <size_t Capacity>
+int next_event_offset(const std::array<AutomationBlockEvent, Capacity>& events, size_t count,
+                      size_t index, int fallback) {
+  return index < count ? events[index].offset : fallback;
 }
 
 }  // namespace
@@ -31,6 +91,7 @@ void copy_to_taps(float* const* channels, std::vector<std::vector<float>>& taps,
 ChannelStrip::ChannelStrip(ChannelStripConfig config)
     : fader_({config.fader_db, config.smoothing_ms}),
       panner_({config.pan, config.pan_law, config.smoothing_ms}),
+      width_(1.0f, config.smoothing_ms),
       eq_position_(config.eq_position) {}
 
 void ChannelStrip::prepare(double sample_rate, int max_block_size) {
@@ -39,8 +100,17 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
 
   fader_.prepare(sample_rate, max_block_size);
   panner_.prepare(sample_rate, max_block_size);
+  width_.prepare(sample_rate, max_block_size);
+  alignment_delay_.prepare(sample_rate, max_block_size);
   eq_.prepare(sample_rate, max_block_size);
-  meter_.prepare(sample_rate, max_block_size);
+  pre_meter_.prepare(sample_rate, max_block_size);
+  post_meter_.prepare(sample_rate, max_block_size);
+  for (auto& insert : pre_inserts_) {
+    insert->prepare(sample_rate_, max_block_size_);
+  }
+  for (auto& insert : post_inserts_) {
+    insert->prepare(sample_rate_, max_block_size_);
+  }
   for (auto& send : sends_) {
     send->prepare(sample_rate, max_block_size);
   }
@@ -65,6 +135,87 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
 }
 
 void ChannelStrip::process(float* const* channels, int num_channels, int num_samples) {
+  process_at(channels, num_channels, num_samples, 0);
+}
+
+void ChannelStrip::process_at(float* const* channels, int num_channels, int num_samples,
+                              int64_t block_start) {
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    return;
+  }
+  if (num_channels > kMaxStackChannels) {
+    process_unsegmented(channels, num_channels, num_samples);
+    return;
+  }
+
+  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> fader_events{};
+  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> pan_events{};
+  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> width_events{};
+  const size_t fader_count =
+      consume_events(fader_automation_, block_start, num_samples, fader_events);
+  const size_t pan_count = consume_events(pan_automation_, block_start, num_samples, pan_events);
+  const size_t width_count =
+      consume_events(width_automation_, block_start, num_samples, width_events);
+
+  if (fader_count == 0 && pan_count == 0 && width_count == 0) {
+    process_unsegmented(channels, num_channels, num_samples);
+    return;
+  }
+
+  if (effectively_muted()) {
+    process_unsegmented(channels, num_channels, num_samples);
+    return;
+  }
+
+  const int clamped_samples = std::min(num_samples, max_block_size_);
+  zero_taps(pre_tap_, num_channels, 0, clamped_samples);
+  zero_taps(post_tap_, num_channels, 0, clamped_samples);
+
+  size_t fader_index = 0;
+  size_t pan_index = 0;
+  size_t width_index = 0;
+  int cursor = 0;
+  while (cursor < num_samples) {
+    while (fader_index < fader_count && fader_events[fader_index].offset == cursor) {
+      apply_automation_event(fader_events[fader_index++].event);
+    }
+    while (pan_index < pan_count && pan_events[pan_index].offset == cursor) {
+      apply_automation_event(pan_events[pan_index++].event);
+    }
+    while (width_index < width_count && width_events[width_index].offset == cursor) {
+      apply_automation_event(width_events[width_index++].event);
+    }
+
+    const int next_offset = std::min(
+        {num_samples, next_event_offset(fader_events, fader_count, fader_index, num_samples),
+         next_event_offset(pan_events, pan_count, pan_index, num_samples),
+         next_event_offset(width_events, width_count, width_index, num_samples)});
+    const int segment_samples = std::max(0, next_offset - cursor);
+    if (segment_samples > 0) {
+      process_segment(channels, num_channels, cursor, segment_samples, cursor);
+      cursor += segment_samples;
+    } else {
+      // Defensive guard for duplicate or unsorted offsets; consume matching events next loop.
+      ++cursor;
+    }
+  }
+
+  const float pre_gain_reduction_db = aggregate_gain_reduction_db(pre_inserts_);
+  const float post_gain_reduction_db =
+      std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+
+  float* pre_meter_channels[kPreparedChannels]{};
+  const int meter_rows = std::min<int>(num_channels, kPreparedChannels);
+  for (int ch = 0; ch < meter_rows; ++ch) {
+    pre_meter_channels[ch] = pre_tap_[static_cast<size_t>(ch)].data();
+  }
+  pre_meter_.set_gain_reduction_db(pre_gain_reduction_db);
+  pre_meter_.process(pre_meter_channels, meter_rows, clamped_samples);
+  post_meter_.set_gain_reduction_db(post_gain_reduction_db);
+  post_meter_.process(channels, num_channels, num_samples);
+}
+
+void ChannelStrip::process_unsegmented(float* const* channels, int num_channels, int num_samples) {
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
@@ -79,16 +230,38 @@ void ChannelStrip::process(float* const* channels, int num_channels, int num_sam
     }
     zero_taps(pre_tap_, num_channels, clamped_samples);
     zero_taps(post_tap_, num_channels, clamped_samples);
-    meter_.process(channels, num_channels, num_samples);
+    pre_meter_.set_gain_reduction_db(0.0f);
+    post_meter_.set_gain_reduction_db(0.0f);
+    pre_meter_.process(channels, num_channels, num_samples);
+    post_meter_.process(channels, num_channels, num_samples);
     return;
   }
+
+  const float polarity_l = polarity_left_.load(std::memory_order_relaxed);
+  const float polarity_r = polarity_right_.load(std::memory_order_relaxed);
+  if (channels[0] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) {
+      channels[0][i] *= polarity_l;
+    }
+  }
+  if (num_channels > 1 && channels[1] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) {
+      channels[1][i] *= polarity_r;
+    }
+  }
+
+  alignment_delay_.process(channels, num_channels, num_samples);
 
   if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
     eq_.process(channels, num_channels, num_samples);
   }
+  process_inserts(pre_inserts_, channels, num_channels, num_samples);
+  const float pre_gain_reduction_db = aggregate_gain_reduction_db(pre_inserts_);
 
-  // Pre-fader tap (after pre-fader EQ if enabled) feeds pre-fader aux sends.
+  // Pre-fader tap (after polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux sends.
   copy_to_taps(channels, pre_tap_, num_channels, clamped_samples);
+  pre_meter_.set_gain_reduction_db(pre_gain_reduction_db);
+  pre_meter_.process(channels, num_channels, num_samples);
 
   fader_.process(channels, num_channels, num_samples);
   panner_.process(channels, num_channels, num_samples);
@@ -96,28 +269,197 @@ void ChannelStrip::process(float* const* channels, int num_channels, int num_sam
   if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(channels, num_channels, num_samples);
   }
+  process_inserts(post_inserts_, channels, num_channels, num_samples);
+  const float post_gain_reduction_db =
+      std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+  post_meter_.set_gain_reduction_db(post_gain_reduction_db);
+  width_.process(channels, num_channels, num_samples);
 
-  // Post-fader tap is the final output, used by post-fader sends and the meter.
+  if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) {
+      goniometer_.push(channels[0][i], channels[1][i]);
+    }
+  }
+
+  // Post-fader tap is the final output, used by post-fader sends and the output meter.
   copy_to_taps(channels, post_tap_, num_channels, clamped_samples);
 
-  meter_.process(channels, num_channels, num_samples);
+  post_meter_.process(channels, num_channels, num_samples);
+}
+
+void ChannelStrip::process_segment(float* const* channels, int num_channels, int start,
+                                   int num_samples, int tap_offset) {
+  std::array<float*, kMaxStackChannels> segment_channels{};
+  for (int ch = 0; ch < num_channels; ++ch) {
+    segment_channels[static_cast<size_t>(ch)] =
+        channels[ch] == nullptr ? nullptr : channels[ch] + start;
+  }
+  float* const* segment = segment_channels.data();
+
+  const float polarity_l = polarity_left_.load(std::memory_order_relaxed);
+  const float polarity_r = polarity_right_.load(std::memory_order_relaxed);
+  if (segment[0] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) {
+      segment[0][i] *= polarity_l;
+    }
+  }
+  if (num_channels > 1 && segment[1] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) {
+      segment[1][i] *= polarity_r;
+    }
+  }
+
+  alignment_delay_.process(segment, num_channels, num_samples);
+
+  if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
+    eq_.process(segment, num_channels, num_samples);
+  }
+  process_inserts(pre_inserts_, segment, num_channels, num_samples);
+  copy_to_taps(segment, pre_tap_, num_channels, num_samples, tap_offset);
+
+  fader_.process(segment, num_channels, num_samples);
+  panner_.process(segment, num_channels, num_samples);
+
+  if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
+    eq_.process(segment, num_channels, num_samples);
+  }
+  process_inserts(post_inserts_, segment, num_channels, num_samples);
+  width_.process(segment, num_channels, num_samples);
+
+  if (num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) {
+      goniometer_.push(segment[0][i], segment[1][i]);
+    }
+  }
+  copy_to_taps(segment, post_tap_, num_channels, num_samples, tap_offset);
 }
 
 void ChannelStrip::reset() {
+  alignment_delay_.reset();
   fader_.reset();
   panner_.reset();
+  width_.reset();
   eq_.reset();
-  meter_.reset();
+  pre_meter_.reset();
+  post_meter_.reset();
+  for (auto& insert : pre_inserts_) {
+    insert->reset();
+  }
+  for (auto& insert : post_inserts_) {
+    insert->reset();
+  }
   for (auto& send : sends_) {
     send->reset();
   }
+  goniometer_.reset();
   zero_taps(pre_tap_, kPreparedChannels, max_block_size_);
   zero_taps(post_tap_, kPreparedChannels, max_block_size_);
   zero_taps(send_temp_, kPreparedChannels, max_block_size_);
 }
 
+int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
+
+int ChannelStrip::latency_samples_q8() const noexcept {
+  return alignment_delay_.latency_samples_q8() + total_latency_q8(pre_inserts_) +
+         total_latency_q8(post_inserts_);
+}
+
+void ChannelStrip::set_polarity_invert(bool left, bool right) noexcept {
+  polarity_left_.store(left ? -1.0f : 1.0f, std::memory_order_relaxed);
+  polarity_right_.store(right ? -1.0f : 1.0f, std::memory_order_relaxed);
+}
+
+bool ChannelStrip::polarity_invert_left() const noexcept {
+  return polarity_left_.load(std::memory_order_relaxed) < 0.0f;
+}
+
+bool ChannelStrip::polarity_invert_right() const noexcept {
+  return polarity_right_.load(std::memory_order_relaxed) < 0.0f;
+}
+
+void ChannelStrip::set_channel_delay_samples(int delay_samples) {
+  alignment_delay_.set_delay_samples(delay_samples);
+}
+
+bool ChannelStrip::schedule_width_automation(int64_t sample_pos, float width,
+                                             AutomationCurveType curve) noexcept {
+  AutomationEvent event;
+  event.sample_pos = sample_pos;
+  event.value = width;
+  event.curve = curve;
+  event.target.kind = AutomationTargetKind::Width;
+  return width_automation_.push(event);
+}
+
+bool ChannelStrip::schedule_fader_automation(int64_t sample_pos, float fader_db,
+                                             AutomationCurveType curve) noexcept {
+  AutomationEvent event;
+  event.sample_pos = sample_pos;
+  event.value = fader_db;
+  event.curve = curve;
+  event.target.kind = AutomationTargetKind::Fader;
+  return fader_automation_.push(event);
+}
+
+bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
+                                           AutomationCurveType curve) noexcept {
+  AutomationEvent event;
+  event.sample_pos = sample_pos;
+  event.value = pan;
+  event.curve = curve;
+  event.target.kind = AutomationTargetKind::Pan;
+  return pan_automation_.push(event);
+}
+
+void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept {
+  switch (event.target.kind) {
+    case AutomationTargetKind::Fader:
+      set_fader_db(event.value);
+      break;
+    case AutomationTargetKind::Pan:
+      set_pan(event.value);
+      break;
+    case AutomationTargetKind::Width:
+      set_width(event.value);
+      break;
+    case AutomationTargetKind::Send:
+    case AutomationTargetKind::InsertParameter:
+      break;
+  }
+}
+
+MeterSnapshot ChannelStrip::meter_snapshot(TapPoint tap) const noexcept {
+  return tap == TapPoint::PreFader ? pre_meter_.snapshot() : post_meter_.snapshot();
+}
+
+size_t ChannelStrip::read_goniometer_latest(GoniometerPoint* dest,
+                                            size_t max_points) const noexcept {
+  return goniometer_.read_latest(dest, max_points);
+}
+
+void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor) {
+  if (!processor) {
+    throw std::invalid_argument("insert processor must not be null");
+  }
+  if (max_block_size_ > 0) {
+    processor->prepare(sample_rate_, max_block_size_);
+  }
+  pre_inserts_.push_back(std::move(processor));
+}
+
+void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor) {
+  if (!processor) {
+    throw std::invalid_argument("insert processor must not be null");
+  }
+  if (max_block_size_ > 0) {
+    processor->prepare(sample_rate_, max_block_size_);
+  }
+  post_inserts_.push_back(std::move(processor));
+}
+
 size_t ChannelStrip::add_send(const SendConfig& cfg) {
   sends_.push_back(std::make_unique<SendProcessor>(cfg));
+  send_automation_.push_back(std::make_unique<AutomationLane>());
   if (max_block_size_ > 0) {
     sends_.back()->prepare(sample_rate_, max_block_size_);
   }
@@ -131,6 +473,23 @@ void ChannelStrip::set_send_db(size_t index, float db) {
   sends_[index]->set_send_db(db);
 }
 
+bool ChannelStrip::schedule_send_automation(size_t index, int64_t sample_pos, float db,
+                                            AutomationCurveType curve) noexcept {
+  if (index >= send_automation_.size()) {
+    return false;
+  }
+  if (!send_automation_[index]) {
+    return false;
+  }
+  AutomationEvent event;
+  event.sample_pos = sample_pos;
+  event.value = db;
+  event.curve = curve;
+  event.target.kind = AutomationTargetKind::Send;
+  event.target.param_id = static_cast<uint32_t>(index);
+  return send_automation_[index]->push(event);
+}
+
 SendTiming ChannelStrip::send_timing(size_t index) const {
   if (index >= sends_.size()) {
     return SendTiming::PostFader;
@@ -139,6 +498,11 @@ SendTiming ChannelStrip::send_timing(size_t index) const {
 }
 
 void ChannelStrip::mix_send(size_t index, float* const* dest, int num_channels, int num_samples) {
+  mix_send_at(index, dest, num_channels, num_samples, 0);
+}
+
+void ChannelStrip::mix_send_at(size_t index, float* const* dest, int num_channels, int num_samples,
+                               int64_t block_start) {
   if (index >= sends_.size() || dest == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
@@ -156,8 +520,36 @@ void ChannelStrip::mix_send(size_t index, float* const* dest, int num_channels, 
     temp[ch] = send_temp_[ch].data();
   }
 
-  // Applies the smoothed send gain in place on the copied tap, leaving dest untouched.
-  send.process(temp, rows, n);
+  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> send_events{};
+  const size_t send_count =
+      index < send_automation_.size() && send_automation_[index]
+          ? consume_events(*send_automation_[index], block_start, n, send_events)
+          : 0;
+
+  if (send_count == 0) {
+    // Applies the smoothed send gain in place on the copied tap, leaving dest untouched.
+    send.process(temp, rows, n);
+  } else {
+    size_t send_event_index = 0;
+    int cursor = 0;
+    while (cursor < n) {
+      while (send_event_index < send_count && send_events[send_event_index].offset == cursor) {
+        send.set_send_db(send_events[send_event_index++].event.value);
+      }
+      const int next_offset = next_event_offset(send_events, send_count, send_event_index, n);
+      const int segment_samples = std::max(0, next_offset - cursor);
+      if (segment_samples > 0) {
+        float* segment[kPreparedChannels]{};
+        for (int ch = 0; ch < rows; ++ch) {
+          segment[ch] = send_temp_[ch].data() + cursor;
+        }
+        send.process(segment, rows, segment_samples);
+        cursor += segment_samples;
+      } else {
+        ++cursor;
+      }
+    }
+  }
 
   for (int ch = 0; ch < rows; ++ch) {
     if (dest[ch] == nullptr) {

@@ -21,6 +21,7 @@ from .types import (
     MasteringStereoResult,
     MelSpectrogramResult,
     MfccResult,
+    MixResult,
     Mode,
     PitchClass,
     PitchResult,
@@ -293,6 +294,17 @@ def mastering_chain_stereo(
     on_progress: ProgressCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def mastering_preset_names() -> list[MasteringPreset]: ...
+def mixing_scene_preset_names() -> list[str]: ...
+def mixing_scene_preset_json(preset: str) -> str: ...
+def mix_stereo(
+    strips: Sequence[tuple[FloatSamples, FloatSamples]],
+    sample_rate: int = 48000,
+    fader_db: Sequence[float] | None = None,
+    pan: Sequence[float] | None = None,
+    pan_mode: Sequence[str | int] | str | int = "balance",
+    width: Sequence[float] | None = None,
+    muted: Sequence[bool] | None = None,
+) -> MixResult: ...
 def master_audio(
     samples: FloatSamples,
     sample_rate: int = 22050,

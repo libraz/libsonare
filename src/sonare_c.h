@@ -62,6 +62,8 @@ typedef enum {
 // Opaque types
 typedef struct SonareAudio SonareAudio;
 typedef struct SonareAnalyzer SonareAnalyzer;
+typedef struct SonareMixer SonareMixer;
+typedef struct SonareStrip SonareStrip;
 
 // Key structure
 typedef struct {
@@ -585,6 +587,63 @@ int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMaster
 
 /// @brief Destroy and free the handle.
 void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);
+
+// ============================================================================
+// Mixing
+// ============================================================================
+
+typedef enum {
+  SONARE_PAN_MODE_BALANCE = 0,
+  SONARE_PAN_MODE_STEREO_PAN = 1,
+  SONARE_PAN_MODE_DUAL_PAN = 2
+} SonarePanMode;
+
+typedef enum {
+  SONARE_SEND_TIMING_PRE_FADER = 0,
+  SONARE_SEND_TIMING_POST_FADER = 1
+} SonareSendTiming;
+
+typedef struct {
+  float peak_db_l;
+  float peak_db_r;
+  float rms_db_l;
+  float rms_db_r;
+  float correlation;
+  float mono_compat_width;
+  float mono_compat_peak;
+  float mono_compat_side_rms;
+  int likely_mono_compatible;
+  float momentary_lufs;
+  float short_term_lufs;
+  float integrated_lufs;
+  float gain_reduction_db;
+  float true_peak_db_l;
+  float true_peak_db_r;
+  float max_true_peak_db;
+  uint64_t seq;
+} SonareMixMeterSnapshot;
+
+SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
+SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
+SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
+SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
+SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
+SonareError sonare_strip_set_width(SonareStrip* strip, float width);
+SonareError sonare_strip_set_muted(SonareStrip* strip, int muted);
+SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
+                                  const char* destination_bus_id, float send_db, int timing,
+                                  size_t* index_out);
+SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float send_db);
+SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
+SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
+SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
+SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* input_left,
+                                        const float* const* input_right, size_t input_count,
+                                        float* output_left, float* output_right,
+                                        size_t num_samples);
+const char* sonare_mixing_scene_preset_names(void);
+SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
+void sonare_mixer_destroy(SonareMixer* mixer);
 
 // ============================================================================
 // Effects

@@ -131,6 +131,12 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "masteringChainStereoWithProgress"));
   exports.Set("masteringPresetNames",
               Napi::Function::New(env, &SonareWrap::MasteringPresetNames, "masteringPresetNames"));
+  exports.Set(
+      "mixingScenePresetNames",
+      Napi::Function::New(env, &SonareWrap::MixingScenePresetNames, "mixingScenePresetNames"));
+  exports.Set("mixingScenePresetJson", Napi::Function::New(env, &SonareWrap::MixingScenePresetJson,
+                                                           "mixingScenePresetJson"));
+  exports.Set("mixStereo", Napi::Function::New(env, &SonareWrap::MixStereo, "mixStereo"));
   exports.Set("masterAudio", Napi::Function::New(env, &SonareWrap::MasterAudio, "masterAudio"));
   exports.Set("masterAudioStereo",
               Napi::Function::New(env, &SonareWrap::MasterAudioStereo, "masterAudioStereo"));

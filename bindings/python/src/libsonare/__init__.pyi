@@ -154,6 +154,15 @@ from .analyzer import (
     midi_to_hz as midi_to_hz,
 )
 from .analyzer import (
+    mix_stereo as mix_stereo,
+)
+from .analyzer import (
+    mixing_scene_preset_json as mixing_scene_preset_json,
+)
+from .analyzer import (
+    mixing_scene_preset_names as mixing_scene_preset_names,
+)
+from .analyzer import (
     normalize as normalize,
 )
 from .analyzer import (
@@ -300,6 +309,12 @@ from .types import (
 )
 from .types import (
     MfccResult as MfccResult,
+)
+from .types import (
+    MixMeterSnapshot as MixMeterSnapshot,
+)
+from .types import (
+    MixResult as MixResult,
 )
 from .types import (
     Mode as Mode,

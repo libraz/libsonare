@@ -1,0 +1,10 @@
+# scenario	signal	fnv1a_quantized_stereo_hash
+unity-balance	tone	340452de410a3a7d
+unity-balance	transient	4420c4cf427cae1f
+unity-balance	dense	8bbbf232dbe7e0ab
+panned-fader	tone	986f78c14ee2b486
+panned-fader	transient	b8f948b6efc3a052
+panned-fader	dense	e0d87563e09ec8cb
+stereo-pan-wide	tone	7d8f6f68d3bdf72e
+stereo-pan-wide	transient	bd9878e607bd1e21
+stereo-pan-wide	dense	b29b200f8d246110

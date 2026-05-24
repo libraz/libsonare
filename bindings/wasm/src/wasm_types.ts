@@ -135,6 +135,33 @@ export interface WasmMasteringStereoChainResult {
   stages: string[];
 }
 
+export interface WasmMixMeterSnapshot {
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  correlation: number;
+  monoCompatWidth: number;
+  monoCompatPeak: number;
+  monoCompatSideRms: number;
+  likelyMonoCompatible: boolean;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
+  truePeakDbL: number;
+  truePeakDbR: number;
+  maxTruePeakDb: number;
+  seq: number;
+}
+
+export interface WasmMixResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  meters: WasmMixMeterSnapshot[];
+}
+
 export interface WasmStftResult {
   nBins: number;
   nFrames: number;
@@ -485,6 +512,14 @@ export interface SonareModule {
     sampleRate: number,
     overrides: Record<string, number | boolean> | null,
   ) => WasmMasteringStereoChainResult;
+  mixingScenePresetNames: () => string[];
+  mixingScenePresetJson: (presetName: string) => string;
+  mixStereo: (
+    leftChannels: Float32Array[],
+    rightChannels: Float32Array[],
+    sampleRate: number,
+    options: Record<string, unknown>,
+  ) => WasmMixResult;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
 
   stft: (

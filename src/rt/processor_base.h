@@ -14,6 +14,7 @@ class ProcessorBase {
   virtual void reset() = 0;
   virtual int latency_samples() const noexcept { return 0; }
   virtual int latency_samples_q8() const noexcept { return latency_samples() << 8; }
+  virtual float last_gain_reduction_db() const { return 0.0f; }
 };
 
 }  // namespace sonare::rt

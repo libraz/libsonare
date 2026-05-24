@@ -25,6 +25,11 @@ class GoniometerBuffer {
     write_index_.store(write_index_.load(std::memory_order_relaxed) + 1, std::memory_order_release);
   }
 
+  void reset() noexcept {
+    points_ = {};
+    write_index_.store(0, std::memory_order_release);
+  }
+
   size_t read_latest(GoniometerPoint* dest, size_t max_points) const noexcept {
     if (dest == nullptr || max_points == 0) {
       return 0;

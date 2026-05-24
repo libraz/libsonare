@@ -4,6 +4,9 @@
 /// @brief Optional mixing library umbrella header.
 
 #include "mixing/alignment_delay.h"
+#include "mixing/api/presets.h"
+#include "mixing/api/scene.h"
+#include "mixing/automation_lane.h"
 #include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"

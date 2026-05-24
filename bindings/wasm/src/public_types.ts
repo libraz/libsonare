@@ -391,6 +391,43 @@ export interface MasteringResult {
 
 export type MasteringProcessorParams = Record<string, number | boolean>;
 
+export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
+
+export interface MixOptions {
+  faderDb?: number | number[];
+  pan?: number | number[];
+  panMode?: PanMode | PanMode[];
+  width?: number | number[];
+  muted?: boolean | boolean[];
+}
+
+export interface MixMeterSnapshot {
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  correlation: number;
+  monoCompatWidth: number;
+  monoCompatPeak: number;
+  monoCompatSideRms: number;
+  likelyMonoCompatible: boolean;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
+  truePeakDbL: number;
+  truePeakDbR: number;
+  maxTruePeakDb: number;
+  seq: number;
+}
+
+export interface MixResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  meters: MixMeterSnapshot[];
+}
+
 export interface MasteringChainConfig {
   repair?: {
     denoise?: boolean;

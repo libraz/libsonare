@@ -163,7 +163,12 @@ if(BUILD_MASTERING)
 endif()
 
 if(BUILD_MIXING)
-  target_sources(sonare_tests PRIVATE mixing/mixing_test.cpp)
+  target_sources(sonare_tests PRIVATE
+    mixing/golden_hash_test.cpp
+    mixing/mixing_test.cpp
+    mixing/no_alloc_test.cpp
+  )
+  target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_mixing.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_mixing)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
 endif()

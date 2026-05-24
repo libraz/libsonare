@@ -514,3 +514,36 @@ class MasteringChainStereoResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class MixMeterSnapshot:
+    """Realtime mixer meter snapshot for one strip."""
+
+    peak_db_l: float
+    peak_db_r: float
+    rms_db_l: float
+    rms_db_r: float
+    correlation: float
+    mono_compat_width: float
+    mono_compat_peak: float
+    mono_compat_side_rms: float
+    likely_mono_compatible: bool
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    true_peak_db_l: float
+    true_peak_db_r: float
+    max_true_peak_db: float
+    seq: int
+
+
+@dataclass(frozen=True, slots=True)
+class MixResult:
+    """Result of rendering a small stereo mixer scene."""
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    meters: list[MixMeterSnapshot]

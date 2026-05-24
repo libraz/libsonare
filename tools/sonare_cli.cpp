@@ -48,6 +48,10 @@
 #include "feature/rhythm.h"
 #include "feature/spectral.h"
 #include "feature/tonnetz.h"
+#ifdef SONARE_WITH_MIXING
+#include "mixing/api/presets.h"
+#include "mixing/channel_strip.h"
+#endif
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
@@ -1731,6 +1735,88 @@ int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
 }
 #endif
 
+#ifdef SONARE_WITH_MIXING
+mixing::PanMode parse_pan_mode_option(const std::string& value) {
+  std::string key = value;
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "balance") return mixing::PanMode::Balance;
+  if (key == "stereopan" || key == "stereo-pan" || key == "pan") return mixing::PanMode::StereoPan;
+  if (key == "dualpan" || key == "dual-pan") return mixing::PanMode::DualPan;
+  throw std::invalid_argument("invalid pan mode: " + value);
+}
+
+int cmd_mixing_presets(const CliArgs& args, const Audio&) {
+  const auto names = mixing::api::scene_preset_names();
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_array();
+    for (const auto& name : names) json.value(name);
+    json.end_array().print();
+  } else {
+    for (const auto& name : names) std::cout << name << "\n";
+  }
+  return 0;
+}
+
+int cmd_mixing_preset(const CliArgs& args, const Audio&) {
+  const std::string preset_name = args.get_string("preset", "vocalReverbSend");
+  const auto preset = mixing::api::scene_preset_from_string(preset_name);
+  std::cout << mixing::api::scene_to_json(mixing::api::scene_preset(preset)) << "\n";
+  return 0;
+}
+
+int cmd_mix(const CliArgs& args, const Audio& audio) {
+  mixing::ChannelStrip strip;
+  strip.set_fader_db(args.get_float("fader-db", 0.0f));
+  strip.set_pan(args.get_float("pan", 0.0f));
+  strip.set_pan_mode(parse_pan_mode_option(args.get_string("pan-mode", "balance")));
+  strip.set_width(args.get_float("width", 1.0f));
+  strip.prepare(static_cast<double>(audio.sample_rate()), static_cast<int>(audio.size()));
+
+  std::vector<float> left(audio.begin(), audio.end());
+  std::vector<float> right(audio.begin(), audio.end());
+  float* channels[] = {left.data(), right.data()};
+  strip.process(channels, 2, static_cast<int>(audio.size()));
+
+  std::vector<float> mono(audio.size(), 0.0f);
+  for (size_t i = 0; i < mono.size(); ++i) {
+    mono[i] = 0.5f * (left[i] + right[i]);
+  }
+  if (!args.output_file.empty()) {
+    save_wav(args.output_file, mono, audio.sample_rate());
+  }
+
+  const auto meter = strip.meter_snapshot();
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("sample_rate", audio.sample_rate())
+        .kv("length", audio.size())
+        .key("meter")
+        .begin_object()
+        .kv("peak_db_l", meter.peak_db[0])
+        .kv("peak_db_r", meter.peak_db[1])
+        .kv("rms_db_l", meter.rms_db[0])
+        .kv("rms_db_r", meter.rms_db[1])
+        .kv("correlation", meter.correlation)
+        .kv("mono_compat_width", meter.mono_compat_width)
+        .kv("likely_mono_compatible", meter.likely_mono_compatible)
+        .kv("max_true_peak_db", meter.max_true_peak_db)
+        .end_object()
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cout << "Mixed " << audio.size() << " samples";
+    if (!args.output_file.empty()) std::cout << " -> " << args.output_file;
+    std::cout << "\n";
+    std::cout << "Correlation: " << meter.correlation
+              << ", mono-compatible: " << (meter.likely_mono_compatible ? "yes" : "no") << "\n";
+  }
+  return 0;
+}
+#endif
+
 // ============================================================================
 // Feature Commands
 // ============================================================================
@@ -2351,6 +2437,11 @@ const std::vector<CommandInfo>& get_commands() {
        false},
       {"mastering-stereo-analyses", "List stereo mastering analyses", cmd_mastering_stereo_analyses,
        false},
+#endif
+#ifdef SONARE_WITH_MIXING
+      {"mix", "Apply mixer strip processing", cmd_mix, true},
+      {"mixing-presets", "List built-in mixer scene presets", cmd_mixing_presets, false},
+      {"mixing-preset", "Print a built-in mixer scene preset JSON", cmd_mixing_preset, false},
 #endif
       // Features
       {"mel", "Compute mel spectrogram", cmd_mel, true},

@@ -35,19 +35,29 @@ class Graph {
 
   bool compiled() const noexcept { return compiled_; }
   int connection_delay_samples(size_t connection_index) const;
+  int connection_delay_samples_q8(size_t connection_index) const;
   const std::vector<std::string>& topo_order_ids() const noexcept { return topo_order_ids_; }
 
  private:
   struct RuntimeConnection {
+    struct FractionalDelayLine {
+      std::vector<float> buffer{0.0f};
+      size_t write_index = 0;
+    };
+
     Connection connection;
     Node* source = nullptr;
     Node* dest = nullptr;
     int delay_samples = 0;
+    int delay_samples_q8 = 0;
     std::vector<rt::DelayLine> delay_lines;
+    std::vector<FractionalDelayLine> fractional_delay_lines;
   };
 
   bool validate_connection(const Connection& connection) const;
   void prepare_delay_lines(RuntimeConnection& runtime_connection);
+  static float process_fractional_delay(RuntimeConnection::FractionalDelayLine& delay_line,
+                                        int delay_samples_q8, float input) noexcept;
 
   std::vector<std::unique_ptr<Node>> nodes_;
   std::unordered_map<std::string, Node*> node_map_;

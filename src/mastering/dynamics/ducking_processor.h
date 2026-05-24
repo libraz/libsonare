@@ -30,7 +30,9 @@ class DuckingProcessor : public common::ProcessorBase {
 
   void set_config(const DuckingConfig& config);
   const DuckingConfig& config() const noexcept { return config_; }
-  float last_gain_reduction_db() const noexcept { return router_.last_gain_reduction_db(); }
+  float last_gain_reduction_db() const noexcept override {
+    return router_.last_gain_reduction_db();
+  }
 
  private:
   static SidechainRouterConfig to_router_config(const DuckingConfig& config);

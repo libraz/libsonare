@@ -40,8 +40,11 @@ import type {
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
+  MixOptions,
+  MixResult,
   PairAnalysis,
   PairProcessor,
+  PanMode,
   PitchResult,
   SectionType,
   SoloProcessor,
@@ -90,8 +93,12 @@ export type {
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
+  MixMeterSnapshot,
+  MixOptions,
+  MixResult,
   PairAnalysis,
   PairProcessor,
+  PanMode,
   PitchResult,
   RhythmFeatures,
   Section,
@@ -921,6 +928,40 @@ export function masterAudioStereo(
     throw new Error('Stereo channel lengths must match.');
   }
   return module.masterAudioStereo(presetName, left, right, sampleRate, overrides);
+}
+
+export function mixingScenePresetNames(): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.mixingScenePresetNames();
+}
+
+export function mixingScenePresetJson(preset: string): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.mixingScenePresetJson(preset);
+}
+
+export function mixStereo(
+  leftChannels: Float32Array[],
+  rightChannels: Float32Array[],
+  sampleRate = 48000,
+  options: MixOptions = {},
+): MixResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  if (leftChannels.length === 0 || leftChannels.length !== rightChannels.length) {
+    throw new Error('leftChannels and rightChannels must have the same non-zero length.');
+  }
+  return module.mixStereo(
+    leftChannels,
+    rightChannels,
+    sampleRate,
+    options as Record<string, unknown>,
+  );
 }
 
 // ============================================================================

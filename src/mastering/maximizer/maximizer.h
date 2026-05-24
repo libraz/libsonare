@@ -23,7 +23,7 @@ class Maximizer : public common::ProcessorBase {
   void reset() override;
   void set_config(const MaximizerConfig& config);
   const MaximizerConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return limiter_.last_gain_reduction_db(); }
+  float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
 
  private:
   static void validate_config(const MaximizerConfig& config);

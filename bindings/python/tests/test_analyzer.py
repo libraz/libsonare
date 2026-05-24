@@ -390,6 +390,22 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     assert '"correlation"' in stereo_json
 
 
+def test_mixing_presets_and_stereo_mix() -> None:
+    """Mixing scene presets and simple stereo mix are exposed."""
+    import libsonare
+
+    assert "vocalReverbSend" in libsonare.mixing_scene_preset_names()
+    assert '"vocal"' in libsonare.mixing_scene_preset_json("vocalReverbSend")
+
+    result = libsonare.mix_stereo([([1.0, 1.0], [0.0, 0.0])], sample_rate=48000, muted=[True])
+    assert result.left == pytest.approx([0.0, 0.0])
+    assert result.right == pytest.approx([0.0, 0.0])
+    assert result.sample_rate == 48000
+    assert len(result.meters) == 1
+    assert math.isfinite(result.meters[0].peak_db_l)
+    assert isinstance(result.meters[0].likely_mono_compatible, bool)
+
+
 def test_audio_analyze() -> None:
     """Audio.analyze returns a full AnalysisResult."""
     from libsonare import Audio

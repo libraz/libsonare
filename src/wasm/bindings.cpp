@@ -6,6 +6,8 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -60,6 +62,8 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "mixing/api/presets.h"
+#include "mixing/channel_strip.h"
 #include "quick.h"
 #include "sonare.h"
 #include "streaming/stream_analyzer.h"
@@ -1108,6 +1112,154 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
   return out;
 }
 
+val js_mixing_scene_preset_names() {
+  val out = val::array();
+  auto names = mixing::api::scene_preset_names();
+  for (size_t index = 0; index < names.size(); ++index) {
+    out.call<void>("push", names[index]);
+  }
+  return out;
+}
+
+std::string js_mixing_scene_preset_json(std::string preset_name) {
+  return mixing::api::scene_to_json(
+      mixing::api::scene_preset(mixing::api::scene_preset_from_string(preset_name)));
+}
+
+namespace {
+
+val optionAt(val options, const char* key, int index) {
+  if (!hasProperty(options, key)) {
+    return val::undefined();
+  }
+  val value = options[key];
+  if (val::global("Array").call<bool>("isArray", value)) {
+    return value[index];
+  }
+  return value;
+}
+
+mixing::PanMode panModeFromVal(val value) {
+  if (value.isUndefined() || value.isNull()) {
+    return mixing::PanMode::Balance;
+  }
+  if (value.typeOf().as<std::string>() == "number") {
+    const int mode = value.as<int>();
+    if (mode == 1) return mixing::PanMode::StereoPan;
+    if (mode == 2) return mixing::PanMode::DualPan;
+    return mixing::PanMode::Balance;
+  }
+  if (value.typeOf().as<std::string>() != "string") {
+    return mixing::PanMode::Balance;
+  }
+  std::string mode = value.as<std::string>();
+  for (char& ch : mode) {
+    if (ch == '_') ch = '-';
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  if (mode == "stereo-pan" || mode == "stereopan" || mode == "pan") {
+    return mixing::PanMode::StereoPan;
+  }
+  if (mode == "dual-pan" || mode == "dualpan") {
+    return mixing::PanMode::DualPan;
+  }
+  return mixing::PanMode::Balance;
+}
+
+val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
+  val out = val::object();
+  out.set("peakDbL", snapshot.peak_db[0]);
+  out.set("peakDbR", snapshot.peak_db[1]);
+  out.set("rmsDbL", snapshot.rms_db[0]);
+  out.set("rmsDbR", snapshot.rms_db[1]);
+  out.set("correlation", snapshot.correlation);
+  out.set("monoCompatWidth", snapshot.mono_compat_width);
+  out.set("monoCompatPeak", snapshot.mono_compat_peak);
+  out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
+  out.set("likelyMonoCompatible", snapshot.likely_mono_compatible);
+  out.set("momentaryLufs", snapshot.momentary_lufs);
+  out.set("shortTermLufs", snapshot.short_term_lufs);
+  out.set("integratedLufs", snapshot.integrated_lufs);
+  out.set("gainReductionDb", snapshot.gain_reduction_db);
+  out.set("truePeakDbL", snapshot.true_peak_db[0]);
+  out.set("truePeakDbR", snapshot.true_peak_db[1]);
+  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.set("seq", static_cast<double>(snapshot.seq));
+  return out;
+}
+
+}  // namespace
+
+val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val options) {
+  const int count = left_channels["length"].as<int>();
+  if (count <= 0 || right_channels["length"].as<int>() != count) {
+    throw std::invalid_argument(
+        "leftChannels and rightChannels must have the same non-zero length");
+  }
+
+  std::vector<std::vector<float>> left_inputs;
+  std::vector<std::vector<float>> right_inputs;
+  left_inputs.reserve(static_cast<size_t>(count));
+  right_inputs.reserve(static_cast<size_t>(count));
+
+  size_t length = 0;
+  for (int index = 0; index < count; ++index) {
+    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
+    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
+    if (left_inputs.back().size() != right_inputs.back().size()) {
+      throw std::invalid_argument("left and right channel lengths must match");
+    }
+    if (index == 0) {
+      length = left_inputs.back().size();
+    } else if (left_inputs.back().size() != length) {
+      throw std::invalid_argument("all strips must have the same length");
+    }
+  }
+
+  std::vector<float> out_left(length, 0.0f);
+  std::vector<float> out_right(length, 0.0f);
+  val meters = val::array();
+
+  for (int index = 0; index < count; ++index) {
+    mixing::ChannelStrip strip;
+    strip.prepare(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
+
+    val fader = optionAt(options, "faderDb", index);
+    if (!fader.isUndefined() && !fader.isNull() && fader.typeOf().as<std::string>() == "number") {
+      strip.set_fader_db(fader.as<float>());
+    }
+    val pan = optionAt(options, "pan", index);
+    if (!pan.isUndefined() && !pan.isNull() && pan.typeOf().as<std::string>() == "number") {
+      strip.set_pan_mode(panModeFromVal(optionAt(options, "panMode", index)));
+      strip.set_pan(pan.as<float>());
+    }
+    val width = optionAt(options, "width", index);
+    if (!width.isUndefined() && !width.isNull() && width.typeOf().as<std::string>() == "number") {
+      strip.set_width(width.as<float>());
+    }
+    val muted = optionAt(options, "muted", index);
+    if (!muted.isUndefined() && !muted.isNull() && muted.typeOf().as<std::string>() == "boolean") {
+      strip.set_muted(muted.as<bool>());
+    }
+
+    float* channels[] = {left_inputs[static_cast<size_t>(index)].data(),
+                         right_inputs[static_cast<size_t>(index)].data()};
+    strip.process(channels, 2, static_cast<int>(length));
+    for (size_t sample = 0; sample < length; ++sample) {
+      out_left[sample] += left_inputs[static_cast<size_t>(index)][sample];
+      out_right[sample] += right_inputs[static_cast<size_t>(index)][sample];
+    }
+    meters.call<void>("push", meterSnapshotToVal(strip.meter_snapshot()));
+  }
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(out_left));
+  out.set("right", vectorToFloat32Array(out_right));
+  out.set("sampleRate", sample_rate);
+  out.set("meters", meters);
+  return out;
+}
+
 val js_mastering_pair_processor_names() {
   val out = val::array();
   auto names = mastering::api::pair_processor_names();
@@ -2068,6 +2220,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("masteringPresetNames", &js_mastering_preset_names);
   function("masterAudio", &js_master_audio);
   function("masterAudioStereo", &js_master_audio_stereo);
+  function("mixingScenePresetNames", &js_mixing_scene_preset_names);
+  function("mixingScenePresetJson", &js_mixing_scene_preset_json);
+  function("mixStereo", &js_mix_stereo);
   function("trim", &js_trim);
 
   // Features - Spectrogram

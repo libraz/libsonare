@@ -809,6 +809,37 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
 }
 #endif
 
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("CLI mixing command", "[cli][mixing]") {
+  create_test_wav(TEST_WAV);
+
+  SECTION("lists and prints mixer presets") {
+    auto [list_code, list_output] = exec_command(CLI + " mixing-presets --json");
+    REQUIRE(list_code == 0);
+    REQUIRE_THAT(list_output, ContainsSubstring("vocalReverbSend"));
+
+    auto [preset_code, preset_output] =
+        exec_command(CLI + " mixing-preset --preset vocalReverbSend --json");
+    REQUIRE(preset_code == 0);
+    REQUIRE_THAT(preset_output, ContainsSubstring("\"strips\""));
+    REQUIRE_THAT(preset_output, ContainsSubstring("\"buses\""));
+  }
+
+  SECTION("processes mixer strip") {
+    const std::string out = unique_temp_path("_mixed.wav");
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " mix " + TEST_WAV + " -o " + out +
+                                       " --fader-db -3 --pan 0.25 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"meter\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+
+    std::ifstream f(out);
+    REQUIRE(f.good());
+  }
+}
+#endif
+
 TEST_CASE("CLI error handling", "[cli]") {
   SECTION("unknown command") {
     auto [code, output] = exec_command(CLI + " unknown-command");

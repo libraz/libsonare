@@ -64,6 +64,30 @@ class SonareLufsResult(ctypes.Structure):
     ]
 
 
+class SonareMixMeterSnapshot(ctypes.Structure):
+    """Maps to SonareMixMeterSnapshot in sonare_c.h."""
+
+    _fields_ = [
+        ("peak_db_l", ctypes.c_float),
+        ("peak_db_r", ctypes.c_float),
+        ("rms_db_l", ctypes.c_float),
+        ("rms_db_r", ctypes.c_float),
+        ("correlation", ctypes.c_float),
+        ("mono_compat_width", ctypes.c_float),
+        ("mono_compat_peak", ctypes.c_float),
+        ("mono_compat_side_rms", ctypes.c_float),
+        ("likely_mono_compatible", ctypes.c_int),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+        ("gain_reduction_db", ctypes.c_float),
+        ("true_peak_db_l", ctypes.c_float),
+        ("true_peak_db_r", ctypes.c_float),
+        ("max_true_peak_db", ctypes.c_float),
+        ("seq", ctypes.c_uint64),
+    ]
+
+
 class SonareBpmCandidate(ctypes.Structure):
     """Maps to SonareBpmCandidate in sonare_c.h."""
 
@@ -1587,6 +1611,76 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.c_void_p,
                 ctypes.POINTER(SonareMasteringChainStereoResult),
             ]
+
+    if hasattr(lib, "sonare_mixer_create"):
+        lib.sonare_mixer_create.restype = ctypes.c_void_p
+        lib.sonare_mixer_create.argtypes = [ctypes.c_int, ctypes.c_int]
+        lib.sonare_mixer_add_strip.restype = ctypes.c_void_p
+        lib.sonare_mixer_add_strip.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        lib.sonare_strip_set_fader_db.restype = ctypes.c_int32
+        lib.sonare_strip_set_fader_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        lib.sonare_strip_set_pan.restype = ctypes.c_int32
+        lib.sonare_strip_set_pan.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_int]
+        lib.sonare_strip_set_dual_pan.restype = ctypes.c_int32
+        lib.sonare_strip_set_dual_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+            ctypes.c_float,
+        ]
+        lib.sonare_strip_set_width.restype = ctypes.c_int32
+        lib.sonare_strip_set_width.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        lib.sonare_strip_set_muted.restype = ctypes.c_int32
+        lib.sonare_strip_set_muted.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        lib.sonare_strip_add_send.restype = ctypes.c_int32
+        lib.sonare_strip_add_send.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_strip_set_send_db.restype = ctypes.c_int32
+        lib.sonare_strip_set_send_db.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_float,
+        ]
+        lib.sonare_strip_meter.restype = ctypes.c_int32
+        lib.sonare_strip_meter.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMixMeterSnapshot),
+        ]
+        lib.sonare_mixer_from_scene_json.restype = ctypes.c_void_p
+        lib.sonare_mixer_from_scene_json.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        lib.sonare_mixer_to_scene_json.restype = ctypes.c_int32
+        lib.sonare_mixer_to_scene_json.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_mixer_process_stereo.restype = ctypes.c_int32
+        lib.sonare_mixer_process_stereo.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_mixing_scene_preset_names.restype = ctypes.c_char_p
+        lib.sonare_mixing_scene_preset_names.argtypes = []
+        lib.sonare_mixing_scene_preset_json.restype = ctypes.c_int32
+        lib.sonare_mixing_scene_preset_json.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_mixer_destroy.restype = None
+        lib.sonare_mixer_destroy.argtypes = [ctypes.c_void_p]
 
     # --- Free functions for result types ---
 

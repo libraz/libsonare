@@ -31,7 +31,7 @@ class AdaptiveRelease : public common::ProcessorBase {
   const AdaptiveReleaseConfig& config() const { return config_; }
   float current_release_ms() const { return current_release_ms_; }
   float current_crest_factor() const { return current_crest_factor_; }
-  float last_gain_reduction_db() const { return limiter_.last_gain_reduction_db(); }
+  float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
 
  private:
   static void validate_config(const AdaptiveReleaseConfig& config);

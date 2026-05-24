@@ -8,6 +8,10 @@
 #include <vector>
 
 #include "analysis/meter/lufs.h"
+#include "mastering/dynamics/compressor.h"
+#include "mastering/dynamics/sidechain_router.h"
+#include "mastering/eq/parametric.h"
+#include "sonare_c.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -15,6 +19,16 @@ using Catch::Matchers::WithinAbs;
 namespace {
 
 float energy(float left, float right) { return left * left + right * right; }
+
+float rms_tail(const std::vector<float>& samples, size_t skip) {
+  double sum = 0.0;
+  size_t count = 0;
+  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
+    sum += static_cast<double>(samples[i]) * samples[i];
+    ++count;
+  }
+  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
+}
 
 }  // namespace
 
@@ -30,6 +44,38 @@ class TestLatencyProcessor final : public sonare::rt::ProcessorBase {
   int latency_ = 0;
 };
 
+class TestQ8LatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit TestQ8LatencyProcessor(int latency_q8) : latency_q8_(latency_q8) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples_q8() const noexcept override { return latency_q8_; }
+
+ private:
+  int latency_q8_ = 0;
+};
+
+class ScaleProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit ScaleProcessor(float scale) : scale_(scale) {}
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) {
+        continue;
+      }
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] *= scale_;
+      }
+    }
+  }
+  void reset() override {}
+
+ private:
+  float scale_ = 1.0f;
+};
+
 TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
   for (float pan : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
     const auto gains = sonare::mixing::compute_pan_gains(pan, sonare::mixing::PanLaw::Const3dB);
@@ -40,15 +86,340 @@ TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
 
 TEST_CASE("Panner supports selectable pan laws", "[mixing]") {
   const auto const3 = sonare::mixing::compute_pan_gains(0.0f, sonare::mixing::PanLaw::Const3dB);
+  const auto const45 = sonare::mixing::compute_pan_gains(0.0f, sonare::mixing::PanLaw::Const4p5dB);
   const auto const6 = sonare::mixing::compute_pan_gains(0.0f, sonare::mixing::PanLaw::Const6dB);
   const auto linear = sonare::mixing::compute_pan_gains(0.0f, sonare::mixing::PanLaw::Linear0dB);
 
   REQUIRE_THAT(const3.left, WithinAbs(std::sqrt(0.5f), 0.0001f));
   REQUIRE_THAT(const3.right, WithinAbs(std::sqrt(0.5f), 0.0001f));
+  REQUIRE_THAT(20.0f * std::log10(const45.left), WithinAbs(-4.5f, 0.05f));
+  REQUIRE_THAT(const45.left, WithinAbs(const45.right, 0.0001f));
   REQUIRE_THAT(const6.left, WithinAbs(0.5f, 0.0001f));
   REQUIRE_THAT(const6.right, WithinAbs(0.5f, 0.0001f));
   REQUIRE_THAT(linear.left, WithinAbs(1.0f, 0.0001f));
   REQUIRE_THAT(linear.right, WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("Panner supports balance stereo-pan and dual-pan modes", "[mixing]") {
+  SECTION("Balance preserves independent stereo channels") {
+    std::array<float, 2> left{1.0f, 1.0f};
+    std::array<float, 2> right{0.25f, 0.25f};
+    float* channels[] = {left.data(), right.data()};
+
+    sonare::mixing::PannerProcessor panner(
+        {1.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f, sonare::mixing::PanMode::Balance});
+    panner.prepare(48000.0, 2);
+    panner.process(channels, 2, 2);
+
+    REQUIRE_THAT(left[0], WithinAbs(0.0f, 0.0001f));
+    REQUIRE_THAT(right[0], WithinAbs(0.25f, 0.0001f));
+  }
+
+  SECTION("StereoPan collapses stereo input to a panned mono image") {
+    std::array<float, 2> left{1.0f, 1.0f};
+    std::array<float, 2> right{0.0f, 0.0f};
+    float* channels[] = {left.data(), right.data()};
+
+    sonare::mixing::PannerProcessor panner(
+        {1.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f, sonare::mixing::PanMode::StereoPan});
+    panner.prepare(48000.0, 2);
+    panner.process(channels, 2, 2);
+
+    REQUIRE_THAT(left[0], WithinAbs(0.0f, 0.0001f));
+    REQUIRE_THAT(right[0], WithinAbs(0.5f, 0.0001f));
+  }
+
+  SECTION("DualPan routes left and right inputs independently") {
+    std::array<float, 2> left{1.0f, 1.0f};
+    std::array<float, 2> right{2.0f, 2.0f};
+    float* channels[] = {left.data(), right.data()};
+
+    sonare::mixing::PannerProcessor panner(
+        {0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f, sonare::mixing::PanMode::DualPan});
+    panner.set_dual_pan(1.0f, -1.0f);
+    panner.prepare(48000.0, 2);
+    panner.process(channels, 2, 2);
+
+    REQUIRE_THAT(left[0], WithinAbs(2.0f, 0.0001f));
+    REQUIRE_THAT(right[0], WithinAbs(1.0f, 0.0001f));
+  }
+}
+
+TEST_CASE("Meter snapshot exposes mono compatibility fields", "[mixing]") {
+  std::array<float, 4> left{1.0f, 0.75f, -0.5f, -0.25f};
+  std::array<float, 4> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::MeterProcessor meter({false, false, 4, 0.0f});
+  meter.prepare(48000.0, static_cast<int>(left.size()));
+  meter.process(channels, 2, static_cast<int>(left.size()));
+  auto snapshot = meter.snapshot();
+
+  REQUIRE_THAT(snapshot.correlation, WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(snapshot.mono_compat_width, WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(snapshot.mono_compat_side_rms, WithinAbs(0.0f, 0.0001f));
+  REQUIRE(snapshot.likely_mono_compatible);
+
+  for (size_t i = 0; i < left.size(); ++i) {
+    right[i] = -left[i];
+  }
+  meter.process(channels, 2, static_cast<int>(left.size()));
+  snapshot = meter.snapshot();
+
+  REQUIRE_THAT(snapshot.correlation, WithinAbs(-1.0f, 0.0001f));
+  REQUIRE(snapshot.mono_compat_width > 1000.0f);
+  REQUIRE_THAT(snapshot.mono_compat_peak, WithinAbs(0.0f, 0.0001f));
+  REQUIRE_FALSE(snapshot.likely_mono_compatible);
+}
+
+TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip_a = sonare_mixer_add_strip(mixer, "a");
+  SonareStrip* strip_b = sonare_mixer_add_strip(mixer, "b");
+  REQUIRE(strip_a != nullptr);
+  REQUIRE(strip_b != nullptr);
+  REQUIRE(sonare_strip_set_fader_db(strip_b, -6.0f) == SONARE_OK);
+  REQUIRE(sonare_strip_set_pan(strip_a, 1.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
+  REQUIRE(sonare_strip_set_muted(strip_a, 1) == SONARE_OK);
+
+  std::array<float, 4> a_l{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> a_r{0.0f, 0.0f, 0.0f, 0.0f};
+  std::array<float, 4> b_l{0.0f, 0.0f, 0.0f, 0.0f};
+  std::array<float, 4> b_r{1.0f, 1.0f, 1.0f, 1.0f};
+  const float* inputs_l[] = {a_l.data(), b_l.data()};
+  const float* inputs_r[] = {a_r.data(), b_r.data()};
+  std::array<float, 4> out_l{};
+  std::array<float, 4> out_r{};
+
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 2, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_OK);
+
+  REQUIRE_THAT(out_l[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE(out_r[0] > std::pow(10.0f, -6.0f / 20.0f));
+  REQUIRE(out_r[0] < 1.0f);
+
+  SonareMixMeterSnapshot snapshot{};
+  REQUIRE(sonare_strip_meter(strip_b, &snapshot) == SONARE_OK);
+  REQUIRE(snapshot.seq > 0);
+  REQUIRE(snapshot.likely_mono_compatible == 1);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixing C API exposes scene preset JSON", "[mixing][capi]") {
+  const char* names = sonare_mixing_scene_preset_names();
+  REQUIRE(names != nullptr);
+  REQUIRE(std::string(names).find("vocalReverbSend") != std::string::npos);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixing_scene_preset_json("vocalReverbSend", &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  REQUIRE(std::string(json).find("\"strips\"") != std::string::npos);
+  sonare_free_string(json);
+}
+
+TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
+  REQUIRE(strip != nullptr);
+  REQUIRE(sonare_strip_set_fader_db(strip, -3.0f) == SONARE_OK);
+  REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
+  REQUIRE(sonare_strip_set_width(strip, 1.2f) == SONARE_OK);
+  size_t send_index = 999;
+  REQUIRE(sonare_strip_add_send(strip, "vocal-to-verb", "verb", -12.0f,
+                                SONARE_SEND_TIMING_POST_FADER, &send_index) == SONARE_OK);
+  REQUIRE(send_index == 0);
+  REQUIRE(sonare_strip_set_send_db(strip, send_index, -10.0f) == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  REQUIRE(scene_json.find("\"vocal\"") != std::string::npos);
+  REQUIRE(scene_json.find("\"vocal-to-verb\"") != std::string::npos);
+  REQUIRE(scene_json.find("\"sendDb\":-10") != std::string::npos);
+  sonare_free_string(json);
+  sonare_mixer_destroy(mixer);
+
+  SonareMixer* restored = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 8);
+  REQUIRE(restored != nullptr);
+
+  std::array<float, 4> input_l{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> input_r{0.0f, 0.0f, 0.0f, 0.0f};
+  const float* inputs_l[] = {input_l.data()};
+  const float* inputs_r[] = {input_r.data()};
+  std::array<float, 4> out_l{};
+  std::array<float, 4> out_r{};
+  REQUIRE(sonare_mixer_process_stereo(restored, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_OK);
+  REQUIRE(out_l[0] > 0.0f);
+  REQUIRE(out_l[0] < 1.0f);
+  sonare_mixer_destroy(restored);
+}
+
+TEST_CASE("Mixing C API reports invalid scene JSON through last error", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_from_scene_json("{\"strips\":[", 48000, 8);
+  REQUIRE(mixer == nullptr);
+  REQUIRE(std::string(sonare_last_error_message()).find("expected") != std::string::npos);
+}
+
+TEST_CASE("AutomationLane enforces bounded monotonic SPSC events", "[mixing]") {
+  sonare::mixing::AutomationLane lane(2);
+  sonare::mixing::AutomationEvent first;
+  first.sample_pos = 10;
+  first.value = 0.25f;
+  first.target = {sonare::mixing::AutomationTargetKind::Fader, 1, 0, 0};
+  sonare::mixing::AutomationEvent second = first;
+  second.sample_pos = 10;
+  second.value = 0.5f;
+  second.curve = sonare::mixing::AutomationCurveType::Exponential;
+  sonare::mixing::AutomationEvent third = first;
+  third.sample_pos = 12;
+  third.value = 0.75f;
+
+  REQUIRE(lane.capacity() == 2);
+  REQUIRE(lane.push(first));
+  REQUIRE(lane.push(second));
+  REQUIRE_FALSE(lane.push(third));
+
+  std::vector<sonare::mixing::AutomationBlockEvent> consumed;
+  const size_t count =
+      lane.consume_block(8, 4, [&](const auto& event) { consumed.push_back(event); });
+
+  REQUIRE(count == 2);
+  REQUIRE(consumed.size() == 2);
+  REQUIRE(consumed[0].offset == 2);
+  REQUIRE(consumed[1].offset == 2);
+  REQUIRE_THAT(consumed[0].event.value, WithinAbs(0.25f, 0.0001f));
+  REQUIRE_THAT(consumed[1].event.value, WithinAbs(0.5f, 0.0001f));
+  REQUIRE(consumed[1].event.curve == sonare::mixing::AutomationCurveType::Exponential);
+  REQUIRE(lane.empty());
+
+  REQUIRE(lane.push(third));
+  sonare::mixing::AutomationEvent stale = first;
+  stale.sample_pos = 11;
+  REQUIRE_FALSE(lane.push(stale));
+}
+
+TEST_CASE("AutomationLane consumes only the requested block and drops stale events", "[mixing]") {
+  sonare::mixing::AutomationLane lane(4);
+  for (int64_t sample : {4, 8, 16}) {
+    sonare::mixing::AutomationEvent event;
+    event.sample_pos = sample;
+    event.value = static_cast<float>(sample);
+    REQUIRE(lane.push(event));
+  }
+
+  std::vector<sonare::mixing::AutomationBlockEvent> first_block;
+  REQUIRE(lane.consume_block(8, 4, [&](const auto& event) { first_block.push_back(event); }) == 1);
+  REQUIRE(first_block.size() == 1);
+  REQUIRE(first_block[0].offset == 0);
+  REQUIRE_THAT(first_block[0].event.value, WithinAbs(8.0f, 0.0001f));
+
+  std::vector<sonare::mixing::AutomationBlockEvent> second_block;
+  REQUIRE(lane.consume_block(12, 4, [&](const auto& event) { second_block.push_back(event); }) ==
+          0);
+  REQUIRE(second_block.empty());
+  REQUIRE_FALSE(lane.empty());
+
+  REQUIRE(lane.consume_block(16, 1, [&](const auto& event) { second_block.push_back(event); }) ==
+          1);
+  REQUIRE(second_block.size() == 1);
+  REQUIRE(second_block[0].offset == 0);
+
+  lane.clear();
+  REQUIRE(lane.empty());
+  sonare::mixing::AutomationEvent reset_event;
+  reset_event.sample_pos = 1;
+  REQUIRE(lane.push(reset_event));
+}
+
+TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[mixing]") {
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip vocal;
+  vocal.id = "vocal";
+  vocal.fader_db = -3.0f;
+  vocal.pan = -0.25f;
+  vocal.width = 1.2f;
+  vocal.muted = false;
+  vocal.soloed = true;
+  vocal.solo_safe = false;
+  vocal.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor", "{\"thresholdDb\":-18}"});
+  vocal.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "eq.midSide", "{\"sideGain\":1}"});
+  vocal.sends.push_back({"verb-send", "verb", -12.0f, sonare::mixing::api::SendTiming::PostFader});
+  scene.strips.push_back(vocal);
+  scene.buses.push_back({"verb", "aux"});
+  scene.vca_groups.push_back({"lead", -1.5f, {"vocal"}});
+  scene.connections.push_back({"vocal", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  const auto parsed = sonare::mixing::api::scene_from_json(json);
+
+  REQUIRE(parsed.version == 1);
+  REQUIRE(parsed.strips.size() == 1);
+  REQUIRE(parsed.strips[0].id == "vocal");
+  REQUIRE_THAT(parsed.strips[0].fader_db, WithinAbs(-3.0f, 0.0001f));
+  REQUIRE_THAT(parsed.strips[0].pan, WithinAbs(-0.25f, 0.0001f));
+  REQUIRE_THAT(parsed.strips[0].width, WithinAbs(1.2f, 0.0001f));
+  REQUIRE(parsed.strips[0].soloed);
+  REQUIRE(parsed.strips[0].inserts.size() == 2);
+  REQUIRE(parsed.strips[0].inserts[0].slot == sonare::mixing::api::InsertSlot::PreFader);
+  REQUIRE(parsed.strips[0].inserts[0].processor_name == "dynamics.compressor");
+  REQUIRE(parsed.strips[0].inserts[0].params_json == "{\"thresholdDb\":-18}");
+  REQUIRE(parsed.strips[0].sends.size() == 1);
+  REQUIRE(parsed.strips[0].sends[0].destination_bus_id == "verb");
+  REQUIRE(parsed.strips[0].sends[0].timing == sonare::mixing::api::SendTiming::PostFader);
+  REQUIRE(parsed.buses[0].role == "aux");
+  REQUIRE(parsed.vca_groups[0].members[0] == "vocal");
+  REQUIRE(parsed.connections[0].destination == "master");
+}
+
+TEST_CASE("Mixing scene presets expose planned templates and JSON round-trip", "[mixing]") {
+  const auto names = sonare::mixing::api::scene_preset_names();
+  REQUIRE(names.size() == 3);
+  REQUIRE(names[0] == "vocalReverbSend");
+  REQUIRE(names[1] == "drumBusSubgroup");
+  REQUIRE(names[2] == "commentaryDucking");
+
+  for (const auto& name : names) {
+    CAPTURE(name);
+    const auto preset = sonare::mixing::api::scene_preset_from_string(name);
+    REQUIRE(std::string(sonare::mixing::api::scene_preset_to_string(preset)) == name);
+    const auto scene = sonare::mixing::api::scene_preset(preset);
+    REQUIRE_FALSE(scene.strips.empty());
+    REQUIRE_FALSE(scene.buses.empty());
+    const auto parsed =
+        sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
+    REQUIRE(parsed.strips.size() == scene.strips.size());
+    REQUIRE(parsed.buses.size() == scene.buses.size());
+  }
+
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_preset_from_string("missing"),
+                    std::invalid_argument);
+}
+
+TEST_CASE("Mixing scene presets contain expected routing intent", "[mixing]") {
+  const auto vocal =
+      sonare::mixing::api::scene_preset(sonare::mixing::api::ScenePreset::VocalReverbSend);
+  REQUIRE(vocal.strips[0].id == "vocal");
+  REQUIRE(vocal.strips[0].sends[0].destination_bus_id == "vocal-verb");
+  REQUIRE(vocal.strips[0].inserts[0].processor_name == "eq.parametric");
+
+  const auto drums =
+      sonare::mixing::api::scene_preset(sonare::mixing::api::ScenePreset::DrumBusSubgroup);
+  REQUIRE(drums.vca_groups.size() == 1);
+  REQUIRE(drums.vca_groups[0].members.size() == 4);
+  REQUIRE(drums.connections[0].destination == "drum-bus");
+
+  const auto commentary =
+      sonare::mixing::api::scene_preset(sonare::mixing::api::ScenePreset::CommentaryDucking);
+  REQUIRE(commentary.strips[2].id == "music-bed");
+  REQUIRE(commentary.strips[2].inserts[0].processor_name == "dynamics.sidechainRouter");
+  REQUIRE(commentary.vca_groups[0].id == "voices");
 }
 
 TEST_CASE("BusProcessor sums multiple stereo inputs", "[mixing]") {
@@ -103,6 +474,209 @@ TEST_CASE("ChannelStrip applies fader then pan", "[mixing]") {
   }
 }
 
+TEST_CASE("ChannelStrip applies polarity delay width and dual meter taps", "[mixing]") {
+  std::array<float, 4> left{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, 4> right{10.0f, 20.0f, 30.0f, 40.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.set_polarity_invert(true, false);
+  strip.set_width(0.0f);
+  strip.set_channel_delay_samples(1);
+  strip.prepare(48000.0, 4);
+  strip.process(channels, 2, 4);
+
+  REQUIRE(strip.polarity_invert_left());
+  REQUIRE_FALSE(strip.polarity_invert_right());
+  REQUIRE(strip.channel_delay_samples() == 1);
+  REQUIRE(strip.latency_samples() == 1);
+
+  // After polarity and one-sample delay, the first nonzero stereo frame is (-1, 10).
+  // Width 0 collapses the post-fader signal to mono, so both channels become 4.5.
+  REQUIRE_THAT(left[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(right[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(left[1], WithinAbs(4.5f, 0.0001f));
+  REQUIRE_THAT(right[1], WithinAbs(4.5f, 0.0001f));
+
+  const auto pre = strip.meter_snapshot(sonare::mixing::TapPoint::PreFader);
+  const auto post = strip.meter_snapshot(sonare::mixing::TapPoint::PostFader);
+  REQUIRE(pre.seq == 1);
+  REQUIRE(post.seq == 1);
+  REQUIRE(pre.peak_db[1] > post.peak_db[1]);
+}
+
+TEST_CASE("ChannelStrip pre and post inserts wrap fader pan and width", "[mixing]") {
+  std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> right{1.0f, 1.0f, 1.0f, 1.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({-6.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(2.0f));
+  strip.add_post_insert(std::make_unique<ScaleProcessor>(3.0f));
+  strip.prepare(48000.0, 4);
+  const size_t pre_send = strip.add_send({0.0f, sonare::mixing::SendTiming::PreFader, 0.0f});
+  strip.process(channels, 2, 4);
+
+  std::array<float, 4> send_l{};
+  std::array<float, 4> send_r{};
+  float* send[] = {send_l.data(), send_r.data()};
+  strip.mix_send(pre_send, send, 2, 4);
+
+  const float fader_gain = std::pow(10.0f, -6.0f / 20.0f);
+  REQUIRE(strip.num_pre_inserts() == 1);
+  REQUIRE(strip.num_post_inserts() == 1);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(send_l[static_cast<size_t>(i)], WithinAbs(2.0f, 0.0001f));
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip aggregates Q8 latency across delay and inserts", "[mixing]") {
+  sonare::mixing::ChannelStrip strip;
+
+  strip.set_channel_delay_samples(2);
+  strip.add_pre_insert(std::make_unique<TestQ8LatencyProcessor>(3 << 8));
+  strip.add_post_insert(std::make_unique<TestQ8LatencyProcessor>((5 << 8) + 128));
+
+  REQUIRE(strip.latency_samples_q8() == ((10 << 8) + 128));
+  REQUIRE(strip.latency_samples() == 10);
+}
+
+TEST_CASE("ChannelStrip applies fader automation at block sample offsets", "[mixing]") {
+  std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 6> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 6);
+  REQUIRE(strip.schedule_fader_automation(102, -6.0206f));
+  strip.process_at(channels, 2, 6, 100);
+
+  for (int i = 0; i < 2; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
+  }
+  for (int i = 2; i < 6; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(0.5f, 0.0001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(0.5f, 0.0001f));
+  }
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-6.0206f, 0.0001f));
+  REQUIRE(strip.meter_snapshot().seq == 1);
+}
+
+TEST_CASE("ChannelStrip applies pan and width automation in sample order", "[mixing]") {
+  std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 6> right{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 6);
+  REQUIRE(strip.schedule_width_automation(102, 0.0f));
+  REQUIRE(strip.schedule_pan_automation(104, 1.0f));
+  strip.process_at(channels, 2, 6, 100);
+
+  REQUIRE_THAT(left[0], WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(right[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(left[2], WithinAbs(0.5f, 0.0001f));
+  REQUIRE_THAT(right[2], WithinAbs(0.5f, 0.0001f));
+  REQUIRE_THAT(left[4], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(right[4], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(strip.width(), WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(strip.pan(), WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("ChannelStrip reuses mastering EQ as a pre-fader insert", "[mixing]") {
+  constexpr int kN = 512;
+  auto make_input = [] {
+    std::vector<float> out(kN);
+    for (int i = 0; i < kN; ++i) {
+      out[static_cast<size_t>(i)] =
+          0.5f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
+    }
+    return out;
+  };
+
+  std::vector<float> plain_l = make_input();
+  std::vector<float> plain_r = plain_l;
+  float* plain[] = {plain_l.data(), plain_r.data()};
+  sonare::mixing::ChannelStrip plain_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  plain_strip.prepare(48000.0, kN);
+  plain_strip.process(plain, 2, kN);
+
+  auto eq = std::make_unique<sonare::mastering::eq::ParametricEq>();
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.gain_db = 12.0f;
+  band.q = sonare::constants::kButterworthQ;
+  band.enabled = true;
+  eq->set_band(0, band);
+
+  std::vector<float> eq_l = make_input();
+  std::vector<float> eq_r = eq_l;
+  float* eq_channels[] = {eq_l.data(), eq_r.data()};
+  sonare::mixing::ChannelStrip eq_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  eq_strip.add_pre_insert(std::move(eq));
+  eq_strip.prepare(48000.0, kN);
+  eq_strip.process(eq_channels, 2, kN);
+
+  REQUIRE(rms_tail(eq_l, 128) > rms_tail(plain_l, 128) * 1.5f);
+}
+
+TEST_CASE("ChannelStrip reuses mastering compressor as a post-fader insert", "[mixing]") {
+  constexpr int kN = 48000;
+  std::vector<float> left(kN, 0.8f);
+  std::vector<float> right(kN, 0.8f);
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mastering::dynamics::CompressorConfig config;
+  config.threshold_db = -30.0f;
+  config.ratio = 8.0f;
+  config.attack_ms = 0.0f;
+  config.release_ms = 20.0f;
+  config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
+  auto compressor = std::make_unique<sonare::mastering::dynamics::Compressor>(config);
+  auto* compressor_ptr = compressor.get();
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_post_insert(std::move(compressor));
+  strip.prepare(48000.0, 1024);
+  strip.process(channels, 2, kN);
+
+  REQUIRE(rms_tail(left, 4096) < 0.25f);
+  REQUIRE(compressor_ptr->last_gain_reduction_db() < -10.0f);
+  REQUIRE(strip.meter_snapshot().gain_reduction_db < -10.0f);
+}
+
+TEST_CASE("ChannelStrip accepts mastering SidechainRouter insert with external key", "[mixing]") {
+  constexpr int kN = 48000;
+  std::vector<float> left(kN, 0.01f);
+  std::vector<float> right(kN, 0.01f);
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mastering::dynamics::SidechainRouterConfig config;
+  config.threshold_db = -30.0f;
+  config.ratio = 4.0f;
+  config.attack_ms = 0.0f;
+  config.release_ms = 20.0f;
+  config.range_db = 18.0f;
+  auto router = std::make_unique<sonare::mastering::dynamics::SidechainRouter>(config);
+  auto* router_ptr = router.get();
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_post_insert(std::move(router));
+  strip.prepare(48000.0, 1024);
+
+  std::vector<float> sidechain(kN, 0.8f);
+  const float* sidechain_channels[] = {sidechain.data()};
+  router_ptr->set_sidechain(sidechain_channels, 1, static_cast<int>(sidechain.size()));
+  strip.process(channels, 2, kN);
+
+  REQUIRE(rms_tail(left, 4096) < 0.0025f);
+  REQUIRE(router_ptr->last_gain_reduction_db() < -10.0f);
+}
+
 TEST_CASE("SendProcessor exposes pre and post fader timing", "[mixing]") {
   sonare::mixing::SendProcessor send({-3.0f, sonare::mixing::SendTiming::PreFader, 0.0f});
 
@@ -155,6 +729,32 @@ TEST_CASE("AlignmentDelay reports and applies integer latency", "[mixing]") {
   REQUIRE_THAT(mono[2], WithinAbs(1.0f, 0.0001f));
 }
 
+TEST_CASE("AlignmentDelay reports Q8 fractional latency and interpolates impulse", "[mixing]") {
+  std::array<float, 6> mono{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  float* channels[] = {mono.data()};
+  sonare::mixing::AlignmentDelay delay;
+
+  delay.set_delay_samples_q8((1 << 8) + 128);
+  delay.prepare(48000.0, 6);
+  delay.process(channels, 1, 6);
+
+  REQUIRE(delay.delay_samples() == 1);
+  REQUIRE(delay.delay_samples_q8() == ((1 << 8) + 128));
+  REQUIRE(delay.latency_samples_q8() == ((1 << 8) + 128));
+  REQUIRE(delay.fractional_mode() == sonare::mixing::FractionalDelayMode::Lagrange3);
+
+  float abs_sum = 0.0f;
+  int nonzero = 0;
+  for (float sample : mono) {
+    abs_sum += std::abs(sample);
+    if (std::abs(sample) > 0.001f) {
+      ++nonzero;
+    }
+  }
+  REQUIRE(abs_sum > 0.5f);
+  REQUIRE(nonzero >= 2);
+}
+
 TEST_CASE("StereoWidthProcessor collapses to mono at zero width", "[mixing]") {
   std::array<float, 2> left{1.0f, 0.0f};
   std::array<float, 2> right{0.0f, 1.0f};
@@ -193,6 +793,27 @@ TEST_CASE("MeterProcessor publishes peak rms and correlation snapshot", "[mixing
   REQUIRE_THAT(snapshot.peak_db[0], WithinAbs(-6.0206f, 0.001f));
   REQUIRE_THAT(snapshot.rms_db[1], WithinAbs(-6.0206f, 0.001f));
   REQUIRE_THAT(snapshot.correlation, WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(snapshot.gain_reduction_db, WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(snapshot.max_true_peak_db, WithinAbs(sonare::constants::kFloorDb, 0.001f));
+}
+
+TEST_CASE("MeterProcessor optionally publishes true peak", "[mixing]") {
+  std::array<float, 3> mono{0.0f, 0.8f, 0.0f};
+  float* channels[] = {mono.data()};
+  sonare::mixing::MeterConfig config;
+  config.measure_lufs = false;
+  config.measure_true_peak = true;
+  config.true_peak_oversample = 4;
+  sonare::mixing::MeterProcessor meter(config);
+
+  meter.prepare(48000.0, 3);
+  meter.process(channels, 1, 3);
+  const auto snapshot = meter.snapshot();
+
+  REQUIRE(snapshot.max_true_peak_db >= snapshot.peak_db[0]);
+  REQUIRE_THAT(snapshot.true_peak_db[0], WithinAbs(snapshot.max_true_peak_db, 0.0001f));
+  REQUIRE_THAT(snapshot.true_peak_db[1], WithinAbs(sonare::constants::kFloorDb, 0.001f));
+  REQUIRE(snapshot.max_true_peak_db > -3.0f);
 }
 
 TEST_CASE("GoniometerBuffer returns latest scope points", "[mixing]") {
@@ -209,6 +830,29 @@ TEST_CASE("GoniometerBuffer returns latest scope points", "[mixing]") {
   REQUIRE_THAT(points[0].left, WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(points[0].right, WithinAbs(1.0f, 0.0001f));
   REQUIRE_THAT(points[2].right, WithinAbs(-1.0f, 0.0001f));
+}
+
+TEST_CASE("ChannelStrip publishes post-fader goniometer points", "[mixing]") {
+  std::array<float, 4> left{1.0f, 0.5f, -0.5f, -1.0f};
+  std::array<float, 4> right{-1.0f, -0.5f, 0.5f, 1.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({-6.0206f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 4);
+  strip.process(channels, 2, 4);
+
+  std::array<sonare::mixing::GoniometerPoint, 4> points{};
+  const size_t count = strip.read_goniometer_latest(points.data(), points.size());
+
+  REQUIRE(count == 4);
+  for (size_t i = 0; i < points.size(); ++i) {
+    REQUIRE_THAT(points[i].left, WithinAbs(left[i], 0.0001f));
+    REQUIRE_THAT(points[i].right, WithinAbs(right[i], 0.0001f));
+  }
+  REQUIRE(strip.meter_snapshot().max_true_peak_db > sonare::constants::kFloorDb);
+
+  strip.reset();
+  REQUIRE(strip.read_goniometer_latest(points.data(), points.size()) == 0);
 }
 
 TEST_CASE("StereoWidthProcessor converges to steady-state mid/side", "[mixing]") {
@@ -566,5 +1210,33 @@ TEST_CASE("ChannelStrip aux sends tap the correct stage", "[mixing]") {
                           std::abs(dest_l[static_cast<size_t>(i)] - in_l[static_cast<size_t>(i)]));
     }
     REQUIRE(max_diff > 1e-3f);
+  }
+}
+
+TEST_CASE("ChannelStrip applies send automation during mix_send_at", "[mixing]") {
+  std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 6> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 6);
+  const size_t send = strip.add_send({0.0f, sonare::mixing::SendTiming::PostFader, 0.0f});
+  REQUIRE(strip.schedule_send_automation(send, 102, -6.0206f));
+  REQUIRE_FALSE(strip.schedule_send_automation(send + 1, 102, -6.0206f));
+
+  strip.process_at(channels, 2, 6, 100);
+
+  std::array<float, 6> send_l{};
+  std::array<float, 6> send_r{};
+  float* dest[] = {send_l.data(), send_r.data()};
+  strip.mix_send_at(send, dest, 2, 6, 100);
+
+  for (int i = 0; i < 2; ++i) {
+    REQUIRE_THAT(send_l[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(send_r[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
+  }
+  for (int i = 2; i < 6; ++i) {
+    REQUIRE_THAT(send_l[static_cast<size_t>(i)], WithinAbs(0.5f, 0.0001f));
+    REQUIRE_THAT(send_r[static_cast<size_t>(i)], WithinAbs(0.5f, 0.0001f));
   }
 }

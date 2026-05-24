@@ -18,6 +18,8 @@ import type {
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MixOptions,
+  MixResult,
   MfccResult,
   PairAnalysis,
   PairProcessor,
@@ -1203,6 +1205,23 @@ export function resample(samples: Float32Array, srcSr: number, targetSr: number)
   return addon.resample(samples, srcSr, targetSr);
 }
 
+export function mixingScenePresetNames(): string[] {
+  return addon.mixingScenePresetNames();
+}
+
+export function mixingScenePresetJson(preset: string): string {
+  return addon.mixingScenePresetJson(preset);
+}
+
+export function mixStereo(
+  leftChannels: Float32Array[],
+  rightChannels: Float32Array[],
+  sampleRate = 48000,
+  options: MixOptions = {},
+): MixResult {
+  return addon.mixStereo(leftChannels, rightChannels, sampleRate, options);
+}
+
 export type {
   AcousticResult,
   AnalysisResult,
@@ -1224,6 +1243,10 @@ export type {
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MixMeterSnapshot,
+  MixOptions,
+  MixResult,
+  PanMode,
   MfccResult,
   PitchResult,
   RhythmResult,

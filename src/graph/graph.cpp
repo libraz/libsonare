@@ -1,6 +1,7 @@
 #include "graph/graph.h"
 
 #include <algorithm>
+#include <cmath>
 #include <queue>
 #include <stdexcept>
 #include <utility>
@@ -126,19 +127,19 @@ bool Graph::compile() {
     return false;
   }
 
-  std::unordered_map<std::string, int> latency_to_node;
+  std::unordered_map<std::string, int> latency_to_node_q8;
   for (Node* current : topo_order_) {
-    int max_incoming_latency = 0;
+    int max_incoming_latency_q8 = 0;
     for (const Connection& connection : connections_) {
       if (connection.dest_node != current->id()) {
         continue;
       }
       const Node* source = node_map_.at(connection.source_node);
-      const int path_latency =
-          latency_to_node[connection.source_node] + source->processor().latency_samples();
-      max_incoming_latency = std::max(max_incoming_latency, path_latency);
+      const int path_latency_q8 =
+          latency_to_node_q8[connection.source_node] + source->processor().latency_samples_q8();
+      max_incoming_latency_q8 = std::max(max_incoming_latency_q8, path_latency_q8);
     }
-    latency_to_node[current->id()] = max_incoming_latency;
+    latency_to_node_q8[current->id()] = max_incoming_latency_q8;
   }
 
   for (const Connection& connection : connections_) {
@@ -146,10 +147,11 @@ bool Graph::compile() {
     runtime_connection.connection = connection;
     runtime_connection.source = node_map_.at(connection.source_node);
     runtime_connection.dest = node_map_.at(connection.dest_node);
-    const int source_path_latency = latency_to_node[connection.source_node] +
-                                    runtime_connection.source->processor().latency_samples();
-    runtime_connection.delay_samples =
-        std::max(0, latency_to_node[connection.dest_node] - source_path_latency);
+    const int source_path_latency_q8 = latency_to_node_q8[connection.source_node] +
+                                       runtime_connection.source->processor().latency_samples_q8();
+    runtime_connection.delay_samples_q8 =
+        std::max(0, latency_to_node_q8[connection.dest_node] - source_path_latency_q8);
+    runtime_connection.delay_samples = runtime_connection.delay_samples_q8 >> 8;
     if (max_block_size_ > 0) {
       prepare_delay_lines(runtime_connection);
     }
@@ -181,6 +183,10 @@ void Graph::reset() {
   for (RuntimeConnection& runtime_connection : runtime_connections_) {
     for (rt::DelayLine& delay_line : runtime_connection.delay_lines) {
       delay_line.reset();
+    }
+    for (auto& delay_line : runtime_connection.fractional_delay_lines) {
+      std::fill(delay_line.buffer.begin(), delay_line.buffer.end(), 0.0f);
+      delay_line.write_index = 0;
     }
   }
 }
@@ -221,9 +227,19 @@ void Graph::process_block(int num_samples) {
       float* dest = runtime_connection.dest->input_port(dest_port);
       rt::DelayLine* delay_line =
           runtime_connection.delay_lines.empty() ? nullptr : &runtime_connection.delay_lines[0];
+      RuntimeConnection::FractionalDelayLine* fractional_delay_line =
+          runtime_connection.fractional_delay_lines.empty()
+              ? nullptr
+              : &runtime_connection.fractional_delay_lines[0];
 
       for (int i = 0; i < num_samples; ++i) {
-        const float value = delay_line == nullptr ? source[i] : delay_line->process(source[i]);
+        float value = source[i];
+        if (fractional_delay_line != nullptr) {
+          value = process_fractional_delay(*fractional_delay_line,
+                                           runtime_connection.delay_samples_q8, value);
+        } else if (delay_line != nullptr) {
+          value = delay_line->process(value);
+        }
         if (runtime_connection.connection.mix == Connection::Mix::Replace) {
           dest[i] = value;
         } else {
@@ -257,6 +273,13 @@ int Graph::connection_delay_samples(size_t connection_index) const {
   return runtime_connections_[connection_index].delay_samples;
 }
 
+int Graph::connection_delay_samples_q8(size_t connection_index) const {
+  if (connection_index >= runtime_connections_.size()) {
+    throw std::out_of_range("connection index out of range");
+  }
+  return runtime_connections_[connection_index].delay_samples_q8;
+}
+
 bool Graph::validate_connection(const Connection& connection) const {
   const Node* source = node(connection.source_node);
   const Node* dest = node(connection.dest_node);
@@ -268,12 +291,51 @@ bool Graph::validate_connection(const Connection& connection) const {
 }
 
 void Graph::prepare_delay_lines(RuntimeConnection& runtime_connection) {
+  runtime_connection.fractional_delay_lines.clear();
   runtime_connection.delay_lines.assign(1, rt::DelayLine{});
   if (runtime_connection.delay_samples <= 0) {
     runtime_connection.delay_lines.clear();
-    return;
   }
-  runtime_connection.delay_lines[0].prepare(static_cast<size_t>(runtime_connection.delay_samples));
+  if ((runtime_connection.delay_samples_q8 & 0xff) != 0) {
+    runtime_connection.delay_lines.clear();
+    runtime_connection.fractional_delay_lines.assign(1, RuntimeConnection::FractionalDelayLine{});
+    const int integer_delay = runtime_connection.delay_samples_q8 >> 8;
+    const size_t size = static_cast<size_t>(std::max(8, integer_delay + 8));
+    runtime_connection.fractional_delay_lines[0].buffer.assign(size, 0.0f);
+    runtime_connection.fractional_delay_lines[0].write_index = 0;
+  } else if (!runtime_connection.delay_lines.empty()) {
+    runtime_connection.delay_lines[0].prepare(
+        static_cast<size_t>(runtime_connection.delay_samples));
+  }
+}
+
+float Graph::process_fractional_delay(RuntimeConnection::FractionalDelayLine& delay_line,
+                                      int delay_samples_q8, float input) noexcept {
+  auto sample_at_delay = [&](int delay) {
+    delay = std::max(0, delay);
+    const size_t size = delay_line.buffer.size();
+    const size_t index =
+        (delay_line.write_index + size - (static_cast<size_t>(delay) % size)) % size;
+    return delay_line.buffer[index];
+  };
+
+  delay_line.buffer[delay_line.write_index] = input;
+  const float delay = static_cast<float>(std::max(0, delay_samples_q8)) / 256.0f;
+  const int base = static_cast<int>(std::floor(delay));
+  const float mu = delay - static_cast<float>(base);
+
+  const float y0 = sample_at_delay(base - 1);
+  const float y1 = sample_at_delay(base);
+  const float y2 = sample_at_delay(base + 1);
+  const float y3 = sample_at_delay(base + 2);
+
+  delay_line.write_index = (delay_line.write_index + 1) % delay_line.buffer.size();
+
+  const float c0 = -mu * (mu - 1.0f) * (mu - 2.0f) / 6.0f;
+  const float c1 = (mu + 1.0f) * (mu - 1.0f) * (mu - 2.0f) / 2.0f;
+  const float c2 = -(mu + 1.0f) * mu * (mu - 2.0f) / 2.0f;
+  const float c3 = (mu + 1.0f) * mu * (mu - 1.0f) / 6.0f;
+  return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
 }
 
 }  // namespace sonare::graph

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "util/constants.h"
 #include "util/db.h"
@@ -71,6 +72,9 @@ float MeterProcessor::energy_to_lufs(double energy) const noexcept {
 
 void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate;
+  if (config_.measure_true_peak) {
+    true_peak_filter_ = rt::TruePeakFilter(2, config_.true_peak_oversample == 2 ? 2 : 4);
+  }
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {
     const int sr = static_cast<int>(std::lround(sample_rate_));
@@ -100,6 +104,7 @@ void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
 void MeterProcessor::reset() {
   snapshot_ = MeterSnapshot{};
   seq_ = 0;
+  gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 
   k_state_pre_ = {};
   k_state_rlb_ = {};
@@ -125,11 +130,15 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   }
 
   MeterSnapshot next;
+  next.gain_reduction_db = gain_reduction_db_.load(std::memory_order_relaxed);
   double sum_l = 0.0;
   double sum_r = 0.0;
   double sum_lr = 0.0;
+  double mid_energy = 0.0;
+  double side_energy = 0.0;
 
   const int meters = std::min(num_channels, 2);
+  std::array<float, 2> sample_peaks{0.0f, 0.0f};
   for (int ch = 0; ch < meters; ++ch) {
     if (channels[ch] == nullptr) {
       continue;
@@ -141,9 +150,25 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       peak = std::max(peak, std::abs(sample));
       sum_square += static_cast<double>(sample) * sample;
     }
+    sample_peaks[static_cast<size_t>(ch)] = peak;
     next.peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
     next.rms_db[static_cast<size_t>(ch)] =
         linear_to_db(std::sqrt(sum_square / static_cast<double>(num_samples)));
+  }
+
+  if (config_.measure_true_peak) {
+    float max_true_peak = 0.0f;
+    for (int ch = 0; ch < meters; ++ch) {
+      if (channels[ch] == nullptr) {
+        continue;
+      }
+      const float* mono[] = {channels[ch]};
+      const float true_peak = std::max(sample_peaks[static_cast<size_t>(ch)],
+                                       true_peak_filter_.process(mono, 1, num_samples));
+      next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(true_peak);
+      max_true_peak = std::max(max_true_peak, true_peak);
+    }
+    next.max_true_peak_db = linear_to_db(max_true_peak);
   }
 
   if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
@@ -153,9 +178,29 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       sum_l += left * left;
       sum_r += right * right;
       sum_lr += left * right;
+
+      const double mono = 0.5 * (left + right);
+      const double side = 0.5 * (left - right);
+      next.mono_compat_peak = std::max(next.mono_compat_peak, static_cast<float>(std::abs(mono)));
+      next.mono_compat_side_rms += static_cast<float>(side * side);
+
+      const double mid = (left + right) * constants::kInvSqrt2;
+      const double side_scaled = (left - right) * constants::kInvSqrt2;
+      mid_energy += mid * mid;
+      side_energy += side_scaled * side_scaled;
     }
     const double denom = std::sqrt(sum_l * sum_r);
     next.correlation = denom > 1.0e-12 ? static_cast<float>(sum_lr / denom) : 0.0f;
+    next.mono_compat_side_rms =
+        static_cast<float>(std::sqrt(next.mono_compat_side_rms / num_samples));
+    if (mid_energy > static_cast<double>(kEpsilon)) {
+      next.mono_compat_width = static_cast<float>(std::sqrt(side_energy / mid_energy));
+    } else {
+      next.mono_compat_width = side_energy > static_cast<double>(kEpsilon)
+                                   ? std::numeric_limits<float>::infinity()
+                                   : 0.0f;
+    }
+    next.likely_mono_compatible = next.correlation >= config_.mono_compat_correlation_threshold;
   }
 
   if (config_.measure_lufs && !energy_ring_.empty()) {
@@ -250,6 +295,10 @@ MeterSnapshot MeterProcessor::snapshot() const noexcept {
     const uint32_t g2 = guard_.load(std::memory_order_acquire);
     if (g1 == g2) return copy;
   }
+}
+
+void MeterProcessor::set_gain_reduction_db(float db) noexcept {
+  gain_reduction_db_.store(std::min(0.0f, db), std::memory_order_relaxed);
 }
 
 }  // namespace sonare::mixing

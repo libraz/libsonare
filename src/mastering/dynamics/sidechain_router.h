@@ -40,7 +40,7 @@ class SidechainRouter : public common::ProcessorBase {
 
   void set_config(const SidechainRouterConfig& config);
   const SidechainRouterConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return last_gain_reduction_db_; }
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
  private:
   static void validate_config(const SidechainRouterConfig& config);

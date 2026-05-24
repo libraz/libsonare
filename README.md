@@ -8,7 +8,7 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**Audio analysis and mastering DSP for C++, Python, and browsers.**
+**Audio analysis, mastering DSP, and mixer primitives for C++, Python, and browsers.**
 Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
 
 - **Analysis** — BPM, key, chord (HMM smoothing, inversions, key-context),
@@ -27,6 +27,9 @@ Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
 - **DAW DSP primitives** — time stretch / pitch shift, pitch correction,
   note-region stretch, voice-change pitch+formant controls, realtime mixer
   primitives, routing graph, creative delay/modulation/reverb FX, and ducking.
+- **Mixing** — channel strips, pan modes, width, sends, FX buses, goniometer /
+  true-peak metering, scene presets, and offline stereo rendering across C++,
+  C, Python, Node, WASM, and CLI surfaces.
 - **License** — Apache-2.0 across the entire stack (C++, Python, Node, WASM).
 
 ## Installation
@@ -195,6 +198,22 @@ const block = chain.processMono(new Float32Array(512));
 chain.delete();
 ```
 
+**Mixing**
+
+```typescript
+import { mixStereo, mixingScenePresetJson, mixingScenePresetNames } from '@libraz/libsonare';
+
+mixingScenePresetNames(); // ['vocalReverbSend', ...]
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+
+const mix = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+// { left, right, meters }
+```
+
 **DAW editing DSP**
 
 ```typescript
@@ -282,6 +301,17 @@ result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
 with libsonare.StreamingMasteringChain({'eq.tilt.tiltDb': 0.5}) as chain:
     chain.prepare(44100, 512, 1)
     out = chain.process_mono([0.0] * 512)
+
+# Mixing presets and offline stereo rendering
+libsonare.mixing_scene_preset_names()  # ['vocalReverbSend', ...]
+scene_json = libsonare.mixing_scene_preset_json("vocalReverbSend")
+mix = libsonare.mix_stereo(
+    [(vocal_l, vocal_r), (music_l, music_r)],
+    sample_rate=sr,
+    fader_db=[-3.0, -12.0],
+    pan=[0.0, -0.2],
+    width=[1.0, 0.9],
+)
 ```
 
 ### Python CLI
@@ -312,6 +342,11 @@ sonare mastering-processor song.wav --processor dynamics.compressor \
 sonare mastering-pair-analyze source.wav --reference reference.wav \
     --analysis match.referenceLoudness
 sonare mastering-processors                 # list available processors
+
+# Mixing
+sonare mixing-presets
+sonare mixing-preset --preset vocalReverbSend
+sonare mix input.wav -o mix.wav --fader-db -3 --pan 0.1 --pan-mode stereo-pan --width 1.1
 
 # DAW editing DSP
 sonare pitch-correct vocal.wav --current-midi 69 --target-midi 70 -o corrected.wav
@@ -372,6 +407,19 @@ restoration, source separation, and RX-style spectral repair are out of scope.
 Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 `cmake -DBUILD_MASTERING=OFF` to ship analysis-only builds.
 
+### Mixing / routing
+
+| Channel strips             | Routing / scene API            | Metering / QA                 |
+|----------------------------|--------------------------------|-------------------------------|
+| Fader / mute / polarity    | Sends and FX buses             | Peak / RMS / true peak        |
+| Balance / stereo / dual pan| JSON scene presets             | Correlation / mono width      |
+| Width and gain automation  | C / Node / Python / WASM / CLI | Golden hashes and RT tests    |
+| Insert processor hosting   | Graph integration              | No-allocation process checks  |
+
+Mixing is built by default (`BUILD_MIXING=ON`) and depends on the mastering
+processor interfaces for insert hosting. Disable with `cmake -DBUILD_MIXING=OFF`
+for analysis/mastering-only builds.
+
 ## Performance
 
 Designed for native execution speed: parallelized analysis with automatic
@@ -413,11 +461,11 @@ the Web Audio API or another JS decoder.
 ## Build from Source
 
 ```bash
-# Native (auto-detects FFmpeg; mastering on by default)
+# Native (auto-detects FFmpeg; mastering and mixing on by default)
 make build && make test
 
 # Analysis-only (smaller binary)
-cmake -B build -DBUILD_MASTERING=OFF && cmake --build build
+cmake -B build -DBUILD_MASTERING=OFF -DBUILD_MIXING=OFF && cmake --build build
 
 # WebAssembly (mastering included)
 make wasm
@@ -438,14 +486,14 @@ make release
 
 libsonare intentionally does **not** include:
 
-- **Creative effects** (reverb, delay, chorus, flanger, phaser) — use Tone.js or your DAW
+- **Plugin-grade creative instruments/effects** — use Tone.js, a plugin host, or your DAW
 - **Audio synthesis** (oscillators, samplers, MIDI playback) — out of scope
 - **Real-time I/O abstraction** (PortAudio/JACK wrappers) — callers handle I/O
 - **DAW workflow** (plugin host, automation, MIDI editing) — different product category
 - **Deep-learning models** (no bundled weights, no inference runtime) — keeps the
   library dependency-free and Apache-2.0 pure
 
-These boundaries keep the library focused on **analysis + mastering DSP**
+These boundaries keep the library focused on **analysis + mastering + mixer DSP**
 and allow us to maintain the dependency-free property.
 
 ## License
