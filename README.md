@@ -11,9 +11,11 @@
 **Audio analysis and mastering DSP for C++, Python, and browsers.**
 Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
 
-- **Analysis** — BPM, key, chord, beat, section, timbre, dynamics, pitch,
-  and room acoustics (blind RT60/EDT or IR-based RT60/EDT/C50/C80/D50),
-  with librosa-compatible defaults.
+- **Analysis** — BPM, key, chord (HMM smoothing, inversions, key-context),
+  beat, downbeat, time signature, section, timbre, dynamics, pitch,
+  tempogram / PLP, NNLS chroma, EBU R128 loudness (LUFS), and room acoustics
+  (blind RT60/EDT or IR-based RT60/EDT/C50/C80/D50), with librosa-compatible
+  defaults.
 - **Mastering** — EQ, dynamics, multiband, stereo, saturation, repair, maximizer,
   reference matching. 70+ named DSP processors (14 wired into the default
   mastering chain), implemented against published references such as
@@ -82,6 +84,45 @@ const blind = detectAcoustic(samples, sampleRate);
 
 // Measured impulse response: ISO-style RT60/EDT plus clarity metrics.
 const room = analyzeImpulseResponse(irSamples, sampleRate);
+```
+
+**Rhythm & chords**
+
+```typescript
+import { analyze, detectDownbeats, detectChords } from '@libraz/libsonare';
+
+const downbeats = detectDownbeats(samples, sampleRate);  // bar-start times (s)
+const { timeSignature } = analyze(samples, sampleRate);  // { numerator: 4, denominator: 4 }
+
+// Chord detection extras are all opt-in (defaults preserve existing behavior).
+const chords = detectChords(samples, sampleRate, {
+  useHmm: true,            // Viterbi/HMM temporal smoothing
+  detectInversions: true,  // slash chords via detected bass note
+  useKeyContext: true,     // bias toward in-key chords
+  chromaMethod: 'nnls',    // NNLS chroma instead of plain STFT chroma
+});
+```
+
+**Tempogram, NNLS chroma & loudness**
+
+```typescript
+import {
+  onsetEnvelope, tempogram, fourierTempogram, tempogramRatio, plp,
+  nnlsChroma, lufs,
+} from '@libraz/libsonare';
+
+// Onset strength envelope feeds the tempo-domain features.
+const env = onsetEnvelope(samples, sampleRate);
+const tg = tempogram(env, sampleRate);          // { winLength, nFrames, data }
+const ft = fourierTempogram(env, sampleRate);   // { nBins, nFrames, data }
+const ratios = tempogramRatio(tg.data, tg.winLength, sampleRate);
+const pulse = plp(env, sampleRate);             // predominant local pulse
+
+const chroma = nnlsChroma(samples, sampleRate); // { nChroma: 12, nFrames, data }
+
+// EBU R128 loudness metering (separate from the mastering loudness target).
+const loud = lufs(samples, sampleRate);
+// { integratedLufs, momentaryLufs, shortTermLufs, loudnessRange }
 ```
 
 **Mastering**
@@ -175,6 +216,29 @@ key_with_options = audio.detect_key(
 acoustic = audio.detect_acoustic()  # blind RT60/EDT; C50/C80/D50 are NaN
 ir_params = libsonare.analyze_impulse_response(ir_samples, sample_rate=sr)
 
+# Downbeats, time signature, and chord extras (all opt-in)
+downbeats = audio.detect_downbeats()              # bar-start times (s)
+time_signature = audio.analyze().time_signature   # e.g. 4/4
+chords = audio.detect_chords(
+    use_hmm=True,             # Viterbi/HMM temporal smoothing
+    detect_inversions=True,   # slash chords via detected bass note
+    use_key_context=True,     # bias toward in-key chords
+    chroma_method="nnls",     # NNLS chroma instead of plain STFT chroma
+)
+
+# Tempogram / NNLS chroma / EBU R128 loudness
+env = audio.onset_envelope()                     # onset strength envelope
+n_frames, tg = libsonare.tempogram(env, sample_rate=sr)
+n_frames_ft, ft = libsonare.fourier_tempogram(env, sample_rate=sr)
+ratios = libsonare.tempogram_ratio(tg)
+pulse = libsonare.plp(env, sample_rate=sr)
+
+nf, chroma = audio.nnls_chroma()                 # (n_frames, 12 x n_frames row-major)
+
+loud = audio.lufs()  # integrated_lufs / momentary_lufs / short_term_lufs / loudness_range
+mom = audio.momentary_lufs()                     # per-block time series
+short = audio.short_term_lufs()
+
 # Mastering chain — returns MasteringResult(samples, sample_rate,
 # input_lufs, output_lufs, applied_gain_db, latency_samples)
 result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
@@ -216,12 +280,22 @@ sonare analyze song.mp3
 
 sonare bpm song.mp3 --json
 
+# Extended analysis (parity with the C++ CLI)
+sonare acoustic room.wav --json          # blind RT60/EDT (add --ir for IR-based clarity metrics)
+sonare lufs song.wav --series            # EBU R128 integrated/momentary/short-term
+sonare rhythm song.wav --json
+sonare dynamics song.wav --json
+sonare timbre song.wav --json
+sonare tempogram song.wav --json
+sonare nnls-chroma song.wav --json
+
 # Mastering
 sonare mastering song.wav -o mastered.wav --target-lufs -14
 sonare mastering-processor song.wav --processor dynamics.compressor \
-    --params thresholdDb=-24,ratio=1.5
+    --params thresholdDb=-24,ratio=1.5 -o compressed.wav
 sonare mastering-pair-analyze source.wav --reference reference.wav \
     --analysis match.referenceLoudness
+sonare mastering-processors                 # list available processors
 ```
 
 ### C++
@@ -240,16 +314,18 @@ std::cout << "BPM: " << result.bpm
 
 ### Analysis (librosa-compatible)
 
-| Music              | Spectral / Pitch     | Streaming           |
-|--------------------|----------------------|---------------------|
-| BPM / Tempo        | STFT / iSTFT         | Real-time analyzer  |
-| Key Detection      | Mel Spectrogram      | Incremental BPM     |
-| Beat Tracking      | MFCC                 | Incremental key     |
-| Chord Recognition  | Chroma               | Onset events        |
-| Section Detection  | CQT / VQT            |                     |
-| Timbre / Dynamics  | Spectral Features    |                     |
-| Pitch (YIN / pYIN) | Onset Detection      |                     |
-| RT60 / EDT / C50   | Room acoustics       |                     |
+| Music                     | Spectral / Pitch     | Streaming           |
+|---------------------------|----------------------|---------------------|
+| BPM / Tempo               | STFT / iSTFT         | Real-time analyzer  |
+| Key Detection             | Mel Spectrogram      | Incremental BPM     |
+| Beat / Downbeat tracking  | MFCC                 | Incremental key     |
+| Time signature / meter    | Chroma / NNLS chroma | Onset events        |
+| Chord (HMM / inversions)  | CQT / VQT            |                     |
+| Section Detection         | Tempogram / PLP      |                     |
+| Timbre / Dynamics         | Spectral Features    |                     |
+| Pitch (YIN / pYIN)        | Onset Detection      |                     |
+| RT60 / EDT / C50          | Room acoustics       |                     |
+| Loudness (EBU R128 LUFS)  | Onset envelope       |                     |
 
 ### Mastering (70+ DSP processors)
 

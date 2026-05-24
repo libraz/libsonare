@@ -11,7 +11,9 @@
 **オーディオ解析とマスタリングDSPを、C++・Python・ブラウザで。**
 Apache-2.0、ランタイム依存ライブラリなし、ネイティブとWebAssemblyの両方でビルドできます。
 
-- **解析（Analysis）** — BPM・キー・コード・ビート・セクション・音色・ダイナミクス・ピッチ・
+- **解析（Analysis）** — BPM・キー・コード（HMM平滑化・転回形・キーコンテキスト）・
+  ビート・ダウンビート・拍子・セクション・音色・ダイナミクス・ピッチ・テンポグラム／PLP・
+  NNLSクロマ・EBU R128 ラウドネス（LUFS）・
   音響特性（blind RT60/EDT、IRベース RT60/EDT/C50/C80/D50）
   （librosa互換のデフォルト値）。
 - **マスタリング（Mastering）** — EQ、ダイナミクス、マルチバンド、ステレオ、サチュレーション、
@@ -83,6 +85,45 @@ const blind = detectAcoustic(samples, sampleRate);
 
 // インパルス応答: ISO-style RT60/EDT と clarity metrics。
 const room = analyzeImpulseResponse(irSamples, sampleRate);
+```
+
+**リズム & コード**
+
+```typescript
+import { analyze, detectDownbeats, detectChords } from '@libraz/libsonare';
+
+const downbeats = detectDownbeats(samples, sampleRate);  // 小節頭の時刻（秒）
+const { timeSignature } = analyze(samples, sampleRate);  // { numerator: 4, denominator: 4 }
+
+// コード検出の追加機能はすべて明示指定時のみ有効です（デフォルト動作は維持されます）。
+const chords = detectChords(samples, sampleRate, {
+  useHmm: true,            // Viterbi/HMM による時間方向の平滑化
+  detectInversions: true,  // 検出したベース音からスラッシュコードを判定
+  useKeyContext: true,     // キー内のコードを優先
+  chromaMethod: 'nnls',    // 通常のSTFTクロマの代わりにNNLSクロマを使用
+});
+```
+
+**テンポグラム・NNLSクロマ・ラウドネス**
+
+```typescript
+import {
+  onsetEnvelope, tempogram, fourierTempogram, tempogramRatio, plp,
+  nnlsChroma, lufs,
+} from '@libraz/libsonare';
+
+// オンセット強度包絡線がテンポ領域の特徴量の入力になります。
+const env = onsetEnvelope(samples, sampleRate);
+const tg = tempogram(env, sampleRate);          // { winLength, nFrames, data }
+const ft = fourierTempogram(env, sampleRate);   // { nBins, nFrames, data }
+const ratios = tempogramRatio(tg.data, tg.winLength, sampleRate);
+const pulse = plp(env, sampleRate);             // predominant local pulse
+
+const chroma = nnlsChroma(samples, sampleRate); // { nChroma: 12, nFrames, data }
+
+// EBU R128 ラウドネス計測（マスタリングのラウドネス目標とは別物）。
+const loud = lufs(samples, sampleRate);
+// { integratedLufs, momentaryLufs, shortTermLufs, loudnessRange }
 ```
 
 **マスタリング**
@@ -177,6 +218,29 @@ key_with_options = audio.detect_key(
 acoustic = audio.detect_acoustic()  # blind RT60/EDT。C50/C80/D50 は NaN
 ir_params = libsonare.analyze_impulse_response(ir_samples, sample_rate=sr)
 
+# ダウンビート・拍子・コードの追加機能（すべて明示指定時のみ有効）
+downbeats = audio.detect_downbeats()              # 小節頭の時刻（秒）
+time_signature = audio.analyze().time_signature   # 例: 4/4
+chords = audio.detect_chords(
+    use_hmm=True,             # Viterbi/HMM による時間方向の平滑化
+    detect_inversions=True,   # 検出したベース音からスラッシュコードを判定
+    use_key_context=True,     # キー内のコードを優先
+    chroma_method="nnls",     # 通常のSTFTクロマの代わりにNNLSクロマを使用
+)
+
+# テンポグラム / NNLSクロマ / EBU R128 ラウドネス
+env = audio.onset_envelope()                     # オンセット強度包絡線
+n_frames, tg = libsonare.tempogram(env, sample_rate=sr)
+n_frames_ft, ft = libsonare.fourier_tempogram(env, sample_rate=sr)
+ratios = libsonare.tempogram_ratio(tg)
+pulse = libsonare.plp(env, sample_rate=sr)
+
+nf, chroma = audio.nnls_chroma()                 # (n_frames, 12 x n_frames row-major)
+
+loud = audio.lufs()  # integrated_lufs / momentary_lufs / short_term_lufs / loudness_range
+mom = audio.momentary_lufs()                     # ブロック単位の時系列
+short = audio.short_term_lufs()
+
 # マスタリング — 返り値は MasteringResult(samples, sample_rate,
 # input_lufs, output_lufs, applied_gain_db, latency_samples)
 result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
@@ -218,12 +282,22 @@ sonare analyze song.mp3
 
 sonare bpm song.mp3 --json
 
+# 拡張解析（C++ CLI と同等）
+sonare acoustic room.wav --json          # blind RT60/EDT（--ir でIRベースの明瞭度指標）
+sonare lufs song.wav --series            # EBU R128 integrated/momentary/short-term
+sonare rhythm song.wav --json
+sonare dynamics song.wav --json
+sonare timbre song.wav --json
+sonare tempogram song.wav --json
+sonare nnls-chroma song.wav --json
+
 # マスタリング
 sonare mastering song.wav -o mastered.wav --target-lufs -14
 sonare mastering-processor song.wav --processor dynamics.compressor \
-    --params thresholdDb=-24,ratio=1.5
+    --params thresholdDb=-24,ratio=1.5 -o compressed.wav
 sonare mastering-pair-analyze source.wav --reference reference.wav \
     --analysis match.referenceLoudness
+sonare mastering-processors                 # 利用可能なプロセッサ一覧
 ```
 
 ### C++
@@ -242,16 +316,18 @@ std::cout << "BPM: " << result.bpm
 
 ### 解析（librosa互換）
 
-| 音楽               | スペクトル / ピッチ  | ストリーミング       |
-|--------------------|----------------------|----------------------|
-| BPM / テンポ       | STFT / iSTFT         | リアルタイム解析     |
-| キー検出           | メルスペクトログラム | 逐次BPM              |
-| ビートトラッキング | MFCC                 | 逐次キー             |
-| コード認識         | クロマ               | オンセットイベント   |
-| セクション検出     | CQT / VQT            |                      |
-| 音色 / ダイナミクス| スペクトル特徴量     |                      |
-| RT60 / EDT / C50   | 音響特性解析         |                      |
-| ピッチ (YIN/pYIN)  | オンセット検出       |                      |
+| 音楽                  | スペクトル / ピッチ  | ストリーミング       |
+|-----------------------|----------------------|----------------------|
+| BPM / テンポ          | STFT / iSTFT         | リアルタイム解析     |
+| キー検出              | メルスペクトログラム | 逐次BPM              |
+| ビート / ダウンビート | MFCC                 | 逐次キー             |
+| 拍子 / メーター       | クロマ / NNLSクロマ  | オンセットイベント   |
+| コード(HMM/転回形)    | CQT / VQT            |                      |
+| セクション検出        | テンポグラム / PLP   |                      |
+| 音色 / ダイナミクス   | スペクトル特徴量     |                      |
+| RT60 / EDT / C50      | 音響特性解析         |                      |
+| ピッチ (YIN/pYIN)     | オンセット検出       |                      |
+| ラウドネス(EBU R128)  | オンセット包絡線     |                      |
 
 ### マスタリング（70以上のDSPプロセッサ）
 
