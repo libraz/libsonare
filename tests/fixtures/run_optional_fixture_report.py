@@ -69,6 +69,10 @@ def ready_count(stats: list[dict[str, Any]]) -> int:
     return sum(int(item["ready"]) for item in stats)
 
 
+def missing_fixture_count(stats: list[dict[str, Any]]) -> int:
+    return sum(int(item["missing_audio"]) + int(item["missing_annotation"]) for item in stats)
+
+
 def provenance_violation_count(stats: list[dict[str, Any]]) -> int:
     return sum(int(item.get("provenance_violations", 0)) for item in stats)
 
@@ -465,6 +469,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail if the selected suite has no ready fixture rows.",
     )
+    parser.add_argument(
+        "--require-complete",
+        action="store_true",
+        help="Fail if any selected suite manifest row is missing audio or annotation files.",
+    )
     return parser.parse_args()
 
 
@@ -491,6 +500,7 @@ def main() -> int:
             "root": str(roots[name]),
             "stats": stats,
             "ready": ready,
+            "missing_fixtures": missing_fixture_count(stats),
             "provenance_violations": provenance_violation_count(stats),
         }
         if ready == 0 and not args.require_ready:
@@ -506,6 +516,10 @@ def main() -> int:
     )
     if args.require_ready:
         report["ok"] = report["ok"] and all(report["suites"][name]["ready"] > 0 for name in selected)
+    if args.require_complete:
+        report["ok"] = report["ok"] and all(
+            report["suites"][name]["missing_fixtures"] == 0 for name in selected
+        )
 
     if args.output:
         write_json_strict(args.output, report, indent=2, sort_keys=True)

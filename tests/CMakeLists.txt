@@ -136,10 +136,12 @@ if(BUILD_MASTERING)
     mastering/assistant_test.cpp
     mastering/chain_test.cpp
     mastering/common_test.cpp
+    mastering/property_test.cpp
     mastering/preset_test.cpp
     mastering/dynamics_test.cpp
     mastering/eq_test.cpp
     mastering/final_test.cpp
+    mastering/golden_hash_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
     mastering/multiband_test.cpp
