@@ -946,6 +946,254 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 }
 #endif
 
+TEST_CASE("sonare_onset_strength", "[c_api]") {
+  SECTION("returns a finite onset envelope") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    float* env = nullptr;
+    size_t count = 0;
+
+    SonareError err =
+        sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(count > 0);
+    REQUIRE(env != nullptr);
+    for (size_t i = 0; i < count; ++i) {
+      REQUIRE(std::isfinite(env[i]));
+    }
+    sonare_free_floats(env);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_clicks(120.0f, 22050, 1.0f);
+    float* env = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_onset_strength(nullptr, samples.size(), 22050, 2048, 512, 128, &env, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, nullptr,
+                                  &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_fourier_tempogram", "[c_api]") {
+  SECTION("returns an [n_bins x n_frames] magnitude matrix") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    float* env = nullptr;
+    size_t env_count = 0;
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                                  &env_count) == SONARE_OK);
+
+    const int win_length = 384;
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+    SonareError err = sonare_fourier_tempogram(env, env_count, 22050, 512, win_length, 1, 1, &data,
+                                               &out_length, &n_frames);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(data != nullptr);
+    REQUIRE(n_frames == static_cast<int>(env_count));
+    const size_t n_bins = static_cast<size_t>(win_length) / 2 + 1;
+    REQUIRE(out_length == n_bins * static_cast<size_t>(n_frames));
+    for (size_t i = 0; i < out_length; ++i) {
+      REQUIRE(std::isfinite(data[i]));
+    }
+
+    sonare_free_floats(data);
+    sonare_free_floats(env);
+  }
+
+  SECTION("rejects invalid parameters") {
+    std::vector<float> env(256, 0.1f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+
+    REQUIRE(sonare_fourier_tempogram(nullptr, env.size(), 22050, 512, 384, 1, 1, &data, &out_length,
+                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_fourier_tempogram(env.data(), env.size(), 22050, 512, 384, 1, 1, &data,
+                                     &out_length, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_tempogram_ratio", "[c_api]") {
+  SECTION("returns one finite value per factor") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    float* env = nullptr;
+    size_t env_count = 0;
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                                  &env_count) == SONARE_OK);
+
+    const int win_length = 384;
+    float* tg = nullptr;
+    size_t tg_length = 0;
+    int tg_frames = 0;
+    REQUIRE(sonare_tempogram(env, env_count, 22050, 512, win_length, 1, 1, &tg, &tg_length,
+                             &tg_frames) == SONARE_OK);
+
+    SECTION("default factors") {
+      float* ratio = nullptr;
+      size_t ratio_count = 0;
+      SonareError err = sonare_tempogram_ratio(tg, tg_length, win_length, 22050, 512, nullptr, 0,
+                                               &ratio, &ratio_count);
+      REQUIRE(err == SONARE_OK);
+      REQUIRE(ratio != nullptr);
+      REQUIRE(ratio_count == 5);  // {0.5, 1, 2, 3, 4}
+      for (size_t i = 0; i < ratio_count; ++i) {
+        REQUIRE(std::isfinite(ratio[i]));
+      }
+      sonare_free_floats(ratio);
+    }
+
+    SECTION("explicit factors") {
+      const float factors[] = {1.0f, 2.0f, 3.0f};
+      float* ratio = nullptr;
+      size_t ratio_count = 0;
+      SonareError err = sonare_tempogram_ratio(tg, tg_length, win_length, 22050, 512, factors, 3,
+                                               &ratio, &ratio_count);
+      REQUIRE(err == SONARE_OK);
+      REQUIRE(ratio_count == 3);
+      for (size_t i = 0; i < ratio_count; ++i) {
+        REQUIRE(std::isfinite(ratio[i]));
+      }
+      sonare_free_floats(ratio);
+    }
+
+    sonare_free_floats(tg);
+    sonare_free_floats(env);
+  }
+
+  SECTION("rejects invalid parameters") {
+    std::vector<float> tg(384 * 4, 0.1f);
+    const float factors[] = {1.0f};
+    float* ratio = nullptr;
+    size_t ratio_count = 0;
+
+    REQUIRE(sonare_tempogram_ratio(nullptr, tg.size(), 384, 22050, 512, factors, 1, &ratio,
+                                   &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), 384, 22050, 512, nullptr, 2, &ratio,
+                                   &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_nnls_chroma", "[c_api]") {
+  SECTION("returns a 12 x n_frames chroma matrix") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+
+    SonareError err =
+        sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length, &n_frames);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(data != nullptr);
+    REQUIRE(n_frames > 0);
+    REQUIRE(out_length == 12u * static_cast<size_t>(n_frames));
+    for (size_t i = 0; i < out_length; ++i) {
+      REQUIRE(std::isfinite(data[i]));
+      REQUIRE(data[i] >= 0.0f);  // NNLS output is non-negative
+    }
+    sonare_free_floats(data);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+
+    REQUIRE(sonare_nnls_chroma(nullptr, samples.size(), 22050, &data, &out_length, &n_frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, nullptr, &n_frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length,
+                               nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_lufs", "[c_api]") {
+  SECTION("returns finite loudness measures") {
+    auto samples = generate_sine(440.0f, 48000, 3.0f);
+    SonareLufsResult result = {};
+
+    SonareError err = sonare_lufs(samples.data(), samples.size(), 48000, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(std::isfinite(result.integrated_lufs));
+    REQUIRE(std::isfinite(result.momentary_lufs));
+    REQUIRE(std::isfinite(result.short_term_lufs));
+    REQUIRE(std::isfinite(result.loudness_range));
+    REQUIRE(result.loudness_range >= 0.0f);
+  }
+
+  SECTION("louder signal measures higher integrated LUFS") {
+    auto loud = generate_sine(440.0f, 48000, 3.0f);
+    auto quiet = loud;
+    for (auto& sample : quiet) sample *= 0.1f;
+
+    SonareLufsResult loud_result = {};
+    SonareLufsResult quiet_result = {};
+    REQUIRE(sonare_lufs(loud.data(), loud.size(), 48000, &loud_result) == SONARE_OK);
+    REQUIRE(sonare_lufs(quiet.data(), quiet.size(), 48000, &quiet_result) == SONARE_OK);
+
+    REQUIRE(loud_result.integrated_lufs > quiet_result.integrated_lufs);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    SonareLufsResult result = {};
+
+    REQUIRE(sonare_lufs(nullptr, samples.size(), 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_lufs(samples.data(), samples.size(), 48000, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_momentary_lufs and sonare_short_term_lufs", "[c_api]") {
+  SECTION("return finite time series") {
+    auto samples = generate_sine(440.0f, 48000, 3.0f);
+
+    float* momentary = nullptr;
+    size_t momentary_count = 0;
+    REQUIRE(sonare_momentary_lufs(samples.data(), samples.size(), 48000, &momentary,
+                                  &momentary_count) == SONARE_OK);
+    REQUIRE(momentary != nullptr);
+    REQUIRE(momentary_count > 0);
+    for (size_t i = 0; i < momentary_count; ++i) {
+      REQUIRE(std::isfinite(momentary[i]));
+    }
+    sonare_free_floats(momentary);
+
+    float* short_term = nullptr;
+    size_t short_term_count = 0;
+    REQUIRE(sonare_short_term_lufs(samples.data(), samples.size(), 48000, &short_term,
+                                   &short_term_count) == SONARE_OK);
+    REQUIRE(short_term != nullptr);
+    REQUIRE(short_term_count > 0);
+    for (size_t i = 0; i < short_term_count; ++i) {
+      REQUIRE(std::isfinite(short_term[i]));
+    }
+    sonare_free_floats(short_term);
+  }
+
+  SECTION("reject invalid parameters") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    float* out = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_momentary_lufs(nullptr, samples.size(), 48000, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_short_term_lufs(nullptr, samples.size(), 48000, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {
     REQUIRE(std::strcmp(sonare_error_message(SONARE_OK), "OK") == 0);

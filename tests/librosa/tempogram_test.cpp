@@ -68,9 +68,8 @@ TEST_CASE("tempogram shape matches librosa", "[librosa][tempogram]") {
     for (int lag = 1; lag < n_lags; ++lag) {
       double s = 0.0;
       for (int f = 0; f < n_frames; ++f) {
-        s += static_cast<double>(
-            data[static_cast<size_t>(lag) * static_cast<size_t>(n_frames) +
-                 static_cast<size_t>(f)]);
+        s += static_cast<double>(data[static_cast<size_t>(lag) * static_cast<size_t>(n_frames) +
+                                      static_cast<size_t>(f)]);
       }
       if (s > best_val) {
         best_val = s;

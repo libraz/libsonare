@@ -20,6 +20,7 @@ import {
   detectChords,
   detectKey,
   detectOnsets,
+  fourierTempogram,
   fixFrames,
   fixLength,
   frameSignal,
@@ -31,6 +32,7 @@ import {
   hzToMel,
   hzToMidi,
   hzToNote,
+  lufs,
   mastering,
   masteringChain,
   masteringPairAnalysisNames,
@@ -46,8 +48,11 @@ import {
   melToHz,
   mfcc,
   midiToHz,
+  momentaryLufs,
+  nnlsChroma,
   normalize,
   noteToHz,
+  onsetEnvelope,
   pcen,
   peakPick,
   percussive,
@@ -59,6 +64,7 @@ import {
   preemphasis,
   resample,
   rmsEnergy,
+  shortTermLufs,
   StreamingMasteringChain,
   samplesToFrames,
   spectralBandwidth,
@@ -69,6 +75,7 @@ import {
   stft,
   stftDb,
   tempogram,
+  tempogramRatio,
   timeStretch,
   timeToFrames,
   tonnetz,
@@ -769,6 +776,105 @@ describe('sonare native binding', () => {
     it('rejects denoise and loudness stages', () => {
       expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).toThrow();
       expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
+    });
+  });
+
+  describe('onset, tempogram, NNLS chroma, and LUFS', () => {
+    const allFinite = (arr: Float32Array): boolean => {
+      for (let i = 0; i < arr.length; i++) {
+        if (!Number.isFinite(arr[i])) return false;
+      }
+      return true;
+    };
+
+    it('onsetEnvelope returns a finite Float32Array', () => {
+      const env = onsetEnvelope(generateSine(440, SR, 2.0), SR);
+      expect(env).toBeInstanceOf(Float32Array);
+      expect(env.length).toBeGreaterThan(0);
+      expect(allFinite(env)).toBe(true);
+    });
+
+    it('fourierTempogram returns an [nBins x nFrames] matrix', () => {
+      const env = onsetEnvelope(generateSine(440, SR, 2.0), SR);
+      const winLength = 384;
+      const result = fourierTempogram(env, SR, 512, winLength);
+      expect(result.nFrames).toBe(env.length);
+      const expectedBins = Math.floor(winLength / 2) + 1;
+      expect(result.nBins).toBe(expectedBins);
+      expect(result.data).toBeInstanceOf(Float32Array);
+      expect(result.data.length).toBe(result.nBins * result.nFrames);
+      expect(allFinite(result.data)).toBe(true);
+    });
+
+    it('tempogramRatio returns one finite value per default factor', () => {
+      const env = onsetEnvelope(generateSine(440, SR, 2.0), SR);
+      const tg = tempogram(env, SR);
+      const ratio = tempogramRatio(tg.data, tg.winLength, SR);
+      expect(ratio).toBeInstanceOf(Float32Array);
+      expect(ratio.length).toBe(5); // {0.5, 1, 2, 3, 4}
+      expect(allFinite(ratio)).toBe(true);
+    });
+
+    it('nnlsChroma returns a 12 x nFrames matrix', () => {
+      const result = nnlsChroma(generateSine(440, SR, 2.0), SR);
+      expect(result.nChroma).toBe(12);
+      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.data).toBeInstanceOf(Float32Array);
+      expect(result.data.length).toBe(12 * result.nFrames);
+      expect(allFinite(result.data)).toBe(true);
+    });
+
+    it('lufs returns finite measures; louder reads higher', () => {
+      const loudSamples = generateSine(440, 48000, 3.0);
+      const quietSamples = loudSamples.map((s) => s * 0.1);
+
+      const loud = lufs(loudSamples, 48000);
+      const quiet = lufs(quietSamples, 48000);
+
+      for (const r of [loud, quiet]) {
+        expect(Number.isFinite(r.integratedLufs)).toBe(true);
+        expect(Number.isFinite(r.momentaryLufs)).toBe(true);
+        expect(Number.isFinite(r.shortTermLufs)).toBe(true);
+        expect(Number.isFinite(r.loudnessRange)).toBe(true);
+        expect(r.loudnessRange).toBeGreaterThanOrEqual(0);
+      }
+      expect(loud.integratedLufs).toBeGreaterThan(quiet.integratedLufs);
+    });
+
+    it('momentaryLufs and shortTermLufs return finite time series', () => {
+      const samples = generateSine(440, 48000, 3.0);
+
+      const momentary = momentaryLufs(samples, 48000);
+      expect(momentary).toBeInstanceOf(Float32Array);
+      expect(momentary.length).toBeGreaterThan(0);
+      expect(allFinite(momentary)).toBe(true);
+
+      const shortTerm = shortTermLufs(samples, 48000);
+      expect(shortTerm).toBeInstanceOf(Float32Array);
+      expect(shortTerm.length).toBeGreaterThan(0);
+      expect(allFinite(shortTerm)).toBe(true);
+    });
+
+    it('Audio methods mirror standalone onset/chroma/LUFS functions', () => {
+      const audio = Audio.fromBuffer(generateSine(440, 48000, 3.0), 48000);
+      try {
+        const env = audio.onsetEnvelope();
+        expect(env).toBeInstanceOf(Float32Array);
+        expect(env.length).toBeGreaterThan(0);
+
+        const chromaResult = audio.nnlsChroma();
+        expect(chromaResult.nChroma).toBe(12);
+        expect(chromaResult.data.length).toBe(12 * chromaResult.nFrames);
+
+        const loud = audio.lufs();
+        expect(Number.isFinite(loud.integratedLufs)).toBe(true);
+        expect(Number.isFinite(loud.loudnessRange)).toBe(true);
+
+        expect(audio.momentaryLufs().length).toBeGreaterThan(0);
+        expect(audio.shortTermLufs().length).toBeGreaterThan(0);
+      } finally {
+        audio.destroy();
+      }
     });
   });
 });
