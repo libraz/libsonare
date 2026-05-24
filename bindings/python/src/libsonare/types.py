@@ -220,6 +220,32 @@ class AcousticResult:
 
 
 @dataclass(frozen=True, slots=True)
+class LufsResult:
+    """ITU-R BS.1770 / EBU R128 loudness metrics (offline meter)."""
+
+    integrated_lufs: float
+    momentary_lufs: float
+    short_term_lufs: float
+    loudness_range: float
+
+    @property
+    def integratedLufs(self) -> float:  # noqa: N802
+        return self.integrated_lufs
+
+    @property
+    def momentaryLufs(self) -> float:  # noqa: N802
+        return self.momentary_lufs
+
+    @property
+    def shortTermLufs(self) -> float:  # noqa: N802
+        return self.short_term_lufs
+
+    @property
+    def loudnessRange(self) -> float:  # noqa: N802
+        return self.loudness_range
+
+
+@dataclass(frozen=True, slots=True)
 class RhythmResult:
     """Rhythm analysis primitives."""
 

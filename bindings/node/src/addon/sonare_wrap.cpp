@@ -97,6 +97,11 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("analyzeTimbre",
               Napi::Function::New(env, &SonareWrap::AnalyzeTimbre, "analyzeTimbre"));
   exports.Set("detectChords", Napi::Function::New(env, &SonareWrap::DetectChords, "detectChords"));
+  exports.Set("lufs", Napi::Function::New(env, &SonareWrap::Lufs, "lufs"));
+  exports.Set("momentaryLufs",
+              Napi::Function::New(env, &SonareWrap::MomentaryLufs, "momentaryLufs"));
+  exports.Set("shortTermLufs",
+              Napi::Function::New(env, &SonareWrap::ShortTermLufs, "shortTermLufs"));
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
   exports.Set("hasFfmpegSupport",
               Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
@@ -221,6 +226,13 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("cyclicTempogram",
               Napi::Function::New(env, &SonareWrap::CyclicTempogram, "cyclicTempogram"));
   exports.Set("plp", Napi::Function::New(env, &SonareWrap::Plp, "plp"));
+  exports.Set("onsetEnvelope",
+              Napi::Function::New(env, &SonareWrap::OnsetEnvelope, "onsetEnvelope"));
+  exports.Set("fourierTempogram",
+              Napi::Function::New(env, &SonareWrap::FourierTempogram, "fourierTempogram"));
+  exports.Set("tempogramRatio",
+              Napi::Function::New(env, &SonareWrap::TempogramRatio, "tempogramRatio"));
+  exports.Set("nnlsChroma", Napi::Function::New(env, &SonareWrap::NnlsChroma, "nnlsChroma"));
 
   // Core - Resample
   exports.Set("resample", Napi::Function::New(env, &SonareWrap::Resample, "resample"));

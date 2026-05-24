@@ -598,3 +598,13 @@ export interface PitchResult {
   medianF0: number;
   meanF0: number;
 }
+
+/**
+ * Loudness measurement result (EBU R128 / ITU-R BS.1770)
+ */
+export interface LufsResult {
+  integratedLufs: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  loudnessRange: number;
+}

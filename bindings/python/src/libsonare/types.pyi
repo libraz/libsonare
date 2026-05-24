@@ -142,6 +142,27 @@ class AcousticResult:
     @property
     def isBlind(self) -> bool: ...
 
+class LufsResult:
+    integrated_lufs: float
+    momentary_lufs: float
+    short_term_lufs: float
+    loudness_range: float
+    def __init__(
+        self,
+        integrated_lufs: float,
+        momentary_lufs: float,
+        short_term_lufs: float,
+        loudness_range: float,
+    ) -> None: ...
+    @property
+    def integratedLufs(self) -> float: ...
+    @property
+    def momentaryLufs(self) -> float: ...
+    @property
+    def shortTermLufs(self) -> float: ...
+    @property
+    def loudnessRange(self) -> float: ...
+
 class RhythmResult:
     bpm: float
     time_signature: TimeSignature

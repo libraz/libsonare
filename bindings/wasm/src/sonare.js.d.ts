@@ -184,6 +184,25 @@ interface WasmCyclicTempogramResult {
   data: Float32Array;
 }
 
+interface WasmFourierTempogramResult {
+  nBins: number;
+  nFrames: number;
+  data: Float32Array;
+}
+
+interface WasmNnlsChromaResult {
+  nChroma: number;
+  nFrames: number;
+  data: Float32Array;
+}
+
+interface WasmLufsResult {
+  integratedLufs: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  loudnessRange: number;
+}
+
 interface WasmMasteringResult {
   samples: Float32Array;
   sampleRate: number;
@@ -556,6 +575,29 @@ interface SonareModule {
     tempoMax: number,
     winLength: number,
   ) => Float32Array;
+  nnlsChroma: (samples: Float32Array, sampleRate: number) => WasmNnlsChromaResult;
+  onsetEnvelope: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nMels: number,
+  ) => Float32Array;
+  fourierTempogram: (
+    onsetEnvelope: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    winLength: number,
+  ) => WasmFourierTempogramResult;
+  tempogramRatio: (
+    tempogramData: Float32Array,
+    winLength: number,
+    sampleRate: number,
+    hopLength: number,
+  ) => Float32Array;
+  lufs: (samples: Float32Array, sampleRate: number) => WasmLufsResult;
+  momentaryLufs: (samples: Float32Array, sampleRate: number) => Float32Array;
+  shortTermLufs: (samples: Float32Array, sampleRate: number) => Float32Array;
 
   // Core - Resample
   resample: (samples: Float32Array, srcSr: number, targetSr: number) => Float32Array;

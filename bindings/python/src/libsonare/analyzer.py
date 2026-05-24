@@ -18,6 +18,7 @@ from ._ffi import (
     SonareHpssResult,
     SonareKey,
     SonareKeyCandidate,
+    SonareLufsResult,
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
     SonareMasteringConfig,
@@ -46,6 +47,7 @@ from .types import (
     Key,
     KeyCandidate,
     KeyProfile,
+    LufsResult,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringResult,
@@ -2917,6 +2919,166 @@ def plp(
         ctypes.c_float(tempo_min),
         ctypes.c_float(tempo_max),
         ctypes.c_int(win_length),
+    )
+
+
+def onset_envelope(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_mels: int = 128,
+) -> list[float]:
+    """Compute the onset strength envelope (librosa.onset.onset_strength).
+
+    Returns one value per frame (half-wave rectified Mel-spectrogram flux).
+    """
+    return _call_float_transform(
+        "sonare_onset_strength",
+        samples,
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_mels),
+    )
+
+
+def fourier_tempogram(
+    onset_envelope: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    win_length: int = 384,
+    center: bool = True,
+    norm: bool = True,
+) -> tuple[int, list[float]]:
+    """Compute the Fourier (FFT-based) tempogram. Returns (n_frames, matrix).
+
+    The matrix is row-major [n_bins x n_frames] where
+    n_bins = len(matrix) // n_frames.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(onset_envelope)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_fourier_tempogram(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(win_length),
+        ctypes.c_int(1 if center else 0),
+        ctypes.c_int(1 if norm else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def tempogram_ratio(
+    tempogram_data: Sequence[float] | list[float],
+    win_length: int = 384,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    factors: Sequence[float] | list[float] | None = None,
+) -> list[float]:
+    """Aggregate tempogram magnitudes at integer ratios of a reference tempo.
+
+    When ``factors`` is None the library default factors are used.
+    Returns one value per factor.
+    """
+    if factors is None:
+        factors_ptr: ctypes.Array[ctypes.c_float] | None = None
+        n_factors = 0
+    else:
+        factors_ptr, n_factors = _to_c_float_array(factors)
+    return _call_float_transform(
+        "sonare_tempogram_ratio",
+        tempogram_data,
+        ctypes.c_int(win_length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        factors_ptr,
+        ctypes.c_size_t(n_factors),
+    )
+
+
+def nnls_chroma(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+) -> tuple[int, list[float]]:
+    """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_nnls_chroma(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def lufs(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+) -> LufsResult:
+    """Compute integrated/momentary/short-term LUFS and loudness range."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareLufsResult()
+    rc = lib.sonare_lufs(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return LufsResult(
+        integrated_lufs=float(out.integrated_lufs),
+        momentary_lufs=float(out.momentary_lufs),
+        short_term_lufs=float(out.short_term_lufs),
+        loudness_range=float(out.loudness_range),
+    )
+
+
+def momentary_lufs(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+) -> list[float]:
+    """Compute the per-block momentary LUFS time series."""
+    return _call_float_transform(
+        "sonare_momentary_lufs",
+        samples,
+        ctypes.c_int(sample_rate),
+    )
+
+
+def short_term_lufs(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+) -> list[float]:
+    """Compute the per-block short-term LUFS time series."""
+    return _call_float_transform(
+        "sonare_short_term_lufs",
+        samples,
+        ctypes.c_int(sample_rate),
     )
 
 

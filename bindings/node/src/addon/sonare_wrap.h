@@ -52,6 +52,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value AnalyzeDynamics(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeTimbre(const Napi::CallbackInfo& info);
   static Napi::Value DetectChords(const Napi::CallbackInfo& info);
+  static Napi::Value Lufs(const Napi::CallbackInfo& info);
+  static Napi::Value MomentaryLufs(const Napi::CallbackInfo& info);
+  static Napi::Value ShortTermLufs(const Napi::CallbackInfo& info);
   static Napi::Value Version(const Napi::CallbackInfo& info);
   static Napi::Value HasFfmpegSupport(const Napi::CallbackInfo& info);
 
@@ -136,6 +139,10 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Tempogram(const Napi::CallbackInfo& info);
   static Napi::Value CyclicTempogram(const Napi::CallbackInfo& info);
   static Napi::Value Plp(const Napi::CallbackInfo& info);
+  static Napi::Value OnsetEnvelope(const Napi::CallbackInfo& info);
+  static Napi::Value FourierTempogram(const Napi::CallbackInfo& info);
+  static Napi::Value TempogramRatio(const Napi::CallbackInfo& info);
+  static Napi::Value NnlsChroma(const Napi::CallbackInfo& info);
 
   // Core - Resample
   static Napi::Value Resample(const Napi::CallbackInfo& info);

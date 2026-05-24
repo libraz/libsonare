@@ -11,6 +11,7 @@ import type {
   Key,
   KeyCandidate,
   KeyDetectionOptions,
+  LufsResult,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringPreset,
@@ -395,6 +396,26 @@ export class Audio {
 
   resample(targetSr: number): Float32Array {
     return addon.resample(this.getData(), this.getSampleRate(), targetSr);
+  }
+
+  onsetEnvelope(nFft = 2048, hopLength = 512, nMels = 128): Float32Array {
+    return addon.onsetEnvelope(this.getData(), this.getSampleRate(), nFft, hopLength, nMels);
+  }
+
+  nnlsChroma(): { nChroma: number; nFrames: number; data: Float32Array } {
+    return addon.nnlsChroma(this.getData(), this.getSampleRate());
+  }
+
+  lufs(): LufsResult {
+    return addon.lufs(this.getData(), this.getSampleRate());
+  }
+
+  momentaryLufs(): Float32Array {
+    return addon.momentaryLufs(this.getData(), this.getSampleRate());
+  }
+
+  shortTermLufs(): Float32Array {
+    return addon.shortTermLufs(this.getData(), this.getSampleRate());
   }
 }
 
@@ -1131,6 +1152,53 @@ export function plp(
   return addon.plp(onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength);
 }
 
+export function onsetEnvelope(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+): Float32Array {
+  return addon.onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
+}
+
+export function fourierTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  winLength = 384,
+): { nBins: number; nFrames: number; data: Float32Array } {
+  return addon.fourierTempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+}
+
+export function tempogramRatio(
+  tempogramData: Float32Array,
+  winLength = 384,
+  sampleRate = 22050,
+  hopLength = 512,
+): Float32Array {
+  return addon.tempogramRatio(tempogramData, winLength, sampleRate, hopLength);
+}
+
+export function nnlsChroma(
+  samples: Float32Array,
+  sampleRate = 22050,
+): { nChroma: number; nFrames: number; data: Float32Array } {
+  return addon.nnlsChroma(samples, sampleRate);
+}
+
+export function lufs(samples: Float32Array, sampleRate = 22050): LufsResult {
+  return addon.lufs(samples, sampleRate);
+}
+
+export function momentaryLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.momentaryLufs(samples, sampleRate);
+}
+
+export function shortTermLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.shortTermLufs(samples, sampleRate);
+}
+
 export function resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array {
   return addon.resample(samples, srcSr, targetSr);
 }
@@ -1150,6 +1218,7 @@ export type {
   KeyCandidate,
   KeyDetectionOptions,
   KeyMode,
+  LufsResult,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringResult,

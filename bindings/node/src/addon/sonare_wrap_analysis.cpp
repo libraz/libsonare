@@ -832,3 +832,78 @@ Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);
 }
+
+Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+
+  SonareLufsResult lufs{};
+  SonareError err = sonare_lufs(typed.Data(), typed.ElementLength(), sr, &lufs);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("integratedLufs", Napi::Number::New(env, lufs.integrated_lufs));
+  result.Set("momentaryLufs", Napi::Number::New(env, lufs.momentary_lufs));
+  result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
+  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
+  return result;
+}
+
+Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+
+  float* out = nullptr;
+  size_t count = 0;
+  SonareError err = sonare_momentary_lufs(typed.Data(), typed.ElementLength(), sr, &out, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto result = Napi::Float32Array::New(env, count);
+  if (count > 0 && out != nullptr) {
+    std::memcpy(result.Data(), out, count * sizeof(float));
+  }
+  sonare_free_floats(out);
+  return result;
+}
+
+Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+
+  float* out = nullptr;
+  size_t count = 0;
+  SonareError err = sonare_short_term_lufs(typed.Data(), typed.ElementLength(), sr, &out, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto result = Napi::Float32Array::New(env, count);
+  if (count > 0 && out != nullptr) {
+    std::memcpy(result.Data(), out, count * sizeof(float));
+  }
+  sonare_free_floats(out);
+  return result;
+}

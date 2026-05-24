@@ -41,6 +41,9 @@ from .analyzer import (
     hpss as _hpss,
 )
 from .analyzer import (
+    lufs as _lufs,
+)
+from .analyzer import (
     master_audio as _master_audio,
 )
 from .analyzer import (
@@ -59,7 +62,16 @@ from .analyzer import (
     mfcc as _mfcc,
 )
 from .analyzer import (
+    momentary_lufs as _momentary_lufs,
+)
+from .analyzer import (
+    nnls_chroma as _nnls_chroma,
+)
+from .analyzer import (
     normalize as _normalize,
+)
+from .analyzer import (
+    onset_envelope as _onset_envelope,
 )
 from .analyzer import (
     percussive as _percussive,
@@ -78,6 +90,9 @@ from .analyzer import (
 )
 from .analyzer import (
     rms_energy as _rms_energy,
+)
+from .analyzer import (
+    short_term_lufs as _short_term_lufs,
 )
 from .analyzer import (
     spectral_bandwidth as _spectral_bandwidth,
@@ -117,6 +132,7 @@ from .types import (
     Key,
     KeyCandidate,
     KeyProfile,
+    LufsResult,
     MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
@@ -651,6 +667,35 @@ class Audio:
     def chroma(self, n_fft: int = 2048, hop_length: int = 512) -> ChromaResult:
         """Compute chroma features."""
         return _chroma(self.data, self.sample_rate, n_fft, hop_length)
+
+    def nnls_chroma(self) -> tuple[int, list[float]]:
+        """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
+        return _nnls_chroma(self.data, self.sample_rate)
+
+    # --- Features - Onset ---
+
+    def onset_envelope(
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+    ) -> list[float]:
+        """Compute the onset strength envelope (one value per frame)."""
+        return _onset_envelope(self.data, self.sample_rate, n_fft, hop_length, n_mels)
+
+    # --- Loudness (LUFS) ---
+
+    def lufs(self) -> LufsResult:
+        """Compute integrated/momentary/short-term LUFS and loudness range."""
+        return _lufs(self.data, self.sample_rate)
+
+    def momentary_lufs(self) -> list[float]:
+        """Compute the per-block momentary LUFS time series."""
+        return _momentary_lufs(self.data, self.sample_rate)
+
+    def short_term_lufs(self) -> list[float]:
+        """Compute the per-block short-term LUFS time series."""
+        return _short_term_lufs(self.data, self.sample_rate)
 
     # --- Features - Spectral ---
 

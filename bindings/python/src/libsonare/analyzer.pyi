@@ -14,6 +14,7 @@ from .types import (
     Key,
     KeyCandidate,
     KeyProfile,
+    LufsResult,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringResult,
@@ -487,4 +488,30 @@ def plp(
     tempo_max: float = 300.0,
     win_length: int = 384,
 ) -> list[float]: ...
+def onset_envelope(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_mels: int = 128,
+) -> list[float]: ...
+def fourier_tempogram(
+    onset_envelope: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    win_length: int = 384,
+    center: bool = True,
+    norm: bool = True,
+) -> tuple[int, list[float]]: ...
+def tempogram_ratio(
+    tempogram_data: FloatSamples,
+    win_length: int = 384,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    factors: FloatSamples | None = None,
+) -> list[float]: ...
+def nnls_chroma(samples: FloatSamples, sample_rate: int = 22050) -> tuple[int, list[float]]: ...
+def lufs(samples: FloatSamples, sample_rate: int = 22050) -> LufsResult: ...
+def momentary_lufs(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
+def short_term_lufs(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def resample(samples: FloatSamples, src_sr: int, target_sr: int) -> list[float]: ...

@@ -53,6 +53,17 @@ class SonareAnalysisResult(ctypes.Structure):
     ]
 
 
+class SonareLufsResult(ctypes.Structure):
+    """Maps to SonareLufsResult in sonare_c.h."""
+
+    _fields_ = [
+        ("integrated_lufs", ctypes.c_float),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("loudness_range", ctypes.c_float),
+    ]
+
+
 class SonareBpmCandidate(ctypes.Structure):
     """Maps to SonareBpmCandidate in sonare_c.h."""
 
@@ -1263,6 +1274,88 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_float,
         ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_onset_strength
+    lib.sonare_onset_strength.restype = ctypes.c_int32
+    lib.sonare_onset_strength.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_fourier_tempogram
+    lib.sonare_fourier_tempogram.restype = ctypes.c_int32
+    lib.sonare_fourier_tempogram.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    # sonare_tempogram_ratio
+    lib.sonare_tempogram_ratio.restype = ctypes.c_int32
+    lib.sonare_tempogram_ratio.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_nnls_chroma
+    lib.sonare_nnls_chroma.restype = ctypes.c_int32
+    lib.sonare_nnls_chroma.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    # sonare_lufs
+    lib.sonare_lufs.restype = ctypes.c_int32
+    lib.sonare_lufs.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareLufsResult),
+    ]
+
+    # sonare_momentary_lufs
+    lib.sonare_momentary_lufs.restype = ctypes.c_int32
+    lib.sonare_momentary_lufs.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_short_term_lufs
+    lib.sonare_short_term_lufs.restype = ctypes.c_int32
+    lib.sonare_short_term_lufs.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),

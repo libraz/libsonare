@@ -30,6 +30,7 @@ import type {
   KeyCandidate,
   KeyDetectionOptions,
   KeyProfileName,
+  LufsResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringPreset,
@@ -56,8 +57,10 @@ import type {
   WasmAnalysisResult,
   WasmChordAnalysisResult,
   WasmCyclicTempogramResult,
+  WasmFourierTempogramResult,
   WasmFrameResult,
   WasmKeyCandidateResult,
+  WasmNnlsChromaResult,
   WasmStreamAnalyzer,
   WasmTempogramResult,
   WasmTrimResult,
@@ -77,6 +80,7 @@ export type {
   KeyCandidate,
   KeyDetectionOptions,
   KeyProfileName,
+  LufsResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringPreset,
@@ -1653,6 +1657,127 @@ export function plp(
   return module.plp(onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength);
 }
 
+/**
+ * Compute NNLS (non-negative least squares) chromagram.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @returns NNLS chroma result
+ */
+export function nnlsChroma(samples: Float32Array, sampleRate = 22050): WasmNnlsChromaResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.nnlsChroma(samples, sampleRate);
+}
+
+/**
+ * Compute the onset strength envelope.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param nFft - FFT size (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @param nMels - Number of Mel bands (default: 128)
+ * @returns Onset envelope for each frame
+ */
+export function onsetEnvelope(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
+}
+
+/**
+ * Compute the Fourier tempogram from an onset envelope.
+ *
+ * @param onsetEnvelope - Onset strength envelope (float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param winLength - Window length in frames (default: 384)
+ * @returns Fourier tempogram result
+ */
+export function fourierTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  winLength = 384,
+): WasmFourierTempogramResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.fourierTempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+}
+
+/**
+ * Compute tempogram ratio features.
+ *
+ * @param tempogramData - Tempogram data (float32)
+ * @param winLength - Window length in frames (default: 384)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @returns Tempogram ratio features
+ */
+export function tempogramRatio(
+  tempogramData: Float32Array,
+  winLength = 384,
+  sampleRate = 22050,
+  hopLength = 512,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.tempogramRatio(tempogramData, winLength, sampleRate, hopLength);
+}
+
+/**
+ * Measure loudness (EBU R128 / ITU-R BS.1770).
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @returns Loudness measurement result
+ */
+export function lufs(samples: Float32Array, sampleRate = 22050): LufsResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.lufs(samples, sampleRate);
+}
+
+/**
+ * Compute the momentary loudness (LUFS) over time.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @returns Momentary LUFS values over time
+ */
+export function momentaryLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.momentaryLufs(samples, sampleRate);
+}
+
+/**
+ * Compute the short-term loudness (LUFS) over time.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @returns Short-term LUFS values over time
+ */
+export function shortTermLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.shortTermLufs(samples, sampleRate);
+}
+
 // ============================================================================
 // Core - Resample
 // ============================================================================
@@ -1836,6 +1961,26 @@ export class Audio {
 
   chroma(nFft = 2048, hopLength = 512): ChromaResult {
     return chroma(this._samples, this._sampleRate, nFft, hopLength);
+  }
+
+  nnlsChroma(): WasmNnlsChromaResult {
+    return nnlsChroma(this._samples, this._sampleRate);
+  }
+
+  onsetEnvelope(nFft = 2048, hopLength = 512, nMels = 128): Float32Array {
+    return onsetEnvelope(this._samples, this._sampleRate, nFft, hopLength, nMels);
+  }
+
+  lufs(): LufsResult {
+    return lufs(this._samples, this._sampleRate);
+  }
+
+  momentaryLufs(): Float32Array {
+    return momentaryLufs(this._samples, this._sampleRate);
+  }
+
+  shortTermLufs(): Float32Array {
+    return shortTermLufs(this._samples, this._sampleRate);
   }
 
   spectralCentroid(nFft = 2048, hopLength = 512): Float32Array {

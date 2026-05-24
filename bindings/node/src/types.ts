@@ -96,6 +96,13 @@ export interface AcousticResult {
   isBlind: boolean;
 }
 
+export interface LufsResult {
+  integratedLufs: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  loudnessRange: number;
+}
+
 export type MasteringPreset =
   | 'pop'
   | 'edm'
