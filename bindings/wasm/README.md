@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/github/license/libraz/libsonare)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-Fast, dependency-free audio analysis library for browser and Node.js via WebAssembly.
+Dependency-free audio analysis library for browser and Node.js via WebAssembly.
 
 > **Audio input:** This package expects already-decoded `Float32Array` mono
 > samples (it does not bundle a file decoder). Use the Web Audio API in the
@@ -34,10 +34,37 @@ const key = detectKey(samples, sampleRate);
 const result = analyze(samples, sampleRate);
 console.log(`BPM: ${result.bpm}, Key: ${result.key.name}`);
 
+// Advanced key options are opt-in; defaults preserve existing behavior.
+const keyWithOptions = detectKey(samples, sampleRate, {
+  useHpss: true,
+  loudnessWeighted: true,
+  highPassHz: 80,
+  nFft: 4096,
+  hopLength: 512,
+});
+
 // Audio class API
 const audio = Audio.fromBuffer(samples, sampleRate);
 console.log(`BPM: ${audio.detectBpm()}`);
 console.log(`Key: ${audio.detectKey().name}`);
+const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
+```
+
+### Room acoustics
+
+Use `detectAcoustic` for blind RT60/EDT estimation from ordinary audio.
+Use `analyzeImpulseResponse` when you have a measured impulse response and need
+clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `NaN` for clarity
+metrics because they are not reliable without an impulse response.
+
+```typescript
+import { init, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare';
+
+await init();
+
+const blind = detectAcoustic(samples, sampleRate, 6, 24, 30.0, 10.0);
+const room = analyzeImpulseResponse(irSamples, sampleRate);
+console.log(blind.rt60, room.c50);
 ```
 
 ### Decoding files in the browser
@@ -169,7 +196,7 @@ import { init, masterAudio, masteringPresetNames } from '@libraz/libsonare';
 
 await init();
 
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 
 const result = masterAudio(samples, sampleRate, 'aiMusic', {
   // optional flat overrides applied on top of the preset (dot notation)

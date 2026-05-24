@@ -1,8 +1,9 @@
-.PHONY: all build release test test-librosa-live clean rebuild format lint wasm coverage \
+.PHONY: all build release test test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-node test-wasm
 
 BUILD_DIR := build
+OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
 RYE ?= rye
 CMAKE ?= cmake
 PYTHON_PKG_DIR := bindings/python/src/libsonare
@@ -32,6 +33,11 @@ wasm:
 
 test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure
+
+test-optional-fixtures:
+	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
+	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) -j
+	ctest --test-dir $(OPTIONAL_FIXTURE_BUILD_DIR) --output-on-failure -R "optional|fixture|EBU R128"
 
 test-librosa-live: build
 	$(RYE) sync --pyproject tests/librosa/pyproject.toml

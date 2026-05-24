@@ -47,6 +47,7 @@ add_executable(sonare_tests
   filters/iir_test.cpp
   feature/mel_spectrogram_test.cpp
   feature/chroma_test.cpp
+  feature/nnls_chroma_test.cpp
   feature/spectral_test.cpp
   feature/onset_test.cpp
   feature/pitch_test.cpp
@@ -58,12 +59,17 @@ add_executable(sonare_tests
   effects/normalize_test.cpp
   analysis/key_profiles_test.cpp
   analysis/chord_templates_test.cpp
+  analysis/acoustic_analyzer_test.cpp
   analysis/bpm_analyzer_test.cpp
   analysis/key_analyzer_test.cpp
+  analysis/key_synthetic_matrix_test.cpp
   analysis/onset_analyzer_test.cpp
   analysis/dynamics_analyzer_test.cpp
   analysis/beat_analyzer_test.cpp
+  analysis/meter_analyzer_test.cpp
+  analysis/downbeat_analyzer_test.cpp
   analysis/chord_analyzer_test.cpp
+  analysis/chord_synthetic_matrix_test.cpp
   analysis/boundary_detector_test.cpp
   analysis/meter_basic_test.cpp
   analysis/rhythm_analyzer_test.cpp
@@ -80,6 +86,8 @@ add_executable(sonare_tests
   librosa/onset_test.cpp
   librosa/tempo_test.cpp
   librosa/beat_test.cpp
+  librosa/high_level/bpm_parity_test.cpp
+  librosa/high_level/beat_tracking_test.cpp
   librosa/stft_test.cpp
   librosa/power_to_db_test.cpp
   librosa/zcr_test.cpp
@@ -116,6 +124,13 @@ target_link_libraries(sonare_tests PRIVATE sonare_core Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
+  target_sources(sonare_tests PRIVATE
+    analysis/acoustic_dataset_test.cpp
+    analysis/music_dataset_test.cpp
+  )
+endif()
+
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
     mastering/chain_test.cpp
@@ -135,6 +150,9 @@ if(BUILD_MASTERING)
   target_link_libraries(sonare_tests PRIVATE sonare_mastering)
   target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering.cpp)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
+  if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
+    target_sources(sonare_tests PRIVATE mastering/ebu_r128_compliance_test.cpp)
+  endif()
 endif()
 
 include(CTest)

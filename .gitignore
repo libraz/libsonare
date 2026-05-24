@@ -45,6 +45,9 @@ backup/
 *.flac
 *.mp3
 *.ogg
+*.m4a
+*.aac
+*.jams
 
 # Test outputs (CMake CTest output directory)
 /Testing/
@@ -55,6 +58,27 @@ backup/
 output.json
 output.mid
 analysis.json
+
+# Optional external fixture data and local-only fixture workflows
+tests/fixtures/local/
+tests/fixtures/local_eval/
+tests/fixtures/reports/
+tests/fixtures/music_eval/FSL10K/
+tests/fixtures/music_eval/annotation/
+tests/fixtures/music_eval/annotations/
+tests/fixtures/music_eval/audio/
+tests/fixtures/music_eval/audio_*/
+tests/fixtures/music_eval/babyslakh*/
+tests/fixtures/music_eval/slakh/
+tests/fixtures/music_eval/Slakh*/
+tests/fixtures/music_eval/Flakh*/
+tests/fixtures/music_eval/guitarset_annotations/
+tests/fixtures/music_eval/midi_annotations/
+tests/fixtures/music_eval/local_annotations/
+tests/fixtures/**/*.tar.gz
+tests/fixtures/**/*.zip
+tests/fixtures/**/*.pdf
+tests/fixtures/**/*.json
 
 # Binaries (in build directory only)
 /build

@@ -42,6 +42,7 @@ set(SONARE_SOURCES
   filters/wavelet.cpp
   feature/mel_spectrogram.cpp
   feature/chroma.cpp
+  feature/nnls_chroma.cpp
   feature/spectral.cpp
   feature/onset.cpp
   feature/pitch.cpp
@@ -71,12 +72,16 @@ set(SONARE_SOURCES
   analysis/meter/true_peak.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
+  analysis/acoustic_analyzer.cpp
   analysis/bpm_analyzer.cpp
   analysis/key_analyzer.cpp
   analysis/onset_analyzer.cpp
   analysis/dynamics_analyzer.cpp
   analysis/beat_analyzer.cpp
+  analysis/meter_analyzer.cpp
   analysis/chord_analyzer.cpp
+  analysis/chord_hmm.cpp
+  analysis/downbeat_analyzer.cpp
   analysis/boundary_detector.cpp
   analysis/rhythm_analyzer.cpp
   analysis/timbre_analyzer.cpp

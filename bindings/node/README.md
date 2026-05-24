@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-Fast audio analysis and mastering DSP for Node.js, exposed as a native N-API
+Audio analysis and mastering DSP for Node.js, exposed as a native N-API
 addon built on the libsonare C++ core.
 
 Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
@@ -67,6 +67,35 @@ console.log(`BPM: ${result.bpm.toFixed(1)}  Key: ${result.key.name}`);
 const samples: Float32Array = audio.getData();
 const bpm = detectBpm(samples, audio.getSampleRate());
 const key = detectKey(samples, audio.getSampleRate());
+
+// Advanced key options are opt-in; defaults preserve existing behavior.
+const keyWithOptions = detectKey(samples, audio.getSampleRate(), {
+  useHpss: true,
+  loudnessWeighted: true,
+  highPassHz: 80,
+  nFft: 4096,
+  hopLength: 512,
+});
+const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
+```
+
+### Room acoustics
+
+Use `detectAcoustic` for blind RT60/EDT estimation from ordinary audio.
+Use `analyzeImpulseResponse` when you have a measured impulse response and need
+clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `NaN` for clarity
+metrics because they are not reliable without an impulse response.
+
+```typescript
+import { Audio, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare-native';
+
+const audio = Audio.fromFile('recording.wav');
+const blind = audio.detectAcoustic(6, 24, 30.0, 10.0);
+console.log(blind.rt60, blind.edt, blind.isBlind);
+
+const ir = Audio.fromFile('room_ir.wav');
+const params = analyzeImpulseResponse(ir.getData(), ir.getSampleRate());
+console.log(params.rt60, params.c50, params.c80, params.d50);
 ```
 
 ### Mastering
@@ -190,7 +219,7 @@ dot-notation keys as `masteringChain`.
 ```typescript
 import { masterAudio, masteringPresetNames } from '@libraz/libsonare-native';
 
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 
 const result = masterAudio(samples, sampleRate, 'aiMusic', {
   'loudness.targetLufs': -13,

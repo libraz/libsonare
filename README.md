@@ -8,17 +8,18 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**Audio analysis + commercial-grade mastering DSP for C++, Python, and browsers.**
-Apache-2.0, dependency-free, runs anywhere — including the browser via WebAssembly.
+**Audio analysis and mastering DSP for C++, Python, and browsers.**
+Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
 
-- **Analysis** — BPM, key, chord, beat, section, timbre, dynamics, pitch
-  (librosa-compatible defaults; tens of times faster than librosa/Python).
+- **Analysis** — BPM, key, chord, beat, section, timbre, dynamics, pitch,
+  and room acoustics (blind RT60/EDT or IR-based RT60/EDT/C50/C80/D50),
+  with librosa-compatible defaults.
 - **Mastering** — EQ, dynamics, multiband, stereo, saturation, repair, maximizer,
-  reference matching. 90+ DSP modules built around published standards
-  (ITU-R BS.1770-4 loudness/true-peak, Vicanek biquads, ADAA nonlinearities,
-  Lemire sliding max, polyphase FIR oversampling).
-- **One permissive license** — Apache-2.0 across the entire stack. No LGPL/GPL
-  surface, no proprietary algorithms, no SaaS dependencies.
+  reference matching. 70+ named DSP processors (14 wired into the default
+  mastering chain), implemented against published references such as
+  ITU-R BS.1770-4 loudness/true-peak, Vicanek biquads, ADAA nonlinearities,
+  Lemire sliding max, and polyphase FIR oversampling.
+- **License** — Apache-2.0 across the entire stack (C++, Python, Node, WASM).
 
 ## Installation
 
@@ -60,6 +61,27 @@ await init();
 const bpm = detectBpm(samples, sampleRate);
 const key = detectKey(samples, sampleRate);  // { name: "C major", confidence: 0.95 }
 const result = analyze(samples, sampleRate);
+
+// Advanced key options are opt-in; defaults preserve existing behavior.
+const keyWithOptions = detectKey(samples, sampleRate, {
+  useHpss: true,
+  loudnessWeighted: true,
+  highPassHz: 80,
+  nFft: 4096,
+  hopLength: 512,
+});
+```
+
+**Room acoustics**
+
+```typescript
+import { analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare';
+
+// Ordinary audio: blind RT60/EDT estimate. C50/C80/D50 are NaN in blind mode.
+const blind = detectAcoustic(samples, sampleRate);
+
+// Measured impulse response: ISO-style RT60/EDT plus clarity metrics.
+const room = analyzeImpulseResponse(irSamples, sampleRate);
 ```
 
 **Mastering**
@@ -117,7 +139,7 @@ dot-notation keys** (mirroring the Node and Python overrides API):
 ```typescript
 // Mastering presets (one-shot) and streaming variant
 import { masterAudio, masteringPresetNames, StreamingMasteringChain } from '@libraz/libsonare';
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 const out = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
 
 const chain = new StreamingMasteringChain({ eq: { tiltDb: 0.5 } });
@@ -143,6 +165,16 @@ import libsonare
 audio = libsonare.Audio.from_file("song.mp3")
 print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
 
+# Advanced key options are opt-in; defaults preserve existing behavior.
+key_with_options = audio.detect_key(
+    use_hpss=True,
+    loudness_weighted=True,
+    high_pass_hz=80.0,
+)
+
+acoustic = audio.detect_acoustic()  # blind RT60/EDT; C50/C80/D50 are NaN
+ir_params = libsonare.analyze_impulse_response(ir_samples, sample_rate=sr)
+
 # Mastering chain — returns MasteringResult(samples, sample_rate,
 # input_lufs, output_lufs, applied_gain_db, latency_samples)
 result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
@@ -163,7 +195,7 @@ libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
 libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
 
 # Preset-based chain (one-shot) + streaming
-libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
                                  overrides={'loudness.targetLufs': -13})
 
@@ -217,8 +249,9 @@ std::cout << "BPM: " << result.bpm
 | Section Detection  | CQT / VQT            |                     |
 | Timbre / Dynamics  | Spectral Features    |                     |
 | Pitch (YIN / pYIN) | Onset Detection      |                     |
+| RT60 / EDT / C50   | Room acoustics       |                     |
 
-### Mastering (90+ DSP modules)
+### Mastering (70+ DSP processors)
 
 | Dynamics                  | EQ                        | Multiband / Stereo            |
 |---------------------------|---------------------------|-------------------------------|
@@ -240,12 +273,13 @@ Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 
 ## Performance
 
-Dramatically faster than Python-based alternatives. Parallelized analysis with
-automatic CPU detection, optimized HPSS with multi-threaded median filter.
-Mastering processors use ITU-spec polyphase oversampling, antiderivative
-anti-aliasing (ADAA), and SIMD-friendly Eigen GEMM for hot paths.
+Designed for native execution speed: parallelized analysis with automatic
+CPU detection, multi-threaded HPSS median filter, ITU-spec polyphase
+oversampling, antiderivative anti-aliasing (ADAA), and SIMD-friendly Eigen
+GEMM on hot paths.
 
-See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for detailed comparisons.
+See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for measured
+comparisons against librosa and other Python-based tools.
 
 ## librosa Compatibility
 
@@ -298,6 +332,20 @@ make release
 - [Python API](https://libsonare.libraz.net/docs/python-api)
 - [C++ API](https://libsonare.libraz.net/docs/cpp-api)
 - [WebAssembly Guide](https://libsonare.libraz.net/docs/wasm)
+
+## Non-goals
+
+libsonare intentionally does **not** include:
+
+- **Creative effects** (reverb, delay, chorus, flanger, phaser) — use Tone.js or your DAW
+- **Audio synthesis** (oscillators, samplers, MIDI playback) — out of scope
+- **Real-time I/O abstraction** (PortAudio/JACK wrappers) — callers handle I/O
+- **DAW workflow** (plugin host, automation, MIDI editing) — different product category
+- **Deep-learning models** (no bundled weights, no inference runtime) — keeps the
+  library dependency-free and Apache-2.0 pure
+
+These boundaries keep the library focused on **analysis + mastering DSP**
+and allow us to maintain the dependency-free property.
 
 ## License
 

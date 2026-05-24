@@ -51,6 +51,7 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/filters/wavelet.cpp
   ${SONARE_ROOT}/src/feature/mel_spectrogram.cpp
   ${SONARE_ROOT}/src/feature/chroma.cpp
+  ${SONARE_ROOT}/src/feature/nnls_chroma.cpp
   ${SONARE_ROOT}/src/feature/spectral.cpp
   ${SONARE_ROOT}/src/feature/onset.cpp
   ${SONARE_ROOT}/src/feature/pitch.cpp
@@ -86,12 +87,16 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/analysis/meter/true_peak.cpp
   ${SONARE_ROOT}/src/analysis/key_profiles.cpp
   ${SONARE_ROOT}/src/analysis/chord_templates.cpp
+  ${SONARE_ROOT}/src/analysis/acoustic_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/bpm_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/key_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/onset_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/dynamics_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/beat_analyzer.cpp
+  ${SONARE_ROOT}/src/analysis/meter_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/chord_analyzer.cpp
+  ${SONARE_ROOT}/src/analysis/chord_hmm.cpp
+  ${SONARE_ROOT}/src/analysis/downbeat_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/boundary_detector.cpp
   ${SONARE_ROOT}/src/analysis/rhythm_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/timbre_analyzer.cpp

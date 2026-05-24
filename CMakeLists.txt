@@ -12,6 +12,8 @@ option(BUILD_CLI "Build CLI tool" ON)
 option(BUILD_BENCH "Build C++ benchmark binary" OFF)
 option(BUILD_MASTERING "Build the mastering library" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
+option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
+       "Build optional external fixture tests that require local datasets" OFF)
 set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
     "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")
 set_property(CACHE SONARE_WITH_FFMPEG PROPERTY STRINGS ON OFF AUTO)
@@ -63,7 +65,23 @@ if(NOT Eigen3_FOUND)
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
   )
-  FetchContent_MakeAvailable(Eigen3)
+  if(BUILD_WASM)
+    if(POLICY CMP0169)
+      cmake_policy(PUSH)
+      cmake_policy(SET CMP0169 OLD)
+    endif()
+    FetchContent_GetProperties(Eigen3)
+    if(NOT eigen3_POPULATED)
+      FetchContent_Populate(Eigen3)
+    endif()
+    if(POLICY CMP0169)
+      cmake_policy(POP)
+    endif()
+    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    target_include_directories(Eigen3::Eigen INTERFACE ${eigen3_SOURCE_DIR})
+  else()
+    FetchContent_MakeAvailable(Eigen3)
+  endif()
 endif()
 
 # サブディレクトリ

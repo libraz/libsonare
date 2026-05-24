@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-Fast audio analysis library for Python.
+Audio analysis library for Python.
 
 Built on a C++ core with zero Python dependencies.
 
@@ -31,8 +31,39 @@ audio = libsonare.Audio.from_file("song.mp3")  # or "song.wav"
 print(f"BPM: {audio.detect_bpm():.1f}")
 print(f"Key: {audio.detect_key().root.name} {audio.detect_key().mode.name}")
 
+# Advanced key options are opt-in; defaults preserve existing behavior.
+key_with_options = audio.detect_key(
+    use_hpss=True,
+    loudness_weighted=True,
+    high_pass_hz=80.0,
+)
+
 result = audio.analyze()  # BPM + key + time signature + beats
 print(f"BPM: {result.bpm:.1f}  Key: {result.key.root.name} {result.key.mode.name}")
+```
+
+### Room acoustics
+
+Use `detect_acoustic` for blind RT60/EDT estimation from ordinary audio.
+Use `analyze_impulse_response` when you have a measured impulse response and
+need clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `nan` for
+clarity metrics because they are not reliable without an impulse response.
+
+```python
+import libsonare
+
+audio = libsonare.Audio.from_file("recording.wav")
+blind = audio.detect_acoustic(
+    n_octave_bands=6,
+    n_third_octave_subbands=24,
+    min_decay_db=30.0,
+    noise_floor_margin_db=10.0,
+)
+print(blind.rt60, blind.edt, blind.is_blind)
+
+ir = libsonare.Audio.from_file("room_ir.wav")
+params = ir.analyze_impulse_response()
+print(params.rt60, params.c50, params.c80, params.d50)
 ```
 
 ### Load from a numpy array / in-memory samples
@@ -147,7 +178,7 @@ same flat dot-notation keys as `mastering_chain`.
 import libsonare
 
 libsonare.mastering_preset_names()
-# -> ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+# -> ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 
 result = libsonare.master_audio(
     samples,
@@ -244,6 +275,15 @@ Both APIs return the same results. Use whichever is more convenient:
 # Functional (good for ad-hoc numpy work)
 bpm = libsonare.detect_bpm(samples, sample_rate=22050)        # -> float
 key = libsonare.detect_key(samples, sample_rate=22050)        # -> Key(root, mode, confidence)
+key_hpss = libsonare.detect_key(
+    samples,
+    sample_rate=22050,
+    n_fft=4096,
+    hop_length=512,
+    use_hpss=True,
+    loudness_weighted=True,
+    high_pass_hz=80.0,
+)
 result = libsonare.analyze(samples, sample_rate=22050)        # -> AnalysisResult
 
 # Audio class (recommended for files, multiple operations on the same audio)
