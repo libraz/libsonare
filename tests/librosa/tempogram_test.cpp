@@ -1,9 +1,11 @@
 /// @file tempogram_test.cpp
 /// @brief Smoke + statistics tests for tempogram / fourier_tempogram.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdlib>
+#include <numeric>
 #include <vector>
 
 #include "core/audio.h"
@@ -118,6 +120,48 @@ TEST_CASE("fourier_tempogram shape sanity", "[librosa][tempogram]") {
   auto ftg = fourier_tempogram(audio, cfg);
   REQUIRE(expected_bins == win / 2 + 1);
   REQUIRE(ftg.size() % static_cast<size_t>(expected_bins) == 0);
+}
+
+TEST_CASE("PLP pulse statistics match librosa reference", "[librosa][plp]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/plp.json");
+  const auto& d = json["data"];
+  int sr = d["sr"].as_int();
+  int hop = d["hop_length"].as_int();
+  int win = d["win_length"].as_int();
+  float bpm = d["bpm"].as_float();
+  int expected_length = d["length"].as_int();
+  float expected_mean = d["mean"].as_float();
+  float expected_std = d["std"].as_float();
+
+  auto y = impulse_train(sr, 8.0f, bpm);
+  Audio audio = Audio::from_vector(std::move(y), sr);
+
+  PlpConfig cfg;
+  cfg.sr = sr;
+  cfg.hop_length = hop;
+  cfg.win_length = win;
+  cfg.tempo_min = 30.0f;
+  cfg.tempo_max = 300.0f;
+  auto pulse = plp(audio, cfg);
+
+  const float mean =
+      std::accumulate(pulse.begin(), pulse.end(), 0.0f) / static_cast<float>(pulse.size());
+  float var = 0.0f;
+  for (float v : pulse) {
+    const float diff = v - mean;
+    var += diff * diff;
+  }
+  const float stddev = std::sqrt(var / static_cast<float>(pulse.size()));
+  const float min_value = *std::min_element(pulse.begin(), pulse.end());
+  const float max_value = *std::max_element(pulse.begin(), pulse.end());
+
+  CAPTURE(pulse.size(), expected_length, mean, expected_mean, stddev, expected_std, min_value,
+          max_value);
+  REQUIRE(std::abs(static_cast<int>(pulse.size()) - expected_length) <= 4);
+  REQUIRE(std::abs(mean - expected_mean) <= 0.12f);
+  REQUIRE(std::abs(stddev - expected_std) <= 0.12f);
+  REQUIRE(min_value >= -1.0e-6f);
+  REQUIRE(max_value <= 1.0f + 1.0e-6f);
 }
 
 TEST_CASE("cyclic_tempogram folds octave-equivalent tempi", "[tempogram][unit]") {
