@@ -30,6 +30,15 @@ enum class Preset {
   Ambient,
   Lofi,
   Classical,
+  DrumAndBass,
+  Techno,
+  Metal,
+  Trap,
+  RnB,
+  Jazz,
+  KPop,
+  Trance,
+  GameOst,
 };
 
 /// @brief Returns string identifiers of all built-in presets, in display order.

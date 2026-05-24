@@ -52,6 +52,15 @@ MasteringPreset: TypeAlias = Literal[
     "ambient",
     "lofi",
     "classical",
+    "drumAndBass",
+    "techno",
+    "metal",
+    "trap",
+    "rnb",
+    "jazz",
+    "kpop",
+    "trance",
+    "gameOst",
 ]
 SoloProcessor: TypeAlias = Literal[
     "dynamics.brickwallLimiter",

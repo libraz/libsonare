@@ -101,7 +101,16 @@ export type MasteringPreset =
   | 'jpop'
   | 'ambient'
   | 'lofi'
-  | 'classical';
+  | 'classical'
+  | 'drumAndBass'
+  | 'techno'
+  | 'metal'
+  | 'trap'
+  | 'rnb'
+  | 'jazz'
+  | 'kpop'
+  | 'trance'
+  | 'gameOst';
 
 export type SoloProcessor =
   | 'dynamics.brickwallLimiter'
