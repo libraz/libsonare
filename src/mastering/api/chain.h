@@ -164,13 +164,24 @@ struct MasteringChainConfig {
 // Chain results
 // ---------------------------------------------------------------------------
 
+/// @brief Gain reduction reported by a single dynamics/maximizer stage.
+/// `gain_reduction_db` is the most recent (typically last-block) gain reduction
+/// in dB (negative or zero); for multiband stages it is the most-reduced band.
+struct StageGainReduction {
+  std::string stage;  // e.g. "dynamics.compressor"
+  float gain_reduction_db = 0.0f;
+};
+
 struct MonoChainResult {
   std::vector<float> samples;
   int sample_rate = 0;
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
   float applied_gain_db = 0.0f;
+  float output_true_peak_dbtp = 0.0f;  // ITU-R BS.1770-4 true peak (4x oversampled)
+  float output_lra = 0.0f;             // EBU Tech 3342 Loudness Range (LU)
   std::vector<std::string> stages;
+  std::vector<StageGainReduction> stage_gain_reductions;
 };
 
 struct StereoChainResult {
@@ -180,7 +191,10 @@ struct StereoChainResult {
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
   float applied_gain_db = 0.0f;
+  float output_true_peak_dbtp = 0.0f;  // ITU-R BS.1770-4 true peak (4x oversampled)
+  float output_lra = 0.0f;             // EBU Tech 3342 Loudness Range (LU)
   std::vector<std::string> stages;
+  std::vector<StageGainReduction> stage_gain_reductions;
 };
 
 // ---------------------------------------------------------------------------

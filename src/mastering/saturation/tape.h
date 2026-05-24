@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
+#include "mastering/common/oversampler.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -28,6 +29,11 @@ struct TapeConfig {
   float head_bump_db = 1.5f;
   float bias = 0.0f;
   float gap_loss = 0.2f;
+  /// J-A core oversampling: 1 (default, no oversampling), 2, or 4. >1 reduces
+  /// aliasing at high drive; intended for offline/whole-buffer rendering (the
+  /// offline oversampler is stateless, so values >1 may produce minor
+  /// block-edge artifacts in per-block streaming use).
+  int oversample_factor = 1;
 };
 
 class Tape : public common::ProcessorBase {
@@ -67,6 +73,7 @@ class Tape : public common::ProcessorBase {
   std::vector<common::JilesAthertonState> states_;
   std::vector<Biquad> head_bump_;
   std::vector<float> gap_state_;
+  common::Oversampler oversampler_;
 };
 
 }  // namespace sonare::mastering::saturation

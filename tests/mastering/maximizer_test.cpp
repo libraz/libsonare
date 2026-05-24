@@ -97,15 +97,17 @@ TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
   REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
 }
 
-TEST_CASE("TruePeakLimiter reports lookahead plus true-peak filter latency",
-          "[mastering][maximizer]") {
+TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][maximizer]") {
   TruePeakLimiter limiter({-1.0f, 1.0f, 10.0f, 4});
   limiter.prepare(48000.0, 64);
 
-  REQUIRE(limiter.latency_samples() == 54);
+  // Signal-path latency equals lookahead_samples_ only (1ms @ 48kHz = 48).
+  // The centered upsampler/downsampler FIRs add zero group delay, so the
+  // true-peak filter latency is NOT part of the reported signal-path delay.
+  REQUIRE(limiter.latency_samples() == 48);
 
   limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
-  REQUIRE(limiter.latency_samples() == 54);
+  REQUIRE(limiter.latency_samples() == 48);
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
 

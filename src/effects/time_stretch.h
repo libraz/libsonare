@@ -8,10 +8,21 @@
 
 namespace sonare {
 
+/// @brief Spectral stretch backend.
+/// @details NativeSpectral is the default spectral path implemented entirely
+/// with libsonare primitives (opinionated high-quality analysis settings).
+/// PhaseVocoder is the plain, fully configurable phase-vocoder path retained
+/// as a lightweight fallback and for explicit n_fft/hop control.
+enum class StretchBackend {
+  NativeSpectral,
+  PhaseVocoder,
+};
+
 /// @brief Configuration for time stretching.
 struct TimeStretchConfig {
   int n_fft = 2048;      ///< FFT size for analysis
   int hop_length = 512;  ///< Hop length for analysis
+  StretchBackend backend = StretchBackend::NativeSpectral;
 };
 
 /// @brief Time-stretches audio without changing pitch.

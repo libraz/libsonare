@@ -1215,6 +1215,36 @@ TEST_CASE("sonare_version", "[c_api]") {
   }
 }
 
+#ifdef SONARE_WITH_VOICE_CHANGER
+TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
+  auto samples = generate_sine(440.0f, 22050, 0.25f);
+  float* out = nullptr;
+  size_t out_length = 0;
+
+  REQUIRE(sonare_pitch_correct_to_midi(samples.data(), samples.size(), 22050, 69.0f, 70.0f, &out,
+                                       &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_note_stretch(samples.data(), samples.size(), 22050, 100, 1000, 1.25f, &out,
+                              &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length > samples.size());
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 5.0f, 1.1f, &out,
+                              &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  sonare_free_floats(out);
+}
+#endif
+
 TEST_CASE("sonare_last_error_message", "[c_api]") {
   SECTION("never returns null pointer") {
     const char* msg = sonare_last_error_message();

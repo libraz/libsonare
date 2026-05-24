@@ -1,8 +1,8 @@
-#include "mastering/common/lookahead_buffer.h"
+#include "rt/lookahead_buffer.h"
 
 #include <cmath>
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 
 void LookaheadBuffer::prepare(size_t lookahead_samples) {
   lookahead_samples_ = lookahead_samples;
@@ -24,4 +24,4 @@ float LookaheadBuffer::process(float input) {
   return delay_.process(input);
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

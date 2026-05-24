@@ -23,6 +23,10 @@ class HardClipper : public common::ProcessorBase {
   void set_config(const HardClipperConfig& config);
   const HardClipperConfig& config() const { return config_; }
 
+  /// @brief Returns the processing latency in samples for the active mode.
+  /// @details None/Adaa1/Oversample4x add no integer latency here; Adaa2 adds one sample.
+  int latency_samples() const noexcept override;
+
  private:
   static void validate_config(const HardClipperConfig& config);
   void ensure_state(int num_channels);
@@ -31,6 +35,7 @@ class HardClipper : public common::ProcessorBase {
   HardClipperConfig config_{};
   bool prepared_ = false;
   std::vector<common::Adaa1<common::HardClipNonlinearity>> hard_clip_adaa_;
+  std::vector<common::Adaa2<common::HardClipNonlinearity>> hard_clip_adaa2_;
 };
 
 }  // namespace sonare::mastering::saturation

@@ -615,6 +615,41 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI DAW editing commands", "[cli]") {
+  create_test_wav(TEST_WAV, 0.5f);
+  std::remove(TEST_OUT.c_str());
+
+  SECTION("pitch-correct") {
+    auto [code, output] = exec_command(CLI + " pitch-correct --current-midi 69 --target-midi 70 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"target_midi\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+
+  SECTION("note-stretch") {
+    auto [code, output] =
+        exec_command(CLI + " note-stretch --onset 100 --offset 2000 --ratio 1.2 " + TEST_WAV +
+                     " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"ratio\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+
+  SECTION("voice-change") {
+    auto [code, output] = exec_command(CLI +
+                                       " voice-change --pitch-semitones 5 --formant-factor "
+                                       "1.1 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+}
+
 TEST_CASE("CLI hpss command", "[cli]") {
   create_test_wav(TEST_WAV);
   std::string out_base = unique_temp_path("_hpss");

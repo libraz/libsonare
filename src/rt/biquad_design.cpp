@@ -1,4 +1,4 @@
-#include "mastering/common/biquad_design.h"
+#include "rt/biquad_design.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 
 using sonare::constants::kHalfPi;
 using sonare::constants::kPi;
@@ -312,4 +312,4 @@ float biquad_magnitude(const BiquadCoeffs& coeffs, float omega) {
   return std::abs(numerator) / denom;
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

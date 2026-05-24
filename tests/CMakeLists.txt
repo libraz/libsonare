@@ -78,6 +78,7 @@ add_executable(sonare_tests
   analysis/section_analyzer_test.cpp
   analysis/music_analyzer_test.cpp
   streaming/stream_analyzer_test.cpp
+  rt/adaa2_test.cpp
   api/quick_test.cpp
   api/sonare_c_test.cpp
   librosa/convert_test.cpp
@@ -135,6 +136,7 @@ if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
     mastering/assistant_test.cpp
     mastering/chain_test.cpp
+    mastering/chain_latency_test.cpp
     mastering/common_test.cpp
     mastering/property_test.cpp
     mastering/preset_test.cpp
@@ -142,11 +144,13 @@ if(BUILD_MASTERING)
     mastering/eq_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp
+    mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
     mastering/multiband_test.cpp
     mastering/repair_test.cpp
     mastering/saturation_test.cpp
+    mastering/tape_oversample_test.cpp
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp
   )
@@ -156,6 +160,36 @@ if(BUILD_MASTERING)
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
     target_sources(sonare_tests PRIVATE mastering/ebu_r128_compliance_test.cpp)
   endif()
+endif()
+
+if(BUILD_MIXING)
+  target_sources(sonare_tests PRIVATE mixing/mixing_test.cpp)
+  target_link_libraries(sonare_tests PRIVATE sonare_mixing)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
+endif()
+
+if(BUILD_GRAPH)
+  target_sources(sonare_tests PRIVATE graph/graph_test.cpp)
+  target_link_libraries(sonare_tests PRIVATE sonare_graph)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_GRAPH=1)
+endif()
+
+if(BUILD_FX)
+  target_sources(sonare_tests PRIVATE effects/creative_fx_test.cpp)
+  target_link_libraries(sonare_tests PRIVATE sonare_fx)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_FX=1)
+endif()
+
+if(BUILD_PITCH_EDITOR)
+  target_sources(sonare_tests PRIVATE analysis/pitch_editor_test.cpp)
+  target_link_libraries(sonare_tests PRIVATE sonare_pitch_editor)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_PITCH_EDITOR=1)
+endif()
+
+if(BUILD_VOICE_CHANGER)
+  target_sources(sonare_tests PRIVATE analysis/voice_changer_test.cpp)
+  target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_VOICE_CHANGER=1)
 endif()
 
 include(CTest)

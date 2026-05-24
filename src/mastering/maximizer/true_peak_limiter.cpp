@@ -113,7 +113,6 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     }
   }
 
-  (void)factor;
   const float ceiling = db_to_linear(config_.ceiling_db);
   float min_gain = 1.0f;
   for (size_t os = 0; os < oversampled_samples; ++os) {
@@ -267,10 +266,12 @@ void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
 }
 
 int TruePeakLimiter::latency_samples() const noexcept {
-  return limiter_.latency_samples() +
-         (config_.oversample_factor == 2 || config_.oversample_factor == 4
-              ? true_peak_filter_.latency_samples()
-              : 0);
+  // Signal-path delay is lookahead_samples_ at base rate for every mode:
+  //  - polyphase: oversampled_lookahead_ holds lookahead_samples_*factor OS samples
+  //    (= lookahead_samples_ base-rate); the upsampler (centered FIR + history pre-fill)
+  //    and the centered batch downsampler add zero group delay.
+  //  - detect_only / fallback: the lookahead buffer / inner limiter delay by lookahead_samples_.
+  return limiter_.latency_samples();
 }
 
 void TruePeakLimiter::prepare_buffers(int num_channels) {

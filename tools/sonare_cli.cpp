@@ -23,9 +23,12 @@
 #include "analysis/melody_analyzer.h"
 #include "analysis/meter/lufs.h"
 #include "analysis/music_analyzer.h"
+#include "analysis/pitch_editor/note_editor.h"
+#include "analysis/pitch_editor/pitch_corrector.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
+#include "analysis/voice_changer/voice_changer.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
 #include "core/convert.h"
@@ -1119,6 +1122,112 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
         .kv("duration", result.duration())
         .end_object()
         .print();
+  }
+  return 0;
+}
+
+int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: pitch-correct requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  if (!args.has("current-midi") || !args.has("target-midi")) {
+    std::cerr << color::red << "Error: --current-midi and --target-midi required" << color::reset
+              << "\n";
+    return 1;
+  }
+
+  const float current_midi = args.get_float("current-midi", 69.0f);
+  const float target_midi = args.get_float("target-midi", 69.0f);
+  analysis::pitch_editor::PitchCorrector corrector;
+  analysis::pitch_editor::F0Track track;
+  track.sample_rate = audio.sample_rate();
+  track.hop_length = args.hop_length;
+  track.f0_hz = {analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.voiced = {true};
+  track.voiced_prob = {1.0f};
+
+  Audio result = corrector.correct_to_midi(audio, track, target_midi);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("current_midi", current_midi)
+        .kv("target_midi", target_midi)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: note-stretch requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  if (!args.has("onset") || !args.has("offset") || !args.has("ratio")) {
+    std::cerr << color::red << "Error: --onset, --offset and --ratio required" << color::reset
+              << "\n";
+    return 1;
+  }
+
+  analysis::pitch_editor::NoteRegion region;
+  region.onset_sample = args.get_int("onset", 0);
+  region.offset_sample = args.get_int("offset", 0);
+  const float ratio = args.get_float("ratio", 1.0f);
+
+  analysis::pitch_editor::NoteEditor editor;
+  Audio result = editor.stretch_note(audio, region, ratio);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("onset_sample", region.onset_sample)
+        .kv("offset_sample", region.offset_sample)
+        .kv("ratio", ratio)
+        .kv("samples", result.size())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_voice_change(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: voice-change requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+
+  analysis::voice_changer::VoiceChangerConfig config;
+  config.pitch_semitones = args.get_float("pitch-semitones", 0.0f);
+  config.formant_factor = args.get_float("formant-factor", 1.0f);
+  analysis::voice_changer::VoiceChanger changer(config);
+  Audio result = changer.process(audio);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("pitch_semitones", config.pitch_semitones)
+        .kv("formant_factor", config.formant_factor)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
   }
   return 0;
 }
@@ -2218,6 +2327,9 @@ const std::vector<CommandInfo>& get_commands() {
       // Processing
       {"pitch-shift", "Shift pitch by semitones", cmd_pitch_shift, true},
       {"time-stretch", "Time stretch audio", cmd_time_stretch, true},
+      {"pitch-correct", "Correct pitch to target MIDI note", cmd_pitch_correct, true},
+      {"note-stretch", "Stretch a note region", cmd_note_stretch, true},
+      {"voice-change", "Apply pitch and formant voice change", cmd_voice_change, true},
       {"hpss", "Harmonic-percussive separation", cmd_hpss, true},
       {"preemphasis", "Apply pre-emphasis filtering", cmd_preemphasis, true},
       {"deemphasis", "Apply de-emphasis filtering", cmd_deemphasis, true},

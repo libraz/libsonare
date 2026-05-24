@@ -1,11 +1,11 @@
-#include "mastering/common/param_smoother.h"
+#include "rt/param_smoother.h"
 
 #include <algorithm>
 #include <cmath>
 
 #include "util/dsp_primitives.h"
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 
 ParamSmoother::ParamSmoother(float initial_value, float time_ms, double sample_rate)
     : sample_rate_(sample_rate),
@@ -43,4 +43,4 @@ void ParamSmoother::update_coefficient() {
   coefficient_ = 1.0f - time_to_coefficient(sample_rate_, clamped_ms);
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

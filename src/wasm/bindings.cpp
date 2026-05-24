@@ -20,9 +20,12 @@
 #include "analysis/meter/lufs.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
+#include "analysis/pitch_editor/note_editor.h"
+#include "analysis/pitch_editor/pitch_corrector.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
+#include "analysis/voice_changer/voice_changer.h"
 #include "core/audio.h"
 #include "core/convert.h"
 #include "core/db_convert.h"
@@ -584,6 +587,46 @@ val js_pitch_shift(val samples, int sample_rate, float semitones) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   Audio result = pitch_shift(audio, semitones);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, float target_midi) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  analysis::pitch_editor::PitchCorrector corrector;
+  analysis::pitch_editor::F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = 512;
+  track.f0_hz = {analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.voiced = {true};
+  track.voiced_prob = {1.0f};
+  Audio result = corrector.correct_to_midi(audio, track, target_midi);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_sample,
+                    float stretch_ratio) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  analysis::pitch_editor::NoteRegion region;
+  region.onset_sample = onset_sample;
+  region.offset_sample = offset_sample;
+  analysis::pitch_editor::NoteEditor editor;
+  Audio result = editor.stretch_note(audio, region, stretch_ratio);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+val js_voice_change(val samples, int sample_rate, float pitch_semitones, float formant_factor) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  analysis::voice_changer::VoiceChangerConfig config;
+  config.pitch_semitones = pitch_semitones;
+  config.formant_factor = formant_factor;
+  analysis::voice_changer::VoiceChanger changer(config);
+  Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
@@ -2004,6 +2047,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("percussive", &js_percussive);
   function("timeStretch", &js_time_stretch);
   function("pitchShift", &js_pitch_shift);
+  function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
+  function("noteStretch", &js_note_stretch);
+  function("voiceChange", &js_voice_change);
   function("normalize", &js_normalize);
   function("mastering", &js_mastering);
   function("masteringProcessorNames", &js_mastering_processor_names);

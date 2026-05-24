@@ -600,6 +600,15 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
                                 float** out, size_t* out_length);
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
+SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
+                                         float current_midi, float target_midi, float** out,
+                                         size_t* out_length);
+SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
+                                int onset_sample, int offset_sample, float stretch_ratio,
+                                float** out, size_t* out_length);
+SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
+                                float pitch_semitones, float formant_factor, float** out,
+                                size_t* out_length);
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,

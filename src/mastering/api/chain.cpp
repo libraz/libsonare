@@ -3,6 +3,7 @@
 
 #include "mastering/api/chain.h"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -11,13 +12,13 @@
 #include <vector>
 
 #include "analysis/meter/lufs.h"
+#include "analysis/meter/true_peak.h"
 #include "core/audio.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
 #include "mastering/eq/tilt.h"
-#include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/declick.h"
@@ -41,9 +42,26 @@ void run_processor_mono(common::ProcessorBase& processor, std::vector<float>& sa
   if (samples.empty()) {
     return;
   }
-  processor.prepare(sample_rate, static_cast<int>(samples.size()));
-  float* channels[] = {samples.data()};
-  processor.process(channels, 1, static_cast<int>(samples.size()));
+  const int n = static_cast<int>(samples.size());
+  // Query latency: prepare once at N, read latency (valid post-prepare for our
+  // processors).
+  processor.prepare(sample_rate, n);
+  const int latency = processor.latency_samples();
+  if (latency <= 0) {
+    float* channels[] = {samples.data()};
+    processor.process(channels, 1, n);
+    return;
+  }
+  // Re-prepare for the padded length, then process N signal + `latency` zeros and
+  // drop the leading `latency` output samples so the result is time-aligned and
+  // the delayed tail is flushed out.
+  processor.reset();
+  processor.prepare(sample_rate, n + latency);
+  std::vector<float> padded(samples.begin(), samples.end());
+  padded.resize(static_cast<std::size_t>(n) + latency, 0.0f);
+  float* channels[] = {padded.data()};
+  processor.process(channels, 1, n + latency);
+  std::copy(padded.begin() + latency, padded.begin() + latency + n, samples.begin());
 }
 
 void run_processor_stereo(common::ProcessorBase& processor, std::vector<float>& left,
@@ -54,9 +72,41 @@ void run_processor_stereo(common::ProcessorBase& processor, std::vector<float>& 
   if (left.size() != right.size()) {
     throw std::invalid_argument("stereo channel lengths must match");
   }
-  processor.prepare(sample_rate, static_cast<int>(left.size()));
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(left.size()));
+  const int n = static_cast<int>(left.size());
+  // Query latency: prepare once at N, read latency (valid post-prepare for our
+  // processors).
+  processor.prepare(sample_rate, n);
+  const int latency = processor.latency_samples();
+  if (latency <= 0) {
+    float* channels[] = {left.data(), right.data()};
+    processor.process(channels, 2, n);
+    return;
+  }
+  // Re-prepare for the padded length, then process N signal + `latency` zeros and
+  // drop the leading `latency` output samples so the result is time-aligned and
+  // the delayed tail is flushed out.
+  processor.reset();
+  processor.prepare(sample_rate, n + latency);
+  std::vector<float> padded_left(left.begin(), left.end());
+  std::vector<float> padded_right(right.begin(), right.end());
+  padded_left.resize(static_cast<std::size_t>(n) + latency, 0.0f);
+  padded_right.resize(static_cast<std::size_t>(n) + latency, 0.0f);
+  float* channels[] = {padded_left.data(), padded_right.data()};
+  processor.process(channels, 2, n + latency);
+  std::copy(padded_left.begin() + latency, padded_left.begin() + latency + n, left.begin());
+  std::copy(padded_right.begin() + latency, padded_right.begin() + latency + n, right.begin());
+}
+
+// Returns the per-band gain reduction with the largest magnitude (most-reduced
+// band). Returns 0.0f for an empty vector.
+float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
+  float most_reduced = 0.0f;
+  for (float gr : gain_reductions_db) {
+    if (std::abs(gr) > std::abs(most_reduced)) {
+      most_reduced = gr;
+    }
+  }
+  return most_reduced;
 }
 
 std::vector<float> mono_mix(const std::vector<float>& left, const std::vector<float>& right) {
@@ -80,6 +130,13 @@ void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float ga
   for (std::size_t i = 0; i < left.size(); ++i) {
     left[i] *= gain;
     right[i] *= gain;
+  }
+}
+
+void apply_gain_mono(std::vector<float>& samples, float gain_db) {
+  const float gain = std::pow(10.0f, gain_db / 20.0f);
+  for (float& sample : samples) {
+    sample *= gain;
   }
 }
 
@@ -180,6 +237,8 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   if (config_.dynamics.deesser.enabled) {
     mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
     run_processor_mono(processor, data, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.deesser", processor.last_gain_reduction_db()});
     report("dynamics.deesser");
   }
 
@@ -194,6 +253,8 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   if (config_.dynamics.compressor.enabled) {
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_mono(processor, data, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.compressor", processor.last_gain_reduction_db()});
     report("dynamics.compressor");
   }
 
@@ -201,6 +262,8 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   if (config_.dynamics.multiband_comp.enabled) {
     mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
     run_processor_mono(processor, data, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.multibandComp", max_abs_gain_reduction(processor.last_gain_reductions_db())});
     report("dynamics.multibandComp");
   }
 
@@ -229,24 +292,38 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   if (config_.maximizer.true_peak_limiter.enabled) {
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_mono(processor, data, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"maximizer.truePeakLimiter", processor.last_gain_reduction_db()});
     report("maximizer.truePeakLimiter");
   }
 
-  // 13. loudness (mono uses loudness_optimize)
+  // 13. loudness (mono path: manual gain + TruePeakLimiter pass, mirrors stereo)
   if (config_.loudness.enabled) {
-    Audio current = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    mastering::maximizer::LoudnessOptimizeConfig loudness_config;
-    loudness_config.target_lufs = config_.loudness.target_lufs;
-    loudness_config.ceiling_db = config_.loudness.ceiling_db;
-    loudness_config.true_peak_oversample = config_.loudness.true_peak_oversample;
-    auto loud = mastering::maximizer::loudness_optimize(current, loudness_config);
-    data.assign(loud.audio.data(), loud.audio.data() + loud.audio.size());
-    applied_gain_db += loud.applied_gain_db;
+    const float current_lufs = integrated_lufs(data, sample_rate);
+    if (std::isfinite(current_lufs)) {
+      const float gain_db = config_.loudness.target_lufs - current_lufs;
+      apply_gain_mono(data, gain_db);
+      applied_gain_db += gain_db;
+    }
+    mastering::maximizer::TruePeakLimiterConfig limiter_config;
+    limiter_config.ceiling_db = config_.loudness.ceiling_db;
+    limiter_config.oversample_factor = config_.loudness.true_peak_oversample;
+    limiter_config.release_ms = config_.loudness.release_ms;
+    limiter_config.apply_gain_at_input_rate = config_.loudness.apply_gain_at_input_rate;
+    mastering::maximizer::TruePeakLimiter processor(limiter_config);
+    run_processor_mono(processor, data, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"loudness.optimize", processor.last_gain_reduction_db()});
     report("loudness.optimize");
   }
 
   result.output_lufs = integrated_lufs(data, sample_rate);
   result.applied_gain_db = applied_gain_db;
+  {
+    Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    result.output_true_peak_dbtp = analysis::meter::true_peak_db(audio, 4);
+    result.output_lra = analysis::meter::lufs(audio).loudness_range;
+  }
   result.samples = std::move(data);
   return result;
 }
@@ -322,6 +399,8 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   if (config_.dynamics.deesser.enabled) {
     mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
     run_processor_stereo(processor, left, right, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.deesser", processor.last_gain_reduction_db()});
     report("dynamics.deesser");
   }
 
@@ -336,6 +415,8 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   if (config_.dynamics.compressor.enabled) {
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_stereo(processor, left, right, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.compressor", processor.last_gain_reduction_db()});
     report("dynamics.compressor");
   }
 
@@ -343,6 +424,8 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   if (config_.dynamics.multiband_comp.enabled) {
     mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
     run_processor_stereo(processor, left, right, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.multibandComp", max_abs_gain_reduction(processor.last_gain_reductions_db())});
     report("dynamics.multibandComp");
   }
 
@@ -385,6 +468,8 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   if (config_.maximizer.true_peak_limiter.enabled) {
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_stereo(processor, left, right, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"maximizer.truePeakLimiter", processor.last_gain_reduction_db()});
     report("maximizer.truePeakLimiter");
   }
 
@@ -403,11 +488,22 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     limiter_config.apply_gain_at_input_rate = config_.loudness.apply_gain_at_input_rate;
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_stereo(processor, left, right, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"loudness.optimize", processor.last_gain_reduction_db()});
     report("loudness.optimize");
   }
 
   result.output_lufs = integrated_lufs(mono_mix(left, right), sample_rate);
   result.applied_gain_db = applied_gain_db;
+  {
+    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+    result.output_true_peak_dbtp = std::max(analysis::meter::true_peak_db(left_audio, 4),
+                                            analysis::meter::true_peak_db(right_audio, 4));
+    std::vector<float> mono = mono_mix(left, right);
+    Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
+    result.output_lra = analysis::meter::lufs(mono_audio).loudness_range;
+  }
   result.left = std::move(left);
   result.right = std::move(right);
   return result;

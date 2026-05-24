@@ -1,9 +1,9 @@
-#include "mastering/common/partitioned_convolver.h"
+#include "rt/partitioned_convolver.h"
 
 #include <algorithm>
 #include <stdexcept>
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 
 PartitionedConvolver::PartitionedConvolver(PartitionedConvolverConfig config) : config_(config) {
   validate_config();
@@ -98,4 +98,4 @@ void PartitionedConvolver::rebuild_fft() {
   accum_spectrum_.assign(static_cast<size_t>(fft_->n_bins()), {0.0f, 0.0f});
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

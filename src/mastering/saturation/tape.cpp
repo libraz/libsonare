@@ -40,6 +40,9 @@ void Tape::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   update_filters(sample_rate_);
+  if (config_.oversample_factor > 1) {
+    oversampler_.set_factor(config_.oversample_factor);
+  }
   prepared_ = true;
   reset();
 }
@@ -53,9 +56,33 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+  }
+
+  if (config_.oversample_factor <= 1) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      auto& state = states_[static_cast<size_t>(ch)];
+      for (int i = 0; i < num_samples; ++i) {
+        float y = process_sample(state, channels[ch][i]);
+        y += head_bump_[static_cast<size_t>(ch)].process(y);
+        auto& gap = gap_state_[static_cast<size_t>(ch)];
+        gap += gap_loss_coeff_ * (y - gap);
+        channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
+      }
+    }
+    return;
+  }
+
+  // Oversample only the stateful J-A core to reduce aliasing at high drive.
+  // head_bump and gap_loss stay at base rate.
+  for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
+    std::vector<float> os = oversampler_.upsample(channels[ch], static_cast<size_t>(num_samples));
+    for (auto& sample : os) {
+      sample = process_sample(state, sample);
+    }
+    std::vector<float> ja = oversampler_.downsample(os);
     for (int i = 0; i < num_samples; ++i) {
-      float y = process_sample(state, channels[ch][i]);
+      float y = ja[static_cast<size_t>(i)];
       y += head_bump_[static_cast<size_t>(ch)].process(y);
       auto& gap = gap_state_[static_cast<size_t>(ch)];
       gap += gap_loss_coeff_ * (y - gap);
@@ -76,6 +103,9 @@ void Tape::set_config(const TapeConfig& config) {
   validate_config(config);
   config_ = config;
   hysteresis_.set_config(make_ja_config(config_));
+  if (config_.oversample_factor > 1) {
+    oversampler_.set_factor(config_.oversample_factor);
+  }
   if (prepared_) update_filters(sample_rate_);
 }
 
@@ -84,6 +114,10 @@ void Tape::validate_config(const TapeConfig& config) {
       config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||
       config.gap_loss < 0.0f || config.gap_loss > 1.0f) {
     throw std::invalid_argument("invalid tape configuration");
+  }
+  if (config.oversample_factor != 1 && config.oversample_factor != 2 &&
+      config.oversample_factor != 4) {
+    throw std::invalid_argument("tape oversample_factor must be 1, 2, or 4");
   }
 }
 

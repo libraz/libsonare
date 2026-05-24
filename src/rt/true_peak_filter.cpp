@@ -1,10 +1,10 @@
-#include "mastering/common/true_peak_filter.h"
+#include "rt/true_peak_filter.h"
 
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 namespace {
 
 // ITU-R BS.1770 Annex 2 coefficient example for a 48-tap, 4-phase FIR.
@@ -153,4 +153,4 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
   }
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

@@ -1,11 +1,11 @@
-#include "mastering/common/envelope_follower.h"
+#include "rt/envelope_follower.h"
 
 #include <algorithm>
 #include <cmath>
 
 #include "util/dsp_primitives.h"
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 
 void EnvelopeFollower::prepare(double sample_rate, float attack_ms, float release_ms) {
   sample_rate_ = sample_rate;
@@ -34,4 +34,4 @@ float EnvelopeFollower::smooth_bidirectional(float target, float release_coeff,
   return envelope_;
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

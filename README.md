@@ -24,6 +24,9 @@ Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
   Repair processors are classical DSP by design; denoise uses spectral
   subtraction / MMSE-STSA / LogMMSE noise reduction rather than DNN source
   separation or spectral repair.
+- **DAW DSP primitives** — time stretch / pitch shift, pitch correction,
+  note-region stretch, voice-change pitch+formant controls, realtime mixer
+  primitives, routing graph, creative delay/modulation/reverb FX, and ducking.
 - **License** — Apache-2.0 across the entire stack (C++, Python, Node, WASM).
 
 ## Installation
@@ -192,6 +195,16 @@ const block = chain.processMono(new Float32Array(512));
 chain.delete();
 ```
 
+**DAW editing DSP**
+
+```typescript
+import { noteStretch, pitchCorrectToMidi, voiceChange } from '@libraz/libsonare';
+
+const corrected = pitchCorrectToMidi(samples, sampleRate, 69, 70);
+const stretchedNote = noteStretch(samples, sampleRate, 12000, 24000, 1.25);
+const changed = voiceChange(samples, sampleRate, 5, 1.1);
+```
+
 ### Python
 
 `pip install libsonare` ships a **WAV/MP3-only wheel** (matching librosa / pydub /
@@ -299,6 +312,11 @@ sonare mastering-processor song.wav --processor dynamics.compressor \
 sonare mastering-pair-analyze source.wav --reference reference.wav \
     --analysis match.referenceLoudness
 sonare mastering-processors                 # list available processors
+
+# DAW editing DSP
+sonare pitch-correct vocal.wav --current-midi 69 --target-midi 70 -o corrected.wav
+sonare note-stretch vocal.wav --onset 12000 --offset 24000 --ratio 1.25 -o stretched.wav
+sonare voice-change vocal.wav --pitch-semitones 5 --formant-factor 1.1 -o changed.wav
 ```
 
 ### C++

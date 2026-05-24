@@ -32,6 +32,20 @@ struct PhaseVocoderConfig {
 Spectrogram phase_vocoder(const Spectrogram& spec, float rate,
                           const PhaseVocoderConfig& config = PhaseVocoderConfig());
 
+/// @brief Phase vocoder time-stretching with identity phase locking.
+/// @details Same magnitude/instantaneous-frequency path as phase_vocoder(), but
+///          synthesis phases are accumulated only at spectral peaks. Non-peak bins
+///          are rigidly locked to the peak of their region of influence, preserving
+///          the intra-frame phase relationship from the analysis frame. This reduces
+///          inter-bin phase incoherence ("phasiness"). See Laroche & Dolson (1999).
+/// @param spec Input spectrogram (must have at least 2 frames)
+/// @param rate Time stretch rate (< 1.0 = slower, > 1.0 = faster)
+/// @param config Phase vocoder configuration
+/// @return Time-stretched spectrogram
+/// @throws SonareException if spec is empty or rate <= 0
+Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
+                                      const PhaseVocoderConfig& config = PhaseVocoderConfig());
+
 /// @brief Computes instantaneous frequency from phase difference.
 /// @param phase Current phase values [n_bins]
 /// @param prev_phase Previous phase values [n_bins]

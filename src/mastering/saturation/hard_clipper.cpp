@@ -29,6 +29,7 @@ void HardClipper::process(float* const* channels, int num_channels, int num_samp
 
 void HardClipper::reset() {
   for (auto& state : hard_clip_adaa_) state.reset();
+  for (auto& state : hard_clip_adaa2_) state.reset();
 }
 
 void HardClipper::set_config(const HardClipperConfig& config) {
@@ -39,8 +40,11 @@ void HardClipper::set_config(const HardClipperConfig& config) {
     const size_t channels = hard_clip_adaa_.size();
     hard_clip_adaa_.clear();
     hard_clip_adaa_.reserve(channels);
+    hard_clip_adaa2_.clear();
+    hard_clip_adaa2_.reserve(channels);
     for (size_t i = 0; i < channels; ++i) {
       hard_clip_adaa_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
+      hard_clip_adaa2_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
     }
   }
 }
@@ -54,15 +58,25 @@ void HardClipper::ensure_state(int num_channels) {
   if (hard_clip_adaa_.size() != static_cast<size_t>(num_channels)) {
     hard_clip_adaa_.clear();
     hard_clip_adaa_.reserve(static_cast<size_t>(num_channels));
+    hard_clip_adaa2_.clear();
+    hard_clip_adaa2_.reserve(static_cast<size_t>(num_channels));
     for (int i = 0; i < num_channels; ++i) {
       hard_clip_adaa_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
+      hard_clip_adaa2_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
     }
   }
+}
+
+int HardClipper::latency_samples() const noexcept {
+  return config_.aliasing == common::AliasingControl::Adaa2 ? 1 : 0;
 }
 
 float HardClipper::process_sample(float sample, int channel) {
   if (config_.aliasing == common::AliasingControl::Adaa1) {
     return hard_clip_adaa_[static_cast<size_t>(channel)].process(sample);
+  }
+  if (config_.aliasing == common::AliasingControl::Adaa2) {
+    return hard_clip_adaa2_[static_cast<size_t>(channel)].process(sample);
   }
   return std::clamp(sample, -config_.ceiling, config_.ceiling);
 }

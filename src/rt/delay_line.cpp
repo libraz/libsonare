@@ -1,8 +1,8 @@
-#include "mastering/common/delay_line.h"
+#include "rt/delay_line.h"
 
 #include <algorithm>
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 
 void DelayLine::prepare(size_t delay_samples) {
   delay_samples_ = delay_samples;
@@ -24,4 +24,4 @@ float DelayLine::process(float input) {
   return output;
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

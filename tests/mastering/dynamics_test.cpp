@@ -8,6 +8,7 @@
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/ducking_processor.h"
 #include "mastering/dynamics/expander.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/limiter.h"
@@ -511,9 +512,44 @@ TEST_CASE("SidechainRouter validates configuration and sidechain buffers",
   REQUIRE_THROWS(SidechainRouter({-24.0f, 0.5f, 5.0f, 100.0f, 18.0f}));
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, -1.0f, 100.0f, 18.0f}));
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, -1.0f}));
+  REQUIRE_THROWS(
+      SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 90.0f, false, false, -1.0f}));
 
   SidechainRouter router;
   REQUIRE_THROWS(router.set_sidechain(nullptr, 1, 128));
+}
+
+TEST_CASE("SidechainRouter lookahead delays main while using current key",
+          "[mastering][dynamics]") {
+  SidechainRouter router({-18.0f, 8.0f, 0.0f, 0.0f, 18.0f, false, 90.0f, false, false, 2.0f});
+  router.prepare(1000.0, 8);
+
+  std::vector<float> main{1.0f, 0.0f, 0.0f, 0.0f};
+  std::vector<float> key{1.0f, 0.0f, 0.0f, 0.0f};
+  const float* key_channels[] = {key.data()};
+  router.set_sidechain(key_channels, 1, static_cast<int>(key.size()));
+  process(router, main);
+
+  REQUIRE_THAT(main[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(main[1], WithinAbs(0.0f, 0.0001f));
+  REQUIRE(main[2] < 0.2f);
+}
+
+TEST_CASE("DuckingProcessor wraps SidechainRouter with voiceover defaults",
+          "[mastering][dynamics]") {
+  DuckingProcessor ducking({-18.0f, 8.0f, 0.0f, 0.0f, 18.0f, 0.0f});
+  ducking.prepare(48000.0, 16);
+
+  std::vector<float> main(16, 1.0f);
+  std::vector<float> key(16, 1.0f);
+  const float* key_channels[] = {key.data()};
+  ducking.set_key_input(key_channels, 1, static_cast<int>(key.size()));
+  process(ducking, main);
+
+  const float expected_reduction_db = -15.75f;
+  const float expected_gain = std::pow(10.0f, expected_reduction_db / 20.0f);
+  REQUIRE_THAT(main[15], WithinAbs(expected_gain, 0.0001f));
+  REQUIRE_THAT(ducking.last_gain_reduction_db(), WithinAbs(expected_reduction_db, 0.0001f));
 }
 
 TEST_CASE("SidechainRouter treats empty sidechain as cleared", "[mastering][dynamics]") {
@@ -544,4 +580,36 @@ TEST_CASE("SidechainRouter supports HPF mono key and key listen", "[mastering][d
   process(listen, target);
 
   REQUIRE(rms_tail(target, 128) > 0.1f);
+}
+
+TEST_CASE("Compressor sidechain HPF attenuates lows in the detector", "[mastering][dynamics]") {
+  // With a 1 kHz sidechain HPF the detector should respond more to a 5 kHz tone
+  // than to a 100 Hz tone of equal amplitude, so the high tone gets more gain
+  // reduction (more negative dB).
+  CompressorConfig config{};
+  config.threshold_db = -30.0f;
+  config.ratio = 4.0f;
+  config.attack_ms = 5.0f;
+  config.release_ms = 50.0f;
+  config.detector = DetectorMode::Peak;
+  config.sidechain_hpf_enabled = true;
+  config.sidechain_hpf_hz = 1000.0f;
+
+  Compressor low_comp(config);
+  Compressor high_comp(config);
+  low_comp.prepare(48000.0, 4096);
+  high_comp.prepare(48000.0, 4096);
+
+  auto low = sine(100.0f, 48000, 24000, 0.5f);
+  auto high = sine(5000.0f, 48000, 24000, 0.5f);
+  process(low_comp, low);
+  process(high_comp, high);
+
+  const float low_gr = low_comp.last_gain_reduction_db();
+  const float high_gr = high_comp.last_gain_reduction_db();
+
+  // The high tone passes through the HPF nearly unattenuated and triggers more
+  // gain reduction; the low tone is attenuated in the detector, so less.
+  REQUIRE(high_gr < low_gr);
+  REQUIRE(low_gr > high_gr + 3.0f);
 }

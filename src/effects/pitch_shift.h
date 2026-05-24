@@ -4,6 +4,7 @@
 /// @brief Pitch shifting without changing duration.
 
 #include "core/audio.h"
+#include "effects/time_stretch.h"
 
 namespace sonare {
 
@@ -11,6 +12,7 @@ namespace sonare {
 struct PitchShiftConfig {
   int n_fft = 2048;      ///< FFT size for time stretch
   int hop_length = 512;  ///< Hop length for time stretch
+  StretchBackend backend = StretchBackend::NativeSpectral;
 };
 
 /// @brief Pitch-shifts audio without changing duration.

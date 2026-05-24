@@ -1,8 +1,8 @@
-#include "mastering/common/oversampler.h"
+#include "rt/oversampler.h"
 
 #include "util/exception.h"
 
-namespace sonare::mastering::common {
+namespace sonare::rt {
 namespace {
 
 bool is_supported_factor(int factor) { return factor == 2 || factor == 4 || factor == 8; }
@@ -55,6 +55,8 @@ std::vector<float> Oversampler::downsample(const float* input, size_t size) cons
       accum += static_cast<double>(input[static_cast<size_t>(src)]) *
                static_cast<double>(decimation_taps_[tap]);
     }
+    // The decimation taps share the interpolation kernel (DC gain = factor_), so
+    // dividing by factor_ normalizes the decimated output to unity DC gain.
     output[i] = static_cast<float>(accum / static_cast<double>(factor_));
   }
   return output;
@@ -64,4 +66,4 @@ std::vector<float> Oversampler::downsample(const std::vector<float>& input) cons
   return downsample(input.data(), input.size());
 }
 
-}  // namespace sonare::mastering::common
+}  // namespace sonare::rt

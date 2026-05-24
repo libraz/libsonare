@@ -1,5 +1,5 @@
 /// @file time_stretch_test.cpp
-/// @brief Tests for time stretching and phase vocoder.
+/// @brief Tests for time stretching backends and phase vocoder.
 
 #include "effects/time_stretch.h"
 
@@ -133,6 +133,34 @@ TEST_CASE("time_stretch basic", "[time_stretch]") {
   REQUIRE(!stretched.empty());
   REQUIRE(stretched.sample_rate() == audio.sample_rate());
   REQUIRE_THAT(stretched.duration(), WithinRel(audio.duration(), 0.1f));
+}
+
+TEST_CASE("time_stretch native spectral backend preserves sample rate and ratio", "[time_stretch]") {
+  Audio audio = create_test_audio(440.0f, 44100, 0.25f);
+
+  TimeStretchConfig config;
+  config.backend = StretchBackend::NativeSpectral;
+
+  Audio stretched = time_stretch(audio, 0.75f, config);
+
+  REQUIRE(!stretched.empty());
+  REQUIRE(stretched.sample_rate() == audio.sample_rate());
+  REQUIRE_THAT(stretched.duration(), WithinRel(audio.duration() / 0.75f, 0.05f));
+}
+
+TEST_CASE("time_stretch phase vocoder backend remains available", "[time_stretch]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.5f);
+
+  TimeStretchConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.backend = StretchBackend::PhaseVocoder;
+
+  Audio stretched = time_stretch(audio, 1.25f, config);
+
+  REQUIRE(!stretched.empty());
+  REQUIRE(stretched.sample_rate() == audio.sample_rate());
+  REQUIRE_THAT(stretched.duration(), WithinRel(audio.duration() / 1.25f, 0.2f));
 }
 
 TEST_CASE("time_stretch slower doubles duration", "[time_stretch]") {

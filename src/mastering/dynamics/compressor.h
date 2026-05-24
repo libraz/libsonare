@@ -54,7 +54,8 @@ class Compressor : public common::ProcessorBase {
   float rms_state_ = 0.0f;
   float rms_coeff_ = 0.0f;
   float log_rms_coeff_ = 0.0f;
-  float hpf_coeff_ = 0.0f;
+  float hpf_b0_ = 1.0f;
+  float hpf_a1_ = 0.0f;
   float hpf_x1_ = 0.0f;
   float hpf_y1_ = 0.0f;
   float pdr_state_db_ = 0.0f;

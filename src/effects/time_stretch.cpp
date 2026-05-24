@@ -1,5 +1,6 @@
 #include "effects/time_stretch.h"
 
+#include "effects/native_spectral_stretch.h"
 #include "effects/phase_vocoder.h"
 #include "util/exception.h"
 
@@ -8,6 +9,10 @@ namespace sonare {
 Audio time_stretch(const Audio& audio, float rate, const TimeStretchConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
+
+  if (config.backend == StretchBackend::NativeSpectral) {
+    return native_spectral_time_stretch(audio, rate);
+  }
 
   /// Compute STFT
   StftConfig stft_config;

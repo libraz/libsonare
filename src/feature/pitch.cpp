@@ -390,8 +390,8 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
 
     std::vector<int> troughs;
     for (int index = 0; index < static_cast<int>(cmndf.size()); ++index) {
-      const bool is_left_edge =
-          index == 0 && index + 1 < static_cast<int>(cmndf.size()) && cmndf[index] < cmndf[index + 1];
+      const bool is_left_edge = index == 0 && index + 1 < static_cast<int>(cmndf.size()) &&
+                                cmndf[index] < cmndf[index + 1];
       const bool is_local_min = index > 0 && index + 1 < static_cast<int>(cmndf.size()) &&
                                 cmndf[index] < cmndf[index - 1] && cmndf[index] <= cmndf[index + 1];
       if (is_left_edge || is_local_min) {
@@ -480,10 +480,9 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
     }
   }
 
-  const int max_semitones_per_frame =
-      static_cast<int>(std::llround(kMaxTransitionRate *
-                                    static_cast<double>(constants::kSemitonesPerOctave) *
-                                    config.hop_length / sr));
+  const int max_semitones_per_frame = static_cast<int>(
+      std::llround(kMaxTransitionRate * static_cast<double>(constants::kSemitonesPerOctave) *
+                   config.hop_length / sr));
   const int transition_width = max_semitones_per_frame * bins_per_semitone + 1;
   const int transition_half = transition_width / 2;
   std::vector<std::vector<std::pair<int, double>>> pitch_transitions(
@@ -554,8 +553,8 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   for (int bin = 0; bin < n_pitch_bins; ++bin) {
     freqs[static_cast<size_t>(bin)] =
         config.fmin *
-        std::pow(2.0f, static_cast<float>(bin) /
-                           (constants::kSemitonesPerOctave * static_cast<float>(bins_per_semitone)));
+        std::pow(2.0f, static_cast<float>(bin) / (constants::kSemitonesPerOctave *
+                                                  static_cast<float>(bins_per_semitone)));
   }
 
   PitchResult result;
