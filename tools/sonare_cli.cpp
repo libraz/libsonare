@@ -15,10 +15,12 @@
 #include <string>
 #include <vector>
 
+#include "analysis/acoustic_analyzer.h"
 #include "analysis/boundary_detector.h"
 #include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/melody_analyzer.h"
+#include "analysis/meter/lufs.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
@@ -36,6 +38,7 @@
 #include "feature/chroma.h"
 #include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/nnls_chroma.h"
 #include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/rhythm.h"
@@ -1869,6 +1872,224 @@ int cmd_cqt(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_acoustic(const CliArgs& args, const Audio& audio) {
+  AcousticConfig config;
+  config.n_octave_bands = args.get_int("n-bands", config.n_octave_bands);
+  config.min_decay_db = args.get_float("min-decay-db", config.min_decay_db);
+  config.noise_floor_margin_db =
+      args.get_float("noise-floor-margin-db", config.noise_floor_margin_db);
+
+  const bool use_ir = args.has("ir");
+  AcousticParameters p = use_ir ? analyze_impulse_response(audio, config)
+                                : detect_acoustic(audio, config);
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object()
+        .kv("rt60", p.rt60)
+        .kv("edt", p.edt)
+        .kv("c50", p.c50)
+        .kv("c80", p.c80)
+        .kv("d50", p.d50)
+        .kv("confidence", p.confidence)
+        .kv("is_blind", p.is_blind)
+        .key("rt60_bands")
+        .float_array(p.rt60_bands)
+        .key("edt_bands")
+        .float_array(p.edt_bands)
+        .key("c50_bands")
+        .float_array(p.c50_bands)
+        .key("c80_bands")
+        .float_array(p.c80_bands)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Acoustic Analysis ("
+              << (p.is_blind ? "blind" : "impulse response") << "):" << color::reset << "\n";
+    printf("    RT60:       %.3f s\n", p.rt60);
+    printf("    EDT:        %.3f s\n", p.edt);
+    printf("    C50:        %.2f dB\n", p.c50);
+    printf("    C80:        %.2f dB\n", p.c80);
+    printf("    D50:        %.2f\n", p.d50);
+    printf("    Confidence: %.2f\n", p.confidence);
+    if (!p.rt60_bands.empty()) {
+      std::cout << "    RT60 bands: ";
+      for (size_t i = 0; i < p.rt60_bands.size(); ++i) {
+        if (i > 0) std::cout << ", ";
+        printf("%.3f", p.rt60_bands[i]);
+      }
+      std::cout << "\n";
+    }
+    std::cout << "\n";
+  }
+  return 0;
+}
+
+int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
+  MelConfig mel_config;
+  mel_config.n_fft = args.n_fft;
+  mel_config.hop_length = args.hop_length;
+  mel_config.n_mels = args.n_mels;
+
+  auto envelope = compute_onset_strength(audio, mel_config, OnsetConfig());
+  Stats stats = Stats::compute(envelope);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("count", envelope.size())
+        .kv("hop_length", args.hop_length)
+        .kv("duration", audio.duration())
+        .key("stats")
+        .begin_object()
+        .kv("mean", stats.mean)
+        .kv("std", stats.std)
+        .kv("min", stats.min)
+        .kv("max", stats.max)
+        .end_object()
+        .key("values")
+        .float_array(envelope)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Onset Strength Envelope:\n";
+    printf("  Frames: %zu\n", envelope.size());
+    printf("  Stats:  mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std, stats.min,
+           stats.max);
+  }
+  return 0;
+}
+
+int cmd_fourier_tempogram(const CliArgs& args, const Audio& audio) {
+  TempogramConfig config;
+  config.hop_length = args.hop_length;
+  config.win_length = args.get_int("win-length", config.win_length);
+
+  auto values = fourier_tempogram(audio, config);
+  const int n_bins = config.win_length / 2 + 1;
+  const int n_frames = n_bins > 0 ? static_cast<int>(values.size()) / n_bins : 0;
+  Stats stats = Stats::compute(values);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("win_length", config.win_length)
+        .kv("n_bins", n_bins)
+        .kv("n_frames", n_frames)
+        .key("stats")
+        .begin_object()
+        .kv("mean", stats.mean)
+        .kv("std", stats.std)
+        .kv("min", stats.min)
+        .kv("max", stats.max)
+        .end_object()
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Fourier Tempogram:\n";
+    printf("  Shape: %d bins x %d frames\n", n_bins, n_frames);
+    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std, stats.min,
+           stats.max);
+  }
+  return 0;
+}
+
+int cmd_tempogram_ratio(const CliArgs& args, const Audio& audio) {
+  TempogramConfig config;
+  config.hop_length = args.hop_length;
+  config.win_length = args.get_int("win-length", config.win_length);
+
+  auto tempogram_data = tempogram(audio, config);
+  static const std::vector<float> factors = {0.5f, 1.0f, 2.0f, 3.0f, 4.0f};
+  auto ratios = tempogram_ratio(tempogram_data, config.win_length, audio.sample_rate(),
+                                config.hop_length, factors);
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().kv("win_length", config.win_length).key("ratios").begin_array();
+    for (size_t i = 0; i < ratios.size(); ++i) {
+      json.begin_object()
+          .kv("factor", factors[i])
+          .kv("value", ratios[i])
+          .end_object();
+    }
+    json.end_array().end_object().print();
+  } else {
+    std::cout << "Tempogram Ratio:\n";
+    for (size_t i = 0; i < ratios.size(); ++i) {
+      printf("  factor %.1f: %.4f\n", factors[i], ratios[i]);
+    }
+  }
+  return 0;
+}
+
+int cmd_nnls_chroma(const CliArgs& args, const Audio& audio) {
+  NnlsChromaConfig config;
+  config.cqt.hop_length = args.hop_length;
+
+  Chroma chroma = nnls_chroma(audio, config);
+  auto mean_energy = chroma.mean_energy();
+  static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object()
+        .kv("n_chroma", chroma.n_chroma())
+        .kv("n_frames", chroma.n_frames())
+        .kv("duration", chroma.duration())
+        .key("mean_energy")
+        .begin_object();
+    for (int i = 0; i < 12; ++i) json.kv(names[i], mean_energy[i]);
+    json.end_object().end_object().print();
+  } else {
+    std::cout << "NNLS Chromagram:\n";
+    printf("  Shape:    %d bins x %d frames\n", chroma.n_chroma(), chroma.n_frames());
+    printf("  Duration: %.2fs\n", chroma.duration());
+    std::cout << "\nMean Energy by Pitch Class:\n";
+    float max_e = *std::max_element(mean_energy.begin(), mean_energy.end());
+    if (max_e <= 0.0f) max_e = 1.0f;
+    for (int i = 0; i < 12; ++i) {
+      int bar = static_cast<int>(mean_energy[i] / max_e * 20);
+      printf("  %-2s: %.3f ", names[i], mean_energy[i]);
+      for (int j = 0; j < bar; ++j) std::cout << "*";
+      std::cout << "\n";
+    }
+  }
+  return 0;
+}
+
+int cmd_lufs(const CliArgs& args, const Audio& audio) {
+  using namespace sonare::analysis::meter;
+  LufsConfig config;
+  LufsResult result = lufs(audio, config);
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object()
+        .kv("integrated_lufs", result.integrated_lufs)
+        .kv("momentary_lufs", result.momentary_lufs)
+        .kv("short_term_lufs", result.short_term_lufs)
+        .kv("loudness_range", result.loudness_range);
+    if (args.has("series")) {
+      json.key("momentary_series").float_array(momentary_lufs(audio, config));
+      json.key("short_term_series").float_array(short_term_lufs(audio, config));
+    }
+    json.end_object().print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::yellow << "> Loudness (LUFS):" << color::reset << "\n";
+    printf("    Integrated:    %.2f LUFS\n", result.integrated_lufs);
+    printf("    Momentary:     %.2f LUFS\n", result.momentary_lufs);
+    printf("    Short-term:    %.2f LUFS\n", result.short_term_lufs);
+    printf("    Loudness Range: %.2f LU\n", result.loudness_range);
+    std::cout << "\n";
+  }
+  return 0;
+}
+
 // ============================================================================
 // Command Registry
 // ============================================================================
@@ -1896,6 +2117,8 @@ const std::vector<CommandInfo>& get_commands() {
       {"rhythm", "Analyze rhythm features", cmd_rhythm, true},
       {"melody", "Track melody/pitch contour", cmd_melody, true},
       {"boundaries", "Detect structural boundaries", cmd_boundaries, true},
+      {"acoustic", "Analyze room acoustics (RT60/EDT/clarity)", cmd_acoustic, true},
+      {"lufs", "Measure loudness (LUFS / loudness range)", cmd_lufs, true},
       // Processing
       {"pitch-shift", "Shift pitch by semitones", cmd_pitch_shift, true},
       {"time-stretch", "Time stretch audio", cmd_time_stretch, true},
@@ -1928,8 +2151,12 @@ const std::vector<CommandInfo>& get_commands() {
       {"spectral", "Compute spectral features", cmd_spectral, true},
       {"pitch", "Track pitch (YIN/pYIN)", cmd_pitch, true},
       {"onset-env", "Compute onset strength envelope", cmd_onset_env, true},
+      {"onset-envelope", "Compute onset strength envelope (full array)", cmd_onset_envelope, true},
       {"tempogram", "Compute onset tempogram", cmd_tempogram, true},
+      {"fourier-tempogram", "Compute Fourier tempogram", cmd_fourier_tempogram, true},
+      {"tempogram-ratio", "Compute tempogram ratio features", cmd_tempogram_ratio, true},
       {"plp", "Compute predominant local pulse", cmd_plp, true},
+      {"nnls-chroma", "Compute NNLS chromagram", cmd_nnls_chroma, true},
       {"cqt", "Compute Constant-Q Transform", cmd_cqt, true},
       // Utility
       {"frames-to-samples", "Convert frame index to sample index", cmd_frames_to_samples, false},

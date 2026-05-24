@@ -9,6 +9,11 @@ import sys
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
 
+# NOTE: Some C++ CLI commands (sections, melody, boundaries, cqt, and the
+# low-level math/unit converters) are intentionally NOT exposed here because
+# they have no standalone Python library backing yet. They remain C++-CLI-only
+# pending Python lib support.
+
 
 def _load_audio(path: str) -> tuple[list[float], int]:
     """Load audio from file via the Audio class."""
@@ -16,6 +21,54 @@ def _load_audio(path: str) -> tuple[list[float], int]:
 
     with Audio.from_file(path) as audio:
         return audio.data, audio.sample_rate
+
+
+def _write_wav(path: str, samples: list[float], sample_rate: int) -> None:
+    """Write mono 16-bit PCM WAV using only the Python standard library.
+
+    Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
+    """
+    import struct
+    import wave
+
+    frames = bytearray()
+    for s in samples:
+        clamped = -1.0 if s < -1.0 else (1.0 if s > 1.0 else s)
+        frames += struct.pack("<h", int(round(clamped * 32767.0)))
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        wav.writeframes(bytes(frames))
+
+
+def _array_stats(vals: list[float]) -> dict:
+    """Summary statistics for a numeric array (avoids dumping huge arrays)."""
+    import statistics
+
+    if not vals:
+        return {"count": 0, "mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
+    return {
+        "count": len(vals),
+        "mean": round(statistics.mean(vals), 6),
+        "std": round(statistics.stdev(vals), 6) if len(vals) > 1 else 0.0,
+        "min": round(min(vals), 6),
+        "max": round(max(vals), 6),
+    }
+
+
+def _parse_kv_params(value: str) -> dict[str, float]:
+    """Parse a ``k=v,k=v`` string into a dict of floats."""
+    params: dict[str, float] = {}
+    for item in value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError(f"invalid param (expected key=value): {item}")
+        key, raw = item.split("=", 1)
+        params[key.strip()] = float(raw.strip())
+    return params
 
 
 def _format_time(seconds: float) -> str:
@@ -523,6 +576,401 @@ def cmd_hpss(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_acoustic(args: argparse.Namespace) -> int:
+    from . import analyze_impulse_response, detect_acoustic
+
+    samples, sr = _load_audio(args.file)
+    if args.ir:
+        result = analyze_impulse_response(samples, sample_rate=sr)
+    else:
+        result = detect_acoustic(samples, sample_rate=sr)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "rt60": round(result.rt60, 4),
+                    "edt": round(result.edt, 4),
+                    "c50": result.c50,
+                    "c80": result.c80,
+                    "d50": result.d50,
+                    "confidence": round(result.confidence, 4),
+                    "is_blind": result.is_blind,
+                }
+            )
+        )
+    else:
+        mode = "impulse response" if args.ir else "blind"
+        print(f"  Acoustic ({mode}):")
+        print(f"    RT60:       {result.rt60:.3f} s")
+        print(f"    EDT:        {result.edt:.3f} s")
+        print(f"    C50:        {result.c50:.2f} dB")
+        print(f"    C80:        {result.c80:.2f} dB")
+        print(f"    D50:        {result.d50:.3f}")
+        print(f"    Confidence: {result.confidence:.1%}")
+        print(f"    Blind:      {result.is_blind}")
+    return 0
+
+
+def cmd_rhythm(args: argparse.Namespace) -> int:
+    from . import analyze_rhythm
+
+    samples, sr = _load_audio(args.file)
+    r = analyze_rhythm(samples, sample_rate=sr)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "bpm": round(r.bpm, 2),
+                    "time_signature": {
+                        "numerator": r.time_signature.numerator,
+                        "denominator": r.time_signature.denominator,
+                    },
+                    "groove_type": r.groove_type,
+                    "syncopation": round(r.syncopation, 4),
+                    "pattern_regularity": round(r.pattern_regularity, 4),
+                    "tempo_stability": round(r.tempo_stability, 4),
+                    "beat_intervals": _array_stats(r.beat_intervals),
+                }
+            )
+        )
+    else:
+        print("  Rhythm:")
+        print(f"    BPM:                {r.bpm:.2f}")
+        print(
+            f"    Time signature:     {r.time_signature.numerator}/{r.time_signature.denominator}"
+        )
+        print(f"    Groove:             {r.groove_type}")
+        print(f"    Syncopation:        {r.syncopation:.4f}")
+        print(f"    Pattern regularity: {r.pattern_regularity:.4f}")
+        print(f"    Tempo stability:    {r.tempo_stability:.4f}")
+        print(f"    Beat intervals:     {len(r.beat_intervals)}")
+    return 0
+
+
+def cmd_dynamics(args: argparse.Namespace) -> int:
+    from . import analyze_dynamics
+
+    samples, sr = _load_audio(args.file)
+    r = analyze_dynamics(samples, sample_rate=sr)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "dynamic_range_db": round(r.dynamic_range_db, 4),
+                    "peak_db": round(r.peak_db, 4),
+                    "rms_db": round(r.rms_db, 4),
+                    "crest_factor": round(r.crest_factor, 4),
+                    "loudness_range_db": round(r.loudness_range_db, 4),
+                    "is_compressed": r.is_compressed,
+                    "loudness": _array_stats(r.loudness_rms_db),
+                }
+            )
+        )
+    else:
+        print("  Dynamics:")
+        print(f"    Dynamic range:  {r.dynamic_range_db:.2f} dB")
+        print(f"    Peak:           {r.peak_db:.2f} dB")
+        print(f"    RMS:            {r.rms_db:.2f} dB")
+        print(f"    Crest factor:   {r.crest_factor:.4f}")
+        print(f"    Loudness range: {r.loudness_range_db:.2f} dB")
+        print(f"    Compressed:     {r.is_compressed}")
+    return 0
+
+
+def cmd_timbre(args: argparse.Namespace) -> int:
+    from . import analyze_timbre
+
+    samples, sr = _load_audio(args.file)
+    r = analyze_timbre(
+        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    )
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "brightness": round(r.brightness, 4),
+                    "warmth": round(r.warmth, 4),
+                    "density": round(r.density, 4),
+                    "roughness": round(r.roughness, 4),
+                    "complexity": round(r.complexity, 4),
+                    "spectral_centroid": _array_stats(r.spectral_centroid),
+                    "spectral_flatness": _array_stats(r.spectral_flatness),
+                    "spectral_rolloff": _array_stats(r.spectral_rolloff),
+                }
+            )
+        )
+    else:
+        print("  Timbre:")
+        print(f"    Brightness: {r.brightness:.4f}")
+        print(f"    Warmth:     {r.warmth:.4f}")
+        print(f"    Density:    {r.density:.4f}")
+        print(f"    Roughness:  {r.roughness:.4f}")
+        print(f"    Complexity: {r.complexity:.4f}")
+    return 0
+
+
+def cmd_lufs(args: argparse.Namespace) -> int:
+    from . import lufs, momentary_lufs, short_term_lufs
+
+    samples, sr = _load_audio(args.file)
+    r = lufs(samples, sample_rate=sr)
+
+    payload: dict[str, object] = {
+        "integrated": round(r.integrated_lufs, 4),
+        "momentary": round(r.momentary_lufs, 4),
+        "short_term": round(r.short_term_lufs, 4),
+        "loudness_range": round(r.loudness_range, 4),
+    }
+    momentary_series: list[float] = []
+    short_term_series: list[float] = []
+    if args.series:
+        momentary_series = momentary_lufs(samples, sample_rate=sr)
+        short_term_series = short_term_lufs(samples, sample_rate=sr)
+
+    if args.json:
+        if args.series:
+            payload["momentary_series"] = [round(v, 4) for v in momentary_series]
+            payload["short_term_series"] = [round(v, 4) for v in short_term_series]
+        print(json.dumps(payload))
+    else:
+        print("  Loudness (LUFS):")
+        print(f"    Integrated:     {r.integrated_lufs:.2f} LUFS")
+        print(f"    Momentary:      {r.momentary_lufs:.2f} LUFS")
+        print(f"    Short-term:     {r.short_term_lufs:.2f} LUFS")
+        print(f"    Loudness range: {r.loudness_range:.2f} LU")
+        if args.series:
+            print(f"    Momentary samples:  {len(momentary_series)}")
+            print(f"    Short-term samples: {len(short_term_series)}")
+    return 0
+
+
+def cmd_onset_envelope(args: argparse.Namespace) -> int:
+    from . import onset_envelope
+
+    samples, sr = _load_audio(args.file)
+    env = onset_envelope(
+        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    )
+
+    if args.json:
+        print(json.dumps({"stats": _array_stats(env), "values": [round(v, 6) for v in env]}))
+    else:
+        stats = _array_stats(env)
+        print("  Onset envelope:")
+        print(f"    Frames: {stats['count']}")
+        print(f"    Mean:   {stats['mean']:.6f}")
+        print(f"    Max:    {stats['max']:.6f}")
+    return 0
+
+
+def cmd_nnls_chroma(args: argparse.Namespace) -> int:
+    from . import nnls_chroma
+
+    samples, sr = _load_audio(args.file)
+    n_frames, data = nnls_chroma(samples, sample_rate=sr)
+    n_chroma = 12
+    # data is row-major [12 x n_frames]; mean energy per bin.
+    mean_energy = []
+    for bin_index in range(n_chroma):
+        start = bin_index * n_frames
+        row = data[start : start + n_frames]
+        mean_energy.append(sum(row) / len(row) if row else 0.0)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "n_chroma": n_chroma,
+                    "n_frames": n_frames,
+                    "mean_energy": [round(e, 6) for e in mean_energy],
+                }
+            )
+        )
+    else:
+        print(f"  NNLS chroma: {n_chroma} bins x {n_frames} frames")
+        print("  Mean energy per pitch class:")
+        max_energy = max(mean_energy) if mean_energy else 0
+        for i, e in enumerate(mean_energy):
+            bar = "#" * int(e * 50 / max_energy) if max_energy > 0 else ""
+            print(f"    {PITCH_NAMES[i]:2s} {e:.4f} {bar}")
+    return 0
+
+
+def cmd_tempogram(args: argparse.Namespace) -> int:
+    from . import onset_envelope, tempogram
+
+    samples, sr = _load_audio(args.file)
+    env = onset_envelope(
+        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    )
+    n_frames, data = tempogram(env, sample_rate=sr, hop_length=args.hop_length)
+    win_length = (len(data) // n_frames) if n_frames else 0
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "win_length": win_length,
+                    "n_frames": n_frames,
+                    "stats": _array_stats(data),
+                }
+            )
+        )
+    else:
+        print("  Tempogram:")
+        print(f"    Win length: {win_length}")
+        print(f"    Frames:     {n_frames}")
+        stats = _array_stats(data)
+        print(f"    Mean:       {stats['mean']:.6f}")
+        print(f"    Max:        {stats['max']:.6f}")
+    return 0
+
+
+def cmd_plp(args: argparse.Namespace) -> int:
+    from . import onset_envelope, plp
+
+    samples, sr = _load_audio(args.file)
+    env = onset_envelope(
+        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    )
+    pulse = plp(env, sample_rate=sr, hop_length=args.hop_length)
+
+    if args.json:
+        print(json.dumps({"stats": _array_stats(pulse)}))
+    else:
+        stats = _array_stats(pulse)
+        print("  Predominant local pulse (PLP):")
+        print(f"    Frames: {stats['count']}")
+        print(f"    Mean:   {stats['mean']:.6f}")
+        print(f"    Max:    {stats['max']:.6f}")
+    return 0
+
+
+def cmd_mastering(args: argparse.Namespace) -> int:
+    from .audio import Audio
+
+    samples, sr = _load_audio(args.file)
+    result = Audio.from_buffer(samples, sr).mastering(
+        target_lufs=args.target_lufs, ceiling_db=args.ceiling_db
+    )
+
+    if args.output:
+        _write_wav(args.output, result.samples, result.sample_rate)
+
+    if args.json:
+        payload = {
+            "input_lufs": round(result.input_lufs, 4),
+            "output_lufs": round(result.output_lufs, 4),
+            "applied_gain_db": round(result.applied_gain_db, 4),
+            "latency_samples": result.latency_samples,
+            "sample_rate": result.sample_rate,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print("  Mastering:")
+        print(f"    Input LUFS:  {result.input_lufs:.2f}")
+        print(f"    Output LUFS: {result.output_lufs:.2f}")
+        print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_mastering_processor(args: argparse.Namespace) -> int:
+    from . import mastering_process
+
+    samples, sr = _load_audio(args.file)
+    params = _parse_kv_params(args.params) if args.params else {}
+    result = mastering_process(args.processor, samples, sample_rate=sr, params=params)
+
+    if args.output:
+        _write_wav(args.output, result.samples, result.sample_rate)
+
+    if args.json:
+        payload = {
+            "processor": args.processor,
+            "input_lufs": round(result.input_lufs, 4),
+            "output_lufs": round(result.output_lufs, 4),
+            "applied_gain_db": round(result.applied_gain_db, 4),
+            "latency_samples": result.latency_samples,
+            "sample_rate": result.sample_rate,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Mastering processor: {args.processor}")
+        print(f"    Input LUFS:   {result.input_lufs:.2f}")
+        print(f"    Output LUFS:  {result.output_lufs:.2f}")
+        print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_mastering_processors(args: argparse.Namespace) -> int:
+    from . import mastering_processor_names
+
+    names = mastering_processor_names()
+    if args.json:
+        print(json.dumps(names))
+    else:
+        print("  Mastering processors:")
+        for name in names:
+            print(f"    {name}")
+    return 0
+
+
+def cmd_mastering_pair_processors(args: argparse.Namespace) -> int:
+    from . import mastering_pair_processor_names
+
+    names = mastering_pair_processor_names()
+    if args.json:
+        print(json.dumps(names))
+    else:
+        print("  Mastering pair processors:")
+        for name in names:
+            print(f"    {name}")
+    return 0
+
+
+def cmd_mastering_pair_analyses(args: argparse.Namespace) -> int:
+    from . import mastering_pair_analysis_names
+
+    names = mastering_pair_analysis_names()
+    if args.json:
+        print(json.dumps(names))
+    else:
+        print("  Mastering pair analyses:")
+        for name in names:
+            print(f"    {name}")
+    return 0
+
+
+def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
+    from . import mastering_pair_analyze
+
+    source, sr = _load_audio(args.file)
+    reference, ref_sr = _load_audio(args.reference)
+    if len(source) != len(reference):
+        # The library requires matching lengths; surface a clear error.
+        raise ValueError(
+            f"source ({len(source)}) and reference ({len(reference)}) "
+            "lengths must match for pair analysis"
+        )
+    result_json = mastering_pair_analyze(args.analysis, source, reference, sample_rate=sr)
+    # The library returns a JSON string regardless of --json; print it as-is.
+    print(result_json)
+    _ = ref_sr
+    return 0
+
+
 def main() -> None:
     """CLI entry point."""
     # Common arguments shared by all subcommands
@@ -601,6 +1049,49 @@ def main() -> None:
     pitch_p.add_argument("--algorithm", choices=["yin", "pyin"], default="pyin")
     sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
 
+    # Analysis commands
+    acoustic_p = sub.add_parser("acoustic", parents=[common], help="Estimate acoustic parameters")
+    acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
+    sub.add_parser("rhythm", parents=[common], help="Analyze rhythm primitives")
+    sub.add_parser("dynamics", parents=[common], help="Analyze dynamics/loudness")
+    sub.add_parser("timbre", parents=[common], help="Analyze timbre/spectral shape")
+    lufs_p = sub.add_parser("lufs", parents=[common], help="Compute LUFS loudness")
+    lufs_p.add_argument(
+        "--series", action="store_true", help="Also emit momentary/short-term LUFS series"
+    )
+    sub.add_parser("onset-envelope", parents=[common], help="Compute the onset strength envelope")
+    sub.add_parser("nnls-chroma", parents=[common], help="Compute NNLS chroma")
+    sub.add_parser("tempogram", parents=[common], help="Compute autocorrelation tempogram")
+    sub.add_parser("plp", parents=[common], help="Compute predominant local pulse")
+
+    # Mastering commands
+    mastering_p = sub.add_parser(
+        "mastering", parents=[common], help="Loudness-normalize with a true-peak ceiling"
+    )
+    mastering_p.add_argument("--target-lufs", type=float, default=-14.0)
+    mastering_p.add_argument("--ceiling-db", type=float, default=-1.0)
+    mproc_p = sub.add_parser(
+        "mastering-processor", parents=[common], help="Apply a named mastering processor"
+    )
+    mproc_p.add_argument("--processor", required=True, help="Processor name")
+    mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
+    sub.add_parser("mastering-processors", parents=[common], help="List mastering processor names")
+    sub.add_parser(
+        "mastering-pair-processors",
+        parents=[common],
+        help="List two-input mastering processor names",
+    )
+    sub.add_parser(
+        "mastering-pair-analyses",
+        parents=[common],
+        help="List two-input mastering analysis names",
+    )
+    mpa_p = sub.add_parser(
+        "mastering-pair-analyze", parents=[common], help="Run a two-input mastering analysis"
+    )
+    mpa_p.add_argument("--reference", required=True, help="Reference audio file")
+    mpa_p.add_argument("--analysis", required=True, help="Analysis name")
+
     # Add file argument to all subcommands that need it
     for name in [
         "info",
@@ -616,6 +1107,18 @@ def main() -> None:
         "spectral",
         "pitch",
         "hpss",
+        "acoustic",
+        "rhythm",
+        "dynamics",
+        "timbre",
+        "lufs",
+        "onset-envelope",
+        "nnls-chroma",
+        "tempogram",
+        "plp",
+        "mastering",
+        "mastering-processor",
+        "mastering-pair-analyze",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
 
@@ -640,6 +1143,21 @@ def main() -> None:
         "spectral": cmd_spectral,
         "pitch": cmd_pitch,
         "hpss": cmd_hpss,
+        "acoustic": cmd_acoustic,
+        "rhythm": cmd_rhythm,
+        "dynamics": cmd_dynamics,
+        "timbre": cmd_timbre,
+        "lufs": cmd_lufs,
+        "onset-envelope": cmd_onset_envelope,
+        "nnls-chroma": cmd_nnls_chroma,
+        "tempogram": cmd_tempogram,
+        "plp": cmd_plp,
+        "mastering": cmd_mastering,
+        "mastering-processor": cmd_mastering_processor,
+        "mastering-processors": cmd_mastering_processors,
+        "mastering-pair-processors": cmd_mastering_pair_processors,
+        "mastering-pair-analyses": cmd_mastering_pair_analyses,
+        "mastering-pair-analyze": cmd_mastering_pair_analyze,
     }
 
     handler = commands.get(args.command)
