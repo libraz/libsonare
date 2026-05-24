@@ -19,6 +19,23 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
+namespace {
+
+NnlsChromaConfig make_fast_nnls_chroma_config(int hop_length = 512) {
+  NnlsChromaConfig config;
+  config.cqt.bins_per_octave = 12;
+  config.cqt.n_bins = 84;
+  config.cqt.hop_length = hop_length;
+  config.midi_min = 24;
+  config.n_pitches = 60;
+  config.n_harmonics = 4;
+  config.max_iter = 25;
+  config.tolerance = 1.0e-3f;
+  return config;
+}
+
+}  // namespace
+
 // Features - Spectrogram
 // ============================================================================
 
@@ -222,7 +239,7 @@ SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, floa
 
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sr);
-  Chroma chroma = nnls_chroma(audio);
+  Chroma chroma = nnls_chroma(audio, make_fast_nnls_chroma_config());
 
   *out_n_frames = chroma.n_frames();
   size_t total = static_cast<size_t>(chroma.n_chroma()) * chroma.n_frames();

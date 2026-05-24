@@ -78,7 +78,18 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
 
   if (config.chroma_method == ChromaMethod::NNLS) {
     NnlsChromaConfig nnls_config;
+    // Chord recognition does not need the full seven-octave, 100-iteration
+    // analysis profile used by the standalone NNLS feature. A lighter front-end
+    // keeps the audio constructor practical for tests and interactive use while
+    // preserving the semitone salience needed by the template matcher.
+    nnls_config.cqt.bins_per_octave = 12;
+    nnls_config.cqt.n_bins = 84;
     nnls_config.cqt.hop_length = config.hop_length;
+    nnls_config.midi_min = 24;
+    nnls_config.n_pitches = 60;
+    nnls_config.n_harmonics = 4;
+    nnls_config.max_iter = 25;
+    nnls_config.tolerance = 1.0e-3f;
     chroma_ = nnls_chroma(audio, nnls_config);
   } else {
     ChromaConfig chroma_config;
