@@ -29,4 +29,7 @@ BiquadCoeffs rbj_peak(float w0, float q, float gain_db);
 BiquadCoeffs rbj_high_shelf(float w0, float q, float gain_db);
 BiquadCoeffs rbj_low_shelf(float w0, float q, float gain_db);
 
+/// @brief Evaluate |H(e^jw)| for normalized biquad coefficients.
+float biquad_magnitude(const BiquadCoeffs& coeffs, float omega);
+
 }  // namespace sonare::mastering::common

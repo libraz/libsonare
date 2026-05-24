@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <stdexcept>
 
 #include "util/constants.h"
@@ -297,6 +298,18 @@ BiquadCoeffs vicanek_low_shelf(float w0, float gain_db) {
   return {b0_base * ginva0, (1.0f - w) * ginva0,
           -0.25f * bb2 * ginva0 / std::max(b0_base, 1.0e-12f), (1.0f - v) * inva0,
           -0.25f * aa2 * inva0 * inva0};
+}
+
+float biquad_magnitude(const BiquadCoeffs& coeffs, float omega) {
+  const std::complex<float> z1 = std::exp(std::complex<float>(0.0f, -omega));
+  const std::complex<float> z2 = z1 * z1;
+  const std::complex<float> numerator = coeffs.b0 + coeffs.b1 * z1 + coeffs.b2 * z2;
+  const std::complex<float> denominator = 1.0f + coeffs.a1 * z1 + coeffs.a2 * z2;
+  const float denom = std::abs(denominator);
+  if (denom <= 1.0e-12f) {
+    return 0.0f;
+  }
+  return std::abs(numerator) / denom;
 }
 
 }  // namespace sonare::mastering::common

@@ -117,11 +117,13 @@ float Tube::process_model(float sample, const TubeConfig& config) {
   const float plate_v = 250.0f;
   const float idle = plate_current_ma(grid_bias_v, plate_v);
   const float current_delta = plate_current_ma(grid_bias_v + grid_signal_v, plate_v) - idle;
-  return std::tanh(current_delta * 2.5f);
+  const float clipped = std::tanh(current_delta * 2.5f);
+  return config.harmonic_drive * clipped + (1.0f - config.harmonic_drive) * current_delta;
 }
 
 void Tube::validate_config(const TubeConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.bias_v) ||
+      config.harmonic_drive < 0.0f || config.harmonic_drive > 1.0f ||
       config.oversample_factor < 1 ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8)) {

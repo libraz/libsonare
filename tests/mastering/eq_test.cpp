@@ -2,8 +2,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <vector>
 
+#include "mastering/common/biquad_design.h"
 #include "mastering/eq/api_style.h"
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
@@ -47,6 +49,17 @@ float peak_abs(const std::vector<float>& samples) {
   float peak = 0.0f;
   for (float sample : samples) peak = std::max(peak, std::abs(sample));
   return peak;
+}
+
+float kernel_magnitude_at(const std::vector<float>& kernel, double frequency_hz,
+                          double sample_rate) {
+  std::complex<double> response{0.0, 0.0};
+  const double omega = 2.0 * kPi * frequency_hz / sample_rate;
+  for (size_t n = 0; n < kernel.size(); ++n) {
+    response += static_cast<double>(kernel[n]) *
+                std::exp(std::complex<double>(0.0, -omega * static_cast<double>(n)));
+  }
+  return static_cast<float>(std::abs(response));
 }
 
 void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
@@ -312,6 +325,25 @@ TEST_CASE("LinearPhaseEq high-pass attenuates lows while preserving highs", "[ma
 
   REQUIRE(low_gain < 0.35f);
   REQUIRE(high_gain > 0.85f);
+}
+
+TEST_CASE("LinearPhaseEq kernel follows RBJ biquad magnitude", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  LinearPhaseEq eq({8192, 2049, false});
+  eq.prepare(sample_rate, 1024);
+  const EqBand band{EqBandType::Peak, 1000.0f, 6.0f, 0.70710678f, true};
+  eq.set_band(0, band);
+
+  const auto coeffs = sonare::mastering::common::rbj_peak(
+      static_cast<float>(2.0 * kPi * band.frequency_hz / sample_rate), band.q, band.gain_db);
+
+  for (double frequency_hz : {250.0, 1000.0, 4000.0}) {
+    const float expected = sonare::mastering::common::biquad_magnitude(
+        coeffs, static_cast<float>(2.0 * kPi * frequency_hz / sample_rate));
+    const float actual = kernel_magnitude_at(eq.kernel(), frequency_hz, sample_rate);
+    INFO("frequency: " << frequency_hz);
+    REQUIRE_THAT(actual, WithinAbs(expected, 0.08f));
+  }
 }
 
 TEST_CASE("LinearPhaseEq partitioned convolution matches direct convolution", "[mastering][eq]") {

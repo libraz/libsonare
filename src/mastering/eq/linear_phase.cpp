@@ -7,17 +7,61 @@
 
 #include "core/fft.h"
 #include "core/window.h"
-#include "util/db.h"
+#include "mastering/common/biquad_design.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 namespace {
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
-float db_to_gain(float db) { return db_to_linear(db); }
-
 double clamp_frequency(double frequency_hz, double sample_rate) {
   return std::clamp(frequency_hz, 1.0, sample_rate * 0.5 - 1.0);
+}
+
+common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) {
+  const double center = clamp_frequency(band.frequency_hz, sample_rate);
+  const float omega =
+      static_cast<float>(sonare::constants::kTwoPi * center / static_cast<double>(sample_rate));
+  const float q = std::max(band.q, 1.0e-6f);
+
+  if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
+    switch (band.type) {
+      case EqBandType::Peak:
+        return common::vicanek_peak(omega, q, band.gain_db);
+      case EqBandType::LowShelf:
+        return common::vicanek_low_shelf(omega, band.gain_db);
+      case EqBandType::HighShelf:
+        return common::vicanek_high_shelf(omega, band.gain_db);
+      case EqBandType::LowPass:
+        return common::vicanek_lowpass(omega, q);
+      case EqBandType::HighPass:
+        return common::vicanek_highpass(omega, q);
+      case EqBandType::BandPass:
+        return common::vicanek_bandpass(omega, q);
+      case EqBandType::Notch:
+        return common::vicanek_notch(omega, q);
+    }
+  }
+
+  switch (band.type) {
+    case EqBandType::Peak:
+      return common::rbj_peak(omega, q, band.gain_db);
+    case EqBandType::LowShelf:
+      return common::rbj_low_shelf(omega, q, band.gain_db);
+    case EqBandType::HighShelf:
+      return common::rbj_high_shelf(omega, q, band.gain_db);
+    case EqBandType::LowPass:
+      return common::rbj_lowpass(omega, q);
+    case EqBandType::HighPass:
+      return common::rbj_highpass(omega, q);
+    case EqBandType::BandPass:
+      return common::rbj_bandpass(omega, q);
+    case EqBandType::Notch:
+      return common::rbj_notch(omega, q);
+  }
+
+  return {};
 }
 
 }  // namespace
@@ -239,52 +283,9 @@ void LinearPhaseEq::validate_band_index(size_t index) {
 
 float LinearPhaseEq::band_magnitude(const EqBand& band, double frequency_hz, double sample_rate) {
   const double frequency = clamp_frequency(frequency_hz, sample_rate);
-  const double center = clamp_frequency(band.frequency_hz, sample_rate);
-  const float target_gain = db_to_gain(band.gain_db);
-  const double q = std::max(static_cast<double>(band.q), 1.0e-6);
-
-  switch (band.type) {
-    case EqBandType::Peak: {
-      const double octaves = std::log2(frequency / center);
-      const double weight = std::exp(-0.5 * std::pow(octaves * q * 2.0, 2.0));
-      return static_cast<float>(1.0 + (target_gain - 1.0) * weight);
-    }
-
-    case EqBandType::LowShelf: {
-      const double ratio = std::pow(frequency / center, q * 2.0);
-      const double weight = 1.0 / (1.0 + ratio);
-      return static_cast<float>(1.0 + (target_gain - 1.0) * weight);
-    }
-
-    case EqBandType::HighShelf: {
-      const double ratio = std::pow(center / frequency, q * 2.0);
-      const double weight = 1.0 / (1.0 + ratio);
-      return static_cast<float>(1.0 + (target_gain - 1.0) * weight);
-    }
-
-    case EqBandType::LowPass: {
-      const double ratio = frequency / center;
-      return static_cast<float>(1.0 / std::sqrt(1.0 + std::pow(ratio, 4.0 * q)));
-    }
-
-    case EqBandType::HighPass: {
-      const double ratio = center / frequency;
-      return static_cast<float>(1.0 / std::sqrt(1.0 + std::pow(ratio, 4.0 * q)));
-    }
-
-    case EqBandType::BandPass: {
-      const double octaves = std::abs(std::log2(frequency / center));
-      return static_cast<float>(std::exp(-0.5 * std::pow(octaves * q * 2.0, 2.0)));
-    }
-
-    case EqBandType::Notch: {
-      const double octaves = std::log2(frequency / center);
-      const double weight = std::exp(-0.5 * std::pow(octaves * q * 2.0, 2.0));
-      return static_cast<float>(std::max(0.0, 1.0 - weight));
-    }
-  }
-
-  return 1.0f;
+  const float omega =
+      static_cast<float>(sonare::constants::kTwoPi * frequency / static_cast<double>(sample_rate));
+  return common::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
 }
 
 }  // namespace sonare::mastering::eq

@@ -216,6 +216,30 @@ TEST_CASE("Tube uses Dempwolf 12AX7 model with configurable oversampling",
   REQUIRE(dry_mix[0] < 0.5f);
 }
 
+TEST_CASE("Tube harmonic drive preserves legacy default and exposes pure model",
+          "[mastering][saturation]") {
+  Tube legacy_default({18.0f, 0.25f, 1.0f, 1});
+  Tube explicit_legacy({18.0f, 0.25f, 1.0f, 1, -1.6f, 1.0f});
+  Tube pure_model({18.0f, 0.25f, 1.0f, 1, -1.6f, 0.0f});
+  legacy_default.prepare(48000.0, 16);
+  explicit_legacy.prepare(48000.0, 16);
+  pure_model.prepare(48000.0, 16);
+
+  std::vector<float> default_signal = {-0.5f, 0.0f, 0.5f};
+  std::vector<float> explicit_signal = default_signal;
+  std::vector<float> pure_signal = default_signal;
+  process(legacy_default, default_signal);
+  process(explicit_legacy, explicit_signal);
+  process(pure_model, pure_signal);
+
+  for (size_t i = 0; i < default_signal.size(); ++i) {
+    REQUIRE_THAT(default_signal[i], WithinAbs(explicit_signal[i], 1.0e-7f));
+  }
+  REQUIRE(std::abs(default_signal.front() - pure_signal.front()) > 1.0e-5f);
+  REQUIRE(std::abs(default_signal.back() - pure_signal.back()) > 1.0e-5f);
+  REQUIRE(std::abs(pure_signal.back()) < std::abs(default_signal.back()));
+}
+
 TEST_CASE("Tube Miller capacitance path keeps block state", "[mastering][saturation]") {
   Tube tube({24.0f, 0.2f, 1.0f, 1});
   tube.prepare(48000.0, 8);
@@ -247,6 +271,8 @@ TEST_CASE("Tube exposes voltage-domain bias control", "[mastering][saturation]")
 
   REQUIRE(std::abs(hot_signal[0] - cold_signal[0]) > 0.001f);
   REQUIRE_THROWS(Tube({18.0f, 0.0f, 1.0f, 1, std::numeric_limits<float>::infinity()}));
+  REQUIRE_THROWS(Tube({18.0f, 0.0f, 1.0f, 1, -1.6f, -0.1f}));
+  REQUIRE_THROWS(Tube({18.0f, 0.0f, 1.0f, 1, -1.6f, 1.1f}));
 }
 
 TEST_CASE("Tape saturation changes driven signal and keeps state resettable",

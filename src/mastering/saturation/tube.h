@@ -13,6 +13,7 @@ struct TubeConfig {
   float mix = 1.0f;
   int oversample_factor = 4;
   float bias_v = -1.6f;
+  float harmonic_drive = 1.0f;
 };
 
 class Tube : public common::ProcessorBase {
