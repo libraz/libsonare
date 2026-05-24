@@ -276,7 +276,7 @@ TEST_CASE("CLI onsets command", "[cli]") {
 }
 
 TEST_CASE("CLI chords command", "[cli]") {
-  create_test_wav(TEST_WAV);
+  create_test_wav(TEST_WAV, 0.5f);
 
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " chords " + TEST_WAV + " -q");
@@ -507,7 +507,7 @@ TEST_CASE("CLI onset-env command", "[cli]") {
 }
 
 TEST_CASE("CLI cqt command", "[cli]") {
-  create_test_wav(TEST_WAV);
+  create_test_wav(TEST_WAV, 0.5f);
 
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " cqt " + TEST_WAV + " -q");

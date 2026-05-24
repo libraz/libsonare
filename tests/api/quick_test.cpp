@@ -145,7 +145,7 @@ TEST_CASE("quick::detect_beats", "[quick][api]") {
 
 TEST_CASE("quick::analyze", "[quick][api]") {
   SECTION("returns complete analysis result") {
-    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
     auto result = sonare::quick::analyze(samples.data(), samples.size(), 22050);
 
     // BPM
@@ -169,7 +169,7 @@ TEST_CASE("quick::analyze", "[quick][api]") {
   }
 
   SECTION("form string is not empty") {
-    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
     auto result = sonare::quick::analyze(samples.data(), samples.size(), 22050);
 
     // Form should have at least one character

@@ -287,7 +287,7 @@ TEST_CASE("MusicAnalyzer progress callback", "[music_analyzer]") {
 }
 
 TEST_CASE("MusicAnalyzer analyze deterministic", "[music_analyzer]") {
-  Audio audio = create_test_audio();
+  Audio audio = create_test_audio(22050, 2.0f);
 
   MusicAnalyzer analyzer1(audio);
   AnalysisResult r1 = analyzer1.analyze();
@@ -307,7 +307,7 @@ TEST_CASE("MusicAnalyzer analyze deterministic", "[music_analyzer]") {
 }
 
 TEST_CASE("MusicAnalyzer analyze multiple instances", "[music_analyzer]") {
-  Audio audio = create_test_audio();
+  Audio audio = create_test_audio(22050, 2.0f);
 
   MusicAnalyzer a(audio);
   MusicAnalyzer b(audio);
