@@ -13,6 +13,20 @@ option(BUILD_BENCH "Build C++ benchmark binary" OFF)
 option(BUILD_MASTERING "Build the mastering library" ON)
 option(BUILD_MIXING "Build the mixing library" ON)
 option(BUILD_GRAPH "Build the routing graph library" ON)
+
+# The mixer embeds mastering processors as channel-strip EQ/inserts.
+if(BUILD_MIXING AND NOT BUILD_MASTERING)
+  message(STATUS "libsonare: BUILD_MIXING requires BUILD_MASTERING; enabling BUILD_MASTERING")
+  set(BUILD_MASTERING ON CACHE BOOL "Build the mastering library" FORCE)
+endif()
+
+# The C mixer (sonare_c_mixing.cpp) routes signal through the routing graph, so
+# mixing requires the graph library. Auto-enable it to keep existing configs
+# that only set BUILD_MIXING working.
+if(BUILD_MIXING AND NOT BUILD_GRAPH)
+  message(STATUS "libsonare: BUILD_MIXING requires BUILD_GRAPH; enabling BUILD_GRAPH")
+  set(BUILD_GRAPH ON CACHE BOOL "Build the routing graph library" FORCE)
+endif()
 option(BUILD_FX "Build creative realtime FX processors" ON)
 option(BUILD_PITCH_EDITOR "Build monophonic pitch editor primitives" ON)
 option(BUILD_VOICE_CHANGER "Build realtime voice changer primitives" ON)

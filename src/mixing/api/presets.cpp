@@ -29,6 +29,7 @@ Scene make_vocal_reverb_send() {
   scene.strips.push_back(return_strip);
 
   scene.connections.push_back({"vocal", "master"});
+  scene.connections.push_back({"vocal-verb", "vocal-verb-return"});
   scene.connections.push_back({"vocal-verb-return", "master"});
   return scene;
 }
@@ -54,6 +55,7 @@ Scene make_drum_bus_subgroup() {
       {InsertSlot::PreFader, "dynamics.parallelComp", "{\"thresholdDb\":-20,\"mix\":0.35}"});
   bus_return.inserts.push_back({InsertSlot::PostFader, "saturation.tape", "{\"driveDb\":1.5}"});
   scene.strips.push_back(bus_return);
+  scene.connections.push_back({"drum-bus", "drum-bus-return"});
   scene.connections.push_back({"drum-bus-return", "master"});
 
   scene.vca_groups.push_back({"drums", 0.0f, {"kick", "snare", "overheads", "drum-bus-return"}});

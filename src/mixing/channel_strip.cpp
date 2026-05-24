@@ -151,13 +151,16 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> fader_events{};
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> pan_events{};
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> width_events{};
+  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> insert_events{};
   const size_t fader_count =
       consume_events(fader_automation_, block_start, num_samples, fader_events);
   const size_t pan_count = consume_events(pan_automation_, block_start, num_samples, pan_events);
   const size_t width_count =
       consume_events(width_automation_, block_start, num_samples, width_events);
+  const size_t insert_count =
+      consume_events(insert_automation_, block_start, num_samples, insert_events);
 
-  if (fader_count == 0 && pan_count == 0 && width_count == 0) {
+  if (fader_count == 0 && pan_count == 0 && width_count == 0 && insert_count == 0) {
     process_unsegmented(channels, num_channels, num_samples);
     return;
   }
@@ -174,6 +177,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   size_t fader_index = 0;
   size_t pan_index = 0;
   size_t width_index = 0;
+  size_t insert_index = 0;
   int cursor = 0;
   while (cursor < num_samples) {
     while (fader_index < fader_count && fader_events[fader_index].offset == cursor) {
@@ -185,11 +189,15 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     while (width_index < width_count && width_events[width_index].offset == cursor) {
       apply_automation_event(width_events[width_index++].event);
     }
+    while (insert_index < insert_count && insert_events[insert_index].offset == cursor) {
+      apply_automation_event(insert_events[insert_index++].event);
+    }
 
     const int next_offset = std::min(
         {num_samples, next_event_offset(fader_events, fader_count, fader_index, num_samples),
          next_event_offset(pan_events, pan_count, pan_index, num_samples),
-         next_event_offset(width_events, width_count, width_index, num_samples)});
+         next_event_offset(width_events, width_count, width_index, num_samples),
+         next_event_offset(insert_events, insert_count, insert_index, num_samples)});
     const int segment_samples = std::max(0, next_offset - cursor);
     if (segment_samples > 0) {
       process_segment(channels, num_channels, cursor, segment_samples, cursor);
@@ -359,9 +367,14 @@ void ChannelStrip::reset() {
 
 int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
 
-int ChannelStrip::latency_samples_q8() const noexcept {
-  return alignment_delay_.latency_samples_q8() + total_latency_q8(pre_inserts_) +
-         total_latency_q8(post_inserts_);
+int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }
+
+int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {
+  return alignment_delay_.latency_samples_q8() + total_latency_q8(pre_inserts_);
+}
+
+int ChannelStrip::post_fader_latency_samples_q8() const noexcept {
+  return pre_fader_latency_samples_q8() + total_latency_q8(post_inserts_);
 }
 
 void ChannelStrip::set_polarity_invert(bool left, bool right) noexcept {
@@ -411,6 +424,31 @@ bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
   return pan_automation_.push(event);
 }
 
+bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
+                                              int64_t sample_pos, float value,
+                                              AutomationCurveType curve) noexcept {
+  const size_t idx = insert_index;
+  const size_t pre_count = pre_inserts_.size();
+  rt::ProcessorBase* insert = nullptr;
+  if (idx < pre_count) {
+    insert = pre_inserts_[idx].get();
+  } else if (idx - pre_count < post_inserts_.size()) {
+    insert = post_inserts_[idx - pre_count].get();
+  }
+  if (insert == nullptr || !insert->parameter_is_realtime_safe(param_id)) {
+    return false;
+  }
+
+  AutomationEvent event;
+  event.sample_pos = sample_pos;
+  event.value = value;
+  event.curve = curve;
+  event.target.kind = AutomationTargetKind::InsertParameter;
+  event.target.insert_index = insert_index;
+  event.target.param_id = param_id;
+  return insert_automation_.push(event);
+}
+
 void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept {
   switch (event.target.kind) {
     case AutomationTargetKind::Fader:
@@ -422,8 +460,23 @@ void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept
     case AutomationTargetKind::Width:
       set_width(event.value);
       break;
+    case AutomationTargetKind::InsertParameter: {
+      // insert_index addresses the combined sequence [pre_inserts_ ... post_inserts_ ...].
+      const size_t idx = event.target.insert_index;
+      const size_t pre_count = pre_inserts_.size();
+      rt::ProcessorBase* insert = nullptr;
+      if (idx < pre_count) {
+        insert = pre_inserts_[idx].get();
+      } else if (idx - pre_count < post_inserts_.size()) {
+        insert = post_inserts_[idx - pre_count].get();
+      }
+      if (insert != nullptr && insert->parameter_is_realtime_safe(event.target.param_id)) {
+        // Ignore unrecognized ids / out-of-range; no-op on failure.
+        insert->set_parameter(event.target.param_id, event.value);
+      }
+      break;
+    }
     case AutomationTargetKind::Send:
-    case AutomationTargetKind::InsertParameter:
       break;
   }
 }
@@ -495,6 +548,11 @@ SendTiming ChannelStrip::send_timing(size_t index) const {
     return SendTiming::PostFader;
   }
   return sends_[index]->timing();
+}
+
+int ChannelStrip::send_latency_samples_q8(size_t index) const noexcept {
+  return send_timing(index) == SendTiming::PreFader ? pre_fader_latency_samples_q8()
+                                                    : post_fader_latency_samples_q8();
 }
 
 void ChannelStrip::mix_send(size_t index, float* const* dest, int num_channels, int num_samples) {

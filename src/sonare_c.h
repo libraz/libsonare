@@ -635,8 +635,36 @@ SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   size_t* index_out);
 SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float send_db);
 SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
+
+// Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
+// mixer is NULL.
+size_t sonare_mixer_strip_count(const SonareMixer* mixer);
+// Borrowed strip handle by index in [0, count). Returns NULL if out of range or
+// mixer is NULL. The handle is owned by the mixer; do not free it.
+SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index);
+// Borrowed strip handle by strip id. Returns NULL if not found or mixer/id NULL.
+// The handle is owned by the mixer; do not free it.
+SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
+// Schedules sample-accurate insert-parameter automation on a strip's insert.
+// @c insert_index addresses the combined insert sequence
+// [pre-inserts... post-inserts...]. @c param_id is processor-specific (see each
+// processor's set_parameter doc). @c sample_pos is in absolute samples from the
+// start of processing: the mixer advances an internal sample position from 0 on
+// the first sonare_mixer_process_stereo call (reset to 0 on recompile).
+// @c curve: 0 = Linear, 1 = Exponential. Returns @c SONARE_OK on success, or
+// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL, curve is unknown, or
+// insert_index is out of range.
+SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned int insert_index,
+                                                    unsigned int param_id, int64_t sample_pos,
+                                                    float value, int curve);
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
+// Rebuilds and compiles the internal routing graph from the current topology
+// (strips, sends, buses, connections). Call after manual topology changes
+// (e.g. sonare_mixer_add_strip / sonare_strip_add_send) before processing.
+// sonare_mixer_process_stereo also compiles lazily as a fallback when the
+// topology is dirty.
+SonareError sonare_mixer_compile(SonareMixer* mixer);
 SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* input_left,
                                         const float* const* input_right, size_t input_count,
                                         float* output_left, float* output_right,

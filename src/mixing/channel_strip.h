@@ -50,6 +50,8 @@ class ChannelStrip : public rt::ProcessorBase {
   void reset() override;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int pre_fader_latency_samples_q8() const noexcept;
+  int post_fader_latency_samples_q8() const noexcept;
 
   void set_polarity_invert(bool left, bool right) noexcept;
   bool polarity_invert_left() const noexcept;
@@ -117,12 +119,19 @@ class ChannelStrip : public rt::ProcessorBase {
   size_t num_pre_inserts() const noexcept { return pre_inserts_.size(); }
   size_t num_post_inserts() const noexcept { return post_inserts_.size(); }
 
+  // Schedules a sample-accurate insert-parameter automation event. @p insert_index addresses
+  // the combined insert sequence [pre_inserts_ ... then post_inserts_ ...]. Control-thread API.
+  bool schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
+                                  int64_t sample_pos, float value,
+                                  AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+
   // Aux sends. add_send is a control-thread mutator (may allocate); it must not run
   // concurrently with process()/mix_send(), matching FxBus::add_insert's contract.
   size_t add_send(const SendConfig& cfg);
   size_t num_sends() const noexcept { return sends_.size(); }
   void set_send_db(size_t index, float db);
   SendTiming send_timing(size_t index) const;
+  int send_latency_samples_q8(size_t index) const noexcept;
   bool schedule_send_automation(size_t index, int64_t sample_pos, float db,
                                 AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
 
@@ -160,6 +169,7 @@ class ChannelStrip : public rt::ProcessorBase {
   AutomationLane fader_automation_;
   AutomationLane pan_automation_;
   AutomationLane width_automation_;
+  AutomationLane insert_automation_;
 
   std::atomic<float> polarity_left_{1.0f};
   std::atomic<float> polarity_right_{1.0f};

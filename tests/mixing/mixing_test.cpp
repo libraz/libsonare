@@ -10,7 +10,9 @@
 #include "analysis/meter/lufs.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/sidechain_router.h"
+#include "mastering/eq/linear_phase.h"
 #include "mastering/eq/parametric.h"
+#include "mastering/maximizer/maximizer.h"
 #include "sonare_c.h"
 #include "util/constants.h"
 
@@ -71,6 +73,15 @@ class ScaleProcessor final : public sonare::rt::ProcessorBase {
     }
   }
   void reset() override {}
+
+  // Param 0 = linear scale, so insert automation can drive this processor.
+  bool set_parameter(unsigned int param_id, float value) override {
+    if (param_id == 0) {
+      scale_ = value;
+      return true;
+    }
+    return false;
+  }
 
  private:
   float scale_ = 1.0f;
@@ -584,6 +595,93 @@ TEST_CASE("ChannelStrip applies pan and width automation in sample order", "[mix
   REQUIRE_THAT(right[4], WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(strip.width(), WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(strip.pan(), WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("ChannelStrip drives insert parameter automation at sample offsets", "[mixing]") {
+  // schedule_insert_automation must dispatch to the insert's set_parameter at the
+  // scheduled sample. ScaleProcessor::set_parameter(0, v) sets its linear gain, so
+  // a single step event flips the gain mid-block at a known boundary.
+  std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 6> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(2.0f));
+  strip.prepare(48000.0, 6);
+  REQUIRE(strip.schedule_insert_automation(0, 0, 102, 4.0f));
+  strip.process_at(channels, 2, 6, 100);
+
+  for (int i = 0; i < 2; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(2.0f, 0.0001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(2.0f, 0.0001f));
+  }
+  for (int i = 2; i < 6; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip insert automation boosts a parametric EQ band", "[mixing][eq]") {
+  // Proves set_parameter reaches a real mastering insert (ParametricEq): band 0
+  // gain lives at param id 1 (block-of-3 layout). Automating it from 0 dB to
+  // +12 dB must lift the band's output energy, which a no-op set_parameter could
+  // not do.
+  constexpr int kN = 4096;
+  auto make_sine = [] {
+    std::vector<float> out(kN);
+    for (int i = 0; i < kN; ++i) {
+      out[static_cast<size_t>(i)] =
+          0.5f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
+    }
+    return out;
+  };
+
+  auto make_band0_eq = [] {
+    auto eq = std::make_unique<sonare::mastering::eq::ParametricEq>();
+    sonare::mastering::eq::EqBand band;
+    band.type = sonare::mastering::eq::EqBandType::Peak;
+    band.frequency_hz = 1000.0f;
+    band.gain_db = 0.0f;
+    band.q = sonare::constants::kButterworthQ;
+    band.enabled = true;
+    eq->set_band(0, band);
+    return eq;
+  };
+
+  std::vector<float> flat_l = make_sine();
+  std::vector<float> flat_r = flat_l;
+  float* flat[] = {flat_l.data(), flat_r.data()};
+  sonare::mixing::ChannelStrip flat_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  flat_strip.add_pre_insert(make_band0_eq());
+  flat_strip.prepare(48000.0, kN);
+  flat_strip.process(flat, 2, kN);
+
+  std::vector<float> auto_l = make_sine();
+  std::vector<float> auto_r = auto_l;
+  float* automated[] = {auto_l.data(), auto_r.data()};
+  sonare::mixing::ChannelStrip auto_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  auto_strip.add_pre_insert(make_band0_eq());
+  auto_strip.prepare(48000.0, kN);
+  REQUIRE(auto_strip.schedule_insert_automation(0, 1, 0, 12.0f));
+  auto_strip.process_at(automated, 2, kN, 0);
+
+  REQUIRE(rms_tail(auto_l, 512) > rms_tail(flat_l, 512) * 1.5f);
+}
+
+TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
+  sonare::mixing::ChannelStrip linear_phase_strip;
+  linear_phase_strip.add_pre_insert(std::make_unique<sonare::mastering::eq::LinearPhaseEq>());
+  linear_phase_strip.prepare(48000.0, 128);
+
+  REQUIRE_FALSE(linear_phase_strip.schedule_insert_automation(0, 1, 0, 6.0f));
+
+  sonare::mixing::ChannelStrip maximizer_strip;
+  maximizer_strip.add_pre_insert(std::make_unique<sonare::mastering::maximizer::Maximizer>());
+  maximizer_strip.prepare(48000.0, 128);
+
+  REQUIRE(maximizer_strip.schedule_insert_automation(0, 0, 0, 3.0f));
+  REQUIRE_FALSE(maximizer_strip.schedule_insert_automation(0, 1, 0, -2.0f));
+  REQUIRE(maximizer_strip.schedule_insert_automation(0, 2, 0, 20.0f));
 }
 
 TEST_CASE("ChannelStrip reuses mastering EQ as a pre-fader insert", "[mixing]") {
