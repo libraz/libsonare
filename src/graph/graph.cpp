@@ -136,7 +136,8 @@ bool Graph::compile() {
       }
       const Node* source = node_map_.at(connection.source_node);
       const int path_latency_q8 =
-          latency_to_node_q8[connection.source_node] + source->processor().latency_samples_q8();
+          latency_to_node_q8[connection.source_node] +
+          source->processor().output_latency_samples_q8(connection.source_port);
       max_incoming_latency_q8 = std::max(max_incoming_latency_q8, path_latency_q8);
     }
     latency_to_node_q8[current->id()] = max_incoming_latency_q8;
@@ -147,8 +148,9 @@ bool Graph::compile() {
     runtime_connection.connection = connection;
     runtime_connection.source = node_map_.at(connection.source_node);
     runtime_connection.dest = node_map_.at(connection.dest_node);
-    const int source_path_latency_q8 = latency_to_node_q8[connection.source_node] +
-                                       runtime_connection.source->processor().latency_samples_q8();
+    const int source_path_latency_q8 =
+        latency_to_node_q8[connection.source_node] +
+        runtime_connection.source->processor().output_latency_samples_q8(connection.source_port);
     runtime_connection.delay_samples_q8 =
         std::max(0, latency_to_node_q8[connection.dest_node] - source_path_latency_q8);
     runtime_connection.delay_samples = runtime_connection.delay_samples_q8 >> 8;
