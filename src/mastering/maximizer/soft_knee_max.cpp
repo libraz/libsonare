@@ -1,8 +1,10 @@
 #include "mastering/maximizer/soft_knee_max.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 
 namespace sonare::mastering::maximizer {
@@ -20,6 +22,7 @@ void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
 }
 
 void SoftKneeMax::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("SoftKneeMax must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -47,6 +50,40 @@ void SoftKneeMax::set_config(const SoftKneeMaxConfig& config) {
   validate_config(config);
   config_ = config;
   if (prepared_) prepare(sample_rate_, max_block_size_);
+}
+
+bool SoftKneeMax::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      // Drive applied per sample in process(); no coefficients to recompute.
+      config_.input_gain_db = value;
+      return true;
+    case 1:
+      config_.ceiling_db = std::min(0.0f, value);
+      // Routes to Maximizer ceiling (param 1), which re-prepares the inner
+      // limiter and clears its lookahead/gain state. Unavoidable reset.
+      if (prepared_) {
+        maximizer_.set_parameter(1, config_.ceiling_db);
+      }
+      return true;
+    case 2:
+      // Soft-knee width applied per sample in process(); no coefficients.
+      config_.knee_db = std::max(0.0f, value);
+      return true;
+    case 3:
+      config_.release_ms = std::max(0.0f, value);
+      // Routes to Maximizer release (param 2): in-place, preserves audio state.
+      if (prepared_) {
+        maximizer_.set_parameter(2, config_.release_ms);
+      }
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id != 1u;
 }
 
 void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {

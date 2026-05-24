@@ -302,7 +302,9 @@ TEST_CASE("TruePeakFilter returns sample peak and interpolated output", "[master
   REQUIRE(fallback.factor() == 2);
   REQUIRE(fallback.latency_samples() == 6);
   REQUIRE_THAT(output_2x[2], WithinAbs(0.8f, 0.0001f));
-  REQUIRE_THROWS(TruePeakFilter(1, 8));
+  TruePeakFilter eightx(1, 8);
+  REQUIRE(eightx.factor() == 8);
+  REQUIRE_THROWS(TruePeakFilter(1, 3));
 }
 
 TEST_CASE("PartitionedConvolver matches direct convolution across streaming blocks",

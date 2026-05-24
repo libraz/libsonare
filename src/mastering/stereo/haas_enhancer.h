@@ -27,6 +27,13 @@ class HaasEnhancer : public common::ProcessorBase {
   const HaasEnhancerConfig& config() const { return config_; }
   int delay_samples() const { return delay_samples_; }
 
+  // Automatable parameters:
+  //   0 = delay_ms (clamped to >= 0; reallocates the delay line and clears its
+  //       state when prepared, so this id is NOT realtime-safe)
+  //   1 = mix (clamped to [0, 1], RT-safe, no state reset)
+  bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
+
  private:
   static void validate_config(const HaasEnhancerConfig& config);
   void rebuild_delay();

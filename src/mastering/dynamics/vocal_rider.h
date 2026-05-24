@@ -34,6 +34,17 @@ class VocalRider : public common::ProcessorBase {
   const VocalRiderConfig& config() const { return config_; }
   float last_gain_db() const { return last_gain_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = target_db
+  //   1 = max_boost_db (clamped to >= 0)
+  //   2 = max_cut_db (clamped to >= 0)
+  //   3 = attack_ms (clamped to >= 0)
+  //   4 = release_ms (clamped to >= 0)
+  //   5 = output_gain_db
+  //   6 = gain_smoothing_ms (clamped to >= 0)
+  //   7 = noise_floor_db
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const VocalRiderConfig& config);
   static float coeff(double sample_rate, float ms);

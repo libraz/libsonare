@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -48,6 +50,7 @@ void Tape::prepare(double sample_rate, int max_block_size) {
 }
 
 void Tape::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("Tape must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -107,6 +110,41 @@ void Tape::set_config(const TapeConfig& config) {
     oversampler_.set_factor(config_.oversample_factor);
   }
   if (prepared_) update_filters(sample_rate_);
+}
+
+bool Tape::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.drive_db = value;
+      return true;
+    case 1:
+      config_.saturation = std::clamp(value, 0.0f, 1.0f);
+      hysteresis_.set_config(make_ja_config(config_));
+      return true;
+    case 2:
+      config_.hysteresis = std::clamp(value, 0.0f, 1.0f);
+      hysteresis_.set_config(make_ja_config(config_));
+      return true;
+    case 3:
+      config_.output_gain_db = value;
+      return true;
+    case 4:
+      config_.speed_ips = std::max(value, std::numeric_limits<float>::min());
+      if (prepared_) update_filters(sample_rate_);
+      return true;
+    case 5:
+      config_.head_bump_db = std::max(0.0f, value);
+      if (prepared_) update_filters(sample_rate_);
+      return true;
+    case 6:
+      config_.bias = value;
+      return true;
+    case 7:
+      config_.gap_loss = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Tape::validate_config(const TapeConfig& config) {

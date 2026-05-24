@@ -48,6 +48,17 @@ class ParametricEq : public common::ProcessorBase {
   void clear_band(size_t index);
   void clear();
 
+  // Automatable parameters (RT-safe: recomputes the affected band's biquad
+  // coefficients in place, preserves filter state). Bands are laid out in
+  // blocks of 3, so band `b` occupies ids `3*b .. 3*b+2`:
+  //   3*b + 0 = frequency_hz (clamped to (0 Hz, Nyquist))
+  //   3*b + 1 = gain_db
+  //   3*b + 2 = Q (clamped to > 0)
+  // Only bands that are currently enabled produce audible coefficient changes;
+  // band type and coefficient mode are not automatable. Ids for b >= kMaxBands
+  // are rejected (return false).
+  bool set_parameter(unsigned int param_id, float value) override;
+
   const EqBand& band(size_t index) const;
   double sample_rate() const { return sample_rate_; }
 

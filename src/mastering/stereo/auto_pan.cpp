@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::stereo {
@@ -29,6 +30,7 @@ void AutoPan::prepare(double sample_rate, int max_block_size) {
 }
 
 void AutoPan::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("AutoPan must be prepared before processing");
   }
@@ -68,6 +70,22 @@ void AutoPan::reset() { phase_ = 0.0; }
 void AutoPan::set_config(const AutoPanConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool AutoPan::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.rate_hz = std::max(0.0f, value);
+      return true;
+    case 1:
+      config_.depth = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 2:
+      config_.phase = value;
+      return true;
+    default:
+      return false;
+  }
 }
 
 void AutoPan::validate_config(const AutoPanConfig& config) {

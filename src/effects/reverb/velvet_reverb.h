@@ -28,6 +28,13 @@ class VelvetReverb : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = dry_wet (clamped to [0, 1] in process())
+  // Note: decay, reverb_time_s and density_hz are not automatable; changing
+  // any of them rebuilds the velvet-noise tap tables and the ring buffers,
+  // which requires prepare().
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   struct Tap {
     int offset = 0;

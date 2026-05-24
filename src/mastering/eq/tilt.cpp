@@ -1,5 +1,6 @@
 #include "mastering/eq/tilt.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "util/constants.h"
@@ -45,6 +46,25 @@ void TiltEq::set_pivot_hz(float pivot_hz) {
   if (prepared_) {
     update_bands();
   }
+}
+
+bool TiltEq::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      tilt_db_ = value;
+      break;
+    case 1:
+      // Clamp to (0 Hz, Nyquist) so coefficient design never throws on the
+      // audio thread.
+      pivot_hz_ = std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      break;
+    default:
+      return false;
+  }
+  if (prepared_) {
+    update_bands();
+  }
+  return true;
 }
 
 void TiltEq::update_bands() {

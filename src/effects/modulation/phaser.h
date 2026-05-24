@@ -27,6 +27,15 @@ class Phaser : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = rate_hz (clamped to >= 0; updates the LFO in place)
+  //   1 = min_hz (sweep lower bound)
+  //   2 = max_hz (sweep upper bound)
+  //   3 = dry_wet
+  // Note: `stages` is not automatable; changing it reallocates the allpass
+  // state and requires prepare().
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   float process_channel(float input, int channel, float coeff);
 

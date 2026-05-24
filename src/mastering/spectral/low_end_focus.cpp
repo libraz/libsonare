@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::spectral {
@@ -22,6 +23,7 @@ void LowEndFocus::prepare(double sample_rate, int max_block_size) {
 }
 
 void LowEndFocus::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("LowEndFocus must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -91,6 +93,25 @@ void LowEndFocus::reset() {
 void LowEndFocus::set_config(const LowEndFocusConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool LowEndFocus::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.cutoff_hz = std::max(value, 1.0e-3f);
+      return true;
+    case 1:
+      config_.width = std::clamp(value, 0.0f, 2.0f);
+      return true;
+    case 2:
+      config_.subharmonic_amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 3:
+      config_.transient_tightness = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void LowEndFocus::validate_config(const LowEndFocusConfig& config) {

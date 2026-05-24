@@ -31,6 +31,15 @@ class DeEsser : public common::ProcessorBase {
   const DeEsserConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = frequency_hz (clamped to > 0)
+  //   1 = threshold_db
+  //   2 = ratio (clamped to >= 1)
+  //   3 = attack_ms (clamped to >= 0)
+  //   4 = release_ms (clamped to >= 0)
+  //   5 = range_db (clamped to >= 0)
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const DeEsserConfig& config);
   static float gain_reduction_db(float input_db, const DeEsserConfig& config);

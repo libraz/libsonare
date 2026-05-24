@@ -38,6 +38,15 @@ class Waveshaper : public common::ProcessorBase {
   void set_config(const WaveshaperConfig& config);
   const WaveshaperConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset). All are
+  // read per sample by shape()/shape_sample() with no precomputed coefficients:
+  //   0 = drive_db
+  //   1 = mix (clamped to [0, 1])
+  //   2 = output_gain_db
+  // bias is NOT automatable: it shifts the ADAA operating point, which would
+  // require clearing the antiderivative history. curve/aliasing are enums.
+  bool set_parameter(unsigned int param_id, float value) override;
+
   static float db_to_linear(float db);
   static float shape(float sample, const WaveshaperConfig& config);
 

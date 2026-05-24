@@ -23,6 +23,13 @@ class MinimumPhaseEq : public common::ProcessorBase {
   void clear_band(size_t index);
   void clear();
 
+  // Automatable parameters: identical block-of-3 layout to ParametricEq (band
+  // `b` -> ids 3*b freq, 3*b+1 gain_db, 3*b+2 Q). RT-safe; recomputes only the
+  // affected band's biquad coefficients in place. Delegates to ParametricEq.
+  bool set_parameter(unsigned int param_id, float value) override {
+    return eq_.set_parameter(param_id, value);
+  }
+
   const EqBand& band(size_t index) const;
   int latency_samples() const noexcept override { return 0; }
 

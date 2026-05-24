@@ -29,6 +29,14 @@ class StereoDelay : public rt::ProcessorBase {
   void set_config(const StereoDelayConfig& config) noexcept;
   const StereoDelayConfig& config() const noexcept { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = delay_time_l_ms
+  //   1 = delay_time_r_ms
+  //   2 = feedback (clamped to [0, 0.95] in process())
+  //   3 = ping_pong (clamped to [0, 1] in process())
+  //   4 = dry_wet
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   StereoDelayConfig config_{};
   double sample_rate_ = 48000.0;

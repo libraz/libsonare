@@ -33,6 +33,14 @@ class TruePeakLimiter : public common::ProcessorBase {
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
   int latency_samples() const noexcept override;
 
+  // Parameters:
+  //   0 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
+  //   1 = release_ms (clamped >= 0; in-place time-constant recompute)
+  // lookahead_ms, oversample_factor and apply_gain_at_input_rate are NOT
+  // automatable (they resize buffers or switch processing modes).
+  bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
+
  private:
   static void validate_config(const TruePeakLimiterConfig& config);
   void prepare_buffers(int num_channels);
@@ -40,7 +48,6 @@ class TruePeakLimiter : public common::ProcessorBase {
   float adaptive_release_coeff(float linked_peak);
   void process_polyphase(float* const* channels, int num_channels, int num_samples);
   void process_polyphase_detect_only(float* const* channels, int num_channels, int num_samples);
-  void process_fallback(float* const* channels, int num_channels, int num_samples);
 
   TruePeakLimiterConfig config_{};
   dynamics::BrickwallLimiter limiter_;

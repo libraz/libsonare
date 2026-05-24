@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -36,6 +37,7 @@ void Compressor::prepare(double sample_rate, int max_block_size) {
 }
 
 void Compressor::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("Compressor must be prepared before processing");
   }
@@ -131,6 +133,35 @@ void Compressor::set_config(const CompressorConfig& config) {
   if (prepared_) {
     update_coefficients();
     reset();
+  }
+}
+
+bool Compressor::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      return true;
+    case 1:
+      config_.ratio = std::max(1.0f, value);
+      return true;
+    case 2:
+      config_.attack_ms = std::max(0.0f, value);
+      // Recompute smoother coefficients in place; preserves envelope state.
+      if (prepared_) {
+        reduction_smoother_.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+      }
+      return true;
+    case 3:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        reduction_smoother_.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+      }
+      return true;
+    case 4:
+      config_.makeup_gain_db = value;
+      return true;
+    default:
+      return false;
   }
 }
 

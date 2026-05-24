@@ -22,6 +22,10 @@ class MonoMaker : public common::ProcessorBase {
   void set_config(const MonoMakerConfig& config);
   const MonoMakerConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = amount (clamped to [0, 1])
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const MonoMakerConfig& config);
 

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "mastering/stereo/mid_side.h"
 #include "util/db.h"
 
@@ -39,6 +40,7 @@ void Imager::prepare(double sample_rate, int max_block_size) {
 }
 
 void Imager::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("Imager must be prepared before processing");
   }
@@ -97,6 +99,22 @@ void Imager::reset() {
 void Imager::set_config(const ImagerConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool Imager::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.width = std::max(0.0f, value);
+      return true;
+    case 1:
+      config_.output_gain_db = value;
+      return true;
+    case 2:
+      config_.decorrelation_amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Imager::validate_config(const ImagerConfig& config) {

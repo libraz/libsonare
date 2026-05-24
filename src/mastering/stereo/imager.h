@@ -25,6 +25,12 @@ class Imager : public common::ProcessorBase {
   void set_config(const ImagerConfig& config);
   const ImagerConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = width (clamped to >= 0)
+  //   1 = output_gain_db
+  //   2 = decorrelation_amount (clamped to [0, 1])
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   struct Allpass {
     float coefficient = 0.0f;

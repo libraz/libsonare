@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
@@ -33,6 +34,7 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
 }
 
 void TransientShaper::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("TransientShaper must be prepared before processing");
   }
@@ -107,6 +109,64 @@ void TransientShaper::set_config(const TransientShaperConfig& config) {
       follower.prepare(sample_rate_, config_.slow_attack_ms, config_.slow_release_ms);
     }
     reset();
+  }
+}
+
+bool TransientShaper::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.attack_gain_db = value;
+      return true;
+    case 1:
+      config_.sustain_gain_db = value;
+      return true;
+    case 2:
+      config_.fast_attack_ms = std::max(0.0f, value);
+      // Recompute fast-follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : fast_followers_) {
+          follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
+        }
+      }
+      return true;
+    case 3:
+      config_.fast_release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : fast_followers_) {
+          follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
+        }
+      }
+      return true;
+    case 4:
+      config_.slow_attack_ms = std::max(0.0f, value);
+      // Recompute slow-follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : slow_followers_) {
+          follower.prepare(sample_rate_, config_.slow_attack_ms, config_.slow_release_ms);
+        }
+      }
+      return true;
+    case 5:
+      config_.slow_release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : slow_followers_) {
+          follower.prepare(sample_rate_, config_.slow_attack_ms, config_.slow_release_ms);
+        }
+      }
+      return true;
+    case 6:
+      config_.sensitivity = std::max(0.0f, value);
+      return true;
+    case 7:
+      config_.max_gain_db = std::max(0.0f, value);
+      return true;
+    case 8:
+      // The smoothing coefficient is derived per sample from this value, so a
+      // plain update is RT-safe and preserves the running gain state.
+      config_.gain_smoothing_ms = std::max(0.0f, value);
+      return true;
+    default:
+      return false;
   }
 }
 

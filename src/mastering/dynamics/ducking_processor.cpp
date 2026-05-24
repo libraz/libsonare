@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::dynamics {
 
 DuckingProcessor::DuckingProcessor(DuckingConfig config)
@@ -15,6 +17,7 @@ void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
 }
 
 void DuckingProcessor::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   router_.process(channels, num_channels, num_samples);
 }
 
@@ -35,6 +38,35 @@ void DuckingProcessor::clear_key_input() { router_.clear_sidechain(); }
 void DuckingProcessor::set_config(const DuckingConfig& config) {
   config_ = config;
   router_.set_config(to_router_config(config_));
+}
+
+bool DuckingProcessor::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      break;
+    case 1:
+      config_.ratio = std::max(1.0f, value);
+      value = config_.ratio;
+      break;
+    case 2:
+      config_.attack_ms = std::max(0.0f, value);
+      value = config_.attack_ms;
+      break;
+    case 3:
+      config_.release_ms = std::max(0.0f, value);
+      value = config_.release_ms;
+      break;
+    case 4:
+      config_.range_db = std::max(0.0f, value);
+      value = config_.range_db;
+      break;
+    default:
+      return false;
+  }
+  // Ducking parameters map 1:1 to the inner router; forward the clamped value so
+  // the router recomputes only the affected coefficients without resetting state.
+  return router_.set_parameter(param_id, value);
 }
 
 SidechainRouterConfig DuckingProcessor::to_router_config(const DuckingConfig& config) {

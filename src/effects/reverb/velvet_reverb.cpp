@@ -131,6 +131,16 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
   dc_blocker_.process(channels, num_channels, num_samples);
 }
 
+bool VelvetReverb::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.dry_wet = value;
+      return true;
+    default:
+      return false;
+  }
+}
+
 void VelvetReverb::reset() {
   ring_l_.reset();
   ring_r_.reset();

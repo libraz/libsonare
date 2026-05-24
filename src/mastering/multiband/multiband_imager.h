@@ -38,6 +38,17 @@ class MultibandImager : public common::ProcessorBase {
   void set_config(const MultibandImagerConfig& config);
   const MultibandImagerConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset).
+  // Per-band block layout with kBandStride params per band: band b occupies
+  // ids [b * kBandStride, b * kBandStride + kBandStride):
+  //   +0 = width (clamped to >= 0)
+  //   +1 = decorrelation_amount (clamped to [0, 1])
+  // The allpass decorrelation coefficients are fixed, so no coefficient
+  // recompute is required. Crossover cutoffs and per-band enable/preserve_energy
+  // switches are not automatable.
+  static constexpr unsigned int kBandStride = 2;
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   struct Allpass {
     float coefficient = 0.0f;

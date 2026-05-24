@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::multiband {
@@ -34,6 +35,7 @@ void MultibandDynamicEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandDynamicEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandDynamicEq must be prepared before processing");
   }
@@ -99,6 +101,15 @@ void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
+}
+
+bool MultibandDynamicEq::set_parameter(unsigned int param_id, float value) {
+  const unsigned int crossover_band = param_id / kParamsPerCrossoverBand;
+  if (crossover_band >= processors_.size()) {
+    return false;
+  }
+  const unsigned int local_id = param_id % kParamsPerCrossoverBand;
+  return processors_[crossover_band].set_parameter(local_id, value);
 }
 
 void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config) {

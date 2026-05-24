@@ -24,12 +24,29 @@ class MultibandDynamicEq : public common::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
+  // Number of automatable parameters per crossover band: every crossover band
+  // owns a full DynamicEq, so it spans kMaxBands * DynamicEq::kParamsPerBand
+  // ids (= 8 * 11 = 88).
+  static constexpr unsigned int kParamsPerCrossoverBand =
+      static_cast<unsigned int>(eq::DynamicEq::kMaxBands) * eq::DynamicEq::kParamsPerBand;
+
   void set_config(const MultibandDynamicEqConfig& config);
   const MultibandDynamicEqConfig& config() const { return config_; }
   const std::vector<float>& last_detector_db() const { return last_detector_db_; }
   const std::vector<std::vector<float>>& last_applied_gain_db() const {
     return last_applied_gain_db_;
   }
+
+  // Automatable parameters (RT-safe: delegates to the per-crossover-band
+  // DynamicEq, which recomputes the affected band's coefficients in place
+  // without resetting filter/envelope state). Parameters are laid out in
+  // per-crossover-band blocks of kParamsPerCrossoverBand (= 88); crossover band
+  // `cb` occupies `kParamsPerCrossoverBand*cb .. +87`. Within each block the
+  // offset is the DynamicEq band layout (DynamicEq::kParamsPerBand fields per
+  // dynamic band; see DynamicEq::set_parameter for the field order). Dynamic
+  // bands that are disabled (the default) are no-ops until enabled via config.
+  // Ids past the last crossover band are rejected (return false).
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const MultibandDynamicEqConfig& config);

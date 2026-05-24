@@ -8,6 +8,7 @@
 #include "core/fft.h"
 #include "core/window.h"
 #include "mastering/common/biquad_design.h"
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -84,6 +85,7 @@ void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void LinearPhaseEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("LinearPhaseEq must be prepared before processing");
   }
@@ -144,6 +146,44 @@ void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
     rebuild_kernel();
     reset();
   }
+}
+
+bool LinearPhaseEq::set_parameter(unsigned int param_id, float value) {
+  const size_t band_index = param_id / 3u;
+  if (band_index >= kMaxBands) {
+    return false;
+  }
+  EqBand updated = bands_[band_index];
+  switch (param_id % 3u) {
+    case 0:
+      // Clamp to the open interval (0 Hz, Nyquist) so the kernel design path
+      // never throws.
+      updated.frequency_hz =
+          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      break;
+    case 1:
+      updated.gain_db = value;
+      break;
+    case 2:
+      updated.q = std::max(value, 1.0e-6f);
+      break;
+    default:
+      return false;
+  }
+
+  bands_[band_index] = updated;
+  if (prepared_) {
+    // Recompute the FIR kernel (latency may change) and clear filter history;
+    // FIR history is invalid once the kernel changes.
+    rebuild_kernel();
+    reset();
+  }
+  return true;
+}
+
+bool LinearPhaseEq::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  (void)param_id;
+  return false;
 }
 
 void LinearPhaseEq::clear_band(size_t index) {

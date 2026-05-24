@@ -36,9 +36,34 @@ class DynamicEq : public common::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
+  // Number of automatable scalar parameters per band (the per-band stride used
+  // by set_parameter). See set_parameter for the field order.
+  static constexpr unsigned int kParamsPerBand = 11;
+
   void set_band(size_t index, const DynamicEqBand& band);
   void clear_band(size_t index);
   void clear();
+
+  // Automatable parameters (RT-safe: writes the band field then recomputes the
+  // affected band's gain and biquad coefficients in place via the underlying
+  // ParametricEq, preserving filter and envelope/smoothing state). Parameters
+  // are laid out in per-band blocks of kParamsPerBand (= 11), so band `b`
+  // occupies ids `kParamsPerBand*b .. kParamsPerBand*b + 10`:
+  //   +0  = frequency_hz       (clamped to (0, Nyquist))
+  //   +1  = static_gain_db
+  //   +2  = q                  (clamped to > 0)
+  //   +3  = threshold_db
+  //   +4  = ratio              (clamped to >= 1)
+  //   +5  = range_db           (signed: < 0 cuts, > 0 boosts)
+  //   +6  = sidechain_q        (clamped to > 0)
+  //   +7  = sidechain_freq_hz  (> 0 to set; -1 follows band frequency_hz)
+  //   +8  = attack_ms          (clamped to >= 0)
+  //   +9  = release_ms         (clamped to >= 0)
+  //   +10 = lookahead_ms       (clamped to >= 0)
+  // Band type and the enabled flag are not automatable. A param change on a
+  // DISABLED band updates config only and has no audible effect until the band
+  // is enabled (via set_band). Ids for b >= kMaxBands are rejected (false).
+  bool set_parameter(unsigned int param_id, float value) override;
   /// Borrows sidechain buffers until the next set/clear/process call.
   void set_sidechain(const float* const* channels, int num_channels, int num_samples);
   void clear_sidechain();

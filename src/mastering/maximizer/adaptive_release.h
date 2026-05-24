@@ -33,6 +33,19 @@ class AdaptiveRelease : public common::ProcessorBase {
   float current_crest_factor() const { return current_crest_factor_; }
   float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
 
+  // Automatable parameters (RT-safe, no allocation). All but ceiling are read
+  // directly each block by the adaptive-release mapping, so writing config_ is
+  // sufficient (no coefficient recompute):
+  //   0 = ceiling_db (clamped <= 0; forwarded in-place to the inner limiter)
+  //   1 = min_release_ms (clamped to >= 0)
+  //   2 = max_release_ms (clamped to >= min_release_ms)
+  //   3 = crest_window_ms (clamped to a small positive minimum)
+  //   4 = crest_low (clamped to a small positive minimum)
+  //   5 = crest_high (clamped to > crest_low)
+  //   6 = release_smoothing_ms (clamped to >= 0)
+  // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const AdaptiveReleaseConfig& config);
   void configure_limiter();

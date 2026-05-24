@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::saturation {
 namespace {
 
@@ -22,6 +24,7 @@ void BitCrusher::prepare(double sample_rate, int max_block_size) {
 }
 
 void BitCrusher::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("BitCrusher must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -55,6 +58,20 @@ void BitCrusher::reset() {
 void BitCrusher::set_config(const BitCrusherConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool BitCrusher::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      // Match validate_config's [1, 24] integer range for bit_depth.
+      config_.bit_depth = std::clamp(static_cast<int>(std::lround(value)), 1, 24);
+      return true;
+    case 1:
+      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {

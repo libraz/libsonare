@@ -1,7 +1,10 @@
 #include "mastering/saturation/soft_clipper.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
+
+#include "mastering/common/scoped_no_denormals.h"
 
 namespace sonare::mastering::saturation {
 
@@ -14,6 +17,7 @@ void SoftClipper::prepare(double sample_rate, int max_block_size) {
 }
 
 void SoftClipper::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("SoftClipper must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -36,6 +40,19 @@ void SoftClipper::set_config(const SoftClipperConfig& config) {
   const bool reset_state = config_.ceiling != config.ceiling || config_.aliasing != config.aliasing;
   config_ = config;
   if (reset_state) reset();
+}
+
+bool SoftClipper::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.drive_db = value;
+      return true;
+    case 1:
+      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void SoftClipper::validate_config(const SoftClipperConfig& config) {

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -55,6 +56,7 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
 }
 
 void SidechainRouter::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("SidechainRouter must be prepared before processing");
   }
@@ -166,6 +168,39 @@ void SidechainRouter::set_config(const SidechainRouterConfig& config) {
       lookahead.prepare(static_cast<size_t>(lookahead_samples_));
     }
     reset();
+  }
+}
+
+bool SidechainRouter::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      return true;
+    case 1:
+      config_.ratio = std::max(1.0f, value);
+      return true;
+    case 2:
+      config_.attack_ms = std::max(0.0f, value);
+      // Recompute follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 3:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 4:
+      config_.range_db = std::max(0.0f, value);
+      return true;
+    default:
+      return false;
   }
 }
 

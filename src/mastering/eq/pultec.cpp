@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -21,6 +22,7 @@ void PultecEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void PultecEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   eq_.process(channels, num_channels, num_samples);
   if (component_model_ == PultecComponentModel::CurveOnly && output_drive_ <= 0.0f) {
     return;
@@ -92,8 +94,11 @@ void PultecEq::clear() {
 }
 
 void PultecEq::rebuild() {
-  eq_.clear();
-
+  // Each of the four shelving/peak bands is set explicitly below, including the
+  // disabled case (ParametricEq skips disabled bands during processing), so we
+  // do not clear() first. This lets rebuild() run on the audio thread for
+  // parameter automation: enabled bands get fresh coefficients while their
+  // filter state (z1/z2) is preserved.
   const bool low_boost_enabled = low_boost_ > 0.0f;
   const bool low_atten_enabled = low_attenuation_ > 0.0f;
   const bool high_boost_enabled = high_boost_ > 0.0f;
@@ -112,6 +117,49 @@ void PultecEq::rebuild() {
                    high_boost_enabled});
   eq_.set_band(3, {EqBandType::HighShelf, high_attenuation_frequency_hz_, -high_attenuation_ * 1.2f,
                    0.7f, high_atten_enabled});
+}
+
+bool PultecEq::set_parameter(unsigned int param_id, float value) {
+  // Keep frequencies inside (0 Hz, Nyquist) so coefficient design never throws
+  // on the audio thread. Band 1 derives its center as low_frequency_hz * 1.45,
+  // so the low frequency is clamped against Nyquist / 1.45.
+  const float nyquist = static_cast<float>(sample_rate_ * 0.5);
+  const float low_freq_max = std::max(nyquist / 1.45f - 1.0e-3f, 1.0e-3f);
+  const float high_freq_max = std::max(nyquist - 1.0e-3f, 1.0e-3f);
+  switch (param_id) {
+    case 0:
+      low_frequency_hz_ = std::clamp(value, 1.0e-3f, low_freq_max);
+      break;
+    case 1:
+      low_boost_ = clamp_amount(value);
+      break;
+    case 2:
+      low_attenuation_ = clamp_amount(value);
+      break;
+    case 3:
+      high_boost_frequency_hz_ = std::clamp(value, 1.0e-3f, high_freq_max);
+      break;
+    case 4:
+      high_boost_ = clamp_amount(value);
+      break;
+    case 5:
+      high_bandwidth_ = std::clamp(value, 0.0f, 1.0f);
+      break;
+    case 6:
+      high_attenuation_frequency_hz_ = std::clamp(value, 1.0e-3f, high_freq_max);
+      break;
+    case 7:
+      high_attenuation_ = clamp_amount(value);
+      break;
+    case 8:
+      // Output drive affects only the waveshaper; no biquad rebuild needed.
+      output_drive_ = std::clamp(value, 0.0f, 10.0f);
+      return true;
+    default:
+      return false;
+  }
+  rebuild();
+  return true;
 }
 
 float PultecEq::clamp_amount(float amount) { return std::clamp(amount, 0.0f, 10.0f); }

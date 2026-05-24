@@ -30,6 +30,20 @@ class PultecEq : public common::ProcessorBase {
   void set_output_drive(float drive);
   void clear();
 
+  // Automatable parameters (RT-safe: rebuild() recomputes the four EQ-band
+  // biquad coefficients in place without resetting filter state; output drive
+  // touches no biquad state). The component model enum is not automatable.
+  //   0 = low_frequency_hz (clamped to > 0)
+  //   1 = low_boost (clamped to [0, 10])
+  //   2 = low_attenuation (clamped to [0, 10])
+  //   3 = high_boost_frequency_hz (clamped to > 0)
+  //   4 = high_boost (clamped to [0, 10])
+  //   5 = high_bandwidth (clamped to [0, 1])
+  //   6 = high_attenuation_frequency_hz (clamped to > 0)
+  //   7 = high_attenuation (clamped to [0, 10])
+  //   8 = output_drive (clamped to [0, 10])
+  bool set_parameter(unsigned int param_id, float value) override;
+
   float low_frequency() const { return low_frequency_hz_; }
   float low_boost() const { return low_boost_; }
   float low_attenuation() const { return low_attenuation_; }

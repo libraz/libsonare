@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 
 namespace sonare::mastering::multiband {
@@ -30,6 +31,7 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandSaturation::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandSaturation must be prepared before processing");
   }
@@ -78,6 +80,27 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   crossover_.set_config(config_.crossover);
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
+  }
+}
+
+bool MultibandSaturation::set_parameter(unsigned int param_id, float value) {
+  const size_t band = param_id / kBandStride;
+  if (band >= config_.bands.size()) {
+    return false;
+  }
+  auto& band_config = config_.bands[band];
+  switch (param_id % kBandStride) {
+    case 0:
+      band_config.drive_db = value;
+      return true;
+    case 1:
+      band_config.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 2:
+      band_config.output_gain_db = value;
+      return true;
+    default:
+      return false;
   }
 }
 

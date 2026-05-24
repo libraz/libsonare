@@ -41,6 +41,31 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   }
 }
 
+bool Phaser::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.rate_hz = std::max(0.0f, value);
+      // Updates the LFO increment in place; preserves oscillator phase.
+      lfo_.set_rate_hz(config_.rate_hz);
+      return true;
+    case 1:
+      config_.min_hz = std::clamp(value, 1.0f, static_cast<float>(sample_rate_ * 0.49));
+      // Keep the sweep range ordered (min <= max) to avoid inverted/NaN coeffs.
+      config_.min_hz = std::min(config_.min_hz, config_.max_hz);
+      return true;
+    case 2:
+      config_.max_hz = std::clamp(value, 1.0f, static_cast<float>(sample_rate_ * 0.49));
+      // Keep the sweep range ordered (min <= max) to avoid inverted/NaN coeffs.
+      config_.max_hz = std::max(config_.max_hz, config_.min_hz);
+      return true;
+    case 3:
+      config_.dry_wet = value;
+      return true;
+    default:
+      return false;
+  }
+}
+
 void Phaser::reset() {
   for (auto& state : x1_) {
     std::fill(state.begin(), state.end(), 0.0f);

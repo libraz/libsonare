@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::multiband {
 
 float MultibandImager::Allpass::process(float input) noexcept {
@@ -47,6 +49,7 @@ void MultibandImager::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandImager::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandImager must be prepared before processing");
   }
@@ -132,6 +135,24 @@ void MultibandImager::set_config(const MultibandImagerConfig& config) {
   crossover_.set_config(config_.crossover);
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
+  }
+}
+
+bool MultibandImager::set_parameter(unsigned int param_id, float value) {
+  const size_t band = param_id / kBandStride;
+  if (band >= config_.bands.size()) {
+    return false;
+  }
+  auto& band_config = config_.bands[band];
+  switch (param_id % kBandStride) {
+    case 0:
+      band_config.width = std::max(0.0f, value);
+      return true;
+    case 1:
+      band_config.decorrelation_amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
   }
 }
 

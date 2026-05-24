@@ -30,6 +30,14 @@ class Expander : public common::ProcessorBase {
   const ExpanderConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = threshold_db
+  //   1 = ratio (clamped to >= 1)
+  //   2 = attack_ms (clamped to >= 0)
+  //   3 = release_ms (clamped to >= 0)
+  //   4 = range_db (clamped to <= 0)
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const ExpanderConfig& config);
   static float gain_reduction_db(float input_db, const ExpanderConfig& config);

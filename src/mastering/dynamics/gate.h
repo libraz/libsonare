@@ -31,6 +31,14 @@ class Gate : public common::ProcessorBase {
   const GateConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
+  // Automatable parameters (RT-safe; attack/release coeffs are recomputed per
+  // block inside process(), so they take effect on the next block):
+  //   0 = threshold_db (close_threshold_db kept <= threshold_db)
+  //   1 = attack_ms (clamped to >= 0)
+  //   2 = release_ms (clamped to >= 0)
+  //   3 = range_db (clamped to <= 0)
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const GateConfig& config);
   static float coeff(double sample_rate, float ms);

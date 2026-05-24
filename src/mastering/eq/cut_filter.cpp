@@ -1,6 +1,15 @@
 #include "mastering/eq/cut_filter.h"
 
+#include <algorithm>
+
 namespace sonare::mastering::eq {
+namespace {
+
+float clamp_frequency(float frequency_hz, double sample_rate) {
+  return std::clamp(frequency_hz, 1.0e-3f, static_cast<float>(sample_rate * 0.5) - 1.0e-3f);
+}
+
+}  // namespace
 
 void CutFilter::prepare(double sample_rate, int max_block_size) {
   eq_.prepare(sample_rate, max_block_size);
@@ -40,6 +49,30 @@ void CutFilter::clear() {
   high_pass_.enabled = false;
   low_pass_.enabled = false;
   eq_.clear();
+}
+
+bool CutFilter::set_parameter(unsigned int param_id, float value) {
+  const double sample_rate = eq_.sample_rate();
+  switch (param_id) {
+    case 0:
+      high_pass_.frequency_hz = clamp_frequency(value, sample_rate);
+      apply_high_pass();
+      return true;
+    case 1:
+      high_pass_.q = std::max(value, 1.0e-6f);
+      apply_high_pass();
+      return true;
+    case 2:
+      low_pass_.frequency_hz = clamp_frequency(value, sample_rate);
+      apply_low_pass();
+      return true;
+    case 3:
+      low_pass_.q = std::max(value, 1.0e-6f);
+      apply_low_pass();
+      return true;
+    default:
+      return false;
+  }
 }
 
 void CutFilter::apply_high_pass() {

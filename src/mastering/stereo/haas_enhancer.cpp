@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::stereo {
 
 HaasEnhancer::HaasEnhancer(HaasEnhancerConfig config) : config_(config) {
@@ -23,6 +25,7 @@ void HaasEnhancer::prepare(double sample_rate, int max_block_size) {
 }
 
 void HaasEnhancer::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("HaasEnhancer must be prepared before processing");
   }
@@ -64,6 +67,29 @@ void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {
   if (prepared_) {
     rebuild_delay();
   }
+}
+
+bool HaasEnhancer::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.delay_ms = std::max(0.0f, value);
+      // Changing the delay length requires resizing the delay line, which
+      // reallocates and clears the buffered samples.
+      if (prepared_) {
+        rebuild_delay();
+      }
+      return true;
+    case 1:
+      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool HaasEnhancer::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  // delay_ms reallocates the delay line; everything else is an in-place scalar.
+  return param_id != 0;
 }
 
 void HaasEnhancer::validate_config(const HaasEnhancerConfig& config) {

@@ -31,6 +31,16 @@ class CutFilter : public common::ProcessorBase {
   CutFilterSlope high_pass_slope() const { return high_pass_slope_; }
   CutFilterSlope low_pass_slope() const { return low_pass_slope_; }
 
+  // Automatable parameters (RT-safe: recomputes affected biquad coefficients in
+  // place via apply_high_pass()/apply_low_pass(), preserves filter state):
+  //   0 = high-pass frequency_hz (clamped to (0 Hz, Nyquist))
+  //   1 = high-pass Q (clamped to > 0; only audible at 12 dB/oct, the 24 dB/oct
+  //       cascade uses fixed Butterworth-stage Q values)
+  //   2 = low-pass frequency_hz (clamped to (0 Hz, Nyquist))
+  //   3 = low-pass Q (clamped to > 0; same 24 dB/oct caveat as id 1)
+  // The slope enum is not automatable.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   void apply_high_pass();
   void apply_low_pass();

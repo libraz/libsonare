@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::multiband {
 
 MultibandExpander::MultibandExpander(MultibandExpanderConfig config)
@@ -30,6 +32,7 @@ void MultibandExpander::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandExpander::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandExpander must be prepared before processing");
   }
@@ -87,6 +90,19 @@ void MultibandExpander::set_config(const MultibandExpanderConfig& config) {
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
+}
+
+bool MultibandExpander::set_parameter(unsigned int param_id, float value) {
+  const unsigned int band = param_id / kBandStride;
+  if (band >= expanders_.size()) {
+    return false;
+  }
+  const unsigned int band_param = param_id % kBandStride;
+  if (expanders_[band].set_parameter(band_param, value)) {
+    config_.bands[band] = expanders_[band].config();
+    return true;
+  }
+  return false;
 }
 
 void MultibandExpander::validate_config(const MultibandExpanderConfig& config) {

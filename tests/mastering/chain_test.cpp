@@ -175,8 +175,8 @@ TEST_CASE("MasteringChain applies new repair stages", "[mastering][chain]") {
   std::vector<float> samples(static_cast<size_t>(sample_rate), 0.0f);
   // Mild noise + a few "clicks".
   for (size_t i = 0; i < samples.size(); ++i) {
-    samples[i] =
-        0.01f * static_cast<float>(((i * 1103515245u + 12345u) & 0xFFFFu) - 32768) / 32768.0f;
+    const int noise = static_cast<int>((i * 1103515245u + 12345u) & 0xFFFFu) - 32768;
+    samples[i] = 0.01f * static_cast<float>(noise) / 32768.0f;
   }
   samples[1000] = 0.95f;
   samples[5000] = -0.95f;

@@ -203,6 +203,7 @@ if(BUILD_MASTERING)
     mastering/api/chain_json.cpp
     mastering/api/chain_params.cpp
     mastering/api/chain_streaming.cpp
+    mastering/api/insert_factory.cpp
     mastering/api/named_processor.cpp
     mastering/api/named_processor_registry.cpp
     mastering/api/presets.cpp
@@ -294,6 +295,11 @@ if(BUILD_MASTERING)
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_mastering PUBLIC sonare_rt)
+  if(BUILD_FX)
+    # Streaming insert factory can build effects.reverb.* processors from sonare_fx.
+    target_link_libraries(sonare_mastering PUBLIC sonare_fx)
+    target_compile_definitions(sonare_mastering PRIVATE SONARE_HAVE_FX)
+  endif()
   target_compile_options(sonare_mastering PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mastering PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -446,6 +452,10 @@ if(BUILD_SHARED)
   if(BUILD_MIXING)
     target_link_libraries(sonare_shared PUBLIC sonare_mixing)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING=1)
+    if(BUILD_GRAPH)
+      # sonare_c_mixing.cpp routes the mixer through the routing graph.
+      target_link_libraries(sonare_shared PUBLIC sonare_graph)
+    endif()
   endif()
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
@@ -470,6 +480,9 @@ if(BUILD_WASM)
   if(BUILD_MIXING)
     target_compile_options(sonare_mixing PUBLIC -msimd128)
   endif()
+  if(BUILD_GRAPH)
+    target_compile_options(sonare_graph PUBLIC -msimd128)
+  endif()
 
   add_executable(sonare wasm/bindings.cpp)
   target_link_libraries(sonare PRIVATE sonare_core)
@@ -488,6 +501,14 @@ if(BUILD_WASM)
   if(BUILD_MIXING)
     target_link_libraries(sonare PRIVATE sonare_mixing)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING=1)
+    if(BUILD_GRAPH)
+      # The mixer C API (sonare_c_mixing.cpp) routes strips through the routing
+      # graph, so the WASM MixerWasm binding needs sonare_graph linked and the
+      # C API translation unit compiled in.
+      target_link_libraries(sonare PRIVATE sonare_graph)
+      target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
+      target_sources(sonare PRIVATE sonare_c_mixing.cpp)
+    endif()
   endif()
   target_compile_options(sonare PRIVATE -msimd128)
   target_link_options(sonare PRIVATE

@@ -1,7 +1,10 @@
 #include "mastering/saturation/hard_clipper.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
+
+#include "mastering/common/scoped_no_denormals.h"
 
 namespace sonare::mastering::saturation {
 
@@ -14,6 +17,7 @@ void HardClipper::prepare(double sample_rate, int max_block_size) {
 }
 
 void HardClipper::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("HardClipper must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -36,16 +40,35 @@ void HardClipper::set_config(const HardClipperConfig& config) {
   validate_config(config);
   const bool reset_state = config_.ceiling != config.ceiling || config_.aliasing != config.aliasing;
   config_ = config;
-  if (reset_state) {
-    const size_t channels = hard_clip_adaa_.size();
-    hard_clip_adaa_.clear();
-    hard_clip_adaa_.reserve(channels);
-    hard_clip_adaa2_.clear();
-    hard_clip_adaa2_.reserve(channels);
-    for (size_t i = 0; i < channels; ++i) {
-      hard_clip_adaa_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
-      hard_clip_adaa2_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
+  if (reset_state) rebuild_adaa();
+}
+
+bool HardClipper::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0: {
+      const float ceiling = std::max(value, std::numeric_limits<float>::min());
+      const bool changed = config_.ceiling != ceiling;
+      config_.ceiling = ceiling;
+      // None mode reads config_.ceiling per sample; nothing else to do. The ADAA
+      // modes cache the threshold inside their nonlinearity objects, so rebuild
+      // them (clearing their tiny history) to make the new ceiling take effect.
+      if (changed) rebuild_adaa();
+      return true;
     }
+    default:
+      return false;
+  }
+}
+
+void HardClipper::rebuild_adaa() {
+  const size_t channels = hard_clip_adaa_.size();
+  hard_clip_adaa_.clear();
+  hard_clip_adaa_.reserve(channels);
+  hard_clip_adaa2_.clear();
+  hard_clip_adaa2_.reserve(channels);
+  for (size_t i = 0; i < channels; ++i) {
+    hard_clip_adaa_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
+    hard_clip_adaa2_.emplace_back(common::HardClipNonlinearity{config_.ceiling});
   }
 }
 

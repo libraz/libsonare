@@ -7,42 +7,22 @@
 namespace sonare::rt {
 namespace {
 
-// ITU-R BS.1770 Annex 2 coefficient example for a 48-tap, 4-phase FIR.
-// Commercial redistribution of the literal table should be reviewed before
-// release; the surrounding implementation can also use a self-designed FIR.
-inline constexpr float kBs1770Polyphase4x[12][4] = {
-    {0.0017089843750f, -0.0291748046875f, -0.0189208984375f, -0.0083007812500f},
-    {0.0109863281250f, 0.0292968750000f, 0.0330810546875f, 0.0148925781250f},
-    {-0.0196533203125f, -0.0517578125000f, -0.0582275390625f, -0.0266113281250f},
-    {0.0332031250000f, 0.0891113281250f, 0.1015625000000f, 0.0476074218750f},
-    {-0.0594482421875f, -0.1665039062500f, -0.2003173828125f, -0.1022949218750f},
-    {0.1373291015625f, 0.4650878906250f, 0.7797851562500f, 0.9721679687500f},
-    {0.9721679687500f, 0.7797851562500f, 0.4650878906250f, 0.1373291015625f},
-    {-0.1022949218750f, -0.2003173828125f, -0.1665039062500f, -0.0594482421875f},
-    {0.0476074218750f, 0.1015625000000f, 0.0891113281250f, 0.0332031250000f},
-    {-0.0266113281250f, -0.0582275390625f, -0.0517578125000f, -0.0196533203125f},
-    {0.0148925781250f, 0.0330810546875f, 0.0292968750000f, 0.0109863281250f},
-    {-0.0083007812500f, -0.0189208984375f, -0.0291748046875f, 0.0017089843750f},
-};
-
-PolyphaseFir make_bs1770_fir() {
-  PolyphaseFir fir;
-  fir.phases = 4;
-  fir.taps_per_phase = 12;
-  fir.phase_taps.assign(4, std::vector<float>(12, 0.0f));
-  for (int tap = 0; tap < 12; ++tap) {
-    for (int phase = 0; phase < 4; ++phase) {
-      fir.phase_taps[static_cast<size_t>(phase)][static_cast<size_t>(tap)] =
-          kBs1770Polyphase4x[tap][phase];
-    }
-  }
-  return fir;
-}
-
+// Self-designed Kaiser-windowed-sinc polyphase low-pass filters for true-peak
+// interpolation. ITU-R BS.1770 frames its coefficient table as merely an
+// example and invites deriving equivalent coefficients matching the target
+// frequency response, so no copyrighted literal table is shipped here.
+//
+// Each factor keeps 12 taps per phase (total = factor * 12). The factor-2 path
+// retains its original Kaiser beta; the higher oversampling factors use a
+// slightly larger beta (9.5) which trades a marginally wider transition band
+// for deeper stop-band attenuation, preventing aliased images from inflating
+// the reconstructed inter-sample peaks at 4x/8x.
 PolyphaseFir make_true_peak_fir(int factor) {
-  if (factor == 4) return make_bs1770_fir();
+  constexpr double kKaiserBeta = 9.5;
   if (factor == 2) return design_polyphase_lowpass(2, 24, 7.85726, true);
-  throw std::invalid_argument("TruePeakFilter factor must be 2 or 4");
+  if (factor == 4) return design_polyphase_lowpass(4, 48, kKaiserBeta, true);
+  if (factor == 8) return design_polyphase_lowpass(8, 96, kKaiserBeta, true);
+  throw std::invalid_argument("TruePeakFilter factor must be 2, 4, or 8");
 }
 
 void validate_buffers(const float* const* input, int num_channels, int num_samples) {

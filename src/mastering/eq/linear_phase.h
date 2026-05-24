@@ -36,6 +36,17 @@ class LinearPhaseEq : public common::ProcessorBase {
   void clear_band(size_t index);
   void clear();
 
+  // Automatable parameters. Bands use the same block-of-3 layout as ParametricEq
+  // (band b -> ids 3*b freq, 3*b+1 gain_db, 3*b+2 Q):
+  //   3*b + 0 = frequency_hz (clamped to (0 Hz, Nyquist))
+  //   3*b + 1 = gain_db
+  //   3*b + 2 = Q (clamped to > 0)
+  // NOTE: unlike the IIR EQs, this rebuilds the FIR kernel and clears filter
+  // history. It is not audio-thread safe; ChannelStrip insert automation rejects
+  // these params via parameter_is_realtime_safe().
+  bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
+
   const EqBand& band(size_t index) const;
   const std::vector<float>& kernel() const { return kernel_; }
   int latency_samples() const noexcept override { return latency_samples_; }

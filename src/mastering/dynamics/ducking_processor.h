@@ -34,6 +34,15 @@ class DuckingProcessor : public common::ProcessorBase {
     return router_.last_gain_reduction_db();
   }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = threshold_db
+  //   1 = ratio (clamped to >= 1)
+  //   2 = attack_ms (clamped to >= 0)
+  //   3 = release_ms (clamped to >= 0)
+  //   4 = range_db (clamped to >= 0)
+  // lookahead_ms is omitted because changing it resizes the lookahead buffers.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static SidechainRouterConfig to_router_config(const DuckingConfig& config);
 

@@ -32,6 +32,20 @@ class MultibandExpander : public common::ProcessorBase {
   const MultibandExpanderConfig& config() const { return config_; }
   const std::vector<float>& last_gain_reductions_db() const { return last_gain_reductions_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset).
+  // Per-band block layout with kBandStride params per band: band b occupies
+  // ids [b * kBandStride, b * kBandStride + kBandStride). Within each band the
+  // ids forward directly to dynamics::Expander::set_parameter:
+  //   +0 = threshold_db
+  //   +1 = ratio (clamped to >= 1)
+  //   +2 = attack_ms (clamped to >= 0; recomputes follower coefficients)
+  //   +3 = release_ms (clamped to >= 0; recomputes follower coefficients)
+  //   +4 = range_db (clamped to <= 0)
+  // Crossover cutoff frequencies are not automatable here: changing them
+  // requires rebuilding the crossover filters and would reset audio state.
+  static constexpr unsigned int kBandStride = 5;
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const MultibandExpanderConfig& config);
   void rebuild_processors();

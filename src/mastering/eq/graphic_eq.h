@@ -23,6 +23,14 @@ class GraphicEq : public common::ProcessorBase {
   void set_gain_for_frequency(float frequency_hz, float gain_db);
   void clear();
 
+  // Automatable parameters (RT-safe: recomputes only the affected band's biquad
+  // coefficients in place, preserves filter state). Each of the 31 ISO bands
+  // exposes a single gain control; param_id is the band index:
+  //   id b (0 .. kNumBands-1) = gain_db for band b (center frequency is fixed;
+  //                             band Q is derived from gain via
+  //                             band_q_for_gain_db()).
+  bool set_parameter(unsigned int param_id, float value) override;
+
   float gain_db(size_t index) const;
   float center_frequency(size_t index) const;
   size_t nearest_band(float frequency_hz) const;
@@ -30,6 +38,8 @@ class GraphicEq : public common::ProcessorBase {
 
  private:
   void rebuild_bands();
+  // Recomputes a single band's coefficients in place (no state reset).
+  void rebuild_band(size_t index);
   static void validate_index(size_t index);
 
   ParametricEq low_eq_;

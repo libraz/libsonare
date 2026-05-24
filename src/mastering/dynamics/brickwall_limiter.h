@@ -29,6 +29,12 @@ class BrickwallLimiter : public common::ProcessorBase {
   int hard_clip_count() const noexcept { return hard_clip_count_; }
   int latency_samples() const noexcept override { return limiter_.latency_samples(); }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = ceiling_db
+  //   1 = release_ms (clamped to >= 0)
+  // lookahead_ms is omitted because changing it resizes the lookahead buffers.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const BrickwallLimiterConfig& config);
 

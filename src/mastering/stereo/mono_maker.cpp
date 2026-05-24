@@ -1,6 +1,9 @@
 #include "mastering/stereo/mono_maker.h"
 
+#include <algorithm>
 #include <stdexcept>
+
+#include "mastering/common/scoped_no_denormals.h"
 
 namespace sonare::mastering::stereo {
 
@@ -17,6 +20,7 @@ void MonoMaker::prepare(double sample_rate, int max_block_size) {
 }
 
 void MonoMaker::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MonoMaker must be prepared before processing");
   }
@@ -50,6 +54,16 @@ void MonoMaker::reset() {}
 void MonoMaker::set_config(const MonoMakerConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool MonoMaker::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void MonoMaker::validate_config(const MonoMakerConfig& config) {

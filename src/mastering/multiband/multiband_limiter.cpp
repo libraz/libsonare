@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::multiband {
 
 MultibandLimiter::MultibandLimiter(MultibandLimiterConfig config)
@@ -30,6 +32,7 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandLimiter::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandLimiter must be prepared before processing");
   }
@@ -87,6 +90,19 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
+}
+
+bool MultibandLimiter::set_parameter(unsigned int param_id, float value) {
+  const unsigned int band = param_id / kBandStride;
+  if (band >= limiters_.size()) {
+    return false;
+  }
+  const unsigned int band_param = param_id % kBandStride;
+  if (limiters_[band].set_parameter(band_param, value)) {
+    config_.bands[band] = limiters_[band].config();
+    return true;
+  }
+  return false;
 }
 
 void MultibandLimiter::validate_config(const MultibandLimiterConfig& config) {

@@ -1,7 +1,8 @@
 #pragma once
 
 /// @file true_peak_filter.h
-/// @brief True-peak interpolation helper with BS.1770 4x default coefficients.
+/// @brief True-peak interpolation helper using self-designed polyphase FIRs
+///        (2x / 4x / 8x) matching the BS.1770 target frequency response.
 
 #include <cstddef>
 #include <vector>

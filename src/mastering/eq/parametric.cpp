@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "mastering/common/biquad_design.h"
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -40,6 +41,7 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void ParametricEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared();
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
@@ -97,6 +99,33 @@ void ParametricEq::set_band(size_t index, const EqBand& band) {
   validate_band_index(index);
   bands_[index] = band;
   update_coefficients(index);
+}
+
+bool ParametricEq::set_parameter(unsigned int param_id, float value) {
+  const size_t band_index = param_id / 3u;
+  if (band_index >= kMaxBands) {
+    return false;
+  }
+  EqBand band = bands_[band_index];
+  switch (param_id % 3u) {
+    case 0:
+      // Clamp to the open interval (0 Hz, Nyquist) so coefficient design never
+      // throws on the audio thread.
+      band.frequency_hz =
+          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      break;
+    case 1:
+      band.gain_db = value;
+      break;
+    case 2:
+      band.q = std::max(value, 1.0e-6f);
+      break;
+    default:
+      return false;
+  }
+  // set_band recomputes only this band's coefficients without touching state.
+  set_band(band_index, band);
+  return true;
 }
 
 void ParametricEq::clear_band(size_t index) {

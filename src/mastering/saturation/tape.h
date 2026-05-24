@@ -45,6 +45,20 @@ class Tape : public common::ProcessorBase {
   void set_config(const TapeConfig& config);
   const TapeConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset):
+  //   0 = drive_db (read per sample)
+  //   1 = saturation (clamped to [0, 1]; updates J-A anhysteretic shape)
+  //   2 = hysteresis (clamped to [0, 1]; updates J-A coercivity)
+  //   3 = output_gain_db (read per sample)
+  //   4 = speed_ips (clamped to > 0; recomputes head-bump/gap filters in place)
+  //   5 = head_bump_db (clamped to >= 0; recomputes head-bump filter in place)
+  //   6 = bias (read per sample)
+  //   7 = gap_loss (clamped to [0, 1]; read per sample)
+  // J-A config updates only touch coefficients; the per-channel magnetization
+  // state in states_ and the biquad delay state are preserved. oversample_factor
+  // is a discrete mode and is not exposed.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const TapeConfig& config);
   static common::JilesAthertonConfig make_ja_config(const TapeConfig& config);

@@ -13,7 +13,7 @@ using sonare::constants::kTwoPi;
 namespace {
 
 // Reference rate from Dattorro's tables; all delay lengths scale by sr/29761.
-constexpr double kRefRate = 29761.0;
+constexpr double kRefRate = DattorroReverb::kReferenceSampleRate;
 
 size_t scale_len(double ref_samples, double sr) {
   const double scaled = ref_samples * sr / kRefRate;
@@ -241,6 +241,36 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
 
     left[i] = dry * in_l + wet * out_l;
     right[i] = dry * in_r + wet * out_r;
+  }
+}
+
+bool DattorroReverb::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      // process() clamps decay to [0, 0.98]; store the raw target.
+      config_.decay = value;
+      return true;
+    case 1:
+      // process() clamps damping to [0, 1] and maps it to the one-pole coeff.
+      config_.damping = value;
+      return true;
+    case 2:
+      config_.dry_wet = value;
+      return true;
+    case 3:
+      // Recompute the LFO increment in place; preserves the modulation phase.
+      config_.mod_rate_hz = value;
+      lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sample_rate_);
+      return true;
+    case 4:
+      // Rescale the modulation depth to the working rate. The tank allpass
+      // clamps reads to the guard buffer sized at prepare(), so growing the
+      // depth never overruns.
+      config_.mod_depth_samples = std::max(0.0f, value);
+      mod_depth_ = static_cast<float>(config_.mod_depth_samples * sample_rate_ / kRefRate);
+      return true;
+    default:
+      return false;
   }
 }
 

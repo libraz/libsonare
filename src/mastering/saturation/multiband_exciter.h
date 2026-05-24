@@ -26,6 +26,17 @@ class MultibandExciter : public common::ProcessorBase {
   void set_config(const MultibandExciterConfig& config);
   const MultibandExciterConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset). Each id is
+  // forwarded to every band's Exciter::set_parameter, which updates its config
+  // and recomputes any biquad coefficients in place:
+  //   0 = frequency_hz (all bands)
+  //   1 = drive_db (all bands)
+  //   2 = amount (all bands)
+  //   3 = q (all bands)
+  //   4 = even_odd_mix (all bands)
+  // The kept config_ mirror stays consistent so config() reflects automation.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const MultibandExciterConfig& config);
   void rebuild_processors();

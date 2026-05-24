@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::saturation {
 
 MultibandExciter::MultibandExciter(MultibandExciterConfig config)
@@ -24,6 +26,7 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandExciter::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("MultibandExciter must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -62,6 +65,16 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
   crossover_.set_config(config_.crossover);
   rebuild_processors();
   if (prepared_) prepare(sample_rate_, max_block_size_);
+}
+
+bool MultibandExciter::set_parameter(unsigned int param_id, float value) {
+  if (param_id > 4 || exciters_.empty()) return false;
+  for (size_t band = 0; band < exciters_.size(); ++band) {
+    if (!exciters_[band].set_parameter(param_id, value)) return false;
+    // Keep the kept config mirror in sync so config() reflects the automation.
+    config_.bands[band] = exciters_[band].config();
+  }
+  return true;
 }
 
 void MultibandExciter::validate_config(const MultibandExciterConfig& config) {

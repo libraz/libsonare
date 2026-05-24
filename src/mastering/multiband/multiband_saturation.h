@@ -37,6 +37,17 @@ class MultibandSaturation : public common::ProcessorBase {
   void set_config(const MultibandSaturationConfig& config);
   const MultibandSaturationConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset).
+  // Per-band block layout with kBandStride params per band: band b occupies
+  // ids [b * kBandStride, b * kBandStride + kBandStride):
+  //   +0 = drive_db
+  //   +1 = mix (clamped to [0, 1])
+  //   +2 = output_gain_db
+  // Saturation is memoryless, so there are no coefficients to recompute.
+  // Crossover cutoffs and the per-band enable switch are not automatable.
+  static constexpr unsigned int kBandStride = 3;
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const MultibandSaturationConfig& config);
   static float saturate_sample(float sample, const SaturationBandConfig& config);

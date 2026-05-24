@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -38,6 +39,7 @@ void Gate::prepare(double sample_rate, int max_block_size) {
 }
 
 void Gate::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("Gate must be prepared before processing");
   }
@@ -102,6 +104,27 @@ void Gate::set_config(const GateConfig& config) {
   config_ = config;
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
+  }
+}
+
+bool Gate::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      // Keep the hysteresis invariant close_threshold_db <= threshold_db.
+      config_.close_threshold_db = std::min(config_.close_threshold_db, config_.threshold_db);
+      return true;
+    case 1:
+      config_.attack_ms = std::max(0.0f, value);
+      return true;
+    case 2:
+      config_.release_ms = std::max(0.0f, value);
+      return true;
+    case 3:
+      config_.range_db = std::min(0.0f, value);
+      return true;
+    default:
+      return false;
   }
 }
 

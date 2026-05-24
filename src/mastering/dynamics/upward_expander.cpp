@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 
 namespace sonare::mastering::dynamics {
@@ -29,6 +30,7 @@ void UpwardExpander::prepare(double sample_rate, int max_block_size) {
 }
 
 void UpwardExpander::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("UpwardExpander must be prepared before processing");
   }
@@ -76,6 +78,39 @@ void UpwardExpander::set_config(const UpwardExpanderConfig& config) {
       follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
     }
     reset();
+  }
+}
+
+bool UpwardExpander::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      return true;
+    case 1:
+      config_.ratio = std::max(1.0f, value);
+      return true;
+    case 2:
+      config_.attack_ms = std::max(0.0f, value);
+      // Recompute follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 3:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 4:
+      config_.range_db = std::max(0.0f, value);
+      return true;
+    default:
+      return false;
   }
 }
 

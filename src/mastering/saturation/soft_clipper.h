@@ -24,6 +24,14 @@ class SoftClipper : public common::ProcessorBase {
   void set_config(const SoftClipperConfig& config);
   const SoftClipperConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset). Both are
+  // read per sample in process_sample() with no precomputed coefficients:
+  //   0 = drive_db
+  //   1 = mix (clamped to [0, 1])
+  // ceiling is NOT automatable: it normalizes the ADAA input, so changing it
+  // would require clearing the antiderivative history. aliasing is an enum.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const SoftClipperConfig& config);
   void ensure_state(int num_channels);

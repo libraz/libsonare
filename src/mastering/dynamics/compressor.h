@@ -41,6 +41,14 @@ class Compressor : public common::ProcessorBase {
   const CompressorConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = threshold_db
+  //   1 = ratio (clamped to >= 1)
+  //   2 = attack_ms (clamped to >= 0)
+  //   3 = release_ms (clamped to >= 0)
+  //   4 = makeup_gain_db
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const CompressorConfig& config);
   static float gain_reduction_db(float input_db, const CompressorConfig& config);

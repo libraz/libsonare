@@ -6,8 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "analysis/meter/true_peak.h"
 #include "mastering/common/sliding_max.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
@@ -24,7 +24,7 @@ float sanitize_sample(float sample, float ceiling) {
 }  // namespace
 
 TruePeakLimiter::TruePeakLimiter(TruePeakLimiterConfig config)
-    : config_(config), true_peak_filter_(1, config.oversample_factor == 2 ? 2 : 4) {
+    : config_(config), true_peak_filter_(1, config.oversample_factor) {
   validate_config(config_);
 }
 
@@ -37,8 +37,8 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   update_time_constants();
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
   limiter_.prepare(sample_rate_, max_block_size_);
-  true_peak_filter_ = common::TruePeakFilter(0, config_.oversample_factor == 2 ? 2 : 4);
-  downsampler_.set_factor(config_.oversample_factor == 2 ? 2 : 4);
+  true_peak_filter_ = common::TruePeakFilter(0, config_.oversample_factor);
+  downsampler_.set_factor(config_.oversample_factor);
   oversampled_peak_window_.prepare(
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
   prepared_ = true;
@@ -54,30 +54,10 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
 
-  if (config_.oversample_factor == 2 || config_.oversample_factor == 4) {
-    process_polyphase(channels, num_channels, num_samples);
-    return;
-  }
-
-  process_fallback(channels, num_channels, num_samples);
-}
-
-void TruePeakLimiter::process_fallback(float* const* channels, int num_channels, int num_samples) {
-  limiter_.process(channels, num_channels, num_samples);
-  const float ceiling = db_to_linear(config_.ceiling_db);
-  float peak = 0.0f;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    peak = std::max(peak, analysis::meter::true_peak(channels[ch], static_cast<size_t>(num_samples),
-                                                     config_.oversample_factor));
-  }
-  if (peak > ceiling && peak > 0.0f) {
-    const float gain = ceiling / peak;
-    for (int ch = 0; ch < num_channels; ++ch)
-      for (int i = 0; i < num_samples; ++i) channels[ch][i] *= gain;
-    last_gain_reduction_db_ = std::min(limiter_.last_gain_reduction_db(), linear_to_db(gain));
-  } else {
-    last_gain_reduction_db_ = limiter_.last_gain_reduction_db();
-  }
+  // All supported oversampling factors (2, 4, 8) use the sample-accurate
+  // polyphase brickwall path; validate_config rejects any other value.
+  common::ScopedNoDenormals no_denormals;
+  process_polyphase(channels, num_channels, num_samples);
 }
 
 void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels, int num_samples) {
@@ -257,6 +237,32 @@ void TruePeakLimiter::set_release_ms(float release_ms) {
   limiter_.set_release_ms(release_ms);
 }
 
+bool TruePeakLimiter::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.ceiling_db = std::min(0.0f, value);
+      // The polyphase path reads config_.ceiling_db directly each block (RT-safe).
+      // Forward to the inner brickwall limiter to keep its reported ceiling
+      // consistent; that forward re-prepares the inner limiter, which does not
+      // affect the polyphase gain envelopes used by the active processing path.
+      if (prepared_) {
+        limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+      }
+      return true;
+    case 1:
+      // In-place: recomputes time constants and forwards to inner limiter
+      // without clearing lookahead or gain-envelope state.
+      set_release_ms(std::max(0.0f, value));
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id != 0u;
+}
+
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
       (config.oversample_factor != 2 && config.oversample_factor != 4 &&
@@ -270,7 +276,7 @@ int TruePeakLimiter::latency_samples() const noexcept {
   //  - polyphase: oversampled_lookahead_ holds lookahead_samples_*factor OS samples
   //    (= lookahead_samples_ base-rate); the upsampler (centered FIR + history pre-fill)
   //    and the centered batch downsampler add zero group delay.
-  //  - detect_only / fallback: the lookahead buffer / inner limiter delay by lookahead_samples_.
+  //  - detect_only: the lookahead buffer / inner limiter delay by lookahead_samples_.
   return limiter_.latency_samples();
 }
 

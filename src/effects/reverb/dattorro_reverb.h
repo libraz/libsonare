@@ -22,11 +22,27 @@ struct DattorroReverbConfig {
 
 class DattorroReverb : public rt::ProcessorBase {
  public:
+  /// Reference rate from Dattorro's tables; all delay lengths scale by sr/this.
+  /// Pre-delay / modulation depth in DattorroReverbConfig are expressed at this
+  /// rate and rescaled to the working sample rate in prepare().
+  static constexpr double kReferenceSampleRate = 29761.0;
+
   explicit DattorroReverb(DattorroReverbConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = decay (clamped to [0, 0.98] in process())
+  //   1 = damping (clamped to [0, 1] in process())
+  //   2 = dry_wet (clamped to [0, 1] in process())
+  //   3 = mod_rate_hz (recomputes the LFO increment in place)
+  //   4 = mod_depth_samples (recomputes scaled depth; process() clamps the
+  //       read to the buffer guard sized at prepare())
+  // Note: pre_delay_samples is not automatable; changing it resizes the
+  // pre-delay buffer and requires prepare().
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   /// @brief Schroeder allpass: out = -g*in + buf[read]; buf[write] = in + g*out.

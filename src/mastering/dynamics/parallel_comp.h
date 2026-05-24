@@ -34,6 +34,16 @@ class ParallelComp : public common::ProcessorBase {
   const ParallelCompConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = threshold_db
+  //   1 = ratio (clamped to >= 1)
+  //   2 = attack_ms (clamped to >= 0)
+  //   3 = release_ms (clamped to >= 0)
+  //   4 = makeup_gain_db
+  //   5 = mix (clamped to [0, 1])
+  //   6 = output_ceiling_db
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const ParallelCompConfig& config);
   static float gain_reduction_db(float input_db, const ParallelCompConfig& config);

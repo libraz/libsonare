@@ -52,4 +52,30 @@ void StereoDelay::reset() {
 
 void StereoDelay::set_config(const StereoDelayConfig& config) noexcept { config_ = config; }
 
+bool StereoDelay::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      // Delay times feed the fractional read taps directly in process(); the
+      // delay lines are sized for up to 4 s so no reallocation is needed.
+      config_.delay_time_l_ms = std::max(0.0f, value);
+      return true;
+    case 1:
+      config_.delay_time_r_ms = std::max(0.0f, value);
+      return true;
+    case 2:
+      // process() clamps feedback to [0, 0.95]; store the raw target.
+      config_.feedback = value;
+      return true;
+    case 3:
+      // process() clamps ping_pong to [0, 1]; store the raw target.
+      config_.ping_pong = value;
+      return true;
+    case 4:
+      config_.dry_wet = value;
+      return true;
+    default:
+      return false;
+  }
+}
+
 }  // namespace sonare::effects::delay

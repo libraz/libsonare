@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::spectral {
@@ -43,6 +44,7 @@ void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
 }
 
 void PresenceEnhancer::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("PresenceEnhancer must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -66,6 +68,38 @@ void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {
 
 void PresenceEnhancer::reset() {
   for (auto& filter : bandpass_) filter.reset();
+}
+
+bool PresenceEnhancer::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 1:
+      config_.drive = std::max(value, 1.0e-6f);
+      return true;
+    case 2:
+    case 3: {
+      if (param_id == 2) {
+        config_.center_frequency_hz = std::max(value, 1.0e-3f);
+      } else {
+        config_.q = std::max(value, 1.0e-6f);
+      }
+      // Recompute the cached bandpass coefficients in place, preserving each
+      // channel's filter state (z1/z2).
+      for (auto& filter : bandpass_) {
+        const Biquad updated = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
+        filter.b0 = updated.b0;
+        filter.b1 = updated.b1;
+        filter.b2 = updated.b2;
+        filter.a1 = updated.a1;
+        filter.a2 = updated.a2;
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
 }
 
 void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {

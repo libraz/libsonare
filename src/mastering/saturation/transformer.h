@@ -22,6 +22,14 @@ class Transformer : public common::ProcessorBase {
   void set_config(const TransformerConfig& config);
   const TransformerConfig& transformer_config() const { return transformer_config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset):
+  //   0 = drive_db (read per sample)
+  //   1 = asymmetry (clamped to [-1, 1]; sets bias and updates J-A coercivity)
+  //   2 = mix (clamped to [0, 1]; read per sample)
+  // The J-A config update only touches coefficients; the per-channel
+  // magnetization state in states_ is preserved.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const TransformerConfig& config);
   static common::JilesAthertonConfig make_ja_config(const TransformerConfig& config);

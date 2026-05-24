@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
@@ -28,6 +29,7 @@ void VocalRider::prepare(double sample_rate, int max_block_size) {
 }
 
 void VocalRider::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("VocalRider must be prepared before processing");
   }
@@ -107,6 +109,50 @@ void VocalRider::set_config(const VocalRiderConfig& config) {
       follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
     }
     reset();
+  }
+}
+
+bool VocalRider::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.target_db = value;
+      return true;
+    case 1:
+      config_.max_boost_db = std::max(0.0f, value);
+      return true;
+    case 2:
+      config_.max_cut_db = std::max(0.0f, value);
+      return true;
+    case 3:
+      config_.attack_ms = std::max(0.0f, value);
+      // Recompute follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 4:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 5:
+      config_.output_gain_db = value;
+      return true;
+    case 6:
+      // The smoothing coefficient is derived per sample from this value, so a
+      // plain update is RT-safe and preserves the running gain state.
+      config_.gain_smoothing_ms = std::max(0.0f, value);
+      return true;
+    case 7:
+      config_.noise_floor_db = value;
+      return true;
+    default:
+      return false;
   }
 }
 

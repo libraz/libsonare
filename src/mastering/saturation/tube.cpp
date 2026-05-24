@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -76,6 +77,7 @@ void Tube::prepare(double sample_rate, int max_block_size) {
 }
 
 void Tube::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("Tube must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -119,6 +121,30 @@ float Tube::process_model(float sample, const TubeConfig& config) {
   const float current_delta = plate_current_ma(grid_bias_v + grid_signal_v, plate_v) - idle;
   const float clipped = std::tanh(current_delta * 2.5f);
   return config.harmonic_drive * clipped + (1.0f - config.harmonic_drive) * current_delta;
+}
+
+bool Tube::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      tube_config_.drive_db = value;
+      return true;
+    case 1:
+      tube_config_.bias = value;
+      return true;
+    case 2:
+      tube_config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 3:
+      // validate_config requires bias_v to be finite; reject non-finite values.
+      if (!std::isfinite(value)) return false;
+      tube_config_.bias_v = value;
+      return true;
+    case 4:
+      tube_config_.harmonic_drive = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Tube::validate_config(const TubeConfig& config) {

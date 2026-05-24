@@ -150,6 +150,7 @@ if(BUILD_MASTERING)
     mastering/multiband_test.cpp
     mastering/repair_test.cpp
     mastering/saturation_test.cpp
+    mastering/set_parameter_test.cpp
     mastering/tape_oversample_test.cpp
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp

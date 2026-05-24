@@ -39,6 +39,28 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
   }
 }
 
+bool Chorus::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.rate_hz = std::max(0.0f, value);
+      // Updates the LFO increment in place; preserves oscillator phase.
+      lfos_[0].set_rate_hz(config_.rate_hz);
+      lfos_[1].set_rate_hz(config_.rate_hz);
+      return true;
+    case 1:
+      config_.depth_ms = std::max(0.0f, value);
+      return true;
+    case 2:
+      config_.center_delay_ms = std::max(0.0f, value);
+      return true;
+    case 3:
+      config_.dry_wet = value;
+      return true;
+    default:
+      return false;
+  }
+}
+
 void Chorus::reset() {
   for (auto& delay : delays_) {
     delay.reset();
