@@ -21,6 +21,9 @@ Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
   mastering chain), implemented against published references such as
   ITU-R BS.1770-4 loudness/true-peak, Vicanek biquads, ADAA nonlinearities,
   Lemire sliding max, and polyphase FIR oversampling.
+  Repair processors are classical DSP by design; denoise uses spectral
+  subtraction / MMSE-STSA / LogMMSE noise reduction rather than DNN source
+  separation or spectral repair.
 - **License** — Apache-2.0 across the entire stack (C++, Python, Node, WASM).
 
 ## Installation
@@ -343,6 +346,10 @@ std::cout << "BPM: " << result.bpm
 | Exciter / Bitcrusher              | Loudness optimizer (LUFS target)        | ADAA nonlinearities        |
 | Declick / Declip / Decrackle      | Adaptive release                        | Vicanek biquad design      |
 | Denoise / Dereverb / Dehum        | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+
+Repair is classical DSP by design. `denoise_classical` covers spectral
+subtraction, MMSE-STSA, and LogMMSE with explicit noise estimation; DNN
+restoration, source separation, and RX-style spectral repair are out of scope.
 
 Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 `cmake -DBUILD_MASTERING=OFF` to ship analysis-only builds.

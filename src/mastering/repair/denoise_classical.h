@@ -31,6 +31,10 @@ enum class DenoiseNoiseEstimator {
 
 /// @brief STFT-based denoiser supporting three classical gain functions.
 ///
+/// This module is intentionally limited to classical, non-ML noise reduction:
+/// spectral subtraction, MMSE-STSA, and LogMMSE with explicit noise tracking.
+/// It does not attempt source separation, spectral repair, or DNN restoration.
+///
 /// The noise PSD is estimated from the quietest `noise_estimation_quantile`
 /// fraction of frames (typically 10%). The decision-directed a priori SNR is
 /// then computed via the Ephraim-Malah recursion with smoothing factor

@@ -22,6 +22,8 @@ Apache-2.0、ランタイム依存ライブラリなし、ネイティブとWebA
   ITU-R BS.1770-4 ラウドネス／トゥルーピーク、Vicanekバイクァッド、ADAA非線形、
   Lemireスライディング最大、ポリフェーズFIRオーバーサンプリングなど、
   公開された規格・論文に基づく実装です。
+  リペア系は意図的に古典的DSPに限定し、デノイズは spectral subtraction /
+  MMSE-STSA / LogMMSE によるノイズ低減です。DNN音源分離やスペクトル修復は対象外です。
 - **ライセンス** — スタック全体（C++・Python・Node・WASM）が Apache-2.0。
 
 ## インストール
@@ -345,6 +347,10 @@ std::cout << "BPM: " << result.bpm
 | エキサイター / ビットクラッシャー   | ラウドネスオプティマイザ (LUFSターゲット) | ADAA非線形                  |
 | デクリック / デクリップ / デクラックル | アダプティブリリース                    | Vicanekバイクァッド設計      |
 | デノイズ / ディリバーブ / デハム     | リファレンスEQ / loudness / spectrum     | パーティションドコンボルバー |
+
+リペア系は意図的に古典的DSPに限定しています。`denoise_classical` は明示的な
+ノイズ推定に基づく spectral subtraction、MMSE-STSA、LogMMSE を扱い、
+DNN復元、音源分離、RX級のスペクトル修復はスコープ外です。
 
 マスタリングはデフォルトでビルドされます（`BUILD_MASTERING=ON`）。
 `cmake -DBUILD_MASTERING=OFF` で解析専用ビルド（バイナリを小さく）にもできます。
