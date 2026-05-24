@@ -457,8 +457,9 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
                                      tail_noise * 0.50,
                                      tail_noise * 0.75,
                                      tail_noise * 0.90};
-  for (int step = 0; step <= 72; ++step) {
-    const float alpha = static_cast<float>(step) / 72.0f;
+  constexpr int kRt60GridSteps = 36;
+  for (int step = 0; step <= kRt60GridSteps; ++step) {
+    const float alpha = static_cast<float>(step) / static_cast<float>(kRt60GridSteps);
     const float rt60 = min_rt60 * std::pow(max_rt60 / min_rt60, alpha);
     const double lambda = std::log(1000000.0) / static_cast<double>(rt60);
 
@@ -572,17 +573,24 @@ BlindRt60Estimate aggregate_decay_candidates(std::vector<DecayEstimateCandidate>
 }
 
 BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t size, int sample_rate,
-                                                 float min_decay_db, float noise_floor_margin_db) {
-  const std::vector<float> denoised =
-      suppress_stationary_noise_spectral(samples, size, sample_rate);
-  const float* analysis_samples = denoised.empty() ? samples : denoised.data();
+                                                 float min_decay_db, float noise_floor_margin_db,
+                                                 bool suppress_stationary_noise = true) {
+  std::vector<float> denoised;
+  const float* analysis_samples = samples;
+  if (suppress_stationary_noise) {
+    denoised = suppress_stationary_noise_spectral(samples, size, sample_rate);
+    if (!denoised.empty()) {
+      analysis_samples = denoised.data();
+    }
+  }
   const FrameEnergy frames = compute_frame_energy(analysis_samples, size, sample_rate);
   if (frames.db.size() < 8) {
     return {};
   }
 
   const float required_drop = std::clamp(min_decay_db, 10.0f, 30.0f);
-  const size_t start_stride = 4;
+  const size_t start_stride = frames.db.size() > 200 ? 8 : 4;
+  const size_t last_stride = frames.db.size() > 200 ? 3 : 1;
   const size_t max_window_frames = static_cast<size_t>(std::round(12.0f / 0.01f));
   auto decay_regions = detect_free_decay_regions(frames, required_drop, noise_floor_margin_db);
   auto lollmann_regions = map_sample_regions_to_frames(
@@ -603,7 +611,7 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
         continue;
       }
       const size_t last_limit = std::min(region_last, first + max_window_frames);
-      for (size_t last = first + 7; last <= last_limit; ++last) {
+      for (size_t last = first + 7; last <= last_limit; last += last_stride) {
         const float drop = frames.db[first] - frames.db[last - 1];
         if (drop < required_drop) {
           continue;
@@ -854,7 +862,7 @@ std::vector<BlindRt60Estimate> estimate_third_octave_rt60(const Audio& audio,
 
     BlindRt60Estimate estimate =
         estimate_blind_rt60_from_decay(filtered.data(), filtered.size(), audio.sample_rate(),
-                                       config.min_decay_db, config.noise_floor_margin_db);
+                                       config.min_decay_db, config.noise_floor_margin_db, false);
     estimate.center_hz = center_hz;
     estimate.energy = energy;
     estimates.push_back(estimate);
@@ -1220,7 +1228,8 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
     }
     if (band.confidence <= 0.0f) {
       band = estimate_blind_rt60_from_decay(filtered.data(), filtered.size(), audio.sample_rate(),
-                                            config_.min_decay_db, config_.noise_floor_margin_db);
+                                            config_.min_decay_db, config_.noise_floor_margin_db,
+                                            false);
     }
     parameters_.rt60_bands.push_back(band.rt60);
     parameters_.edt_bands.push_back(band.confidence > 0.0f ? band.rt60 : nan_value());
