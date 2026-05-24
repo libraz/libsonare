@@ -9,6 +9,8 @@
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/nnls_chroma.h"
+#include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "sonare_c.h"
@@ -145,6 +147,34 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   SONARE_C_CATCH
 }
 
+// Features - Onset
+// ============================================================================
+
+SonareError sonare_onset_strength(const float* samples, size_t length, int sr, int n_fft,
+                                  int hop_length, int n_mels, float** out, size_t* out_length) {
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sr);
+  if (err != SONARE_OK) return err;
+
+  *out = nullptr;
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sr);
+  MelConfig mel_config;
+  mel_config.n_fft = n_fft;
+  mel_config.hop_length = hop_length;
+  mel_config.n_mels = n_mels;
+  std::vector<float> env = compute_onset_strength(audio, mel_config, OnsetConfig());
+
+  *out_length = env.size();
+  if (env.empty()) return SONARE_OK;
+  std::unique_ptr<float[]> data(new float[env.size()]);
+  std::memcpy(data.get(), env.data(), env.size() * sizeof(float));
+  *out = release_array(data);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 // Features - Chroma
 // ============================================================================
 
@@ -178,6 +208,29 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
   std::unique_ptr<float[]> mean_out(new float[chroma.n_chroma()]);
   std::memcpy(mean_out.get(), mean.data(), chroma.n_chroma() * sizeof(float));
   out->mean_energy = release_array(mean_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
+                               size_t* out_length, int* out_n_frames) {
+  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sr);
+  if (err != SONARE_OK) return err;
+
+  *out = nullptr;
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sr);
+  Chroma chroma = nnls_chroma(audio);
+
+  *out_n_frames = chroma.n_frames();
+  size_t total = static_cast<size_t>(chroma.n_chroma()) * chroma.n_frames();
+  *out_length = total;
+  if (total == 0) return SONARE_OK;
+  std::unique_ptr<float[]> features(new float[total]);
+  std::memcpy(features.get(), chroma.data(), total * sizeof(float));
+  *out = release_array(features);
   return SONARE_OK;
   SONARE_C_CATCH
 }

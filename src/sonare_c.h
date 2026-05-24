@@ -290,6 +290,14 @@ typedef struct {
   int is_blind;
 } SonareAcousticResult;
 
+// LUFS loudness result (no heap pointers; no free function required).
+typedef struct {
+  float integrated_lufs;
+  float momentary_lufs;
+  float short_term_lufs;
+  float loudness_range;
+} SonareLufsResult;
+
 typedef struct {
   float bpm;
   float confidence;
@@ -753,6 +761,41 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
 SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
                        float tempo_min, float tempo_max, int win_length, float** out,
                        size_t* out_length);
+
+/// @brief Onset strength envelope from audio (librosa.onset.onset_strength).
+/// @details Builds a Mel spectrogram from @p samples and returns the half-wave
+///   rectified onset strength envelope. Output length is the number of frames.
+SonareError sonare_onset_strength(const float* samples, size_t length, int sr, int n_fft,
+                                  int hop_length, int n_mels, float** out, size_t* out_length);
+
+/// @brief Fourier (FFT-based) tempogram of an onset envelope.
+/// @details Returns a magnitude matrix [n_bins x n_frames] row-major, where
+///   n_bins = win_length / 2 + 1 (derivable as out_length / out_n_frames).
+SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length, int sr,
+                                     int hop_length, int win_length, int center, int norm,
+                                     float** out, size_t* out_length, int* out_n_frames);
+
+/// @brief Aggregated tempogram values at integer tempo ratios of a reference tempo.
+/// @details If @p factors is NULL or @p n_factors is 0, the library default
+///   factors {0.5, 1, 2, 3, 4} are used. The output contains one value per factor.
+SonareError sonare_tempogram_ratio(const float* tempogram_data, size_t length, int win_length,
+                                   int sr, int hop_length, const float* factors, size_t n_factors,
+                                   float** out, size_t* out_length);
+
+/// @brief NNLS chroma from audio (12 x n_frames row-major).
+SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
+                               size_t* out_length, int* out_n_frames);
+
+/// @brief Integrated/momentary/short-term LUFS and loudness range (offline meter).
+SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsResult* out);
+
+/// @brief Per-block momentary LUFS time series.
+SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, float** out,
+                                  size_t* out_length);
+
+/// @brief Per-block short-term LUFS time series.
+SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, float** out,
+                                   size_t* out_length);
 
 // ============================================================================
 // Core - Resample

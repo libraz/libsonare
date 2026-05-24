@@ -37,6 +37,8 @@
 #include "effects/time_stretch.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/nnls_chroma.h"
+#include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/rhythm.h"
 #include "feature/spectral.h"
@@ -1286,6 +1288,21 @@ val js_chroma(val samples, int sample_rate, int n_fft, int hop_length) {
   return out;
 }
 
+val js_nnls_chroma(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  Chroma chroma = nnls_chroma(audio);
+
+  val out = val::object();
+  out.set("nChroma", chroma.n_chroma());
+  out.set("nFrames", chroma.n_frames());
+
+  std::vector<float> data_vec(chroma.data(), chroma.data() + chroma.n_chroma() * chroma.n_frames());
+  out.set("data", vectorToFloat32Array(data_vec));
+  return out;
+}
+
 // ============================================================================
 // Features - Spectral
 // ============================================================================
@@ -1618,6 +1635,62 @@ val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min,
   config.tempo_max = tempo_max;
   config.win_length = win_length;
   return vectorToFloat32Array(plp(data, config));
+}
+
+val js_onset_envelope(val samples, int sample_rate, int n_fft, int hop_length, int n_mels) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  MelConfig mel_config;
+  mel_config.n_fft = n_fft;
+  mel_config.hop_length = hop_length;
+  mel_config.n_mels = n_mels;
+  return vectorToFloat32Array(compute_onset_strength(audio, mel_config, OnsetConfig()));
+}
+
+val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length) {
+  std::vector<float> data = float32ArrayToVector(onset_envelope);
+  TempogramConfig config;
+  config.hop_length = hop_length;
+  config.win_length = win_length;
+  auto result = fourier_tempogram(data, sample_rate, config);
+  val out = val::object();
+  out.set("nBins", win_length / 2 + 1);
+  out.set("nFrames", static_cast<int>(data.size()));
+  out.set("data", vectorToFloat32Array(result));
+  return out;
+}
+
+val js_tempogram_ratio(val tempogram_data, int win_length, int sample_rate, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(tempogram_data);
+  return vectorToFloat32Array(tempogram_ratio(data, win_length, sample_rate, hop_length));
+}
+
+// ============================================================================
+// Analysis - LUFS metering
+// ============================================================================
+
+val js_lufs(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  analysis::meter::LufsResult result = analysis::meter::lufs(audio);
+  val out = val::object();
+  out.set("integratedLufs", result.integrated_lufs);
+  out.set("momentaryLufs", result.momentary_lufs);
+  out.set("shortTermLufs", result.short_term_lufs);
+  out.set("loudnessRange", result.loudness_range);
+  return out;
+}
+
+val js_momentary_lufs(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  return vectorToFloat32Array(analysis::meter::momentary_lufs(audio));
+}
+
+val js_short_term_lufs(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  return vectorToFloat32Array(analysis::meter::short_term_lufs(audio));
 }
 
 // ============================================================================
@@ -1961,6 +2034,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   // Features - Chroma
   function("chroma", &js_chroma);
+  function("nnlsChroma", &js_nnls_chroma);
 
   // Features - Spectral
   function("spectralCentroid", &js_spectral_centroid);
@@ -2004,6 +2078,14 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("tempogram", &js_tempogram);
   function("cyclicTempogram", &js_cyclic_tempogram);
   function("plp", &js_plp);
+  function("onsetEnvelope", &js_onset_envelope);
+  function("fourierTempogram", &js_fourier_tempogram);
+  function("tempogramRatio", &js_tempogram_ratio);
+
+  // Analysis - LUFS metering
+  function("lufs", &js_lufs);
+  function("momentaryLufs", &js_momentary_lufs);
+  function("shortTermLufs", &js_short_term_lufs);
 
   // Core - Resample
   function("resample", &js_resample);
