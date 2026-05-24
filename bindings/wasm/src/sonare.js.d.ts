@@ -699,6 +699,10 @@ interface SonareModule {
 
   // Streaming - StreamingMasteringChain
   createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
+
+  // Mixing - scene-based Mixer
+  createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
+  mixerPresetJson: (presetName: string) => string;
 }
 
 interface WasmStreamingMasteringChain {
@@ -711,6 +715,25 @@ interface WasmStreamingMasteringChain {
   reset: () => void;
   latencySamples: () => number;
   stageNames: () => string[];
+  delete: () => void;
+}
+
+interface WasmMixer {
+  compile: () => void;
+  processStereo: (
+    leftChannels: Float32Array[],
+    rightChannels: Float32Array[],
+  ) => { left: Float32Array; right: Float32Array; sampleRate: number };
+  stripCount: () => number;
+  scheduleInsertAutomation: (
+    stripIndex: number,
+    insertIndex: number,
+    paramId: number,
+    samplePos: number,
+    value: number,
+    curve: number,
+  ) => void;
+  toSceneJson: () => string;
   delete: () => void;
 }
 

@@ -4,6 +4,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 from .analyzer import (
+    Mixer,
     StreamingMasteringChain,
     amplitude_to_db,
     analyze,
@@ -220,6 +221,7 @@ __all__ = [
     "mastering_stereo_analysis_names",
     "mastering_stereo_analyze",
     "mfcc",
+    "Mixer",
     "mix_stereo",
     "mixing_scene_preset_json",
     "mixing_scene_preset_names",

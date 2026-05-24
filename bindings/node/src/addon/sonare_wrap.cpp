@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "sonare_wrap_mixer.h"
 #include "sonare_wrap_streaming.h"
 #include "sonare_wrap_utils.h"
 
@@ -245,6 +246,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Streaming - StreamingMasteringChain
   StreamingMasteringChainWrap::Init(env, exports);
+
+  // Mixing - scene-based Mixer
+  MixerWrap::Init(env, exports);
 
   return exports;
 }

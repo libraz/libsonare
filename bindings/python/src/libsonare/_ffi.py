@@ -1662,6 +1662,25 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_void_p),
         ]
+        if hasattr(lib, "sonare_mixer_compile"):
+            lib.sonare_mixer_compile.restype = ctypes.c_int32
+            lib.sonare_mixer_compile.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_mixer_strip_count"):
+            lib.sonare_mixer_strip_count.restype = ctypes.c_size_t
+            lib.sonare_mixer_strip_count.argtypes = [ctypes.c_void_p]
+            lib.sonare_mixer_strip_at.restype = ctypes.c_void_p
+            lib.sonare_mixer_strip_at.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            lib.sonare_mixer_strip_by_id.restype = ctypes.c_void_p
+            lib.sonare_mixer_strip_by_id.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            lib.sonare_strip_schedule_insert_automation.restype = ctypes.c_int32
+            lib.sonare_strip_schedule_insert_automation.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint,
+                ctypes.c_uint,
+                ctypes.c_int64,
+                ctypes.c_float,
+                ctypes.c_int,
+            ]
         lib.sonare_mixer_process_stereo.restype = ctypes.c_int32
         lib.sonare_mixer_process_stereo.argtypes = [
             ctypes.c_void_p,

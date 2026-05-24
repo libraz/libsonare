@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import type {
   AcousticResult,
   AnalysisResult,
+  AutomationCurve,
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordChromaMethod,
@@ -18,9 +19,10 @@ import type {
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MfccResult,
+  MixerProcessResult,
   MixOptions,
   MixResult,
-  MfccResult,
   PairAnalysis,
   PairProcessor,
   PitchResult,
@@ -1213,6 +1215,91 @@ export function mixingScenePresetJson(preset: string): string {
   return addon.mixingScenePresetJson(preset);
 }
 
+/**
+ * Scene-based persistent stereo mixer. Built from a scene JSON string, it routes
+ * per-strip stereo blocks through a compiled routing graph (sends, buses,
+ * inserts) into a stereo master. Insert-parameter automation is scheduled by
+ * strip index; the underlying strip handles are never exposed.
+ */
+export class Mixer {
+  private native: InstanceType<typeof addon.Mixer>;
+
+  private constructor(native: InstanceType<typeof addon.Mixer>) {
+    this.native = native;
+  }
+
+  /** Build a mixer from a scene JSON string (see {@link mixingScenePresetJson}). */
+  static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
+    return new Mixer(new addon.Mixer(json, sampleRate, blockSize));
+  }
+
+  /** Rebuild and compile the routing graph from the current scene topology. */
+  compile(): void {
+    this.native.compile();
+  }
+
+  /** Number of strips in the mixer. */
+  stripCount(): number {
+    return this.native.stripCount();
+  }
+
+  /**
+   * Mix one block of per-strip stereo audio into the stereo master.
+   *
+   * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
+   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`
+   */
+  processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
+    if (leftChannels.length !== rightChannels.length) {
+      throw new Error('leftChannels and rightChannels must have the same length.');
+    }
+    return this.native.processStereo(leftChannels, rightChannels);
+  }
+
+  /**
+   * Schedule a sample-accurate insert-parameter automation event.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param insertIndex - Index into the strip's combined [pre... post...] inserts
+   * @param paramId - Processor-specific parameter id
+   * @param samplePos - Absolute sample position from the start of processing
+   * @param value - Target parameter value
+   * @param curve - Interpolation curve toward the value (default `'linear'`)
+   */
+  scheduleInsertAutomation(
+    stripIndex: number,
+    insertIndex: number,
+    paramId: number,
+    samplePos: number,
+    value: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleInsertAutomation(
+      stripIndex,
+      insertIndex,
+      paramId,
+      samplePos,
+      value,
+      curve === 'exponential' ? 1 : 0,
+    );
+  }
+
+  /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
+  toSceneJson(): string {
+    return this.native.toSceneJson();
+  }
+
+  /** Release the underlying native mixer. Safe to call only once. */
+  destroy(): void {
+    this.native.destroy();
+  }
+
+  /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
+  delete(): void {
+    this.destroy();
+  }
+}
+
 export function mixStereo(
   leftChannels: Float32Array[],
   rightChannels: Float32Array[],
@@ -1225,6 +1312,7 @@ export function mixStereo(
 export type {
   AcousticResult,
   AnalysisResult,
+  AutomationCurve,
   BpmAnalysisResult,
   BpmCandidate,
   Chord,
@@ -1243,11 +1331,12 @@ export type {
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MfccResult,
+  MixerProcessResult,
   MixMeterSnapshot,
   MixOptions,
   MixResult,
   PanMode,
-  MfccResult,
   PitchResult,
   RhythmResult,
   StftDbResult,

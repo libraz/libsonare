@@ -331,6 +331,25 @@ export interface WasmStreamingMasteringChain {
   delete: () => void;
 }
 
+export interface WasmMixer {
+  compile: () => void;
+  processStereo: (
+    leftChannels: Float32Array[],
+    rightChannels: Float32Array[],
+  ) => { left: Float32Array; right: Float32Array; sampleRate: number };
+  stripCount: () => number;
+  scheduleInsertAutomation: (
+    stripIndex: number,
+    insertIndex: number,
+    paramId: number,
+    samplePos: number,
+    value: number,
+    curve: number,
+  ) => void;
+  toSceneJson: () => string;
+  delete: () => void;
+}
+
 export interface WasmStreamAnalyzer {
   process: (samples: Float32Array) => void;
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
@@ -723,4 +742,6 @@ export interface SonareModule {
   ) => WasmStreamAnalyzer;
 
   createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
+  createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
+  mixerPresetJson: (presetName: string) => string;
 }

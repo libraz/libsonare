@@ -66,6 +66,7 @@
 #include "mixing/channel_strip.h"
 #include "quick.h"
 #include "sonare.h"
+#include "sonare_c.h"
 #include "streaming/stream_analyzer.h"
 #include "util/frame.h"
 #include "util/padding.h"
@@ -1125,6 +1126,160 @@ std::string js_mixing_scene_preset_json(std::string preset_name) {
   return mixing::api::scene_to_json(
       mixing::api::scene_preset(mixing::api::scene_preset_from_string(preset_name)));
 }
+
+// ---------------------------------------------------------------------------
+// MixerWasm: persistent scene-based mixer wrapper around the C mixer API
+// (sonare_mixer_*). Owns a SonareMixer* built from a scene JSON string, routes
+// strips through the compiled routing graph, and sums to a stereo master.
+//
+// processStereo takes planar inputs: leftChannels[i] / rightChannels[i] are the
+// L/R Float32Array for strip i (matching mixStereo's input layout). It returns
+// { left, right, sampleRate } with the mixed stereo master. Call delete() (or
+// use try/finally) to release the underlying WASM object.
+// ---------------------------------------------------------------------------
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
+class MixerWasm {
+ public:
+  MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
+      : mixer_(mixer), sample_rate_(sample_rate), block_size_(block_size) {}
+
+  ~MixerWasm() {
+    if (mixer_ != nullptr) {
+      sonare_mixer_destroy(mixer_);
+      mixer_ = nullptr;
+    }
+  }
+
+  MixerWasm(const MixerWasm&) = delete;
+  MixerWasm& operator=(const MixerWasm&) = delete;
+
+  static MixerWasm* fromSceneJson(std::string json, int sample_rate, int block_size) {
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), sample_rate, block_size);
+    if (mixer == nullptr) {
+      throw std::runtime_error(std::string("failed to build mixer from scene JSON: ") +
+                               sonare_last_error_message());
+    }
+    return new MixerWasm(mixer, sample_rate, block_size);
+  }
+
+  static std::string presetJson(std::string name) {
+    char* json = nullptr;
+    SonareError err = sonare_mixing_scene_preset_json(name.c_str(), &json);
+    if (err != SONARE_OK || json == nullptr) {
+      throw std::runtime_error(std::string("failed to get mixing scene preset JSON: ") +
+                               sonare_error_message(err));
+    }
+    std::string out(json);
+    sonare_free_string(json);
+    return out;
+  }
+
+  void compile() {
+    SonareError err = sonare_mixer_compile(mixer_);
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to compile mixer graph: ") +
+                               sonare_error_message(err));
+    }
+  }
+
+  size_t stripCount() const { return sonare_mixer_strip_count(mixer_); }
+
+  // Schedules sample-accurate insert-parameter automation on the strip at
+  // strip_index. insert_index addresses the strip's combined insert sequence
+  // [pre-inserts... post-inserts...]. param_id is processor-specific. sample_pos
+  // is in absolute samples from the start of processing. curve: 0 = Linear,
+  // 1 = Exponential.
+  void scheduleInsertAutomation(unsigned int strip_index, unsigned int insert_index,
+                                unsigned int param_id, double sample_pos, float value, int curve) {
+    SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
+    if (strip == nullptr) {
+      throw std::runtime_error("mixer strip index out of range");
+    }
+    SonareError err = sonare_strip_schedule_insert_automation(
+        strip, insert_index, param_id, static_cast<int64_t>(sample_pos), value, curve);
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to schedule insert automation: ") +
+                               sonare_error_message(err));
+    }
+  }
+
+  std::string toSceneJson() const {
+    char* json = nullptr;
+    SonareError err = sonare_mixer_to_scene_json(mixer_, &json);
+    if (err != SONARE_OK || json == nullptr) {
+      throw std::runtime_error(std::string("failed to serialize mixer scene: ") +
+                               sonare_error_message(err));
+    }
+    std::string out(json);
+    sonare_free_string(json);
+    return out;
+  }
+
+  val processStereo(val left_channels, val right_channels) {
+    const int count = left_channels["length"].as<int>();
+    if (count < 0 || right_channels["length"].as<int>() != count) {
+      throw std::invalid_argument("leftChannels and rightChannels must have the same length");
+    }
+
+    std::vector<std::vector<float>> left_inputs;
+    std::vector<std::vector<float>> right_inputs;
+    left_inputs.reserve(static_cast<size_t>(count));
+    right_inputs.reserve(static_cast<size_t>(count));
+
+    size_t length = 0;
+    for (int index = 0; index < count; ++index) {
+      left_inputs.push_back(float32ArrayToVector(left_channels[index]));
+      right_inputs.push_back(float32ArrayToVector(right_channels[index]));
+      if (left_inputs.back().size() != right_inputs.back().size()) {
+        throw std::invalid_argument("left and right channel lengths must match");
+      }
+      if (index == 0) {
+        length = left_inputs.back().size();
+      } else if (left_inputs.back().size() != length) {
+        throw std::invalid_argument("all strips must have the same length");
+      }
+    }
+    if (length > static_cast<size_t>(block_size_)) {
+      throw std::invalid_argument("block length exceeds the mixer's configured block size");
+    }
+
+    std::vector<const float*> left_ptrs(static_cast<size_t>(count));
+    std::vector<const float*> right_ptrs(static_cast<size_t>(count));
+    for (int index = 0; index < count; ++index) {
+      left_ptrs[static_cast<size_t>(index)] = left_inputs[static_cast<size_t>(index)].data();
+      right_ptrs[static_cast<size_t>(index)] = right_inputs[static_cast<size_t>(index)].data();
+    }
+
+    std::vector<float> out_left(length, 0.0f);
+    std::vector<float> out_right(length, 0.0f);
+    SonareError err = sonare_mixer_process_stereo(
+        mixer_, count > 0 ? left_ptrs.data() : nullptr, count > 0 ? right_ptrs.data() : nullptr,
+        static_cast<size_t>(count), out_left.data(), out_right.data(), length);
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("mixer process failed: ") + sonare_error_message(err));
+    }
+
+    val out = val::object();
+    out.set("left", vectorToFloat32Array(out_left));
+    out.set("right", vectorToFloat32Array(out_right));
+    out.set("sampleRate", sample_rate_);
+    return out;
+  }
+
+ private:
+  SonareMixer* mixer_ = nullptr;
+  int sample_rate_ = 48000;
+  int block_size_ = 0;
+};
+
+MixerWasm* createMixerFromSceneJson(std::string json, int sample_rate, int block_size) {
+  return MixerWasm::fromSceneJson(std::move(json), sample_rate, block_size);
+}
+
+std::string js_mixer_preset_json(std::string name) {
+  return MixerWasm::presetJson(std::move(name));
+}
+#endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
 
 namespace {
 
@@ -2223,6 +2378,16 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("mixingScenePresetNames", &js_mixing_scene_preset_names);
   function("mixingScenePresetJson", &js_mixing_scene_preset_json);
   function("mixStereo", &js_mix_stereo);
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
+  class_<MixerWasm>("Mixer")
+      .function("compile", &MixerWasm::compile)
+      .function("processStereo", &MixerWasm::processStereo)
+      .function("stripCount", &MixerWasm::stripCount)
+      .function("scheduleInsertAutomation", &MixerWasm::scheduleInsertAutomation)
+      .function("toSceneJson", &MixerWasm::toSceneJson);
+  function("createMixerFromSceneJson", &createMixerFromSceneJson, allow_raw_pointers());
+  function("mixerPresetJson", &js_mixer_preset_json);
+#endif
   function("trim", &js_trim);
 
   // Features - Spectrogram

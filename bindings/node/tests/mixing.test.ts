@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mixStereo, mixingScenePresetJson, mixingScenePresetNames } from '../src/index.js';
+import { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from '../src/index.js';
 
 describe('mixing native binding', () => {
   it('exposes scene presets and renders a muted stereo mix', () => {

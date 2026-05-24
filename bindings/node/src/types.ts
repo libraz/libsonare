@@ -357,6 +357,19 @@ export interface MixResult {
   meters: MixMeterSnapshot[];
 }
 
+/** Mixed stereo master returned by {@link Mixer.processStereo}. */
+export interface MixerProcessResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+}
+
+/**
+ * Interpolation curve for scheduled automation events
+ * (see {@link Mixer.scheduleInsertAutomation}).
+ */
+export type AutomationCurve = 'linear' | 'exponential';
+
 export interface StftResult {
   nBins: number;
   nFrames: number;

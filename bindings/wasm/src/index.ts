@@ -21,6 +21,7 @@
 import type {
   AcousticResult,
   AnalysisResult,
+  AutomationCurve,
   ChordAnalysisResult,
   ChordDetectionOptions,
   ChordQuality,
@@ -40,11 +41,11 @@ import type {
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
+  MixerProcessResult,
   MixOptions,
   MixResult,
   PairAnalysis,
   PairProcessor,
-  PanMode,
   PitchResult,
   SectionType,
   SoloProcessor,
@@ -72,6 +73,7 @@ import type {
 export type {
   AcousticResult,
   AnalysisResult,
+  AutomationCurve,
   Beat,
   Chord,
   ChordAnalysisResult,
@@ -93,6 +95,7 @@ export type {
   MasteringStereoResult,
   MelSpectrogramResult,
   MfccResult,
+  MixerProcessResult,
   MixMeterSnapshot,
   MixOptions,
   MixResult,
@@ -1048,6 +1051,145 @@ export class StreamingMasteringChain {
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.chain.delete();
+  }
+}
+
+// ============================================================================
+// Mixer Class (scene-based persistent mixer)
+// ============================================================================
+
+/**
+ * Get a built-in mixing scene preset serialized as JSON.
+ *
+ * Unlike {@link mixingScenePresetJson}, this round-trips through the C mixer
+ * API (normalizing the scene the same way {@link Mixer} would), so it is the
+ * canonical source for a preset you intend to load into a {@link Mixer}.
+ *
+ * @param preset - Preset name (see {@link mixingScenePresetNames})
+ * @returns Scene JSON string
+ */
+export function mixerScenePresetJson(preset: string): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.mixerPresetJson(preset);
+}
+
+/**
+ * Persistent, scene-based stereo mixer.
+ *
+ * Build one from a scene JSON string (e.g. {@link mixerScenePresetJson} or a
+ * hand-authored scene), then feed per-strip stereo blocks through
+ * {@link processStereo} to get the routed stereo master. Strips, sends, buses,
+ * and inserts are described entirely by the scene; the routing graph is
+ * compiled lazily on the first {@link processStereo} call (or eagerly via
+ * {@link compile}).
+ *
+ * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
+ * object — the embind handle is not garbage-collected automatically.
+ *
+ * @example
+ * ```typescript
+ * const mixer = Mixer.fromSceneJson(mixerScenePresetJson('basicStereo'), 48000, 512);
+ * try {
+ *   const out = mixer.processStereo([stripL], [stripR]);
+ * } finally {
+ *   mixer.delete();
+ * }
+ * ```
+ */
+export class Mixer {
+  private mixer: import('./wasm_types').WasmMixer;
+
+  private constructor(mixer: import('./wasm_types').WasmMixer) {
+    this.mixer = mixer;
+  }
+
+  /**
+   * Build a mixer from a scene JSON string.
+   *
+   * @param json - Scene JSON (strips, buses, sends, connections, inserts)
+   * @param sampleRate - Sample rate in Hz (default: 48000)
+   * @param blockSize - Maximum block size per {@link processStereo} call (default: 512)
+   */
+  static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize));
+  }
+
+  /** Rebuild and compile the routing graph from the current scene topology. */
+  compile(): void {
+    this.mixer.compile();
+  }
+
+  /**
+   * Mix one block of per-strip stereo audio into the stereo master.
+   *
+   * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
+   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`
+   * @returns Mixed stereo master (`left`, `right`, `sampleRate`)
+   */
+  processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
+    if (leftChannels.length !== rightChannels.length) {
+      throw new Error('leftChannels and rightChannels must have the same length.');
+    }
+    return this.mixer.processStereo(leftChannels, rightChannels);
+  }
+
+  /** Number of strips in the mixer (e.g. strips loaded from the scene). */
+  stripCount(): number {
+    return this.mixer.stripCount();
+  }
+
+  /**
+   * Schedule sample-accurate insert-parameter automation on a strip's insert.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param insertIndex - Index into the strip's combined insert sequence
+   *   (`[pre-inserts... post-inserts...]`)
+   * @param paramId - Processor-specific parameter id
+   * @param samplePos - Absolute samples from the start of processing (the mixer
+   *   advances an internal position from 0 on the first {@link processStereo}
+   *   call; recompiling resets it to 0)
+   * @param value - Target parameter value
+   * @param curve - Interpolation curve (default: `'linear'`)
+   * @throws If the strip index is out of range or the schedule call fails
+   *   (unknown curve, out-of-range insert index, or full event lane)
+   */
+  scheduleInsertAutomation(
+    stripIndex: number,
+    insertIndex: number,
+    paramId: number,
+    samplePos: number,
+    value: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    const curveCode = curve === 'exponential' ? 1 : 0;
+    this.mixer.scheduleInsertAutomation(
+      stripIndex,
+      insertIndex,
+      paramId,
+      samplePos,
+      value,
+      curveCode,
+    );
+  }
+
+  /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
+  toSceneJson(): string {
+    return this.mixer.toSceneJson();
+  }
+
+  /** Release the underlying WASM object. Safe to call only once. */
+  delete(): void {
+    this.mixer.delete();
+  }
+
+  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
+  destroy(): void {
+    this.delete();
   }
 }
 

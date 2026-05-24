@@ -129,6 +129,23 @@ file(GLOB_RECURSE SONARE_RT_SOURCES CONFIGURE_DEPENDS
 )
 list(APPEND SONARE_SOURCES ${SONARE_RT_SOURCES})
 list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/sonare_c_mixing.cpp)
+# sonare_c_mixing.cpp routes the mixer through the routing graph.
+list(APPEND SONARE_SOURCES
+  ${SONARE_ROOT}/src/graph/graph.cpp
+  ${SONARE_ROOT}/src/graph/node.cpp
+)
+# The channel-strip insert factory (mastering/api/insert_factory.cpp, pulled in
+# via the mastering GLOB above) can instantiate effects.reverb.* inserts when
+# SONARE_HAVE_FX is defined. Compile the reverb sources it links against so the
+# addon resolves those symbols, matching the native sonare_fx target.
+list(APPEND SONARE_SOURCES
+  ${SONARE_ROOT}/src/effects/reverb/dattorro_reverb.cpp
+  ${SONARE_ROOT}/src/effects/reverb/fdn_reverb.cpp
+  ${SONARE_ROOT}/src/effects/reverb/velvet_reverb.cpp
+  ${SONARE_ROOT}/src/effects/reverb/convolution_reverb.cpp
+  # dc_blocker.cpp is a transitive dependency of the FDN/convolution reverbs.
+  ${SONARE_ROOT}/src/effects/common/dc_blocker.cpp
+)
 list(REMOVE_DUPLICATES SONARE_SOURCES)
 
 # KissFFT sources
@@ -144,6 +161,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_analysis.cpp
   src/addon/sonare_wrap_effects.cpp
   src/addon/sonare_wrap_features.cpp
+  src/addon/sonare_wrap_mixer.cpp
   src/addon/sonare_wrap_streaming.cpp
   src/addon/sonare_wrap_utils.cpp
 )
@@ -236,6 +254,9 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   NAPI_DISABLE_CPP_EXCEPTIONS
   KISS_FFT_FIXED=0
+  # Enable the effects.reverb.* branch of the channel-strip insert factory
+  # (mirrors src/CMakeLists.txt's sonare_mastering + sonare_fx wiring).
+  SONARE_HAVE_FX
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE

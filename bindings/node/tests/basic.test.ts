@@ -20,9 +20,9 @@ import {
   detectChords,
   detectKey,
   detectOnsets,
-  fourierTempogram,
   fixFrames,
   fixLength,
+  fourierTempogram,
   frameSignal,
   framesToSamples,
   framesToTime,
@@ -33,6 +33,7 @@ import {
   hzToMidi,
   hzToNote,
   lufs,
+  Mixer,
   mastering,
   masteringChain,
   masteringPairAnalysisNames,
@@ -48,6 +49,7 @@ import {
   melToHz,
   mfcc,
   midiToHz,
+  mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
   normalize,
@@ -64,9 +66,9 @@ import {
   preemphasis,
   resample,
   rmsEnergy,
-  shortTermLufs,
   StreamingMasteringChain,
   samplesToFrames,
+  shortTermLufs,
   spectralBandwidth,
   spectralCentroid,
   spectralFlatness,
@@ -782,7 +784,9 @@ describe('sonare native binding', () => {
   describe('onset, tempogram, NNLS chroma, and LUFS', () => {
     const allFinite = (arr: Float32Array): boolean => {
       for (let i = 0; i < arr.length; i++) {
-        if (!Number.isFinite(arr[i])) return false;
+        if (!Number.isFinite(arr[i])) {
+          return false;
+        }
       }
       return true;
     };
@@ -874,6 +878,41 @@ describe('sonare native binding', () => {
         expect(audio.shortTermLufs().length).toBeGreaterThan(0);
       } finally {
         audio.destroy();
+      }
+    });
+  });
+
+  describe('Mixer (scene-based routing)', () => {
+    it('routes a preset scene and schedules insert automation', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+      try {
+        mixer.compile();
+        expect(mixer.stripCount()).toBeGreaterThan(0);
+
+        // Strip 0 (vocal) carries pre-fader inserts; schedule a no-throw event.
+        expect(() => mixer.scheduleInsertAutomation(0, 0, 0, 0, 0.0)).not.toThrow();
+        expect(() =>
+          mixer.scheduleInsertAutomation(0, 0, 0, 48000, 1.0, 'exponential'),
+        ).not.toThrow();
+
+        // Out-of-range strip index must throw.
+        expect(() => mixer.scheduleInsertAutomation(999, 0, 0, 0, 0.0)).toThrow();
+
+        const block = 512;
+        const vocalL = new Float32Array(block);
+        const vocalR = new Float32Array(block);
+        vocalL[0] = 1.0;
+        vocalR[0] = 1.0;
+        const silentL = new Float32Array(block);
+        const silentR = new Float32Array(block);
+        const out = mixer.processStereo([vocalL, silentL], [vocalR, silentR]);
+        expect(out.left.length).toBe(block);
+        expect(out.sampleRate).toBe(48000);
+
+        const scene = mixer.toSceneJson();
+        expect(scene).toContain('vocal-verb');
+      } finally {
+        mixer.destroy();
       }
     });
   });
