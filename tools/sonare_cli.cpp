@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -45,7 +46,10 @@
 #include "feature/spectral.h"
 #include "feature/tonnetz.h"
 #ifdef SONARE_WITH_MASTERING
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
+#include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #endif
 #include "cli_support.h"
@@ -120,8 +124,8 @@ std::vector<Mode> parse_mode_list_option(const std::string& value) {
   std::transform(key.begin(), key.end(), key.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (key == "all" || key == "modal") {
-    return {Mode::Major,    Mode::Minor,      Mode::Dorian,     Mode::Phrygian,
-            Mode::Lydian,   Mode::Mixolydian, Mode::Locrian};
+    return {Mode::Major,  Mode::Minor,      Mode::Dorian, Mode::Phrygian,
+            Mode::Lydian, Mode::Mixolydian, Mode::Locrian};
   }
   if (key == "major-minor" || key == "majmin" || key == "diatonic") {
     return {Mode::Major, Mode::Minor};
@@ -286,17 +290,17 @@ int cmd_samples_to_frames(const CliArgs& args, const Audio&) {
 
 int cmd_power_to_db(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(args, power_to_db(values, args.get_float("ref", 1.0f),
-                                       args.get_float("amin", 1e-10f),
-                                       args.get_float("top-db", 80.0f)));
+  print_float_values(
+      args, power_to_db(values, args.get_float("ref", 1.0f), args.get_float("amin", 1e-10f),
+                        args.get_float("top-db", 80.0f)));
   return 0;
 }
 
 int cmd_amplitude_to_db(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(args, amplitude_to_db(values, args.get_float("ref", 1.0f),
-                                           args.get_float("amin", 1e-5f),
-                                           args.get_float("top-db", 80.0f)));
+  print_float_values(
+      args, amplitude_to_db(values, args.get_float("ref", 1.0f), args.get_float("amin", 1e-5f),
+                            args.get_float("top-db", 80.0f)));
   return 0;
 }
 
@@ -381,8 +385,8 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
   config.bias = args.get_float("bias", config.bias);
   config.power = args.get_float("power", config.power);
   config.eps = args.get_float("eps", config.eps);
-  print_float_values(args, pcen(values, args.get_int("n-bins", 0), args.get_int("n-frames", 0),
-                                config));
+  print_float_values(args,
+                     pcen(values, args.get_int("n-bins", 0), args.get_int("n-frames", 0), config));
   return 0;
 }
 
@@ -1308,7 +1312,101 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   return params;
 }
 
+std::string read_text_file(const std::string& path) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    throw std::invalid_argument("cannot open config file: " + path);
+  }
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  return buffer.str();
+}
+
+void print_chain_result_json(const mastering::api::MonoChainResult& result, const std::string& mode,
+                             const std::string& output, const std::string& preset,
+                             const std::vector<std::string>& explanation = {}) {
+  JsonBuilder json;
+  json.begin_object()
+      .kv("mode", mode)
+      .kv("input_lufs", result.input_lufs)
+      .kv("output_lufs", result.output_lufs)
+      .kv("applied_gain_db", result.applied_gain_db)
+      .kv("output", output);
+  if (!preset.empty()) json.kv("preset", preset);
+  json.key("stages").begin_array();
+  for (const auto& stage : result.stages) json.value(stage);
+  json.end_array();
+  if (!explanation.empty()) {
+    json.key("explanation").begin_array();
+    for (const auto& item : explanation) json.value(item);
+    json.end_array();
+  }
+  json.end_object().print();
+}
+
 int cmd_mastering(const CliArgs& args, const Audio& audio) {
+  const bool use_chain = args.has("preset") || args.has("config") || args.has("assistant");
+  if (use_chain) {
+    mastering::api::MasteringChainConfig chain_config;
+    std::string mode = "config";
+    std::string preset_name;
+    std::vector<std::string> explanation;
+
+    if (args.has("assistant")) {
+      mastering::assistant::AssistantConfig assistant_config;
+      assistant_config.target_lufs = args.get_float("target-lufs", -14.0f);
+      assistant_config.ceiling_db = args.get_float("ceiling-db", -1.0f);
+      assistant_config.enable_repair = args.has("enable-repair");
+      auto suggestion = mastering::assistant::suggest_chain(audio, assistant_config);
+      chain_config = std::move(suggestion.config);
+      explanation = std::move(suggestion.explanation);
+      mode = "assistant";
+    } else if (args.has("config")) {
+      chain_config =
+          mastering::api::chain_config_from_json(read_text_file(args.get_string("config")));
+      mode = "config";
+    } else {
+      preset_name = args.get_string("preset");
+      chain_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
+      mode = "preset";
+    }
+
+    const auto overrides = parse_mastering_params(args.get_string("params"));
+    if (!overrides.empty()) {
+      mastering::api::apply_chain_config_overrides(chain_config, overrides.data(),
+                                                   overrides.size());
+    }
+
+    mastering::api::MasteringChain chain(std::move(chain_config));
+    const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
+    if (!args.output_file.empty()) {
+      save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+               args.get_int("bits", 16));
+    }
+
+    if (args.json_output) {
+      print_chain_result_json(result, mode, args.output_file, preset_name,
+                              args.has("explain") ? explanation : std::vector<std::string>{});
+    } else {
+      std::cout << "\n"
+                << color::cyan << color::bold << "Mastering Chain" << color::reset << "\n"
+                << "  Mode:            " << mode << "\n";
+      if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
+      std::cout << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+                << "\n"
+                << "  Output LUFS:     " << result.output_lufs << "\n"
+                << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
+                << "  Stages:          " << result.stages.size() << "\n";
+      if (args.has("explain") && !explanation.empty()) {
+        std::cout << "  Explanation:\n";
+        for (const auto& item : explanation) std::cout << "    - " << item << "\n";
+      }
+      if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
+      std::cout << "\n";
+    }
+    return 0;
+  }
+
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = args.get_float("target-lufs", -14.0f);
   config.ceiling_db = args.get_float("ceiling-db", -1.0f);
@@ -1630,8 +1728,8 @@ int cmd_tonnetz(const CliArgs& args, const Audio& audio) {
   } else {
     std::cout << "Tonnetz:\n";
     printf("  Shape: %d dims x %d frames\n", 6, chroma.n_frames());
-    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std,
-           stats.min, stats.max);
+    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std, stats.min,
+           stats.max);
   }
   return 0;
 }
@@ -1781,7 +1879,8 @@ int cmd_tempogram(const CliArgs& args, const Audio& audio) {
   config.hop_length = args.hop_length;
   config.win_length = args.get_int("win-length", 384);
   auto values = tempogram(audio, config);
-  const int n_frames = config.win_length > 0 ? static_cast<int>(values.size()) / config.win_length : 0;
+  const int n_frames =
+      config.win_length > 0 ? static_cast<int>(values.size()) / config.win_length : 0;
   Stats stats = Stats::compute(values);
 
   if (args.json_output) {
@@ -1801,8 +1900,8 @@ int cmd_tempogram(const CliArgs& args, const Audio& audio) {
   } else {
     std::cout << "Tempogram:\n";
     printf("  Shape: %d lags x %d frames\n", config.win_length, n_frames);
-    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std,
-           stats.min, stats.max);
+    printf("  Stats: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std, stats.min,
+           stats.max);
   }
   return 0;
 }
@@ -1835,8 +1934,8 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
   } else {
     std::cout << "Predominant Local Pulse:\n";
     printf("  Frames: %zu\n", values.size());
-    printf("  Stats:  mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std,
-           stats.min, stats.max);
+    printf("  Stats:  mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n", stats.mean, stats.std, stats.min,
+           stats.max);
   }
   return 0;
 }
@@ -1880,8 +1979,8 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
       args.get_float("noise-floor-margin-db", config.noise_floor_margin_db);
 
   const bool use_ir = args.has("ir");
-  AcousticParameters p = use_ir ? analyze_impulse_response(audio, config)
-                                : detect_acoustic(audio, config);
+  AcousticParameters p =
+      use_ir ? analyze_impulse_response(audio, config) : detect_acoustic(audio, config);
 
   if (args.json_output) {
     JsonBuilder json;
@@ -2010,10 +2109,7 @@ int cmd_tempogram_ratio(const CliArgs& args, const Audio& audio) {
     JsonBuilder json;
     json.begin_object().kv("win_length", config.win_length).key("ratios").begin_array();
     for (size_t i = 0; i < ratios.size(); ++i) {
-      json.begin_object()
-          .kv("factor", factors[i])
-          .kv("value", ratios[i])
-          .end_object();
+      json.begin_object().kv("factor", factors[i]).kv("value", ratios[i]).end_object();
     }
     json.end_array().end_object().print();
   } else {
@@ -2139,10 +2235,10 @@ const std::vector<CommandInfo>& get_commands() {
       {"mastering-processors", "List named mastering processors", cmd_mastering_processors, false},
       {"mastering-pair-processors", "List two-input mastering processors",
        cmd_mastering_pair_processors, false},
-      {"mastering-pair-analyses", "List two-input mastering analyses",
-       cmd_mastering_pair_analyses, false},
-      {"mastering-stereo-analyses", "List stereo mastering analyses",
-       cmd_mastering_stereo_analyses, false},
+      {"mastering-pair-analyses", "List two-input mastering analyses", cmd_mastering_pair_analyses,
+       false},
+      {"mastering-stereo-analyses", "List stereo mastering analyses", cmd_mastering_stereo_analyses,
+       false},
 #endif
       // Features
       {"mel", "Compute mel spectrogram", cmd_mel, true},

@@ -681,6 +681,44 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(f.good());
   }
 
+  SECTION("runs preset mastering chain") {
+    std::string preset_out = unique_temp_path("_preset_mastered.wav");
+    std::remove(preset_out.c_str());
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " -o " + preset_out +
+                                       " --preset pop --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"preset\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"preset\": \"pop\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
+
+    std::ifstream f(preset_out);
+    REQUIRE(f.good());
+  }
+
+  SECTION("runs JSON config mastering chain") {
+    std::string config_path = unique_temp_path("_chain.json");
+    {
+      std::ofstream config(config_path);
+      config << "{\"version\":1,\"params\":{\"eq.tilt.enabled\":true,"
+                "\"eq.tilt.tiltDb\":0.25,\"loudness.enabled\":true,"
+                "\"loudness.targetLufs\":-18}}";
+    }
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --config " + config_path + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"config\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
+  }
+
+  SECTION("runs assistant mastering chain with explanations") {
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --assistant --explain --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"assistant\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"explanation\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
+  }
+
   SECTION("lists named processors") {
     auto [code, output] = exec_command(CLI + " mastering-processors --json");
     REQUIRE(code == 0);

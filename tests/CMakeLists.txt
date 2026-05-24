@@ -133,6 +133,7 @@ endif()
 
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
+    mastering/assistant_test.cpp
     mastering/chain_test.cpp
     mastering/common_test.cpp
     mastering/preset_test.cpp

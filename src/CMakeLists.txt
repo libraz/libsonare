@@ -184,6 +184,8 @@ if(BUILD_MASTERING)
     mastering/api/named_processor.cpp
     mastering/api/named_processor_registry.cpp
     mastering/api/presets.cpp
+    mastering/assistant/audio_profile.cpp
+    mastering/assistant/suggester.cpp
     mastering/common/biquad_design.cpp
     mastering/common/param_smoother.cpp
     mastering/common/envelope_follower.cpp
