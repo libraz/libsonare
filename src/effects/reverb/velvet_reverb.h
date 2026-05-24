@@ -15,9 +15,9 @@ struct VelvetReverbConfig {
   /// @brief Scales reverb_time_s: effective T60 = reverb_time_s * (0.5 + decay).
   float decay = 0.45f;
   float dry_wet = 0.3f;
-  float reverb_time_s = 1.5f;   ///< Base T60 in seconds.
-  float density_hz = 2000.0f;   ///< Velvet pulse density, clamped to [1000, 3000].
-  bool enable_shelf = true;     ///< Post one-pole HF damping at 6 kHz.
+  float reverb_time_s = 1.5f;  ///< Base T60 in seconds.
+  float density_hz = 2000.0f;  ///< Velvet pulse density, clamped to [1000, 3000].
+  bool enable_shelf = true;    ///< Post one-pole HF damping at 6 kHz.
 };
 
 class VelvetReverb : public rt::ProcessorBase {
@@ -42,7 +42,7 @@ class VelvetReverb : public rt::ProcessorBase {
 
     void prepare(int length);
     void reset();
-    void write(float in);    ///< Writes then advances the head.
+    void write(float in);             ///< Writes then advances the head.
     float read_at(int offset) const;  ///< Reads offset samples behind the last write.
   };
 

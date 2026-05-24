@@ -319,7 +319,7 @@ if(BUILD_MIXING)
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
-  target_link_libraries(sonare_mixing PUBLIC sonare_rt)
+  target_link_libraries(sonare_mixing PUBLIC sonare_rt sonare_mastering)
   target_compile_options(sonare_mixing PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mixing PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()

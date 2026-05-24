@@ -130,8 +130,8 @@ Audio FormantWarp::process(const Audio& audio) const {
       const int lo = static_cast<int>(std::floor(src));
       const int hi = std::min(lo + 1, n_bins - 1);
       const float frac = src - static_cast<float>(lo);
-      warped[static_cast<size_t>(k)] = env[static_cast<size_t>(lo)] * (1.0f - frac) +
-                                       env[static_cast<size_t>(hi)] * frac;
+      warped[static_cast<size_t>(k)] =
+          env[static_cast<size_t>(lo)] * (1.0f - frac) + env[static_cast<size_t>(hi)] * frac;
     }
 
     // Re-color the whitened residual with the warped envelope: out_R[k] = R[k] * Hw[k].

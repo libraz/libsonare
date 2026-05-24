@@ -3,11 +3,121 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace sonare::mixing {
 
-void MeterProcessor::prepare(double, int) { reset(); }
+using sonare::constants::kEpsilon;
+using sonare::constants::kFloorDb;
+using sonare::constants::kPiD;
+
+namespace {
+constexpr double kLoudnessOffset = -0.691;
+}  // namespace
+
+// K-weighting biquad design mirrored from analysis/meter/lufs.cpp.
+MeterProcessor::Biquad MeterProcessor::high_shelf(double frequency, double sample_rate,
+                                                  double gain_db, double q) {
+  const double a = std::pow(10.0, gain_db / 40.0);
+  const double omega = 2.0 * kPiD * frequency / sample_rate;
+  const double sin_omega = std::sin(omega);
+  const double cos_omega = std::cos(omega);
+  const double alpha = sin_omega / (2.0 * q);
+  const double two_sqrt_a_alpha = 2.0 * std::sqrt(a) * alpha;
+
+  const double b0 = a * ((a + 1.0) + (a - 1.0) * cos_omega + two_sqrt_a_alpha);
+  const double b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_omega);
+  const double b2 = a * ((a + 1.0) + (a - 1.0) * cos_omega - two_sqrt_a_alpha);
+  const double a0 = (a + 1.0) - (a - 1.0) * cos_omega + two_sqrt_a_alpha;
+  const double a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_omega);
+  const double a2 = (a + 1.0) - (a - 1.0) * cos_omega - two_sqrt_a_alpha;
+
+  return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+}
+
+MeterProcessor::Biquad MeterProcessor::highpass(double frequency, double sample_rate, double q) {
+  const double omega = 2.0 * kPiD * frequency / sample_rate;
+  const double sin_omega = std::sin(omega);
+  const double cos_omega = std::cos(omega);
+  const double alpha = sin_omega / (2.0 * q);
+  const double a0 = 1.0 + alpha;
+
+  return {(1.0 + cos_omega) * 0.5 / a0, -(1.0 + cos_omega) / a0, (1.0 + cos_omega) * 0.5 / a0,
+          -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
+}
+
+double MeterProcessor::filter_sample(int channel, double x) noexcept {
+  const size_t c = static_cast<size_t>(channel);
+  // Pre-filter (high shelf), Direct Form II transposed.
+  BiquadState& s0 = k_state_pre_[c];
+  const double y0 = k_pre_.b0 * x + s0.z1;
+  s0.z1 = k_pre_.b1 * x - k_pre_.a1 * y0 + s0.z2;
+  s0.z2 = k_pre_.b2 * x - k_pre_.a2 * y0;
+
+  // RLB high-pass.
+  BiquadState& s1 = k_state_rlb_[c];
+  const double y1 = k_rlb_.b0 * y0 + s1.z1;
+  s1.z1 = k_rlb_.b1 * y0 - k_rlb_.a1 * y1 + s1.z2;
+  s1.z2 = k_rlb_.b2 * y0 - k_rlb_.a2 * y1;
+  return y1;
+}
+
+float MeterProcessor::energy_to_lufs(double energy) const noexcept {
+  // Finite floor instead of -inf so the meter always shows a bounded value.
+  if (energy < static_cast<double>(kEpsilon)) return kFloorDb;
+  return static_cast<float>(kLoudnessOffset + 10.0 * std::log10(energy));
+}
+
+void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
+  sample_rate_ = sample_rate;
+
+  if (config_.measure_lufs && sample_rate_ > 0.0) {
+    const int sr = static_cast<int>(std::lround(sample_rate_));
+    if (sr == 48000) {
+      k_pre_ = {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241,
+                0.73248077421585};
+      k_rlb_ = {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621};
+    } else {
+      k_pre_ = high_shelf(1681.974450955533, sample_rate_, 3.999843853973347, 0.7071752369554196);
+      k_rlb_ = highpass(38.13547087613982, sample_rate_, 0.5003270373238773);
+    }
+
+    momentary_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.400 * sample_rate_)));
+    short_term_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(3.0 * sample_rate_)));
+    gate_hop_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.100 * sample_rate_)));
+    energy_ring_.assign(short_term_len_, 0.0);  // ring sized to the longer window
+  } else {
+    energy_ring_.clear();
+    momentary_len_ = 0;
+    short_term_len_ = 0;
+    gate_hop_ = 0;
+  }
+
+  reset();
+}
+
+void MeterProcessor::reset() {
+  snapshot_ = MeterSnapshot{};
+  seq_ = 0;
+
+  k_state_pre_ = {};
+  k_state_rlb_ = {};
+  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0);
+  ring_pos_ = 0;
+  filled_ = 0;
+  momentary_sum_ = 0.0;
+  short_term_sum_ = 0.0;
+  gate_hop_counter_ = 0;
+  reset_integrated();
+
+  guard_.store(0, std::memory_order_release);
+}
+
+void MeterProcessor::reset_integrated() noexcept {
+  hist_count_.fill(0);
+  hist_energy_.fill(0.0);
+}
 
 void MeterProcessor::process(float* const* channels, int num_channels, int num_samples) {
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
@@ -48,21 +158,98 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     next.correlation = denom > 1.0e-12 ? static_cast<float>(sum_lr / denom) : 0.0f;
   }
 
-  next.seq = ++seq_;
-  const int next_index = 1 - active_index_.load(std::memory_order_relaxed);
-  snapshots_[static_cast<size_t>(next_index)] = next;
-  active_index_.store(next_index, std::memory_order_release);
+  if (config_.measure_lufs && !energy_ring_.empty()) {
+    const int lufs_channels = std::min(num_channels, 2);
+    for (int i = 0; i < num_samples; ++i) {
+      // Combined K-weighted squared energy summed across stereo channels (BS.1770 weight 1.0 each).
+      double combined = 0.0;
+      for (int ch = 0; ch < lufs_channels; ++ch) {
+        if (channels[ch] == nullptr) continue;
+        const double y = filter_sample(ch, static_cast<double>(channels[ch][i]));
+        combined += y * y;
+      }
+
+      // Slide both running sums over the single ring; subtract the value leaving each window.
+      const double leaving_short = energy_ring_[ring_pos_];
+      short_term_sum_ += combined - leaving_short;
+
+      size_t out_pos = ring_pos_ + short_term_len_ - momentary_len_;
+      if (out_pos >= short_term_len_) out_pos -= short_term_len_;
+      const double leaving_mom = energy_ring_[out_pos];
+      momentary_sum_ += combined - leaving_mom;
+
+      energy_ring_[ring_pos_] = combined;
+      ring_pos_ = (ring_pos_ + 1 == short_term_len_) ? 0 : ring_pos_ + 1;
+      if (filled_ < short_term_len_) ++filled_;
+
+      // Integrated: take a 400 ms gating block every 100 ms once the momentary window is full.
+      if (++gate_hop_counter_ >= gate_hop_) {
+        gate_hop_counter_ = 0;
+        if (filled_ >= momentary_len_) {
+          const double block_energy = momentary_sum_ / static_cast<double>(momentary_len_);
+          const float block_lufs = energy_to_lufs(block_energy);
+          if (block_lufs >= static_cast<float>(kHistLowLufs)) {
+            int bin = static_cast<int>((block_lufs - kHistLowLufs) / kHistBinLu);
+            if (bin >= 0 && bin < kHistBins) {
+              ++hist_count_[static_cast<size_t>(bin)];
+              hist_energy_[static_cast<size_t>(bin)] += block_energy;
+            }
+          }
+        }
+      }
+    }
+
+    if (filled_ >= momentary_len_) {
+      next.momentary_lufs = energy_to_lufs(momentary_sum_ / static_cast<double>(momentary_len_));
+    }
+    if (filled_ >= short_term_len_) {
+      next.short_term_lufs = energy_to_lufs(short_term_sum_ / static_cast<double>(short_term_len_));
+    }
+
+    // Gated integrated loudness via the bounded histogram (libebur128-style).
+    uint64_t abs_count = 0;
+    double abs_energy = 0.0;
+    for (int b = 0; b < kHistBins; ++b) {
+      abs_count += hist_count_[static_cast<size_t>(b)];
+      abs_energy += hist_energy_[static_cast<size_t>(b)];
+    }
+    if (abs_count > 0) {
+      const double preliminary = abs_energy / static_cast<double>(abs_count);
+      const double relative_gate_lufs = static_cast<double>(energy_to_lufs(preliminary)) - 10.0;
+      const int gate_bin =
+          static_cast<int>(std::ceil((relative_gate_lufs - kHistLowLufs) / kHistBinLu));
+
+      uint64_t rel_count = 0;
+      double rel_energy = 0.0;
+      for (int b = std::max(0, gate_bin); b < kHistBins; ++b) {
+        rel_count += hist_count_[static_cast<size_t>(b)];
+        rel_energy += hist_energy_[static_cast<size_t>(b)];
+      }
+      if (rel_count > 0) {
+        next.integrated_lufs = energy_to_lufs(rel_energy / static_cast<double>(rel_count));
+      }
+    }
+  }
+
+  publish(next);
 }
 
-void MeterProcessor::reset() {
-  snapshots_[0] = MeterSnapshot{};
-  snapshots_[1] = MeterSnapshot{};
-  active_index_.store(0, std::memory_order_release);
-  seq_ = 0;
+void MeterProcessor::publish(const MeterSnapshot& next) noexcept {
+  guard_.fetch_add(1, std::memory_order_release);  // now odd: write in progress
+  snapshot_ = next;
+  snapshot_.seq = ++seq_;
+  guard_.fetch_add(1, std::memory_order_release);  // now even: write complete
 }
 
 MeterSnapshot MeterProcessor::snapshot() const noexcept {
-  return snapshots_[static_cast<size_t>(active_index_.load(std::memory_order_acquire))];
+  for (;;) {
+    const uint32_t g1 = guard_.load(std::memory_order_acquire);
+    if (g1 & 1u) continue;  // writer mid-update
+    MeterSnapshot copy = snapshot_;
+    std::atomic_thread_fence(std::memory_order_acquire);
+    const uint32_t g2 = guard_.load(std::memory_order_acquire);
+    if (g1 == g2) return copy;
+  }
 }
 
 }  // namespace sonare::mixing

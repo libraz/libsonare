@@ -44,7 +44,7 @@ float spectral_centroid(const std::vector<float>& samples, int sample_rate) {
   for (int i = 0; i < n; ++i) {
     // Hann window to limit spectral leakage.
     const float w = 0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * static_cast<float>(i) /
-                                            static_cast<float>(kNfft - 1));
+                                           static_cast<float>(kNfft - 1));
     frame[static_cast<size_t>(i)] = samples[static_cast<size_t>(i)] * w;
   }
   sonare::FFT fft(kNfft);

@@ -5,12 +5,13 @@
 
 namespace sonare::mixing {
 
-PannerProcessor::PannerProcessor(PannerConfig config) : config_(config) {}
+PannerProcessor::PannerProcessor(PannerConfig config)
+    : smoothing_ms_(config.smoothing_ms), pan_(config.pan), pan_law_(config.pan_law) {}
 
 void PannerProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  left_.prepare(sample_rate_, config_.smoothing_ms);
-  right_.prepare(sample_rate_, config_.smoothing_ms);
+  left_.prepare(sample_rate_, smoothing_ms_);
+  right_.prepare(sample_rate_, smoothing_ms_);
   reset();
 }
 
@@ -19,7 +20,8 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     return;
   }
 
-  const PanGains gains = compute_pan_gains(config_.pan, config_.pan_law);
+  const PanGains gains = compute_pan_gains(pan_.load(std::memory_order_relaxed),
+                                           pan_law_.load(std::memory_order_relaxed));
   left_.set_target(gains.left);
   right_.set_target(gains.right);
 
@@ -48,11 +50,14 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
 }
 
 void PannerProcessor::reset() {
-  const PanGains gains = compute_pan_gains(config_.pan, config_.pan_law);
+  const PanGains gains = compute_pan_gains(pan_.load(std::memory_order_relaxed),
+                                           pan_law_.load(std::memory_order_relaxed));
   left_.reset(gains.left);
   right_.reset(gains.right);
 }
 
-void PannerProcessor::set_pan(float pan) noexcept { config_.pan = std::clamp(pan, -1.0f, 1.0f); }
+void PannerProcessor::set_pan(float pan) noexcept {
+  pan_.store(std::clamp(pan, -1.0f, 1.0f), std::memory_order_relaxed);
+}
 
 }  // namespace sonare::mixing

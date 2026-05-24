@@ -3,6 +3,8 @@
 /// @file panner.h
 /// @brief Stereo panner with selectable pan laws.
 
+#include <atomic>
+
 #include "mixing/pan_law.h"
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
@@ -24,16 +26,18 @@ class PannerProcessor : public rt::ProcessorBase {
   void reset() override;
 
   void set_pan(float pan) noexcept;
-  float pan() const noexcept { return config_.pan; }
+  float pan() const noexcept { return pan_.load(std::memory_order_relaxed); }
 
-  void set_pan_law(PanLaw law) noexcept { config_.pan_law = law; }
-  PanLaw pan_law() const noexcept { return config_.pan_law; }
+  void set_pan_law(PanLaw law) noexcept { pan_law_.store(law, std::memory_order_relaxed); }
+  PanLaw pan_law() const noexcept { return pan_law_.load(std::memory_order_relaxed); }
 
  private:
-  PannerConfig config_{};
   double sample_rate_ = 48000.0;
+  float smoothing_ms_ = 5.0f;
   rt::ParamSmoother left_{1.0f, 5.0f, 48000.0};
   rt::ParamSmoother right_{1.0f, 5.0f, 48000.0};
+  std::atomic<float> pan_{0.0f};
+  std::atomic<PanLaw> pan_law_{PanLaw::Const3dB};
 };
 
 }  // namespace sonare::mixing

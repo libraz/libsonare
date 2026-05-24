@@ -24,15 +24,16 @@ class GainProcessor : public rt::ProcessorBase {
   void reset() override;
 
   void set_gain_db(float gain_db) noexcept;
-  float gain_db() const noexcept { return config_.gain_db; }
+  float gain_db() const noexcept { return gain_db_.load(std::memory_order_relaxed); }
 
   void set_vca_offset_db(float offset_db) noexcept;
   float vca_offset_db() const noexcept;
 
  private:
-  GainConfig config_{};
   double sample_rate_ = 48000.0;
+  float smoothing_ms_ = 5.0f;
   rt::ParamSmoother smoother_{1.0f, 5.0f, 48000.0};
+  std::atomic<float> gain_db_{0.0f};
   std::atomic<float> vca_offset_db_{0.0f};
 };
 

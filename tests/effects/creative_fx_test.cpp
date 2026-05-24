@@ -250,8 +250,7 @@ TEST_CASE("ConvolutionReverb partitioned-convolves with reported latency", "[fx]
   // Output equals the direct convolution delayed by the reported latency.
   for (int n = 0; n < ir_len + 8; ++n) {
     const int idx = latency + n;
-    REQUIRE_THAT(mono[static_cast<size_t>(idx)],
-                 WithinAbs(direct[static_cast<size_t>(n)], 1e-4f));
+    REQUIRE_THAT(mono[static_cast<size_t>(idx)], WithinAbs(direct[static_cast<size_t>(n)], 1e-4f));
   }
   // Nothing leaks out ahead of the latency.
   for (int n = 0; n < latency; ++n) {

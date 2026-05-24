@@ -251,9 +251,8 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
     /// Lock every bin (including peaks) and emit output.
     for (int k = 0; k < n_bins; ++k) {
       int k_p = nearest_peak[k];
-      float synth_phase = (k == k_p)
-                              ? phase_acc[k_p]
-                              : phase_acc[k_p] + (ana_phase[k] - ana_phase[k_p]);
+      float synth_phase =
+          (k == k_p) ? phase_acc[k_p] : phase_acc[k_p] + (ana_phase[k] - ana_phase[k_p]);
       phase_acc[k] = wrap_phase(synth_phase);
       output[k * n_frames_out + t_out] = std::polar(mag[k], phase_acc[k]);
     }

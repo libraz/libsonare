@@ -31,9 +31,7 @@ constexpr float kPsolaMaxSemitones = 6.0f;
 constexpr float kCrossfadeMs = 10.0f;
 
 // Hann window value at normalized position t in [0, 1].
-float hann(float t) noexcept {
-  return 0.5f - 0.5f * std::cos(kTwoPi * t);
-}
+float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
 
 }  // namespace
 
@@ -151,8 +149,7 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
   // Phase 2: retune IIR. alpha derived from time constant in frames.
   const float sr = static_cast<float>(track.sample_rate);
   const float hop = static_cast<float>(std::max(1, track.hop_length));
-  const float tau_frames =
-      std::max(1e-6f, config_.retune_speed_ms * 0.001f * sr / hop);
+  const float tau_frames = std::max(1e-6f, config_.retune_speed_ms * 0.001f * sr / hop);
   const float alpha = std::exp(-1.0f / tau_frames);
 
   const float max_corr = std::max(0.0f, config_.max_correction_semitones);
@@ -202,8 +199,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     const float frac = ff - static_cast<float>(f0);
     f0 = std::clamp(f0, 0, n_frames - 1);
     const int f1 = std::clamp(f0 + 1, 0, n_frames - 1);
-    return curve[static_cast<size_t>(f0)] * (1.0f - frac) +
-           curve[static_cast<size_t>(f1)] * frac;
+    return curve[static_cast<size_t>(f0)] * (1.0f - frac) + curve[static_cast<size_t>(f1)] * frac;
   };
 
   // Build a per-sample voiced flag and per-sample f0 (for epoch spacing).

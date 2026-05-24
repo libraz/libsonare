@@ -13,7 +13,7 @@ using sonare::constants::kSpectrumEpsilon;
 using sonare::constants::kTwoPi;
 
 namespace {
-constexpr int kGrainSize = 2048;       // ~46 ms at 44.1k; acceptable preview latency.
+constexpr int kGrainSize = 2048;        // ~46 ms at 44.1k; acceptable preview latency.
 constexpr float kMaxSemitones = 24.0f;  // Clamp shift range to +/- 2 octaves.
 }  // namespace
 

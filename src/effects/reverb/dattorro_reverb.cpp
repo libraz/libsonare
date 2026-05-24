@@ -20,9 +20,9 @@ size_t scale_len(double ref_samples, double sr) {
   return static_cast<size_t>(std::max(1L, std::lround(scaled)));
 }
 
-constexpr float kGainIn = 0.75f;    // Input diffusion allpass gain.
-constexpr float kGainMod = 0.7f;    // Modulated tank allpass gain.
-constexpr float kGainDiff = 0.5f;   // Decay diffusion allpass gain.
+constexpr float kGainIn = 0.75f;   // Input diffusion allpass gain.
+constexpr float kGainMod = 0.7f;   // Modulated tank allpass gain.
+constexpr float kGainDiff = 0.5f;  // Decay diffusion allpass gain.
 
 }  // namespace
 

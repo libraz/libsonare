@@ -44,8 +44,8 @@ bool Graph::connect(Connection connection) {
   }
   // Reject duplicate edges (same source/dest node and port) to avoid
   // double-summing the same signal at the destination port.
-  const bool exists = std::any_of(
-      connections_.begin(), connections_.end(), [&](const Connection& existing) {
+  const bool exists =
+      std::any_of(connections_.begin(), connections_.end(), [&](const Connection& existing) {
         return existing.source_node == connection.source_node &&
                existing.source_port == connection.source_port &&
                existing.dest_node == connection.dest_node &&

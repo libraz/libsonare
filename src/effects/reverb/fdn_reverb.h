@@ -12,8 +12,8 @@
 namespace sonare::effects::reverb {
 
 struct FdnReverbConfig {
-  float decay = 0.55f;        ///< T60_lf = max(0.01, decay*10) seconds.
-  float hf_damping = 0.5f;    ///< HF decay shortening, [0, 1].
+  float decay = 0.55f;      ///< T60_lf = max(0.01, decay*10) seconds.
+  float hf_damping = 0.5f;  ///< HF decay shortening, [0, 1].
   float dry_wet = 0.35f;
 };
 

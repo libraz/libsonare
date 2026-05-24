@@ -135,7 +135,8 @@ TEST_CASE("time_stretch basic", "[time_stretch]") {
   REQUIRE_THAT(stretched.duration(), WithinRel(audio.duration(), 0.1f));
 }
 
-TEST_CASE("time_stretch native spectral backend preserves sample rate and ratio", "[time_stretch]") {
+TEST_CASE("time_stretch native spectral backend preserves sample rate and ratio",
+          "[time_stretch]") {
   Audio audio = create_test_audio(440.0f, 44100, 0.25f);
 
   TimeStretchConfig config;

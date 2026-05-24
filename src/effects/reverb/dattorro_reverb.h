@@ -12,12 +12,12 @@
 namespace sonare::effects::reverb {
 
 struct DattorroReverbConfig {
-  float decay = 0.5f;             ///< Tank feedback / tail length, clamped to [0, 0.98].
-  float damping = 0.5f;           ///< HF damping, mapped to one-pole d = damping * 0.4.
-  float dry_wet = 0.35f;          ///< Wet mix amount, [0, 1].
-  float mod_rate_hz = 0.5f;       ///< Tank allpass modulation rate.
-  float mod_depth_samples = 6.0f; ///< Modulation depth (at reference rate 29761 Hz).
-  float pre_delay_samples = 0.0f; ///< Input pre-delay (at reference rate 29761 Hz).
+  float decay = 0.5f;              ///< Tank feedback / tail length, clamped to [0, 0.98].
+  float damping = 0.5f;            ///< HF damping, mapped to one-pole d = damping * 0.4.
+  float dry_wet = 0.35f;           ///< Wet mix amount, [0, 1].
+  float mod_rate_hz = 0.5f;        ///< Tank allpass modulation rate.
+  float mod_depth_samples = 6.0f;  ///< Modulation depth (at reference rate 29761 Hz).
+  float pre_delay_samples = 0.0f;  ///< Input pre-delay (at reference rate 29761 Hz).
 };
 
 class DattorroReverb : public rt::ProcessorBase {

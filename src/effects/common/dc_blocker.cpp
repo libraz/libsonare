@@ -55,8 +55,6 @@ void DcBlocker::reset() {
 
 void DcBlocker::set_pole(float pole) noexcept { pole_ = std::clamp(pole, 0.0f, 0.9999f); }
 
-void DcBlocker::set_cutoff_hz(float cutoff_hz) noexcept {
-  cutoff_hz_ = std::max(0.0f, cutoff_hz);
-}
+void DcBlocker::set_cutoff_hz(float cutoff_hz) noexcept { cutoff_hz_ = std::max(0.0f, cutoff_hz); }
 
 }  // namespace sonare::effects::common

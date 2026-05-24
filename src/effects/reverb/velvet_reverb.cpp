@@ -57,7 +57,8 @@ void VelvetReverb::build_table(std::vector<Tap>& taps, std::uint32_t seed_offset
     int tap = k * grid_ls + static_cast<int>(s_pos % ls);
     tap = std::clamp(tap, 1, n_seg - 1);
     const float sign = (s_sign & 1u) ? 1.0f : -1.0f;
-    const float gain = sign * std::exp(-decay_rate * static_cast<float>(tap) / static_cast<float>(sr));
+    const float gain =
+        sign * std::exp(-decay_rate * static_cast<float>(tap) / static_cast<float>(sr));
     taps.push_back({tap, gain});
   }
 }
@@ -68,7 +69,8 @@ void VelvetReverb::prepare(double sample_rate, int max_block_size) {
   const float rho = std::clamp(config_.density_hz, 1000.0f, 3000.0f);
   const int grid_ls = std::max(1, static_cast<int>(std::lround(sr / rho)));
   // decay scales the base reverb time around its nominal value.
-  const float rt60 = std::max(0.05f, config_.reverb_time_s * (0.5f + std::clamp(config_.decay, 0.0f, 1.0f)));
+  const float rt60 =
+      std::max(0.05f, config_.reverb_time_s * (0.5f + std::clamp(config_.decay, 0.0f, 1.0f)));
   const int n_seg = std::max(2, static_cast<int>(std::lround(rt60 * sr)));
   const int num_pulses = std::max(1, static_cast<int>(std::lround(rho * rt60)));
   const float decay_rate = std::log(kT60Drop) / rt60;

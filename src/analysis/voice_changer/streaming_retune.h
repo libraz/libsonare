@@ -42,9 +42,9 @@ class StreamingRetune {
   double sample_rate_ = 0.0;
   int max_block_size_ = 0;
 
-  int grain_size_ = 0;        ///< Grain length in samples.
-  int hop_a_ = 0;             ///< Analysis/synthesis hop (grain_size / 4).
-  std::size_t ring_cap_ = 0;  ///< History ring capacity (4 * grain_size).
+  int grain_size_ = 0;         ///< Grain length in samples.
+  int hop_a_ = 0;              ///< Analysis/synthesis hop (grain_size / 4).
+  std::size_t ring_cap_ = 0;   ///< History ring capacity (4 * grain_size).
   std::size_t accum_cap_ = 0;  ///< OLA accumulator capacity (2 * grain_size).
 
   double pitch_ratio_ = 1.0;
