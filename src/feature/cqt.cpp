@@ -353,54 +353,83 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     return Audio();
   }
 
-  int n_bins = cqt_result.n_bins();
-  int n_frames = cqt_result.n_frames();
-  int hop_length = cqt_result.hop_length();
-  int sr = cqt_result.sample_rate();
-
-  // Estimate output length
-  int output_length = length > 0 ? length : (n_frames - 1) * hop_length + hop_length;
-
-  std::vector<float> output(output_length, 0.0f);
-  std::vector<float> weight(output_length, 0.0f);
-
+  const int n_bins = cqt_result.n_bins();
+  const int n_frames = cqt_result.n_frames();
+  const int hop_length = cqt_result.hop_length();
+  const int sr = cqt_result.sample_rate();
   const auto& frequencies = cqt_result.frequencies();
+  if (frequencies.empty()) {
+    return Audio();
+  }
 
-  // Simple overlap-add reconstruction
-  // This is a simplified pseudo-inverse, not exact
-  for (int t = 0; t < n_frames; ++t) {
-    int center = t * hop_length;
+  int bins_per_octave = constants::kSemitonesPerOctave;
+  if (frequencies.size() >= 2 && frequencies[0] > 0.0f && frequencies[1] > frequencies[0]) {
+    const float ratio = frequencies[1] / frequencies[0];
+    const float estimated_bpo = 1.0f / std::log2(ratio);
+    bins_per_octave = std::max(1, static_cast<int>(std::lround(estimated_bpo)));
+  }
 
-    for (int k = 0; k < n_bins; ++k) {
-      std::complex<float> coef = cqt_result.at(k, t);
-      float freq = frequencies[k];
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = frequencies.front();
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
 
-      // Estimate filter length for this bin
-      float Q = 1.0f / (std::pow(2.0f, 1.0f / constants::kSemitonesPerOctave) - 1.0f);
-      int filter_length = static_cast<int>(Q * sr / freq);
-      filter_length = std::min(filter_length, output_length);
+  auto cached = get_cached_kernel(sr, config);
+  const auto& kernel = *cached.kernel;
+  const auto& basis = kernel.kernel();
+  const auto& lengths = kernel.raw_lengths();
+  const int n_fft = kernel.fft_length();
+  const int n_freq = n_fft / 2 + 1;
 
-      // Create windowed sinusoid
-      for (int n = 0; n < filter_length; ++n) {
-        int idx = center + n - filter_length / 2;
-        if (idx >= 0 && idx < output_length) {
-          float phase = kTwoPi * freq * n / sr;
-          float win = 0.5f * (1.0f - std::cos(kTwoPi * n / filter_length));
-
-          // Real part of complex multiplication
-          float val = std::real(coef) * std::cos(phase) - std::imag(coef) * std::sin(phase);
-          output[idx] += val * win;
-          weight[idx] += win;
-        }
-      }
+  std::vector<float> freq_power(n_bins, 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    double power = 0.0;
+    for (int b = 0; b < n_freq; ++b) {
+      power += std::norm(basis[static_cast<size_t>(k) * n_fft + b]);
+    }
+    if (power > 0.0 && lengths[k] > 0.0f) {
+      freq_power[k] = static_cast<float>((static_cast<double>(n_fft) / lengths[k]) / power);
     }
   }
 
-  // Normalize by weight
-  for (int i = 0; i < output_length; ++i) {
-    if (weight[i] > 1e-6f) {
-      output[i] /= weight[i];
+  std::vector<float> output_padded(static_cast<size_t>(n_fft + (n_frames - 1) * hop_length), 0.0f);
+  std::vector<float> weight(output_padded.size(), 0.0f);
+  std::vector<std::complex<float>> spectrum(n_freq);
+  std::vector<float> frame(n_fft, 0.0f);
+  FFT fft(n_fft);
+
+  for (int t = 0; t < n_frames; ++t) {
+    std::fill(spectrum.begin(), spectrum.end(), std::complex<float>(0.0f, 0.0f));
+    for (int b = 0; b < n_freq; ++b) {
+      std::complex<float> acc(0.0f, 0.0f);
+      for (int k = 0; k < n_bins; ++k) {
+        const float scale = std::sqrt(std::max(lengths[k], 0.0f)) * freq_power[k];
+        acc += std::conj(basis[static_cast<size_t>(k) * n_fft + b]) * scale * cqt_result.at(k, t);
+      }
+      spectrum[b] = acc;
     }
+    fft.inverse(spectrum.data(), frame.data());
+
+    const int start = t * hop_length;
+    for (int n = 0; n < n_fft; ++n) {
+      const size_t idx = static_cast<size_t>(start + n);
+      output_padded[idx] += frame[n];
+      weight[idx] += 1.0f;
+    }
+  }
+
+  for (size_t i = 0; i < output_padded.size(); ++i) {
+    if (weight[i] > 1e-6f) output_padded[i] /= weight[i];
+  }
+
+  const int crop_start = n_fft / 2;
+  int output_length =
+      length > 0 ? length : std::max(0, static_cast<int>(output_padded.size()) - 2 * crop_start);
+  std::vector<float> output(static_cast<size_t>(output_length), 0.0f);
+  for (int i = 0; i < output_length; ++i) {
+    const int src = crop_start + i;
+    if (src >= 0 && src < static_cast<int>(output_padded.size())) output[i] = output_padded[src];
   }
 
   return Audio::from_vector(std::move(output), sr);

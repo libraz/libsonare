@@ -272,8 +272,19 @@ TEST_CASE("icqt reconstruction", "[cqt]") {
   REQUIRE(reconstructed.sample_rate() == original.sample_rate());
   REQUIRE(!reconstructed.empty());
 
-  // Note: Perfect reconstruction is not guaranteed with this simple iCQT
-  // Just verify it doesn't crash and produces reasonable output
+  double ref_energy = 0.0;
+  double rec_energy = 0.0;
+  for (size_t i = 0; i < std::min(original.size(), reconstructed.size()); ++i) {
+    const double x = original.data()[i];
+    const double y = reconstructed.data()[i];
+    ref_energy += x * x;
+    rec_energy += y * y;
+  }
+  REQUIRE(rec_energy > ref_energy * 1e-4);
+  REQUIRE(rec_energy < ref_energy * 10.0);
+  for (size_t i = 0; i < reconstructed.size(); ++i) {
+    REQUIRE(std::isfinite(reconstructed.data()[i]));
+  }
 }
 
 #if defined(__GNUC__) || defined(__clang__)

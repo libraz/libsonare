@@ -151,3 +151,67 @@ TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
     REQUIRE(std::abs(max_energy_freq - 440.0f) < 5.0f);
   }
 }
+
+// Suppress deprecated warning for icqt reference compatibility test.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
+TEST_CASE("iCQT reference compatibility", "[cqt][icqt][reference]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/icqt.json");
+  const auto& data = json["data"];
+
+  const int sr = data["sr"].as_int();
+  const int n_bins = data["n_bins"].as_int();
+  const int hop_length = data["hop_length"].as_int();
+  const int length = data["length"].as_int();
+  const auto& shape = data["shape"].as_array();
+  const int n_frames = shape[1].as_int();
+
+  std::vector<float> frequencies;
+  for (const auto& v : data["frequencies"].as_array()) {
+    frequencies.push_back(v.as_float());
+  }
+
+  std::vector<std::complex<float>> cqt_data(static_cast<size_t>(n_bins) * n_frames);
+  const auto& real = data["cqt_real"].as_array();
+  const auto& imag = data["cqt_imag"].as_array();
+  REQUIRE(real.size() == cqt_data.size());
+  REQUIRE(imag.size() == cqt_data.size());
+  for (size_t i = 0; i < cqt_data.size(); ++i) {
+    cqt_data[i] = std::complex<float>(real[i].as_float(), imag[i].as_float());
+  }
+
+  CqtResult cqt_result(std::move(cqt_data), n_bins, n_frames, std::move(frequencies), hop_length,
+                       sr);
+  Audio reconstructed = icqt(cqt_result, length);
+
+  const auto& ref = data["reconstruction"].as_array();
+  REQUIRE(reconstructed.size() == static_cast<size_t>(length));
+  REQUIRE(ref.size() == reconstructed.size());
+
+  double ref_energy = 0.0;
+  double err_energy = 0.0;
+  double max_abs_diff = 0.0;
+  for (size_t i = 0; i < reconstructed.size(); ++i) {
+    const double expected = ref[i].as_float();
+    const double actual = reconstructed.data()[i];
+    const double diff = actual - expected;
+    ref_energy += expected * expected;
+    err_energy += diff * diff;
+    max_abs_diff = std::max(max_abs_diff, std::abs(diff));
+  }
+
+  const double rel_rmse = std::sqrt(err_energy / ref_energy);
+  CAPTURE(rel_rmse, max_abs_diff);
+  // rel_rmse is the primary accuracy bar (1% energy error). max_abs_diff is a
+  // looser spike guard: the flat-weight overlap-add normalization leaves larger
+  // localized error in the first/last hop where frame coverage is incomplete.
+  REQUIRE(rel_rmse < 0.01);
+  REQUIRE(max_abs_diff < 0.15);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
