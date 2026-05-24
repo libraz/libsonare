@@ -310,6 +310,15 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
 void apply_chain_config_overrides(MasteringChainConfig& config, const Param* params,
                                   std::size_t count);
 
+/// @brief Serialize a chain configuration as canonical JSON.
+/// Schema: {"version":1,"params":{"dot.notation.key":number_or_bool,...}}.
+std::string chain_config_to_json(const MasteringChainConfig& config);
+
+/// @brief Parse a chain configuration serialized by chain_config_to_json.
+/// Throws std::invalid_argument for malformed JSON, unsupported versions, or
+/// unknown parameter keys.
+MasteringChainConfig chain_config_from_json(const std::string& json);
+
 /// @brief Convenience: parse params, build chain, run mono once.
 MonoChainResult run_chain_mono_params(const Param* params, std::size_t param_count,
                                       const float* samples, std::size_t length, int sample_rate);

@@ -178,7 +178,11 @@ endif()
 if(BUILD_MASTERING)
   add_library(sonare_mastering STATIC
     mastering/api/chain.cpp
+    mastering/api/chain_json.cpp
+    mastering/api/chain_params.cpp
+    mastering/api/chain_streaming.cpp
     mastering/api/named_processor.cpp
+    mastering/api/named_processor_registry.cpp
     mastering/api/presets.cpp
     mastering/common/biquad_design.cpp
     mastering/common/param_smoother.cpp

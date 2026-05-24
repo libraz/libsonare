@@ -572,6 +572,7 @@ void configure_processor(const std::string& name, const ParamMap& params,
     config.mix = f(params, "mix", config.mix);
     config.oversample_factor = i(params, "oversampleFactor", config.oversample_factor);
     config.bias_v = f(params, "biasV", config.bias_v);
+    config.harmonic_drive = f(params, "harmonicDrive", config.harmonic_drive);
     saturation::Tube p(config);
     run_processor(p, samples, sample_rate, latency_samples);
   } else if (name == "saturation.transformer") {
@@ -749,73 +750,6 @@ void configure_processor(const std::string& name, const ParamMap& params,
 
 }  // namespace
 
-std::vector<std::string> processor_names() {
-  return {"dynamics.brickwallLimiter",
-          "dynamics.compressor",
-          "dynamics.deesser",
-          "dynamics.expander",
-          "dynamics.gate",
-          "dynamics.limiter",
-          "dynamics.parallelComp",
-          "dynamics.sidechainRouter",
-          "dynamics.transientShaper",
-          "dynamics.upwardCompressor",
-          "dynamics.upwardExpander",
-          "dynamics.vocalRider",
-          "eq.apiStyle",
-          "eq.bandPass",
-          "eq.cutFilter",
-          "eq.dynamic",
-          "eq.graphic",
-          "eq.linearPhase",
-          "eq.midSide",
-          "eq.minimumPhase",
-          "eq.parametric",
-          "eq.pultec",
-          "eq.shelving",
-          "eq.tilt",
-          "final.bitDepth",
-          "final.dither",
-          "final.outputChain",
-          "maximizer.adaptiveRelease",
-          "maximizer.loudnessOptimize",
-          "maximizer.maximizer",
-          "maximizer.softKneeMax",
-          "maximizer.truePeakLimiter",
-          "multiband.compressor",
-          "multiband.dynamicEq",
-          "multiband.expander",
-          "multiband.imager",
-          "multiband.limiter",
-          "multiband.saturation",
-          "repair.declick",
-          "repair.declip",
-          "repair.decrackle",
-          "repair.dehum",
-          "repair.denoiseClassical",
-          "repair.dereverbClassical",
-          "repair.trimSilence",
-          "saturation.bitcrusher",
-          "saturation.exciter",
-          "saturation.hardClipper",
-          "saturation.multibandExciter",
-          "saturation.softClipper",
-          "saturation.tape",
-          "saturation.transformer",
-          "saturation.tube",
-          "saturation.waveshaper",
-          "spectral.airBand",
-          "spectral.lowEndFocus",
-          "spectral.presenceEnhancer",
-          "spectral.spectralShaper",
-          "stereo.autoPan",
-          "stereo.haasEnhancer",
-          "stereo.imager",
-          "stereo.monoMaker",
-          "stereo.phaseAlign",
-          "stereo.stereoBalance"};
-}
-
 MonoResult apply_named_processor(const std::string& name, const float* samples, std::size_t length,
                                  int sample_rate, const std::vector<Param>& params) {
   MonoResult result;
@@ -954,20 +888,6 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
 
   result.output_lufs = lufs_for(mono_mix(result.left, result.right), sample_rate);
   return result;
-}
-
-std::vector<std::string> pair_processor_names() {
-  return {"match.applyMatchEq", "match.alignReferenceToSource", "match.abSwitch",
-          "match.abCrossfade"};
-}
-
-std::vector<std::string> pair_analysis_names() {
-  return {"match.referenceLoudness", "match.tonalBalance", "match.tonalBalanceLogBands",
-          "match.matchEqCurve", "match.estimateReferenceDelaySamples"};
-}
-
-std::vector<std::string> stereo_analysis_names() {
-  return {"stereo.monoCompatCheck", "stereo.monoCompatCheckLogBands"};
 }
 
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
