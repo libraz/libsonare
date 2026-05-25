@@ -23,6 +23,7 @@
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
+#include "mastering/eq/equalizer.h"
 #include "mastering/eq/graphic_eq.h"
 #include "mastering/eq/linear_phase.h"
 #include "mastering/eq/mid_side_eq.h"
@@ -180,6 +181,10 @@ void configure_processor(const std::string& name, const ParamMap& params,
   } else if (name == "eq.parametric") {
     eq::ParametricEq p;
     configure_parametric(p, params);
+    run_processor(p, samples, sample_rate, latency_samples);
+  } else if (name == "eq.equalizer") {
+    eq::EqualizerProcessor p(detail::equalizer_config(params, 1));
+    detail::configure_equalizer(p, params);
     run_processor(p, samples, sample_rate, latency_samples);
   } else if (name == "eq.minimumPhase") {
     eq::MinimumPhaseEq p;
@@ -433,6 +438,10 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "eq.midSide") {
     eq::MidSideEq p;
     detail::configure_mid_side(p, map);
+    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+  } else if (name == "eq.equalizer") {
+    eq::EqualizerProcessor p(detail::equalizer_config(map, 2));
+    detail::configure_equalizer(p, map);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "multiband.compressor") {
     multiband::MultibandCompressorConfig config;

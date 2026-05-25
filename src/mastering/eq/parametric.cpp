@@ -13,6 +13,20 @@ namespace {
 
 using sonare::constants::kPiD;
 
+common::BiquadCoeffs first_order_lowpass(float w0) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double inv = 1.0 / (1.0 + k);
+  const float b0 = static_cast<float>(k * inv);
+  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
+}
+
+common::BiquadCoeffs first_order_highpass(float w0) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double inv = 1.0 / (1.0 + k);
+  const float b0 = static_cast<float>(inv);
+  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
+}
+
 float safe_q(float q) {
   if (!(q > 0.0f)) {
     throw std::invalid_argument("EQ band Q must be positive");
@@ -40,6 +54,16 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
   }
 }
 
+void ParametricEq::prepare_channels(int num_channels) {
+  if (num_channels < 0) {
+    throw std::invalid_argument("num_channels must be non-negative");
+  }
+  num_channels_ = num_channels;
+  for (auto& band_states : states_) {
+    band_states.assign(static_cast<size_t>(num_channels), {});
+  }
+}
+
 void ParametricEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared();
@@ -53,7 +77,9 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
     throw std::invalid_argument("channels must not be null");
   }
 
-  if (num_channels_ != num_channels) {
+  if (num_channels_ < num_channels) {
+    prepare_channels(num_channels);
+  } else if (num_channels_ != num_channels && num_channels_ == 0) {
     num_channels_ = num_channels;
     for (auto& band_states : states_) {
       band_states.assign(static_cast<size_t>(num_channels), {});
@@ -168,6 +194,14 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
   const auto from_common = [](const common::BiquadCoeffs& c) {
     return Coefficients{c.b0, c.b1, c.b2, c.a1, c.a2};
   };
+  if (band.slope_db_oct == 6) {
+    if (band.type == EqBandType::LowPass) {
+      return from_common(first_order_lowpass(w0f));
+    }
+    if (band.type == EqBandType::HighPass) {
+      return from_common(first_order_highpass(w0f));
+    }
+  }
 
   if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
     switch (band.type) {
@@ -185,6 +219,9 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
         return from_common(common::vicanek_low_shelf(w0f, band.gain_db));
       case EqBandType::HighShelf:
         return from_common(common::vicanek_high_shelf(w0f, band.gain_db));
+      case EqBandType::TiltShelf:
+      case EqBandType::FlatTilt:
+        throw std::invalid_argument("unsupported Vicanek EQ band type");
     }
   }
 
@@ -209,6 +246,10 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
 
     case EqBandType::HighShelf:
       return from_common(common::rbj_high_shelf(w0f, qf, band.gain_db));
+
+    case EqBandType::TiltShelf:
+    case EqBandType::FlatTilt:
+      throw std::invalid_argument("unsupported EQ band type");
   }
 
   return {};

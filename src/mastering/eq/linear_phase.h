@@ -15,11 +15,21 @@
 namespace sonare::mastering::eq {
 
 struct LinearPhaseEqConfig {
+  enum class Resolution {
+    Custom = 0,
+    Low,
+    Medium,
+    High,
+    VeryHigh,
+    Maximum,
+  };
+
   int fft_size = 2048;
   int kernel_size = 513;
   bool use_partitioned_convolution = true;
   /// 0 means use the `max_block_size` passed to prepare().
   int partition_size = 0;
+  Resolution resolution = Resolution::Custom;
 };
 
 class LinearPhaseEq : public common::ProcessorBase {
@@ -31,6 +41,7 @@ class LinearPhaseEq : public common::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  void prepare_channels(int num_channels);
 
   void set_band(size_t index, const EqBand& band);
   void clear_band(size_t index);
@@ -56,6 +67,7 @@ class LinearPhaseEq : public common::ProcessorBase {
     std::vector<float> history;
     size_t write_index = 0;
     std::unique_ptr<common::PartitionedConvolver> convolver;
+    bool convolver_kernel_current = false;
   };
 
   void rebuild_kernel();

@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file api_style.h
-/// @brief API 550 style stepped proportional-Q equalizer.
+/// @brief Stepped proportional-Q equalizer.
 
 #include <array>
 #include <cstddef>
@@ -36,7 +36,7 @@ class ApiStyleEq : public common::ProcessorBase {
   //   2*b + 1 = gain_db (snapped to the 2 dB gain steps; enables the band when
   //             non-zero, matching set_band())
   // Values are snapped exactly as set_band() does, preserving the stepped
-  // API 550 character; Q is still derived from gain via proportional_q().
+  // proportional-Q character; Q is still derived from gain via proportional_q().
   bool set_parameter(unsigned int param_id, float value) override;
 
   float frequency(Band band) const;

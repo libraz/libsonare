@@ -8,8 +8,8 @@ namespace sonare::mastering::maximizer {
 ///
 /// release_ms is recomputed each block from the short-term crest factor of the
 /// input (peak / RMS). High crest (transient material) -> short release, low crest
-/// (sustained material) -> long release. This is the patent-safe alternative to
-/// iZotope IRC.
+/// (sustained material) -> long release. This avoids product-specific limiter
+/// behavior while keeping the mapping deterministic.
 struct AdaptiveReleaseConfig {
   float ceiling_db = -1.0f;
   float lookahead_ms = 1.0f;

@@ -22,6 +22,7 @@ std::vector<std::string> processor_names() {
           "eq.bandPass",
           "eq.cutFilter",
           "eq.dynamic",
+          "eq.equalizer",
           "eq.graphic",
           "eq.linearPhase",
           "eq.midSide",

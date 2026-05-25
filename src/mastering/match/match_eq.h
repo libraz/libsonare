@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "mastering/eq/equalizer.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/match/reference_spectrum.h"
 
@@ -52,5 +53,11 @@ Audio align_reference_to_source(const Audio& source, const Audio& reference, int
 std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
                                        const ReferenceSpectrum& reference,
                                        const MatchEqConfig& config = {});
+std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
+                                                  const MatchEqConfig& config = {});
+void configure_equalizer_from_match(eq::EqualizerProcessor& equalizer,
+                                    const ReferenceSpectrum& source,
+                                    const ReferenceSpectrum& reference,
+                                    const MatchEqConfig& config = {});
 
 }  // namespace sonare::mastering::match

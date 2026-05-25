@@ -270,6 +270,11 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
     detail::configure_parametric(*p, params);
     return p;
   }
+  if (name == "eq.equalizer") {
+    auto p = std::make_unique<eq::EqualizerProcessor>(detail::equalizer_config(params, 2));
+    detail::configure_equalizer(*p, params);
+    return p;
+  }
   if (name == "eq.minimumPhase") {
     auto p = std::make_unique<eq::MinimumPhaseEq>();
     detail::configure_minimum_phase(*p, params);
@@ -538,6 +543,7 @@ std::vector<std::string> insert_factory_names() {
       "eq.minimumPhase",
       "eq.linearPhase",
       "eq.dynamic",
+      "eq.equalizer",
       "eq.pultec",
       "eq.cutFilter",
       "eq.bandPass",

@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file pultec.h
-/// @brief Pultec EQP-1A inspired program equalizer.
+/// @brief Passive-style program equalizer.
 
 #include <vector>
 

@@ -17,7 +17,6 @@ namespace sonare::mastering::match {
 namespace {
 
 using sonare::constants::kPiD;
-using sonare::constants::kTwoPiD;
 
 float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   if (spectrum.frequencies.empty() || spectrum.db.empty()) {
@@ -38,7 +37,15 @@ float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   const size_t index = static_cast<size_t>(upper - spectrum.frequencies.begin());
   const float f0 = spectrum.frequencies[index - 1];
   const float f1 = spectrum.frequencies[index];
-  const float t = (frequency_hz - f0) / std::max(f1 - f0, 1.0f);
+  // Interpolate dB linearly against log-frequency so spacing matches the
+  // perceptual (octave) scale rather than raw Hz.
+  float t;
+  if (!(f0 > 0.0f) || f1 == f0) {
+    t = (frequency_hz - f0) / std::max(f1 - f0, 1.0f);
+  } else {
+    t = static_cast<float>(std::log(static_cast<double>(frequency_hz) / f0) /
+                           std::log(static_cast<double>(f1) / f0));
+  }
   return spectrum.db[index - 1] + (spectrum.db[index] - spectrum.db[index - 1]) * t;
 }
 
@@ -73,47 +80,49 @@ std::vector<float> smooth_log_frequency(const std::vector<float>& frequencies,
   return smoothed;
 }
 
-std::vector<std::complex<double>> dft(const std::vector<std::complex<double>>& input,
-                                      bool inverse) {
-  const size_t n = input.size();
-  std::vector<std::complex<double>> output(n);
-  const double sign = inverse ? 1.0 : -1.0;
-  for (size_t k = 0; k < n; ++k) {
-    std::complex<double> sum{0.0, 0.0};
-    for (size_t t = 0; t < n; ++t) {
-      const double angle = sign * kTwoPiD * static_cast<double>(k * t) / static_cast<double>(n);
-      sum += input[t] * std::complex<double>{std::cos(angle), std::sin(angle)};
-    }
-    output[k] = inverse ? sum / static_cast<double>(n) : sum;
-  }
-  return output;
-}
-
 std::vector<float> minimum_phase_kernel(const std::vector<float>& magnitude_bins, int kernel_size) {
   const size_t n_bins = magnitude_bins.size();
   const size_t n_fft = (n_bins - 1) * 2;
-  std::vector<std::complex<double>> log_magnitude(n_fft, {0.0, 0.0});
+  FFT fft(static_cast<int>(n_fft));
+
+  // Hermitian-symmetric, zero-phase log-magnitude spectrum (n_bins = n_fft/2+1).
+  std::vector<std::complex<float>> log_magnitude_bins(n_bins);
   for (size_t k = 0; k < n_bins; ++k) {
-    log_magnitude[k] = {std::log(std::max(static_cast<double>(magnitude_bins[k]), 1e-9)), 0.0};
-  }
-  for (size_t k = 1; k + 1 < n_bins; ++k) {
-    log_magnitude[n_fft - k] = log_magnitude[k];
+    log_magnitude_bins[k] = {
+        static_cast<float>(std::log(std::max(static_cast<double>(magnitude_bins[k]), 1e-9))), 0.0f};
   }
 
-  auto cepstrum = dft(log_magnitude, true);
-  for (size_t n = 1; n < n_fft / 2; ++n) cepstrum[n] *= 2.0;
-  for (size_t n = n_fft / 2 + 1; n < n_fft; ++n) cepstrum[n] = {0.0, 0.0};
+  // Real cepstrum: inverse of the real, symmetric log spectrum. FFT::inverse
+  // applies the 1/n_fft scaling, matching the previous naive inverse DFT.
+  std::vector<float> cepstrum(n_fft, 0.0f);
+  fft.inverse(log_magnitude_bins.data(), cepstrum.data());
 
-  auto minimum_log_spectrum = dft(cepstrum, false);
-  std::vector<std::complex<double>> minimum_spectrum(n_fft);
-  for (size_t k = 0; k < n_fft; ++k) {
-    minimum_spectrum[k] = std::exp(minimum_log_spectrum[k]);
+  // Fold the cepstrum so the reconstructed spectrum becomes minimum phase.
+  std::vector<std::complex<float>> folded(n_fft, {0.0f, 0.0f});
+  folded[0] = {cepstrum[0], 0.0f};
+  for (size_t n = 1; n < n_fft / 2; ++n) {
+    folded[n] = {cepstrum[n] * 2.0f, 0.0f};
   }
-  auto impulse = dft(minimum_spectrum, true);
+  folded[n_fft / 2] = {cepstrum[n_fft / 2], 0.0f};
+
+  // Forward (unnormalized) transform of the real folded cepstrum, matching the
+  // previous naive forward DFT, yields the complex (minimum-phase) log spectrum.
+  std::vector<std::complex<float>> minimum_log_spectrum(n_fft);
+  fft.forward_complex(folded.data(), minimum_log_spectrum.data());
+
+  // Exponentiate. The folded cepstrum is real, so its spectrum is Hermitian
+  // symmetric and the exponential preserves that symmetry; the inverse below
+  // therefore produces a real impulse response.
+  std::vector<std::complex<float>> minimum_spectrum_bins(n_bins);
+  for (size_t k = 0; k < n_bins; ++k) {
+    minimum_spectrum_bins[k] = std::exp(minimum_log_spectrum[k]);
+  }
+  std::vector<float> impulse(n_fft, 0.0f);
+  fft.inverse(minimum_spectrum_bins.data(), impulse.data());
 
   std::vector<float> kernel(static_cast<size_t>(kernel_size), 0.0f);
   for (int i = 0; i < kernel_size; ++i) {
-    kernel[static_cast<size_t>(i)] = static_cast<float>(impulse[static_cast<size_t>(i)].real());
+    kernel[static_cast<size_t>(i)] = impulse[static_cast<size_t>(i)];
   }
   return kernel;
 }
@@ -308,24 +317,108 @@ std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
   }
 
   const MatchEqCurve curve = match_eq_curve(source, reference, config);
+  return match_eq_bands_from_curve(curve, config);
+}
+
+std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
+                                                  const MatchEqConfig& config) {
+  if (config.max_bands == 0 || config.max_bands > eq::EqualizerProcessor::kMaxBands) {
+    throw std::invalid_argument("invalid match EQ band count");
+  }
+  if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
+      !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f)) {
+    throw std::invalid_argument("invalid match EQ configuration");
+  }
+  if (curve.frequencies.size() != curve.gain_db.size()) {
+    throw std::invalid_argument("invalid match EQ curve");
+  }
   if (curve.frequencies.empty()) {
     return {};
   }
 
+  struct Candidate {
+    size_t index = 0;
+    float strength = 0.0f;
+    bool extrema = false;
+  };
+  std::vector<Candidate> candidates;
+  candidates.reserve(curve.frequencies.size());
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    const float frequency = curve.frequencies[i];
+    if (frequency < config.min_frequency_hz || frequency > config.max_frequency_hz) {
+      continue;
+    }
+    const float gain = curve.gain_db[i];
+    bool extrema = i == 0 || i + 1 == curve.gain_db.size();
+    if (i > 0 && i + 1 < curve.gain_db.size()) {
+      const float prev = curve.gain_db[i - 1];
+      const float next = curve.gain_db[i + 1];
+      extrema = (gain >= prev && gain > next) || (gain > prev && gain >= next) ||
+                (gain <= prev && gain < next) || (gain < prev && gain <= next);
+    }
+    candidates.push_back({i, std::abs(gain), extrema});
+  }
+
+  std::stable_sort(candidates.begin(), candidates.end(),
+                   [](const Candidate& a, const Candidate& b) {
+                     if (a.extrema != b.extrema) return a.extrema > b.extrema;
+                     return a.strength > b.strength;
+                   });
+
+  std::vector<size_t> selected;
+  selected.reserve(config.max_bands);
+  const float min_spacing_octaves =
+      std::max(0.0f, std::log2(config.max_frequency_hz / config.min_frequency_hz) /
+                         static_cast<float>(std::max<size_t>(config.max_bands, 1)) * 0.35f);
+  for (int pass = 0; pass < 2 && selected.size() < config.max_bands; ++pass) {
+    for (const auto& candidate : candidates) {
+      if (selected.size() >= config.max_bands) {
+        break;
+      }
+      if (pass == 0 && !candidate.extrema) {
+        continue;
+      }
+      if (candidate.strength < 0.05f) {
+        continue;
+      }
+      const float frequency = curve.frequencies[candidate.index];
+      bool too_close = false;
+      for (size_t existing : selected) {
+        const float existing_frequency = curve.frequencies[existing];
+        too_close =
+            too_close || std::abs(std::log2(frequency / existing_frequency)) < min_spacing_octaves;
+      }
+      if (!too_close) {
+        selected.push_back(candidate.index);
+      }
+    }
+  }
+  if (selected.empty()) {
+    return {};
+  }
+
+  std::sort(selected.begin(), selected.end(),
+            [&](size_t a, size_t b) { return curve.frequencies[a] < curve.frequencies[b]; });
+
   std::vector<eq::EqBand> bands;
-  bands.reserve(config.max_bands);
-  const float ratio = std::pow(config.max_frequency_hz / config.min_frequency_hz,
-                               1.0f / static_cast<float>(config.max_bands));
-  float frequency = config.min_frequency_hz;
-  for (size_t i = 0; i < config.max_bands; ++i) {
-    const float center = frequency * std::sqrt(ratio);
-    ReferenceSpectrum curve_spectrum{curve.frequencies, curve.gain_db, source.sample_rate};
-    const float diff = interpolate_db(curve_spectrum, center);
-    bands.push_back({eq::EqBandType::Peak, center,
-                     std::clamp(diff, -config.max_gain_db, config.max_gain_db), config.q, true});
-    frequency *= ratio;
+  bands.reserve(selected.size());
+  for (size_t index : selected) {
+    bands.push_back({eq::EqBandType::Peak, curve.frequencies[index],
+                     std::clamp(curve.gain_db[index], -config.max_gain_db, config.max_gain_db),
+                     config.q, true});
   }
   return bands;
+}
+
+void configure_equalizer_from_match(eq::EqualizerProcessor& equalizer,
+                                    const ReferenceSpectrum& source,
+                                    const ReferenceSpectrum& reference,
+                                    const MatchEqConfig& config) {
+  const auto bands = match_eq_bands(source, reference, config);
+  equalizer.clear();
+  for (size_t i = 0; i < bands.size(); ++i) {
+    equalizer.set_band(i, bands[i]);
+  }
 }
 
 }  // namespace sonare::mastering::match

@@ -31,6 +31,7 @@
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
+#include "mastering/eq/equalizer.h"
 #include "mastering/eq/graphic_eq.h"
 #include "mastering/eq/linear_phase.h"
 #include "mastering/eq/mid_side_eq.h"
@@ -120,18 +121,111 @@ inline eq::EqBandType eq_band_type(int value) {
       return eq::EqBandType::BandPass;
     case 6:
       return eq::EqBandType::Notch;
+    case 7:
+      return eq::EqBandType::TiltShelf;
+    case 8:
+      return eq::EqBandType::FlatTilt;
     default:
       return eq::EqBandType::Peak;
   }
 }
 
+inline eq::StereoPlacement stereo_placement(int value) {
+  switch (value) {
+    case 1:
+      return eq::StereoPlacement::Left;
+    case 2:
+      return eq::StereoPlacement::Right;
+    case 3:
+      return eq::StereoPlacement::Mid;
+    case 4:
+      return eq::StereoPlacement::Side;
+    default:
+      return eq::StereoPlacement::Stereo;
+  }
+}
+
+inline eq::PhaseMode phase_mode(int value) {
+  switch (value) {
+    case 1:
+      return eq::PhaseMode::ZeroLatency;
+    case 2:
+      return eq::PhaseMode::NaturalPhase;
+    case 3:
+      return eq::PhaseMode::LinearPhase;
+    default:
+      return eq::PhaseMode::Inherit;
+  }
+}
+
+inline eq::BiquadCoeffMode coeff_mode(int value) {
+  switch (value) {
+    case 1:
+      return eq::BiquadCoeffMode::Vicanek;
+    default:
+      return eq::BiquadCoeffMode::Rbj;
+  }
+}
+
+inline bool has_eq_band_params(const ParamMap& params, const std::string& prefix) {
+  static constexpr const char* kFields[] = {
+      "type",
+      "frequencyHz",
+      "gainDb",
+      "q",
+      "enabled",
+      "coeffMode",
+      "slopeDbOct",
+      "placement",
+      "phase",
+      "soloed",
+      "bypassed",
+      "proportionalQ",
+      "proportionalQStrength",
+      "dynamic",
+      "thresholdDb",
+      "autoThreshold",
+      "ratio",
+      "rangeDb",
+      "attackMs",
+      "releaseMs",
+      "lookaheadMs",
+      "sidechainFreqHz",
+      "sidechainQ",
+  };
+  for (const char* field : kFields) {
+    if (params.find(prefix + field) != params.end()) return true;
+  }
+  return false;
+}
+
 inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   eq::EqBand band;
   band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
+  band.coeff_mode = coeff_mode(i(params, (prefix + "coeffMode").c_str(), 0));
   band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
   band.gain_db = f(params, (prefix + "gainDb").c_str(), band.gain_db);
   band.q = f(params, (prefix + "q").c_str(), band.q);
   band.enabled = b(params, (prefix + "enabled").c_str(), true);
+  band.slope_db_oct = i(params, (prefix + "slopeDbOct").c_str(), band.slope_db_oct);
+  band.placement = stereo_placement(i(params, (prefix + "placement").c_str(), 0));
+  band.phase = phase_mode(i(params, (prefix + "phase").c_str(), 0));
+  band.soloed = b(params, (prefix + "soloed").c_str(), band.soloed);
+  band.bypassed = b(params, (prefix + "bypassed").c_str(), band.bypassed);
+  band.proportional_q = b(params, (prefix + "proportionalQ").c_str(), band.proportional_q);
+  band.proportional_q_strength =
+      f(params, (prefix + "proportionalQStrength").c_str(), band.proportional_q_strength);
+  band.dyn.enabled = b(params, (prefix + "dynamic").c_str(), band.dyn.enabled);
+  band.dyn.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.dyn.threshold_db);
+  band.dyn.auto_threshold = b(params, (prefix + "autoThreshold").c_str(), band.dyn.auto_threshold);
+  band.dyn.ratio = f(params, (prefix + "ratio").c_str(), band.dyn.ratio);
+  band.dyn.range_db = f(params, (prefix + "rangeDb").c_str(), band.dyn.range_db);
+  band.dyn.attack_ms = f(params, (prefix + "attackMs").c_str(), band.dyn.attack_ms);
+  band.dyn.release_ms = f(params, (prefix + "releaseMs").c_str(), band.dyn.release_ms);
+  band.dyn.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.dyn.lookahead_ms);
+  band.dyn.sidechain_freq_hz =
+      f(params, (prefix + "sidechainFreqHz").c_str(), band.dyn.sidechain_freq_hz);
+  band.dyn.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.dyn.sidechain_q);
   return band;
 }
 
@@ -139,9 +233,20 @@ inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& pa
                                  const std::string& prefix = "band") {
   for (size_t index = 0; index < eq::ParametricEq::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
-    if (params.find(band_prefix + "frequencyHz") != params.end() ||
-        params.find(band_prefix + "gainDb") != params.end() ||
-        params.find(band_prefix + "enabled") != params.end()) {
+    if (has_eq_band_params(params, band_prefix)) {
+      processor.set_band(index, eq_band(params, band_prefix));
+    }
+  }
+}
+
+inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params,
+                                const std::string& prefix = "band") {
+  processor.set_auto_gain_enabled(b(params, "autoGain", processor.auto_gain_enabled()));
+  processor.set_phase_mode(
+      phase_mode(i(params, "phaseMode", static_cast<int>(processor.phase_mode()))));
+  for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {
+    const std::string band_prefix = prefix + std::to_string(index) + ".";
+    if (has_eq_band_params(params, band_prefix)) {
       processor.set_band(index, eq_band(params, band_prefix));
     }
   }
@@ -338,11 +443,19 @@ inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& param
 
 inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
   eq::LinearPhaseEqConfig config;
+  config.resolution = static_cast<eq::LinearPhaseEqConfig::Resolution>(i(params, "resolution", 0));
   config.fft_size = i(params, "fftSize", config.fft_size);
   config.kernel_size = i(params, "kernelSize", config.kernel_size);
   config.use_partitioned_convolution =
       b(params, "usePartitionedConvolution", config.use_partitioned_convolution);
   config.partition_size = i(params, "partitionSize", config.partition_size);
+  return config;
+}
+
+inline eq::EqualizerProcessorConfig equalizer_config(const ParamMap& params, int max_channels) {
+  eq::EqualizerProcessorConfig config;
+  config.max_channels = max_channels;
+  config.linear_phase_config = linear_phase_config(params);
   return config;
 }
 

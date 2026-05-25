@@ -8,41 +8,18 @@
 #include <vector>
 
 #include "mastering/common/processor_base.h"
-#include "util/constants.h"
+#include "mastering/eq/eq_band.h"
 
 namespace sonare::mastering::eq {
 
-enum class EqBandType {
-  Peak,
-  LowShelf,
-  HighShelf,
-  LowPass,
-  HighPass,
-  BandPass,
-  Notch,
-};
-
-enum class BiquadCoeffMode {
-  Rbj,
-  Vicanek,
-};
-
-struct EqBand {
-  EqBandType type = EqBandType::Peak;
-  float frequency_hz = 1000.0f;
-  float gain_db = 0.0f;
-  float q = sonare::constants::kButterworthQ;
-  bool enabled = false;
-  BiquadCoeffMode coeff_mode = BiquadCoeffMode::Rbj;
-};
-
 class ParametricEq : public common::ProcessorBase {
  public:
-  static constexpr size_t kMaxBands = 16;
+  static constexpr size_t kMaxBands = 24;
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  void prepare_channels(int num_channels);
 
   void set_band(size_t index, const EqBand& band);
   void clear_band(size_t index);

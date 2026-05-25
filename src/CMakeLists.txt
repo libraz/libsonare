@@ -278,11 +278,18 @@ if(BUILD_MASTERING)
     mastering/eq/band_pass.cpp
     mastering/eq/cut_filter.cpp
     mastering/eq/dynamic_eq.cpp
+    mastering/eq/equalizer.cpp
+    mastering/eq/equalizer_dynamic.cpp
+    mastering/eq/equalizer_routing.cpp
+    mastering/eq/equalizer_spectrum.cpp
+    mastering/eq/equalizer_validation.cpp
     mastering/eq/graphic_eq.cpp
     mastering/eq/linear_phase.cpp
     mastering/eq/mid_side_eq.cpp
     mastering/eq/minimum_phase.cpp
     mastering/eq/parametric.cpp
+    mastering/eq/spectrum_engine.cpp
+    mastering/eq/spectrum_registry.cpp
     mastering/eq/pultec.cpp
     mastering/eq/shelving.cpp
     mastering/eq/tilt.cpp

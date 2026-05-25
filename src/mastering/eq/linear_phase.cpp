@@ -16,6 +16,34 @@ namespace {
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
+LinearPhaseEqConfig resolve_resolution(LinearPhaseEqConfig config) {
+  switch (config.resolution) {
+    case LinearPhaseEqConfig::Resolution::Low:
+      config.fft_size = 4096;
+      config.kernel_size = 1025;
+      break;
+    case LinearPhaseEqConfig::Resolution::Medium:
+      config.fft_size = 8192;
+      config.kernel_size = 2049;
+      break;
+    case LinearPhaseEqConfig::Resolution::High:
+      config.fft_size = 16384;
+      config.kernel_size = 4097;
+      break;
+    case LinearPhaseEqConfig::Resolution::VeryHigh:
+      config.fft_size = 32768;
+      config.kernel_size = 8193;
+      break;
+    case LinearPhaseEqConfig::Resolution::Maximum:
+      config.fft_size = 32768;
+      config.kernel_size = 16385;
+      break;
+    case LinearPhaseEqConfig::Resolution::Custom:
+      break;
+  }
+  return config;
+}
+
 double clamp_frequency(double frequency_hz, double sample_rate) {
   return std::clamp(frequency_hz, 1.0, sample_rate * 0.5 - 1.0);
 }
@@ -42,6 +70,9 @@ common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) 
         return common::vicanek_bandpass(omega, q);
       case EqBandType::Notch:
         return common::vicanek_notch(omega, q);
+      case EqBandType::TiltShelf:
+      case EqBandType::FlatTilt:
+        throw std::invalid_argument("unsupported Vicanek EQ band type");
     }
   }
 
@@ -60,14 +91,91 @@ common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) 
       return common::rbj_bandpass(omega, q);
     case EqBandType::Notch:
       return common::rbj_notch(omega, q);
+    case EqBandType::TiltShelf:
+    case EqBandType::FlatTilt:
+      throw std::invalid_argument("unsupported EQ band type");
   }
 
   return {};
 }
 
+common::BiquadCoeffs first_order_lowpass(float w0) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double inv = 1.0 / (1.0 + k);
+  const float b0 = static_cast<float>(k * inv);
+  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
+}
+
+common::BiquadCoeffs first_order_highpass(float w0) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double inv = 1.0 / (1.0 + k);
+  const float b0 = static_cast<float>(inv);
+  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
+}
+
+bool is_cut_band(EqBandType type) noexcept {
+  return type == EqBandType::LowPass || type == EqBandType::HighPass;
+}
+
+int cut_order(int slope_db_oct) {
+  if (slope_db_oct == 0) {
+    return 0;
+  }
+  if (slope_db_oct < 6 || slope_db_oct > 96 || (slope_db_oct % 6) != 0) {
+    throw std::invalid_argument("cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
+  }
+  return slope_db_oct / 6;
+}
+
+float butterworth_stage_q(int order, int pair) {
+  const double angle = (static_cast<double>(2 * pair + 1) * sonare::constants::kPiD) /
+                       (2.0 * static_cast<double>(order));
+  return static_cast<float>(1.0 / (2.0 * std::sin(angle)));
+}
+
+float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double sample_rate) {
+  if (!is_cut_band(band.type) || band.slope_db_oct == 12) {
+    const float omega =
+        static_cast<float>(sonare::constants::kTwoPi * clamp_frequency(frequency_hz, sample_rate) /
+                           static_cast<double>(sample_rate));
+    return common::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
+  }
+  const int order = cut_order(band.slope_db_oct);
+  if (order == 0) {
+    return 1.0f;
+  }
+
+  const double frequency = clamp_frequency(frequency_hz, sample_rate);
+  const float omega =
+      static_cast<float>(sonare::constants::kTwoPi * frequency / static_cast<double>(sample_rate));
+  const double center = clamp_frequency(band.frequency_hz, sample_rate);
+  const float w0 =
+      static_cast<float>(sonare::constants::kTwoPi * center / static_cast<double>(sample_rate));
+  float magnitude = 1.0f;
+  if ((order % 2) != 0) {
+    magnitude *= common::biquad_magnitude(
+        band.type == EqBandType::HighPass ? first_order_highpass(w0) : first_order_lowpass(w0),
+        omega);
+  }
+  const int pair_count = order / 2;
+  for (int pair = pair_count - 1; pair >= 0; --pair) {
+    float stage_q = butterworth_stage_q(order, pair);
+    if (pair == pair_count - 1 && std::abs(band.q - sonare::constants::kButterworthQ) > 1.0e-6f) {
+      stage_q = std::max(band.q, 1.0e-6f);
+    }
+    magnitude *= common::biquad_magnitude(band.type == EqBandType::HighPass
+                                              ? common::rbj_highpass(w0, stage_q)
+                                              : common::rbj_lowpass(w0, stage_q),
+                                          omega);
+  }
+  return magnitude;
+}
+
 }  // namespace
 
-LinearPhaseEq::LinearPhaseEq(LinearPhaseEqConfig config) : config_(config) { validate_config(); }
+LinearPhaseEq::LinearPhaseEq(LinearPhaseEqConfig config) : config_(resolve_resolution(config)) {
+  validate_config();
+}
 
 void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -128,6 +236,8 @@ void LinearPhaseEq::reset() {
     if (state.convolver) state.convolver->reset();
   }
 }
+
+void LinearPhaseEq::prepare_channels(int num_channels) { ensure_channel_state(num_channels); }
 
 void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
   validate_band_index(index);
@@ -239,6 +349,9 @@ void LinearPhaseEq::rebuild_kernel() {
   }
 
   latency_samples_ = half;
+  for (auto& state : states_) {
+    state.convolver_kernel_current = false;
+  }
   ensure_channel_state(static_cast<int>(states_.size()));
 }
 
@@ -256,10 +369,15 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
         if (!state.convolver) {
           state.convolver = std::make_unique<common::PartitionedConvolver>(
               common::PartitionedConvolverConfig{partition_size});
+          state.convolver_kernel_current = false;
         }
-        state.convolver->set_impulse_response(kernel_);
+        if (!state.convolver_kernel_current) {
+          state.convolver->set_impulse_response(kernel_);
+          state.convolver_kernel_current = true;
+        }
       } else {
         state.convolver.reset();
+        state.convolver_kernel_current = false;
       }
     }
     return;
@@ -275,6 +393,7 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
       state.convolver = std::make_unique<common::PartitionedConvolver>(
           common::PartitionedConvolverConfig{partition_size});
       state.convolver->set_impulse_response(kernel_);
+      state.convolver_kernel_current = true;
     }
   }
 }
@@ -323,8 +442,21 @@ void LinearPhaseEq::validate_band_index(size_t index) {
 
 float LinearPhaseEq::band_magnitude(const EqBand& band, double frequency_hz, double sample_rate) {
   const double frequency = clamp_frequency(frequency_hz, sample_rate);
+  if (band.slope_db_oct == 0) {
+    switch (band.type) {
+      case EqBandType::LowPass:
+        return frequency <= static_cast<double>(band.frequency_hz) ? 1.0f : 0.0f;
+      case EqBandType::HighPass:
+        return frequency >= static_cast<double>(band.frequency_hz) ? 1.0f : 0.0f;
+      default:
+        break;
+    }
+  }
   const float omega =
       static_cast<float>(sonare::constants::kTwoPi * frequency / static_cast<double>(sample_rate));
+  if (is_cut_band(band.type)) {
+    return cut_cascade_magnitude(band, frequency_hz, sample_rate);
+  }
   return common::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
 }
 
