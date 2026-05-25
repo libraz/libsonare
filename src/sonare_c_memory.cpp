@@ -1,3 +1,4 @@
+#include "rt/command.h"
 #include "sonare.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
@@ -42,6 +43,8 @@ const char* sonare_error_message(SonareError error) {
 const char* sonare_last_error_message(void) { return last_error_storage().c_str(); }
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
+
+uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }
 
 int sonare_has_ffmpeg_support(void) {
 #ifdef SONARE_WITH_FFMPEG
@@ -171,4 +174,11 @@ void sonare_free_chord_analysis_result(SonareChordAnalysisResult* r) {
     r->chords = nullptr;
     r->chord_count = 0;
   }
+}
+
+void sonare_free_bounce_result(SonareEngineBounceResult* result) {
+  if (!result) return;
+  delete[] result->interleaved;
+  result->interleaved = nullptr;
+  result->sample_count = 0;
 }

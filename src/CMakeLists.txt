@@ -494,12 +494,7 @@ if(BUILD_SHARED)
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
   endif()
-  # The DAW/editing C API (sonare_c_daw.cpp) wraps the pitch-editor and
-  # voice-changer engines, so it is compiled into the shared library only when
-  # the voice changer is enabled (which requires the pitch editor).
-  if(BUILD_VOICE_CHANGER)
-    list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
-  endif()
+  list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
@@ -519,10 +514,14 @@ if(BUILD_SHARED)
     target_link_libraries(sonare_shared PUBLIC sonare_mastering)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MASTERING=1)
   endif()
+  target_link_libraries(sonare_shared PUBLIC sonare_engine)
+  if(BUILD_PITCH_EDITOR)
+    target_link_libraries(sonare_shared PUBLIC sonare_pitch_editor)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_PITCH_EDITOR=1)
+  endif()
   if(BUILD_VOICE_CHANGER)
-    # Pulls in the voice-changer engine and, transitively, the pitch editor that
-    # sonare_c_daw.cpp depends on.
     target_link_libraries(sonare_shared PUBLIC sonare_voice_changer)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_VOICE_CHANGER=1)
   endif()
   if(BUILD_MIXING)
     target_link_libraries(sonare_shared PUBLIC sonare_mixing)
@@ -530,6 +529,7 @@ if(BUILD_SHARED)
     if(BUILD_GRAPH)
       # sonare_c_mixing.cpp routes the mixer through the routing graph.
       target_link_libraries(sonare_shared PUBLIC sonare_graph)
+      target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_GRAPH=1)
     endif()
   endif()
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
@@ -549,6 +549,8 @@ if(BUILD_WASM)
   # vectorization to actually map onto v128 ops in the emitted .wasm.
   target_compile_options(sonare_core PUBLIC -msimd128)
   target_compile_options(sonare_rt PUBLIC -msimd128)
+  target_compile_options(sonare_automation PUBLIC -msimd128)
+  target_compile_options(sonare_engine PUBLIC -msimd128)
   if(BUILD_MASTERING)
     target_compile_options(sonare_mastering PUBLIC -msimd128)
   endif()
@@ -558,9 +560,41 @@ if(BUILD_WASM)
   if(BUILD_GRAPH)
     target_compile_options(sonare_graph PUBLIC -msimd128)
   endif()
+  if(BUILD_FX)
+    target_compile_options(sonare_fx PUBLIC -msimd128)
+  endif()
+  if(BUILD_PITCH_EDITOR)
+    target_compile_options(sonare_pitch_editor PUBLIC -msimd128)
+  endif()
+  if(BUILD_VOICE_CHANGER)
+    target_compile_options(sonare_voice_changer PUBLIC -msimd128)
+  endif()
+
+  target_compile_options(sonare_core PUBLIC -matomics -mbulk-memory)
+  target_compile_options(sonare_rt PUBLIC -matomics -mbulk-memory)
+  target_compile_options(sonare_automation PUBLIC -matomics -mbulk-memory)
+  target_compile_options(sonare_engine PUBLIC -matomics -mbulk-memory)
+  if(BUILD_MASTERING)
+    target_compile_options(sonare_mastering PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_MIXING)
+    target_compile_options(sonare_mixing PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_GRAPH)
+    target_compile_options(sonare_graph PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_FX)
+    target_compile_options(sonare_fx PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_PITCH_EDITOR)
+    target_compile_options(sonare_pitch_editor PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_VOICE_CHANGER)
+    target_compile_options(sonare_voice_changer PUBLIC -matomics -mbulk-memory)
+  endif()
 
   add_executable(sonare wasm/bindings.cpp)
-  target_link_libraries(sonare PRIVATE sonare_core)
+  target_link_libraries(sonare PRIVATE sonare_core sonare_engine)
   if(BUILD_PITCH_EDITOR)
     target_link_libraries(sonare PRIVATE sonare_pitch_editor)
   endif()
@@ -603,5 +637,35 @@ if(BUILD_WASM)
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare.wasm ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
     COMMENT "Copying WASM files to bindings/wasm/dist/"
+  )
+
+  add_executable(sonare-rt wasm/rt_bindings.cpp)
+  target_link_libraries(sonare-rt PRIVATE sonare_engine)
+  if(BUILD_GRAPH)
+    target_link_libraries(sonare-rt PRIVATE sonare_graph)
+    target_compile_definitions(sonare-rt PRIVATE SONARE_WITH_GRAPH=1)
+  endif()
+  if(BUILD_MIXING)
+    target_link_libraries(sonare-rt PRIVATE sonare_mixing)
+    target_compile_definitions(sonare-rt PRIVATE SONARE_WITH_MIXING=1)
+  endif()
+  target_compile_options(sonare-rt PRIVATE -msimd128)
+  target_link_options(sonare-rt PRIVATE
+    -msimd128
+    -sEXPORT_NAME='SonareRt'
+    -sEXPORTED_FUNCTIONS=['_malloc','_free','_sonare_rt_engine_abi_version','_sonare_rt_engine_create','_sonare_rt_engine_destroy','_sonare_rt_engine_prepare','_sonare_rt_engine_play','_sonare_rt_engine_stop','_sonare_rt_engine_seek_sample','_sonare_rt_engine_seek_ppq','_sonare_rt_engine_set_tempo','_sonare_rt_engine_set_loop','_sonare_rt_engine_seek_marker','_sonare_rt_engine_set_metronome_enabled','_sonare_rt_engine_set_capture_armed','_sonare_rt_engine_set_capture_punch','_sonare_rt_engine_process','_sonare_rt_engine_drain_telemetry']
+    -sMODULARIZE=1
+    -sEXPORT_ES6=1
+    -sALLOW_MEMORY_GROWTH=0
+    -sINITIAL_MEMORY=67108864
+    -sSTACK_SIZE=1048576
+    -sWASM_WORKERS=1
+    -sAUDIO_WORKLET=1
+  )
+  add_custom_command(TARGET sonare-rt POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bindings/wasm/dist
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare-rt> ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare-rt.wasm ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
+    COMMENT "Copying realtime WASM files to bindings/wasm/dist/"
   )
 endif()

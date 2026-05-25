@@ -218,8 +218,13 @@ endif()
 
 if(BUILD_VOICE_CHANGER)
   target_sources(sonare_tests PRIVATE analysis/voice_changer_test.cpp)
+  target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
+  target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_daw.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
-  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_VOICE_CHANGER=1)
+  target_compile_definitions(sonare_tests PRIVATE
+    SONARE_WITH_PITCH_EDITOR=1
+    SONARE_WITH_VOICE_CHANGER=1
+  )
 endif()
 
 include(CTest)

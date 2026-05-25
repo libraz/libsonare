@@ -65,6 +65,7 @@ typedef struct SonareAnalyzer SonareAnalyzer;
 typedef struct SonareMixer SonareMixer;
 typedef struct SonareStrip SonareStrip;
 typedef struct SonareEq SonareEq;
+typedef struct SonareRealtimeEngine SonareRealtimeEngine;
 
 #define SONARE_EQ_MAX_BANDS 24
 #define SONARE_EQ_SPECTRUM_STREAM_CAPACITY 256
@@ -106,6 +107,142 @@ typedef struct {
   float* beat_times;
   size_t beat_count;
 } SonareAnalysisResult;
+
+typedef struct {
+  int type;
+  int error;
+  int64_t render_frame;
+  int64_t timeline_sample;
+  int64_t audible_timeline_sample;
+  int32_t graph_latency_samples_q8;
+  uint32_t value;
+} SonareEngineTelemetry;
+
+typedef struct {
+  uint32_t id;
+  char name[64];
+  char unit[16];
+  float min_value;
+  float max_value;
+  float default_value;
+  int rt_safe;
+  int default_curve;
+} SonareParameterInfo;
+
+typedef struct {
+  double ppq;
+  float value;
+  int curve_to_next;
+} SonareAutomationPoint;
+
+typedef struct {
+  uint32_t id;
+  double ppq;
+  char name[64];
+} SonareEngineMarker;
+
+typedef struct {
+  int enabled;
+  float beat_gain;
+  float accent_gain;
+  int click_samples;
+} SonareEngineMetronomeConfig;
+
+typedef struct {
+  uint32_t id;
+  const float* const* channels;
+  int num_channels;
+  int64_t num_samples;
+  double start_ppq;
+  int64_t clip_offset_samples;
+  int64_t length_samples;
+  int loop;
+  float gain;
+  int64_t fade_in_samples;
+  int64_t fade_out_samples;
+} SonareEngineClip;
+
+typedef struct {
+  float* const* channels;
+  int num_channels;
+  int64_t capacity_frames;
+} SonareEngineCaptureBuffer;
+
+typedef struct {
+  int64_t captured_frames;
+  uint32_t overflow_count;
+  int armed;
+  int punch_enabled;
+} SonareEngineCaptureStatus;
+
+typedef struct {
+  int64_t total_frames;
+  int block_size;
+  int num_channels;
+  int target_sample_rate;
+  int source_sample_rate;
+  int normalize_lufs;
+  float target_lufs;
+  int dither; /* 0 = none, 1 = RPDF, 2 = TPDF, 3 = noise-shaped */
+  int dither_bits;
+  uint32_t dither_seed;
+} SonareEngineBounceOptions;
+
+typedef struct {
+  float* interleaved; /* heap-allocated; free with sonare_free_bounce_result */
+  size_t sample_count;
+  int64_t frames;
+  int num_channels;
+  int sample_rate;
+  float integrated_lufs;
+} SonareEngineBounceResult;
+
+typedef struct {
+  int64_t total_frames;
+  int block_size;
+  int num_channels;
+  uint32_t clip_id;
+  double start_ppq;
+  float gain;
+} SonareEngineFreezeOptions;
+
+typedef struct {
+  uint32_t clip_id;
+  int64_t frames;
+  int num_channels;
+} SonareEngineFreezeResult;
+
+typedef struct {
+  char id[64];
+  int type; /* 0 = pass-through, 1 = gain */
+  float gain_db;
+  int num_ports;
+} SonareEngineGraphNode;
+
+typedef struct {
+  char source_node[64];
+  int source_port;
+  char dest_node[64];
+  int dest_port;
+  int mix; /* 0 = replace, 1 = add */
+} SonareEngineGraphConnection;
+
+typedef struct {
+  uint32_t param_id;
+  char node_id[64];
+} SonareEngineGraphParameterBinding;
+
+typedef struct {
+  const SonareEngineGraphNode* nodes;
+  size_t node_count;
+  const SonareEngineGraphConnection* connections;
+  size_t connection_count;
+  const SonareEngineGraphParameterBinding* parameter_bindings;
+  size_t parameter_binding_count;
+  char input_node[64];
+  char output_node[64];
+  int num_channels;
+} SonareEngineGraphSpec;
 
 typedef enum {
   SONARE_GROOVE_STRAIGHT = 0,
@@ -217,6 +354,7 @@ const char* sonare_last_error_message(void);
 
 // Version
 const char* sonare_version(void);
+uint32_t sonare_engine_abi_version(void);
 
 /// @brief Returns 1 if libsonare was compiled with FFmpeg-backed decoding for
 ///        M4A/AAC/FLAC/OGG, 0 otherwise.
@@ -792,6 +930,79 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);
+
+SonareError sonare_engine_create(SonareRealtimeEngine** out);
+void sonare_engine_destroy(SonareRealtimeEngine* engine);
+SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
+                                  int max_block_size, size_t command_capacity,
+                                  size_t telemetry_capacity);
+SonareError sonare_engine_play(SonareRealtimeEngine* engine, int64_t render_frame);
+SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_frame);
+SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
+                                      int64_t render_frame);
+SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame);
+SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm);
+SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
+                                             int denominator);
+SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
+                                   int enabled);
+SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
+                                        const SonareParameterInfo* info);
+SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
+                                                  SonareParameterInfo* out);
+SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t id,
+                                         SonareParameterInfo* out);
+SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
+                                              const SonareAutomationPoint* points,
+                                              size_t point_count);
+SonareError sonare_engine_automation_lane_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
+                                      const SonareEngineMarker* markers, size_t marker_count);
+SonareError sonare_engine_marker_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_marker_by_index(SonareRealtimeEngine* engine, size_t index,
+                                          SonareEngineMarker* out);
+SonareError sonare_engine_marker(SonareRealtimeEngine* engine, uint32_t id,
+                                 SonareEngineMarker* out);
+SonareError sonare_engine_seek_marker(SonareRealtimeEngine* engine, uint32_t marker_id,
+                                      int64_t render_frame);
+SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
+                                                uint32_t start_marker_id, uint32_t end_marker_id);
+SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
+                                        const SonareEngineMetronomeConfig* config);
+SonareError sonare_engine_metronome(SonareRealtimeEngine* engine, SonareEngineMetronomeConfig* out);
+SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int64_t start_sample,
+                                              int bars, int64_t* out_sample);
+SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
+                                    size_t clip_count);
+SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
+                                             const SonareEngineCaptureBuffer* buffer);
+SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed);
+SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
+                                            int64_t end_sample, int enabled);
+SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine);
+SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
+                                         SonareEngineCaptureStatus* out);
+SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
+                                    const SonareEngineGraphSpec* spec);
+SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
+                                  int num_channels, int num_frames);
+SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
+                                         int num_channels, int64_t total_frames, int block_size);
+SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
+                                         const SonareEngineBounceOptions* options,
+                                         SonareEngineBounceResult* out);
+/// @brief Free the heap-allocated buffer held by a bounce result.
+/// @param result Result whose @c interleaved buffer is deleted and nulled.
+void sonare_free_bounce_result(SonareEngineBounceResult* result);
+SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
+                                         const SonareEngineFreezeOptions* options,
+                                         SonareEngineFreezeResult* out);
+SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEngineTelemetry* out,
+                                          size_t max_records, size_t* written);
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
