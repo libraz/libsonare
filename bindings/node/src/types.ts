@@ -399,6 +399,140 @@ export interface GoniometerPoint {
   right: number;
 }
 
+export type EngineTelemetryType = 0 | 1;
+
+export type EngineTelemetryError = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+export interface EngineTelemetry {
+  type: EngineTelemetryType;
+  error: EngineTelemetryError;
+  renderFrame: number;
+  timelineSample: number;
+  audibleTimelineSample: number;
+  graphLatencySamplesQ8: number;
+  value: number;
+}
+
+export type EngineAutomationPointCurve = 0 | 1 | 2 | 3;
+
+export interface EngineParameterInfo {
+  id: number;
+  name: string;
+  unit: string;
+  minValue: number;
+  maxValue: number;
+  defaultValue: number;
+  rtSafe: boolean;
+  defaultCurve: EngineAutomationPointCurve;
+}
+
+export interface EngineAutomationPoint {
+  ppq: number;
+  value: number;
+  curveToNext?: EngineAutomationPointCurve;
+}
+
+export interface EngineMarker {
+  id: number;
+  ppq: number;
+  name?: string;
+}
+
+export interface EngineMetronomeConfig {
+  enabled: boolean;
+  beatGain?: number;
+  accentGain?: number;
+  clickSamples?: number;
+}
+
+export interface EngineClip {
+  id: number;
+  channels: Float32Array[];
+  startPpq: number;
+  lengthSamples?: number;
+  clipOffsetSamples?: number;
+  loop?: boolean;
+  gain?: number;
+  fadeInSamples?: number;
+  fadeOutSamples?: number;
+}
+
+export interface EngineCaptureStatus {
+  capturedFrames: number;
+  overflowCount: number;
+  armed: boolean;
+  punchEnabled: boolean;
+}
+
+export interface EngineBounceOptions {
+  totalFrames: number;
+  blockSize?: number;
+  numChannels?: number;
+  targetSampleRate?: number;
+  sourceSampleRate?: number;
+  normalizeLufs?: boolean;
+  targetLufs?: number;
+  dither?: 0 | 1 | 2 | 3;
+  ditherBits?: number;
+  ditherSeed?: number;
+}
+
+export interface EngineBounceResult {
+  interleaved: Float32Array;
+  frames: number;
+  numChannels: number;
+  sampleRate: number;
+  integratedLufs: number;
+}
+
+export interface EngineFreezeOptions {
+  totalFrames: number;
+  blockSize?: number;
+  numChannels?: number;
+  clipId?: number;
+  startPpq?: number;
+  gain?: number;
+}
+
+export interface EngineFreezeResult {
+  clipId: number;
+  frames: number;
+  numChannels: number;
+}
+
+export type EngineGraphNodeType = 0 | 1;
+
+export type EngineGraphMix = 0 | 1;
+
+export interface EngineGraphNode {
+  id: string;
+  type?: EngineGraphNodeType;
+  gainDb?: number;
+  numPorts?: number;
+}
+
+export interface EngineGraphConnection {
+  sourceNode: string;
+  sourcePort: number;
+  destNode: string;
+  destPort: number;
+  mix?: EngineGraphMix;
+}
+
+export interface EngineGraphParameterBinding {
+  paramId: number;
+  nodeId: string;
+}
+
+export interface EngineGraphSpec {
+  nodes: EngineGraphNode[];
+  connections: EngineGraphConnection[];
+  inputNode: string;
+  outputNode: string;
+  numChannels?: number;
+  parameterBindings?: EngineGraphParameterBinding[];
+}
+
 export interface StftResult {
   nBins: number;
   nFrames: number;

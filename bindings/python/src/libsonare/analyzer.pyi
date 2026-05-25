@@ -38,6 +38,9 @@ from .types import (
 
 FloatSamples: TypeAlias = Sequence[float] | list[float]
 StripRef: TypeAlias = int | str
+
+def engine_abi_version() -> int: ...
+
 AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int]
 MasteringParamValue: TypeAlias = float | int | bool

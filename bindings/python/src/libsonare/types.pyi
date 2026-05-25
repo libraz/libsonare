@@ -48,6 +48,28 @@ class MeterTap(IntEnum):
     PRE_FADER: MeterTap
     POST_FADER: MeterTap
 
+class EngineTelemetryType(IntEnum):
+    PROCESS_BLOCK: EngineTelemetryType
+    ERROR: EngineTelemetryType
+
+class EngineTelemetryError(IntEnum):
+    NONE: EngineTelemetryError
+    COMMAND_QUEUE_OVERFLOW: EngineTelemetryError
+    PENDING_COMMAND_OVERFLOW: EngineTelemetryError
+    BOUNDARY_OVERFLOW: EngineTelemetryError
+    TELEMETRY_OVERFLOW: EngineTelemetryError
+    CAPTURE_OVERFLOW: EngineTelemetryError
+    MAX_BLOCK_EXCEEDED: EngineTelemetryError
+    UNKNOWN_TARGET: EngineTelemetryError
+    NON_REALTIME_SAFE_PARAMETER: EngineTelemetryError
+    NOT_PREPARED: EngineTelemetryError
+
+class AutomationPointCurve(IntEnum):
+    HOLD: AutomationPointCurve
+    LINEAR: AutomationPointCurve
+    EXPONENTIAL: AutomationPointCurve
+    S_CURVE: AutomationPointCurve
+
 class Key:
     root: PitchClass
     mode: Mode
@@ -516,3 +538,238 @@ class MixResult:
     right: list[float]
     sample_rate: int
     meters: list[MixMeterSnapshot]
+
+class EngineTelemetry:
+    type: EngineTelemetryType
+    error: EngineTelemetryError
+    render_frame: int
+    timeline_sample: int
+    audible_timeline_sample: int
+    graph_latency_samples_q8: int
+    value: int
+    def __init__(
+        self,
+        type: EngineTelemetryType,
+        error: EngineTelemetryError,
+        render_frame: int,
+        timeline_sample: int,
+        audible_timeline_sample: int,
+        graph_latency_samples_q8: int,
+        value: int,
+    ) -> None: ...
+    @property
+    def renderFrame(self) -> int: ...
+    @property
+    def timelineSample(self) -> int: ...
+    @property
+    def audibleTimelineSample(self) -> int: ...
+    @property
+    def graphLatencySamplesQ8(self) -> int: ...
+
+class ParameterInfo:
+    id: int
+    name: str
+    unit: str
+    min_value: float
+    max_value: float
+    default_value: float
+    rt_safe: bool
+    default_curve: AutomationPointCurve
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        unit: str,
+        min_value: float,
+        max_value: float,
+        default_value: float,
+        rt_safe: bool,
+        default_curve: AutomationPointCurve,
+    ) -> None: ...
+
+class AutomationPoint:
+    ppq: float
+    value: float
+    curve_to_next: AutomationPointCurve
+    def __init__(
+        self,
+        ppq: float,
+        value: float,
+        curve_to_next: AutomationPointCurve = AutomationPointCurve.LINEAR,
+    ) -> None: ...
+
+class EngineMarker:
+    id: int
+    ppq: float
+    name: str
+    def __init__(self, id: int, ppq: float, name: str = "") -> None: ...
+
+class EngineMetronomeConfig:
+    enabled: bool
+    beat_gain: float
+    accent_gain: float
+    click_samples: int
+    def __init__(
+        self,
+        enabled: bool = False,
+        beat_gain: float = 0.35,
+        accent_gain: float = 0.7,
+        click_samples: int = 96,
+    ) -> None: ...
+
+class EngineClip:
+    id: int
+    channels: list[list[float]]
+    start_ppq: float
+    length_samples: int | None
+    clip_offset_samples: int
+    loop: bool
+    gain: float
+    fade_in_samples: int
+    fade_out_samples: int
+    def __init__(
+        self,
+        id: int,
+        channels: list[list[float]],
+        start_ppq: float,
+        length_samples: int | None = None,
+        clip_offset_samples: int = 0,
+        loop: bool = False,
+        gain: float = 1.0,
+        fade_in_samples: int = 0,
+        fade_out_samples: int = 0,
+    ) -> None: ...
+
+class EngineCaptureStatus:
+    captured_frames: int
+    overflow_count: int
+    armed: bool
+    punch_enabled: bool
+    def __init__(
+        self,
+        captured_frames: int,
+        overflow_count: int,
+        armed: bool,
+        punch_enabled: bool,
+    ) -> None: ...
+
+class EngineBounceOptions:
+    total_frames: int
+    block_size: int
+    num_channels: int
+    target_sample_rate: int
+    source_sample_rate: int
+    normalize_lufs: bool
+    target_lufs: float
+    dither: int
+    dither_bits: int
+    dither_seed: int
+    def __init__(
+        self,
+        total_frames: int,
+        block_size: int = 128,
+        num_channels: int = 2,
+        target_sample_rate: int = 48000,
+        source_sample_rate: int = 48000,
+        normalize_lufs: bool = False,
+        target_lufs: float = -14.0,
+        dither: int = 0,
+        dither_bits: int = 16,
+        dither_seed: int = 0,
+    ) -> None: ...
+
+class EngineBounceResult:
+    interleaved: list[float]
+    frames: int
+    num_channels: int
+    sample_rate: int
+    integrated_lufs: float
+    def __init__(
+        self,
+        interleaved: list[float],
+        frames: int,
+        num_channels: int,
+        sample_rate: int,
+        integrated_lufs: float,
+    ) -> None: ...
+
+class EngineFreezeOptions:
+    total_frames: int
+    block_size: int
+    num_channels: int
+    clip_id: int
+    start_ppq: float
+    gain: float
+    def __init__(
+        self,
+        total_frames: int,
+        block_size: int = 128,
+        num_channels: int = 2,
+        clip_id: int = 1,
+        start_ppq: float = 0.0,
+        gain: float = 1.0,
+    ) -> None: ...
+
+class EngineFreezeResult:
+    clip_id: int
+    frames: int
+    num_channels: int
+    def __init__(self, clip_id: int, frames: int, num_channels: int) -> None: ...
+
+class EngineGraphNodeType(IntEnum):
+    PASS_THROUGH: EngineGraphNodeType
+    GAIN: EngineGraphNodeType
+
+class EngineGraphMix(IntEnum):
+    REPLACE: EngineGraphMix
+    ADD: EngineGraphMix
+
+class EngineGraphNode:
+    id: str
+    type: EngineGraphNodeType
+    gain_db: float
+    num_ports: int
+    def __init__(
+        self,
+        id: str,
+        type: EngineGraphNodeType = EngineGraphNodeType.PASS_THROUGH,
+        gain_db: float = 0.0,
+        num_ports: int = 0,
+    ) -> None: ...
+
+class EngineGraphConnection:
+    source_node: str
+    source_port: int
+    dest_node: str
+    dest_port: int
+    mix: EngineGraphMix
+    def __init__(
+        self,
+        source_node: str,
+        source_port: int,
+        dest_node: str,
+        dest_port: int,
+        mix: EngineGraphMix = EngineGraphMix.ADD,
+    ) -> None: ...
+
+class EngineGraphParameterBinding:
+    param_id: int
+    node_id: str
+    def __init__(self, param_id: int, node_id: str) -> None: ...
+
+class EngineGraphSpec:
+    nodes: list[EngineGraphNode]
+    connections: list[EngineGraphConnection]
+    input_node: str
+    output_node: str
+    num_channels: int
+    parameter_bindings: list[EngineGraphParameterBinding] | None
+    def __init__(
+        self,
+        nodes: list[EngineGraphNode],
+        connections: list[EngineGraphConnection],
+        input_node: str,
+        output_node: str,
+        num_channels: int = 2,
+        parameter_bindings: list[EngineGraphParameterBinding] | None = None,
+    ) -> None: ...

@@ -362,6 +362,194 @@ export interface WasmStreamingEqualizer {
   delete: () => void;
 }
 
+export interface WasmEngineClip {
+  id?: number;
+  channels: Float32Array[];
+  startPpq: number;
+  lengthSamples?: number;
+  clipOffsetSamples?: number;
+  loop?: boolean;
+  gain?: number;
+  fadeInSamples?: number;
+  fadeOutSamples?: number;
+}
+
+export interface WasmEngineParameterInfo {
+  id: number;
+  name: string;
+  unit: string;
+  minValue: number;
+  maxValue: number;
+  defaultValue: number;
+  rtSafe: boolean;
+  defaultCurve: number;
+}
+
+export interface WasmEngineAutomationPoint {
+  ppq: number;
+  value: number;
+  curveToNext?: number;
+}
+
+export interface WasmEngineMarker {
+  id: number;
+  ppq: number;
+  name?: string;
+}
+
+export interface WasmEngineMetronomeConfig {
+  enabled: boolean;
+  beatGain?: number;
+  accentGain?: number;
+  clickSamples?: number;
+}
+
+export interface WasmEngineGraphNode {
+  id: string;
+  type?: number;
+  gainDb?: number;
+  numPorts?: number;
+}
+
+export interface WasmEngineGraphConnection {
+  sourceNode: string;
+  sourcePort: number;
+  destNode: string;
+  destPort: number;
+  mix?: number;
+}
+
+export interface WasmEngineGraphParameterBinding {
+  paramId: number;
+  nodeId: string;
+}
+
+export interface WasmEngineGraphSpec {
+  nodes: WasmEngineGraphNode[];
+  connections: WasmEngineGraphConnection[];
+  inputNode: string;
+  outputNode: string;
+  numChannels: number;
+  parameterBindings?: WasmEngineGraphParameterBinding[];
+}
+
+export interface WasmEngineTelemetry {
+  type: number;
+  error: number;
+  renderFrame: number;
+  timelineSample: number;
+  audibleTimelineSample: number;
+  graphLatencySamplesQ8: number;
+  value: number;
+}
+
+export interface WasmEngineMeterTelemetry {
+  targetId: number;
+  renderFrame: number;
+  seq: number;
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  truePeakDbL: number;
+  truePeakDbR: number;
+  maxTruePeakDb: number;
+  correlation: number;
+  monoCompatWidth: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
+  droppedRecords: number;
+}
+
+export interface WasmEngineCaptureStatus {
+  capturedFrames: number;
+  overflowCount: number;
+  armed: boolean;
+  punchEnabled: boolean;
+}
+
+export interface WasmEngineBounceOptions {
+  totalFrames: number;
+  blockSize?: number;
+  numChannels?: number;
+  targetSampleRate?: number;
+  sourceSampleRate?: number;
+  normalizeLufs?: boolean;
+  targetLufs?: number;
+  dither?: 0 | 1 | 2 | 3;
+  ditherBits?: number;
+  ditherSeed?: number;
+}
+
+export interface WasmEngineBounceResult {
+  interleaved: Float32Array;
+  frames: number;
+  numChannels: number;
+  sampleRate: number;
+  integratedLufs: number;
+}
+
+export interface WasmEngineFreezeOptions {
+  totalFrames: number;
+  blockSize?: number;
+  numChannels?: number;
+  clipId?: number;
+  startPpq?: number;
+  gain?: number;
+}
+
+export interface WasmEngineFreezeResult {
+  clipId: number;
+  frames: number;
+  numChannels: number;
+}
+
+export interface WasmRealtimeEngine {
+  prepare: (sampleRate: number, maxBlockSize: number) => void;
+  play: (renderFrame: number) => void;
+  stop: (renderFrame: number) => void;
+  seekSample: (timelineSample: number, renderFrame: number) => void;
+  seekPpq: (ppq: number, renderFrame: number) => void;
+  setTempo: (bpm: number) => void;
+  setTimeSignature: (numerator: number, denominator: number) => void;
+  setLoop: (startPpq: number, endPpq: number, enabled: boolean) => void;
+  addParameter: (info: WasmEngineParameterInfo) => void;
+  parameterCount: () => number;
+  parameterInfoByIndex: (index: number) => WasmEngineParameterInfo;
+  parameterInfo: (id: number) => WasmEngineParameterInfo;
+  setAutomationLane: (paramId: number, points: WasmEngineAutomationPoint[]) => void;
+  automationLaneCount: () => number;
+  setMarkers: (markers: WasmEngineMarker[]) => void;
+  markerCount: () => number;
+  markerByIndex: (index: number) => WasmEngineMarker;
+  marker: (id: number) => WasmEngineMarker;
+  seekMarker: (id: number) => void;
+  setLoopFromMarkers: (startMarkerId: number, endMarkerId: number) => void;
+  setMetronome: (config: WasmEngineMetronomeConfig) => void;
+  metronome: () => Required<WasmEngineMetronomeConfig>;
+  countInEndSample: (startSample: number, bars: number) => number;
+  setGraph: (spec: WasmEngineGraphSpec) => void;
+  graphNodeCount: () => number;
+  graphConnectionCount: () => number;
+  setClips: (clips: WasmEngineClip[]) => void;
+  clipCount: () => number;
+  setCaptureBuffer: (numChannels: number, capacityFrames: number) => void;
+  armCapture: (armed: boolean) => void;
+  setCapturePunch: (startSample: number, endSample: number, enabled: boolean) => void;
+  resetCapture: () => void;
+  captureStatus: () => WasmEngineCaptureStatus;
+  capturedAudio: () => Float32Array[];
+  process: (channels: Float32Array[]) => Float32Array[];
+  renderOffline: (channels: Float32Array[], blockSize: number) => Float32Array[];
+  bounceOffline: (options: WasmEngineBounceOptions) => WasmEngineBounceResult;
+  freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;
+  drainTelemetry: (maxRecords: number) => WasmEngineTelemetry[];
+  drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
+  delete: () => void;
+}
+
 export interface WasmMixer {
   compile: () => void;
   processStereo: (
@@ -527,6 +715,7 @@ export interface SonareModule {
     progressCallback: ProgressCallback | null,
   ) => WasmAnalysisResult;
   version: () => string;
+  engineAbiVersion: () => number;
 
   hpss: (
     samples: Float32Array,
@@ -850,6 +1039,7 @@ export interface SonareModule {
     computeOnset: boolean,
     emitEveryNFrames: number,
   ) => WasmStreamAnalyzer;
+  RealtimeEngine: new (sampleRate: number, maxBlockSize: number) => WasmRealtimeEngine;
 
   createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
   createEqualizer: (config: Record<string, unknown>) => WasmStreamingEqualizer;

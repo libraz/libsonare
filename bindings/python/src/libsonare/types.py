@@ -94,6 +94,37 @@ class MeterTap(IntEnum):
     POST_FADER = 1
 
 
+class EngineTelemetryType(IntEnum):
+    """Realtime engine telemetry record type."""
+
+    PROCESS_BLOCK = 0
+    ERROR = 1
+
+
+class EngineTelemetryError(IntEnum):
+    """Recoverable realtime engine error codes."""
+
+    NONE = 0
+    COMMAND_QUEUE_OVERFLOW = 1
+    PENDING_COMMAND_OVERFLOW = 2
+    BOUNDARY_OVERFLOW = 3
+    TELEMETRY_OVERFLOW = 4
+    CAPTURE_OVERFLOW = 5
+    MAX_BLOCK_EXCEEDED = 6
+    UNKNOWN_TARGET = 7
+    NON_REALTIME_SAFE_PARAMETER = 8
+    NOT_PREPARED = 9
+
+
+class AutomationPointCurve(IntEnum):
+    """Breakpoint curve type used by engine automation lanes."""
+
+    HOLD = 0
+    LINEAR = 1
+    EXPONENTIAL = 2
+    S_CURVE = 3
+
+
 class KeyProfile(IntEnum):
     """Key-profile family used by profile-correlation key detection."""
 
@@ -623,3 +654,202 @@ class MixResult:
     right: list[float]
     sample_rate: int
     meters: list[MixMeterSnapshot]
+
+
+@dataclass(frozen=True, slots=True)
+class EngineTelemetry:
+    """Realtime engine telemetry event."""
+
+    type: EngineTelemetryType
+    error: EngineTelemetryError
+    render_frame: int
+    timeline_sample: int
+    audible_timeline_sample: int
+    graph_latency_samples_q8: int
+    value: int
+
+    @property
+    def renderFrame(self) -> int:  # noqa: N802
+        return self.render_frame
+
+    @property
+    def timelineSample(self) -> int:  # noqa: N802
+        return self.timeline_sample
+
+    @property
+    def audibleTimelineSample(self) -> int:  # noqa: N802
+        return self.audible_timeline_sample
+
+    @property
+    def graphLatencySamplesQ8(self) -> int:  # noqa: N802
+        return self.graph_latency_samples_q8
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterInfo:
+    """DAW parameter metadata for automation/introspection UIs."""
+
+    id: int
+    name: str
+    unit: str
+    min_value: float
+    max_value: float
+    default_value: float
+    rt_safe: bool
+    default_curve: AutomationPointCurve
+
+
+@dataclass(frozen=True, slots=True)
+class AutomationPoint:
+    """PPQ automation breakpoint."""
+
+    ppq: float
+    value: float
+    curve_to_next: AutomationPointCurve = AutomationPointCurve.LINEAR
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMarker:
+    """Timeline marker used by the realtime engine transport."""
+
+    id: int
+    ppq: float
+    name: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMetronomeConfig:
+    """Realtime engine metronome click configuration."""
+
+    enabled: bool = False
+    beat_gain: float = 0.35
+    accent_gain: float = 0.7
+    click_samples: int = 96
+
+
+@dataclass(frozen=True, slots=True)
+class EngineClip:
+    """Owned audio clip schedule for realtime engine playback."""
+
+    id: int
+    channels: list[list[float]]
+    start_ppq: float
+    length_samples: int | None = None
+    clip_offset_samples: int = 0
+    loop: bool = False
+    gain: float = 1.0
+    fade_in_samples: int = 0
+    fade_out_samples: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineCaptureStatus:
+    """Capture progress for the realtime engine recording sink."""
+
+    captured_frames: int
+    overflow_count: int
+    armed: bool
+    punch_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class EngineBounceOptions:
+    """Offline export options for the realtime engine."""
+
+    total_frames: int
+    block_size: int = 128
+    num_channels: int = 2
+    target_sample_rate: int = 48000
+    source_sample_rate: int = 48000
+    normalize_lufs: bool = False
+    target_lufs: float = -14.0
+    dither: int = 0
+    dither_bits: int = 16
+    dither_seed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineBounceResult:
+    """Interleaved offline export result from the realtime engine."""
+
+    interleaved: list[float]
+    frames: int
+    num_channels: int
+    sample_rate: int
+    integrated_lufs: float
+
+
+@dataclass(frozen=True, slots=True)
+class EngineFreezeOptions:
+    """Offline freeze options for replacing current engine output with a clip."""
+
+    total_frames: int
+    block_size: int = 128
+    num_channels: int = 2
+    clip_id: int = 1
+    start_ppq: float = 0.0
+    gain: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineFreezeResult:
+    """Result of freezing current engine output into a scheduled clip."""
+
+    clip_id: int
+    frames: int
+    num_channels: int
+
+
+class EngineGraphNodeType(IntEnum):
+    """Builtin processor node type for realtime engine graphs."""
+
+    PASS_THROUGH = 0
+    GAIN = 1
+
+
+class EngineGraphMix(IntEnum):
+    """Connection mix mode for realtime engine graphs."""
+
+    REPLACE = 0
+    ADD = 1
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphNode:
+    """Prepared realtime engine graph node."""
+
+    id: str
+    type: EngineGraphNodeType = EngineGraphNodeType.PASS_THROUGH
+    gain_db: float = 0.0
+    num_ports: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphConnection:
+    """Prepared realtime engine graph connection."""
+
+    source_node: str
+    source_port: int
+    dest_node: str
+    dest_port: int
+    mix: EngineGraphMix = EngineGraphMix.ADD
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphParameterBinding:
+    """Map an engine automation parameter id to a graph node processor."""
+
+    param_id: int
+    node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphSpec:
+    """Prepared realtime engine graph specification."""
+
+    nodes: list[EngineGraphNode]
+    connections: list[EngineGraphConnection]
+    input_node: str
+    output_node: str
+    num_channels: int = 2
+    parameter_bindings: list[EngineGraphParameterBinding] | None = None

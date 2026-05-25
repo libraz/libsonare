@@ -12,6 +12,9 @@ import {
   detectBeats,
   detectBpm,
   detectKey,
+  engineAbiVersion,
+  engineCapabilities,
+  EXPECTED_ENGINE_ABI_VERSION,
   fixFrames,
   fixLength,
   frameSignal,
@@ -40,6 +43,7 @@ import {
   plp,
   powerToDb,
   preemphasis,
+  RealtimeEngine,
   StreamingEqualizer,
   StreamingMasteringChain,
   samplesToFrames,
@@ -64,6 +68,242 @@ describe('Sonare WASM Module', () => {
     it('should return version string', () => {
       const v = version();
       expect(v).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    it('should return engine ABI version', () => {
+      expect(engineAbiVersion()).toBeGreaterThan(0);
+    });
+
+    it('reports realtime engine capabilities and ABI compatibility', () => {
+      const capabilities = engineCapabilities();
+      expect(capabilities.engineAbiVersion).toBe(EXPECTED_ENGINE_ABI_VERSION);
+      expect(capabilities.abiCompatible).toBe(true);
+      expect(capabilities.mode === 'sab' || capabilities.mode === 'postMessage').toBe(true);
+    });
+
+    it('loads the dedicated sonare-rt target and processes an audio block through the C ABI', async () => {
+      const { default: createSonareRt } = (await import('../dist/sonare-rt.js')) as {
+        default: (options?: { locateFile?: (path: string) => string }) => Promise<{
+          _malloc: (size: number) => number;
+          _free: (ptr: number) => void;
+          _sonare_rt_engine_abi_version: () => number;
+          _sonare_rt_engine_create: () => number;
+          _sonare_rt_engine_prepare: (
+            engine: number,
+            sampleRate: number,
+            maxBlockSize: number,
+            commandCapacity: number,
+            telemetryCapacity: number,
+          ) => number;
+          _sonare_rt_engine_play: (engine: number, renderFrame: bigint) => number;
+          _sonare_rt_engine_process: (
+            engine: number,
+            channelsPtr: number,
+            numChannels: number,
+            numFrames: number,
+          ) => void;
+          _sonare_rt_engine_seek_sample: (
+            engine: number,
+            timelineSample: bigint,
+            renderFrame: bigint,
+          ) => number;
+          _sonare_rt_engine_drain_telemetry: (
+            engine: number,
+            typesErrorsValuesPtr: number,
+            frameValuesPtr: number,
+            maxRecords: number,
+          ) => number;
+          _sonare_rt_engine_destroy: (engine: number) => void;
+        }>;
+      };
+      const memory = new WebAssembly.Memory({ initial: 1024, maximum: 1024, shared: true });
+      const rt = await createSonareRt({
+        wasmMemory: memory,
+        locateFile: (path) => new URL(`../dist/${path}`, import.meta.url).pathname,
+      } as Parameters<typeof createSonareRt>[0]);
+      expect(rt._sonare_rt_engine_abi_version()).toBe(EXPECTED_ENGINE_ABI_VERSION);
+      const engine = rt._sonare_rt_engine_create();
+      expect(engine).toBeGreaterThan(0);
+      expect(rt._sonare_rt_engine_prepare(engine, 48000, 128, 64, 64)).toBe(1);
+      expect(rt._sonare_rt_engine_play(engine, -1n)).toBe(1);
+
+      const frames = 128;
+      const leftPtr = rt._malloc(frames * Float32Array.BYTES_PER_ELEMENT);
+      const rightPtr = rt._malloc(frames * Float32Array.BYTES_PER_ELEMENT);
+      const channelPtr = rt._malloc(2 * Uint32Array.BYTES_PER_ELEMENT);
+      const telemetryIntsPtr = rt._malloc(4 * Int32Array.BYTES_PER_ELEMENT);
+      const telemetryFramesPtr = rt._malloc(3 * Float64Array.BYTES_PER_ELEMENT);
+      const samples = new Float32Array(memory.buffer);
+      const pointers = new Uint32Array(memory.buffer);
+      const telemetryInts = new Int32Array(memory.buffer);
+      const telemetryFrames = new Float64Array(memory.buffer);
+      for (let i = 0; i < frames; i++) {
+        samples[(leftPtr >> 2) + i] = i / frames;
+        samples[(rightPtr >> 2) + i] = -i / frames;
+      }
+      pointers[channelPtr >> 2] = leftPtr;
+      pointers[(channelPtr >> 2) + 1] = rightPtr;
+
+      rt._sonare_rt_engine_process(engine, channelPtr, 2, frames);
+
+      expect(samples[leftPtr >> 2]).toBeCloseTo(0, 6);
+      expect(samples[(leftPtr >> 2) + 127]).toBeCloseTo(127 / 128, 6);
+      expect(samples[rightPtr >> 2]).toBeCloseTo(0, 6);
+      expect(samples[(rightPtr >> 2) + 127]).toBeCloseTo(-127 / 128, 6);
+      expect(
+        rt._sonare_rt_engine_drain_telemetry(engine, telemetryIntsPtr, telemetryFramesPtr, 1),
+      ).toBe(1);
+      expect(telemetryInts[telemetryIntsPtr >> 2]).toBe(0);
+      expect(telemetryFrames[telemetryFramesPtr >> 3]).toBe(0);
+      expect(telemetryFrames[(telemetryFramesPtr >> 3) + 1]).toBe(128);
+
+      expect(rt._sonare_rt_engine_seek_sample(engine, 48000n, -1n)).toBe(1);
+      rt._sonare_rt_engine_process(engine, channelPtr, 2, frames);
+      expect(
+        rt._sonare_rt_engine_drain_telemetry(engine, telemetryIntsPtr, telemetryFramesPtr, 1),
+      ).toBe(1);
+      expect(telemetryFrames[(telemetryFramesPtr >> 3) + 1]).toBe(48000 + 128);
+
+      rt._free(telemetryFramesPtr);
+      rt._free(telemetryIntsPtr);
+      rt._free(channelPtr);
+      rt._free(rightPtr);
+      rt._free(leftPtr);
+      rt._sonare_rt_engine_destroy(engine);
+    });
+
+    it('processes realtime engine clips, capture, and telemetry', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(60);
+      engine.setTimeSignature(3, 4);
+      engine.setMarkers([
+        { id: 11, ppq: 1, name: 'intro' },
+        { id: 12, ppq: 2, name: 'out' },
+      ]);
+      expect(engine.markerCount()).toBe(2);
+      expect(engine.markerByIndex(0).name).toBe('intro');
+      expect(engine.marker(12).ppq).toBe(2);
+      engine.setLoopFromMarkers(11, 12);
+      engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
+      expect(engine.metronome().enabled).toBe(true);
+      expect(engine.countInEndSample(0, 2)).toBe(288000);
+      engine.setMetronome({ enabled: false });
+      engine.addParameter({
+        id: 7,
+        name: 'gain',
+        unit: 'dB',
+        minValue: -60,
+        maxValue: 12,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 1,
+      });
+      expect(engine.parameterCount()).toBe(1);
+      expect(engine.parameterInfo(7).name).toBe('gain');
+      expect(engine.parameterInfoByIndex(0).unit).toBe('dB');
+      engine.setAutomationLane(7, [
+        { ppq: 0, value: 0 },
+        { ppq: 1, value: 6.0205999, curveToNext: 1 },
+      ]);
+      expect(engine.automationLaneCount()).toBe(1);
+      engine.setGraph({
+        nodes: [
+          { id: 'in', numPorts: 2 },
+          { id: 'gain', type: 1, gainDb: 0, numPorts: 2 },
+          { id: 'out', numPorts: 2 },
+        ],
+        connections: [
+          { sourceNode: 'in', sourcePort: 0, destNode: 'gain', destPort: 0 },
+          { sourceNode: 'in', sourcePort: 1, destNode: 'gain', destPort: 1 },
+          { sourceNode: 'gain', sourcePort: 0, destNode: 'out', destPort: 0 },
+          { sourceNode: 'gain', sourcePort: 1, destNode: 'out', destPort: 1 },
+        ],
+        inputNode: 'in',
+        outputNode: 'out',
+        numChannels: 2,
+        parameterBindings: [{ paramId: 7, nodeId: 'gain' }],
+      });
+      expect(engine.graphNodeCount()).toBe(3);
+      expect(engine.graphConnectionCount()).toBe(4);
+      engine.setClips([
+        {
+          id: 101,
+          channels: [new Float32Array(128).fill(0.125), new Float32Array(128).fill(-0.125)],
+          startPpq: 1,
+          lengthSamples: 128,
+        },
+      ]);
+      expect(engine.clipCount()).toBe(1);
+      engine.setCaptureBuffer(2, 128);
+      engine.setCapturePunch(48000, 48128);
+      engine.seekMarker(11);
+      engine.play();
+
+      const processed = engine.process([
+        new Float32Array(128).fill(0.25),
+        new Float32Array(128).fill(-0.25),
+      ]);
+      expect(processed[0][0]).toBeCloseTo(0.75, 4);
+      expect(processed[1][0]).toBeCloseTo(-0.75, 4);
+
+      engine.armCapture();
+      engine.seekMarker(11);
+      const capturedBlock = engine.process([
+        new Float32Array(128).fill(0.25),
+        new Float32Array(128).fill(-0.25),
+      ]);
+      expect(capturedBlock[0][0]).toBeCloseTo(0.75, 4);
+      const captureStatus = engine.captureStatus();
+      expect(captureStatus.capturedFrames).toBe(128);
+      expect(captureStatus.overflowCount).toBe(0);
+      expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.75, 4);
+      engine.resetCapture();
+      expect(engine.captureStatus().capturedFrames).toBe(0);
+
+      const telemetry = engine.drainTelemetry();
+      expect(telemetry.length).toBeGreaterThan(0);
+      expect(telemetry.at(-1)?.timelineSample).toBe(48000 + 128);
+      const meters = engine.drainMeterTelemetry();
+      expect(meters.length).toBeGreaterThan(0);
+      expect(meters.at(-1)).toMatchObject({ targetId: 0 });
+      expect(meters.at(-1)?.peakDbL).toBeGreaterThan(-20);
+      const bounced = engine.bounceOffline({
+        totalFrames: 256,
+        blockSize: 128,
+        numChannels: 2,
+        sourceSampleRate: 48000,
+        targetSampleRate: 24000,
+      });
+      expect(bounced.frames).toBe(128);
+      expect(bounced.numChannels).toBe(2);
+      expect(bounced.sampleRate).toBe(24000);
+      expect(bounced.interleaved.length).toBe(256);
+      expect(Number.isFinite(bounced.integratedLufs) || !Number.isNaN(bounced.integratedLufs)).toBe(
+        true,
+      );
+      engine.setClips([
+        {
+          id: 202,
+          channels: [new Float32Array(128).fill(0.125), new Float32Array(128).fill(-0.25)],
+          startPpq: 0,
+          lengthSamples: 128,
+        },
+      ]);
+      engine.seekSample(0);
+      const frozen = engine.freezeOffline({
+        totalFrames: 128,
+        blockSize: 128,
+        numChannels: 2,
+        clipId: 77,
+      });
+      expect(frozen.clipId).toBe(77);
+      expect(frozen.frames).toBe(128);
+      expect(frozen.numChannels).toBe(2);
+      engine.seekSample(0);
+      const frozenRendered = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      expect(frozenRendered[0][0]).toBeCloseTo(0.125, 4);
+      expect(frozenRendered[1][0]).toBeCloseTo(-0.25, 4);
+      engine.destroy();
     });
 
     it('should allow retry after failed init', async () => {

@@ -17,6 +17,7 @@ from ._analysis import (
     detect_key,
     detect_key_candidates,
     detect_onsets,
+    engine_abi_version,
     has_ffmpeg_support,
     version,
 )
@@ -127,6 +128,7 @@ __all__ = [
     "detect_key",
     "detect_key_candidates",
     "detect_onsets",
+    "engine_abi_version",
     "has_ffmpeg_support",
     "version",
     "harmonic",

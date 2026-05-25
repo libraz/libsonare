@@ -659,6 +659,11 @@ def version() -> str:
     return v.decode("utf-8") if v else ""
 
 
+def engine_abi_version() -> int:
+    """Return the realtime engine ABI version used for binding compatibility checks."""
+    return int(_get_lib().sonare_engine_abi_version())
+
+
 def has_ffmpeg_support() -> bool:
     """Return whether the loaded libsonare was compiled with FFmpeg support.
 

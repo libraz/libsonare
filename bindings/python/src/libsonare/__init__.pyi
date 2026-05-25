@@ -67,6 +67,9 @@ from .analyzer import (
     detect_onsets as detect_onsets,
 )
 from .analyzer import (
+    engine_abi_version as engine_abi_version,
+)
+from .analyzer import (
     fix_frames as fix_frames,
 )
 from .analyzer import (
@@ -268,6 +271,7 @@ from .analyzer import (
     zero_crossing_rate as zero_crossing_rate,
 )
 from .audio import Audio as Audio
+from .engine import RealtimeEngine as RealtimeEngine
 from .types import (
     AcousticResult as AcousticResult,
 )
@@ -276,6 +280,12 @@ from .types import (
 )
 from .types import (
     AutomationCurve as AutomationCurve,
+)
+from .types import (
+    AutomationPoint as AutomationPoint,
+)
+from .types import (
+    AutomationPointCurve as AutomationPointCurve,
 )
 from .types import (
     BpmAnalysisResult as BpmAnalysisResult,
@@ -294,6 +304,57 @@ from .types import (
 )
 from .types import (
     DynamicsResult as DynamicsResult,
+)
+from .types import (
+    EngineBounceOptions as EngineBounceOptions,
+)
+from .types import (
+    EngineBounceResult as EngineBounceResult,
+)
+from .types import (
+    EngineCaptureStatus as EngineCaptureStatus,
+)
+from .types import (
+    EngineClip as EngineClip,
+)
+from .types import (
+    EngineFreezeOptions as EngineFreezeOptions,
+)
+from .types import (
+    EngineFreezeResult as EngineFreezeResult,
+)
+from .types import (
+    EngineGraphConnection as EngineGraphConnection,
+)
+from .types import (
+    EngineGraphMix as EngineGraphMix,
+)
+from .types import (
+    EngineGraphNode as EngineGraphNode,
+)
+from .types import (
+    EngineGraphNodeType as EngineGraphNodeType,
+)
+from .types import (
+    EngineGraphParameterBinding as EngineGraphParameterBinding,
+)
+from .types import (
+    EngineGraphSpec as EngineGraphSpec,
+)
+from .types import (
+    EngineMarker as EngineMarker,
+)
+from .types import (
+    EngineMetronomeConfig as EngineMetronomeConfig,
+)
+from .types import (
+    EngineTelemetry as EngineTelemetry,
+)
+from .types import (
+    EngineTelemetryError as EngineTelemetryError,
+)
+from .types import (
+    EngineTelemetryType as EngineTelemetryType,
 )
 from .types import (
     EqSpectrumSnapshot as EqSpectrumSnapshot,
@@ -342,6 +403,9 @@ from .types import (
 )
 from .types import (
     Mode as Mode,
+)
+from .types import (
+    ParameterInfo as ParameterInfo,
 )
 from .types import (
     PitchClass as PitchClass,

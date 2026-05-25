@@ -138,6 +138,19 @@ file(GLOB_RECURSE SONARE_RT_SOURCES CONFIGURE_DEPENDS
   ${SONARE_ROOT}/src/rt/*.cpp
 )
 list(APPEND SONARE_SOURCES ${SONARE_RT_SOURCES})
+file(GLOB_RECURSE SONARE_TRANSPORT_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/transport/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_TRANSPORT_SOURCES})
+file(GLOB_RECURSE SONARE_AUTOMATION_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/automation/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_AUTOMATION_SOURCES})
+file(GLOB_RECURSE SONARE_ENGINE_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/engine/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_ENGINE_SOURCES})
+list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/sonare_c_daw.cpp)
 list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/sonare_c_mixing.cpp)
 # sonare_c_mixing.cpp routes the mixer through the routing graph.
 list(APPEND SONARE_SOURCES
@@ -167,6 +180,7 @@ set(KISSFFT_SOURCES
 # Addon sources
 set(ADDON_SOURCES
   src/addon/addon.cpp
+  src/addon/sonare_wrap_engine.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_analysis.cpp
   src/addon/sonare_wrap_effects.cpp
@@ -264,6 +278,9 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   NAPI_DISABLE_CPP_EXCEPTIONS
   KISS_FFT_FIXED=0
+  SONARE_WITH_GRAPH=1
+  SONARE_WITH_PITCH_EDITOR=1
+  SONARE_WITH_VOICE_CHANGER=1
   # Enable the effects.reverb.* branch of the channel-strip insert factory
   # (mirrors src/CMakeLists.txt's sonare_mastering + sonare_fx wiring).
   SONARE_HAVE_FX

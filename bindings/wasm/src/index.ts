@@ -72,9 +72,23 @@ import type {
   WasmCyclicTempogramResult,
   WasmFourierTempogramResult,
   WasmFrameResult,
+  WasmEngineCaptureStatus,
+  WasmEngineAutomationPoint,
+  WasmEngineBounceOptions,
+  WasmEngineBounceResult,
+  WasmEngineClip,
+  WasmEngineFreezeOptions,
+  WasmEngineFreezeResult,
+  WasmEngineGraphSpec,
+  WasmEngineMarker,
+  WasmEngineMeterTelemetry,
+  WasmEngineMetronomeConfig,
+  WasmEngineParameterInfo,
+  WasmEngineTelemetry,
   WasmKeyCandidateResult,
   WasmNnlsChromaResult,
   WasmStreamAnalyzer,
+  WasmRealtimeEngine,
   WasmTempogramResult,
   WasmTrimResult,
 } from './wasm_types';
@@ -149,6 +163,32 @@ export type {
   StreamConfig,
 } from './stream_types';
 export type { ProgressCallback } from './wasm_types';
+
+export type EngineClip = WasmEngineClip;
+export type EngineParameterInfo = WasmEngineParameterInfo;
+export type EngineAutomationPoint = WasmEngineAutomationPoint;
+export type EngineMarker = WasmEngineMarker;
+export type EngineMetronomeConfig = WasmEngineMetronomeConfig;
+export type EngineGraphSpec = WasmEngineGraphSpec;
+export type EngineCaptureStatus = WasmEngineCaptureStatus;
+export type EngineBounceOptions = WasmEngineBounceOptions;
+export type EngineBounceResult = WasmEngineBounceResult;
+export type EngineFreezeOptions = WasmEngineFreezeOptions;
+export type EngineFreezeResult = WasmEngineFreezeResult;
+export type EngineTelemetry = WasmEngineTelemetry;
+export type EngineMeterTelemetry = WasmEngineMeterTelemetry;
+
+export const EXPECTED_ENGINE_ABI_VERSION = 2;
+
+export interface EngineCapabilities {
+  engineAbiVersion: number;
+  expectedEngineAbiVersion: number;
+  abiCompatible: boolean;
+  sharedArrayBuffer: boolean;
+  atomics: boolean;
+  audioWorklet: boolean;
+  mode: 'sab' | 'postMessage';
+}
 
 export interface MixerRealtimeBuffer {
   leftInputs: Float32Array[];
@@ -243,6 +283,213 @@ export function version(): string {
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.version();
+}
+
+export function engineAbiVersion(): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.engineAbiVersion();
+}
+
+export function engineCapabilities(): EngineCapabilities {
+  const abiVersion = engineAbiVersion();
+  const sharedArrayBuffer = typeof globalThis.SharedArrayBuffer === 'function';
+  const atomics = typeof globalThis.Atomics === 'object';
+  const audioWorklet =
+    typeof AudioWorkletNode !== 'undefined' ||
+    typeof (globalThis as typeof globalThis & { AudioWorkletProcessor?: unknown })
+      .AudioWorkletProcessor !== 'undefined';
+  return {
+    engineAbiVersion: abiVersion,
+    expectedEngineAbiVersion: EXPECTED_ENGINE_ABI_VERSION,
+    abiCompatible: abiVersion === EXPECTED_ENGINE_ABI_VERSION,
+    sharedArrayBuffer,
+    atomics,
+    audioWorklet,
+    mode: sharedArrayBuffer && atomics ? 'sab' : 'postMessage',
+  };
+}
+
+export class RealtimeEngine {
+  private native: WasmRealtimeEngine;
+
+  constructor(sampleRate = 48000, maxBlockSize = 128) {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    const capabilities = engineCapabilities();
+    if (!capabilities.abiCompatible) {
+      throw new Error(
+        `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
+      );
+    }
+    this.native = new module.RealtimeEngine(sampleRate, maxBlockSize);
+  }
+
+  prepare(sampleRate: number, maxBlockSize: number): void {
+    this.native.prepare(sampleRate, maxBlockSize);
+  }
+
+  play(renderFrame = -1): void {
+    this.native.play(renderFrame);
+  }
+
+  stop(renderFrame = -1): void {
+    this.native.stop(renderFrame);
+  }
+
+  seekSample(timelineSample: number, renderFrame = -1): void {
+    this.native.seekSample(timelineSample, renderFrame);
+  }
+
+  seekPpq(ppq: number, renderFrame = -1): void {
+    this.native.seekPpq(ppq, renderFrame);
+  }
+
+  setTempo(bpm: number): void {
+    this.native.setTempo(bpm);
+  }
+
+  setTimeSignature(numerator: number, denominator: number): void {
+    this.native.setTimeSignature(numerator, denominator);
+  }
+
+  setLoop(startPpq: number, endPpq: number, enabled = true): void {
+    this.native.setLoop(startPpq, endPpq, enabled);
+  }
+
+  addParameter(info: EngineParameterInfo): void {
+    this.native.addParameter(info);
+  }
+
+  parameterCount(): number {
+    return this.native.parameterCount();
+  }
+
+  parameterInfoByIndex(index: number): EngineParameterInfo {
+    return this.native.parameterInfoByIndex(index);
+  }
+
+  parameterInfo(id: number): EngineParameterInfo {
+    return this.native.parameterInfo(id);
+  }
+
+  setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
+    this.native.setAutomationLane(paramId, points);
+  }
+
+  automationLaneCount(): number {
+    return this.native.automationLaneCount();
+  }
+
+  setMarkers(markers: EngineMarker[]): void {
+    this.native.setMarkers(markers);
+  }
+
+  markerCount(): number {
+    return this.native.markerCount();
+  }
+
+  markerByIndex(index: number): EngineMarker {
+    return this.native.markerByIndex(index);
+  }
+
+  marker(id: number): EngineMarker {
+    return this.native.marker(id);
+  }
+
+  seekMarker(id: number): void {
+    this.native.seekMarker(id);
+  }
+
+  setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
+    this.native.setLoopFromMarkers(startMarkerId, endMarkerId);
+  }
+
+  setMetronome(config: EngineMetronomeConfig): void {
+    this.native.setMetronome(config);
+  }
+
+  metronome(): Required<EngineMetronomeConfig> {
+    return this.native.metronome();
+  }
+
+  countInEndSample(startSample: number, bars: number): number {
+    return Number(this.native.countInEndSample(startSample, bars));
+  }
+
+  setGraph(spec: EngineGraphSpec): void {
+    this.native.setGraph(spec);
+  }
+
+  graphNodeCount(): number {
+    return this.native.graphNodeCount();
+  }
+
+  graphConnectionCount(): number {
+    return this.native.graphConnectionCount();
+  }
+
+  setClips(clips: EngineClip[]): void {
+    this.native.setClips(clips);
+  }
+
+  clipCount(): number {
+    return this.native.clipCount();
+  }
+
+  setCaptureBuffer(numChannels: number, capacityFrames: number): void {
+    this.native.setCaptureBuffer(numChannels, capacityFrames);
+  }
+
+  armCapture(armed = true): void {
+    this.native.armCapture(armed);
+  }
+
+  setCapturePunch(startSample: number, endSample: number, enabled = true): void {
+    this.native.setCapturePunch(startSample, endSample, enabled);
+  }
+
+  resetCapture(): void {
+    this.native.resetCapture();
+  }
+
+  captureStatus(): EngineCaptureStatus {
+    return this.native.captureStatus();
+  }
+
+  capturedAudio(): Float32Array[] {
+    return this.native.capturedAudio();
+  }
+
+  process(channels: Float32Array[]): Float32Array[] {
+    return this.native.process(channels);
+  }
+
+  renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {
+    return this.native.renderOffline(channels, blockSize);
+  }
+
+  bounceOffline(options: EngineBounceOptions): EngineBounceResult {
+    return this.native.bounceOffline(options);
+  }
+
+  freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
+    return this.native.freezeOffline(options);
+  }
+
+  drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
+    return this.native.drainTelemetry(maxRecords);
+  }
+
+  drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
+    return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  destroy(): void {
+    this.native.delete();
+  }
 }
 
 // ============================================================================
