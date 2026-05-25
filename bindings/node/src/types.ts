@@ -324,6 +324,7 @@ export interface MasteringChainStereoResult {
 export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
 
 export interface MixOptions {
+  inputTrimDb?: number | number[];
   faderDb?: number | number[];
   pan?: number | number[];
   panMode?: PanMode | PanMode[];
@@ -460,6 +461,7 @@ export interface EqBandInput {
   attackMs?: number;
   releaseMs?: number;
   lookaheadMs?: number;
+  externalSidechain?: boolean;
   sidechainFreqHz?: number;
   sidechainQ?: number;
 }
@@ -472,5 +474,6 @@ export interface EqSpectrumSnapshot {
   postRight: Float32Array;
   bandGainDb: Float32Array;
   profileDb: Float32Array;
+  lastAutoGainDb: number;
   seq: number;
 }

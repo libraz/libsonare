@@ -44,13 +44,6 @@ void copy_to_taps(float* const* channels, std::vector<std::vector<float>>& taps,
   }
 }
 
-void process_inserts(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
-                     float* const* channels, int num_channels, int num_samples) {
-  for (auto& insert : inserts) {
-    insert->process(channels, num_channels, num_samples);
-  }
-}
-
 int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
   int total = 0;
   for (const auto& insert : inserts) {
@@ -89,7 +82,8 @@ int next_event_offset(const std::array<AutomationBlockEvent, Capacity>& events, 
 }  // namespace
 
 ChannelStrip::ChannelStrip(ChannelStripConfig config)
-    : fader_({config.fader_db, config.smoothing_ms}),
+    : input_trim_({config.input_trim_db, config.smoothing_ms}),
+      fader_({config.fader_db, config.smoothing_ms}),
       panner_({config.pan, config.pan_law, config.smoothing_ms}),
       width_(1.0f, config.smoothing_ms),
       eq_position_(config.eq_position) {}
@@ -98,6 +92,7 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = std::max(0, max_block_size);
 
+  input_trim_.prepare(sample_rate, max_block_size);
   fader_.prepare(sample_rate, max_block_size);
   panner_.prepare(sample_rate, max_block_size);
   width_.prepare(sample_rate, max_block_size);
@@ -245,6 +240,8 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
     return;
   }
 
+  input_trim_.process(channels, num_channels, num_samples);
+
   const float polarity_l = polarity_left_.load(std::memory_order_relaxed);
   const float polarity_r = polarity_right_.load(std::memory_order_relaxed);
   if (channels[0] != nullptr) {
@@ -263,10 +260,10 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
     eq_.process(channels, num_channels, num_samples);
   }
-  process_inserts(pre_inserts_, channels, num_channels, num_samples);
+  process_insert_chain(pre_inserts_, channels, num_channels, num_samples, 0, 0);
   const float pre_gain_reduction_db = aggregate_gain_reduction_db(pre_inserts_);
 
-  // Pre-fader tap (after polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux sends.
+  // Pre-fader tap (after trim, polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux.
   copy_to_taps(channels, pre_tap_, num_channels, clamped_samples);
   pre_meter_.set_gain_reduction_db(pre_gain_reduction_db);
   pre_meter_.process(channels, num_channels, num_samples);
@@ -277,7 +274,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(channels, num_channels, num_samples);
   }
-  process_inserts(post_inserts_, channels, num_channels, num_samples);
+  process_insert_chain(post_inserts_, channels, num_channels, num_samples, pre_inserts_.size(), 0);
   const float post_gain_reduction_db =
       std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
   post_meter_.set_gain_reduction_db(post_gain_reduction_db);
@@ -304,6 +301,8 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   }
   float* const* segment = segment_channels.data();
 
+  input_trim_.process(segment, num_channels, num_samples);
+
   const float polarity_l = polarity_left_.load(std::memory_order_relaxed);
   const float polarity_r = polarity_right_.load(std::memory_order_relaxed);
   if (segment[0] != nullptr) {
@@ -322,7 +321,7 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
     eq_.process(segment, num_channels, num_samples);
   }
-  process_inserts(pre_inserts_, segment, num_channels, num_samples);
+  process_insert_chain(pre_inserts_, segment, num_channels, num_samples, 0, start);
   copy_to_taps(segment, pre_tap_, num_channels, num_samples, tap_offset);
 
   fader_.process(segment, num_channels, num_samples);
@@ -331,7 +330,8 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(segment, num_channels, num_samples);
   }
-  process_inserts(post_inserts_, segment, num_channels, num_samples);
+  process_insert_chain(post_inserts_, segment, num_channels, num_samples, pre_inserts_.size(),
+                       start);
   width_.process(segment, num_channels, num_samples);
 
   if (num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
@@ -342,7 +342,36 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   copy_to_taps(segment, post_tap_, num_channels, num_samples, tap_offset);
 }
 
+void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
+                                        float* const* channels, int num_channels, int num_samples,
+                                        size_t first_insert_index, int sidechain_offset) {
+  std::array<const float*, kPreparedChannels> shifted_sidechain{};
+  for (size_t local = 0; local < inserts.size(); ++local) {
+    const size_t index = first_insert_index + local;
+    const InsertSidechain* key =
+        index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
+    if (key != nullptr && key->channels != nullptr && key->num_channels > 0 &&
+        key->num_samples > sidechain_offset) {
+      const int rows = std::min<int>(key->num_channels, kPreparedChannels);
+      const int remaining = key->num_samples - sidechain_offset;
+      for (int ch = 0; ch < rows; ++ch) {
+        shifted_sidechain[static_cast<size_t>(ch)] =
+            key->channels[ch] == nullptr ? nullptr : key->channels[ch] + sidechain_offset;
+      }
+      inserts[local]->set_sidechain(shifted_sidechain.data(), rows,
+                                    std::min(num_samples, remaining));
+    } else if (key != nullptr && key->managed) {
+      inserts[local]->clear_sidechain();
+    } else {
+      // Leave directly configured processor sidechains intact. Graph-managed
+      // keys are marked through set_insert_sidechain().
+    }
+    inserts[local]->process(channels, num_channels, num_samples);
+  }
+}
+
 void ChannelStrip::reset() {
+  input_trim_.reset();
   alignment_delay_.reset();
   fader_.reset();
   panner_.reset();
@@ -498,6 +527,7 @@ void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor) 
     processor->prepare(sample_rate_, max_block_size_);
   }
   pre_inserts_.push_back(std::move(processor));
+  insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
 }
 
 void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor) {
@@ -508,6 +538,29 @@ void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor)
     processor->prepare(sample_rate_, max_block_size_);
   }
   post_inserts_.push_back(std::move(processor));
+  insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
+}
+
+void ChannelStrip::set_insert_sidechain(unsigned int insert_index, const float* const* channels,
+                                        int num_channels, int num_samples) {
+  const size_t index = insert_index;
+  if (index >= pre_inserts_.size() + post_inserts_.size()) {
+    return;
+  }
+  if (insert_sidechains_.size() < pre_inserts_.size() + post_inserts_.size()) {
+    insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
+  }
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    insert_sidechains_[index] = {nullptr, 0, 0, true};
+    return;
+  }
+  insert_sidechains_[index] = {channels, num_channels, num_samples, true};
+}
+
+void ChannelStrip::clear_insert_sidechains() noexcept {
+  for (auto& sidechain : insert_sidechains_) {
+    sidechain = {};
+  }
 }
 
 size_t ChannelStrip::add_send(const SendConfig& cfg) {

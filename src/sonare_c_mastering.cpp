@@ -405,6 +405,8 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
       json_number_any(json, "sidechainFreqHz", "sidechain_freq_hz", band.dyn.sidechain_freq_hz));
   band.dyn.sidechain_q =
       static_cast<float>(json_number_any(json, "sidechainQ", "sidechain_q", band.dyn.sidechain_q));
+  band.dyn.external_sidechain =
+      json_bool_any(json, "externalSidechain", "external_sidechain", band.dyn.external_sidechain);
   return band;
 }
 
@@ -483,8 +485,47 @@ float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
   return eq ? eq->processor.last_auto_gain_db() : 0.0f;
 }
 
+SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_gain_scale(scale);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_output_gain_db(gain_db);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_output_pan(pan);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 int sonare_eq_latency_samples(const SonareEq* eq) {
   return eq ? eq->processor.latency_samples() : 0;
+}
+
+SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
+                                    int num_samples) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_sidechain(channels, num_channels, num_samples);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_eq_clear_sidechain(SonareEq* eq) {
+  if (eq) {
+    eq->processor.clear_sidechain();
+  }
 }
 
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
@@ -503,6 +544,7 @@ SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
   *out = {};
   out->pre_count = snapshot.pre_count;
   out->post_count = snapshot.post_count;
+  out->last_auto_gain_db = eq->processor.last_auto_gain_db();
   out->seq = snapshot.seq;
   for (size_t i = 0; i < SONARE_EQ_SPECTRUM_STREAM_CAPACITY; ++i) {
     out->pre_left[i] = snapshot.pre[i].left;

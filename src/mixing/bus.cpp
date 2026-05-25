@@ -1,14 +1,52 @@
 #include "mixing/bus.h"
 
 #include <algorithm>
+#include <stdexcept>
+#include <utility>
 
 namespace sonare::mixing {
 
 BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inputs_(max_inputs) {}
 
-void BusProcessor::prepare(double, int) {}
+void BusProcessor::prepare(double sample_rate, int max_block_size) {
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  max_block_size_ = max_block_size;
+  for (auto& insert : inserts_) {
+    insert->prepare(sample_rate_, max_block_size_);
+  }
+}
 
-void BusProcessor::process(float* const*, int, int) {}
+void BusProcessor::process(float* const* channels, int num_channels, int num_samples) {
+  for (size_t index = 0; index < inserts_.size(); ++index) {
+    const InsertSidechain* key =
+        index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
+    if (key != nullptr && key->channels != nullptr && key->num_channels > 0 &&
+        key->num_samples >= num_samples) {
+      inserts_[index]->set_sidechain(key->channels, key->num_channels, num_samples);
+    } else if (key != nullptr && key->managed) {
+      inserts_[index]->clear_sidechain();
+    } else {
+      // Leave directly configured processor sidechains intact.
+    }
+    inserts_[index]->process(channels, num_channels, num_samples);
+  }
+}
+
+void BusProcessor::reset() {
+  for (auto& insert : inserts_) {
+    insert->reset();
+  }
+}
+
+int BusProcessor::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
+
+int BusProcessor::latency_samples_q8() const noexcept {
+  int total = 0;
+  for (const auto& insert : inserts_) {
+    total += insert->latency_samples_q8();
+  }
+  return total;
+}
 
 void BusProcessor::sum_inputs(const std::vector<float* const*>& inputs, float* const* output,
                               int num_channels, int num_samples) const {
@@ -37,6 +75,39 @@ void BusProcessor::sum_inputs(const std::vector<float* const*>& inputs, float* c
         output[ch][i] += input[ch][i];
       }
     }
+  }
+}
+
+void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
+  if (!processor) {
+    throw std::invalid_argument("insert processor must not be null");
+  }
+  if (max_block_size_ > 0) {
+    processor->prepare(sample_rate_, max_block_size_);
+  }
+  inserts_.push_back(std::move(processor));
+  insert_sidechains_.resize(inserts_.size());
+}
+
+void BusProcessor::set_insert_sidechain(unsigned int insert_index, const float* const* channels,
+                                        int num_channels, int num_samples) {
+  const size_t index = insert_index;
+  if (index >= inserts_.size()) {
+    return;
+  }
+  if (insert_sidechains_.size() < inserts_.size()) {
+    insert_sidechains_.resize(inserts_.size());
+  }
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    insert_sidechains_[index] = {nullptr, 0, 0, true};
+    return;
+  }
+  insert_sidechains_[index] = {channels, num_channels, num_samples, true};
+}
+
+void BusProcessor::clear_insert_sidechains() noexcept {
+  for (auto& sidechain : insert_sidechains_) {
+    sidechain = {};
   }
 }
 

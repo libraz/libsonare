@@ -221,6 +221,28 @@ TEST_CASE("ParametricEq Vicanek shelves match low and high shelf intent", "[mast
   REQUIRE(rms_tail(high, 4096) / high2_before > 1.6f);
 }
 
+TEST_CASE("ParametricEq Vicanek high shelf falls back when endpoint error is excessive",
+          "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  constexpr float gain_db = 24.0f;
+  const float w0 = static_cast<float>(2.0 * kPiD * 18000.0 / sample_rate);
+  const auto coeffs = sonare::mastering::common::vicanek_high_shelf(w0, gain_db);
+
+  const float nyquist_mag = sonare::mastering::common::biquad_magnitude(
+      coeffs, static_cast<float>(sonare::constants::kPiD * 0.999));
+  REQUIRE_THAT(20.0f * std::log10(nyquist_mag), WithinAbs(gain_db, 0.05f));
+
+  ParametricEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_band(
+      0, {EqBandType::HighShelf, 18000.0f, gain_db, kButterworthQ, true, BiquadCoeffMode::Vicanek});
+
+  auto high = sine(23000.0f, sample_rate, sample_rate);
+  const float before = rms_tail(high, 4096);
+  process(eq, high);
+  REQUIRE(20.0f * std::log10(rms_tail(high, 4096) / before) > 22.0f);
+}
+
 TEST_CASE("ParametricEq disabled band is bypassed", "[mastering][eq]") {
   ParametricEq eq;
   eq.prepare(48000.0, 512);
@@ -586,6 +608,35 @@ TEST_CASE("EqualizerProcessor resolves inherited phase mode and enforces prepare
   REQUIRE(eq.latency_samples() > 0);
 }
 
+TEST_CASE(
+    "EqualizerProcessor per-band NaturalPhase uses Vicanek without changing the global default",
+    "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  EqBand requested{EqBandType::Peak, 12000.0f, 9.0f, 0.8f, true, BiquadCoeffMode::Rbj};
+  requested.phase = PhaseMode::NaturalPhase;
+
+  EqualizerProcessor eq({1});
+  eq.prepare(sample_rate, 4096);
+  REQUIRE(eq.phase_mode() == PhaseMode::ZeroLatency);
+  eq.set_band(0, requested);
+  REQUIRE(eq.band(0).coeff_mode == BiquadCoeffMode::Rbj);
+
+  ParametricEq reference;
+  reference.prepare(sample_rate, 512);
+  reference.set_band(0, {EqBandType::Peak, 12000.0f, 9.0f, 0.8f, true, BiquadCoeffMode::Vicanek});
+
+  auto expected = sine(12000.0f, sample_rate, 4096);
+  auto actual = expected;
+  process(reference, expected);
+  process(eq, actual);
+
+  double diff = 0.0;
+  for (size_t i = 0; i < actual.size(); ++i) {
+    diff += std::abs(static_cast<double>(actual[i] - expected[i]));
+  }
+  REQUIRE(diff < 1.0e-6);
+}
+
 TEST_CASE("EqualizerProcessor dynamic band attenuates above threshold on any of 24 bands",
           "[mastering][eq]") {
   constexpr int sample_rate = 48000;
@@ -617,6 +668,59 @@ TEST_CASE("EqualizerProcessor dynamic band attenuates above threshold on any of 
   REQUIRE(quiet_applied == 0.0f);
   REQUIRE(eq.last_applied_gain_db(23) < -3.0f);
   REQUIRE(loud_gain < quiet_gain * 0.8f);
+}
+
+TEST_CASE("EqualizerProcessor dynamic band can use an external sidechain", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  EqualizerProcessor eq({1});
+  eq.prepare(sample_rate, 4096);
+
+  EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
+  band.dyn.enabled = true;
+  band.dyn.external_sidechain = true;
+  band.dyn.threshold_db = -32.0f;
+  band.dyn.ratio = 4.0f;
+  band.dyn.range_db = -12.0f;
+  band.dyn.attack_ms = 0.0f;
+  band.dyn.release_ms = 10.0f;
+  eq.set_band(0, band);
+
+  auto quiet = sine(1000.0f, sample_rate, 4096, 0.005f);
+  auto internal = quiet;
+  process(eq, internal);
+  const float internal_gain = eq.last_applied_gain_db(0);
+
+  eq.reset();
+  quiet = sine(1000.0f, sample_rate, 4096, 0.005f);
+  auto key = sine(1000.0f, sample_rate, 4096, 0.8f);
+  const float* key_channels[] = {key.data()};
+  eq.set_sidechain(key_channels, 1, static_cast<int>(key.size()));
+  process(eq, quiet);
+
+  REQUIRE_THAT(internal_gain, WithinAbs(0.0f, 0.0001f));
+  REQUIRE(eq.last_band_detector_db(0) > -32.0f);
+  REQUIRE(eq.last_applied_gain_db(0) < -3.0f);
+  REQUIRE(rms_tail(quiet, 512) < rms_tail(internal, 512) * 0.8f);
+}
+
+TEST_CASE("EqualizerProcessor validates and clears external sidechain buffers", "[mastering][eq]") {
+  EqualizerProcessor eq({2});
+  eq.prepare(48000, 128);
+
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  const float* stereo_key[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(eq.set_sidechain(stereo_key, 2, 128));
+  eq.clear_sidechain();
+  REQUIRE_THROWS(eq.set_sidechain(nullptr, 1, 128));
+  const float* bad_key[] = {left.data(), nullptr};
+  REQUIRE_THROWS(eq.set_sidechain(bad_key, 2, 128));
+
+  REQUIRE_NOTHROW(eq.set_sidechain(stereo_key, 2, 64));
+  float* audio[] = {left.data(), right.data()};
+  REQUIRE_THROWS(eq.process(audio, 2, 128));
+
+  REQUIRE_NOTHROW(eq.set_sidechain(nullptr, 0, 0));
 }
 
 TEST_CASE("EqualizerProcessor dynamic auto-threshold is input-gain relative", "[mastering][eq]") {
@@ -666,6 +770,73 @@ TEST_CASE("EqualizerProcessor auto-gain compensates block RMS changes", "[master
   REQUIRE(rms_tail(plain_audio, 512) > before * 3.0f);
   REQUIRE(rms_tail(compensated_audio, 512) < rms_tail(plain_audio, 512) * 0.55f);
   REQUIRE(compensated.last_auto_gain_db() < -6.0f);
+}
+
+TEST_CASE("EqualizerProcessor gain scale controls applied static and dynamic gain",
+          "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+
+  EqualizerProcessor scaled({1});
+  scaled.prepare(sample_rate, 4096);
+  scaled.set_gain_scale(0.5f);
+  EqBand peak{EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true};
+  scaled.set_band(0, peak);
+
+  ParametricEq reference;
+  reference.prepare(sample_rate, 4096);
+  reference.set_band(0, {EqBandType::Peak, 1000.0f, 3.0f, 1.0f, true});
+
+  auto scaled_audio = sine(1000.0f, sample_rate, 4096, 0.1f);
+  auto reference_audio = scaled_audio;
+  process(scaled, scaled_audio);
+  process(reference, reference_audio);
+  REQUIRE_THAT(rms_tail(scaled_audio, 1024), WithinAbs(rms_tail(reference_audio, 1024), 0.002f));
+  REQUIRE_THAT(scaled.spectrum_snapshot().band_gain_db[0], WithinAbs(3.0f, 0.0001f));
+
+  EqualizerProcessor dynamic({1});
+  dynamic.prepare(sample_rate, 4096);
+  dynamic.set_gain_scale(0.5f);
+  EqBand dyn{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
+  dyn.dyn.enabled = true;
+  dyn.dyn.threshold_db = -40.0f;
+  dyn.dyn.ratio = 4.0f;
+  dyn.dyn.range_db = -12.0f;
+  dyn.dyn.attack_ms = 0.0f;
+  dyn.dyn.release_ms = 10.0f;
+  dynamic.set_band(0, dyn);
+  auto loud = sine(1000.0f, sample_rate, 4096, 0.5f);
+  process(dynamic, loud);
+  REQUIRE(dynamic.last_applied_gain_db(0) < -3.0f);
+  REQUIRE(dynamic.last_applied_gain_db(0) > -6.1f);
+  REQUIRE_THAT(dynamic.spectrum_snapshot().band_gain_db[0],
+               WithinAbs(dynamic.last_applied_gain_db(0), 0.0001f));
+}
+
+TEST_CASE("EqualizerProcessor output gain and pan apply after EQ", "[mastering][eq]") {
+  EqualizerProcessor eq({2});
+  eq.prepare(48000, 128);
+  eq.set_output_gain_db(6.0f);
+  eq.set_output_pan(1.0f);
+
+  std::vector<float> left(128, 0.25f);
+  std::vector<float> right(128, 0.25f);
+  process_stereo(eq, left, right);
+  REQUIRE(peak_abs(left) < 0.000001f);
+  REQUIRE_THAT(right[0], WithinAbs(0.25f * std::pow(10.0f, 6.0f / 20.0f), 0.0001f));
+
+  eq.reset();
+  eq.set_output_pan(-1.0f);
+  left.assign(128, 0.25f);
+  right.assign(128, 0.25f);
+  process_stereo(eq, left, right);
+  REQUIRE_THAT(left[0], WithinAbs(0.25f * std::pow(10.0f, 6.0f / 20.0f), 0.0001f));
+  REQUIRE(peak_abs(right) < 0.000001f);
+
+  eq.reset();
+  eq.set_output_pan(1.0f);
+  std::vector<float> mono(128, 0.25f);
+  process(eq, mono);
+  REQUIRE_THAT(mono[0], WithinAbs(0.25f * std::pow(10.0f, 6.0f / 20.0f), 0.0001f));
 }
 
 TEST_CASE("EqualizerProcessor soloed band listens through a bandpass region", "[mastering][eq]") {

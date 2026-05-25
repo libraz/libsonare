@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <memory>
 #include <vector>
 
@@ -31,6 +32,23 @@ float rms_tail(const std::vector<float>& samples, size_t skip) {
     ++count;
   }
   return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
+}
+
+double lagrange3_magnitude_db(double fractional_delay, double normalized_to_nyquist) {
+  const double mu = fractional_delay;
+  const std::array<double, 4> coeffs{
+      -mu * (mu - 1.0) * (mu - 2.0) / 6.0,
+      (mu + 1.0) * (mu - 1.0) * (mu - 2.0) / 2.0,
+      -(mu + 1.0) * mu * (mu - 2.0) / 2.0,
+      (mu + 1.0) * mu * (mu - 1.0) / 6.0,
+  };
+  const double omega = normalized_to_nyquist * sonare::constants::kPiD;
+  std::complex<double> response{0.0, 0.0};
+  for (size_t tap = 0; tap < coeffs.size(); ++tap) {
+    response += coeffs[tap] *
+                std::exp(std::complex<double>{0.0, -omega * (static_cast<double>(tap) - 1.0)});
+  }
+  return 20.0 * std::log10(std::abs(response));
 }
 
 }  // namespace
@@ -86,6 +104,26 @@ class ScaleProcessor final : public sonare::rt::ProcessorBase {
 
  private:
   float scale_ = 1.0f;
+};
+
+class AddProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit AddProcessor(float offset) : offset_(offset) {}
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) {
+        continue;
+      }
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] += offset_;
+      }
+    }
+  }
+  void reset() override {}
+
+ private:
+  float offset_ = 0.0f;
 };
 
 TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
@@ -236,6 +274,7 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
   REQUIRE(strip != nullptr);
+  REQUIRE(sonare_strip_set_input_trim_db(strip, 6.0f) == SONARE_OK);
   REQUIRE(sonare_strip_set_fader_db(strip, -3.0f) == SONARE_OK);
   REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
   REQUIRE(sonare_strip_set_width(strip, 1.2f) == SONARE_OK);
@@ -250,6 +289,7 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
   REQUIRE(json != nullptr);
   const std::string scene_json(json);
   REQUIRE(scene_json.find("\"vocal\"") != std::string::npos);
+  REQUIRE(scene_json.find("\"inputTrimDb\":6") != std::string::npos);
   REQUIRE(scene_json.find("\"vocal-to-verb\"") != std::string::npos);
   REQUIRE(scene_json.find("\"sendDb\":-10") != std::string::npos);
   sonare_free_string(json);
@@ -352,6 +392,7 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   sonare::mixing::api::Scene scene;
   sonare::mixing::api::Strip vocal;
   vocal.id = "vocal";
+  vocal.input_trim_db = 2.0f;
   vocal.fader_db = -3.0f;
   vocal.pan = -0.25f;
   vocal.width = 1.2f;
@@ -360,11 +401,16 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   vocal.solo_safe = false;
   vocal.inserts.push_back(
       {sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor", "{\"thresholdDb\":-18}"});
-  vocal.inserts.push_back(
-      {sonare::mixing::api::InsertSlot::PostFader, "eq.midSide", "{\"sideGain\":1}"});
+  vocal.inserts.push_back({sonare::mixing::api::InsertSlot::PostFader, "eq.equalizer",
+                           "{\"band0.externalSidechain\":1,\"band0.gainDb\":-3}", "kick"});
   vocal.sends.push_back({"verb-send", "verb", -12.0f, sonare::mixing::api::SendTiming::PostFader});
   scene.strips.push_back(vocal);
-  scene.buses.push_back({"verb", "aux"});
+  sonare::mixing::api::Bus verb_bus;
+  verb_bus.id = "verb";
+  verb_bus.role = "aux";
+  verb_bus.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "effects.reverb.plate", "{\"decaySec\":1.2}"});
+  scene.buses.push_back(verb_bus);
   scene.vca_groups.push_back({"lead", -1.5f, {"vocal"}});
   scene.connections.push_back({"vocal", "master"});
 
@@ -374,6 +420,7 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   REQUIRE(parsed.version == 1);
   REQUIRE(parsed.strips.size() == 1);
   REQUIRE(parsed.strips[0].id == "vocal");
+  REQUIRE_THAT(parsed.strips[0].input_trim_db, WithinAbs(2.0f, 0.0001f));
   REQUIRE_THAT(parsed.strips[0].fader_db, WithinAbs(-3.0f, 0.0001f));
   REQUIRE_THAT(parsed.strips[0].pan, WithinAbs(-0.25f, 0.0001f));
   REQUIRE_THAT(parsed.strips[0].width, WithinAbs(1.2f, 0.0001f));
@@ -382,10 +429,15 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   REQUIRE(parsed.strips[0].inserts[0].slot == sonare::mixing::api::InsertSlot::PreFader);
   REQUIRE(parsed.strips[0].inserts[0].processor_name == "dynamics.compressor");
   REQUIRE(parsed.strips[0].inserts[0].params_json == "{\"thresholdDb\":-18}");
+  REQUIRE(parsed.strips[0].inserts[1].processor_name == "eq.equalizer");
+  REQUIRE(parsed.strips[0].inserts[1].params_json.find("externalSidechain") != std::string::npos);
+  REQUIRE(parsed.strips[0].inserts[1].sidechain_key == "kick");
   REQUIRE(parsed.strips[0].sends.size() == 1);
   REQUIRE(parsed.strips[0].sends[0].destination_bus_id == "verb");
   REQUIRE(parsed.strips[0].sends[0].timing == sonare::mixing::api::SendTiming::PostFader);
   REQUIRE(parsed.buses[0].role == "aux");
+  REQUIRE(parsed.buses[0].inserts.size() == 1);
+  REQUIRE(parsed.buses[0].inserts[0].processor_name == "effects.reverb.plate");
   REQUIRE(parsed.vca_groups[0].members[0] == "vocal");
   REQUIRE(parsed.connections[0].destination == "master");
 }
@@ -469,6 +521,20 @@ TEST_CASE("GainProcessor applies fader and VCA offset", "[mixing]") {
   }
 }
 
+TEST_CASE("GainProcessor zero smoothing applies target without a second ramp", "[mixing]") {
+  std::array<float, 4> samples{1.0f, 1.0f, 1.0f, 1.0f};
+  float* channels[] = {samples.data()};
+
+  sonare::mixing::GainProcessor gain({0.0f, 0.0f});
+  gain.prepare(48000.0, 4);
+  gain.set_gain_db(-6.0206f);
+  gain.process(channels, 1, 4);
+
+  for (float sample : samples) {
+    REQUIRE_THAT(sample, WithinAbs(0.5f, 0.0001f));
+  }
+}
+
 TEST_CASE("ChannelStrip applies fader then pan", "[mixing]") {
   std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
   std::array<float, 4> right{1.0f, 1.0f, 1.0f, 1.0f};
@@ -483,6 +549,24 @@ TEST_CASE("ChannelStrip applies fader then pan", "[mixing]") {
   }
   for (float sample : right) {
     REQUIRE_THAT(sample, WithinAbs(1.0f, 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip input trim is independent from fader", "[mixing]") {
+  std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> right{1.0f, 1.0f, 1.0f, 1.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({-6.0206f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.set_input_trim_db(6.0206f);
+  strip.prepare(48000.0, 4);
+  strip.process(channels, 2, 4);
+
+  REQUIRE_THAT(strip.input_trim_db(), WithinAbs(6.0206f, 0.0001f));
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-6.0206f, 0.0001f));
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0002f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0002f));
   }
 }
 
@@ -542,6 +626,34 @@ TEST_CASE("ChannelStrip pre and post inserts wrap fader pan and width", "[mixing
     REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
     REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
   }
+}
+
+TEST_CASE("ChannelStrip input trim starts the fixed strip order", "[mixing]") {
+  std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> right{1.0f, 1.0f, 1.0f, 1.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({-6.0206f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.set_input_trim_db(6.0206f);
+  strip.add_pre_insert(std::make_unique<AddProcessor>(3.0f));
+  strip.add_post_insert(std::make_unique<ScaleProcessor>(5.0f));
+  strip.prepare(48000.0, 4);
+  const size_t pre_send = strip.add_send({0.0f, sonare::mixing::SendTiming::PreFader, 0.0f});
+  strip.process(channels, 2, 4);
+
+  std::array<float, 4> send_l{};
+  std::array<float, 4> send_r{};
+  float* send[] = {send_l.data(), send_r.data()};
+  strip.mix_send(pre_send, send, 2, 4);
+
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(send_l[static_cast<size_t>(i)], WithinAbs(5.0f, 0.0002f));
+    REQUIRE_THAT(send_r[static_cast<size_t>(i)], WithinAbs(5.0f, 0.0002f));
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(12.5f, 0.001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(12.5f, 0.001f));
+  }
+  REQUIRE(strip.meter_snapshot(sonare::mixing::TapPoint::PreFader).seq == 1);
+  REQUIRE(strip.meter_snapshot(sonare::mixing::TapPoint::PostFader).seq == 1);
 }
 
 TEST_CASE("ChannelStrip aggregates Q8 latency across delay and inserts", "[mixing]") {
@@ -865,6 +977,18 @@ TEST_CASE("AlignmentDelay reports Q8 fractional latency and interpolates impulse
   REQUIRE(nonzero >= 2);
 }
 
+TEST_CASE("AlignmentDelay Lagrange3 magnitude droop is documented by fixture values", "[mixing]") {
+  for (double fractional_delay : {0.25, 0.5, 0.75}) {
+    REQUIRE(lagrange3_magnitude_db(fractional_delay, 0.25) > -0.1);
+  }
+
+  REQUIRE_THAT(lagrange3_magnitude_db(0.25, 0.8), WithinAbs(-3.4543, 0.01));
+  REQUIRE_THAT(lagrange3_magnitude_db(0.5, 0.8), WithinAbs(-6.9595, 0.01));
+  REQUIRE_THAT(lagrange3_magnitude_db(0.75, 0.8), WithinAbs(-3.4543, 0.01));
+
+  REQUIRE(lagrange3_magnitude_db(0.5, 1.0) < -200.0);
+}
+
 TEST_CASE("StereoWidthProcessor collapses to mono at zero width", "[mixing]") {
   std::array<float, 2> left{1.0f, 0.0f};
   std::array<float, 2> right{0.0f, 1.0f};
@@ -887,6 +1011,31 @@ TEST_CASE("FxBus owns ordered inserts and sums latency", "[mixing]") {
 
   REQUIRE(fx_bus.num_inserts() == 2);
   REQUIRE(fx_bus.latency_samples() == 8);
+  REQUIRE(fx_bus.latency_samples_q8() == (8 << 8));
+}
+
+TEST_CASE("BusProcessor applies post-sum inserts", "[mixing]") {
+  std::array<float, 4> a_l{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> a_r{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> b_l{2.0f, 2.0f, 2.0f, 2.0f};
+  std::array<float, 4> b_r{2.0f, 2.0f, 2.0f, 2.0f};
+  float* input_a[] = {a_l.data(), a_r.data()};
+  float* input_b[] = {b_l.data(), b_r.data()};
+  std::array<float, 4> out_l{};
+  std::array<float, 4> out_r{};
+  float* output[] = {out_l.data(), out_r.data()};
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.add_insert(std::make_unique<ScaleProcessor>(2.0f));
+  bus.prepare(48000.0, 4);
+  bus.sum_inputs({input_a, input_b}, output, 2, 4);
+  bus.process(output, 2, 4);
+
+  REQUIRE(bus.num_inserts() == 1);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(out_l[static_cast<size_t>(i)], WithinAbs(6.0f, 0.0001f));
+    REQUIRE_THAT(out_r[static_cast<size_t>(i)], WithinAbs(6.0f, 0.0001f));
+  }
 }
 
 TEST_CASE("MeterProcessor publishes peak rms and correlation snapshot", "[mixing]") {

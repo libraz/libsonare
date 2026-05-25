@@ -3,6 +3,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include "mastering/eq/equalizer.h"
@@ -36,6 +39,26 @@ double bench(Fn&& fn, int runs, int iterations) {
     times.push_back(total_ms / static_cast<double>(iterations));
   }
   return median_ms(std::move(times));
+}
+
+std::string format_result_json(int iterations, int runs, double static_ms, double dynamic_ms,
+                               double linear_ms, int linear_latency_samples) {
+  std::ostringstream json;
+  json << "{\n";
+  json << "  \"benchmark\": \"eq_processor\",\n";
+  json << "  \"sample_rate\": " << kSampleRate << ",\n";
+  json << "  \"channels\": " << kChannels << ",\n";
+  json << "  \"block_samples\": " << kBlockSamples << ",\n";
+  json << "  \"runs\": " << runs << ",\n";
+  json << "  \"iterations_per_run\": " << iterations << ",\n";
+  json.setf(std::ios::fixed);
+  json.precision(6);
+  json << "  \"static_24_band_ms\": " << static_ms << ",\n";
+  json << "  \"dynamic_8_band_ms\": " << dynamic_ms << ",\n";
+  json << "  \"linear_phase_4_band_ms\": " << linear_ms << ",\n";
+  json << "  \"linear_phase_latency_samples\": " << linear_latency_samples << "\n";
+  json << "}\n";
+  return json.str();
 }
 
 std::vector<float> make_signal(int samples, float gain, float offset_hz) {
@@ -78,9 +101,9 @@ sonare::mastering::eq::EqBand make_peak(size_t index) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  using sonare::mastering::eq::EqualizerProcessor;
   using sonare::mastering::eq::EqBand;
   using sonare::mastering::eq::EqBandType;
+  using sonare::mastering::eq::EqualizerProcessor;
   using sonare::mastering::eq::PhaseMode;
 
   const int iterations = argc > 1 ? std::max(1, std::atoi(argv[1])) : 2000;
@@ -113,8 +136,7 @@ int main(int argc, char** argv) {
   linear_eq.prepare(kSampleRate, kBlockSamples);
   linear_eq.set_phase_mode(PhaseMode::LinearPhase);
   for (size_t i = 0; i < 4; ++i) {
-    EqBand band{EqBandType::Peak, 240.0f * std::pow(2.0f, static_cast<float>(i)), 2.0f, 1.0f,
-                true};
+    EqBand band{EqBandType::Peak, 240.0f * std::pow(2.0f, static_cast<float>(i)), 2.0f, 1.0f, true};
     linear_eq.set_band(i, band);
   }
 
@@ -145,18 +167,17 @@ int main(int argc, char** argv) {
       },
       runs, iterations);
 
-  std::printf("{\n");
-  std::printf("  \"benchmark\": \"eq_processor\",\n");
-  std::printf("  \"sample_rate\": %d,\n", kSampleRate);
-  std::printf("  \"channels\": %d,\n", kChannels);
-  std::printf("  \"block_samples\": %d,\n", kBlockSamples);
-  std::printf("  \"runs\": %d,\n", runs);
-  std::printf("  \"iterations_per_run\": %d,\n", iterations);
-  std::printf("  \"static_24_band_ms\": %.6f,\n", static_ms);
-  std::printf("  \"dynamic_8_band_ms\": %.6f,\n", dynamic_ms);
-  std::printf("  \"linear_phase_4_band_ms\": %.6f,\n", linear_ms);
-  std::printf("  \"linear_phase_latency_samples\": %d\n", linear_eq.latency_samples());
-  std::printf("}\n");
+  const std::string json = format_result_json(iterations, runs, static_ms, dynamic_ms, linear_ms,
+                                              linear_eq.latency_samples());
+  std::printf("%s", json.c_str());
+  if (argc > 3 && argv[3] != nullptr && argv[3][0] != '\0') {
+    std::ofstream out(argv[3]);
+    if (!out) {
+      std::fprintf(stderr, "failed to open output file: %s\n", argv[3]);
+      return 1;
+    }
+    out << json;
+  }
 
   return 0;
 }

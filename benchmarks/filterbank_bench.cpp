@@ -81,8 +81,7 @@ int main(int argc, char** argv) {
   std::vector<float> power(static_cast<size_t>(kNBins) * static_cast<size_t>(kNFrames), 0.0f);
   for (int k = 0; k < kNBins; ++k) {
     for (int f = 0; f < kNFrames; ++f) {
-      const float phase =
-          0.01f * sonare::constants::kPi * static_cast<float>(k + f * 7);
+      const float phase = 0.01f * sonare::constants::kPi * static_cast<float>(k + f * 7);
       power[static_cast<size_t>(k * kNFrames + f)] = std::abs(std::sin(phase));
     }
   }

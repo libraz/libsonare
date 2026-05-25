@@ -10,6 +10,7 @@
 
 namespace sonare::rt {
 
+using sonare::constants::kButterworthQ;
 using sonare::constants::kHalfPi;
 using sonare::constants::kPi;
 
@@ -50,6 +51,28 @@ BiquadCoeffs normalize(double b0, double b1, double b2, double a0, double a1, do
       static_cast<float>(b2 * inv_a0), static_cast<float>(a1 * inv_a0),
       static_cast<float>(a2 * inv_a0),
   };
+}
+
+float magnitude_at(const BiquadCoeffs& coeffs, float omega) {
+  const std::complex<float> z1 = std::exp(std::complex<float>(0.0f, -omega));
+  const std::complex<float> z2 = z1 * z1;
+  const std::complex<float> numerator = coeffs.b0 + coeffs.b1 * z1 + coeffs.b2 * z2;
+  const std::complex<float> denominator = 1.0f + coeffs.a1 * z1 + coeffs.a2 * z2;
+  const float denom = std::abs(denominator);
+  if (denom <= 1.0e-12f) {
+    return 0.0f;
+  }
+  return std::abs(numerator) / denom;
+}
+
+bool endpoint_gain_error_exceeds(const BiquadCoeffs& coeffs, float omega, float target_gain_db,
+                                 float tolerance_db) {
+  const float magnitude = magnitude_at(coeffs, omega);
+  if (!(magnitude > 0.0f) || !std::isfinite(magnitude)) {
+    return true;
+  }
+  const float actual_gain_db = 20.0f * std::log10(magnitude);
+  return std::abs(actual_gain_db - target_gain_db) > tolerance_db;
 }
 
 PoleCoeffs matched_poles(float w0, float q_value) {
@@ -248,8 +271,13 @@ BiquadCoeffs vicanek_high_shelf(float w0, float gain_db) {
   const float inva0 = safe_div(1.0f, a0, 1.0f);
   const float b0_unscaled = 0.5f * (w + safe_sqrt(w * w + bb2));
   const float b0 = b0_unscaled * inva0;
-  return {b0, (1.0f - w) * inva0, -0.25f * bb2 * inva0 * inva0 / std::max(b0_unscaled, 1.0e-12f),
-          (1.0f - v) * inva0, -0.25f * aa2 * inva0 * inva0};
+  const BiquadCoeffs coeffs{b0, (1.0f - w) * inva0,
+                            -0.25f * bb2 * inva0 * inva0 / std::max(b0_unscaled, 1.0e-12f),
+                            (1.0f - v) * inva0, -0.25f * aa2 * inva0 * inva0};
+  if (endpoint_gain_error_exceeds(coeffs, kPi * 0.999f, gain_db, 1.5f)) {
+    return rbj_high_shelf(w0, kButterworthQ, gain_db);
+  }
+  return coeffs;
 }
 
 BiquadCoeffs vicanek_low_shelf(float w0, float gain_db) {
@@ -295,21 +323,17 @@ BiquadCoeffs vicanek_low_shelf(float w0, float gain_db) {
   const float inva0 = safe_div(1.0f, a0, 1.0f);
   const float ginva0 = invg * inva0;
   const float b0_base = 0.5f * (w + safe_sqrt(w * w + bb2));
-  return {b0_base * ginva0, (1.0f - w) * ginva0,
-          -0.25f * bb2 * ginva0 / std::max(b0_base, 1.0e-12f), (1.0f - v) * inva0,
-          -0.25f * aa2 * inva0 * inva0};
+  const BiquadCoeffs coeffs{b0_base * ginva0, (1.0f - w) * ginva0,
+                            -0.25f * bb2 * ginva0 / std::max(b0_base, 1.0e-12f), (1.0f - v) * inva0,
+                            -0.25f * aa2 * inva0 * inva0};
+  if (endpoint_gain_error_exceeds(coeffs, 0.0f, gain_db, 1.5f)) {
+    return rbj_low_shelf(w0, kButterworthQ, gain_db);
+  }
+  return coeffs;
 }
 
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega) {
-  const std::complex<float> z1 = std::exp(std::complex<float>(0.0f, -omega));
-  const std::complex<float> z2 = z1 * z1;
-  const std::complex<float> numerator = coeffs.b0 + coeffs.b1 * z1 + coeffs.b2 * z2;
-  const std::complex<float> denominator = 1.0f + coeffs.a1 * z1 + coeffs.a2 * z2;
-  const float denom = std::abs(denominator);
-  if (denom <= 1.0e-12f) {
-    return 0.0f;
-  }
-  return std::abs(numerator) / denom;
+  return magnitude_at(coeffs, omega);
 }
 
 }  // namespace sonare::rt

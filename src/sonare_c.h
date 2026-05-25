@@ -571,6 +571,7 @@ typedef struct {
   size_t post_count;
   float band_gain_db[SONARE_EQ_MAX_BANDS];
   float profile_db[SONARE_EQ_SPECTRUM_PROFILE_BANDS];
+  float last_auto_gain_db;
   uint64_t seq;
 } SonareEqSnapshot;
 
@@ -583,7 +584,13 @@ SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* refe
                             size_t length, int sample_rate, int max_bands);
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled);
 float sonare_eq_last_auto_gain_db(const SonareEq* eq);
+SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale);
+SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db);
+SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan);
 int sonare_eq_latency_samples(const SonareEq* eq);
+SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
+                                    int num_samples);
+void sonare_eq_clear_sidechain(SonareEq* eq);
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
                               int num_samples);
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
@@ -663,8 +670,14 @@ typedef struct {
   uint64_t seq;
 } SonareMixMeterSnapshot;
 
+typedef struct {
+  float left;
+  float right;
+} SonareMixGoniometerPoint;
+
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
+SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
 SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
@@ -675,6 +688,8 @@ SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   size_t* index_out);
 SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float send_db);
 SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
+size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGoniometerPoint* out,
+                                           size_t max_points);
 
 // Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
 // mixer is NULL.

@@ -3,6 +3,7 @@
 
 #include <napi.h>
 
+#include <array>
 #include <memory>
 
 #include "mastering/api/chain.h"
@@ -71,6 +72,12 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Value Clear(const Napi::CallbackInfo& info);
   Napi::Value SetPhaseMode(const Napi::CallbackInfo& info);
   Napi::Value SetAutoGain(const Napi::CallbackInfo& info);
+  Napi::Value SetGainScale(const Napi::CallbackInfo& info);
+  Napi::Value SetOutputGainDb(const Napi::CallbackInfo& info);
+  Napi::Value SetOutputPan(const Napi::CallbackInfo& info);
+  Napi::Value SetSidechainMono(const Napi::CallbackInfo& info);
+  Napi::Value SetSidechainStereo(const Napi::CallbackInfo& info);
+  Napi::Value ClearSidechain(const Napi::CallbackInfo& info);
   Napi::Value LastAutoGainDb(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
@@ -79,6 +86,9 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Value Match(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::eq::EqualizerProcessor> eq_;
+  Napi::Reference<Napi::Float32Array> sidechain_left_;
+  Napi::Reference<Napi::Float32Array> sidechain_right_;
+  std::array<const float*, 2> sidechain_channels_{};
 
   static Napi::FunctionReference constructor_;
 };

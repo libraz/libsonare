@@ -847,7 +847,7 @@ TEST_CASE("CLI mixing command", "[cli][mixing]") {
     const std::string out = unique_temp_path("_mixed.wav");
     std::remove(out.c_str());
     auto [code, output] = exec_command(CLI + " mix " + TEST_WAV + " -o " + out +
-                                       " --fader-db -3 --pan 0.25 --json -q");
+                                       " --input-trim-db 1 --fader-db -3 --pan 0.25 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"meter\""));
     REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));

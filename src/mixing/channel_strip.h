@@ -38,6 +38,7 @@ struct ChannelStripConfig {
   PanLaw pan_law = PanLaw::Const3dB;
   float smoothing_ms = 5.0f;
   EqPosition eq_position = EqPosition::PreFader;
+  float input_trim_db = 0.0f;
 };
 
 class ChannelStrip : public rt::ProcessorBase {
@@ -69,6 +70,9 @@ class ChannelStrip : public rt::ProcessorBase {
   float fader_db() const noexcept { return fader_.gain_db(); }
   bool schedule_fader_automation(int64_t sample_pos, float fader_db,
                                  AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+
+  void set_input_trim_db(float trim_db) noexcept { input_trim_.set_gain_db(trim_db); }
+  float input_trim_db() const noexcept { return input_trim_.gain_db(); }
 
   void set_vca_offset_db(float offset_db) noexcept { fader_.set_vca_offset_db(offset_db); }
   float vca_offset_db() const noexcept { return fader_.vca_offset_db(); }
@@ -124,6 +128,9 @@ class ChannelStrip : public rt::ProcessorBase {
   bool schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
                                   int64_t sample_pos, float value,
                                   AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
+                            int num_channels, int num_samples);
+  void clear_insert_sidechains() noexcept;
 
   // Aux sends. add_send is a control-thread mutator (may allocate); it must not run
   // concurrently with process()/mix_send(), matching FxBus::add_insert's contract.
@@ -153,7 +160,18 @@ class ChannelStrip : public rt::ProcessorBase {
   void process_segment(float* const* channels, int num_channels, int start, int num_samples,
                        int tap_offset);
   void apply_automation_event(const AutomationEvent& event) noexcept;
+  void process_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
+                            float* const* channels, int num_channels, int num_samples,
+                            size_t first_insert_index, int sidechain_offset);
 
+  struct InsertSidechain {
+    const float* const* channels = nullptr;
+    int num_channels = 0;
+    int num_samples = 0;
+    bool managed = false;
+  };
+
+  GainProcessor input_trim_;
   AlignmentDelay alignment_delay_;
   GainProcessor fader_;
   PannerProcessor panner_;
@@ -164,6 +182,7 @@ class ChannelStrip : public rt::ProcessorBase {
   GoniometerBuffer<kGoniometerCapacity> goniometer_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> pre_inserts_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> post_inserts_;
+  std::vector<InsertSidechain> insert_sidechains_;
   std::vector<std::unique_ptr<SendProcessor>> sends_;
   std::vector<std::unique_ptr<AutomationLane>> send_automation_;
   AutomationLane fader_automation_;
@@ -183,7 +202,7 @@ class ChannelStrip : public rt::ProcessorBase {
   int max_block_size_ = 0;
 
   // Preallocated scratch taps, [kPreparedChannels][max_block_size_].
-  std::vector<std::vector<float>> pre_tap_;    // post-EQ-if-pre, pre-fader signal
+  std::vector<std::vector<float>> pre_tap_;    // post-input/pre-insert chain, pre-fader signal
   std::vector<std::vector<float>> post_tap_;   // final output
   std::vector<std::vector<float>> send_temp_;  // per-send work buffer
 };

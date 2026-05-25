@@ -4,6 +4,7 @@
 /// @brief Pure-data mixer scene schema and JSON helpers.
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace sonare::mixing::api {
@@ -19,9 +20,18 @@ enum class SendTiming {
 };
 
 struct Insert {
+  Insert() = default;
+  Insert(InsertSlot slot_, std::string processor_name_, std::string params_json_,
+         std::string sidechain_key_ = {})
+      : slot(slot_),
+        processor_name(std::move(processor_name_)),
+        params_json(std::move(params_json_)),
+        sidechain_key(std::move(sidechain_key_)) {}
+
   InsertSlot slot = InsertSlot::PreFader;
   std::string processor_name;
   std::string params_json;
+  std::string sidechain_key;
 };
 
 struct Send {
@@ -33,6 +43,7 @@ struct Send {
 
 struct Strip {
   std::string id;
+  float input_trim_db = 0.0f;
   float fader_db = 0.0f;
   float pan = 0.0f;
   float width = 1.0f;
@@ -44,8 +55,12 @@ struct Strip {
 };
 
 struct Bus {
+  Bus() = default;
+  Bus(std::string id_, std::string role_ = "aux") : id(std::move(id_)), role(std::move(role_)) {}
+
   std::string id;
   std::string role = "aux";
+  std::vector<Insert> inserts;
 };
 
 struct VcaGroup {

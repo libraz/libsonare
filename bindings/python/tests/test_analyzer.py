@@ -413,9 +413,14 @@ def test_mixing_presets_and_stereo_mix() -> None:
     assert "vocalReverbSend" in libsonare.mixing_scene_preset_names()
     assert '"vocal"' in libsonare.mixing_scene_preset_json("vocalReverbSend")
 
-    result = libsonare.mix_stereo([([1.0, 1.0], [0.0, 0.0])], sample_rate=48000, muted=[True])
-    assert result.left == pytest.approx([0.0, 0.0])
-    assert result.right == pytest.approx([0.0, 0.0])
+    result = libsonare.mix_stereo(
+        [([1.0, 1.0], [0.0, 0.0])],
+        sample_rate=48000,
+        fader_db=[-6.0206],
+        input_trim_db=[6.0206],
+    )
+    assert result.left == pytest.approx([math.sqrt(0.5), math.sqrt(0.5)], abs=0.004)
+    assert result.right == pytest.approx([0.0, 0.0], abs=0.0002)
     assert result.sample_rate == 48000
     assert len(result.meters) == 1
     assert math.isfinite(result.meters[0].peak_db_l)
@@ -1180,6 +1185,9 @@ def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
     block = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(512)]
 
     with StreamingEqualizer(sample_rate=sr, max_block_size=512) as eq:
+        eq.set_gain_scale(0.5)
+        eq.set_output_gain_db(3.0)
+        eq.set_output_pan(0.0)
         eq.set_band(
             0,
             {
@@ -1198,7 +1206,7 @@ def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
         assert snapshot.seq == 1
         assert len(snapshot.pre_left) == 256
         assert len(snapshot.post_left) == 256
-        assert snapshot.band_gain_db[0] > 5.0
+        assert 2.5 < snapshot.band_gain_db[0] < 3.5
 
         eq.set_phase_mode("linear")
         assert eq.latency_samples > 0

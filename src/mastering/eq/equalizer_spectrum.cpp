@@ -56,7 +56,8 @@ void EqualizerProcessor::publish_spectrum_snapshot(const EqualizerSpectrumSnapsh
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& band = bands_[i];
     if (band.enabled && !band.bypassed) {
-      next.band_gain_db[i] = band.dyn.enabled ? last_applied_gain_db_[i] : band.gain_db;
+      next.band_gain_db[i] =
+          band.dyn.enabled ? last_applied_gain_db_[i] : band.gain_db * gain_scale_;
     }
   }
   next.profile_db.fill(kFloorDb);

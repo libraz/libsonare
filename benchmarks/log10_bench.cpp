@@ -79,9 +79,8 @@ SizeResult run_size(int n, int iterations, int runs) {
 
   float max_abs_diff = 0.0f;
   for (int i = 0; i < n; ++i) {
-    max_abs_diff = std::max(max_abs_diff,
-                            std::abs(out_eigen[static_cast<size_t>(i)] -
-                                     out_scalar[static_cast<size_t>(i)]));
+    max_abs_diff = std::max(max_abs_diff, std::abs(out_eigen[static_cast<size_t>(i)] -
+                                                   out_scalar[static_cast<size_t>(i)]));
   }
 
   const double eigen_ms = bench(

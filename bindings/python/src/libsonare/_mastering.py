@@ -2,7 +2,27 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
+
+from ._ffi import (
+    SonareEqSnapshot,
+    SonareMasteringChainResult,
+    SonareMasteringChainStereoResult,
+    SonareMasteringConfig,
+    SonareMasteringParam,
+    SonareMasteringProgressCallback,
+    SonareMasteringResult,
+    SonareMasteringStereoResult,
+)
 from ._runtime import *  # noqa: F403
+from .types import (
+    EqSpectrumSnapshot,
+    MasteringChainResult,
+    MasteringChainStereoResult,
+    MasteringResult,
+    MasteringStereoResult,
+)
 
 
 def mastering(
@@ -672,6 +692,7 @@ class StreamingEqualizer:
         self._handle = ctypes.c_void_p(handle)
         self.sample_rate = int(sample_rate)
         self.max_block_size = int(max_block_size)
+        self._sidechain_refs: object | None = None
 
     def set_band(self, index: int, band: dict | str) -> None:
         """Set one EQ band from a JSON string or a Python dict."""
@@ -704,6 +725,56 @@ class StreamingEqualizer:
         self._ensure_open()
         self._lib.sonare_eq_set_auto_gain(self._handle, ctypes.c_int(1 if enabled else 0))
 
+    def set_gain_scale(self, scale: float) -> None:
+        """Set all-band EQ gain scale as a 0.0..2.0 multiplier."""
+        self._ensure_open()
+        _check(self._lib.sonare_eq_set_gain_scale(self._handle, ctypes.c_float(float(scale))))
+
+    def set_output_gain_db(self, gain_db: float) -> None:
+        """Set post-EQ output gain in dB."""
+        self._ensure_open()
+        _check(self._lib.sonare_eq_set_output_gain_db(self._handle, ctypes.c_float(float(gain_db))))
+
+    def set_output_pan(self, pan: float) -> None:
+        """Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan."""
+        self._ensure_open()
+        _check(self._lib.sonare_eq_set_output_pan(self._handle, ctypes.c_float(float(pan))))
+
+    def set_sidechain_mono(self, samples: Sequence[float] | list[float]) -> None:
+        """Set a mono external key for dynamic bands with ``externalSidechain`` enabled."""
+        self._ensure_open()
+        c_array, length = _to_c_float_array(samples)
+        channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
+        channels = channel_array_type(c_array)
+        _check(self._lib.sonare_eq_set_sidechain(self._handle, channels, ctypes.c_int(1), length))
+        self._sidechain_refs = (c_array, channels)
+
+    def set_sidechain_stereo(
+        self,
+        left: Sequence[float] | list[float],
+        right: Sequence[float] | list[float],
+    ) -> None:
+        """Set a stereo external key for dynamic bands with ``externalSidechain`` enabled."""
+        self._ensure_open()
+        left_array, left_length = _to_c_float_array(left)
+        right_array, right_length = _to_c_float_array(right)
+        if left_length != right_length:
+            raise ValueError("left and right sidechain lengths must match")
+        channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
+        channels = channel_array_type(left_array, right_array)
+        _check(
+            self._lib.sonare_eq_set_sidechain(
+                self._handle, channels, ctypes.c_int(2), ctypes.c_int(left_length)
+            )
+        )
+        self._sidechain_refs = (left_array, right_array, channels)
+
+    def clear_sidechain(self) -> None:
+        """Clear any pending external key buffer."""
+        self._ensure_open()
+        self._lib.sonare_eq_clear_sidechain(self._handle)
+        self._sidechain_refs = None
+
     def match(
         self,
         source: Sequence[float] | list[float],
@@ -733,6 +804,7 @@ class StreamingEqualizer:
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
         channels = channel_array_type(c_array)
         _check(self._lib.sonare_eq_process(self._handle, channels, ctypes.c_int(1), length))
+        self._sidechain_refs = None
         return [float(c_array[i]) for i in range(length)]
 
     def process_stereo(
@@ -753,6 +825,7 @@ class StreamingEqualizer:
                 self._handle, channels, ctypes.c_int(2), ctypes.c_int(left_length)
             )
         )
+        self._sidechain_refs = None
         return (
             [float(left_array[i]) for i in range(left_length)],
             [float(right_array[i]) for i in range(right_length)],
@@ -772,6 +845,7 @@ class StreamingEqualizer:
             post_right=[float(out.post_right[i]) for i in range(post_count)],
             band_gain_db=[float(out.band_gain_db[i]) for i in range(24)],
             profile_db=[float(out.profile_db[i]) for i in range(16)],
+            last_auto_gain_db=float(out.last_auto_gain_db),
             seq=int(out.seq),
         )
 

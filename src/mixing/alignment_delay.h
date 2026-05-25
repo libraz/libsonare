@@ -12,6 +12,9 @@ namespace sonare::mixing {
 
 enum class FractionalDelayMode {
   None,
+  // Default fractional-delay mode for alignment/PDC. The implementation is a
+  // 3rd-order Lagrange FIR: stable and predictable for delay changes, with a
+  // deliberate high-frequency magnitude droop for fractional delays.
   Lagrange3,
 };
 
@@ -23,6 +26,9 @@ class AlignmentDelay : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override { return delay_samples_; }
+  // Reports the exact requested Q8 delay. latency_samples() intentionally
+  // returns the integer floor for legacy callers; graph/mixing PDC should use
+  // latency_samples_q8() to preserve the fractional part.
   int latency_samples_q8() const noexcept override { return delay_samples_q8_; }
 
   void set_delay_samples(int delay_samples);

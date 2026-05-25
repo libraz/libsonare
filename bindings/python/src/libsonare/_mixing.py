@@ -196,6 +196,7 @@ def mix_stereo(
     pan_mode: Sequence[str | int] | str | int = "balance",
     width: Sequence[float] | None = None,
     muted: Sequence[bool] | None = None,
+    input_trim_db: Sequence[float] | None = None,
 ) -> MixResult:
     """Render a small stereo mixer scene from per-strip left/right buffers.
 
@@ -209,6 +210,7 @@ def mix_stereo(
             ``"balance"``, ``"stereoPan"``, or ``"dualPan"``.
         width: Optional per-strip stereo width values.
         muted: Optional per-strip mute flags.
+        input_trim_db: Optional per-strip input trim values in dB.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixer_create"):
@@ -244,6 +246,12 @@ def mix_stereo(
                 raise RuntimeError("failed to add mixer strip")
             strip_handles.append(ctypes.c_void_p(handle))
 
+            if input_trim_db is not None:
+                _check(
+                    lib.sonare_strip_set_input_trim_db(
+                        strip_handles[-1], ctypes.c_float(input_trim_db[index])
+                    )
+                )
             if fader_db is not None:
                 _check(
                     lib.sonare_strip_set_fader_db(

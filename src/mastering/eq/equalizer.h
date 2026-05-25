@@ -56,6 +56,10 @@ class EqualizerProcessor : public common::ProcessorBase {
   void set_band(size_t index, const EqBand& band);
   void clear_band(size_t index);
   void clear();
+  /// Borrows sidechain buffers until the next process/clear call. Dynamic bands
+  /// opt into this key via DynamicParams::external_sidechain.
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override;
+  void clear_sidechain() override;
 
   const EqBand& band(size_t index) const;
   float last_detector_db() const noexcept { return last_detector_db_; }
@@ -64,6 +68,12 @@ class EqualizerProcessor : public common::ProcessorBase {
   void set_auto_gain_enabled(bool enabled) noexcept { auto_gain_enabled_ = enabled; }
   bool auto_gain_enabled() const noexcept { return auto_gain_enabled_; }
   float last_auto_gain_db() const noexcept { return last_auto_gain_db_; }
+  void set_gain_scale(float scale);
+  float gain_scale() const noexcept { return gain_scale_; }
+  void set_output_gain_db(float gain_db);
+  float output_gain_db() const noexcept { return output_gain_db_; }
+  void set_output_pan(float pan);
+  float output_pan() const noexcept { return output_pan_; }
   EqualizerSpectrumSnapshot spectrum_snapshot() const noexcept;
 
  private:
@@ -79,13 +89,16 @@ class EqualizerProcessor : public common::ProcessorBase {
   static float rms_db(const float* const* channels, int num_channels, int num_samples) noexcept;
   static float dynamic_gain_delta(const EqBand& band, float detector_db, float threshold_db);
   void update_dynamic_state(const float* const* channels, int num_channels, int num_samples);
+  void validate_sidechain(int expected_samples) const;
   void update_iir_bands_preserving_state(int num_samples = 0);
   void rebuild_iir(int num_samples = 0);
-  static EqBand backend_band(EqBand band, PhaseMode global_phase);
+  static EqBand backend_band(EqBand band, PhaseMode global_phase, float gain_scale);
   void process_mono_backend(ParametricEq& backend, float* samples, int num_samples);
   void process_mono_fir(LinearPhaseEq& backend, float* samples, int num_samples);
   void apply_auto_gain(float* const* channels, int num_channels, int num_samples,
                        float input_db) noexcept;
+  void apply_output_gain_and_pan(float* const* channels, int num_channels,
+                                 int num_samples) noexcept;
   static void capture_stream(const float* const* channels, int num_channels, int num_samples,
                              std::array<SpectrumPoint, kSpectrumStreamCapacity>& stream,
                              size_t& count) noexcept;
@@ -112,6 +125,9 @@ class EqualizerProcessor : public common::ProcessorBase {
   bool has_mid_side_linear_bands_ = false;
   float last_auto_gain_db_ = 0.0f;
   float smoothed_auto_gain_db_ = 0.0f;
+  float gain_scale_ = 1.0f;
+  float output_gain_db_ = 0.0f;
+  float output_pan_ = 0.0f;
   mutable std::atomic<uint32_t> spectrum_guard_{0};
   EqualizerSpectrumSnapshot spectrum_snapshot_{};
   uint64_t spectrum_seq_ = 0;
@@ -126,6 +142,9 @@ class EqualizerProcessor : public common::ProcessorBase {
   LinearPhaseEq side_fir_;
   std::vector<float> mid_buffer_;
   std::vector<float> side_buffer_;
+  const float* const* sidechain_channels_ = nullptr;
+  int sidechain_num_channels_ = 0;
+  int sidechain_num_samples_ = 0;
 };
 
 }  // namespace sonare::mastering::eq

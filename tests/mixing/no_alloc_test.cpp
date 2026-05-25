@@ -4,12 +4,14 @@
 #include <cstdlib>
 #include <memory>
 #include <new>
+#include <vector>
 
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/spectrum_registry.h"
+#include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
 
@@ -50,6 +52,26 @@ class AllocationGuard {
   }
   ~AllocationGuard() { g_count_allocations.store(false, std::memory_order_relaxed); }
   size_t count() const noexcept { return g_allocation_count.load(std::memory_order_relaxed); }
+};
+
+class ScaleProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit ScaleProcessor(float scale) : scale_(scale) {}
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) {
+        continue;
+      }
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] *= scale_;
+      }
+    }
+  }
+  void reset() override {}
+
+ private:
+  float scale_ = 1.0f;
 };
 
 }  // namespace
@@ -95,6 +117,7 @@ TEST_CASE("ChannelStrip process performs no heap allocation after prepare", "[mi
   strip.prepare(48000.0, kBlock);
   strip.set_polarity_invert(true, false);
   strip.set_channel_delay_samples(3);
+  strip.set_input_trim_db(1.5f);
   strip.set_fader_db(-3.0f);
   strip.set_pan(0.2f);
   strip.set_width(1.25f);
@@ -115,6 +138,32 @@ TEST_CASE("ChannelStrip process performs no heap allocation after prepare", "[mi
   const size_t allocations = guard.count();
 
   REQUIRE(allocations == 0);
+}
+
+TEST_CASE("BusProcessor post-sum inserts perform no heap allocation after prepare",
+          "[mixing][rt]") {
+  constexpr int kBlock = 256;
+  sonare::mixing::BusProcessor bus;
+  bus.add_insert(std::make_unique<ScaleProcessor>(0.5f));
+  bus.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> in_l{};
+  std::array<float, kBlock> in_r{};
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  in_l.fill(1.0f);
+  in_r.fill(1.0f);
+  float* input[] = {in_l.data(), in_r.data()};
+  float* output[] = {out_l.data(), out_r.data()};
+  const std::vector<float* const*> inputs{input};
+
+  bus.sum_inputs(inputs, output, 2, kBlock);
+  bus.process(output, 2, kBlock);
+
+  AllocationGuard guard;
+  bus.sum_inputs(inputs, output, 2, kBlock);
+  bus.process(output, 2, kBlock);
+  REQUIRE(guard.count() == 0);
 }
 
 TEST_CASE("EqualizerProcessor process performs no heap allocation after prepare",
@@ -203,6 +252,43 @@ TEST_CASE("EqualizerProcessor dynamic bands perform no heap allocation after pre
   eq.process(stereo, 2, kBlock);
   eq.reset();
 
+  AllocationGuard guard;
+  eq.process(stereo, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("EqualizerProcessor external sidechain performs no heap allocation after prepare",
+          "[mastering][eq][rt]") {
+  constexpr int kBlock = 256;
+  sonare::mastering::eq::EqualizerProcessor eq({2});
+  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqBand band{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 0.0f, 2.0f,
+                                     true};
+  band.dyn.enabled = true;
+  band.dyn.external_sidechain = true;
+  band.dyn.threshold_db = -40.0f;
+  band.dyn.ratio = 4.0f;
+  band.dyn.range_db = -12.0f;
+  band.dyn.attack_ms = 0.0f;
+  band.dyn.release_ms = 10.0f;
+  eq.set_band(0, band);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  std::array<float, kBlock> key{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = 0.02f;
+    right[static_cast<size_t>(i)] = 0.02f;
+    key[static_cast<size_t>(i)] = 0.5f;
+  }
+  float* stereo[] = {left.data(), right.data()};
+  const float* sidechain[] = {key.data()};
+
+  eq.set_sidechain(sidechain, 1, kBlock);
+  eq.process(stereo, 2, kBlock);
+  eq.reset();
+
+  eq.set_sidechain(sidechain, 1, kBlock);
   AllocationGuard guard;
   eq.process(stereo, 2, kBlock);
   REQUIRE(guard.count() == 0);

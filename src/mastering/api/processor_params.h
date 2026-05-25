@@ -242,6 +242,9 @@ inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& pa
 inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params,
                                 const std::string& prefix = "band") {
   processor.set_auto_gain_enabled(b(params, "autoGain", processor.auto_gain_enabled()));
+  processor.set_gain_scale(f(params, "gainScale", processor.gain_scale()));
+  processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db()));
+  processor.set_output_pan(f(params, "outputPan", processor.output_pan()));
   processor.set_phase_mode(
       phase_mode(i(params, "phaseMode", static_cast<int>(processor.phase_mode()))));
   for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {

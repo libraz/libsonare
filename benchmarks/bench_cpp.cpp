@@ -79,7 +79,8 @@ int main(int argc, char** argv) {
   auto cached_mel = sonare::MelSpectrogram::compute(resampled, sonare::MelConfig{});
 
   // --- Full analysis (matches Python analyze() path) ---
-  const double full_ms = bench([&] { (void)sonare::quick::analyze(resampled.data(), resampled.size(), kResampledSr); });
+  const double full_ms = bench(
+      [&] { (void)sonare::quick::analyze(resampled.data(), resampled.size(), kResampledSr); });
   print_row("Full analyze", full_ms);
 
   std::fprintf(stderr, "\n-- Standalone (from raw audio) --\n");

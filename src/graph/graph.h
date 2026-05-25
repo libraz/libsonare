@@ -35,6 +35,9 @@ class Graph {
 
   bool compiled() const noexcept { return compiled_; }
   int connection_delay_samples(size_t connection_index) const;
+  // Q8 delay inserted on a compiled connection by longest-path PDC. If the
+  // value has a fractional part, Graph uses the same Lagrange3 fractional delay
+  // convention as mixing::AlignmentDelay.
   int connection_delay_samples_q8(size_t connection_index) const;
   const std::vector<std::string>& topo_order_ids() const noexcept { return topo_order_ids_; }
 

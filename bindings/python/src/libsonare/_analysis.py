@@ -3,6 +3,23 @@
 from __future__ import annotations
 
 from ._runtime import *  # noqa: F403
+from .types import (
+    AcousticResult,
+    AnalysisResult,
+    BpmAnalysisResult,
+    BpmCandidate,
+    Chord,
+    ChordAnalysisResult,
+    DynamicsResult,
+    Key,
+    KeyCandidate,
+    KeyProfile,
+    Mode,
+    PitchClass,
+    RhythmResult,
+    TimbreResult,
+    TimeSignature,
+)
 
 
 def detect_bpm(

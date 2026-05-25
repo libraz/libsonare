@@ -205,6 +205,72 @@ const result = masterAudio(samples, sampleRate, 'aiMusic', {
 console.log(result.outputLufs, result.appliedGainDb);
 ```
 
+### Mixing
+
+```typescript
+import { init, Mixer, mixStereo, mixingScenePresetJson } from '@libraz/libsonare';
+
+await init();
+
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+const offline = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  inputTrimDb: [3, 0],
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+
+const mixer = Mixer.fromSceneJson(sceneJson, sampleRate, 512);
+const block = mixer.processStereo([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR]);
+console.log(offline.meters[0].maxTruePeakDb, block.left.length);
+mixer.delete();
+```
+
+### AudioWorklet bridge
+
+The package exposes an optional worklet entry that uses the same `sonare.wasm`
+as the offline API. The bridge processes fixed 128-sample render quanta and
+treats each AudioWorklet input as one stereo mixer strip.
+
+```typescript
+// worklet.ts, loaded with audioContext.audioWorklet.addModule(...)
+import { init, mixingScenePresetJson } from '@libraz/libsonare';
+import { registerSonareWorkletProcessor } from '@libraz/libsonare/worklet';
+
+await init();
+registerSonareWorkletProcessor();
+```
+
+```typescript
+// main thread
+import { mixingScenePresetJson } from '@libraz/libsonare';
+
+await audioContext.audioWorklet.addModule('/worklet.js');
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+const node = new AudioWorkletNode(audioContext, 'sonare-worklet-processor', {
+  numberOfInputs: 2,
+  numberOfOutputs: 1,
+  outputChannelCount: [2],
+  processorOptions: { sceneJson, sampleRate: audioContext.sampleRate, blockSize: 128 },
+});
+
+node.port.postMessage({
+  type: 'scheduleInsertAutomation',
+  stripIndex: 0,
+  insertIndex: 0,
+  paramId: 0,
+  samplePos: 0,
+  value: 0,
+  curve: 'linear',
+});
+
+node.port.onmessage = (event) => {
+  if (event.data?.type === 'meter') {
+    console.log(event.data.peakDbL, event.data.rmsDbL, event.data.correlation);
+  }
+};
+```
+
 ### Progress callback
 
 `masteringChainWithProgress` (and its stereo variant) is `masteringChain` with

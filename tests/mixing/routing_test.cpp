@@ -8,16 +8,20 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "graph/graph.h"
+#include "mastering/eq/linear_phase.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"
+#include "mixing/meter.h"
 #include "rt/processor_base.h"
 #include "sonare_c.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -235,6 +239,172 @@ TEST_CASE("Routed mixer compensates plugin latency at the master bus", "[mixing]
   REQUIRE_THAT(static_cast<float>(pre_energy), WithinAbs(0.0f, 0.001f));
 }
 
+TEST_CASE("Routed mixer compensates bus insert latency", "[mixing][routing]") {
+  constexpr int kLatency = 8;
+  constexpr int kBlock = 64;
+  constexpr double kSr = 48000.0;
+
+  sonare::graph::Graph graph;
+  auto direct = std::make_unique<sonare::mixing::ChannelStrip>(
+      sonare::mixing::ChannelStripConfig{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  auto via_bus = std::make_unique<sonare::mixing::ChannelStrip>(
+      sonare::mixing::ChannelStripConfig{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  auto bus = std::make_unique<sonare::mixing::FxBus>();
+  bus->add_insert(std::make_unique<FixedLatencyProcessor>(kLatency));
+
+  REQUIRE(graph.add_node("direct", std::move(direct), 2));
+  REQUIRE(graph.add_node("via-bus", std::move(via_bus), 2));
+  REQUIRE(graph.add_node("sub", std::move(bus), 2));
+  REQUIRE(graph.add_node("master", std::make_unique<sonare::mixing::FxBus>(), 2));
+  REQUIRE(graph.connect({"direct", 0, "master", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"direct", 1, "master", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"via-bus", 0, "sub", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"via-bus", 1, "sub", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"sub", 0, "master", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"sub", 1, "master", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(kSr, kBlock);
+
+  std::array<float, kBlock> impulse{};
+  impulse[0] = 1.0f;
+  graph.clear_inputs(kBlock);
+  graph.set_input("direct", 0, impulse.data(), kBlock);
+  graph.set_input("direct", 1, impulse.data(), kBlock);
+  graph.set_input("via-bus", 0, impulse.data(), kBlock);
+  graph.set_input("via-bus", 1, impulse.data(), kBlock);
+  graph.process_block(kBlock);
+
+  const float* out_l = graph.output("master", 0);
+  const float* out_r = graph.output("master", 1);
+  REQUIRE(out_l != nullptr);
+  REQUIRE(out_r != nullptr);
+  REQUIRE_THAT(out_l[kLatency], WithinAbs(2.0f, 0.001f));
+  REQUIRE_THAT(out_r[kLatency], WithinAbs(2.0f, 0.001f));
+
+  double pre_energy = 0.0;
+  for (int i = 0; i < kLatency; ++i) {
+    pre_energy +=
+        static_cast<double>(out_l[i]) * out_l[i] + static_cast<double>(out_r[i]) * out_r[i];
+  }
+  REQUIRE_THAT(static_cast<float>(pre_energy), WithinAbs(0.0f, 0.001f));
+}
+
+TEST_CASE("Routed mixer aligns linear-phase EQ insert while strip automation runs",
+          "[mixing][routing][eq]") {
+  constexpr int kLatency = 256;
+  constexpr int kBlock = 1024;
+  constexpr int kSecondPulse = 200;
+  constexpr double kSr = 48000.0;
+  constexpr float kHalfGainDb = -6.0205999f;
+
+  auto dry = std::make_unique<sonare::mixing::ChannelStrip>(
+      sonare::mixing::ChannelStripConfig{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  auto eq = std::make_unique<sonare::mixing::ChannelStrip>(
+      sonare::mixing::ChannelStripConfig{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  eq->add_pre_insert(std::make_unique<sonare::mastering::eq::LinearPhaseEq>(
+      sonare::mastering::eq::LinearPhaseEqConfig{}));
+
+  dry->prepare(kSr, kBlock);
+  eq->prepare(kSr, kBlock);
+  REQUIRE(eq->latency_samples() == kLatency);
+  REQUIRE(dry->schedule_fader_automation(128, kHalfGainDb));
+
+  sonare::mixing::ChannelStrip* dry_raw = dry.get();
+  sonare::mixing::ChannelStrip* eq_raw = eq.get();
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("dry", std::make_unique<TestStripNode>(dry_raw, 0), 2));
+  REQUIRE(graph.add_node("eq", std::make_unique<TestStripNode>(eq_raw, 0), 2));
+  REQUIRE(graph.add_node("master", std::make_unique<sonare::mixing::FxBus>(), 2));
+  REQUIRE(graph.connect({"dry", 0, "master", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"dry", 1, "master", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"eq", 0, "master", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"eq", 1, "master", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(kSr, kBlock);
+
+  std::array<float, kBlock> input{};
+  input[0] = 1.0f;
+  input[kSecondPulse] = 1.0f;
+  graph.clear_inputs(kBlock);
+  graph.set_input("dry", 0, input.data(), kBlock);
+  graph.set_input("dry", 1, input.data(), kBlock);
+  graph.set_input("eq", 0, input.data(), kBlock);
+  graph.set_input("eq", 1, input.data(), kBlock);
+  graph.process_block(kBlock);
+
+  const float* out_l = graph.output("master", 0);
+  const float* out_r = graph.output("master", 1);
+  REQUIRE(out_l != nullptr);
+  REQUIRE(out_r != nullptr);
+
+  REQUIRE_THAT(out_l[kLatency], WithinAbs(2.0f, 0.01f));
+  REQUIRE_THAT(out_r[kLatency], WithinAbs(2.0f, 0.01f));
+  REQUIRE_THAT(out_l[kLatency + kSecondPulse], WithinAbs(1.5f, 0.02f));
+  REQUIRE_THAT(out_r[kLatency + kSecondPulse], WithinAbs(1.5f, 0.02f));
+
+  double pre_energy = 0.0;
+  for (int i = 0; i < kLatency; ++i) {
+    pre_energy +=
+        static_cast<double>(out_l[i]) * out_l[i] + static_cast<double>(out_r[i]) * out_r[i];
+  }
+  REQUIRE_THAT(static_cast<float>(pre_energy), WithinAbs(0.0f, 0.001f));
+}
+
+TEST_CASE("Graph master output reports LUFS and true peak", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+  constexpr int kBlocks = 96;
+
+  sonare::graph::Graph graph;
+  auto strip = std::make_unique<sonare::mixing::ChannelStrip>(
+      sonare::mixing::ChannelStripConfig{-3.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  REQUIRE(graph.add_node("strip", std::move(strip), 2));
+  REQUIRE(graph.add_node("master", std::make_unique<sonare::mixing::FxBus>(), 2));
+  REQUIRE(graph.connect({"strip", 0, "master", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"strip", 1, "master", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(static_cast<double>(kSr), kBlock);
+
+  sonare::mixing::MeterProcessor meter(sonare::mixing::MeterConfig{true, true, 4, 0.0f});
+  meter.prepare(static_cast<double>(kSr), kBlock);
+
+  std::array<float, kBlock> in_l{};
+  std::array<float, kBlock> in_r{};
+  std::array<float, kBlock> meter_l{};
+  std::array<float, kBlock> meter_r{};
+  for (int block = 0; block < kBlocks; ++block) {
+    for (int i = 0; i < kBlock; ++i) {
+      const int n = block * kBlock + i;
+      const float s = 0.6f * std::sin(sonare::constants::kTwoPi * 440.0f * static_cast<float>(n) /
+                                      static_cast<float>(kSr));
+      in_l[static_cast<size_t>(i)] = s;
+      in_r[static_cast<size_t>(i)] = s;
+    }
+
+    graph.clear_inputs(kBlock);
+    graph.set_input("strip", 0, in_l.data(), kBlock);
+    graph.set_input("strip", 1, in_r.data(), kBlock);
+    graph.process_block(kBlock);
+
+    const float* out_l = graph.output("master", 0);
+    const float* out_r = graph.output("master", 1);
+    REQUIRE(out_l != nullptr);
+    REQUIRE(out_r != nullptr);
+    std::copy(out_l, out_l + kBlock, meter_l.begin());
+    std::copy(out_r, out_r + kBlock, meter_r.begin());
+    float* meter_channels[2] = {meter_l.data(), meter_r.data()};
+    meter.process(meter_channels, 2, kBlock);
+  }
+
+  const sonare::mixing::MeterSnapshot snapshot = meter.snapshot();
+  REQUIRE(snapshot.seq >= static_cast<uint64_t>(kBlocks));
+  REQUIRE(std::isfinite(snapshot.momentary_lufs));
+  REQUIRE(snapshot.momentary_lufs > -70.0f);
+  REQUIRE(std::isfinite(snapshot.integrated_lufs));
+  REQUIRE(snapshot.integrated_lufs > -70.0f);
+  REQUIRE(snapshot.max_true_peak_db > sonare::constants::kFloorDb);
+}
+
 TEST_CASE("Routed mixer compensates pre-fader send latency separately from main output",
           "[mixing][routing]") {
   constexpr int kLatency = 8;
@@ -329,6 +499,209 @@ TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]
   REQUIRE(restored != nullptr);
   REQUIRE(sonare_mixer_compile(restored) == SONARE_OK);
   sonare_mixer_destroy(restored);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Routed mixer applies scene bus inserts", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 64;
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip lead;
+  lead.id = "lead";
+  scene.strips.push_back(lead);
+  sonare::mixing::api::Bus master("master", "master");
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "saturation.hardClipper", "{\"ceiling\":0.25}"});
+  scene.buses.push_back(master);
+  scene.connections.push_back({"lead", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+
+  std::array<float, kBlock> input{};
+  input.fill(1.0f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+
+  REQUIRE_THAT(out_l[0], WithinAbs(0.25f, 0.001f));
+  REQUIRE_THAT(out_r[0], WithinAbs(0.25f, 0.001f));
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+
+  auto render = [&](bool with_key) {
+    sonare::mixing::api::Scene scene;
+    scene.buses.push_back({"master", "master"});
+    scene.buses.push_back({"discard", "aux"});
+
+    sonare::mixing::api::Strip host;
+    host.id = "host";
+    scene.strips.push_back(host);
+
+    sonare::mixing::api::Strip bed;
+    bed.id = "bed";
+    bed.inserts.push_back({sonare::mixing::api::InsertSlot::PostFader, "dynamics.sidechainRouter",
+                           "{\"thresholdDb\":-10,\"rangeDb\":18,\"attackMs\":0,\"releaseMs\":50}",
+                           with_key ? "host" : ""});
+    scene.strips.push_back(bed);
+    scene.connections.push_back({"host", "discard"});
+    scene.connections.push_back({"bed", "master"});
+
+    const std::string json = sonare::mixing::api::scene_to_json(scene);
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+
+    std::array<float, kBlock> host_l{};
+    std::array<float, kBlock> host_r{};
+    std::array<float, kBlock> bed_l{};
+    std::array<float, kBlock> bed_r{};
+    host_l.fill(1.0f);
+    host_r.fill(1.0f);
+    bed_l.fill(0.05f);
+    bed_r.fill(0.05f);
+
+    const float* in_l[] = {host_l.data(), bed_l.data()};
+    const float* in_r[] = {host_r.data(), bed_r.data()};
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 2, out_l.data(), out_r.data(), kBlock) ==
+            SONARE_OK);
+
+    SonareStrip* bed_strip = sonare_mixer_strip_by_id(mixer, "bed");
+    REQUIRE(bed_strip != nullptr);
+    SonareMixMeterSnapshot meter{};
+    REQUIRE(sonare_strip_meter(bed_strip, &meter) == SONARE_OK);
+    const double energy = block_energy({out_l.begin(), out_l.end()}, {out_r.begin(), out_r.end()});
+    sonare_mixer_destroy(mixer);
+    return std::pair<double, float>{energy, meter.gain_reduction_db};
+  };
+
+  const auto without_key = render(false);
+  const auto with_key = render(true);
+  REQUIRE(with_key.first < without_key.first * 0.35);
+  REQUIRE(with_key.second < -3.0f);
+  REQUIRE(without_key.second > -0.5f);
+}
+
+TEST_CASE("Routed mixer delivers scene sidechain keys to bus inserts", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+
+  auto render = [&](bool with_key) {
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Bus master("master", "master");
+    master.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PostFader, "dynamics.sidechainRouter",
+         "{\"thresholdDb\":-10,\"rangeDb\":18,\"attackMs\":0,\"releaseMs\":50}",
+         with_key ? "host" : ""});
+    scene.buses.push_back(master);
+    scene.buses.push_back({"discard", "aux"});
+
+    sonare::mixing::api::Strip host;
+    host.id = "host";
+    scene.strips.push_back(host);
+    sonare::mixing::api::Strip bed;
+    bed.id = "bed";
+    scene.strips.push_back(bed);
+    scene.connections.push_back({"host", "discard"});
+    scene.connections.push_back({"bed", "master"});
+
+    const std::string json = sonare::mixing::api::scene_to_json(scene);
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+
+    std::array<float, kBlock> host_l{};
+    std::array<float, kBlock> host_r{};
+    std::array<float, kBlock> bed_l{};
+    std::array<float, kBlock> bed_r{};
+    host_l.fill(1.0f);
+    host_r.fill(1.0f);
+    bed_l.fill(0.05f);
+    bed_r.fill(0.05f);
+
+    const float* in_l[] = {host_l.data(), bed_l.data()};
+    const float* in_r[] = {host_r.data(), bed_r.data()};
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 2, out_l.data(), out_r.data(), kBlock) ==
+            SONARE_OK);
+
+    const double energy = block_energy({out_l.begin(), out_l.end()}, {out_r.begin(), out_r.end()});
+    sonare_mixer_destroy(mixer);
+    return energy;
+  };
+
+  const double without_key = render(false);
+  const double with_key = render(true);
+  REQUIRE(with_key < without_key * 0.35);
+}
+
+TEST_CASE("Scene-loaded mixer exposes strip meter and goniometer snapshots", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+  constexpr int kBlocks = 96;  // > 1 second, enough for momentary/integrated LUFS.
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip vocal;
+  vocal.id = "vocal";
+  vocal.input_trim_db = 3.0f;
+  vocal.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor",
+                           "{\"thresholdDb\":-30,\"ratio\":4,\"attackMs\":0,\"releaseMs\":50}"});
+  scene.strips.push_back(vocal);
+  scene.buses.push_back({"master", "master"});
+  scene.connections.push_back({"vocal", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_strip_by_id(mixer, "vocal");
+  REQUIRE(strip != nullptr);
+
+  std::array<float, kBlock> in_l{};
+  std::array<float, kBlock> in_r{};
+  const float* inputs_l[] = {in_l.data()};
+  const float* inputs_r[] = {in_r.data()};
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  for (int block = 0; block < kBlocks; ++block) {
+    for (int i = 0; i < kBlock; ++i) {
+      const int n = block * kBlock + i;
+      const float s = 0.7f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(n) /
+                                      static_cast<float>(kSr));
+      in_l[static_cast<size_t>(i)] = s;
+      in_r[static_cast<size_t>(i)] = -0.5f * s;
+    }
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                        kBlock) == SONARE_OK);
+  }
+
+  SonareMixMeterSnapshot meter{};
+  REQUIRE(sonare_strip_meter(strip, &meter) == SONARE_OK);
+  REQUIRE(meter.seq >= static_cast<uint64_t>(kBlocks));
+  REQUIRE(meter.gain_reduction_db < -0.1f);
+  REQUIRE(meter.max_true_peak_db > sonare::constants::kFloorDb);
+  REQUIRE(std::isfinite(meter.momentary_lufs));
+  REQUIRE(meter.momentary_lufs > -70.0f);
+  REQUIRE(std::isfinite(meter.integrated_lufs));
+  REQUIRE(meter.integrated_lufs > -70.0f);
+
+  std::array<SonareMixGoniometerPoint, 8> points{};
+  const size_t count = sonare_strip_read_goniometer_latest(strip, points.data(), points.size());
+  REQUIRE(count == points.size());
+  REQUIRE(std::isfinite(points[0].left));
+  REQUIRE(std::isfinite(points[0].right));
+  REQUIRE(std::abs(points[0].left) > 0.0f);
+  REQUIRE(std::abs(points[0].right) > 0.0f);
 
   sonare_mixer_destroy(mixer);
 }

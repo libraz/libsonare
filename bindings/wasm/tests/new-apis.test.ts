@@ -194,6 +194,26 @@ describe('v1.2 feature additions (WASM)', () => {
       restored.delete();
       mixer.delete();
     });
+
+    it('processes 128-sample render quanta through the single WASM module', () => {
+      const quantum = 128;
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, quantum);
+      mixer.compile();
+
+      const vocalL = new Float32Array(quantum);
+      const vocalR = new Float32Array(quantum);
+      const returnL = new Float32Array(quantum);
+      const returnR = new Float32Array(quantum);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+
+      const out = mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
+      expect(out.left.length).toBe(quantum);
+      expect(out.right.length).toBe(quantum);
+      expect(blockEnergy(out)).toBeGreaterThan(0);
+
+      mixer.delete();
+    });
   });
 
   describe('Audio class methods', () => {

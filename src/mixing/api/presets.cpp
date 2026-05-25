@@ -87,7 +87,7 @@ Scene make_commentary_ducking() {
   bed.id = "music-bed";
   bed.fader_db = -18.0f;
   bed.inserts.push_back(
-      {InsertSlot::PostFader, "dynamics.sidechainRouter", "{\"key\":\"host\",\"rangeDb\":18}"});
+      {InsertSlot::PostFader, "dynamics.sidechainRouter", "{\"rangeDb\":18}", "host"});
   scene.strips.push_back(bed);
 
   scene.connections.push_back({"host", "master"});

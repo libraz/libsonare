@@ -195,6 +195,34 @@ audio = libsonare.Audio.from_file("song.wav")
 pop_mastered = audio.master_audio("pop")
 ```
 
+### Mixing
+
+```python
+import libsonare
+
+libsonare.mixing_scene_preset_names()
+# -> ['vocalReverbSend', ...]
+scene_json = libsonare.mixing_scene_preset_json("vocalReverbSend")
+
+offline = libsonare.mix_stereo(
+    [(vocal_l, vocal_r), (music_l, music_r)],
+    sample_rate=sr,
+    input_trim_db=[3.0, 0.0],
+    fader_db=[-3.0, -12.0],
+    pan=[0.0, -0.2],
+    width=[1.0, 0.9],
+)
+
+mixer = libsonare.Mixer.from_scene_json(scene_json, sample_rate=sr, block_size=512)
+try:
+    block_l, block_r = mixer.process_stereo(
+        [vocal_block_l, return_block_l],
+        [vocal_block_r, return_block_r],
+    )
+finally:
+    mixer.close()
+```
+
 ### Streaming mastering chain
 
 `StreamingMasteringChain` runs the same pipeline block-by-block for real-time

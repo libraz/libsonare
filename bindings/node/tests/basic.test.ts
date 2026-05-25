@@ -818,6 +818,9 @@ describe('sonare native binding', () => {
     it('processes stereo blocks and exposes a spectrum snapshot', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+      eq.setGainScale(0.5);
+      eq.setOutputGainDb(3);
+      eq.setOutputPan(0);
       const left = new Float32Array(512).fill(0.1);
       const right = new Float32Array(512).fill(0.1);
       const out = eq.processStereo(left, right);
@@ -827,6 +830,8 @@ describe('sonare native binding', () => {
       const snapshot = eq.spectrum();
       expect(snapshot.seq).toBeGreaterThan(0);
       expect(snapshot.bandGainDb.length).toBe(24);
+      expect(snapshot.bandGainDb[0]).toBeGreaterThan(2.5);
+      expect(snapshot.bandGainDb[0]).toBeLessThan(3.5);
     });
 
     it('switches phase mode and reports linear-phase latency', () => {
@@ -837,6 +842,31 @@ describe('sonare native binding', () => {
       eq.setPhaseMode('zero');
       expect(eq.latencySamples()).toBe(0);
       expect(() => eq.setPhaseMode('bogus' as unknown as 'zero')).toThrow();
+    });
+
+    it('accepts an external sidechain key for dynamic bands', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      eq.setBand(0, {
+        type: 'Peak',
+        frequencyHz: 1000,
+        gainDb: 0,
+        q: 2,
+        enabled: true,
+        dynamic: true,
+        externalSidechain: true,
+        thresholdDb: -32,
+        ratio: 4,
+        rangeDb: -12,
+        attackMs: 0,
+        releaseMs: 20,
+      });
+      const audio = new Float32Array(512).fill(0.02);
+      const key = generateSine(1000, 48000, 512 / 48000);
+      eq.setSidechainMono(key);
+      const out = eq.processMono(audio);
+      expect(out.length).toBe(512);
+      expect(Number.isFinite(out[0])).toBe(true);
+      eq.clearSidechain();
     });
   });
 

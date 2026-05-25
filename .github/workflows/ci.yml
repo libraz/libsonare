@@ -22,6 +22,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' |
+            xargs -0 clang-format --dry-run --Werror
+
   lint:
     runs-on: ubuntu-latest
     defaults:
@@ -40,6 +54,61 @@ jobs:
       - run: yarn lint
 
   build-and-test:
+    name: Native C++ (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel
+
+  sanitizer:
+    name: ASan/UBSan (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang build-essential libeigen3-dev
+      - name: Configure with sanitizers
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -B build-sanitize \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DBUILD_CLI=OFF \
+            -DSONARE_WITH_FFMPEG=OFF \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build
+        run: cmake --build build-sanitize --parallel
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build-sanitize --output-on-failure --parallel
+      # Windows is intentionally excluded: MSVC sanitizer coverage differs from
+      # Clang/GCC ASan+UBSan and would make this gate inconsistent across OSes.
+
+  coverage-wasm:
+    name: Coverage + WASM
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -190,19 +259,3 @@ jobs:
         with:
           name: wasm-size-report
           path: build/reports/wasm-size-*.json
-
-  native-matrix:
-    name: Native C++ (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
-      - name: Build
-        run: cmake --build build --parallel
-      - name: Test
-        run: ctest --test-dir build --output-on-failure --parallel

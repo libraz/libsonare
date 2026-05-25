@@ -88,6 +88,15 @@ class SonareMixMeterSnapshot(ctypes.Structure):
     ]
 
 
+class SonareMixGoniometerPoint(ctypes.Structure):
+    """Maps to SonareMixGoniometerPoint in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.c_float),
+        ("right", ctypes.c_float),
+    ]
+
+
 class SonareBpmCandidate(ctypes.Structure):
     """Maps to SonareBpmCandidate in sonare_c.h."""
 
@@ -393,6 +402,7 @@ class SonareEqSnapshot(ctypes.Structure):
         ("post_count", ctypes.c_size_t),
         ("band_gain_db", ctypes.c_float * SONARE_EQ_MAX_BANDS),
         ("profile_db", ctypes.c_float * SONARE_EQ_SPECTRUM_PROFILE_BANDS),
+        ("last_auto_gain_db", ctypes.c_float),
         ("seq", ctypes.c_uint64),
     ]
 
@@ -1581,8 +1591,23 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             lib.sonare_eq_set_auto_gain.argtypes = [ctypes.c_void_p, ctypes.c_int]
             lib.sonare_eq_last_auto_gain_db.restype = ctypes.c_float
             lib.sonare_eq_last_auto_gain_db.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_gain_scale.restype = ctypes.c_int32
+            lib.sonare_eq_set_gain_scale.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            lib.sonare_eq_set_output_gain_db.restype = ctypes.c_int32
+            lib.sonare_eq_set_output_gain_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            lib.sonare_eq_set_output_pan.restype = ctypes.c_int32
+            lib.sonare_eq_set_output_pan.argtypes = [ctypes.c_void_p, ctypes.c_float]
             lib.sonare_eq_latency_samples.restype = ctypes.c_int
             lib.sonare_eq_latency_samples.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_sidechain.restype = ctypes.c_int32
+            lib.sonare_eq_set_sidechain.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_eq_clear_sidechain.restype = None
+            lib.sonare_eq_clear_sidechain.argtypes = [ctypes.c_void_p]
             lib.sonare_eq_process.restype = ctypes.c_int32
             lib.sonare_eq_process.argtypes = [
                 ctypes.c_void_p,
@@ -1676,6 +1701,8 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         lib.sonare_mixer_create.argtypes = [ctypes.c_int, ctypes.c_int]
         lib.sonare_mixer_add_strip.restype = ctypes.c_void_p
         lib.sonare_mixer_add_strip.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        lib.sonare_strip_set_input_trim_db.restype = ctypes.c_int32
+        lib.sonare_strip_set_input_trim_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
         lib.sonare_strip_set_fader_db.restype = ctypes.c_int32
         lib.sonare_strip_set_fader_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
         lib.sonare_strip_set_pan.restype = ctypes.c_int32
@@ -1709,6 +1736,12 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         lib.sonare_strip_meter.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(SonareMixMeterSnapshot),
+        ]
+        lib.sonare_strip_read_goniometer_latest.restype = ctypes.c_size_t
+        lib.sonare_strip_read_goniometer_latest.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMixGoniometerPoint),
+            ctypes.c_size_t,
         ]
         lib.sonare_mixer_from_scene_json.restype = ctypes.c_void_p
         lib.sonare_mixer_from_scene_json.argtypes = [

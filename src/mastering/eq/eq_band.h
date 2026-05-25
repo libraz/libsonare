@@ -50,6 +50,7 @@ struct DynamicParams {
   float lookahead_ms = 0.0f;
   float sidechain_freq_hz = -1.0f;
   float sidechain_q = 1.0f;
+  bool external_sidechain = false;
 };
 
 struct EqBand {

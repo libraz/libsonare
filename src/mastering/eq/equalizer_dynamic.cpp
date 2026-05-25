@@ -129,8 +129,11 @@ void EqualizerProcessor::update_dynamic_state(const float* const* channels, int 
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& band = bands_[i];
     if (band.enabled && band.dyn.enabled) {
-      last_band_detector_db_[i] =
-          band_detector_db(channels, num_channels, num_samples, sample_rate_, band);
+      const bool use_external = band.dyn.external_sidechain && sidechain_channels_ != nullptr;
+      const float* const* detector_channels = use_external ? sidechain_channels_ : channels;
+      const int detector_num_channels = use_external ? sidechain_num_channels_ : num_channels;
+      last_band_detector_db_[i] = band_detector_db(detector_channels, detector_num_channels,
+                                                   num_samples, sample_rate_, band);
       if (band.dyn.auto_threshold) {
         const float target = last_band_detector_db_[i] - 6.0f;
         if (auto_threshold_db_[i] <= kFloorDb + 1.0f) {
@@ -146,6 +149,15 @@ void EqualizerProcessor::update_dynamic_state(const float* const* channels, int 
       last_band_detector_db_[i] = kFloorDb;
       last_applied_gain_db_[i] = 0.0f;
     }
+  }
+}
+
+void EqualizerProcessor::validate_sidechain(int expected_samples) const {
+  if (sidechain_channels_ == nullptr) {
+    return;
+  }
+  if (sidechain_num_samples_ != expected_samples) {
+    throw std::invalid_argument("sidechain length must match process block length");
   }
 }
 
@@ -169,6 +181,38 @@ void EqualizerProcessor::apply_auto_gain(float* const* channels, int num_channel
   last_auto_gain_db_ = smoothed_auto_gain_db_;
   const float gain = db_to_linear(last_auto_gain_db_);
   for (int ch = 0; ch < num_channels; ++ch) {
+    for (int i = 0; i < num_samples; ++i) {
+      channels[ch][i] *= gain;
+    }
+  }
+}
+
+void EqualizerProcessor::apply_output_gain_and_pan(float* const* channels, int num_channels,
+                                                   int num_samples) noexcept {
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    return;
+  }
+  const float gain = db_to_linear(output_gain_db_);
+  float left_gain = gain;
+  float right_gain = gain;
+  if (num_channels >= 2) {
+    if (output_pan_ < 0.0f) {
+      right_gain *= 1.0f + output_pan_;
+    } else if (output_pan_ > 0.0f) {
+      left_gain *= 1.0f - output_pan_;
+    }
+  }
+  if (num_channels == 1) {
+    for (int i = 0; i < num_samples; ++i) {
+      channels[0][i] *= gain;
+    }
+    return;
+  }
+  for (int i = 0; i < num_samples; ++i) {
+    channels[0][i] *= left_gain;
+    channels[1][i] *= right_gain;
+  }
+  for (int ch = 2; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
       channels[ch][i] *= gain;
     }

@@ -544,6 +544,12 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
         throw std::runtime_error("failed to add mixer strip");
       }
       strips.push_back(strip);
+      Napi::Value inputTrim = OptionAt(env, options, "inputTrimDb", index);
+      if (inputTrim.IsNumber()) {
+        SonareError err =
+            sonare_strip_set_input_trim_db(strip, inputTrim.As<Napi::Number>().FloatValue());
+        if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+      }
       Napi::Value fader = OptionAt(env, options, "faderDb", index);
       if (fader.IsNumber()) {
         SonareError err = sonare_strip_set_fader_db(strip, fader.As<Napi::Number>().FloatValue());

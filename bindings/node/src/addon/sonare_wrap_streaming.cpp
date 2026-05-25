@@ -156,6 +156,7 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.dyn.release_ms = static_cast<float>(NumberKey(object, "releaseMs", band.dyn.release_ms));
   band.dyn.lookahead_ms =
       static_cast<float>(NumberKey(object, "lookaheadMs", band.dyn.lookahead_ms));
+  band.dyn.external_sidechain = BoolKey(object, "externalSidechain", band.dyn.external_sidechain);
   band.dyn.sidechain_freq_hz =
       static_cast<float>(NumberKey(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz));
   band.dyn.sidechain_q = static_cast<float>(NumberKey(object, "sidechainQ", band.dyn.sidechain_q));
@@ -320,20 +321,26 @@ Napi::Value StreamingMasteringChainWrap::StageNames(const Napi::CallbackInfo& in
 Napi::FunctionReference StreamingEqualizerWrap::constructor_;
 
 Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func =
-      DefineClass(env, "StreamingEqualizer",
-                  {
-                      InstanceMethod<&StreamingEqualizerWrap::SetBand>("setBand"),
-                      InstanceMethod<&StreamingEqualizerWrap::Clear>("clear"),
-                      InstanceMethod<&StreamingEqualizerWrap::SetPhaseMode>("setPhaseMode"),
-                      InstanceMethod<&StreamingEqualizerWrap::SetAutoGain>("setAutoGain"),
-                      InstanceMethod<&StreamingEqualizerWrap::LastAutoGainDb>("lastAutoGainDb"),
-                      InstanceMethod<&StreamingEqualizerWrap::LatencySamples>("latencySamples"),
-                      InstanceMethod<&StreamingEqualizerWrap::ProcessMono>("processMono"),
-                      InstanceMethod<&StreamingEqualizerWrap::ProcessStereo>("processStereo"),
-                      InstanceMethod<&StreamingEqualizerWrap::Spectrum>("spectrum"),
-                      InstanceMethod<&StreamingEqualizerWrap::Match>("match"),
-                  });
+  Napi::Function func = DefineClass(
+      env, "StreamingEqualizer",
+      {
+          InstanceMethod<&StreamingEqualizerWrap::SetBand>("setBand"),
+          InstanceMethod<&StreamingEqualizerWrap::Clear>("clear"),
+          InstanceMethod<&StreamingEqualizerWrap::SetPhaseMode>("setPhaseMode"),
+          InstanceMethod<&StreamingEqualizerWrap::SetAutoGain>("setAutoGain"),
+          InstanceMethod<&StreamingEqualizerWrap::SetGainScale>("setGainScale"),
+          InstanceMethod<&StreamingEqualizerWrap::SetOutputGainDb>("setOutputGainDb"),
+          InstanceMethod<&StreamingEqualizerWrap::SetOutputPan>("setOutputPan"),
+          InstanceMethod<&StreamingEqualizerWrap::SetSidechainMono>("setSidechainMono"),
+          InstanceMethod<&StreamingEqualizerWrap::SetSidechainStereo>("setSidechainStereo"),
+          InstanceMethod<&StreamingEqualizerWrap::ClearSidechain>("clearSidechain"),
+          InstanceMethod<&StreamingEqualizerWrap::LastAutoGainDb>("lastAutoGainDb"),
+          InstanceMethod<&StreamingEqualizerWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&StreamingEqualizerWrap::ProcessMono>("processMono"),
+          InstanceMethod<&StreamingEqualizerWrap::ProcessStereo>("processStereo"),
+          InstanceMethod<&StreamingEqualizerWrap::Spectrum>("spectrum"),
+          InstanceMethod<&StreamingEqualizerWrap::Match>("match"),
+      });
 
   constructor_ = Napi::Persistent(func);
   constructor_.SuppressDestruct();
@@ -427,6 +434,117 @@ Napi::Value StreamingEqualizerWrap::SetAutoGain(const Napi::CallbackInfo& info) 
   return env.Undefined();
 }
 
+Napi::Value StreamingEqualizerWrap::SetGainScale(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (scale)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  eq_->set_gain_scale(static_cast<float>(info[0].As<Napi::Number>().DoubleValue()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::SetOutputGainDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (gainDb)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  eq_->set_output_gain_db(static_cast<float>(info[0].As<Napi::Number>().DoubleValue()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::SetOutputPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (pan)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  eq_->set_output_pan(static_cast<float>(info[0].As<Napi::Number>().DoubleValue()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected (Float32Array)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  sidechain_left_.Reset();
+  sidechain_right_.Reset();
+  Napi::Float32Array key = info[0].As<Napi::Float32Array>();
+  sidechain_left_ = Napi::Persistent(key);
+  sidechain_channels_[0] = key.Data();
+  sidechain_channels_[1] = nullptr;
+  eq_->set_sidechain(sidechain_channels_.data(), 1, static_cast<int>(key.ElementLength()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "Expected (leftFloat32Array, rightFloat32Array)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  Napi::Float32Array left = info[0].As<Napi::Float32Array>();
+  Napi::Float32Array right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::TypeError::New(env, "left and right sidechain lengths must match")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  sidechain_left_.Reset();
+  sidechain_right_.Reset();
+  sidechain_left_ = Napi::Persistent(left);
+  sidechain_right_ = Napi::Persistent(right);
+  sidechain_channels_[0] = left.Data();
+  sidechain_channels_[1] = right.Data();
+  eq_->set_sidechain(sidechain_channels_.data(), 2, static_cast<int>(left.ElementLength()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (eq_) {
+    eq_->clear_sidechain();
+  }
+  sidechain_left_.Reset();
+  sidechain_right_.Reset();
+  sidechain_channels_ = {};
+  return env.Undefined();
+}
+
 Napi::Value StreamingEqualizerWrap::LastAutoGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!eq_) {
@@ -461,6 +579,9 @@ Napi::Value StreamingEqualizerWrap::ProcessMono(const Napi::CallbackInfo& info) 
     std::memcpy(out_arr.Data(), typed.Data(), length * sizeof(float));
     float* channels[] = {out_arr.Data()};
     eq_->process(channels, 1, static_cast<int>(length));
+    sidechain_left_.Reset();
+    sidechain_right_.Reset();
+    sidechain_channels_ = {};
   }
   return out_arr;
   SONARE_NODE_CATCH(env)
@@ -493,6 +614,9 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
     std::memcpy(right_out.Data(), right.Data(), length * sizeof(float));
     float* channels[] = {left_out.Data(), right_out.Data()};
     eq_->process(channels, 2, static_cast<int>(length));
+    sidechain_left_.Reset();
+    sidechain_right_.Reset();
+    sidechain_channels_ = {};
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", left_out);
@@ -538,6 +662,7 @@ Napi::Value StreamingEqualizerWrap::Spectrum(const Napi::CallbackInfo& info) {
     profile[i] = snapshot.profile_db[i];
   }
   out.Set("profileDb", profile);
+  out.Set("lastAutoGainDb", Napi::Number::New(env, eq_->last_auto_gain_db()));
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
   return out;
   SONARE_NODE_CATCH(env)

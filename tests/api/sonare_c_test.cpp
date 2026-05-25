@@ -787,6 +787,11 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                "\"proportional_q\":true}") == SONARE_OK);
     REQUIRE(sonare_eq_latency_samples(eq) == 0);
     sonare_eq_set_auto_gain(eq, 1);
+    REQUIRE(sonare_eq_set_gain_scale(eq, 0.5f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_gain_scale(eq, -0.1f) != SONARE_OK);
+    REQUIRE(sonare_eq_set_output_gain_db(eq, 3.0f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_output_pan(eq, 0.25f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_output_pan(eq, 1.5f) != SONARE_OK);
 
     std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
     std::vector<float> right = left;
@@ -802,7 +807,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(snapshot.seq == 1);
     REQUIRE(snapshot.pre_count == SONARE_EQ_SPECTRUM_STREAM_CAPACITY);
     REQUIRE(snapshot.post_count == SONARE_EQ_SPECTRUM_STREAM_CAPACITY);
-    REQUIRE(snapshot.band_gain_db[0] > 8.0f);
+    REQUIRE(snapshot.band_gain_db[0] > 4.0f);
+    REQUIRE(snapshot.band_gain_db[0] < 5.0f);
+    REQUIRE(snapshot.last_auto_gain_db < 0.0f);
 
     REQUIRE(sonare_eq_set_phase_mode(eq, SONARE_EQ_PHASE_LINEAR) == SONARE_OK);
     REQUIRE(sonare_eq_latency_samples(eq) > 0);
@@ -919,14 +926,13 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::strstr(names, "eq.equalizer") != nullptr);
     REQUIRE(std::strstr(names, "stereo.imager") != nullptr);
 
-    SonareMasteringParam eq_params[] = {{"band0.enabled", 1.0},
-                                        {"band0.frequencyHz", 440.0},
-                                        {"band0.gainDb", 6.0},
-                                        {"band0.q", 1.0},
-                                        {"autoGain", 1.0}};
+    SonareMasteringParam eq_params[] = {{"band0.enabled", 1.0}, {"band0.frequencyHz", 440.0},
+                                        {"band0.gainDb", 6.0},  {"band0.q", 1.0},
+                                        {"autoGain", 1.0},      {"gainScale", 0.5},
+                                        {"outputGainDb", 1.0},  {"outputPan", 0.0}};
     SonareMasteringResult eq_result{};
     REQUIRE(sonare_mastering_apply_processor("eq.equalizer", samples.data(), samples.size(), 22050,
-                                             eq_params, 5, &eq_result) == SONARE_OK);
+                                             eq_params, 8, &eq_result) == SONARE_OK);
     REQUIRE(eq_result.samples != nullptr);
     REQUIRE(eq_result.length == samples.size());
     sonare_free_mastering_result(&eq_result);

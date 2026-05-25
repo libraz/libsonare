@@ -338,6 +338,7 @@ export interface WasmEqSpectrumSnapshot {
   postRight: Float32Array;
   bandGainDb: Float32Array;
   profileDb: Float32Array;
+  lastAutoGainDb: number;
   seq: number;
 }
 
@@ -346,6 +347,9 @@ export interface WasmStreamingEqualizer {
   clear: () => void;
   setPhaseMode: (mode: number) => void;
   setAutoGain: (enabled: boolean) => void;
+  setGainScale: (scale: number) => void;
+  setOutputGainDb: (gainDb: number) => void;
+  setOutputPan: (pan: number) => void;
   lastAutoGainDb: () => number;
   latencySamples: () => number;
   processMono: (samples: Float32Array) => Float32Array;

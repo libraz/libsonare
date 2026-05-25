@@ -944,6 +944,9 @@ def cmd_eq(args: argparse.Namespace) -> int:
             "phaseMode": float(args.phase_mode),
             "resolution": float(args.resolution),
             "autoGain": 1.0 if args.auto_gain else 0.0,
+            "gainScale": float(args.gain_scale),
+            "outputGainDb": float(args.output_gain_db),
+            "outputPan": float(args.output_pan),
         }
     result = mastering_process("eq.equalizer", samples, sample_rate=sr, params=params)
 
@@ -1162,6 +1165,9 @@ def main() -> None:
         help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
     )
     eq_p.add_argument("--auto-gain", action="store_true")
+    eq_p.add_argument("--gain-scale", type=float, default=1.0)
+    eq_p.add_argument("--output-gain-db", type=float, default=0.0)
+    eq_p.add_argument("--output-pan", type=float, default=0.0)
     eq_p.add_argument("--proportional-q", action="store_true")
     eq_p.add_argument("--dynamic", action="store_true")
     eq_p.add_argument("--threshold-db", type=float, default=-24.0)

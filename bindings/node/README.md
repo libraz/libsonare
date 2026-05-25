@@ -231,6 +231,32 @@ const audio = Audio.fromFile('song.wav');
 const popMastered = audio.masterAudio('pop');
 ```
 
+### Mixing
+
+```typescript
+import {
+  Mixer,
+  mixStereo,
+  mixingScenePresetJson,
+  mixingScenePresetNames,
+} from '@libraz/libsonare-native';
+
+mixingScenePresetNames(); // ['vocalReverbSend', ...]
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+
+const offline = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  inputTrimDb: [3, 0],
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+
+const mixer = Mixer.fromSceneJson(sceneJson, sampleRate, 512);
+const block = mixer.processStereo([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR]);
+console.log(offline.meters[0].maxTruePeakDb, block.left.length);
+mixer.destroy();
+```
+
 ### Streaming mastering chain
 
 `StreamingMasteringChain` runs the same pipeline block-by-block for real-time

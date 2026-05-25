@@ -255,6 +255,7 @@ class EqSpectrumSnapshot:
     post_right: list[float]
     band_gain_db: list[float]
     profile_db: list[float]
+    last_auto_gain_db: float
     seq: int
 
     @property
@@ -280,6 +281,10 @@ class EqSpectrumSnapshot:
     @property
     def profileDb(self) -> list[float]:  # noqa: N802
         return self.profile_db
+
+    @property
+    def lastAutoGainDb(self) -> float:  # noqa: N802
+        return self.last_auto_gain_db
 
 
 @dataclass(frozen=True, slots=True)

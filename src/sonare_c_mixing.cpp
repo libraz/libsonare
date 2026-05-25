@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <memory>
 #include <sstream>
@@ -88,13 +89,25 @@ const char* join_names(const std::vector<std::string>& values, std::string& stor
 // prepared externally (by SonareStrip), so prepare()/reset() only forward reset.
 class StripNode final : public sonare::rt::ProcessorBase {
  public:
-  StripNode(sonare::mixing::ChannelStrip* strip, int num_sends)
-      : strip_(strip), num_sends_(num_sends) {}
+  struct SidechainInput {
+    unsigned int insert_index = 0;
+    int left_port = 0;
+    int right_port = 0;
+  };
+
+  StripNode(sonare::mixing::ChannelStrip* strip, int num_sends,
+            std::vector<SidechainInput> sidechain_inputs = {})
+      : strip_(strip), num_sends_(num_sends), sidechain_inputs_(std::move(sidechain_inputs)) {}
 
   void prepare(double, int) override {}  // inner strip prepared via add_strip()
 
   void process(float* const* channels, int num_channels, int num_samples) override {
     (void)num_channels;  // Node passes num_ports; main path always uses L/R.
+    strip_->clear_insert_sidechains();
+    for (const auto& input : sidechain_inputs_) {
+      const float* key[2] = {channels[input.left_port], channels[input.right_port]};
+      strip_->set_insert_sidechain(input.insert_index, key, 2, num_samples);
+    }
     strip_->process_at(channels, 2, num_samples, sample_pos_);
     for (int s = 0; s < num_sends_; ++s) {
       float* dst[2] = {channels[2 + 2 * s], channels[3 + 2 * s]};
@@ -122,7 +135,42 @@ class StripNode final : public sonare::rt::ProcessorBase {
  private:
   sonare::mixing::ChannelStrip* strip_;  // borrowed; owned by SonareStrip
   int num_sends_;
+  std::vector<SidechainInput> sidechain_inputs_;
   int64_t sample_pos_ = 0;
+};
+
+class BusNode final : public sonare::rt::ProcessorBase {
+ public:
+  struct SidechainInput {
+    unsigned int insert_index = 0;
+    int left_port = 0;
+    int right_port = 0;
+  };
+
+  BusNode(std::unique_ptr<sonare::mixing::FxBus> bus,
+          std::vector<SidechainInput> sidechain_inputs = {})
+      : bus_(std::move(bus)), sidechain_inputs_(std::move(sidechain_inputs)) {}
+
+  void prepare(double sample_rate, int max_block_size) override {
+    bus_->prepare(sample_rate, max_block_size);
+  }
+
+  void process(float* const* channels, int, int num_samples) override {
+    bus_->clear_insert_sidechains();
+    for (const auto& input : sidechain_inputs_) {
+      const float* key[2] = {channels[input.left_port], channels[input.right_port]};
+      bus_->set_insert_sidechain(input.insert_index, key, 2, num_samples);
+    }
+    bus_->process(channels, 2, num_samples);
+  }
+
+  void reset() override { bus_->reset(); }
+  int latency_samples() const noexcept override { return bus_->latency_samples(); }
+  int latency_samples_q8() const noexcept override { return bus_->latency_samples_q8(); }
+
+ private:
+  std::unique_ptr<sonare::mixing::FxBus> bus_;
+  std::vector<SidechainInput> sidechain_inputs_;
 };
 
 void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
@@ -242,19 +290,76 @@ void build_and_compile(SonareMixer* mixer) {
     }
   }
 
-  // Bus nodes: pure summing pass-throughs (FxBus with no inserts).
+  // Bus nodes: post-sum insert chains live inside FxBus/BusProcessor.
+  std::unordered_map<std::string, std::vector<BusNode::SidechainInput>> bus_sidechain_inputs_by_id;
+  std::unordered_map<std::string, std::vector<std::string>> bus_sidechain_keys_by_id;
   for (const auto& bus : buses) {
-    if (!graph.add_node(bus.id, std::make_unique<sonare::mixing::FxBus>(), 2)) {
+    auto fx_bus = std::make_unique<sonare::mixing::FxBus>();
+    for (const auto& insert : bus.inserts) {
+      auto processor =
+          sonare::mastering::api::make_insert(insert.processor_name, insert.params_json);
+      if (!processor) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            "unknown bus insert processor: " + insert.processor_name + " (bus " + bus.id + ")");
+      }
+      fx_bus->add_insert(std::move(processor));
+    }
+    int next_sidechain_port = 2;
+    std::vector<BusNode::SidechainInput> sidechain_inputs;
+    std::vector<std::string> sidechain_keys;
+    for (size_t insert_index = 0; insert_index < bus.inserts.size(); ++insert_index) {
+      const auto& insert = bus.inserts[insert_index];
+      if (insert.sidechain_key.empty()) {
+        continue;
+      }
+      sidechain_inputs.push_back(
+          {static_cast<unsigned int>(insert_index), next_sidechain_port, next_sidechain_port + 1});
+      sidechain_keys.push_back(insert.sidechain_key);
+      next_sidechain_port += 2;
+    }
+    bus_sidechain_inputs_by_id[bus.id] = sidechain_inputs;
+    bus_sidechain_keys_by_id[bus.id] = sidechain_keys;
+    auto node = std::make_unique<BusNode>(std::move(fx_bus), std::move(sidechain_inputs));
+    if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
       throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
     }
   }
 
   // Strip nodes: 2 main ports + 2 ports per send tap.
   std::unordered_map<std::string, SonareStrip*> strip_by_id;
+  std::unordered_map<std::string, std::vector<StripNode::SidechainInput>> sidechain_inputs_by_id;
+  std::unordered_map<std::string, std::vector<std::string>> sidechain_keys_by_id;
   for (const auto& strip : mixer->strips) {
     const int num_sends = static_cast<int>(strip->strip.num_sends());
-    const int num_ports = 2 + 2 * num_sends;
-    auto node = std::make_unique<StripNode>(&strip->strip, num_sends);
+    int next_sidechain_port = 2 + 2 * num_sends;
+    std::vector<StripNode::SidechainInput> sidechain_inputs;
+    std::vector<std::string> sidechain_keys;
+    const size_t pre_insert_count =
+        std::count_if(strip->scene_strip.inserts.begin(), strip->scene_strip.inserts.end(),
+                      [](const sonare::mixing::api::Insert& insert) {
+                        return insert.slot == sonare::mixing::api::InsertSlot::PreFader;
+                      });
+    size_t pre_index = 0;
+    size_t post_index = 0;
+    for (size_t insert_index = 0; insert_index < strip->scene_strip.inserts.size();
+         ++insert_index) {
+      const auto& insert = strip->scene_strip.inserts[insert_index];
+      const size_t combined_insert_index = insert.slot == sonare::mixing::api::InsertSlot::PreFader
+                                               ? pre_index++
+                                               : pre_insert_count + post_index++;
+      if (insert.sidechain_key.empty()) {
+        continue;
+      }
+      sidechain_inputs.push_back({static_cast<unsigned int>(combined_insert_index),
+                                  next_sidechain_port, next_sidechain_port + 1});
+      sidechain_keys.push_back(insert.sidechain_key);
+      next_sidechain_port += 2;
+    }
+    const int num_ports = next_sidechain_port;
+    sidechain_inputs_by_id[strip->id] = sidechain_inputs;
+    sidechain_keys_by_id[strip->id] = sidechain_keys;
+    auto node = std::make_unique<StripNode>(&strip->strip, num_sends, std::move(sidechain_inputs));
     if (!graph.add_node(strip->id, std::move(node), num_ports)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "duplicate or invalid strip id: " + strip->id);
@@ -307,6 +412,52 @@ void build_and_compile(SonareMixer* mixer) {
       const int src_r = 3 + 2 * static_cast<int>(s);
       checked_connect({strip->id, src_l, dest, 0, sonare::graph::Connection::Mix::Add});
       checked_connect({strip->id, src_r, dest, 1, sonare::graph::Connection::Mix::Add});
+    }
+  }
+
+  // Insert sidechain keys: source main output -> destination strip key input ports.
+  for (const auto& strip : mixer->strips) {
+    const auto inputs_it = sidechain_inputs_by_id.find(strip->id);
+    const auto keys_it = sidechain_keys_by_id.find(strip->id);
+    if (inputs_it == sidechain_inputs_by_id.end() || keys_it == sidechain_keys_by_id.end()) {
+      continue;
+    }
+    const auto& inputs = inputs_it->second;
+    const auto& keys = keys_it->second;
+    for (size_t index = 0; index < inputs.size(); ++index) {
+      const std::string& key_source = keys[index];
+      if (graph.node(key_source) == nullptr) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            "sidechain key references unknown node: " + key_source + " (strip " + strip->id + ")");
+      }
+      checked_connect(
+          {key_source, 0, strip->id, inputs[index].left_port, sonare::graph::Connection::Mix::Add});
+      checked_connect({key_source, 1, strip->id, inputs[index].right_port,
+                       sonare::graph::Connection::Mix::Add});
+    }
+  }
+
+  for (const auto& bus : buses) {
+    const auto inputs_it = bus_sidechain_inputs_by_id.find(bus.id);
+    const auto keys_it = bus_sidechain_keys_by_id.find(bus.id);
+    if (inputs_it == bus_sidechain_inputs_by_id.end() ||
+        keys_it == bus_sidechain_keys_by_id.end()) {
+      continue;
+    }
+    const auto& inputs = inputs_it->second;
+    const auto& keys = keys_it->second;
+    for (size_t index = 0; index < inputs.size(); ++index) {
+      const std::string& key_source = keys[index];
+      if (graph.node(key_source) == nullptr) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            "bus sidechain key references unknown node: " + key_source + " (bus " + bus.id + ")");
+      }
+      checked_connect(
+          {key_source, 0, bus.id, inputs[index].left_port, sonare::graph::Connection::Mix::Add});
+      checked_connect(
+          {key_source, 1, bus.id, inputs[index].right_port, sonare::graph::Connection::Mix::Add});
     }
   }
 
@@ -377,6 +528,17 @@ SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db) {
   SONARE_C_TRY
   strip->strip.set_fader_db(db);
   strip->scene_strip.fader_db = db;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  strip->strip.set_input_trim_db(db);
+  strip->scene_strip.input_trim_db = db;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -479,6 +641,24 @@ SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot*
   SONARE_C_CATCH
 }
 
+size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGoniometerPoint* out,
+                                           size_t max_points) {
+  if (!strip || !out || max_points == 0) {
+    return 0;
+  }
+  try {
+    std::vector<sonare::mixing::GoniometerPoint> points(max_points);
+    const size_t count = strip->strip.read_goniometer_latest(points.data(), points.size());
+    for (size_t i = 0; i < count; ++i) {
+      out[i].left = points[i].left;
+      out[i].right = points[i].right;
+    }
+    return count;
+  } catch (...) {
+    return 0;
+  }
+}
+
 size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
   if (!mixer) {
     return 0;
@@ -553,6 +733,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
         return nullptr;
       }
       strip->scene_strip = scene_strip;
+      strip->strip.set_input_trim_db(scene_strip.input_trim_db);
       strip->strip.set_fader_db(scene_strip.fader_db);
       strip->strip.set_pan(scene_strip.pan);
       strip->strip.set_width(scene_strip.width);
@@ -636,6 +817,7 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
   for (const auto& strip : mixer->strips) {
     sonare::mixing::api::Strip scene_strip = strip->scene_strip;
     scene_strip.id = strip->id;
+    scene_strip.input_trim_db = strip->strip.input_trim_db();
     scene_strip.fader_db = strip->strip.fader_db();
     scene_strip.pan = strip->strip.pan();
     scene_strip.width = strip->strip.width();

@@ -109,8 +109,7 @@ int main(int argc, char** argv) {
 
   float max_abs_diff_mel = 0.0f;
   for (size_t i = 0; i < mel_out_eigen.size(); ++i) {
-    max_abs_diff_mel =
-        std::max(max_abs_diff_mel, std::abs(mel_out_eigen[i] - mel_out_scalar[i]));
+    max_abs_diff_mel = std::max(max_abs_diff_mel, std::abs(mel_out_eigen[i] - mel_out_scalar[i]));
   }
   const bool correctness_mel_pass = max_abs_diff_mel <= 1e-3f;
 
@@ -137,8 +136,7 @@ int main(int argc, char** argv) {
 
   const double chroma_eigen_ms = bench(
       [&] {
-        apply_gemv_eigen(chroma_fb.data(), power.data(), chroma_out_eigen.data(), kNChroma,
-                         kNBins);
+        apply_gemv_eigen(chroma_fb.data(), power.data(), chroma_out_eigen.data(), kNChroma, kNBins);
         g_sink += chroma_out_eigen[0];
       },
       runs, iterations);

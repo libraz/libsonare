@@ -96,6 +96,8 @@ class Parser {
         expect(':');
         if (key == "id")
           strip.id = parse_string();
+        else if (key == "inputTrimDb")
+          strip.input_trim_db = parse_float();
         else if (key == "faderDb")
           strip.fader_db = parse_float();
         else if (key == "pan")
@@ -137,6 +139,8 @@ class Parser {
           insert.processor_name = parse_string();
         else if (key == "params")
           insert.params_json = parse_string();
+        else if (key == "sidechainKey")
+          insert.sidechain_key = parse_string();
         else
           throw std::invalid_argument("unknown insert field: " + key);
         consume(',');
@@ -187,6 +191,8 @@ class Parser {
           bus.id = parse_string();
         else if (key == "role")
           bus.role = parse_string();
+        else if (key == "inserts")
+          bus.inserts = parse_inserts();
         else
           throw std::invalid_argument("unknown bus field: " + key);
         consume(',');
@@ -340,6 +346,8 @@ std::string scene_to_json(const Scene& scene) {
     out << "{";
     write_key(out, "id");
     out << "\"" << escape_json(strip.id) << "\",";
+    write_key(out, "inputTrimDb");
+    out << strip.input_trim_db << ",";
     write_key(out, "faderDb");
     out << strip.fader_db << ",";
     write_key(out, "pan");
@@ -359,7 +367,11 @@ std::string scene_to_json(const Scene& scene) {
       if (j > 0) out << ",";
       out << "{\"slot\":\"" << to_string(insert.slot) << "\",\"processor\":\""
           << escape_json(insert.processor_name) << "\",\"params\":\""
-          << escape_json(insert.params_json) << "\"}";
+          << escape_json(insert.params_json) << "\"";
+      if (!insert.sidechain_key.empty()) {
+        out << ",\"sidechainKey\":\"" << escape_json(insert.sidechain_key) << "\"";
+      }
+      out << "}";
     }
     out << "],";
     write_key(out, "sends");
@@ -380,7 +392,19 @@ std::string scene_to_json(const Scene& scene) {
     const auto& bus = scene.buses[i];
     if (i > 0) out << ",";
     out << "{\"id\":\"" << escape_json(bus.id) << "\",\"role\":\"" << escape_json(bus.role)
-        << "\"}";
+        << "\",\"inserts\":[";
+    for (size_t j = 0; j < bus.inserts.size(); ++j) {
+      const auto& insert = bus.inserts[j];
+      if (j > 0) out << ",";
+      out << "{\"slot\":\"" << to_string(insert.slot) << "\",\"processor\":\""
+          << escape_json(insert.processor_name) << "\",\"params\":\""
+          << escape_json(insert.params_json) << "\"";
+      if (!insert.sidechain_key.empty()) {
+        out << ",\"sidechainKey\":\"" << escape_json(insert.sidechain_key) << "\"";
+      }
+      out << "}";
+    }
+    out << "]}";
   }
   out << "],";
   write_key(out, "vcaGroups");

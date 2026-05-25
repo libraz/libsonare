@@ -1599,8 +1599,7 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_eq(const CliArgs& args, const Audio& audio) {
-  std::vector<mastering::api::Param> params =
-      parse_mastering_params(args.get_string("params"));
+  std::vector<mastering::api::Param> params = parse_mastering_params(args.get_string("params"));
   if (args.get_string("params").empty()) {
     params.push_back({"band0.enabled", 1.0});
     params.push_back({"band0.type", static_cast<double>(args.get_int("type", 0))});
@@ -1624,10 +1623,12 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     params.push_back({"phaseMode", static_cast<double>(args.get_int("phase-mode", 1))});
     params.push_back({"resolution", static_cast<double>(args.get_int("resolution", 0))});
     params.push_back({"autoGain", args.has("auto-gain") ? 1.0 : 0.0});
+    params.push_back({"gainScale", args.get_float("gain-scale", 1.0f)});
+    params.push_back({"outputGainDb", args.get_float("output-gain-db", 0.0f)});
+    params.push_back({"outputPan", args.get_float("output-pan", 0.0f)});
   }
-  const auto result = mastering::api::apply_named_processor("eq.equalizer", audio.data(),
-                                                            audio.size(), audio.sample_rate(),
-                                                            params);
+  const auto result = mastering::api::apply_named_processor(
+      "eq.equalizer", audio.data(), audio.size(), audio.sample_rate(), params);
   if (!args.output_file.empty()) {
     save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
              args.get_int("bits", 16));
@@ -1827,6 +1828,7 @@ int cmd_mixing_preset(const CliArgs& args, const Audio&) {
 
 int cmd_mix(const CliArgs& args, const Audio& audio) {
   mixing::ChannelStrip strip;
+  strip.set_input_trim_db(args.get_float("input-trim-db", 0.0f));
   strip.set_fader_db(args.get_float("fader-db", 0.0f));
   strip.set_pan(args.get_float("pan", 0.0f));
   strip.set_pan_mode(parse_pan_mode_option(args.get_string("pan-mode", "balance")));

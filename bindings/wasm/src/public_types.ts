@@ -395,6 +395,7 @@ export type MasteringProcessorParams = Record<string, number | boolean>;
 export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
 
 export interface MixOptions {
+  inputTrimDb?: number | number[];
   faderDb?: number | number[];
   pan?: number | number[];
   panMode?: PanMode | PanMode[];
@@ -675,8 +676,9 @@ export interface LufsResult {
  * Mirrors the C++ `EqualizerSpectrumSnapshot`: `preLeft`/`preRight` and
  * `postLeft`/`postRight` are the pre- and post-EQ spectrum streams (trimmed to
  * their valid count). `bandGainDb` holds per-band applied gain (24 entries),
- * `profileDb` the smoothed magnitude profile (16 entries), and `seq` increments
- * each time a new snapshot is published.
+ * `profileDb` the smoothed magnitude profile (16 entries), `lastAutoGainDb`
+ * the latest auto-gain compensation, and `seq` increments each time a new
+ * snapshot is published.
  */
 export interface EqSpectrumSnapshot {
   preLeft: Float32Array;
@@ -685,6 +687,7 @@ export interface EqSpectrumSnapshot {
   postRight: Float32Array;
   bandGainDb: Float32Array;
   profileDb: Float32Array;
+  lastAutoGainDb: number;
   seq: number;
 }
 
@@ -739,6 +742,7 @@ export interface EqBand {
   attackMs?: number;
   releaseMs?: number;
   lookaheadMs?: number;
+  externalSidechain?: boolean;
   sidechainFreqHz?: number;
   sidechainQ?: number;
 }

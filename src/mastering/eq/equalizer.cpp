@@ -1,10 +1,12 @@
 #include "mastering/eq/equalizer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 #include "mastering/eq/spectrum_registry.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::mastering::eq {
 
@@ -76,6 +78,7 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   if (num_samples > max_block_size_) {
     throw std::invalid_argument("EqualizerProcessor num_samples exceeds prepared max_block_size");
   }
+  validate_sidechain(num_samples);
   EqualizerSpectrumSnapshot pre_snapshot;
   capture_stream(const_cast<const float* const*>(channels), num_channels, num_samples,
                  pre_snapshot.pre, pre_snapshot.pre_count);
@@ -141,8 +144,10 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
     }
   }
   apply_auto_gain(channels, num_channels, num_samples, input_db);
+  apply_output_gain_and_pan(channels, num_channels, num_samples);
   publish_spectrum_snapshot(pre_snapshot, const_cast<const float* const*>(channels), num_channels,
                             num_samples);
+  clear_sidechain();
 }
 
 void EqualizerProcessor::reset() {
@@ -162,6 +167,7 @@ void EqualizerProcessor::reset() {
   auto_threshold_db_.fill(kFloorDb);
   last_auto_gain_db_ = 0.0f;
   smoothed_auto_gain_db_ = 0.0f;
+  clear_sidechain();
 }
 
 bool EqualizerProcessor::set_parameter(unsigned int param_id, float value) {
@@ -313,9 +319,61 @@ void EqualizerProcessor::clear() {
   }
 }
 
+void EqualizerProcessor::set_gain_scale(float scale) {
+  if (!std::isfinite(scale) || scale < 0.0f || scale > 2.0f) {
+    throw std::invalid_argument("EqualizerProcessor gain scale must be in 0..2");
+  }
+  gain_scale_ = scale;
+  if (prepared_) {
+    rebuild_iir();
+  }
+}
+
+void EqualizerProcessor::set_output_gain_db(float gain_db) {
+  if (!std::isfinite(gain_db)) {
+    throw std::invalid_argument("EqualizerProcessor output gain must be finite");
+  }
+  output_gain_db_ = gain_db;
+}
+
+void EqualizerProcessor::set_output_pan(float pan) {
+  if (!std::isfinite(pan) || pan < -1.0f || pan > 1.0f) {
+    throw std::invalid_argument("EqualizerProcessor output pan must be in -1..1");
+  }
+  output_pan_ = pan;
+}
+
 const EqBand& EqualizerProcessor::band(size_t index) const {
   validate_band_index(index);
   return bands_[index];
+}
+
+void EqualizerProcessor::set_sidechain(const float* const* channels, int num_channels,
+                                       int num_samples) {
+  if (num_channels < 0 || num_samples < 0) {
+    throw std::invalid_argument("sidechain dimensions must be non-negative");
+  }
+  if (num_channels == 0 || num_samples == 0) {
+    clear_sidechain();
+    return;
+  }
+  if (channels == nullptr) {
+    throw std::invalid_argument("sidechain channels must not be null");
+  }
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (channels[ch] == nullptr) {
+      throw std::invalid_argument("sidechain channel must not be null");
+    }
+  }
+  sidechain_channels_ = channels;
+  sidechain_num_channels_ = num_channels;
+  sidechain_num_samples_ = num_samples;
+}
+
+void EqualizerProcessor::clear_sidechain() {
+  sidechain_channels_ = nullptr;
+  sidechain_num_channels_ = 0;
+  sidechain_num_samples_ = 0;
 }
 
 float EqualizerProcessor::last_band_detector_db(size_t index) const {

@@ -1125,6 +1125,21 @@ export class StreamingEqualizer {
     this.eq.setAutoGain(enabled);
   }
 
+  /** Set all-band EQ gain scale as a 0.0..2.0 multiplier. */
+  setGainScale(scale: number): void {
+    this.eq.setGainScale(scale);
+  }
+
+  /** Set post-EQ output gain in dB. */
+  setOutputGainDb(gainDb: number): void {
+    this.eq.setOutputGainDb(gainDb);
+  }
+
+  /** Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan. */
+  setOutputPan(pan: number): void {
+    this.eq.setOutputPan(pan);
+  }
+
   /** Auto-gain applied on the most recent block, in dB. */
   lastAutoGainDb(): number {
     return this.eq.lastAutoGainDb();

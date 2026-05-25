@@ -404,17 +404,22 @@ Repair is classical DSP by design. `denoise_classical` covers spectral
 subtraction, MMSE-STSA, and LogMMSE with explicit noise estimation; DNN
 restoration, source separation, and interactive spectral repair are out of scope.
 
+EQ phase modes preserve existing coefficient defaults: Zero Latency keeps RBJ
+biquads for compatibility, while Natural Phase resolves bands through Vicanek
+matched-Z IIR. High-frequency shelf designs fall back to RBJ when the Vicanek
+endpoint gain error exceeds the fixed tolerance.
+
 Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 `cmake -DBUILD_MASTERING=OFF` to ship analysis-only builds.
 
 ### Mixing / routing
 
-| Channel strips             | Routing / scene API            | Metering / QA                 |
-|----------------------------|--------------------------------|-------------------------------|
-| Fader / mute / polarity    | Sends and FX buses             | Peak / RMS / true peak        |
-| Balance / stereo / dual pan| JSON scene presets             | Correlation / mono width      |
-| Width and gain automation  | C / Node / Python / WASM / CLI | Golden hashes and RT tests    |
-| Insert processor hosting   | Graph integration              | No-allocation process checks  |
+| Channel strips                   | Routing / scene API            | Metering / QA                 |
+|----------------------------------|--------------------------------|-------------------------------|
+| Input trim / fader / polarity    | Sends and FX buses             | Peak / RMS / true peak        |
+| Balance / stereo / dual pan      | Bus inserts and graph PDC      | Correlation / mono width      |
+| Width and gain automation        | C / Node / Python / WASM / CLI | Golden hashes and RT tests    |
+| Insert hosting and sidechain keys| Persistent scene mixers        | No-allocation process checks  |
 
 Mixing is built by default (`BUILD_MIXING=ON`) and depends on the mastering
 processor interfaces for insert hosting. Disable with `cmake -DBUILD_MIXING=OFF`

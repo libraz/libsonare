@@ -818,6 +818,36 @@ export class StreamingEqualizer {
     this.native.setAutoGain(enabled);
   }
 
+  /** Set all-band EQ gain scale as a 0.0..2.0 multiplier. */
+  setGainScale(scale: number): void {
+    this.native.setGainScale(scale);
+  }
+
+  /** Set post-EQ output gain in dB. */
+  setOutputGainDb(gainDb: number): void {
+    this.native.setOutputGainDb(gainDb);
+  }
+
+  /** Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan. */
+  setOutputPan(pan: number): void {
+    this.native.setOutputPan(pan);
+  }
+
+  /** Set a mono external key for dynamic bands with `externalSidechain` enabled. */
+  setSidechainMono(samples: Float32Array): void {
+    this.native.setSidechainMono(samples);
+  }
+
+  /** Set a stereo external key for dynamic bands with `externalSidechain` enabled. */
+  setSidechainStereo(left: Float32Array, right: Float32Array): void {
+    this.native.setSidechainStereo(left, right);
+  }
+
+  /** Clear any pending external key before the next process call. */
+  clearSidechain(): void {
+    this.native.clearSidechain();
+  }
+
   /** Last applied auto-gain in dB (0 when disabled). */
   lastAutoGainDb(): number {
     return this.native.lastAutoGainDb();

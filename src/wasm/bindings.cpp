@@ -1136,6 +1136,8 @@ mastering::eq::EqBand eqBandFromVal(val band) {
   result.dyn.attack_ms = floatProperty(band, "attackMs", result.dyn.attack_ms);
   result.dyn.release_ms = floatProperty(band, "releaseMs", result.dyn.release_ms);
   result.dyn.lookahead_ms = floatProperty(band, "lookaheadMs", result.dyn.lookahead_ms);
+  result.dyn.external_sidechain =
+      boolProperty(band, "externalSidechain", result.dyn.external_sidechain);
   result.dyn.sidechain_freq_hz =
       floatProperty(band, "sidechainFreqHz", result.dyn.sidechain_freq_hz);
   result.dyn.sidechain_q = floatProperty(band, "sidechainQ", result.dyn.sidechain_q);
@@ -1159,6 +1161,12 @@ class EqualizerWrapper {
   void setPhaseMode(int mode) { processor_.set_phase_mode(eqPhaseFromInt(mode)); }
 
   void setAutoGain(bool enabled) { processor_.set_auto_gain_enabled(enabled); }
+
+  void setGainScale(float scale) { processor_.set_gain_scale(scale); }
+
+  void setOutputGainDb(float gain_db) { processor_.set_output_gain_db(gain_db); }
+
+  void setOutputPan(float pan) { processor_.set_output_pan(pan); }
 
   float lastAutoGainDb() const { return processor_.last_auto_gain_db(); }
 
@@ -1214,6 +1222,7 @@ class EqualizerWrapper {
     out.set("postRight", vectorToFloat32Array(post_right));
     out.set("bandGainDb", vectorToFloat32Array(band_gain_db));
     out.set("profileDb", vectorToFloat32Array(profile_db));
+    out.set("lastAutoGainDb", processor_.last_auto_gain_db());
     out.set("seq", static_cast<double>(snapshot.seq));
     return out;
   }
@@ -1585,6 +1594,11 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     mixing::ChannelStrip strip;
     strip.prepare(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
 
+    val inputTrim = optionAt(options, "inputTrimDb", index);
+    if (!inputTrim.isUndefined() && !inputTrim.isNull() &&
+        inputTrim.typeOf().as<std::string>() == "number") {
+      strip.set_input_trim_db(inputTrim.as<float>());
+    }
     val fader = optionAt(options, "faderDb", index);
     if (!fader.isUndefined() && !fader.isNull() && fader.typeOf().as<std::string>() == "number") {
       strip.set_fader_db(fader.as<float>());
@@ -2678,6 +2692,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("clear", &EqualizerWrapper::clear)
       .function("setPhaseMode", &EqualizerWrapper::setPhaseMode)
       .function("setAutoGain", &EqualizerWrapper::setAutoGain)
+      .function("setGainScale", &EqualizerWrapper::setGainScale)
+      .function("setOutputGainDb", &EqualizerWrapper::setOutputGainDb)
+      .function("setOutputPan", &EqualizerWrapper::setOutputPan)
       .function("lastAutoGainDb", &EqualizerWrapper::lastAutoGainDb)
       .function("latencySamples", &EqualizerWrapper::latencySamples)
       .function("processMono", &EqualizerWrapper::processMono)

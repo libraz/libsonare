@@ -13,12 +13,26 @@ class ProcessorBase {
   virtual void process(float* const* channels, int num_channels, int num_samples) = 0;
   virtual void reset() = 0;
   virtual int latency_samples() const noexcept { return 0; }
+  // Q8 fixed-point latency, in samples. The integer API remains the legacy
+  // floor value; graph/mixing PDC uses Q8 so fractional processor latency is
+  // not rounded away.
   virtual int latency_samples_q8() const noexcept { return latency_samples() << 8; }
   virtual int output_latency_samples_q8(int output_port) const noexcept {
     (void)output_port;
     return latency_samples_q8();
   }
   virtual float last_gain_reduction_db() const { return 0.0f; }
+
+  // Optional external detector/key input for processors that support
+  // sidechain operation. Buffers are borrowed until the processor consumes or
+  // clears them; default implementation is a no-op for processors without a
+  // sidechain detector.
+  virtual void set_sidechain(const float* const* channels, int num_channels, int num_samples) {
+    (void)channels;
+    (void)num_channels;
+    (void)num_samples;
+  }
+  virtual void clear_sidechain() {}
 
   // Set a processor-specific scalar parameter by id. Returns false if the id is
   // not recognized. Default: no automatable parameters. Implementations must be

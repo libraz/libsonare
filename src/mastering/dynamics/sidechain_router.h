@@ -35,8 +35,8 @@ class SidechainRouter : public common::ProcessorBase {
   // Borrows channel pointers until the next set_sidechain(), clear_sidechain(),
   // or process() call that consumes them. The caller owns the buffers and must
   // keep them alive and unchanged for that interval.
-  void set_sidechain(const float* const* channels, int num_channels, int num_samples);
-  void clear_sidechain();
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override;
+  void clear_sidechain() override;
 
   void set_config(const SidechainRouterConfig& config);
   const SidechainRouterConfig& config() const { return config_; }

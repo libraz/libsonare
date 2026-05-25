@@ -4,7 +4,6 @@
 /// @brief Aux FX bus with an ordered insert chain.
 
 #include <memory>
-#include <vector>
 
 #include "mixing/bus.h"
 #include "rt/processor_base.h"
@@ -19,16 +18,17 @@ class FxBus : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
 
   void add_insert(std::unique_ptr<rt::ProcessorBase> processor);
-  size_t num_inserts() const noexcept { return inserts_.size(); }
+  size_t num_inserts() const noexcept { return bus_.num_inserts(); }
+  void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
+                            int num_channels, int num_samples);
+  void clear_insert_sidechains() noexcept;
   BusProcessor& bus() noexcept { return bus_; }
 
  private:
   BusProcessor bus_;
-  std::vector<std::unique_ptr<rt::ProcessorBase>> inserts_;
-  double sample_rate_ = 48000.0;
-  int max_block_size_ = 0;
 };
 
 }  // namespace sonare::mixing

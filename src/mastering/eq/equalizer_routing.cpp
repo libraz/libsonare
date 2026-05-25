@@ -154,7 +154,7 @@ void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
   };
 
   for (size_t i = 0; i < kMaxBands; ++i) {
-    EqBand band = backend_band(bands_[i], phase_mode_);
+    EqBand band = backend_band(bands_[i], phase_mode_, gain_scale_);
     if (band.bypassed || (any_soloed && !band.soloed)) {
       band.enabled = false;
     }
@@ -163,7 +163,8 @@ void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
       const float threshold =
           band.dyn.auto_threshold ? auto_threshold_db_[i] : band.dyn.threshold_db;
       const float target_gain =
-          band.gain_db + dynamic_gain_delta(band, last_band_detector_db_[i], threshold);
+          band.gain_db +
+          gain_scale_ * dynamic_gain_delta(bands_[i], last_band_detector_db_[i], threshold);
       if (num_samples > 0) {
         const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
         const float coeff = static_cast<float>(
@@ -314,7 +315,7 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
   };
 
   for (size_t i = 0; i < kMaxBands; ++i) {
-    EqBand band = backend_band(bands_[i], phase_mode_);
+    EqBand band = backend_band(bands_[i], phase_mode_, gain_scale_);
     if (band.bypassed || (any_soloed && !band.soloed)) {
       band.enabled = false;
     }
@@ -323,7 +324,8 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
       const float threshold =
           band.dyn.auto_threshold ? auto_threshold_db_[i] : band.dyn.threshold_db;
       const float target_gain =
-          band.gain_db + dynamic_gain_delta(band, last_band_detector_db_[i], threshold);
+          band.gain_db +
+          gain_scale_ * dynamic_gain_delta(bands_[i], last_band_detector_db_[i], threshold);
       if (prepared_ && num_samples > 0) {
         const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
         const float coeff = static_cast<float>(
@@ -368,8 +370,9 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
   }
 }
 
-EqBand EqualizerProcessor::backend_band(EqBand band, PhaseMode global_phase) {
+EqBand EqualizerProcessor::backend_band(EqBand band, PhaseMode global_phase, float gain_scale) {
   const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? global_phase : band.phase;
+  band.gain_db *= gain_scale;
   if (is_cut_band(band.type)) {
     (void)cut_order(band.slope_db_oct);
     if (band.slope_db_oct == 0) {

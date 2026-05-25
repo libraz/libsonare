@@ -23,5 +23,26 @@
     {"feature": "Chroma", "libsonare_ms": 1.12},
     {"feature": "MFCC", "libsonare_ms": 0.77},
     {"feature": "Spectral Centroid", "libsonare_ms": 0.42}
-  ]
+  ],
+  "eq_processor": {
+    "sample_rate": 48000,
+    "channels": 2,
+    "block_samples": 256,
+    "runs": 7,
+    "iterations_per_run": 2000,
+    "static_24_band_ms": 0.053980,
+    "dynamic_8_band_ms": 0.029739,
+    "linear_phase_4_band_ms": 0.008556,
+    "linear_phase_latency_samples": 256
+  },
+  "mixing_channel_strip": {
+    "sample_rate": 48000,
+    "channels": 2,
+    "block_samples": 256,
+    "runs": 7,
+    "iterations_per_run": 2000,
+    "strip_8_metered_ms": 0.153159,
+    "strip_32_metered_ms": 0.606190,
+    "strip_32_compressor_insert_metered_ms": 0.682666
+  }
 }

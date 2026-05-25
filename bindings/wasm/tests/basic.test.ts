@@ -509,10 +509,11 @@ describe('Sonare WASM Module', () => {
 
       const left = new Float32Array([1, 1]);
       const right = new Float32Array([0, 0]);
-      const result = mixStereo([left], [right], 48000, { muted: true });
+      const result = mixStereo([left], [right], 48000, { inputTrimDb: 6.0206, faderDb: -6.0206 });
       expect(result.left).toBeInstanceOf(Float32Array);
       expect(result.right).toBeInstanceOf(Float32Array);
-      expect(Array.from(result.left)).toEqual([0, 0]);
+      expect(result.left[0]).toBeCloseTo(Math.SQRT1_2, 2);
+      expect(result.left[1]).toBeCloseTo(Math.SQRT1_2, 2);
       expect(Array.from(result.right)).toEqual([0, 0]);
       expect(result.meters).toHaveLength(1);
       expect(Number.isFinite(result.meters[0].peakDbL)).toBe(true);
@@ -549,6 +550,9 @@ describe('Sonare WASM Module', () => {
           gainDb: 6,
           enabled: true,
         });
+        eq.setGainScale(0.5);
+        eq.setOutputGainDb(3);
+        eq.setOutputPan(0);
 
         const length = 512;
         const left = new Float32Array(length);
@@ -569,6 +573,8 @@ describe('Sonare WASM Module', () => {
         const snapshot = eq.spectrum();
         expect(snapshot.seq).toBeGreaterThan(firstSeq);
         expect(snapshot.bandGainDb.length).toBe(24);
+        expect(snapshot.bandGainDb[0]).toBeGreaterThan(2.5);
+        expect(snapshot.bandGainDb[0]).toBeLessThan(3.5);
         expect(snapshot.profileDb.length).toBe(16);
         expect(snapshot.preLeft.length).toBe(snapshot.postLeft.length);
         expect(eq.latencySamples()).toBeGreaterThanOrEqual(0);
