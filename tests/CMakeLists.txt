@@ -79,6 +79,12 @@ add_executable(sonare_tests
   analysis/music_analyzer_test.cpp
   streaming/stream_analyzer_test.cpp
   rt/adaa2_test.cpp
+  rt/spsc_queue_test.cpp
+  rt/partitioned_convolver_test.cpp
+  rt/true_peak_filter_test.cpp
+  rt/rt_publisher_test.cpp
+  transport/marker_test.cpp
+  transport/transport_test.cpp
   api/quick_test.cpp
   api/sonare_c_test.cpp
   librosa/convert_test.cpp
@@ -121,7 +127,7 @@ add_executable(sonare_tests
   cli/cli_test.cpp
 )
 
-target_link_libraries(sonare_tests PRIVATE sonare_core Catch2::Catch2WithMain)
+target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

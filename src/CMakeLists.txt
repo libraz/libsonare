@@ -185,6 +185,10 @@ add_library(sonare_rt STATIC
   rt/param_smoother.cpp
   rt/partitioned_convolver.cpp
   rt/true_peak_filter.cpp
+  transport/marker.cpp
+  transport/musical_time.cpp
+  transport/tempo_map.cpp
+  transport/transport.cpp
 )
 target_include_directories(sonare_rt PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}

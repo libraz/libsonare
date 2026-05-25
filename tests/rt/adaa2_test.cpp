@@ -12,18 +12,16 @@
 #include "rt/adaa.h"
 #include "rt/aliasing_control.h"
 #include "rt/nonlinearities.h"
+#include "util/constants.h"
 
 using sonare::FFT;
+using sonare::constants::kPi;
+using sonare::constants::kTwoPi;
 using sonare::rt::Adaa1;
 using sonare::rt::Adaa2;
 using sonare::rt::ArctanNonlinearity;
 using sonare::rt::CubicSoftClipNonlinearity;
 using sonare::rt::HardClipNonlinearity;
-
-namespace {
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 2.0f * kPi;
-}  // namespace
 
 TEST_CASE("Adaa2 converges to the nonlinearity for constant input", "[adaa][adaa2]") {
   constexpr int kNumSamples = 1000;

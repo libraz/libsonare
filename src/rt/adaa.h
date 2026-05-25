@@ -9,6 +9,12 @@
 
 namespace sonare::rt {
 
+// Divided-difference denominator threshold for the ADAA recurrences. This is an
+// algorithm-specific guard against ill-conditioned division when consecutive
+// samples are nearly equal, intentionally distinct from constants::kEpsilon
+// (1e-10) which is far too small to keep these ratios numerically stable.
+constexpr float kAdaaDivisorEpsilon = 1.0e-5f;
+
 template <typename Nonlinearity>
 class Adaa1 {
  public:
@@ -18,7 +24,7 @@ class Adaa1 {
     const float f1_x = nonlinearity_.antiderivative(x);
     const float dx = x - prev_x_;
     float y = 0.0f;
-    if (std::abs(dx) > epsilon_) {
+    if (std::abs(dx) > kEpsilon_) {
       y = (f1_x - prev_f1_) / dx;
     } else {
       y = nonlinearity_.apply(0.5f * (x + prev_x_));
@@ -40,7 +46,7 @@ class Adaa1 {
   Nonlinearity nonlinearity_{};
   float prev_x_ = 0.0f;
   float prev_f1_ = nonlinearity_.antiderivative(0.0f);
-  float epsilon_ = 1.0e-5f;
+  static constexpr float kEpsilon_ = kAdaaDivisorEpsilon;
 };
 
 /// @brief Detects whether a nonlinearity provides a second antiderivative (F2).
@@ -92,7 +98,6 @@ class Adaa2 {
     prev_x2_ = prev_x1_;
     prev_f2_x2_ = prev_f2_x1_;
     prev_x1_ = x0;
-    prev_f1_x1_ = f1_x0;
     prev_f2_x1_ = f2_x0;
     return y;
   }
@@ -100,7 +105,6 @@ class Adaa2 {
   void reset(float x = 0.0f) noexcept {
     prev_x1_ = x;
     prev_x2_ = x;
-    prev_f1_x1_ = nonlinearity_.antiderivative(x);
     prev_f2_x1_ = nonlinearity_.second_antiderivative(x);
     prev_f2_x2_ = prev_f2_x1_;
   }
@@ -109,12 +113,11 @@ class Adaa2 {
   int latency_samples_q8() const noexcept { return 256; }
 
  private:
-  static constexpr float kEps = 1.0e-5f;
+  static constexpr float kEps = kAdaaDivisorEpsilon;
 
   Nonlinearity nonlinearity_{};
   float prev_x1_ = 0.0f;
   float prev_x2_ = 0.0f;
-  float prev_f1_x1_ = 0.0f;
   float prev_f2_x1_ = 0.0f;
   float prev_f2_x2_ = 0.0f;
 };

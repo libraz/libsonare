@@ -71,7 +71,7 @@ bool endpoint_gain_error_exceeds(const BiquadCoeffs& coeffs, float omega, float 
   if (!(magnitude > 0.0f) || !std::isfinite(magnitude)) {
     return true;
   }
-  const float actual_gain_db = 20.0f * std::log10(magnitude);
+  const float actual_gain_db = linear_to_db(magnitude);
   return std::abs(actual_gain_db - target_gain_db) > tolerance_db;
 }
 

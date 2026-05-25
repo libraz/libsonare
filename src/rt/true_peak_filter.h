@@ -32,6 +32,11 @@ class TruePeakFilter {
  private:
   int factor_ = 4;
   PolyphaseFir fir_;
+
+  // Member-backed scratch for the history-less overload so the audio thread
+  // does not allocate a temporary per call. Mutable because the public
+  // methods are const; the buffer only caches working storage, never state.
+  mutable std::vector<std::vector<float>> internal_scratch_;
 };
 
 }  // namespace sonare::rt

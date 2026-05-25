@@ -19,6 +19,9 @@ namespace {
 // the reconstructed inter-sample peaks at 4x/8x.
 PolyphaseFir make_true_peak_fir(int factor) {
   constexpr double kKaiserBeta = 9.5;
+  // factor=2 is below ITU-R BS.1770's 4x minimum, so its result is a
+  // non-compliant approximation of the true-peak level; use 4x or 8x for
+  // standards-compliant measurement.
   if (factor == 2) return design_polyphase_lowpass(2, 24, 7.85726, true);
   if (factor == 4) return design_polyphase_lowpass(4, 48, kKaiserBeta, true);
   if (factor == 8) return design_polyphase_lowpass(8, 96, kKaiserBeta, true);
@@ -92,8 +95,11 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
                                            float* const* output_oversampled, int num_channels,
                                            int num_samples,
                                            std::vector<std::vector<float>>& history) const {
-  std::vector<std::vector<float>> scratch;
-  upsample_with_history(input, output_oversampled, num_channels, num_samples, history, scratch);
+  // Route through the scratch-aware overload using a member-backed buffer so
+  // this audio-thread-callable path performs no per-call allocation once the
+  // scratch has grown to the working size.
+  upsample_with_history(input, output_oversampled, num_channels, num_samples, history,
+                        internal_scratch_);
 }
 
 void TruePeakFilter::upsample_with_history(const float* const* input,
