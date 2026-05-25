@@ -201,6 +201,22 @@ target_link_libraries(sonare_rt PUBLIC sonare_core)
 target_compile_options(sonare_rt PRIVATE ${SONARE_WARNING_FLAGS})
 set_target_properties(sonare_rt PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+add_library(sonare_automation STATIC
+  automation/automation_engine.cpp
+  automation/automation_lane.cpp
+  automation/parameter.cpp
+)
+target_include_directories(sonare_automation PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/third_party/kissfft
+  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
+  ${CMAKE_SOURCE_DIR}/third_party/minimp3
+  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+)
+target_link_libraries(sonare_automation PUBLIC sonare_rt)
+target_compile_options(sonare_automation PRIVATE ${SONARE_WARNING_FLAGS})
+set_target_properties(sonare_automation PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 if(BUILD_MASTERING)
   add_library(sonare_mastering STATIC
     mastering/api/chain.cpp

@@ -83,6 +83,7 @@ add_executable(sonare_tests
   rt/partitioned_convolver_test.cpp
   rt/true_peak_filter_test.cpp
   rt/rt_publisher_test.cpp
+  automation/automation_test.cpp
   transport/marker_test.cpp
   transport/transport_test.cpp
   api/quick_test.cpp
@@ -127,7 +128,7 @@ add_executable(sonare_tests
   cli/cli_test.cpp
 )
 
-target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt Catch2::Catch2WithMain)
+target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt sonare_automation Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
