@@ -26,6 +26,9 @@ import type {
   ChordDetectionOptions,
   ChordQuality,
   ChromaResult,
+  EqBand,
+  EqMatchOptions,
+  EqSpectrumSnapshot,
   HpssResult,
   Key,
   KeyCandidate,
@@ -51,6 +54,7 @@ import type {
   SoloProcessor,
   StereoAnalysis,
   StftResult,
+  StreamingEqualizerConfig,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
 import type { AnalyzerStats, FrameBuffer, StreamConfig } from './stream_types';
@@ -80,6 +84,13 @@ export type {
   ChordDetectionOptions,
   ChromaResult,
   Dynamics,
+  EqBand,
+  EqBandPhase,
+  EqBandType,
+  EqCoeffMode,
+  EqMatchOptions,
+  EqSpectrumSnapshot,
+  EqStereoPlacement,
   HpssResult,
   Key,
   KeyCandidate,
@@ -108,6 +119,7 @@ export type {
   SoloProcessor,
   StereoAnalysis,
   StftResult,
+  StreamingEqualizerConfig,
   Timbre,
   TimeSignature,
 } from './public_types';
@@ -1051,6 +1063,120 @@ export class StreamingMasteringChain {
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.chain.delete();
+  }
+}
+
+// ============================================================================
+// StreamingEqualizer Class
+// ============================================================================
+
+/**
+ * Block-by-block streaming equalizer wrapping the unified C++
+ * `EqualizerProcessor` (up to 24 bands, RBJ/Vicanek biquads, dynamic EQ,
+ * linear-phase FIR, mid/side processing, and auto-gain).
+ *
+ * State is maintained across {@link processMono}/{@link processStereo} calls.
+ * Call {@link delete} (or use `try/finally`) to release the underlying WASM
+ * object — the embind handle is not garbage-collected automatically.
+ *
+ * @example
+ * ```typescript
+ * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+ * try {
+ *   eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+ *   const out = eq.processStereo(left, right);
+ *   const snapshot = eq.spectrum();
+ * } finally {
+ *   eq.delete();
+ * }
+ * ```
+ */
+export class StreamingEqualizer {
+  private eq: import('./wasm_types').WasmStreamingEqualizer;
+
+  constructor(config: StreamingEqualizerConfig = {}) {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    this.eq = module.createEqualizer(config as Record<string, unknown>);
+  }
+
+  /**
+   * Configure the band at `index` (0..23). Omitted fields use C++ defaults.
+   */
+  setBand(index: number, band: EqBand): void {
+    this.eq.setBand(index, band as Record<string, unknown>);
+  }
+
+  /** Disable and reset every band. */
+  clear(): void {
+    this.eq.clear();
+  }
+
+  /**
+   * Set the global phase mode: 1=ZeroLatency, 2=NaturalPhase, 3=LinearPhase.
+   */
+  setPhaseMode(mode: number): void {
+    this.eq.setPhaseMode(mode);
+  }
+
+  /** Enable or disable output auto-gain compensation. */
+  setAutoGain(enabled: boolean): void {
+    this.eq.setAutoGain(enabled);
+  }
+
+  /** Auto-gain applied on the most recent block, in dB. */
+  lastAutoGainDb(): number {
+    return this.eq.lastAutoGainDb();
+  }
+
+  /** Reported processing latency in samples (non-zero for linear-phase bands). */
+  latencySamples(): number {
+    return this.eq.latencySamples();
+  }
+
+  /**
+   * Process one mono block, returning the equalized samples (same length).
+   */
+  processMono(samples: Float32Array): Float32Array {
+    return this.eq.processMono(samples);
+  }
+
+  /**
+   * Process one stereo block, returning the equalized channels.
+   */
+  processStereo(
+    left: Float32Array,
+    right: Float32Array,
+  ): { left: Float32Array; right: Float32Array } {
+    if (left.length !== right.length) {
+      throw new Error('Stereo channel lengths must match.');
+    }
+    return this.eq.processStereo(left, right);
+  }
+
+  /**
+   * Read the latest pre/post spectrum snapshot for metering. `seq` increments
+   * each time a new snapshot is published.
+   */
+  spectrum(): EqSpectrumSnapshot {
+    return this.eq.spectrum();
+  }
+
+  /**
+   * Configure bands so the source spectrum matches the reference spectrum.
+   *
+   * @param source - Source audio (mono samples)
+   * @param reference - Reference audio (mono samples)
+   * @param options - `sampleRate` (default 48000) and `maxBands` (default 8)
+   */
+  match(source: Float32Array, reference: Float32Array, options: EqMatchOptions = {}): void {
+    this.eq.match(source, reference, options as Record<string, unknown>);
+  }
+
+  /** Release the underlying WASM object. Safe to call only once. */
+  delete(): void {
+    this.eq.delete();
   }
 }
 

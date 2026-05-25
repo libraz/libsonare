@@ -247,6 +247,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   // Streaming - StreamingMasteringChain
   StreamingMasteringChainWrap::Init(env, exports);
 
+  // Streaming - StreamingEqualizer
+  StreamingEqualizerWrap::Init(env, exports);
+
   // Mixing - scene-based Mixer
   MixerWrap::Init(env, exports);
 

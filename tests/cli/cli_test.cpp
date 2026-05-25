@@ -758,6 +758,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     auto [code, output] = exec_command(CLI + " mastering-processors --json");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("dynamics.compressor"));
+    REQUIRE_THAT(output, ContainsSubstring("eq.equalizer"));
     REQUIRE_THAT(output, ContainsSubstring("stereo.imager"));
 
     auto [pair_code, pair_output] = exec_command(CLI + " mastering-pair-processors --json");
@@ -782,6 +783,23 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"processor\": \"dynamics.compressor\""));
     REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
+  }
+
+  SECTION("runs unified equalizer shortcut") {
+    auto [code, output] = exec_command(CLI + " eq " + TEST_WAV +
+                                       " --frequency-hz 440 --gain-db 3 --q 1 --coeff-mode 1"
+                                       " --phase-mode 3 --resolution 1 --auto-gain --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\": 512"));
+
+    auto [dynamic_code, dynamic_output] =
+        exec_command(CLI + " eq " + TEST_WAV +
+                     " --frequency-hz 440 --gain-db 3 --q 1 --dynamic"
+                     " --threshold-db -36 --ratio 2 --range-db -3 --json -q");
+    REQUIRE(dynamic_code == 0);
+    REQUIRE_THAT(dynamic_output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
   }
 
   SECTION("runs pair processor and analysis") {

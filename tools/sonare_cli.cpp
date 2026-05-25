@@ -1598,6 +1598,65 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_eq(const CliArgs& args, const Audio& audio) {
+  std::vector<mastering::api::Param> params =
+      parse_mastering_params(args.get_string("params"));
+  if (args.get_string("params").empty()) {
+    params.push_back({"band0.enabled", 1.0});
+    params.push_back({"band0.type", static_cast<double>(args.get_int("type", 0))});
+    params.push_back({"band0.frequencyHz", args.get_float("frequency-hz", 1000.0f)});
+    params.push_back({"band0.gainDb", args.get_float("gain-db", 0.0f)});
+    params.push_back({"band0.q", args.get_float("q", 1.0f)});
+    params.push_back({"band0.coeffMode", static_cast<double>(args.get_int("coeff-mode", 0))});
+    params.push_back({"band0.slopeDbOct", static_cast<double>(args.get_int("slope-db-oct", 12))});
+    params.push_back({"band0.placement", static_cast<double>(args.get_int("placement", 0))});
+    params.push_back({"band0.proportionalQ", args.has("proportional-q") ? 1.0 : 0.0});
+    params.push_back({"band0.dynamic", args.has("dynamic") ? 1.0 : 0.0});
+    params.push_back({"band0.thresholdDb", args.get_float("threshold-db", -24.0f)});
+    params.push_back({"band0.autoThreshold", args.has("auto-threshold") ? 1.0 : 0.0});
+    params.push_back({"band0.ratio", args.get_float("ratio", 2.0f)});
+    params.push_back({"band0.rangeDb", args.get_float("range-db", -6.0f)});
+    params.push_back({"band0.attackMs", args.get_float("attack-ms", 5.0f)});
+    params.push_back({"band0.releaseMs", args.get_float("release-ms", 50.0f)});
+    params.push_back({"band0.lookaheadMs", args.get_float("lookahead-ms", 0.0f)});
+    params.push_back({"band0.sidechainFreqHz", args.get_float("sidechain-freq-hz", -1.0f)});
+    params.push_back({"band0.sidechainQ", args.get_float("sidechain-q", 1.0f)});
+    params.push_back({"phaseMode", static_cast<double>(args.get_int("phase-mode", 1))});
+    params.push_back({"resolution", static_cast<double>(args.get_int("resolution", 0))});
+    params.push_back({"autoGain", args.has("auto-gain") ? 1.0 : 0.0});
+  }
+  const auto result = mastering::api::apply_named_processor("eq.equalizer", audio.data(),
+                                                            audio.size(), audio.sample_rate(),
+                                                            params);
+  if (!args.output_file.empty()) {
+    save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+             args.get_int("bits", 16));
+  }
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("processor", "eq.equalizer")
+        .kv("input_lufs", result.input_lufs)
+        .kv("output_lufs", result.output_lufs)
+        .kv("applied_gain_db", result.applied_gain_db)
+        .kv("latency_samples", result.latency_samples)
+        .kv("output", args.output_file)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << "Equalizer" << color::reset << "\n"
+              << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+              << "\n"
+              << "  Output LUFS:     " << result.output_lufs << "\n"
+              << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
+    if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
+    std::cout << "\n";
+  }
+  return 0;
+}
+
 int cmd_mastering_processors(const CliArgs& args, const Audio&) {
   const auto names = mastering::api::processor_names();
   if (args.json_output) {
@@ -2430,6 +2489,7 @@ const std::vector<CommandInfo>& get_commands() {
       {"split-silence", "List non-silent intervals", cmd_split_silence, true},
 #ifdef SONARE_WITH_MASTERING
       {"mastering", "Apply mastering loudness/true-peak processing", cmd_mastering, true},
+      {"eq", "Apply the unified mastering equalizer", cmd_eq, true},
       {"mastering-processor", "Apply a named mastering processor", cmd_mastering_processor, true},
       {"mastering-pair-processor", "Apply a two-input mastering processor",
        cmd_mastering_pair_processor, true},

@@ -147,6 +147,7 @@ export type SoloProcessor =
   | 'eq.bandPass'
   | 'eq.cutFilter'
   | 'eq.dynamic'
+  | 'eq.equalizer'
   | 'eq.graphic'
   | 'eq.linearPhase'
   | 'eq.midSide'
@@ -417,4 +418,59 @@ export interface PitchResult {
   nFrames: number;
   medianF0: number;
   meanF0: number;
+}
+
+/** Phase processing mode for the streaming equalizer. */
+export type EqPhaseMode = 'zero' | 'natural' | 'linear';
+
+/**
+ * Single equalizer band passed to {@link StreamingEqualizer.setBand}.
+ *
+ * Only `type`/`frequencyHz`/`gainDb`/`enabled` are commonly needed; the
+ * remaining fields fall back to processor defaults.
+ */
+export interface EqBandInput {
+  type?:
+    | 'Peak'
+    | 'LowShelf'
+    | 'HighShelf'
+    | 'LowPass'
+    | 'HighPass'
+    | 'BandPass'
+    | 'Notch'
+    | 'TiltShelf'
+    | 'FlatTilt';
+  frequencyHz?: number;
+  gainDb?: number;
+  q?: number;
+  enabled?: boolean;
+  coeffMode?: 'Rbj' | 'Vicanek';
+  slopeDbOct?: number;
+  placement?: 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+  phase?: 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
+  soloed?: boolean;
+  bypassed?: boolean;
+  proportionalQ?: boolean;
+  proportionalQStrength?: number;
+  dynamic?: boolean;
+  thresholdDb?: number;
+  autoThreshold?: boolean;
+  ratio?: number;
+  rangeDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  lookaheadMs?: number;
+  sidechainFreqHz?: number;
+  sidechainQ?: number;
+}
+
+/** Realtime-safe spectrum snapshot from {@link StreamingEqualizer.spectrum}. */
+export interface EqSpectrumSnapshot {
+  preLeft: Float32Array;
+  preRight: Float32Array;
+  postLeft: Float32Array;
+  postRight: Float32Array;
+  bandGainDb: Float32Array;
+  profileDb: Float32Array;
+  seq: number;
 }

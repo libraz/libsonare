@@ -129,6 +129,7 @@ export type SoloProcessor =
   | 'eq.bandPass'
   | 'eq.cutFilter'
   | 'eq.dynamic'
+  | 'eq.equalizer'
   | 'eq.graphic'
   | 'eq.linearPhase'
   | 'eq.midSide'
@@ -666,4 +667,90 @@ export interface LufsResult {
   momentaryLufs: number;
   shortTermLufs: number;
   loudnessRange: number;
+}
+
+/**
+ * Realtime equalizer spectrum snapshot.
+ *
+ * Mirrors the C++ `EqualizerSpectrumSnapshot`: `preLeft`/`preRight` and
+ * `postLeft`/`postRight` are the pre- and post-EQ spectrum streams (trimmed to
+ * their valid count). `bandGainDb` holds per-band applied gain (24 entries),
+ * `profileDb` the smoothed magnitude profile (16 entries), and `seq` increments
+ * each time a new snapshot is published.
+ */
+export interface EqSpectrumSnapshot {
+  preLeft: Float32Array;
+  preRight: Float32Array;
+  postLeft: Float32Array;
+  postRight: Float32Array;
+  bandGainDb: Float32Array;
+  profileDb: Float32Array;
+  seq: number;
+}
+
+/**
+ * Equalizer band type (string union mirroring `sonare::mastering::eq::EqBandType`).
+ */
+export type EqBandType =
+  | 'Peak'
+  | 'LowShelf'
+  | 'HighShelf'
+  | 'LowPass'
+  | 'HighPass'
+  | 'BandPass'
+  | 'Notch'
+  | 'TiltShelf'
+  | 'FlatTilt';
+
+/** Biquad coefficient design mode. */
+export type EqCoeffMode = 'Rbj' | 'Vicanek';
+
+/** Stereo placement for an EQ band. */
+export type EqStereoPlacement = 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+
+/** Per-band phase behaviour. */
+export type EqBandPhase = 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
+
+/**
+ * Equalizer band configuration accepted by {@link StreamingEqualizer.setBand}.
+ *
+ * All fields are optional; omitted values fall back to the C++ band defaults
+ * (Peak, 1000 Hz, 0 dB gain, Butterworth Q, disabled).
+ */
+export interface EqBand {
+  type?: EqBandType;
+  frequencyHz?: number;
+  gainDb?: number;
+  q?: number;
+  enabled?: boolean;
+  coeffMode?: EqCoeffMode;
+  slopeDbOct?: number;
+  placement?: EqStereoPlacement;
+  phase?: EqBandPhase;
+  soloed?: boolean;
+  bypassed?: boolean;
+  proportionalQ?: boolean;
+  proportionalQStrength?: number;
+  dynamic?: boolean;
+  thresholdDb?: number;
+  autoThreshold?: boolean;
+  ratio?: number;
+  rangeDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  lookaheadMs?: number;
+  sidechainFreqHz?: number;
+  sidechainQ?: number;
+}
+
+/** Construction options for {@link StreamingEqualizer}. */
+export interface StreamingEqualizerConfig {
+  sampleRate?: number;
+  maxBlockSize?: number;
+}
+
+/** Options for {@link StreamingEqualizer.match}. */
+export interface EqMatchOptions {
+  sampleRate?: number;
+  maxBands?: number;
 }

@@ -40,6 +40,7 @@ import {
   plp,
   powerToDb,
   preemphasis,
+  StreamingEqualizer,
   StreamingMasteringChain,
   samplesToFrames,
   splitSilence,
@@ -402,6 +403,7 @@ describe('Sonare WASM Module', () => {
 
       const names = masteringProcessorNames();
       expect(names).toContain('dynamics.compressor');
+      expect(names).toContain('eq.equalizer');
       expect(names).toContain('saturation.tape');
       expect(names).toContain('stereo.imager');
 
@@ -412,6 +414,17 @@ describe('Sonare WASM Module', () => {
       expect(mono.samples).toBeInstanceOf(Float32Array);
       expect(mono.samples.length).toBe(samples.length);
       expect(Number.isFinite(mono.outputLufs)).toBe(true);
+
+      const eq = masteringProcess('eq.equalizer', samples, sampleRate, {
+        'band0.enabled': 1,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 6,
+        'band0.q': 1,
+        autoGain: 1,
+      });
+      expect(eq.samples).toBeInstanceOf(Float32Array);
+      expect(eq.samples.length).toBe(samples.length);
+      expect(Number.isFinite(eq.outputLufs)).toBe(true);
     });
 
     it('should expose named stereo mastering processors in WASM', () => {
@@ -431,6 +444,26 @@ describe('Sonare WASM Module', () => {
       expect(result.left.length).toBe(left.length);
       expect(result.right.length).toBe(right.length);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
+
+      const leftEq = masteringProcessStereo('eq.equalizer', left, left, sampleRate, {
+        'band0.enabled': 1,
+        'band0.frequencyHz': 220,
+        'band0.gainDb': 12,
+        'band0.q': 1,
+        'band0.placement': 1,
+      });
+      const leftPeak = Math.max(...Array.from(leftEq.left, Math.abs));
+      const rightPeak = Math.max(...Array.from(leftEq.right, Math.abs));
+      expect(leftPeak).toBeGreaterThan(rightPeak * 1.5);
+
+      const linearEq = masteringProcessStereo('eq.equalizer', left, left, sampleRate, {
+        phaseMode: 3,
+        'band0.enabled': 1,
+        'band0.frequencyHz': 220,
+        'band0.gainDb': 3,
+        'band0.q': 1,
+      });
+      expect(linearEq.latencySamples).toBeGreaterThan(0);
     });
 
     it('should expose pair and stereo mastering APIs in WASM', () => {
@@ -504,6 +537,43 @@ describe('Sonare WASM Module', () => {
         expect(stages).toContain('eq.tilt');
       } finally {
         chain.delete();
+      }
+    });
+
+    it('should stream stereo blocks through StreamingEqualizer', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, {
+          type: 'HighShelf',
+          frequencyHz: 8000,
+          gainDb: 6,
+          enabled: true,
+        });
+
+        const length = 512;
+        const left = new Float32Array(length);
+        const right = new Float32Array(length);
+        for (let i = 0; i < length; i += 1) {
+          const value = Math.sin((2 * Math.PI * 1000 * i) / 48000) * 0.5;
+          left[i] = value;
+          right[i] = value;
+        }
+
+        const firstSeq = eq.spectrum().seq;
+        const out = eq.processStereo(left, right);
+        expect(out.left).toBeInstanceOf(Float32Array);
+        expect(out.right).toBeInstanceOf(Float32Array);
+        expect(out.left.length).toBe(length);
+        expect(out.right.length).toBe(length);
+
+        const snapshot = eq.spectrum();
+        expect(snapshot.seq).toBeGreaterThan(firstSeq);
+        expect(snapshot.bandGainDb.length).toBe(24);
+        expect(snapshot.profileDb.length).toBe(16);
+        expect(snapshot.preLeft.length).toBe(snapshot.postLeft.length);
+        expect(eq.latencySamples()).toBeGreaterThanOrEqual(0);
+      } finally {
+        eq.delete();
       }
     });
   });

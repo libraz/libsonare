@@ -331,6 +331,33 @@ export interface WasmStreamingMasteringChain {
   delete: () => void;
 }
 
+export interface WasmEqSpectrumSnapshot {
+  preLeft: Float32Array;
+  preRight: Float32Array;
+  postLeft: Float32Array;
+  postRight: Float32Array;
+  bandGainDb: Float32Array;
+  profileDb: Float32Array;
+  seq: number;
+}
+
+export interface WasmStreamingEqualizer {
+  setBand: (index: number, band: Record<string, unknown>) => void;
+  clear: () => void;
+  setPhaseMode: (mode: number) => void;
+  setAutoGain: (enabled: boolean) => void;
+  lastAutoGainDb: () => number;
+  latencySamples: () => number;
+  processMono: (samples: Float32Array) => Float32Array;
+  processStereo: (
+    left: Float32Array,
+    right: Float32Array,
+  ) => { left: Float32Array; right: Float32Array };
+  spectrum: () => WasmEqSpectrumSnapshot;
+  match: (source: Float32Array, reference: Float32Array, options: Record<string, unknown>) => void;
+  delete: () => void;
+}
+
 export interface WasmMixer {
   compile: () => void;
   processStereo: (
@@ -742,6 +769,7 @@ export interface SonareModule {
   ) => WasmStreamAnalyzer;
 
   createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
+  createEqualizer: (config: Record<string, unknown>) => WasmStreamingEqualizer;
   createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
   mixerPresetJson: (presetName: string) => string;
 }

@@ -64,6 +64,19 @@ typedef struct SonareAudio SonareAudio;
 typedef struct SonareAnalyzer SonareAnalyzer;
 typedef struct SonareMixer SonareMixer;
 typedef struct SonareStrip SonareStrip;
+typedef struct SonareEq SonareEq;
+
+#define SONARE_EQ_MAX_BANDS 24
+#define SONARE_EQ_SPECTRUM_STREAM_CAPACITY 256
+#define SONARE_EQ_SPECTRUM_PROFILE_BANDS 16
+
+// Values match the offline `phaseMode` param and eq::PhaseMode ordinals;
+// 0 (Inherit) is invalid for a global phase mode.
+typedef enum {
+  SONARE_EQ_PHASE_ZERO_LATENCY = 1,
+  SONARE_EQ_PHASE_NATURAL = 2,
+  SONARE_EQ_PHASE_LINEAR = 3
+} SonareEqPhaseMode;
 
 // Key structure
 typedef struct {
@@ -548,6 +561,33 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,
                                             char** json_out);
+
+typedef struct {
+  float pre_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  float pre_right[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  float post_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  float post_right[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  size_t pre_count;
+  size_t post_count;
+  float band_gain_db[SONARE_EQ_MAX_BANDS];
+  float profile_db[SONARE_EQ_SPECTRUM_PROFILE_BANDS];
+  uint64_t seq;
+} SonareEqSnapshot;
+
+SonareEq* sonare_eq_create(double sample_rate, int max_block_size);
+void sonare_eq_destroy(SonareEq* eq);
+SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json);
+void sonare_eq_clear(SonareEq* eq);
+SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode);
+SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
+                            size_t length, int sample_rate, int max_bands);
+void sonare_eq_set_auto_gain(SonareEq* eq, int enabled);
+float sonare_eq_last_auto_gain_db(const SonareEq* eq);
+int sonare_eq_latency_samples(const SonareEq* eq);
+SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
+                              int num_samples);
+SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
+
 void sonare_free_mastering_result(SonareMasteringResult* result);
 void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);
 void sonare_free_mastering_chain_result(SonareMasteringChainResult* result);

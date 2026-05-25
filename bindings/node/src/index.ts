@@ -8,6 +8,8 @@ import type {
   ChordChromaMethod,
   ChromaResult,
   DynamicsResult,
+  EqBandInput,
+  EqSpectrumSnapshot,
   HpssResult,
   Key,
   KeyCandidate,
@@ -760,6 +762,100 @@ export class StreamingMasteringChain {
   }
 }
 
+const EQ_PHASE_MODES: Record<string, number> = {
+  zero: 1,
+  'zero-latency': 1,
+  zero_latency: 1,
+  natural: 2,
+  'natural-phase': 2,
+  natural_phase: 2,
+  linear: 3,
+  'linear-phase': 3,
+  linear_phase: 3,
+};
+
+/**
+ * Block-by-block unified equalizer (zero-latency / natural / linear phase).
+ *
+ * Wraps the native `EqualizerProcessor`; state persists across
+ * {@link processMono}/{@link processStereo} calls.
+ *
+ * @example
+ * ```typescript
+ * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+ * eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+ * const { left, right } = eq.processStereo(blockLeft, blockRight);
+ * ```
+ */
+export class StreamingEqualizer {
+  private native: InstanceType<typeof addon.StreamingEqualizer>;
+
+  constructor(config: { sampleRate?: number; maxBlockSize?: number } = {}) {
+    this.native = new addon.StreamingEqualizer(config);
+  }
+
+  /** Configure one EQ band (0-based index). */
+  setBand(index: number, band: EqBandInput): void {
+    this.native.setBand(index, band);
+  }
+
+  /** Disable all bands. */
+  clear(): void {
+    this.native.clear();
+  }
+
+  /** Set the global phase mode: ``'zero'`` | ``'natural'`` | ``'linear'`` or 1/2/3. */
+  setPhaseMode(mode: 'zero' | 'natural' | 'linear' | number): void {
+    const value = typeof mode === 'number' ? mode : EQ_PHASE_MODES[mode.toLowerCase()];
+    if (value === undefined) {
+      throw new Error(`unknown EQ phase mode: ${mode}`);
+    }
+    this.native.setPhaseMode(value);
+  }
+
+  /** Enable or disable output auto-gain compensation. */
+  setAutoGain(enabled: boolean): void {
+    this.native.setAutoGain(enabled);
+  }
+
+  /** Last applied auto-gain in dB (0 when disabled). */
+  lastAutoGainDb(): number {
+    return this.native.lastAutoGainDb();
+  }
+
+  /** Reported processing latency in samples. */
+  latencySamples(): number {
+    return this.native.latencySamples();
+  }
+
+  /** Process one mono block; returns the processed samples (same length). */
+  processMono(samples: Float32Array): Float32Array {
+    return this.native.processMono(samples);
+  }
+
+  /** Process one stereo block; returns the processed channels. */
+  processStereo(
+    left: Float32Array,
+    right: Float32Array,
+  ): { left: Float32Array; right: Float32Array } {
+    return this.native.processStereo(left, right);
+  }
+
+  /** Latest realtime-safe spectrum snapshot. */
+  spectrum(): EqSpectrumSnapshot {
+    return this.native.spectrum();
+  }
+
+  /** Configure bands to match a reference spectrum (offline analysis). */
+  match(
+    source: Float32Array,
+    reference: Float32Array,
+    options: { sampleRate?: number; maxBands?: number } = {},
+  ): void {
+    this.native.match(source, reference, options);
+  }
+}
+
 export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
 }
@@ -1320,6 +1416,8 @@ export type {
   ChordChromaMethod,
   ChromaResult,
   DynamicsResult,
+  EqBandInput,
+  EqSpectrumSnapshot,
   HpssResult,
   Key,
   KeyCandidate,

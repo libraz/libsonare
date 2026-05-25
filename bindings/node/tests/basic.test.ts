@@ -66,6 +66,7 @@ import {
   preemphasis,
   resample,
   rmsEnergy,
+  StreamingEqualizer,
   StreamingMasteringChain,
   samplesToFrames,
   shortTermLufs,
@@ -382,6 +383,7 @@ describe('sonare native binding', () => {
 
       const names = masteringProcessorNames();
       expect(names).toContain('dynamics.compressor');
+      expect(names).toContain('eq.equalizer');
       expect(names).toContain('stereo.imager');
 
       const result = masteringProcess('dynamics.compressor', quiet, SR, {
@@ -394,6 +396,37 @@ describe('sonare native binding', () => {
       const stereo = masteringProcessStereo('stereo.imager', quiet, quiet, SR, { width: 1.1 });
       expect(stereo.left).toBeInstanceOf(Float32Array);
       expect(stereo.right.length).toBe(quiet.length);
+
+      const eq = masteringProcess('eq.equalizer', quiet, SR, {
+        'band0.enabled': 1,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 6,
+        'band0.q': 1,
+        autoGain: 1,
+      });
+      expect(eq.samples).toBeInstanceOf(Float32Array);
+      expect(eq.samples.length).toBe(quiet.length);
+      expect(Number.isFinite(eq.outputLufs)).toBe(true);
+
+      const leftEq = masteringProcessStereo('eq.equalizer', quiet, quiet, SR, {
+        'band0.enabled': 1,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 12,
+        'band0.q': 1,
+        'band0.placement': 1,
+      });
+      const leftPeak = Math.max(...leftEq.left.map((sample) => Math.abs(sample)));
+      const rightPeak = Math.max(...leftEq.right.map((sample) => Math.abs(sample)));
+      expect(leftPeak).toBeGreaterThan(rightPeak * 1.5);
+
+      const linearEq = masteringProcessStereo('eq.equalizer', quiet, quiet, SR, {
+        phaseMode: 3,
+        'band0.enabled': 1,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 3,
+        'band0.q': 1,
+      });
+      expect(linearEq.latencySamples).toBeGreaterThan(0);
     });
 
     it('trim removes silence', () => {
@@ -778,6 +811,32 @@ describe('sonare native binding', () => {
     it('rejects denoise and loudness stages', () => {
       expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).toThrow();
       expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
+    });
+  });
+
+  describe('StreamingEqualizer', () => {
+    it('processes stereo blocks and exposes a spectrum snapshot', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+      const left = new Float32Array(512).fill(0.1);
+      const right = new Float32Array(512).fill(0.1);
+      const out = eq.processStereo(left, right);
+      expect(out.left.length).toBe(512);
+      expect(out.right.length).toBe(512);
+      expect(Number.isFinite(out.left[0])).toBe(true);
+      const snapshot = eq.spectrum();
+      expect(snapshot.seq).toBeGreaterThan(0);
+      expect(snapshot.bandGainDb.length).toBe(24);
+    });
+
+    it('switches phase mode and reports linear-phase latency', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
+      eq.setPhaseMode('linear');
+      expect(eq.latencySamples()).toBeGreaterThan(0);
+      eq.setPhaseMode('zero');
+      expect(eq.latencySamples()).toBe(0);
+      expect(() => eq.setPhaseMode('bogus' as unknown as 'zero')).toThrow();
     });
   });
 

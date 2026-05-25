@@ -3,12 +3,15 @@
 
 #include "sonare_c.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "util/constants.h"
 
 namespace {
 
@@ -17,9 +20,18 @@ std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
   size_t n_samples = static_cast<size_t>(sample_rate * duration);
   std::vector<float> samples(n_samples);
   for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] = std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+    samples[i] =
+        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i / sample_rate);
   }
   return samples;
+}
+
+float max_abs(const float* samples, size_t length) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < length; ++i) {
+    peak = std::max(peak, std::abs(samples[i]));
+  }
+  return peak;
 }
 
 #ifdef SONARE_WITH_MASTERING
@@ -46,7 +58,7 @@ std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
     size_t start = static_cast<size_t>(beat * samples_per_beat);
     size_t click_length = static_cast<size_t>(sample_rate * 0.01f);
     for (size_t i = 0; i < click_length && start + i < n_samples; ++i) {
-      samples[start + i] = std::sin(static_cast<float>(M_PI) * i / click_length);
+      samples[start + i] = std::sin(static_cast<float>(sonare::constants::kPiD) * i / click_length);
     }
   }
   return samples;
@@ -748,6 +760,91 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
 
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
+  SECTION("streaming EQ handle processes JSON bands and exposes spectrum") {
+    SonareEq* eq = sonare_eq_create(48000.0, 512);
+    REQUIRE(eq != nullptr);
+    REQUIRE(sonare_eq_set_band(eq, 0,
+                               "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
+                               "\"q\":1,\"enabled\":true,\"coeffMode\":\"Vicanek\","
+                               "\"proportionalQ\":true}") == SONARE_OK);
+    REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"enabled\":truish}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\" \"enabled\":true}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"type\":\"Notch\"}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":7,\"enabled\":true}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"coeffMode\":\"unknown\"}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0,
+                               "{\"note\":\"\\\"type\\\":\\\"Unknown\\\"\","
+                               "\"type\":\"Peak\",\"frequency_hz\":1000,\"gain_db\":9,"
+                               "\"q\":1,\"enabled\":true,\"coeff_mode\":\"vicanek\","
+                               "\"proportional_q\":true}") == SONARE_OK);
+    REQUIRE(sonare_eq_latency_samples(eq) == 0);
+    sonare_eq_set_auto_gain(eq, 1);
+
+    std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
+    std::vector<float> right = left;
+    for (auto& sample : left) sample *= 0.2f;
+    for (auto& sample : right) sample *= 0.2f;
+    float* channels[] = {left.data(), right.data()};
+
+    REQUIRE(sonare_eq_process(eq, channels, 2, static_cast<int>(left.size())) == SONARE_OK);
+    REQUIRE(sonare_eq_last_auto_gain_db(eq) < 0.0f);
+
+    SonareEqSnapshot snapshot{};
+    REQUIRE(sonare_eq_spectrum(eq, &snapshot) == SONARE_OK);
+    REQUIRE(snapshot.seq == 1);
+    REQUIRE(snapshot.pre_count == SONARE_EQ_SPECTRUM_STREAM_CAPACITY);
+    REQUIRE(snapshot.post_count == SONARE_EQ_SPECTRUM_STREAM_CAPACITY);
+    REQUIRE(snapshot.band_gain_db[0] > 8.0f);
+
+    REQUIRE(sonare_eq_set_phase_mode(eq, SONARE_EQ_PHASE_LINEAR) == SONARE_OK);
+    REQUIRE(sonare_eq_latency_samples(eq) > 0);
+    REQUIRE(sonare_eq_set_phase_mode(eq, 99) == SONARE_ERROR_INVALID_PARAMETER);
+
+    sonare_eq_clear(eq);
+    REQUIRE(sonare_eq_latency_samples(eq) == 0);
+    sonare_eq_destroy(eq);
+  }
+
+  SECTION("streaming EQ match configures live bands from source and reference") {
+    auto source = generate_sine(1000.0f, 48000, 1.0f);
+    auto reference = source;
+    SonareEq* eq = sonare_eq_create(48000.0, static_cast<int>(source.size()));
+    REQUIRE(eq != nullptr);
+
+    for (auto& sample : source) sample *= 0.12f;
+    for (auto& sample : reference) sample *= 0.45f;
+
+    REQUIRE(sonare_eq_match(eq, source.data(), reference.data(), source.size(), 48000, 4) ==
+            SONARE_OK);
+
+    std::vector<float> left = source;
+    std::vector<float> right = source;
+    float* channels[] = {left.data(), right.data()};
+    REQUIRE(sonare_eq_process(eq, channels, 2, static_cast<int>(left.size())) == SONARE_OK);
+
+    SonareEqSnapshot snapshot{};
+    REQUIRE(sonare_eq_spectrum(eq, &snapshot) == SONARE_OK);
+    bool has_positive_band = false;
+    for (size_t i = 0; i < SONARE_EQ_MAX_BANDS; ++i) {
+      has_positive_band = has_positive_band || snapshot.band_gain_db[i] > 0.5f;
+    }
+    REQUIRE(has_positive_band);
+
+    REQUIRE(sonare_eq_match(eq, source.data(), reference.data(), source.size(), 48000, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_match(eq, source.data(), reference.data(), source.size(), 48000,
+                            SONARE_EQ_MAX_BANDS + 1) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_eq_destroy(eq);
+  }
+
   SECTION("returns processed samples and loudness metadata") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
     for (auto& sample : samples) {
@@ -819,7 +916,56 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     const char* names = sonare_mastering_processor_names();
     REQUIRE(names != nullptr);
     REQUIRE(std::strstr(names, "dynamics.compressor") != nullptr);
+    REQUIRE(std::strstr(names, "eq.equalizer") != nullptr);
     REQUIRE(std::strstr(names, "stereo.imager") != nullptr);
+
+    SonareMasteringParam eq_params[] = {{"band0.enabled", 1.0},
+                                        {"band0.frequencyHz", 440.0},
+                                        {"band0.gainDb", 6.0},
+                                        {"band0.q", 1.0},
+                                        {"autoGain", 1.0}};
+    SonareMasteringResult eq_result{};
+    REQUIRE(sonare_mastering_apply_processor("eq.equalizer", samples.data(), samples.size(), 22050,
+                                             eq_params, 5, &eq_result) == SONARE_OK);
+    REQUIRE(eq_result.samples != nullptr);
+    REQUIRE(eq_result.length == samples.size());
+    sonare_free_mastering_result(&eq_result);
+
+    auto high_tone = generate_sine(8000.0f, 22050, 0.5f);
+    SonareMasteringParam type_only_eq_params[] = {{"band0.type", 3.0}, {"band0.coeffMode", 1.0}};
+    SonareMasteringResult type_only_eq{};
+    REQUIRE(sonare_mastering_apply_processor("eq.equalizer", high_tone.data(), high_tone.size(),
+                                             22050, type_only_eq_params, 2,
+                                             &type_only_eq) == SONARE_OK);
+    REQUIRE(type_only_eq.samples != nullptr);
+    REQUIRE(max_abs(type_only_eq.samples, type_only_eq.length) <
+            max_abs(high_tone.data(), high_tone.size()) * 0.6f);
+    sonare_free_mastering_result(&type_only_eq);
+
+    SonareMasteringParam left_eq_params[] = {{"band0.enabled", 1.0},
+                                             {"band0.frequencyHz", 440.0},
+                                             {"band0.gainDb", 12.0},
+                                             {"band0.q", 1.0},
+                                             {"band0.placement", 1.0}};
+    SonareMasteringStereoResult left_eq{};
+    REQUIRE(sonare_mastering_apply_processor_stereo("eq.equalizer", samples.data(), samples.data(),
+                                                    samples.size(), 22050, left_eq_params, 5,
+                                                    &left_eq) == SONARE_OK);
+    REQUIRE(left_eq.left != nullptr);
+    REQUIRE(left_eq.right != nullptr);
+    REQUIRE(left_eq.length == samples.size());
+    REQUIRE(max_abs(left_eq.left, left_eq.length) > max_abs(left_eq.right, left_eq.length) * 1.5f);
+    sonare_free_mastering_stereo_result(&left_eq);
+
+    SonareMasteringParam linear_eq_params[] = {{"phaseMode", 3.0},     {"resolution", 1.0},
+                                               {"band0.enabled", 1.0}, {"band0.frequencyHz", 440.0},
+                                               {"band0.gainDb", 3.0},  {"band0.q", 1.0}};
+    SonareMasteringStereoResult linear_eq{};
+    REQUIRE(sonare_mastering_apply_processor_stereo("eq.equalizer", samples.data(), samples.data(),
+                                                    samples.size(), 22050, linear_eq_params, 6,
+                                                    &linear_eq) == SONARE_OK);
+    REQUIRE(linear_eq.latency_samples == 512);
+    sonare_free_mastering_stereo_result(&linear_eq);
   }
 
   SECTION("named processor validation includes processor and parameter name") {
