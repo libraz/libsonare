@@ -34,6 +34,8 @@ class Graph {
   const Node* node(const std::string& id) const;
 
   bool compiled() const noexcept { return compiled_; }
+  size_t node_count() const noexcept { return nodes_.size(); }
+  size_t connection_count() const noexcept { return connections_.size(); }
   int connection_delay_samples(size_t connection_index) const;
   // Q8 delay inserted on a compiled connection by longest-path PDC. If the
   // value has a fractional part, Graph uses the same Lagrange3 fractional delay

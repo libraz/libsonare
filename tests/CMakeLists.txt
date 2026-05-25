@@ -84,6 +84,14 @@ add_executable(sonare_tests
   rt/true_peak_filter_test.cpp
   rt/rt_publisher_test.cpp
   automation/automation_test.cpp
+  engine/boundary_splitter_test.cpp
+  engine/capture_test.cpp
+  engine/clip_player_test.cpp
+  engine/metronome_test.cpp
+  engine/realtime_engine_test.cpp
+  engine/realtime_engine_concurrency_test.cpp
+  engine/telemetry_test.cpp
+  engine/tempo_sync_test.cpp
   transport/marker_test.cpp
   transport/transport_test.cpp
   api/quick_test.cpp
@@ -128,7 +136,7 @@ add_executable(sonare_tests
   cli/cli_test.cpp
 )
 
-target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt sonare_automation Catch2::Catch2WithMain)
+target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt sonare_automation sonare_engine Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -173,6 +181,9 @@ endif()
 
 if(BUILD_MIXING)
   target_sources(sonare_tests PRIVATE
+    engine/meter_telemetry_test.cpp
+    engine/mixing_runtime_test.cpp
+    engine/monitor_runtime_test.cpp
     mixing/golden_hash_test.cpp
     mixing/insert_automation_c_api_test.cpp
     mixing/mixing_test.cpp
@@ -185,7 +196,10 @@ if(BUILD_MIXING)
 endif()
 
 if(BUILD_GRAPH)
-  target_sources(sonare_tests PRIVATE graph/graph_test.cpp)
+  target_sources(sonare_tests PRIVATE
+    engine/graph_runtime_test.cpp
+    graph/graph_test.cpp
+  )
   target_link_libraries(sonare_tests PRIVATE sonare_graph)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_GRAPH=1)
 endif()

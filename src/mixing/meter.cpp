@@ -73,7 +73,11 @@ float MeterProcessor::energy_to_lufs(double energy) const noexcept {
 void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate;
   if (config_.measure_true_peak) {
-    true_peak_filter_ = rt::TruePeakFilter(2, config_.true_peak_oversample == 2 ? 2 : 4);
+    // ITU-R BS.1770-4 mandates at least 4x oversampling for true-peak
+    // measurement; clamp anything below 4 up to 4 while still honoring 8x.
+    const int requested = config_.true_peak_oversample;
+    const int oversample = requested >= 8 ? 8 : 4;
+    true_peak_filter_ = rt::TruePeakFilter(2, oversample);
   }
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {

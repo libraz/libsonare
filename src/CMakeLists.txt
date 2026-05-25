@@ -377,6 +377,44 @@ if(BUILD_GRAPH)
   set_target_properties(sonare_graph PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
+set(SONARE_ENGINE_SOURCES
+  engine/boundary_splitter.cpp
+  engine/capture.cpp
+  engine/clip_player.cpp
+  engine/engine_controller.cpp
+  engine/metronome.cpp
+  engine/realtime_engine.cpp
+  engine/tempo_sync.cpp
+)
+if(BUILD_GRAPH)
+  list(APPEND SONARE_ENGINE_SOURCES engine/graph_runtime.cpp)
+endif()
+if(BUILD_MIXING)
+  list(APPEND SONARE_ENGINE_SOURCES
+    engine/meter_telemetry.cpp
+    engine/mixing_runtime.cpp
+    engine/monitor_runtime.cpp
+  )
+endif()
+add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
+target_include_directories(sonare_engine PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/third_party/kissfft
+  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
+  ${CMAKE_SOURCE_DIR}/third_party/minimp3
+  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+)
+target_link_libraries(sonare_engine PUBLIC sonare_rt sonare_automation)
+if(BUILD_GRAPH)
+  target_link_libraries(sonare_engine PUBLIC sonare_graph)
+  target_compile_definitions(sonare_engine PUBLIC SONARE_WITH_GRAPH=1)
+endif()
+if(BUILD_MIXING)
+  target_link_libraries(sonare_engine PUBLIC sonare_mixing)
+endif()
+target_compile_options(sonare_engine PRIVATE ${SONARE_WARNING_FLAGS})
+set_target_properties(sonare_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 if(BUILD_FX)
   add_library(sonare_fx STATIC
     effects/common/dc_blocker.cpp
