@@ -141,6 +141,7 @@ if(BUILD_MASTERING)
     mastering/property_test.cpp
     mastering/preset_test.cpp
     mastering/dynamics_test.cpp
+    mastering/eq_golden_test.cpp
     mastering/eq_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp

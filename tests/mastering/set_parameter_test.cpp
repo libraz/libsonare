@@ -119,7 +119,8 @@ std::unique_ptr<ProcessorBase> MakePrepared(const std::string& name,
 // activation is applied identically to the baseline and perturbed instances, so
 // the only difference between them is the perturbed parameter itself.
 std::string ActivationJson(const std::string& name) {
-  if (name == "eq.parametric" || name == "eq.minimumPhase" || name == "eq.linearPhase") {
+  if (name == "eq.parametric" || name == "eq.equalizer" || name == "eq.minimumPhase" ||
+      name == "eq.linearPhase") {
     return R"({"band0.frequencyHz":1000,"band0.gainDb":0})";
   }
   if (name == "eq.midSide") {

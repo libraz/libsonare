@@ -79,6 +79,7 @@ require `BUILD_MASTERING=ON`. Run individually, e.g.:
 ./build-bench/bin/sonare_filterbank_bench
 ./build-bench/bin/sonare_spectrum_power_bench
 ./build-bench/bin/sonare_mastering_isp_bench   # needs -DBUILD_MASTERING=ON
+./build-bench/bin/sonare_eq_bench              # needs -DBUILD_MASTERING=ON
 ```
 
 The mastering ISP bench is also runnable in WASM via

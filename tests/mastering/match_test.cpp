@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "mastering/eq/equalizer.h"
 #include "mastering/match/ab_switcher.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_loudness.h"
@@ -80,6 +81,34 @@ TEST_CASE("MatchEq bands follow reference minus source difference", "[mastering]
   REQUIRE(bands[0].gain_db > 0.0f);
   REQUIRE(bands[1].gain_db <= 6.0f);
   REQUIRE(bands[2].gain_db < 0.0f);
+}
+
+TEST_CASE("MatchEq live bands are placed at curve extrema and can configure EqualizerProcessor",
+          "[mastering][match]") {
+  ReferenceSpectrum source{{100.0f, 250.0f, 1000.0f, 4000.0f, 12000.0f},
+                           {-20.0f, -20.0f, -20.0f, -20.0f, -20.0f},
+                           48000};
+  ReferenceSpectrum reference{{100.0f, 250.0f, 1000.0f, 4000.0f, 12000.0f},
+                              {-20.0f, -10.0f, -20.0f, -30.0f, -20.0f},
+                              48000};
+
+  const auto bands = match_eq_bands(source, reference, {2, 12.0f, 100.0f, 12000.0f, 1.4f, 0});
+
+  REQUIRE(bands.size() == 2);
+  REQUIRE_THAT(bands[0].frequency_hz, WithinAbs(250.0f, 0.001f));
+  REQUIRE(bands[0].gain_db > 9.0f);
+  REQUIRE_THAT(bands[1].frequency_hz, WithinAbs(4000.0f, 0.001f));
+  REQUIRE(bands[1].gain_db < -9.0f);
+
+  sonare::mastering::eq::EqualizerProcessor eq({1});
+  eq.prepare(48000.0, 512);
+  configure_equalizer_from_match(eq, source, reference, {2, 12.0f, 100.0f, 12000.0f, 1.4f, 0});
+
+  REQUIRE(eq.band(0).enabled);
+  REQUIRE_THAT(eq.band(0).frequency_hz, WithinAbs(250.0f, 0.001f));
+  REQUIRE(eq.band(1).enabled);
+  REQUIRE_THAT(eq.band(1).frequency_hz, WithinAbs(4000.0f, 0.001f));
+  REQUIRE_FALSE(eq.band(2).enabled);
 }
 
 TEST_CASE("MatchEq curve keeps dense smoothed correction data", "[mastering][match]") {

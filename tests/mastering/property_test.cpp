@@ -11,6 +11,7 @@
 #include "mastering/api/presets.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
+#include "mastering/eq/equalizer.h"
 #include "mastering/eq/mid_side_eq.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/stereo/mid_side.h"
@@ -228,6 +229,42 @@ TEST_CASE("Property: zero-gain mid-side EQ preserves stereo", "[mastering][prope
 
   require_close(left, original_left, 2.0e-5f);
   require_close(right, original_right, 2.0e-5f);
+}
+
+TEST_CASE("Property: EqualizerProcessor stereo placement preserves side energy symmetry",
+          "[mastering][property]") {
+  using namespace sonare::mastering::eq;
+  EqualizerProcessor eq({2});
+  eq.prepare(48000.0, 4096);
+  EqBand side_band{EqBandType::Peak, 2000.0f, 6.0f, 1.0f, true};
+  side_band.placement = StereoPlacement::Side;
+  eq.set_band(0, side_band);
+
+  auto left = sine(2000.0f, 48000, 4096, 0.2f);
+  auto right = left;
+  const auto original_left = left;
+  const auto original_right = right;
+  process_stereo(eq, left, right);
+
+  require_close(left, original_left, 1.0e-6f);
+  require_close(right, original_right, 1.0e-6f);
+}
+
+TEST_CASE("Property: EqualizerProcessor auto-gain trends boosted RMS toward unity",
+          "[mastering][property]") {
+  using namespace sonare::mastering::eq;
+  EqualizerProcessor eq({1});
+  eq.prepare(48000.0, 48000);
+  eq.set_auto_gain_enabled(true);
+  eq.set_band(0, {EqBandType::Peak, 1000.0f, 9.0f, 1.0f, true});
+
+  auto audio = sine(1000.0f, 48000, 48000, 0.2f);
+  const float before = rms(audio);
+  process(eq, audio);
+  const float after = rms(audio);
+
+  REQUIRE(after < before * 1.35f);
+  REQUIRE(eq.last_auto_gain_db() < -6.0f);
 }
 
 TEST_CASE("Property: empty mastering chain preserves mono silence", "[mastering][property]") {

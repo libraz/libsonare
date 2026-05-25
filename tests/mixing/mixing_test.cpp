@@ -10,6 +10,7 @@
 #include "analysis/meter/lufs.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/sidechain_router.h"
+#include "mastering/eq/equalizer.h"
 #include "mastering/eq/linear_phase.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/maximizer/maximizer.h"
@@ -674,6 +675,17 @@ TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
   linear_phase_strip.prepare(48000.0, 128);
 
   REQUIRE_FALSE(linear_phase_strip.schedule_insert_automation(0, 1, 0, 6.0f));
+
+  auto equalizer = std::make_unique<sonare::mastering::eq::EqualizerProcessor>();
+  sonare::mastering::eq::EqBand linear_band{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 3.0f,
+                                            1.0f, true};
+  linear_band.phase = sonare::mastering::eq::PhaseMode::LinearPhase;
+  equalizer->set_band(0, linear_band);
+  sonare::mixing::ChannelStrip equalizer_strip;
+  equalizer_strip.add_pre_insert(std::move(equalizer));
+  equalizer_strip.prepare(48000.0, 128);
+
+  REQUIRE_FALSE(equalizer_strip.schedule_insert_automation(0, 1, 0, 6.0f));
 
   sonare::mixing::ChannelStrip maximizer_strip;
   maximizer_strip.add_pre_insert(std::make_unique<sonare::mastering::maximizer::Maximizer>());
