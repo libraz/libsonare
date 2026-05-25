@@ -5,6 +5,7 @@ from importlib.metadata import version as _pkg_version
 
 from .analyzer import (
     Mixer,
+    StreamingEqualizer,
     StreamingMasteringChain,
     amplitude_to_db,
     analyze,
@@ -108,6 +109,7 @@ from .types import (
     ChordAnalysisResult,
     ChromaResult,
     DynamicsResult,
+    EqSpectrumSnapshot,
     HpssResult,
     Key,
     KeyCandidate,
@@ -149,6 +151,7 @@ __all__ = [
     "__version__",
     "ChromaResult",
     "DynamicsResult",
+    "EqSpectrumSnapshot",
     "HpssResult",
     "Key",
     "KeyCandidate",
@@ -168,6 +171,7 @@ __all__ = [
     "RhythmResult",
     "StftResult",
     "StreamingMasteringChain",
+    "StreamingEqualizer",
     "TimbreResult",
     "TimeSignature",
     "analyze",

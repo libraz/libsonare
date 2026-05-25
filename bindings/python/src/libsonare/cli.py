@@ -914,6 +914,64 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_eq(args: argparse.Namespace) -> int:
+    from . import mastering_process
+
+    samples, sr = _load_audio(args.file)
+    if args.params:
+        params = _parse_kv_params(args.params)
+    else:
+        params = {
+            "band0.enabled": 1.0,
+            "band0.type": float(args.type),
+            "band0.frequencyHz": float(args.frequency_hz),
+            "band0.gainDb": float(args.gain_db),
+            "band0.q": float(args.q),
+            "band0.coeffMode": float(args.coeff_mode),
+            "band0.slopeDbOct": float(args.slope_db_oct),
+            "band0.placement": float(args.placement),
+            "band0.proportionalQ": 1.0 if args.proportional_q else 0.0,
+            "band0.dynamic": 1.0 if args.dynamic else 0.0,
+            "band0.thresholdDb": float(args.threshold_db),
+            "band0.autoThreshold": 1.0 if args.auto_threshold else 0.0,
+            "band0.ratio": float(args.ratio),
+            "band0.rangeDb": float(args.range_db),
+            "band0.attackMs": float(args.attack_ms),
+            "band0.releaseMs": float(args.release_ms),
+            "band0.lookaheadMs": float(args.lookahead_ms),
+            "band0.sidechainFreqHz": float(args.sidechain_freq_hz),
+            "band0.sidechainQ": float(args.sidechain_q),
+            "phaseMode": float(args.phase_mode),
+            "resolution": float(args.resolution),
+            "autoGain": 1.0 if args.auto_gain else 0.0,
+        }
+    result = mastering_process("eq.equalizer", samples, sample_rate=sr, params=params)
+
+    if args.output:
+        _write_wav(args.output, result.samples, result.sample_rate)
+
+    if args.json:
+        payload = {
+            "processor": "eq.equalizer",
+            "input_lufs": round(result.input_lufs, 4),
+            "output_lufs": round(result.output_lufs, 4),
+            "applied_gain_db": round(result.applied_gain_db, 4),
+            "latency_samples": result.latency_samples,
+            "sample_rate": result.sample_rate,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print("  Equalizer")
+        print(f"    Input LUFS:   {result.input_lufs:.2f}")
+        print(f"    Output LUFS:  {result.output_lufs:.2f}")
+        print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
 def cmd_mastering_processors(args: argparse.Namespace) -> int:
     from . import mastering_processor_names
 
@@ -1075,6 +1133,46 @@ def main() -> None:
     )
     mproc_p.add_argument("--processor", required=True, help="Processor name")
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
+    eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
+    eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
+    eq_p.add_argument(
+        "--type",
+        type=int,
+        default=0,
+        help=(
+            "Band type enum: 0 peak, 1 low shelf, 2 high shelf, 3 low pass, "
+            "4 high pass, 5 band pass, 6 notch, 7 tilt"
+        ),
+    )
+    eq_p.add_argument("--frequency-hz", type=float, default=1000.0)
+    eq_p.add_argument("--gain-db", type=float, default=0.0)
+    eq_p.add_argument("--q", type=float, default=1.0)
+    eq_p.add_argument("--coeff-mode", type=int, default=0, help="0 RBJ, 1 Vicanek")
+    eq_p.add_argument("--slope-db-oct", type=int, default=12)
+    eq_p.add_argument(
+        "--placement", type=int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
+    )
+    eq_p.add_argument(
+        "--phase-mode", type=int, default=1, help="1 zero latency, 2 natural, 3 linear"
+    )
+    eq_p.add_argument(
+        "--resolution",
+        type=int,
+        default=0,
+        help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
+    )
+    eq_p.add_argument("--auto-gain", action="store_true")
+    eq_p.add_argument("--proportional-q", action="store_true")
+    eq_p.add_argument("--dynamic", action="store_true")
+    eq_p.add_argument("--threshold-db", type=float, default=-24.0)
+    eq_p.add_argument("--auto-threshold", action="store_true")
+    eq_p.add_argument("--ratio", type=float, default=2.0)
+    eq_p.add_argument("--range-db", type=float, default=-6.0)
+    eq_p.add_argument("--attack-ms", type=float, default=5.0)
+    eq_p.add_argument("--release-ms", type=float, default=50.0)
+    eq_p.add_argument("--lookahead-ms", type=float, default=0.0)
+    eq_p.add_argument("--sidechain-freq-hz", type=float, default=-1.0)
+    eq_p.add_argument("--sidechain-q", type=float, default=1.0)
     sub.add_parser("mastering-processors", parents=[common], help="List mastering processor names")
     sub.add_parser(
         "mastering-pair-processors",
@@ -1117,6 +1215,7 @@ def main() -> None:
         "tempogram",
         "plp",
         "mastering",
+        "eq",
         "mastering-processor",
         "mastering-pair-analyze",
     ]:
@@ -1153,6 +1252,7 @@ def main() -> None:
         "tempogram": cmd_tempogram,
         "plp": cmd_plp,
         "mastering": cmd_mastering,
+        "eq": cmd_eq,
         "mastering-processor": cmd_mastering_processor,
         "mastering-processors": cmd_mastering_processors,
         "mastering-pair-processors": cmd_mastering_pair_processors,

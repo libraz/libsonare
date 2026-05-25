@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from .analyzer import (
+    StreamingEqualizer as StreamingEqualizer,
+)
+from .analyzer import (
     StreamingMasteringChain as StreamingMasteringChain,
 )
 from .analyzer import (
@@ -279,6 +282,9 @@ from .types import (
 )
 from .types import (
     DynamicsResult as DynamicsResult,
+)
+from .types import (
+    EqSpectrumSnapshot as EqSpectrumSnapshot,
 )
 from .types import (
     HpssResult as HpssResult,

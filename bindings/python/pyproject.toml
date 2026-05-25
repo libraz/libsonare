@@ -76,6 +76,15 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "*.pyi" = ["N802"]
+# Domain facade modules re-export the shared runtime via `from ._runtime import *`.
+# The aggregate `__all__` is resolved at runtime; ruff cannot see through the star
+# import, so F405 is unavoidable here. mypy (strict) still catches genuine undefined names.
+"**/_analysis.py" = ["F405"]
+"**/_conversions.py" = ["F405"]
+"**/_effects.py" = ["F405"]
+"**/_features.py" = ["F405"]
+"**/_mastering.py" = ["F405"]
+"**/_mixing.py" = ["F405"]
 
 [tool.mypy]
 strict = true

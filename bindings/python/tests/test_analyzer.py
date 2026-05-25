@@ -329,6 +329,7 @@ def test_named_mastering_processors() -> None:
 
     names = libsonare.mastering_processor_names()
     assert "dynamics.compressor" in names
+    assert "eq.equalizer" in names
     assert "stereo.imager" in names
 
     result = libsonare.mastering_process(
@@ -339,6 +340,21 @@ def test_named_mastering_processors() -> None:
     )
     assert len(result.samples) == len(samples)
     assert math.isfinite(result.output_lufs)
+
+    eq_result = libsonare.mastering_process(
+        "eq.equalizer",
+        samples,
+        sample_rate=sr,
+        params={
+            "band0.enabled": 1.0,
+            "band0.frequencyHz": 440.0,
+            "band0.gainDb": 6.0,
+            "band0.q": 1.0,
+            "autoGain": 1.0,
+        },
+    )
+    assert len(eq_result.samples) == len(samples)
+    assert math.isfinite(eq_result.output_lufs)
 
     stereo = libsonare.mastering_process_stereo(
         "stereo.imager",
@@ -1154,6 +1170,53 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     assert len(out) == len(block)
     assert any(abs(out[i] - block[i]) > 1e-6 for i in range(len(out)))
     chain.reset()
+
+
+def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
+    """StreamingEqualizer exposes the native SonareEq handle to Python."""
+    from libsonare import StreamingEqualizer
+
+    sr = 48000
+    block = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(512)]
+
+    with StreamingEqualizer(sample_rate=sr, max_block_size=512) as eq:
+        eq.set_band(
+            0,
+            {
+                "type": "Peak",
+                "frequencyHz": 1000.0,
+                "gainDb": 6.0,
+                "q": 1.0,
+                "enabled": True,
+            },
+        )
+        out = eq.process_mono(block)
+        assert len(out) == len(block)
+        assert max(abs(sample) for sample in out) > max(abs(sample) for sample in block)
+
+        snapshot = eq.spectrum()
+        assert snapshot.seq == 1
+        assert len(snapshot.pre_left) == 256
+        assert len(snapshot.post_left) == 256
+        assert snapshot.band_gain_db[0] > 5.0
+
+        eq.set_phase_mode("linear")
+        assert eq.latency_samples > 0
+
+
+def test_streaming_equalizer_match_configures_bands() -> None:
+    """StreamingEqualizer.match forwards to the live EQ match C API."""
+    from libsonare import StreamingEqualizer
+
+    sr = 48000
+    source = [0.08 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(1024)]
+    reference = [0.35 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(1024)]
+
+    with StreamingEqualizer(sample_rate=sr, max_block_size=len(source)) as eq:
+        eq.match(source, reference, max_bands=4)
+        out = eq.process_mono(source)
+        assert len(out) == len(source)
+        assert any(gain > 0.5 for gain in eq.spectrum().band_gain_db)
 
 
 def test_streaming_mastering_chain_rejects_denoise() -> None:

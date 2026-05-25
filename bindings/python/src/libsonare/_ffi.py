@@ -376,6 +376,27 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
     ]
 
 
+SONARE_EQ_MAX_BANDS = 24
+SONARE_EQ_SPECTRUM_STREAM_CAPACITY = 256
+SONARE_EQ_SPECTRUM_PROFILE_BANDS = 16
+
+
+class SonareEqSnapshot(ctypes.Structure):
+    """Maps to SonareEqSnapshot in sonare_c.h."""
+
+    _fields_ = [
+        ("pre_left", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("pre_right", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("post_left", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("post_right", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("pre_count", ctypes.c_size_t),
+        ("post_count", ctypes.c_size_t),
+        ("band_gain_db", ctypes.c_float * SONARE_EQ_MAX_BANDS),
+        ("profile_db", ctypes.c_float * SONARE_EQ_SPECTRUM_PROFILE_BANDS),
+        ("seq", ctypes.c_uint64),
+    ]
+
+
 # Progress callback: void(float progress, const char* stage, void* user_data).
 # Maps to SonareMasteringProgressCallback in sonare_c.h.
 SonareMasteringProgressCallback = ctypes.CFUNCTYPE(
@@ -1536,6 +1557,44 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             lib.sonare_streaming_mastering_chain_latency_samples.argtypes = [ctypes.c_void_p]
             lib.sonare_streaming_mastering_chain_destroy.restype = None
             lib.sonare_streaming_mastering_chain_destroy.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_eq_create"):
+            lib.sonare_eq_create.restype = ctypes.c_void_p
+            lib.sonare_eq_create.argtypes = [ctypes.c_double, ctypes.c_int]
+            lib.sonare_eq_destroy.restype = None
+            lib.sonare_eq_destroy.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_band.restype = ctypes.c_int32
+            lib.sonare_eq_set_band.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p]
+            lib.sonare_eq_clear.restype = None
+            lib.sonare_eq_clear.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_phase_mode.restype = ctypes.c_int32
+            lib.sonare_eq_set_phase_mode.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_eq_match.restype = ctypes.c_int32
+            lib.sonare_eq_match.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_eq_set_auto_gain.restype = None
+            lib.sonare_eq_set_auto_gain.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_eq_last_auto_gain_db.restype = ctypes.c_float
+            lib.sonare_eq_last_auto_gain_db.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_latency_samples.restype = ctypes.c_int
+            lib.sonare_eq_latency_samples.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_process.restype = ctypes.c_int32
+            lib.sonare_eq_process.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_eq_spectrum.restype = ctypes.c_int32
+            lib.sonare_eq_spectrum.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareEqSnapshot),
+            ]
         if hasattr(lib, "sonare_mastering_preset_names"):
             lib.sonare_mastering_preset_names.restype = ctypes.c_char_p
             lib.sonare_mastering_preset_names.argtypes = []

@@ -246,6 +246,43 @@ class LufsResult:
 
 
 @dataclass(frozen=True, slots=True)
+class EqSpectrumSnapshot:
+    """Realtime equalizer spectrum snapshot."""
+
+    pre_left: list[float]
+    pre_right: list[float]
+    post_left: list[float]
+    post_right: list[float]
+    band_gain_db: list[float]
+    profile_db: list[float]
+    seq: int
+
+    @property
+    def preLeft(self) -> list[float]:  # noqa: N802
+        return self.pre_left
+
+    @property
+    def preRight(self) -> list[float]:  # noqa: N802
+        return self.pre_right
+
+    @property
+    def postLeft(self) -> list[float]:  # noqa: N802
+        return self.post_left
+
+    @property
+    def postRight(self) -> list[float]:  # noqa: N802
+        return self.post_right
+
+    @property
+    def bandGainDb(self) -> list[float]:  # noqa: N802
+        return self.band_gain_db
+
+    @property
+    def profileDb(self) -> list[float]:  # noqa: N802
+        return self.profile_db
+
+
+@dataclass(frozen=True, slots=True)
 class RhythmResult:
     """Rhythm analysis primitives."""
 
