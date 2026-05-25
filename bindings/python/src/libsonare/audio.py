@@ -71,10 +71,16 @@ from .analyzer import (
     normalize as _normalize,
 )
 from .analyzer import (
+    note_stretch as _note_stretch,
+)
+from .analyzer import (
     onset_envelope as _onset_envelope,
 )
 from .analyzer import (
     percussive as _percussive,
+)
+from .analyzer import (
+    pitch_correct_to_midi as _pitch_correct_to_midi,
 )
 from .analyzer import (
     pitch_pyin as _pitch_pyin,
@@ -117,6 +123,9 @@ from .analyzer import (
 )
 from .analyzer import (
     trim as _trim,
+)
+from .analyzer import (
+    voice_change as _voice_change,
 )
 from .analyzer import (
     zero_crossing_rate as _zero_crossing_rate,
@@ -570,6 +579,26 @@ class Audio:
     def pitch_shift(self, semitones: float = 0.0) -> list[float]:
         """Shift the pitch of audio."""
         return _pitch_shift(self.data, self.sample_rate, semitones)
+
+    def pitch_correct_to_midi(
+        self, current_midi: float = 69.0, target_midi: float = 69.0
+    ) -> list[float]:
+        """Pitch-correct audio from a current MIDI note to a target MIDI note."""
+        return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
+
+    def note_stretch(
+        self, onset_sample: int = 0, offset_sample: int = 0, stretch_ratio: float = 1.0
+    ) -> list[float]:
+        """Time-stretch a single note region without changing pitch."""
+        return _note_stretch(
+            self.data, self.sample_rate, onset_sample, offset_sample, stretch_ratio
+        )
+
+    def voice_change(
+        self, pitch_semitones: float = 0.0, formant_factor: float = 1.0
+    ) -> list[float]:
+        """Apply a voice-change effect with independent pitch and formant control."""
+        return _voice_change(self.data, self.sample_rate, pitch_semitones, formant_factor)
 
     def normalize(self, target_db: float = -3.0) -> list[float]:
         """Normalize audio to a target dB level."""

@@ -8,7 +8,7 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**Audio analysis, mastering DSP, and mixer primitives for C++, Python, and browsers.**
+**An audio DSP toolkit for C++, Python, and browsers — analysis, mastering, mixing, and editing.**
 Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
 
 - **Analysis** — BPM, key, chord (HMM smoothing, inversions, key-context),
@@ -427,13 +427,18 @@ for analysis/mastering-only builds.
 
 ## Performance
 
-Designed for native execution speed: parallelized analysis with automatic
-CPU detection, multi-threaded HPSS median filter, ITU-spec polyphase
-oversampling, antiderivative anti-aliasing (ADAA), and SIMD-friendly Eigen
-GEMM on hot paths.
+Analysis runs natively in C++ and uses multi-threading where it helps (HPSS
+median filtering, the full `analyze()` pipeline). On the benchmark fixture,
+iterative algorithms such as HPSS and pYIN, and the full pipeline, are
+meaningfully faster than the equivalent librosa calls; single FFT-bound
+features (STFT, Mel, MFCC) are roughly on par. WebAssembly is single-threaded,
+so the multi-threaded gains do not apply there.
 
-See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for measured
-comparisons against librosa and other Python-based tools.
+Mastering DSP uses ITU-spec polyphase oversampling, antiderivative
+anti-aliasing (ADAA), and Eigen for SIMD-friendly linear algebra on hot paths.
+
+See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for the
+methodology and per-feature numbers.
 
 ## librosa Compatibility
 

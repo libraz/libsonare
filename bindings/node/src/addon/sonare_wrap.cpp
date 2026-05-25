@@ -113,6 +113,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("percussive", Napi::Function::New(env, &SonareWrap::Percussive, "percussive"));
   exports.Set("timeStretch", Napi::Function::New(env, &SonareWrap::TimeStretch, "timeStretch"));
   exports.Set("pitchShift", Napi::Function::New(env, &SonareWrap::PitchShift, "pitchShift"));
+  exports.Set("pitchCorrectToMidi",
+              Napi::Function::New(env, &SonareWrap::PitchCorrectToMidi, "pitchCorrectToMidi"));
+  exports.Set("noteStretch", Napi::Function::New(env, &SonareWrap::NoteStretch, "noteStretch"));
+  exports.Set("voiceChange", Napi::Function::New(env, &SonareWrap::VoiceChange, "voiceChange"));
   exports.Set("normalize", Napi::Function::New(env, &SonareWrap::Normalize, "normalize"));
   exports.Set("mastering", Napi::Function::New(env, &SonareWrap::Mastering, "mastering"));
   exports.Set("masteringProcess",

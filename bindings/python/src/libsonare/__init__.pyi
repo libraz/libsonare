@@ -169,6 +169,9 @@ from .analyzer import (
     normalize as normalize,
 )
 from .analyzer import (
+    note_stretch as note_stretch,
+)
+from .analyzer import (
     note_to_hz as note_to_hz,
 )
 from .analyzer import (
@@ -182,6 +185,9 @@ from .analyzer import (
 )
 from .analyzer import (
     percussive as percussive,
+)
+from .analyzer import (
+    pitch_correct_to_midi as pitch_correct_to_midi,
 )
 from .analyzer import (
     pitch_pyin as pitch_pyin,
@@ -254,6 +260,9 @@ from .analyzer import (
 )
 from .analyzer import (
     version as version,
+)
+from .analyzer import (
+    voice_change as voice_change,
 )
 from .analyzer import (
     zero_crossing_rate as zero_crossing_rate,

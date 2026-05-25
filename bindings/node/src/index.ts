@@ -261,6 +261,24 @@ export class Audio {
     return addon.pitchShift(this.getData(), this.getSampleRate(), semitones);
   }
 
+  pitchCorrectToMidi(currentMidi: number, targetMidi: number): Float32Array {
+    return addon.pitchCorrectToMidi(this.getData(), this.getSampleRate(), currentMidi, targetMidi);
+  }
+
+  noteStretch(onsetSample: number, offsetSample: number, stretchRatio: number): Float32Array {
+    return addon.noteStretch(
+      this.getData(),
+      this.getSampleRate(),
+      onsetSample,
+      offsetSample,
+      stretchRatio,
+    );
+  }
+
+  voiceChange(pitchSemitones: number, formantFactor = 1.0): Float32Array {
+    return addon.voiceChange(this.getData(), this.getSampleRate(), pitchSemitones, formantFactor);
+  }
+
   normalize(targetDb = 0.0): Float32Array {
     return addon.normalize(this.getData(), this.getSampleRate(), targetDb);
   }
@@ -647,6 +665,34 @@ export function pitchShift(
   semitones: number,
 ): Float32Array {
   return addon.pitchShift(samples, sampleRate, semitones);
+}
+
+export function pitchCorrectToMidi(
+  samples: Float32Array,
+  sampleRate = 22050,
+  currentMidi: number,
+  targetMidi: number,
+): Float32Array {
+  return addon.pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
+}
+
+export function noteStretch(
+  samples: Float32Array,
+  sampleRate = 22050,
+  onsetSample: number,
+  offsetSample: number,
+  stretchRatio: number,
+): Float32Array {
+  return addon.noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
+}
+
+export function voiceChange(
+  samples: Float32Array,
+  sampleRate = 22050,
+  pitchSemitones: number,
+  formantFactor = 1.0,
+): Float32Array {
+  return addon.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
 }
 
 export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 0.0): Float32Array {

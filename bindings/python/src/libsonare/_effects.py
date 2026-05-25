@@ -176,6 +176,120 @@ def pitch_shift(
     return result
 
 
+def pitch_correct_to_midi(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    current_midi: float = 69.0,
+    target_midi: float = 69.0,
+) -> list[float]:
+    """Pitch-correct audio from a current MIDI note to a target MIDI note.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        current_midi: Detected/current pitch as a MIDI note number.
+        target_midi: Desired pitch as a MIDI note number.
+
+    Returns:
+        List of pitch-corrected samples.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_pitch_correct_to_midi(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(current_midi),
+        ctypes.c_float(target_midi),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    result = [float(out[i]) for i in range(out_length.value)]
+    if out and out_length.value > 0:
+        lib.sonare_free_floats(out)
+    return result
+
+
+def note_stretch(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    onset_sample: int = 0,
+    offset_sample: int = 0,
+    stretch_ratio: float = 1.0,
+) -> list[float]:
+    """Time-stretch a single note region without changing pitch.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        onset_sample: Start sample index of the note region.
+        offset_sample: End sample index of the note region.
+        stretch_ratio: Stretch factor for the region (>1 lengthens).
+
+    Returns:
+        List of samples with the note region stretched.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_note_stretch(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(onset_sample),
+        ctypes.c_int(offset_sample),
+        ctypes.c_float(stretch_ratio),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    result = [float(out[i]) for i in range(out_length.value)]
+    if out and out_length.value > 0:
+        lib.sonare_free_floats(out)
+    return result
+
+
+def voice_change(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    pitch_semitones: float = 0.0,
+    formant_factor: float = 1.0,
+) -> list[float]:
+    """Apply a voice-change effect with independent pitch and formant control.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        pitch_semitones: Pitch shift in semitones (positive = up).
+        formant_factor: Formant scaling factor (1.0 = unchanged).
+
+    Returns:
+        List of voice-changed samples.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_voice_change(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(pitch_semitones),
+        ctypes.c_float(formant_factor),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    result = [float(out[i]) for i in range(out_length.value)]
+    if out and out_length.value > 0:
+        lib.sonare_free_floats(out)
+    return result
+
+
 def normalize(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

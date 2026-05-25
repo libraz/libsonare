@@ -918,6 +918,43 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    # sonare_pitch_correct_to_midi
+    lib.sonare_pitch_correct_to_midi.restype = ctypes.c_int32
+    lib.sonare_pitch_correct_to_midi.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_note_stretch
+    lib.sonare_note_stretch.restype = ctypes.c_int32
+    lib.sonare_note_stretch.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_voice_change
+    lib.sonare_voice_change.restype = ctypes.c_int32
+    lib.sonare_voice_change.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     # sonare_normalize
     lib.sonare_normalize.restype = ctypes.c_int32
     lib.sonare_normalize.argtypes = [

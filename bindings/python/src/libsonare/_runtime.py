@@ -5,19 +5,12 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
-from ._ffi import (
-    SONARE_OK,
-    SonareMixMeterSnapshot,
-    load_library,
-)
-from .types import (
-    AutomationCurve,
-    KeyProfile,
-    MeterTap,
-    MixMeterSnapshot,
-    Mode,
-    PanLaw,
-)
+# _runtime is the shared re-export hub: feature submodules do
+# `from ._runtime import *`, so forward the full C-struct and public type
+# surfaces here instead of maintaining a partial hand-written list (an
+# incomplete list silently breaks submodules at runtime with NameError).
+from ._ffi import *  # noqa: F403
+from .types import *  # noqa: F403
 
 PAN_MODE_BALANCE = 0
 PAN_MODE_STEREO_PAN = 1

@@ -3,6 +3,9 @@
 #include <string>
 #include <vector>
 
+#include "analysis/pitch_editor/note_editor.h"
+#include "analysis/pitch_editor/pitch_corrector.h"
+#include "analysis/voice_changer/voice_changer.h"
 #include "core/audio.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
@@ -143,6 +146,99 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::pitch_shift(audio, semitones);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, currentMidi, targetMidi)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+  float current_midi = info[2].As<Napi::Number>().FloatValue();
+  float target_midi = info[3].As<Napi::Number>().FloatValue();
+
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
+  sonare::analysis::pitch_editor::PitchCorrector corrector;
+  sonare::analysis::pitch_editor::F0Track track;
+  track.sample_rate = sr;
+  track.hop_length = 512;
+  track.f0_hz = {sonare::analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.voiced = {true};
+  track.voiced_prob = {1.0f};
+  sonare::Audio result = corrector.correct_to_midi(audio, track, target_midi);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber() || !info[4].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array, sampleRate, onsetSample, offsetSample, "
+                         "stretchRatio)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+  int onset_sample = info[2].As<Napi::Number>().Int32Value();
+  int offset_sample = info[3].As<Napi::Number>().Int32Value();
+  float stretch_ratio = info[4].As<Napi::Number>().FloatValue();
+
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
+  sonare::analysis::pitch_editor::NoteRegion region;
+  region.onset_sample = onset_sample;
+  region.offset_sample = offset_sample;
+  sonare::analysis::pitch_editor::NoteEditor editor;
+  sonare::Audio result = editor.stretch_note(audio, region, stretch_ratio);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, pitchSemitones, formantFactor)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+  float pitch_semitones = info[2].As<Napi::Number>().FloatValue();
+  float formant_factor = info[3].As<Napi::Number>().FloatValue();
+
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
+  sonare::analysis::voice_changer::VoiceChangerConfig config;
+  config.pitch_semitones = pitch_semitones;
+  config.formant_factor = formant_factor;
+  sonare::analysis::voice_changer::VoiceChanger changer(config);
+  sonare::Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)

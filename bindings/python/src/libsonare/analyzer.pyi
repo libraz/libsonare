@@ -262,6 +262,25 @@ def time_stretch(
 def pitch_shift(
     samples: FloatSamples, sample_rate: int = 22050, semitones: float = 0.0
 ) -> list[float]: ...
+def pitch_correct_to_midi(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    current_midi: float = 69.0,
+    target_midi: float = 69.0,
+) -> list[float]: ...
+def note_stretch(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    onset_sample: int = 0,
+    offset_sample: int = 0,
+    stretch_ratio: float = 1.0,
+) -> list[float]: ...
+def voice_change(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    pitch_semitones: float = 0.0,
+    formant_factor: float = 1.0,
+) -> list[float]: ...
 def normalize(
     samples: FloatSamples, sample_rate: int = 22050, target_db: float = -3.0
 ) -> list[float]: ...

@@ -64,6 +64,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Percussive(const Napi::CallbackInfo& info);
   static Napi::Value TimeStretch(const Napi::CallbackInfo& info);
   static Napi::Value PitchShift(const Napi::CallbackInfo& info);
+  static Napi::Value PitchCorrectToMidi(const Napi::CallbackInfo& info);
+  static Napi::Value NoteStretch(const Napi::CallbackInfo& info);
+  static Napi::Value VoiceChange(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);
   static Napi::Value Mastering(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcess(const Napi::CallbackInfo& info);

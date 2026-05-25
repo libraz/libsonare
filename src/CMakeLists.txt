@@ -411,7 +411,6 @@ endif()
 
 if(BUILD_VOICE_CHANGER)
   add_library(sonare_voice_changer STATIC
-    sonare_c_daw.cpp
     analysis/voice_changer/formant_warp.cpp
     analysis/voice_changer/streaming_retune.cpp
     analysis/voice_changer/voice_changer.cpp
@@ -437,6 +436,12 @@ if(BUILD_SHARED)
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
   endif()
+  # The DAW/editing C API (sonare_c_daw.cpp) wraps the pitch-editor and
+  # voice-changer engines, so it is compiled into the shared library only when
+  # the voice changer is enabled (which requires the pitch editor).
+  if(BUILD_VOICE_CHANGER)
+    list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
+  endif()
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
@@ -455,6 +460,11 @@ if(BUILD_SHARED)
   if(BUILD_MASTERING)
     target_link_libraries(sonare_shared PUBLIC sonare_mastering)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MASTERING=1)
+  endif()
+  if(BUILD_VOICE_CHANGER)
+    # Pulls in the voice-changer engine and, transitively, the pitch editor that
+    # sonare_c_daw.cpp depends on.
+    target_link_libraries(sonare_shared PUBLIC sonare_voice_changer)
   endif()
   if(BUILD_MIXING)
     target_link_libraries(sonare_shared PUBLIC sonare_mixing)

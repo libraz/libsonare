@@ -7,7 +7,8 @@
 [![License](https://img.shields.io/github/license/libraz/libsonare)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-Dependency-free audio analysis library for browser and Node.js via WebAssembly.
+A dependency-free audio DSP toolkit for browser and Node.js via WebAssembly —
+analysis, mastering, mixing, and editing.
 
 > **Audio input:** This package expects already-decoded `Float32Array` mono
 > samples (it does not bundle a file decoder). Use the Web Audio API in the

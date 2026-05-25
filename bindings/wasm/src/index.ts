@@ -698,6 +698,71 @@ export function pitchShift(
 }
 
 /**
+ * Pitch-correct audio from a current MIDI note to a target MIDI note.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param currentMidi - Detected/current MIDI note number
+ * @param targetMidi - Desired MIDI note number
+ * @returns Pitch-corrected audio
+ */
+export function pitchCorrectToMidi(
+  samples: Float32Array,
+  sampleRate: number,
+  currentMidi: number,
+  targetMidi: number,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
+}
+
+/**
+ * Time-stretch a note region between two sample offsets without changing pitch.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param onsetSample - Note onset position in samples
+ * @param offsetSample - Note offset position in samples
+ * @param stretchRatio - Stretch ratio (0.5 = double duration, 2.0 = half duration)
+ * @returns Audio with the note region stretched
+ */
+export function noteStretch(
+  samples: Float32Array,
+  sampleRate: number,
+  onsetSample: number,
+  offsetSample: number,
+  stretchRatio: number,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
+}
+
+/**
+ * Apply a voice change by shifting pitch and formants independently.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param pitchSemitones - Pitch shift in semitones
+ * @param formantFactor - Formant scaling factor (1.0 = unchanged)
+ * @returns Voice-changed audio
+ */
+export function voiceChange(
+  samples: Float32Array,
+  sampleRate: number,
+  pitchSemitones: number,
+  formantFactor: number,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
+}
+
+/**
  * Normalize audio to target peak level.
  *
  * @param samples - Audio samples (mono, float32)
@@ -2504,6 +2569,18 @@ export class Audio {
 
   pitchShift(semitones: number): Float32Array {
     return pitchShift(this._samples, this._sampleRate, semitones);
+  }
+
+  pitchCorrectToMidi(currentMidi: number, targetMidi: number): Float32Array {
+    return pitchCorrectToMidi(this._samples, this._sampleRate, currentMidi, targetMidi);
+  }
+
+  noteStretch(onsetSample: number, offsetSample: number, stretchRatio: number): Float32Array {
+    return noteStretch(this._samples, this._sampleRate, onsetSample, offsetSample, stretchRatio);
+  }
+
+  voiceChange(pitchSemitones: number, formantFactor: number): Float32Array {
+    return voiceChange(this._samples, this._sampleRate, pitchSemitones, formantFactor);
   }
 
   normalize(targetDb = 0.0): Float32Array {

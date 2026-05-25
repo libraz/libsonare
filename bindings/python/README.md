@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-Audio analysis library for Python.
+An audio DSP toolkit for Python — analysis, mastering, mixing, and editing.
 
 Built on a C++ core with zero Python dependencies.
 

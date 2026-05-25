@@ -14,11 +14,14 @@ import {
   mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
+  noteStretch,
   onsetEnvelope,
+  pitchCorrectToMidi,
   plp,
   shortTermLufs,
   tempogram,
   tempogramRatio,
+  voiceChange,
 } from '../dist/index.js';
 
 const SR = 22050;
@@ -111,6 +114,36 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(momentaryLufs(signal, SR).length).toBeGreaterThan(0);
       expect(shortTermLufs(signal, SR).length).toBeGreaterThan(0);
       expect(allFinite(momentaryLufs(signal, SR))).toBe(true);
+    });
+  });
+
+  describe('editing DSP (pitch correct / note stretch / voice change)', () => {
+    it('pitchCorrectToMidi returns a non-empty finite buffer', () => {
+      const out = pitchCorrectToMidi(signal, SR, 57, 60);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBeGreaterThan(0);
+      expect(allFinite(out)).toBe(true);
+    });
+
+    it('noteStretch returns a non-empty finite buffer', () => {
+      const out = noteStretch(signal, SR, 0, signal.length, 1.5);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBeGreaterThan(0);
+      expect(allFinite(out)).toBe(true);
+    });
+
+    it('voiceChange returns a non-empty finite buffer', () => {
+      const out = voiceChange(signal, SR, 2, 1.1);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBeGreaterThan(0);
+      expect(allFinite(out)).toBe(true);
+    });
+
+    it('exposes the editing methods on the Audio class', () => {
+      const audio = Audio.fromBuffer(signal, SR);
+      expect(audio.pitchCorrectToMidi(57, 60).length).toBeGreaterThan(0);
+      expect(audio.noteStretch(0, signal.length, 1.5).length).toBeGreaterThan(0);
+      expect(audio.voiceChange(2, 1.1).length).toBeGreaterThan(0);
     });
   });
 

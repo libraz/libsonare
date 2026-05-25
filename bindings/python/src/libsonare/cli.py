@@ -597,6 +597,85 @@ def cmd_hpss(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pitch_correct(args: argparse.Namespace) -> int:
+    from . import pitch_correct_to_midi
+
+    samples, sr = _load_audio(args.file)
+    result = pitch_correct_to_midi(
+        samples,
+        sample_rate=sr,
+        current_midi=args.current_midi,
+        target_midi=args.target_midi,
+    )
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict = {"length": len(result), "sample_rate": sr}
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Pitch correct: {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_note_stretch(args: argparse.Namespace) -> int:
+    from . import note_stretch
+
+    samples, sr = _load_audio(args.file)
+    result = note_stretch(
+        samples,
+        sample_rate=sr,
+        onset_sample=args.onset,
+        offset_sample=args.offset,
+        stretch_ratio=args.ratio,
+    )
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict = {"length": len(result), "sample_rate": sr}
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Note stretch: {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_voice_change(args: argparse.Namespace) -> int:
+    from . import voice_change
+
+    samples, sr = _load_audio(args.file)
+    result = voice_change(
+        samples,
+        sample_rate=sr,
+        pitch_semitones=args.pitch_semitones,
+        formant_factor=args.formant_factor,
+    )
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict = {"length": len(result), "sample_rate": sr}
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Voice change: {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
 def cmd_acoustic(args: argparse.Namespace) -> int:
     from . import analyze_impulse_response, detect_acoustic
 
@@ -1201,6 +1280,38 @@ def main() -> None:
     pitch_p.add_argument("--algorithm", choices=["yin", "pyin"], default="pyin")
     sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
 
+    # Editing commands
+    pitch_correct_p = sub.add_parser(
+        "pitch-correct", parents=[common], help="Pitch-correct from a current to a target MIDI note"
+    )
+    pitch_correct_p.add_argument(
+        "--current-midi", type=float, default=69.0, help="Current pitch as a MIDI note number"
+    )
+    pitch_correct_p.add_argument(
+        "--target-midi", type=float, default=69.0, help="Target pitch as a MIDI note number"
+    )
+    note_stretch_p = sub.add_parser(
+        "note-stretch", parents=[common], help="Time-stretch a single note region"
+    )
+    note_stretch_p.add_argument(
+        "--onset", type=int, default=0, help="Start sample index of the note region"
+    )
+    note_stretch_p.add_argument(
+        "--offset", type=int, default=0, help="End sample index of the note region"
+    )
+    note_stretch_p.add_argument(
+        "--ratio", type=float, default=1.0, help="Stretch factor for the region (>1 lengthens)"
+    )
+    voice_change_p = sub.add_parser(
+        "voice-change", parents=[common], help="Apply a voice-change effect"
+    )
+    voice_change_p.add_argument(
+        "--pitch-semitones", type=float, default=0.0, help="Pitch shift in semitones"
+    )
+    voice_change_p.add_argument(
+        "--formant-factor", type=float, default=1.0, help="Formant scaling factor (1.0 = unchanged)"
+    )
+
     # Analysis commands
     acoustic_p = sub.add_parser("acoustic", parents=[common], help="Estimate acoustic parameters")
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
@@ -1325,6 +1436,9 @@ def main() -> None:
         "spectral",
         "pitch",
         "hpss",
+        "pitch-correct",
+        "note-stretch",
+        "voice-change",
         "acoustic",
         "rhythm",
         "dynamics",
@@ -1362,6 +1476,9 @@ def main() -> None:
         "spectral": cmd_spectral,
         "pitch": cmd_pitch,
         "hpss": cmd_hpss,
+        "pitch-correct": cmd_pitch_correct,
+        "note-stretch": cmd_note_stretch,
+        "voice-change": cmd_voice_change,
         "acoustic": cmd_acoustic,
         "rhythm": cmd_rhythm,
         "dynamics": cmd_dynamics,

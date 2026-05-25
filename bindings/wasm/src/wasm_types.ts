@@ -538,6 +538,25 @@ export interface SonareModule {
   percussive: (samples: Float32Array, sampleRate: number) => Float32Array;
   timeStretch: (samples: Float32Array, sampleRate: number, rate: number) => Float32Array;
   pitchShift: (samples: Float32Array, sampleRate: number, semitones: number) => Float32Array;
+  pitchCorrectToMidi: (
+    samples: Float32Array,
+    sampleRate: number,
+    currentMidi: number,
+    targetMidi: number,
+  ) => Float32Array;
+  noteStretch: (
+    samples: Float32Array,
+    sampleRate: number,
+    onsetSample: number,
+    offsetSample: number,
+    stretchRatio: number,
+  ) => Float32Array;
+  voiceChange: (
+    samples: Float32Array,
+    sampleRate: number,
+    pitchSemitones: number,
+    formantFactor: number,
+  ) => Float32Array;
   normalize: (samples: Float32Array, sampleRate: number, targetDb: number) => Float32Array;
   mastering: (
     samples: Float32Array,

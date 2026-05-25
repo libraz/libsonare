@@ -8,13 +8,14 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-Audio analysis and mastering DSP for Node.js, exposed as a native N-API
-addon built on the libsonare C++ core.
+An audio DSP toolkit for Node.js — analysis, mastering, mixing, and editing —
+exposed as a native N-API addon built on the libsonare C++ core.
 
 Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
 audio files directly from disk or memory (WAV / MP3 out of the box, plus
-M4A / AAC / FLAC / OGG / Opus when built with FFmpeg). Both the analysis and
-mastering APIs are exposed, matching the C, Python, CLI, and WASM surfaces.
+M4A / AAC / FLAC / OGG / Opus when built with FFmpeg). The analysis, mastering,
+mixing, and editing APIs are exposed, matching the C, Python, CLI, and WASM
+surfaces.
 
 ## Installation
 

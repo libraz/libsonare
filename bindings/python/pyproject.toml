@@ -85,6 +85,9 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 "**/_features.py" = ["F405"]
 "**/_mastering.py" = ["F405"]
 "**/_mixing.py" = ["F405"]
+# _runtime is the aggregation hub itself (`from ._ffi import *` / `from .types import *`),
+# so its own re-exported references are likewise opaque to ruff.
+"**/_runtime.py" = ["F405"]
 
 [tool.mypy]
 strict = true
