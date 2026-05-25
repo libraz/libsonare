@@ -390,7 +390,7 @@ std::cout << "BPM: " << result.bpm
 | Compressor                | Parametric / Graphic      | Multiband comp / EQ / limiter |
 | Limiter / Brickwall       | Linear / Minimum phase    | Stereo imager / M-S           |
 | Expander / Gate           | Dynamic EQ                | Haas / phase align            |
-| De-esser                  | Pultec / API style        | Mono maker / compat           |
+| De-esser                  | Passive / stepped EQ      | Mono maker / compat           |
 | Transient shaper          | Tilt / shelving           |                               |
 
 | Saturation / Repair               | Maximizer / Match                       | Building blocks            |
@@ -402,7 +402,7 @@ std::cout << "BPM: " << result.bpm
 
 Repair is classical DSP by design. `denoise_classical` covers spectral
 subtraction, MMSE-STSA, and LogMMSE with explicit noise estimation; DNN
-restoration, source separation, and RX-style spectral repair are out of scope.
+restoration, source separation, and interactive spectral repair are out of scope.
 
 Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 `cmake -DBUILD_MASTERING=OFF` to ship analysis-only builds.
