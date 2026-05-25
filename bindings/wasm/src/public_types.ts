@@ -443,6 +443,27 @@ export interface MixerProcessResult {
  */
 export type AutomationCurve = 'linear' | 'exponential';
 
+/**
+ * Pan law applied when computing left/right gains from a pan position
+ * (see {@link Mixer.setPanLaw}). Maps to the underlying integer code.
+ */
+export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
+
+/**
+ * Meter tap point for reading a strip's meter snapshot
+ * (see {@link Mixer.meterTap} and {@link Mixer.stripMeter}).
+ */
+export type MeterTap = 'preFader' | 'postFader';
+
+/** Pre/post-fader send timing (see {@link Mixer.addSend}). */
+export type SendTiming = 'preFader' | 'postFader';
+
+/** A single goniometer (left/right) sample returned by {@link Mixer.readGoniometerLatest}. */
+export interface GoniometerPoint {
+  left: number;
+  right: number;
+}
+
 export interface MasteringChainConfig {
   repair?: {
     denoise?: boolean;

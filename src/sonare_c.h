@@ -650,6 +650,8 @@ typedef enum {
   SONARE_SEND_TIMING_POST_FADER = 1
 } SonareSendTiming;
 
+typedef enum { SONARE_METER_TAP_PRE_FADER = 0, SONARE_METER_TAP_POST_FADER = 1 } SonareMeterTap;
+
 typedef struct {
   float peak_db_l;
   float peak_db_r;
@@ -683,11 +685,34 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
 SonareError sonare_strip_set_width(SonareStrip* strip, float width);
 SonareError sonare_strip_set_muted(SonareStrip* strip, int muted);
+// Sets the strip's solo state. Solo changes take effect on the next process
+// without a graph recompile (implied mutes are recomputed across the mixer).
+SonareError sonare_strip_set_soloed(SonareStrip* strip, int soloed);
+// Marks a strip as solo-safe so it is never implied-muted by another strip's
+// solo. Takes effect on the next process without a graph recompile.
+SonareError sonare_strip_set_solo_safe(SonareStrip* strip, int solo_safe);
+// Inverts the polarity of the left and/or right channel. Does not change
+// latency or topology.
+SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left, int invert_right);
+// Sets the strip's pan law. @c pan_law: 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB,
+// 3 = linear (0 dB). Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL
+// or pan_law is unknown.
+SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
+// Sets a per-strip channel delay in samples. This changes the strip's reported
+// latency; the routing graph re-runs latency compensation at the next compile.
+SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay_samples);
+// Sets the strip's live VCA gain offset in dB. VCA is a group concept with no
+// per-strip scene field, so this is not persisted to the scene JSON.
+SonareError sonare_strip_set_vca_offset_db(SonareStrip* strip, float offset_db);
 SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   const char* destination_bus_id, float send_db, int timing,
                                   size_t* index_out);
 SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float send_db);
 SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
+// Reads a meter snapshot at the given tap point. @c tap: 0 = pre-fader,
+// 1 = post-fader (see SonareMeterTap). Returns @c SONARE_ERROR_INVALID_PARAMETER
+// if strip or out is NULL, or tap is unknown.
+SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out);
 size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGoniometerPoint* out,
                                            size_t max_points);
 
@@ -712,6 +737,22 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
 SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned int insert_index,
                                                     unsigned int param_id, int64_t sample_pos,
                                                     float value, int curve);
+// Schedules sample-accurate fader/pan/width automation on a strip. @c sample_pos
+// uses the same absolute-sample timeline as sonare_strip_schedule_insert_automation.
+// @c curve: 0 = Linear, 1 = Exponential. Returns @c SONARE_OK on success, or
+// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL, curve is unknown, or the
+// event lane is full.
+SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t sample_pos,
+                                                   float fader_db, int curve);
+SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sample_pos, float pan,
+                                                 int curve);
+SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t sample_pos,
+                                                   float width, int curve);
+// Schedules sample-accurate send-level automation on a strip's send. @c send_index
+// addresses the strip's sends in add order. See the schedulers above for timeline
+// and @c curve semantics.
+SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t send_index,
+                                                  int64_t sample_pos, float db, int curve);
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
 // Rebuilds and compiles the internal routing graph from the current topology

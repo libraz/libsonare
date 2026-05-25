@@ -11,9 +11,12 @@ from ._ffi import (
     load_library,
 )
 from .types import (
+    AutomationCurve,
     KeyProfile,
+    MeterTap,
     MixMeterSnapshot,
     Mode,
+    PanLaw,
 )
 
 PAN_MODE_BALANCE = 0
@@ -73,6 +76,57 @@ def _pan_mode_value(value: str | int) -> int:
     if key in ("dual-pan", "dualpan"):
         return PAN_MODE_DUAL_PAN
     raise ValueError(f"unknown pan mode: {value}")
+
+
+def _curve_value(value: AutomationCurve | str | int) -> int:
+    """Resolve an automation curve to its C enum value (0 linear, 1 exponential)."""
+    if isinstance(value, AutomationCurve):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    key = value.lower()
+    if key in ("linear", "lin"):
+        return int(AutomationCurve.LINEAR)
+    if key in ("exponential", "exp"):
+        return int(AutomationCurve.EXPONENTIAL)
+    raise ValueError(f"unknown automation curve: {value}")
+
+
+def _pan_law_value(value: PanLaw | str | int) -> int:
+    """Resolve a pan law to its C enum value (0=-3dB, 1=-4.5dB, 2=-6dB, 3=linear)."""
+    if isinstance(value, PanLaw):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    key = value.replace("_", "-").lower()
+    mapping = {
+        "const-3db": PanLaw.CONST_3DB,
+        "-3db": PanLaw.CONST_3DB,
+        "const-4.5db": PanLaw.CONST_4_5DB,
+        "-4.5db": PanLaw.CONST_4_5DB,
+        "const-6db": PanLaw.CONST_6DB,
+        "-6db": PanLaw.CONST_6DB,
+        "linear": PanLaw.LINEAR_0DB,
+        "linear-0db": PanLaw.LINEAR_0DB,
+        "0db": PanLaw.LINEAR_0DB,
+    }
+    if key not in mapping:
+        raise ValueError(f"unknown pan law: {value}")
+    return int(mapping[key])
+
+
+def _meter_tap_value(value: MeterTap | str | int) -> int:
+    """Resolve a meter tap point to its C enum value (0 pre-fader, 1 post-fader)."""
+    if isinstance(value, MeterTap):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    key = value.replace("_", "-").lower()
+    if key in ("pre-fader", "pre", "prefader"):
+        return int(MeterTap.PRE_FADER)
+    if key in ("post-fader", "post", "postfader"):
+        return int(MeterTap.POST_FADER)
+    raise ValueError(f"unknown meter tap: {value}")
 
 
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:

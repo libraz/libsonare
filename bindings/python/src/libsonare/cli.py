@@ -42,6 +42,27 @@ def _write_wav(path: str, samples: list[float], sample_rate: int) -> None:
         wav.writeframes(bytes(frames))
 
 
+def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
+    """Write a stereo 16-bit PCM WAV using only the Python standard library.
+
+    Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
+    """
+    import struct
+    import wave
+
+    frames = bytearray()
+    count = min(len(left), len(right))
+    for i in range(count):
+        for s in (left[i], right[i]):
+            clamped = -1.0 if s < -1.0 else (1.0 if s > 1.0 else s)
+            frames += struct.pack("<h", int(round(clamped * 32767.0)))
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        wav.writeframes(bytes(frames))
+
+
 def _array_stats(vals: list[float]) -> dict:
     """Summary statistics for a numeric array (avoids dumping huge arrays)."""
     import statistics
@@ -1032,6 +1053,76 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mix(args: argparse.Namespace) -> int:
+    from . import Mixer, mixing_scene_preset_json
+
+    # Resolve the scene JSON from either a file or a built-in preset.
+    if args.scene:
+        with open(args.scene, encoding="utf-8") as fh:
+            scene_json = fh.read()
+    elif args.preset:
+        scene_json = mixing_scene_preset_json(args.preset)
+    else:
+        raise ValueError("either --scene or --preset is required")
+
+    mixer = Mixer.from_scene_json(
+        scene_json, sample_rate=args.sample_rate, block_size=args.block_size
+    )
+    try:
+        strip_count = mixer.strip_count()
+
+        rendered = False
+        out_left: list[float] = []
+        out_right: list[float] = []
+        if args.input:
+            # Process each input WAV as one strip (mono inputs are duplicated to
+            # both channels). All inputs must share a length.
+            left_channels: list[list[float]] = []
+            right_channels: list[list[float]] = []
+            length: int | None = None
+            for path in args.input:
+                samples, _sr = _load_audio(path)
+                if length is None:
+                    length = len(samples)
+                elif len(samples) != length:
+                    raise ValueError("all --input files must have the same length")
+                left_channels.append(list(samples))
+                right_channels.append(list(samples))
+            if len(left_channels) != strip_count:
+                raise ValueError(
+                    f"scene has {strip_count} strips but {len(left_channels)} inputs were given"
+                )
+            mixer.compile()
+            out_left, out_right = mixer.process_stereo(left_channels, right_channels)
+            rendered = True
+            if args.output:
+                _write_wav_stereo(args.output, out_left, out_right, args.sample_rate)
+
+        if args.json:
+            payload: dict[str, object] = {
+                "strip_count": strip_count,
+                "sample_rate": args.sample_rate,
+                "block_size": args.block_size,
+            }
+            if rendered:
+                payload["rendered_samples"] = len(out_left)
+                if args.output:
+                    payload["output"] = args.output
+            print(json.dumps(payload))
+        else:
+            print("  Mixer:")
+            print(f"    Strips:      {strip_count}")
+            print(f"    Sample rate: {args.sample_rate} Hz")
+            print(f"    Block size:  {args.block_size}")
+            if rendered:
+                print(f"    Rendered:    {len(out_left)} samples (stereo)")
+                if args.output:
+                    print(f"    Wrote: {args.output}")
+    finally:
+        mixer.close()
+    return 0
+
+
 def main() -> None:
     """CLI entry point."""
     # Common arguments shared by all subcommands
@@ -1196,6 +1287,29 @@ def main() -> None:
     mpa_p.add_argument("--reference", required=True, help="Reference audio file")
     mpa_p.add_argument("--analysis", required=True, help="Analysis name")
 
+    # Mixing commands
+    mix_p = sub.add_parser(
+        "mix",
+        parents=[common],
+        help="Load a mixer scene (JSON file or preset) and optionally render inputs",
+    )
+    mix_group = mix_p.add_mutually_exclusive_group(required=True)
+    mix_group.add_argument("--scene", default="", help="Path to a scene JSON file")
+    mix_group.add_argument("--preset", default="", help="Built-in scene preset name")
+    mix_p.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="WAV",
+        help="Per-strip input WAV (repeat once per strip); requires --output to render",
+    )
+    mix_p.add_argument(
+        "--sample-rate", type=int, default=48000, help="Mixer sample rate (default: 48000)"
+    )
+    mix_p.add_argument(
+        "--block-size", type=int, default=512, help="Mixer max block size (default: 512)"
+    )
+
     # Add file argument to all subcommands that need it
     for name in [
         "info",
@@ -1264,6 +1378,7 @@ def main() -> None:
         "mastering-pair-processors": cmd_mastering_pair_processors,
         "mastering-pair-analyses": cmd_mastering_pair_analyses,
         "mastering-pair-analyze": cmd_mastering_pair_analyze,
+        "mix": cmd_mix,
     }
 
     handler = commands.get(args.command)

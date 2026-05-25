@@ -50,6 +50,13 @@ struct Strip {
   bool muted = false;
   bool soloed = false;
   bool solo_safe = false;
+  int pan_mode = 0;  // 0 = balance (matches SONARE_PAN_MODE_*).
+  float dual_pan_left = 0.0f;
+  float dual_pan_right = 0.0f;
+  bool polarity_invert_left = false;
+  bool polarity_invert_right = false;
+  int pan_law = 0;  // 0 = Const3dB (matches PanLaw enum order).
+  int channel_delay_samples = 0;
   std::vector<Insert> inserts;
   std::vector<Send> sends;
 };

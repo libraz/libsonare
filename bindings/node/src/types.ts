@@ -372,6 +372,33 @@ export interface MixerProcessResult {
  */
 export type AutomationCurve = 'linear' | 'exponential';
 
+/**
+ * Pan law applied by a strip's panner. Mapped to the C enum ints
+ * `0=const3dB`, `1=const4.5dB`, `2=const6dB`, `3=linear0dB`.
+ */
+export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
+
+/**
+ * Meter tap point on a strip. Mapped to the C enum ints
+ * `0=preFader`, `1=postFader`.
+ */
+export type MeterTap = 'preFader' | 'postFader';
+
+/** Pre/post-fader send timing (see {@link Mixer.addSend}). */
+export type SendTiming = 'preFader' | 'postFader';
+
+/**
+ * A reference to a strip in the {@link Mixer}: either a 0-based strip index or
+ * the strip's string id.
+ */
+export type StripRef = number | string;
+
+/** Single goniometer sample from {@link Mixer.readGoniometerLatest}. */
+export interface GoniometerPoint {
+  left: number;
+  right: number;
+}
+
 export interface StftResult {
   nBins: number;
   nFrames: number;

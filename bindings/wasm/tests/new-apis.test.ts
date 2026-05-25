@@ -214,6 +214,99 @@ describe('v1.2 feature additions (WASM)', () => {
 
       mixer.delete();
     });
+
+    it('can render a block into caller-owned output arrays', () => {
+      const quantum = 128;
+      const scene = mixingScenePresetJson('vocalReverbSend');
+      const offline = Mixer.fromSceneJson(scene, 48000, quantum);
+      const inplace = Mixer.fromSceneJson(scene, 48000, quantum);
+      offline.compile();
+      inplace.compile();
+
+      const vocalL = new Float32Array(quantum);
+      const vocalR = new Float32Array(quantum);
+      const returnL = new Float32Array(quantum);
+      const returnR = new Float32Array(quantum);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+
+      const expected = offline.processStereo([vocalL, returnL], [vocalR, returnR]);
+      const outL = new Float32Array(quantum);
+      const outR = new Float32Array(quantum);
+      inplace.processStereoInto([vocalL, returnL], [vocalR, returnR], outL, outR);
+
+      expect(Array.from(outL)).toEqual(Array.from(expected.left));
+      expect(Array.from(outR)).toEqual(Array.from(expected.right));
+
+      offline.delete();
+      inplace.delete();
+    });
+
+    it('can render through reusable WASM-heap realtime buffers', () => {
+      const quantum = 128;
+      const scene = mixingScenePresetJson('vocalReverbSend');
+      const offline = Mixer.fromSceneJson(scene, 48000, quantum);
+      const realtime = Mixer.fromSceneJson(scene, 48000, quantum);
+      offline.compile();
+      realtime.compile();
+
+      const vocalL = new Float32Array(quantum);
+      const vocalR = new Float32Array(quantum);
+      const returnL = new Float32Array(quantum);
+      const returnR = new Float32Array(quantum);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+
+      const expected = offline.processStereo([vocalL, returnL], [vocalR, returnR]);
+      const buffer = realtime.createRealtimeBuffer();
+      buffer.leftInputs[0].set(vocalL);
+      buffer.rightInputs[0].set(vocalR);
+      buffer.leftInputs[1].set(returnL);
+      buffer.rightInputs[1].set(returnR);
+      buffer.process();
+
+      expect(Array.from(buffer.outLeft)).toEqual(Array.from(expected.left));
+      expect(Array.from(buffer.outRight)).toEqual(Array.from(expected.right));
+
+      offline.delete();
+      realtime.delete();
+    });
+
+    it('exposes live mixer controls and meter readers', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      const vocal = mixer.stripById('vocal');
+      expect(vocal).toBe(0);
+
+      mixer.setSoloSafe(vocal, true);
+      mixer.setSoloed(vocal, false);
+      mixer.setPolarityInvert(vocal, false, true);
+      mixer.setPanLaw(vocal, 'linear0dB');
+      mixer.setChannelDelaySamples(vocal, 0);
+      mixer.setVcaOffsetDb(vocal, -1);
+      mixer.setDualPan(vocal, -0.2, 0.2);
+      const sendIndex = mixer.addSend(vocal, 'wasm-extra-send', 'vocal-verb', -24, 'postFader');
+      mixer.setSendDb(vocal, sendIndex, -18);
+      mixer.scheduleFaderAutomation(vocal, 0, -6, 'linear');
+      mixer.schedulePanAutomation(vocal, 0, 0, 'linear');
+      mixer.scheduleWidthAutomation(vocal, 0, 1, 'linear');
+      mixer.scheduleSendAutomation(vocal, sendIndex, 0, -12, 'linear');
+      mixer.compile();
+
+      const vocalL = new Float32Array(BLOCK);
+      const vocalR = new Float32Array(BLOCK);
+      const returnL = new Float32Array(BLOCK);
+      const returnR = new Float32Array(BLOCK);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+      const out = mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
+      expect(blockEnergy(out)).toBeGreaterThan(0);
+
+      expect(Number.isFinite(mixer.meterTap(vocal, 'preFader').peakDbL)).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter(vocal, 'postFader').rmsDbL)).toBe(true);
+      expect(mixer.readGoniometerLatest(vocal, 8).length).toBeGreaterThan(0);
+
+      mixer.delete();
+    });
   });
 
   describe('Audio class methods', () => {

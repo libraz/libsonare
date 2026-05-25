@@ -128,6 +128,9 @@ TEST_CASE("C-API insert-automation handles bad arguments", "[mixing][automation]
   // Unknown curve value.
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, /*curve=*/2) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  // Outlandish parameter ids are rejected before they can become silent no-ops.
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 1000000u, 0, -24.0f, /*curve=*/0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   // Valid linear and exponential curves both succeed.
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, /*curve=*/0) ==
           SONARE_OK);

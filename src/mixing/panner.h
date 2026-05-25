@@ -50,6 +50,13 @@ class PannerProcessor : public rt::ProcessorBase {
   float smoothing_ms_ = 5.0f;
   rt::ParamSmoother left_{1.0f, 5.0f, 48000.0};
   rt::ParamSmoother right_{1.0f, 5.0f, 48000.0};
+  // Dual-pan 2x2 routing matrix coefficients (input -> output):
+  // dual_ll_ = left in -> left out, dual_lr_ = left in -> right out,
+  // dual_rl_ = right in -> left out, dual_rr_ = right in -> right out.
+  rt::ParamSmoother dual_ll_{1.0f, 5.0f, 48000.0};
+  rt::ParamSmoother dual_lr_{1.0f, 5.0f, 48000.0};
+  rt::ParamSmoother dual_rl_{1.0f, 5.0f, 48000.0};
+  rt::ParamSmoother dual_rr_{1.0f, 5.0f, 48000.0};
   std::atomic<float> pan_{0.0f};
   std::atomic<float> dual_pan_left_{-1.0f};
   std::atomic<float> dual_pan_right_{1.0f};

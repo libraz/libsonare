@@ -34,6 +34,20 @@ class KeyProfile(IntEnum):
     FARALDO_EDMM: KeyProfile
     BELLMAN_BUDGE: KeyProfile
 
+class AutomationCurve(IntEnum):
+    LINEAR: AutomationCurve
+    EXPONENTIAL: AutomationCurve
+
+class PanLaw(IntEnum):
+    CONST_3DB: PanLaw
+    CONST_4_5DB: PanLaw
+    CONST_6DB: PanLaw
+    LINEAR_0DB: PanLaw
+
+class MeterTap(IntEnum):
+    PRE_FADER: MeterTap
+    POST_FADER: MeterTap
+
 class Key:
     root: PitchClass
     mode: Mode
@@ -162,6 +176,41 @@ class LufsResult:
     def shortTermLufs(self) -> float: ...
     @property
     def loudnessRange(self) -> float: ...
+
+class EqSpectrumSnapshot:
+    pre_left: list[float]
+    pre_right: list[float]
+    post_left: list[float]
+    post_right: list[float]
+    band_gain_db: list[float]
+    profile_db: list[float]
+    last_auto_gain_db: float
+    seq: int
+    def __init__(
+        self,
+        pre_left: list[float],
+        pre_right: list[float],
+        post_left: list[float],
+        post_right: list[float],
+        band_gain_db: list[float],
+        profile_db: list[float],
+        last_auto_gain_db: float,
+        seq: int,
+    ) -> None: ...
+    @property
+    def preLeft(self) -> list[float]: ...
+    @property
+    def preRight(self) -> list[float]: ...
+    @property
+    def postLeft(self) -> list[float]: ...
+    @property
+    def postRight(self) -> list[float]: ...
+    @property
+    def bandGainDb(self) -> list[float]: ...
+    @property
+    def profileDb(self) -> list[float]: ...
+    @property
+    def lastAutoGainDb(self) -> float: ...
 
 class RhythmResult:
     bpm: float
@@ -456,6 +505,11 @@ class MixMeterSnapshot:
     true_peak_db_r: float
     max_true_peak_db: float
     seq: int
+
+class GoniometerPoint:
+    left: float
+    right: float
+    def __init__(self, left: float, right: float) -> None: ...
 
 class MixResult:
     left: list[float]

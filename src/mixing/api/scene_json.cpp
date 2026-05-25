@@ -73,7 +73,7 @@ class Parser {
       } else if (key == "connections") {
         scene.connections = parse_connections();
       } else {
-        throw std::invalid_argument("unknown scene field: " + key);
+        skip_value();
       }
       consume(',');
     }
@@ -110,12 +110,26 @@ class Parser {
           strip.soloed = parse_bool();
         else if (key == "soloSafe")
           strip.solo_safe = parse_bool();
+        else if (key == "panMode")
+          strip.pan_mode = static_cast<int>(parse_number());
+        else if (key == "dualPanLeft")
+          strip.dual_pan_left = parse_float();
+        else if (key == "dualPanRight")
+          strip.dual_pan_right = parse_float();
+        else if (key == "polarityInvertLeft")
+          strip.polarity_invert_left = parse_bool();
+        else if (key == "polarityInvertRight")
+          strip.polarity_invert_right = parse_bool();
+        else if (key == "panLaw")
+          strip.pan_law = static_cast<int>(parse_number());
+        else if (key == "channelDelaySamples")
+          strip.channel_delay_samples = static_cast<int>(parse_number());
         else if (key == "inserts")
           strip.inserts = parse_inserts();
         else if (key == "sends")
           strip.sends = parse_sends();
         else
-          throw std::invalid_argument("unknown strip field: " + key);
+          skip_value();
         consume(',');
       }
       out.push_back(std::move(strip));
@@ -142,7 +156,7 @@ class Parser {
         else if (key == "sidechainKey")
           insert.sidechain_key = parse_string();
         else
-          throw std::invalid_argument("unknown insert field: " + key);
+          skip_value();
         consume(',');
       }
       out.push_back(std::move(insert));
@@ -169,7 +183,7 @@ class Parser {
         else if (key == "timing")
           send.timing = send_timing_from_string(parse_string());
         else
-          throw std::invalid_argument("unknown send field: " + key);
+          skip_value();
         consume(',');
       }
       out.push_back(std::move(send));
@@ -194,7 +208,7 @@ class Parser {
         else if (key == "inserts")
           bus.inserts = parse_inserts();
         else
-          throw std::invalid_argument("unknown bus field: " + key);
+          skip_value();
         consume(',');
       }
       out.push_back(std::move(bus));
@@ -219,7 +233,7 @@ class Parser {
         else if (key == "members")
           group.members = parse_string_array();
         else
-          throw std::invalid_argument("unknown vca group field: " + key);
+          skip_value();
         consume(',');
       }
       out.push_back(std::move(group));
@@ -242,7 +256,7 @@ class Parser {
         else if (key == "destination")
           connection.destination = parse_string();
         else
-          throw std::invalid_argument("unknown connection field: " + key);
+          skip_value();
         consume(',');
       }
       out.push_back(std::move(connection));
@@ -280,12 +294,29 @@ class Parser {
     skip_ws();
     const size_t start = pos_;
     if (pos_ < text_.size() && (text_[pos_] == '-' || text_[pos_] == '+')) ++pos_;
-    while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
+    bool saw_digit = false;
+    while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) {
+      saw_digit = true;
+      ++pos_;
+    }
     if (pos_ < text_.size() && text_[pos_] == '.') {
       ++pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
+      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) {
+        saw_digit = true;
+        ++pos_;
+      }
     }
-    if (start == pos_) throw std::invalid_argument("expected number");
+    if (!saw_digit) throw std::invalid_argument("expected number");
+    if (pos_ < text_.size() && (text_[pos_] == 'e' || text_[pos_] == 'E')) {
+      ++pos_;
+      if (pos_ < text_.size() && (text_[pos_] == '-' || text_[pos_] == '+')) ++pos_;
+      bool saw_exponent_digit = false;
+      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) {
+        saw_exponent_digit = true;
+        ++pos_;
+      }
+      if (!saw_exponent_digit) throw std::invalid_argument("expected number exponent");
+    }
     return std::stod(text_.substr(start, pos_ - start));
   }
 
@@ -305,6 +336,57 @@ class Parser {
       }
     }
     throw std::invalid_argument("unterminated string");
+  }
+
+  // Consumes and discards the next JSON value of any type so that unknown
+  // object fields can be skipped instead of treated as fatal errors. Handles
+  // strings, numbers, literals (true/false/null), and recursively nested
+  // objects and arrays (respecting quoting so braces/brackets inside strings
+  // do not miscount).
+  void skip_value() {
+    skip_ws();
+    if (pos_ >= text_.size()) {
+      throw std::invalid_argument("expected value");
+    }
+    const char c = text_[pos_];
+    if (c == '"') {
+      parse_string();
+    } else if (c == '{' || c == '[') {
+      skip_container();
+    } else if (text_.compare(pos_, 4, "true") == 0) {
+      pos_ += 4;
+    } else if (text_.compare(pos_, 5, "false") == 0) {
+      pos_ += 5;
+    } else if (text_.compare(pos_, 4, "null") == 0) {
+      pos_ += 4;
+    } else {
+      parse_number();
+    }
+  }
+
+  // Skips a balanced object/array starting at the current open brace/bracket,
+  // tracking nesting depth and skipping over string contents so that delimiter
+  // characters inside strings are not counted.
+  void skip_container() {
+    const char open = text_[pos_++];
+    const char close = open == '{' ? '}' : ']';
+    int depth = 1;
+    while (pos_ < text_.size() && depth > 0) {
+      const char c = text_[pos_];
+      if (c == '"') {
+        parse_string();
+        continue;
+      }
+      if (c == open) {
+        ++depth;
+      } else if (c == close) {
+        --depth;
+      }
+      ++pos_;
+    }
+    if (depth != 0) {
+      throw std::invalid_argument("unterminated JSON container");
+    }
   }
 
   bool consume(char expected) {
@@ -360,6 +442,20 @@ std::string scene_to_json(const Scene& scene) {
     out << (strip.soloed ? "true" : "false") << ",";
     write_key(out, "soloSafe");
     out << (strip.solo_safe ? "true" : "false") << ",";
+    write_key(out, "panMode");
+    out << strip.pan_mode << ",";
+    write_key(out, "dualPanLeft");
+    out << strip.dual_pan_left << ",";
+    write_key(out, "dualPanRight");
+    out << strip.dual_pan_right << ",";
+    write_key(out, "polarityInvertLeft");
+    out << (strip.polarity_invert_left ? "true" : "false") << ",";
+    write_key(out, "polarityInvertRight");
+    out << (strip.polarity_invert_right ? "true" : "false") << ",";
+    write_key(out, "panLaw");
+    out << strip.pan_law << ",";
+    write_key(out, "channelDelaySamples");
+    out << strip.channel_delay_samples << ",";
     write_key(out, "inserts");
     out << "[";
     for (size_t j = 0; j < strip.inserts.size(); ++j) {

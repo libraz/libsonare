@@ -266,6 +266,9 @@ from .types import (
     AnalysisResult as AnalysisResult,
 )
 from .types import (
+    AutomationCurve as AutomationCurve,
+)
+from .types import (
     BpmAnalysisResult as BpmAnalysisResult,
 )
 from .types import (
@@ -285,6 +288,9 @@ from .types import (
 )
 from .types import (
     EqSpectrumSnapshot as EqSpectrumSnapshot,
+)
+from .types import (
+    GoniometerPoint as GoniometerPoint,
 )
 from .types import (
     HpssResult as HpssResult,
@@ -312,6 +318,9 @@ from .types import (
 )
 from .types import (
     MelSpectrogramResult as MelSpectrogramResult,
+)
+from .types import (
+    MeterTap as MeterTap,
 )
 from .types import (
     MfccResult as MfccResult,

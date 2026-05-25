@@ -368,6 +368,17 @@ export interface WasmMixer {
     leftChannels: Float32Array[],
     rightChannels: Float32Array[],
   ) => { left: Float32Array; right: Float32Array; sampleRate: number };
+  processStereoInto: (
+    leftChannels: Float32Array[],
+    rightChannels: Float32Array[],
+    outLeft: Float32Array,
+    outRight: Float32Array,
+  ) => void;
+  inputLeftView: (index: number) => Float32Array;
+  inputRightView: (index: number) => Float32Array;
+  outputLeftView: () => Float32Array;
+  outputRightView: () => Float32Array;
+  processPreparedStereo: (numSamples: number) => void;
   stripCount: () => number;
   scheduleInsertAutomation: (
     stripIndex: number,
@@ -377,8 +388,57 @@ export interface WasmMixer {
     value: number,
     curve: number,
   ) => void;
+  stripById: (id: string) => number;
+  setSoloed: (stripIndex: number, soloed: boolean) => void;
+  setSoloSafe: (stripIndex: number, soloSafe: boolean) => void;
+  setPolarityInvert: (stripIndex: number, invertLeft: boolean, invertRight: boolean) => void;
+  setPanLaw: (stripIndex: number, panLaw: number) => void;
+  setChannelDelaySamples: (stripIndex: number, delaySamples: number) => void;
+  setVcaOffsetDb: (stripIndex: number, offsetDb: number) => void;
+  setDualPan: (stripIndex: number, leftPan: number, rightPan: number) => void;
+  addSend: (
+    stripIndex: number,
+    id: string,
+    destinationBusId: string,
+    sendDb: number,
+    timing: number,
+  ) => number;
+  setSendDb: (stripIndex: number, sendIndex: number, sendDb: number) => void;
+  meterTap: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
+  stripMeter: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
+  scheduleFaderAutomation: (
+    stripIndex: number,
+    samplePos: number,
+    faderDb: number,
+    curve: number,
+  ) => void;
+  schedulePanAutomation: (
+    stripIndex: number,
+    samplePos: number,
+    pan: number,
+    curve: number,
+  ) => void;
+  scheduleWidthAutomation: (
+    stripIndex: number,
+    samplePos: number,
+    width: number,
+    curve: number,
+  ) => void;
+  scheduleSendAutomation: (
+    stripIndex: number,
+    sendIndex: number,
+    samplePos: number,
+    db: number,
+    curve: number,
+  ) => void;
+  readGoniometerLatest: (stripIndex: number, maxPoints: number) => WasmGoniometerPoint[];
   toSceneJson: () => string;
   delete: () => void;
+}
+
+export interface WasmGoniometerPoint {
+  left: number;
+  right: number;
 }
 
 export interface WasmStreamAnalyzer {

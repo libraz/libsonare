@@ -60,8 +60,10 @@ class TruePeakLimiter : public common::ProcessorBase {
   std::vector<float*> oversampled_ptrs_;
   std::vector<std::vector<float>> oversampled_buffers_;
   std::vector<std::vector<float>> limited_oversampled_buffers_;
+  std::vector<std::vector<float>> true_peak_scratch_;
   std::vector<float> linked_abs_;
   std::vector<float> input_rate_gain_;
+  std::vector<float> downsampled_;
   common::SlidingMax<float> oversampled_peak_window_{1};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

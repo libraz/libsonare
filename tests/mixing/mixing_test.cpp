@@ -6,6 +6,8 @@
 #include <cmath>
 #include <complex>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "analysis/meter/lufs.h"
@@ -195,6 +197,55 @@ TEST_CASE("Panner supports balance stereo-pan and dual-pan modes", "[mixing]") {
   }
 }
 
+TEST_CASE("Panner DualPan ramps coefficient changes without a single-sample step", "[mixing]") {
+  // Regression: DualPan must smooth its 2x2 routing matrix the same way the
+  // other pan modes smooth their gains. With the old instantaneous behavior the
+  // first sample of the block after set_dual_pan() would jump straight to the
+  // new target. A 5 ms one-pole smoother instead ramps over many samples.
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 256;
+
+  // Start fully separated: left input -> left out, right input -> right out
+  // (DualPan defaults to dual_pan_left = -1, dual_pan_right = +1). Feed a DC
+  // signal only on the left input so the left output reflects the left->left
+  // coefficient (ll) directly.
+  sonare::mixing::PannerProcessor panner(
+      {0.0f, sonare::mixing::PanLaw::Linear0dB, 5.0f, sonare::mixing::PanMode::DualPan});
+  panner.prepare(kSr, kBlock);
+
+  std::vector<float> left(kBlock, 1.0f);
+  std::vector<float> right(kBlock, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+
+  // Settle the initial state: left out should equal the input (ll == 1).
+  panner.process(channels, 2, kBlock);
+  REQUIRE_THAT(left[kBlock - 1], WithinAbs(1.0f, 0.01f));
+  const float settled = left[kBlock - 1];
+
+  // Swap the routing: now left input should go to the right output, so the
+  // left->left coefficient (ll) must ramp from 1 toward 0.
+  panner.set_dual_pan(1.0f, -1.0f);
+  std::fill(left.begin(), left.end(), 1.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  panner.process(channels, 2, kBlock);
+
+  // (1) Continuity across the block boundary: the first sample of the new block
+  // stays close to the previous block's last sample. A single-sample step to
+  // the new target (ll == 0) would put left[0] near 0, failing this bound.
+  REQUIRE_THAT(left[0], WithinAbs(settled, 0.05f));
+
+  // (2) The coefficient ramps gradually: each of the first few samples moves
+  // only a little and the sequence is monotonically decreasing toward 0. A
+  // single-sample step would make samples 1..N identical (all 0), not a ramp.
+  REQUIRE(left[0] > left[1]);
+  REQUIRE(left[1] > left[2]);
+  REQUIRE(left[4] > 0.5f);  // still well above target after ~0.1 ms
+
+  // (3) After the full block (~5.3 ms, ~1 time constant) it has converged well
+  // toward the new target of 0.
+  REQUIRE(left[kBlock - 1] < 0.4f);
+}
+
 TEST_CASE("Meter snapshot exposes mono compatibility fields", "[mixing]") {
   std::array<float, 4> left{1.0f, 0.75f, -0.5f, -0.25f};
   std::array<float, 4> right = left;
@@ -308,6 +359,36 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
                                       out_l.size()) == SONARE_OK);
   REQUIRE(out_l[0] > 0.0f);
   REQUIRE(out_l[0] < 1.0f);
+  sonare_mixer_destroy(restored);
+}
+
+TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "dual");
+  REQUIRE(strip != nullptr);
+  REQUIRE(sonare_strip_set_dual_pan(strip, 1.0f, -0.5f) == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  REQUIRE(scene_json.find("\"panMode\":2") != std::string::npos);
+  REQUIRE(scene_json.find("\"dualPanLeft\":1") != std::string::npos);
+  REQUIRE(scene_json.find("\"dualPanRight\":-0.5") != std::string::npos);
+  sonare_free_string(json);
+  sonare_mixer_destroy(mixer);
+
+  SonareMixer* restored = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 8);
+  REQUIRE(restored != nullptr);
+  char* restored_json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(restored, &restored_json) == SONARE_OK);
+  REQUIRE(restored_json != nullptr);
+  const std::string restored_scene_json(restored_json);
+  REQUIRE(restored_scene_json.find("\"panMode\":2") != std::string::npos);
+  REQUIRE(restored_scene_json.find("\"dualPanLeft\":1") != std::string::npos);
+  REQUIRE(restored_scene_json.find("\"dualPanRight\":-0.5") != std::string::npos);
+  sonare_free_string(restored_json);
   sonare_mixer_destroy(restored);
 }
 
@@ -440,6 +521,100 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   REQUIRE(parsed.buses[0].inserts[0].processor_name == "effects.reverb.plate");
   REQUIRE(parsed.vca_groups[0].members[0] == "vocal");
   REQUIRE(parsed.connections[0].destination == "master");
+}
+
+TEST_CASE("Mixing Scene JSON parses exponent-form numbers it can emit", "[mixing]") {
+  const std::string json =
+      "{\"version\":1,\"strips\":[{\"id\":\"tiny\",\"inputTrimDb\":1e-05,\"faderDb\":-3E+00,"
+      "\"pan\":0,\"width\":1,\"muted\":false,\"soloed\":false,\"soloSafe\":false,"
+      "\"panMode\":0,\"dualPanLeft\":-1.25e-01,\"dualPanRight\":1.25E-01,"
+      "\"polarityInvertLeft\":false,\"polarityInvertRight\":false,\"panLaw\":0,"
+      "\"channelDelaySamples\":0,\"inserts\":[],\"sends\":[]}],\"buses\":[],"
+      "\"vcaGroups\":[],\"connections\":[]}";
+
+  const auto parsed = sonare::mixing::api::scene_from_json(json);
+
+  REQUIRE(parsed.strips.size() == 1);
+  REQUIRE_THAT(parsed.strips[0].input_trim_db, WithinAbs(1e-05f, 1e-09f));
+  REQUIRE_THAT(parsed.strips[0].fader_db, WithinAbs(-3.0f, 0.0001f));
+  REQUIRE_THAT(parsed.strips[0].dual_pan_left, WithinAbs(-0.125f, 0.0001f));
+  REQUIRE_THAT(parsed.strips[0].dual_pan_right, WithinAbs(0.125f, 0.0001f));
+
+  const auto reparsed =
+      sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(parsed));
+  REQUIRE(reparsed.strips.size() == 1);
+  REQUIRE_THAT(reparsed.strips[0].input_trim_db, WithinAbs(1e-05f, 1e-09f));
+}
+
+TEST_CASE("Mixing Scene JSON round-trips all extended strip fields", "[mixing]") {
+  // Every field added to api::Strip beyond the original set must survive a
+  // scene_to_json -> scene_from_json round-trip. Build a strip whose extended
+  // fields all carry non-default values so a dropped field would change the
+  // observed value.
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "extended";
+  strip.pan_mode = 2;  // DualPan
+  strip.dual_pan_left = -0.4f;
+  strip.dual_pan_right = 0.7f;
+  strip.polarity_invert_left = true;
+  strip.polarity_invert_right = true;
+  strip.pan_law = 3;  // Linear0dB
+  strip.channel_delay_samples = 17;
+  scene.strips.push_back(strip);
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  const auto parsed = sonare::mixing::api::scene_from_json(json);
+
+  REQUIRE(parsed.strips.size() == 1);
+  const auto& out = parsed.strips[0];
+  REQUIRE(out.pan_mode == 2);
+  REQUIRE_THAT(out.dual_pan_left, WithinAbs(-0.4f, 0.0001f));
+  REQUIRE_THAT(out.dual_pan_right, WithinAbs(0.7f, 0.0001f));
+  REQUIRE(out.polarity_invert_left);
+  REQUIRE(out.polarity_invert_right);
+  REQUIRE(out.pan_law == 3);
+  REQUIRE(out.channel_delay_samples == 17);
+}
+
+TEST_CASE("Mixing Scene JSON ignores unknown forward-compat fields", "[mixing]") {
+  // A scene authored by a newer version may carry fields this parser does not
+  // know. Unknown scalars, arrays, and nested objects at both the scene level
+  // and inside a strip object must be skipped without throwing, while known
+  // fields still parse correctly.
+  const std::string json =
+      "{"
+      "\"version\":1,"
+      "\"futureScalar\":42,"
+      "\"unknownArray\":[1,2,3],"
+      "\"futureField\":{\"nested\":{\"deep\":[true,false],\"s\":\"x\"}},"
+      "\"strips\":[{"
+      "\"id\":\"vox\","
+      "\"faderDb\":-4.5,"
+      "\"panLaw\":2,"
+      "\"channelDelaySamples\":9,"
+      "\"futureStripScalar\":\"hello\","
+      "\"futureStripObject\":{\"a\":1,\"b\":[{\"c\":2}]},"
+      "\"futureStripArray\":[{\"x\":1},{\"y\":2}]"
+      "}],"
+      "\"buses\":[],"
+      "\"vcaGroups\":[],"
+      "\"connections\":[]"
+      "}";
+
+  sonare::mixing::api::Scene parsed;
+  REQUIRE_NOTHROW(parsed = sonare::mixing::api::scene_from_json(json));
+  REQUIRE(parsed.version == 1);
+  REQUIRE(parsed.strips.size() == 1);
+  REQUIRE(parsed.strips[0].id == "vox");
+  REQUIRE_THAT(parsed.strips[0].fader_db, WithinAbs(-4.5f, 0.0001f));
+  REQUIRE(parsed.strips[0].pan_law == 2);
+  REQUIRE(parsed.strips[0].channel_delay_samples == 9);
+}
+
+TEST_CASE("Mixing Scene JSON rejects unsupported version", "[mixing]") {
+  const std::string json = "{\"version\":2,\"strips\":[],\"buses\":[]}";
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(json), std::invalid_argument);
 }
 
 TEST_CASE("Mixing scene presets expose planned templates and JSON round-trip", "[mixing]") {

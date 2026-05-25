@@ -35,6 +35,47 @@ sonare::mixing::PanMode to_pan_mode(int mode) {
   }
 }
 
+sonare::mixing::PanLaw to_pan_law(int law) {
+  switch (law) {
+    case 0:
+      return sonare::mixing::PanLaw::Const3dB;
+    case 1:
+      return sonare::mixing::PanLaw::Const4p5dB;
+    case 2:
+      return sonare::mixing::PanLaw::Const6dB;
+    case 3:
+      return sonare::mixing::PanLaw::Linear0dB;
+    default:
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
+  }
+}
+
+int from_pan_law(sonare::mixing::PanLaw law) {
+  switch (law) {
+    case sonare::mixing::PanLaw::Const3dB:
+      return 0;
+    case sonare::mixing::PanLaw::Const4p5dB:
+      return 1;
+    case sonare::mixing::PanLaw::Const6dB:
+      return 2;
+    case sonare::mixing::PanLaw::Linear0dB:
+      return 3;
+  }
+  return 0;
+}
+
+int from_pan_mode(sonare::mixing::PanMode mode) {
+  switch (mode) {
+    case sonare::mixing::PanMode::Balance:
+      return SONARE_PAN_MODE_BALANCE;
+    case sonare::mixing::PanMode::StereoPan:
+      return SONARE_PAN_MODE_STEREO_PAN;
+    case sonare::mixing::PanMode::DualPan:
+      return SONARE_PAN_MODE_DUAL_PAN;
+  }
+  return SONARE_PAN_MODE_BALANCE;
+}
+
 sonare::mixing::SendTiming to_send_timing(int timing) {
   switch (timing) {
     case SONARE_SEND_TIMING_PRE_FADER:
@@ -227,7 +268,7 @@ void apply_solo_mutes(SonareMixer* mixer) {
     any_solo = any_solo || strip->strip.soloed();
   }
   for (const auto& strip : mixer->strips) {
-    strip->strip.set_implied_mute(any_solo && !strip->strip.soloed());
+    strip->strip.set_implied_mute(any_solo && !strip->strip.soloed() && !strip->strip.solo_safe());
   }
 }
 
@@ -563,6 +604,9 @@ SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float 
   strip->strip.set_pan_mode(sonare::mixing::PanMode::DualPan);
   strip->strip.set_dual_pan(left_pan, right_pan);
   strip->scene_strip.pan = 0.5f * (left_pan + right_pan);
+  strip->scene_strip.pan_mode = SONARE_PAN_MODE_DUAL_PAN;
+  strip->scene_strip.dual_pan_left = std::clamp(left_pan, -1.0f, 1.0f);
+  strip->scene_strip.dual_pan_right = std::clamp(right_pan, -1.0f, 1.0f);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -585,6 +629,90 @@ SonareError sonare_strip_set_muted(SonareStrip* strip, int muted) {
   SONARE_C_TRY
   strip->strip.set_muted(muted != 0);
   strip->scene_strip.muted = muted != 0;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_soloed(SonareStrip* strip, int soloed) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  strip->strip.set_soloed(soloed != 0);
+  strip->scene_strip.soloed = soloed != 0;
+  // Solo state is consumed live via implied_mute in process(); recompute the
+  // implied mutes across the mixer so the change takes effect on the next
+  // process without a full graph recompile.
+  if (strip->owner != nullptr) {
+    apply_solo_mutes(strip->owner);
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_solo_safe(SonareStrip* strip, int solo_safe) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  strip->strip.set_solo_safe(solo_safe != 0);
+  strip->scene_strip.solo_safe = solo_safe != 0;
+  // Solo-safe strips are excluded from implied mutes; recompute live.
+  if (strip->owner != nullptr) {
+    apply_solo_mutes(strip->owner);
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left,
+                                             int invert_right) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  strip->strip.set_polarity_invert(invert_left != 0, invert_right != 0);
+  strip->scene_strip.polarity_invert_left = invert_left != 0;
+  strip->scene_strip.polarity_invert_right = invert_right != 0;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  strip->strip.set_pan_law(to_pan_law(pan_law));  // validates pan_law (throws on unknown)
+  strip->scene_strip.pan_law = pan_law;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay_samples) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  strip->strip.set_channel_delay_samples(delay_samples);
+  strip->scene_strip.channel_delay_samples = delay_samples;
+  // Channel delay changes the strip's reported latency; mark the graph dirty so
+  // latency compensation re-runs at the next compile.
+  if (strip->owner != nullptr) {
+    strip->owner->compiled_dirty = true;
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_set_vca_offset_db(SonareStrip* strip, float offset_db) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  // VCA offset is a group concept with no per-strip scene field; only the live
+  // value is updated (not cached to scene_strip).
+  strip->strip.set_vca_offset_db(offset_db);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -637,6 +765,27 @@ SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot*
   }
   SONARE_C_TRY
   copy_meter_snapshot(strip->strip.meter_snapshot(), out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out) {
+  if (!strip || !out) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::mixing::TapPoint tap_point;
+  switch (tap) {
+    case SONARE_METER_TAP_PRE_FADER:
+      tap_point = sonare::mixing::TapPoint::PreFader;
+      break;
+    case SONARE_METER_TAP_POST_FADER:
+      tap_point = sonare::mixing::TapPoint::PostFader;
+      break;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  copy_meter_snapshot(strip->strip.meter_snapshot(tap_point), out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -717,6 +866,94 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
   return SONARE_OK;
 }
 
+SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t sample_pos,
+                                                   float fader_db, int curve) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::mixing::AutomationCurveType curve_enum;
+  switch (curve) {
+    case 0:
+      curve_enum = sonare::mixing::AutomationCurveType::Linear;
+      break;
+    case 1:
+      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
+      break;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!strip->strip.schedule_fader_automation(sample_pos, fader_db, curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
+SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sample_pos, float pan,
+                                                 int curve) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::mixing::AutomationCurveType curve_enum;
+  switch (curve) {
+    case 0:
+      curve_enum = sonare::mixing::AutomationCurveType::Linear;
+      break;
+    case 1:
+      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
+      break;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!strip->strip.schedule_pan_automation(sample_pos, pan, curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
+SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t sample_pos,
+                                                   float width, int curve) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::mixing::AutomationCurveType curve_enum;
+  switch (curve) {
+    case 0:
+      curve_enum = sonare::mixing::AutomationCurveType::Linear;
+      break;
+    case 1:
+      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
+      break;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!strip->strip.schedule_width_automation(sample_pos, width, curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
+SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t send_index,
+                                                  int64_t sample_pos, float db, int curve) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::mixing::AutomationCurveType curve_enum;
+  switch (curve) {
+    case 0:
+      curve_enum = sonare::mixing::AutomationCurveType::Linear;
+      break;
+    case 1:
+      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
+      break;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!strip->strip.schedule_send_automation(send_index, sample_pos, db, curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size) {
   if (!json) {
     return nullptr;
@@ -740,6 +977,12 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       strip->strip.set_muted(scene_strip.muted);
       strip->strip.set_soloed(scene_strip.soloed);
       strip->strip.set_solo_safe(scene_strip.solo_safe);
+      strip->strip.set_pan_mode(to_pan_mode(scene_strip.pan_mode));
+      strip->strip.set_dual_pan(scene_strip.dual_pan_left, scene_strip.dual_pan_right);
+      strip->strip.set_pan_law(to_pan_law(scene_strip.pan_law));
+      strip->strip.set_polarity_invert(scene_strip.polarity_invert_left,
+                                       scene_strip.polarity_invert_right);
+      strip->strip.set_channel_delay_samples(scene_strip.channel_delay_samples);
       for (const auto& insert : scene_strip.inserts) {
         auto processor =
             sonare::mastering::api::make_insert(insert.processor_name, insert.params_json);
@@ -824,6 +1067,14 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
     scene_strip.muted = strip->strip.muted();
     scene_strip.soloed = strip->strip.soloed();
     scene_strip.solo_safe = strip->strip.solo_safe();
+    scene_strip.pan_mode = from_pan_mode(strip->strip.pan_mode());
+    scene_strip.pan_law = from_pan_law(strip->strip.pan_law());
+    // ChannelStrip exposes no dual-pan getters; reuse the cached scene values.
+    scene_strip.dual_pan_left = strip->scene_strip.dual_pan_left;
+    scene_strip.dual_pan_right = strip->scene_strip.dual_pan_right;
+    scene_strip.polarity_invert_left = strip->strip.polarity_invert_left();
+    scene_strip.polarity_invert_right = strip->strip.polarity_invert_right();
+    scene_strip.channel_delay_samples = strip->strip.channel_delay_samples();
     scene.strips.push_back(std::move(scene_strip));
   }
   *json_out = copy_string(sonare::mixing::api::scene_to_json(scene));

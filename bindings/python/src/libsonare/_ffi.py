@@ -1717,6 +1717,23 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         lib.sonare_strip_set_width.argtypes = [ctypes.c_void_p, ctypes.c_float]
         lib.sonare_strip_set_muted.restype = ctypes.c_int32
         lib.sonare_strip_set_muted.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        if hasattr(lib, "sonare_strip_set_soloed"):
+            lib.sonare_strip_set_soloed.restype = ctypes.c_int32
+            lib.sonare_strip_set_soloed.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_solo_safe.restype = ctypes.c_int32
+            lib.sonare_strip_set_solo_safe.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_polarity_invert.restype = ctypes.c_int32
+            lib.sonare_strip_set_polarity_invert.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_strip_set_pan_law.restype = ctypes.c_int32
+            lib.sonare_strip_set_pan_law.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_channel_delay_samples.restype = ctypes.c_int32
+            lib.sonare_strip_set_channel_delay_samples.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_vca_offset_db.restype = ctypes.c_int32
+            lib.sonare_strip_set_vca_offset_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
         lib.sonare_strip_add_send.restype = ctypes.c_int32
         lib.sonare_strip_add_send.argtypes = [
             ctypes.c_void_p,
@@ -1737,6 +1754,13 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.c_void_p,
             ctypes.POINTER(SonareMixMeterSnapshot),
         ]
+        if hasattr(lib, "sonare_strip_meter_tap"):
+            lib.sonare_strip_meter_tap.restype = ctypes.c_int32
+            lib.sonare_strip_meter_tap.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMixMeterSnapshot),
+            ]
         lib.sonare_strip_read_goniometer_latest.restype = ctypes.c_size_t
         lib.sonare_strip_read_goniometer_latest.argtypes = [
             ctypes.c_void_p,
@@ -1769,6 +1793,28 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.c_void_p,
                 ctypes.c_uint,
                 ctypes.c_uint,
+                ctypes.c_int64,
+                ctypes.c_float,
+                ctypes.c_int,
+            ]
+        if hasattr(lib, "sonare_strip_schedule_fader_automation"):
+            for _name in (
+                "sonare_strip_schedule_fader_automation",
+                "sonare_strip_schedule_pan_automation",
+                "sonare_strip_schedule_width_automation",
+            ):
+                _fn = getattr(lib, _name)
+                _fn.restype = ctypes.c_int32
+                _fn.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_int64,
+                    ctypes.c_float,
+                    ctypes.c_int,
+                ]
+            lib.sonare_strip_schedule_send_automation.restype = ctypes.c_int32
+            lib.sonare_strip_schedule_send_automation.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
                 ctypes.c_int64,
                 ctypes.c_float,
                 ctypes.c_int,

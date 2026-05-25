@@ -21,6 +21,7 @@ class Oversampler {
   std::vector<float> upsample(const std::vector<float>& input) const;
   std::vector<float> downsample(const float* input, size_t size) const;
   std::vector<float> downsample(const std::vector<float>& input) const;
+  void downsample_to(const float* input, size_t size, float* output, size_t output_size) const;
 
  private:
   int factor_ = 2;

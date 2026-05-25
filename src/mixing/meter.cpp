@@ -172,6 +172,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   }
 
   if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
+    double side_sq_sum = 0.0;
     for (int i = 0; i < num_samples; ++i) {
       const double left = channels[0][i];
       const double right = channels[1][i];
@@ -182,7 +183,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       const double mono = 0.5 * (left + right);
       const double side = 0.5 * (left - right);
       next.mono_compat_peak = std::max(next.mono_compat_peak, static_cast<float>(std::abs(mono)));
-      next.mono_compat_side_rms += static_cast<float>(side * side);
+      side_sq_sum += side * side;
 
       const double mid = (left + right) * constants::kInvSqrt2;
       const double side_scaled = (left - right) * constants::kInvSqrt2;
@@ -191,8 +192,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     }
     const double denom = std::sqrt(sum_l * sum_r);
     next.correlation = denom > 1.0e-12 ? static_cast<float>(sum_lr / denom) : 0.0f;
-    next.mono_compat_side_rms =
-        static_cast<float>(std::sqrt(next.mono_compat_side_rms / num_samples));
+    next.mono_compat_side_rms = static_cast<float>(std::sqrt(side_sq_sum / num_samples));
     if (mid_energy > static_cast<double>(kEpsilon)) {
       next.mono_compat_width = static_cast<float>(std::sqrt(side_energy / mid_energy));
     } else {

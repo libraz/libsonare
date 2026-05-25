@@ -456,6 +456,10 @@ bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
 bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
                                               int64_t sample_pos, float value,
                                               AutomationCurveType curve) noexcept {
+  constexpr unsigned int kMaxReasonableParamId = 65535u;
+  if (param_id > kMaxReasonableParamId) {
+    return false;
+  }
   const size_t idx = insert_index;
   const size_t pre_count = pre_inserts_.size();
   rt::ProcessorBase* insert = nullptr;
@@ -506,6 +510,9 @@ void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept
       break;
     }
     case AutomationTargetKind::Send:
+      // Send automation is consumed separately from the send_automation_ lanes in
+      // mix_send_at, not through this function, so this case is intentionally a no-op
+      // (kept only for -Wswitch exhaustiveness).
       break;
   }
 }

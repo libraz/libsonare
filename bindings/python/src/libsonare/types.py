@@ -68,6 +68,32 @@ class Mode(IntEnum):
         return names[self]
 
 
+class AutomationCurve(IntEnum):
+    """Interpolation curve for scheduled mixer automation events."""
+
+    LINEAR = 0
+    EXPONENTIAL = 1
+
+    def __str__(self) -> str:
+        return "exponential" if self is AutomationCurve.EXPONENTIAL else "linear"
+
+
+class PanLaw(IntEnum):
+    """Pan law applied to a mixer strip's pan position."""
+
+    CONST_3DB = 0
+    CONST_4_5DB = 1
+    CONST_6DB = 2
+    LINEAR_0DB = 3
+
+
+class MeterTap(IntEnum):
+    """Tap point at which a strip meter snapshot is read."""
+
+    PRE_FADER = 0
+    POST_FADER = 1
+
+
 class KeyProfile(IntEnum):
     """Key-profile family used by profile-correlation key detection."""
 
@@ -579,6 +605,14 @@ class MixMeterSnapshot:
     true_peak_db_r: float
     max_true_peak_db: float
     seq: int
+
+
+@dataclass(frozen=True, slots=True)
+class GoniometerPoint:
+    """A single left/right sample pair for goniometer (vectorscope) display."""
+
+    left: float
+    right: float
 
 
 @dataclass(frozen=True, slots=True)

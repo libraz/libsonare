@@ -223,6 +223,18 @@ const offline = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
 const mixer = Mixer.fromSceneJson(sceneJson, sampleRate, 512);
 const block = mixer.processStereo([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR]);
 console.log(offline.meters[0].maxTruePeakDb, block.left.length);
+
+const outL = new Float32Array(512);
+const outR = new Float32Array(512);
+mixer.processStereoInto([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR], outL, outR);
+
+const realtime = mixer.createRealtimeBuffer();
+realtime.leftInputs[0].set(vocalBlockL);
+realtime.rightInputs[0].set(vocalBlockR);
+realtime.leftInputs[1].set(returnBlockL);
+realtime.rightInputs[1].set(returnBlockR);
+realtime.process();
+console.log(realtime.outLeft[0], realtime.outRight[0]);
 mixer.delete();
 ```
 
@@ -251,7 +263,13 @@ const node = new AudioWorkletNode(audioContext, 'sonare-worklet-processor', {
   numberOfInputs: 2,
   numberOfOutputs: 1,
   outputChannelCount: [2],
-  processorOptions: { sceneJson, sampleRate: audioContext.sampleRate, blockSize: 128 },
+  processorOptions: {
+    sceneJson,
+    sampleRate: audioContext.sampleRate,
+    blockSize: 128,
+    spectrumIntervalFrames: 2048,
+    spectrumBands: 16,
+  },
 });
 
 node.port.postMessage({
@@ -267,8 +285,53 @@ node.port.postMessage({
 node.port.onmessage = (event) => {
   if (event.data?.type === 'meter') {
     console.log(event.data.peakDbL, event.data.rmsDbL, event.data.correlation);
+  } else if (event.data?.type === 'spectrum') {
+    console.log(event.data.frame, event.data.bands);
   }
 };
+```
+
+For cross-origin-isolated pages, meters and spectrum snapshots can use optional
+SharedArrayBuffer rings instead of per-message `postMessage`:
+
+```typescript
+import {
+  createSonareMeterRingBuffer,
+  createSonareSpectrumRingBuffer,
+  readSonareMeterRingBuffer,
+  readSonareSpectrumRingBuffer,
+} from '@libraz/libsonare/worklet';
+
+const meterRing = createSonareMeterRingBuffer(128);
+const spectrumRing = createSonareSpectrumRingBuffer(64, 16);
+const node = new AudioWorkletNode(audioContext, 'sonare-worklet-processor', {
+  numberOfInputs: 2,
+  numberOfOutputs: 1,
+  outputChannelCount: [2],
+  processorOptions: {
+    sceneJson,
+    sampleRate: audioContext.sampleRate,
+    blockSize: 128,
+    meterSharedBuffer: meterRing.sharedBuffer,
+    spectrumIntervalFrames: 2048,
+    spectrumSharedBuffer: spectrumRing.sharedBuffer,
+  },
+});
+
+let nextMeterRead = 0;
+let nextSpectrumRead = 0;
+function readMeters() {
+  const result = readSonareMeterRingBuffer(meterRing, nextMeterRead);
+  nextMeterRead = result.nextReadIndex;
+  for (const meter of result.meters) {
+    console.log(meter.frame, meter.peakDbL, meter.rmsDbL);
+  }
+  const spectra = readSonareSpectrumRingBuffer(spectrumRing, nextSpectrumRead);
+  nextSpectrumRead = spectra.nextReadIndex;
+  for (const spectrum of spectra.spectra) {
+    console.log(spectrum.frame, spectrum.bands);
+  }
+}
 ```
 
 ### Progress callback

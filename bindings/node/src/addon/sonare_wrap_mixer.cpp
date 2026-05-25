@@ -8,6 +8,31 @@
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node {
+namespace {
+
+Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("peakDbL", snapshot.peak_db_l);
+  out.Set("peakDbR", snapshot.peak_db_r);
+  out.Set("rmsDbL", snapshot.rms_db_l);
+  out.Set("rmsDbR", snapshot.rms_db_r);
+  out.Set("correlation", snapshot.correlation);
+  out.Set("monoCompatWidth", snapshot.mono_compat_width);
+  out.Set("monoCompatPeak", snapshot.mono_compat_peak);
+  out.Set("monoCompatSideRms", snapshot.mono_compat_side_rms);
+  out.Set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
+  out.Set("momentaryLufs", snapshot.momentary_lufs);
+  out.Set("shortTermLufs", snapshot.short_term_lufs);
+  out.Set("integratedLufs", snapshot.integrated_lufs);
+  out.Set("gainReductionDb", snapshot.gain_reduction_db);
+  out.Set("truePeakDbL", snapshot.true_peak_db_l);
+  out.Set("truePeakDbR", snapshot.true_peak_db_r);
+  out.Set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
+  return out;
+}
+
+}  // namespace
 
 Napi::FunctionReference MixerWrap::constructor_;
 
@@ -21,6 +46,23 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation"),
           InstanceMethod<&MixerWrap::ToSceneJson>("toSceneJson"),
           InstanceMethod<&MixerWrap::Destroy>("destroy"),
+          InstanceMethod<&MixerWrap::SetSoloed>("setSoloed"),
+          InstanceMethod<&MixerWrap::SetSoloSafe>("setSoloSafe"),
+          InstanceMethod<&MixerWrap::SetPolarityInvert>("setPolarityInvert"),
+          InstanceMethod<&MixerWrap::SetPanLaw>("setPanLaw"),
+          InstanceMethod<&MixerWrap::SetChannelDelaySamples>("setChannelDelaySamples"),
+          InstanceMethod<&MixerWrap::SetVcaOffsetDb>("setVcaOffsetDb"),
+          InstanceMethod<&MixerWrap::SetDualPan>("setDualPan"),
+          InstanceMethod<&MixerWrap::AddSend>("addSend"),
+          InstanceMethod<&MixerWrap::SetSendDb>("setSendDb"),
+          InstanceMethod<&MixerWrap::StripMeter>("stripMeter"),
+          InstanceMethod<&MixerWrap::MeterTap>("meterTap"),
+          InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest"),
+          InstanceMethod<&MixerWrap::StripById>("stripById"),
+          InstanceMethod<&MixerWrap::ScheduleFaderAutomation>("scheduleFaderAutomation"),
+          InstanceMethod<&MixerWrap::SchedulePanAutomation>("schedulePanAutomation"),
+          InstanceMethod<&MixerWrap::ScheduleWidthAutomation>("scheduleWidthAutomation"),
+          InstanceMethod<&MixerWrap::ScheduleSendAutomation>("scheduleSendAutomation"),
       });
 
   constructor_ = Napi::Persistent(func);
@@ -219,6 +261,408 @@ Napi::Value MixerWrap::ToSceneJson(const Napi::CallbackInfo& info) {
   std::string out(json);
   sonare_free_string(json);
   return Napi::String::New(env, out);
+}
+
+SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi::Value& ref) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return nullptr;
+  }
+  SonareStrip* strip = nullptr;
+  if (ref.IsNumber()) {
+    const size_t index = static_cast<size_t>(ref.As<Napi::Number>().Int64Value());
+    strip = sonare_mixer_strip_at(mixer_, index);
+    if (strip == nullptr) {
+      Napi::Error::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
+    }
+  } else if (ref.IsString()) {
+    const std::string id = ref.As<Napi::String>().Utf8Value();
+    strip = sonare_mixer_strip_by_id(mixer_, id.c_str());
+    if (strip == nullptr) {
+      Napi::Error::New(env, std::string("mixer strip not found: ") + id)
+          .ThrowAsJavaScriptException();
+    }
+  } else {
+    Napi::TypeError::New(env, "strip reference must be a number (index) or string (id)")
+        .ThrowAsJavaScriptException();
+  }
+  return strip;
+}
+
+Napi::Value MixerWrap::SetSoloed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsBoolean()) {
+    Napi::TypeError::New(env, "Expected (strip, soloed: boolean)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_soloed(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip solo: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetSoloSafe(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsBoolean()) {
+    Napi::TypeError::New(env, "Expected (strip, soloSafe: boolean)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_solo_safe(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip solo-safe: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetPolarityInvert(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsBoolean() || !info[2].IsBoolean()) {
+    Napi::TypeError::New(env, "Expected (strip, invertLeft: boolean, invertRight: boolean)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err =
+      sonare_strip_set_polarity_invert(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0,
+                                       info[2].As<Napi::Boolean>().Value() ? 1 : 0);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip polarity: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetPanLaw(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, panLaw: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_pan_law(strip, info[1].As<Napi::Number>().Int32Value());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip pan law: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetChannelDelaySamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, delaySamples: number)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err =
+      sonare_strip_set_channel_delay_samples(strip, info[1].As<Napi::Number>().Int32Value());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to set strip channel delay: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetVcaOffsetDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, offsetDb: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_vca_offset_db(strip, info[1].As<Napi::Number>().FloatValue());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to set strip VCA offset: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, leftPan: number, rightPan: number)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_dual_pan(strip, info[1].As<Napi::Number>().FloatValue(),
+                                              info[2].As<Napi::Number>().FloatValue());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip dual pan: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsString() || !info[2].IsString()) {
+    Napi::TypeError::New(
+        env, "Expected (strip, sendId: string, destinationBusId: string, sendDb?, timing?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const std::string send_id = info[1].As<Napi::String>().Utf8Value();
+  const std::string destination_bus_id = info[2].As<Napi::String>().Utf8Value();
+  const float send_db =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
+  const int timing =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 0;
+
+  size_t index = 0;
+  SonareError err = sonare_strip_add_send(strip, send_id.c_str(), destination_bus_id.c_str(),
+                                          send_db, timing, &index);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to add strip send: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, static_cast<double>(index));
+}
+
+Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, sendIndex: number, sendDb: number)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const size_t send_index = static_cast<size_t>(info[1].As<Napi::Number>().Int64Value());
+  SonareError err =
+      sonare_strip_set_send_db(strip, send_index, info[2].As<Napi::Number>().FloatValue());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to set strip send level: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected (strip)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareMixMeterSnapshot snapshot{};
+  SonareError err = sonare_strip_meter(strip, &snapshot);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to read strip meter: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return MeterSnapshotToObject(env, snapshot);
+}
+
+Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, tap: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareMixMeterSnapshot snapshot{};
+  SonareError err =
+      sonare_strip_meter_tap(strip, info[1].As<Napi::Number>().Int32Value(), &snapshot);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to read strip meter tap: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return MeterSnapshotToObject(env, snapshot);
+}
+
+Napi::Value MixerWrap::ReadGoniometerLatest(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, maxPoints: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const int64_t requested = info[1].As<Napi::Number>().Int64Value();
+  const size_t max_points = requested > 0 ? static_cast<size_t>(requested) : 0;
+  std::vector<SonareMixGoniometerPoint> points(max_points);
+  const size_t count = sonare_strip_read_goniometer_latest(
+      strip, max_points > 0 ? points.data() : nullptr, max_points);
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t index = 0; index < count; ++index) {
+    Napi::Object point = Napi::Object::New(env);
+    point.Set("left", points[index].left);
+    point.Set("right", points[index].right);
+    out.Set(index, point);
+  }
+  return out;
+}
+
+Napi::Value MixerWrap::StripById(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  SonareStrip* strip = sonare_mixer_strip_by_id(mixer_, id.c_str());
+  if (strip == nullptr) {
+    return env.Null();
+  }
+  const size_t count = sonare_mixer_strip_count(mixer_);
+  for (size_t index = 0; index < count; ++index) {
+    if (sonare_mixer_strip_at(mixer_, index) == strip) {
+      return Napi::Number::New(env, static_cast<double>(index));
+    }
+  }
+  return env.Null();
+}
+
+Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, samplePos, faderDb, curve?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const int64_t sample_pos = info[1].As<Napi::Number>().Int64Value();
+  const float fader_db = info[2].As<Napi::Number>().FloatValue();
+  const int curve =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 0;
+  SonareError err = sonare_strip_schedule_fader_automation(strip, sample_pos, fader_db, curve);
+  if (err != SONARE_OK) {
+    Napi::Error::New(
+        env, std::string("failed to schedule fader automation: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, samplePos, pan, curve?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const int64_t sample_pos = info[1].As<Napi::Number>().Int64Value();
+  const float pan = info[2].As<Napi::Number>().FloatValue();
+  const int curve =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 0;
+  SonareError err = sonare_strip_schedule_pan_automation(strip, sample_pos, pan, curve);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to schedule pan automation: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, samplePos, width, curve?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const int64_t sample_pos = info[1].As<Napi::Number>().Int64Value();
+  const float width = info[2].As<Napi::Number>().FloatValue();
+  const int curve =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 0;
+  SonareError err = sonare_strip_schedule_width_automation(strip, sample_pos, width, curve);
+  if (err != SONARE_OK) {
+    Napi::Error::New(
+        env, std::string("failed to schedule width automation: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 4 || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, sendIndex, samplePos, db, curve?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const size_t send_index = static_cast<size_t>(info[1].As<Napi::Number>().Int64Value());
+  const int64_t sample_pos = info[2].As<Napi::Number>().Int64Value();
+  const float db = info[3].As<Napi::Number>().FloatValue();
+  const int curve =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 0;
+  SonareError err = sonare_strip_schedule_send_automation(strip, send_index, sample_pos, db, curve);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to schedule send automation: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
 }
 
 void MixerWrap::Destroy(const Napi::CallbackInfo& /*info*/) {

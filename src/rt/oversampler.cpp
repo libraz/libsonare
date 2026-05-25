@@ -43,6 +43,18 @@ std::vector<float> Oversampler::downsample(const float* input, size_t size) cons
 
   const size_t out_size = size / static_cast<size_t>(factor_);
   std::vector<float> output(out_size);
+  downsample_to(input, size, output.data(), output.size());
+  return output;
+}
+
+void Oversampler::downsample_to(const float* input, size_t size, float* output,
+                                size_t output_size) const {
+  if (size == 0) return;
+  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(output != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(size % static_cast<size_t>(factor_) == 0, ErrorCode::InvalidParameter);
+  const size_t out_size = size / static_cast<size_t>(factor_);
+  SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
   const int half = static_cast<int>(decimation_taps_.size() / 2);
   for (size_t i = 0; i < out_size; ++i) {
     const long center = static_cast<long>(i * static_cast<size_t>(factor_));
@@ -59,7 +71,6 @@ std::vector<float> Oversampler::downsample(const float* input, size_t size) cons
     // dividing by factor_ normalizes the decimated output to unity DC gain.
     output[i] = static_cast<float>(accum / static_cast<double>(factor_));
   }
-  return output;
 }
 
 std::vector<float> Oversampler::downsample(const std::vector<float>& input) const {

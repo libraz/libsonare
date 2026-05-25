@@ -29,6 +29,7 @@ import type {
   EqBand,
   EqMatchOptions,
   EqSpectrumSnapshot,
+  GoniometerPoint,
   HpssResult,
   Key,
   KeyCandidate,
@@ -43,14 +44,18 @@ import type {
   MasteringStereoChainResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MeterTap,
   MfccResult,
   MixerProcessResult,
+  MixMeterSnapshot,
   MixOptions,
   MixResult,
   PairAnalysis,
   PairProcessor,
+  PanLaw,
   PitchResult,
   SectionType,
+  SendTiming,
   SoloProcessor,
   StereoAnalysis,
   StftResult,
@@ -91,6 +96,7 @@ export type {
   EqMatchOptions,
   EqSpectrumSnapshot,
   EqStereoPlacement,
+  GoniometerPoint,
   HpssResult,
   Key,
   KeyCandidate,
@@ -105,6 +111,7 @@ export type {
   MasteringStereoChainResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MeterTap,
   MfccResult,
   MixerProcessResult,
   MixMeterSnapshot,
@@ -112,10 +119,12 @@ export type {
   MixResult,
   PairAnalysis,
   PairProcessor,
+  PanLaw,
   PanMode,
   PitchResult,
   RhythmFeatures,
   Section,
+  SendTiming,
   SoloProcessor,
   StereoAnalysis,
   StftResult,
@@ -140,6 +149,42 @@ export type {
   StreamConfig,
 } from './stream_types';
 export type { ProgressCallback } from './wasm_types';
+
+export interface MixerRealtimeBuffer {
+  leftInputs: Float32Array[];
+  rightInputs: Float32Array[];
+  outLeft: Float32Array;
+  outRight: Float32Array;
+  process: (numSamples?: number) => void;
+}
+
+function automationCurveCode(curve: AutomationCurve): number {
+  return curve === 'exponential' ? 1 : 0;
+}
+
+function panLawCode(panLaw: PanLaw | number): number {
+  if (typeof panLaw === 'number') {
+    return panLaw;
+  }
+  switch (panLaw) {
+    case 'const4.5dB':
+      return 1;
+    case 'const6dB':
+      return 2;
+    case 'linear0dB':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function meterTapCode(tap: MeterTap | number): number {
+  return tap === 'preFader' || tap === 0 ? 0 : 1;
+}
+
+function sendTimingCode(timing: SendTiming | number): number {
+  return timing === 'preFader' || timing === 0 ? 0 : 1;
+}
 
 // ============================================================================
 // Module State
@@ -1279,6 +1324,54 @@ export class Mixer {
     return this.mixer.processStereo(leftChannels, rightChannels);
   }
 
+  /**
+   * Mix one block into caller-owned output arrays.
+   *
+   * This avoids allocating the result object and result `Float32Array`s. It is
+   * intended for realtime bridges such as AudioWorklet; the input channel count
+   * must match the scene strip count and all arrays must have the same length.
+   */
+  processStereoInto(
+    leftChannels: Float32Array[],
+    rightChannels: Float32Array[],
+    outLeft: Float32Array,
+    outRight: Float32Array,
+  ): void {
+    if (leftChannels.length !== rightChannels.length) {
+      throw new Error('leftChannels and rightChannels must have the same length.');
+    }
+    if (outLeft.length !== outRight.length) {
+      throw new Error('outLeft and outRight must have the same length.');
+    }
+    this.mixer.processStereoInto(leftChannels, rightChannels, outLeft, outRight);
+  }
+
+  /**
+   * Create reusable WASM-heap input/output views for realtime-style processing.
+   *
+   * Fill `leftInputs[i]` / `rightInputs[i]`, call `process()`, then read
+   * `outLeft` / `outRight`. The views are owned by this mixer and become invalid
+   * after {@link delete}.
+   */
+  createRealtimeBuffer(): MixerRealtimeBuffer {
+    const stripCount = this.stripCount();
+    const leftInputs: Float32Array[] = [];
+    const rightInputs: Float32Array[] = [];
+    for (let index = 0; index < stripCount; index++) {
+      leftInputs.push(this.mixer.inputLeftView(index));
+      rightInputs.push(this.mixer.inputRightView(index));
+    }
+    const outLeft = this.mixer.outputLeftView();
+    const outRight = this.mixer.outputRightView();
+    return {
+      leftInputs,
+      rightInputs,
+      outLeft,
+      outRight,
+      process: (numSamples = outLeft.length) => this.mixer.processPreparedStereo(numSamples),
+    };
+  }
+
   /** Number of strips in the mixer (e.g. strips loaded from the scene). */
   stripCount(): number {
     return this.mixer.stripCount();
@@ -1307,15 +1400,193 @@ export class Mixer {
     value: number,
     curve: AutomationCurve = 'linear',
   ): void {
-    const curveCode = curve === 'exponential' ? 1 : 0;
     this.mixer.scheduleInsertAutomation(
       stripIndex,
       insertIndex,
       paramId,
       samplePos,
       value,
-      curveCode,
+      automationCurveCode(curve),
     );
+  }
+
+  /** Resolve a strip's index in `[0, stripCount())` from its scene id. */
+  stripById(id: string): number {
+    return this.mixer.stripById(id);
+  }
+
+  /**
+   * Set a strip's solo state. Takes effect on the next process without a
+   * graph recompile.
+   */
+  setSoloed(stripIndex: number, soloed: boolean): void {
+    this.mixer.setSoloed(stripIndex, soloed);
+  }
+
+  /**
+   * Mark a strip solo-safe so it is never implied-muted by another strip's
+   * solo. Takes effect on the next process without a graph recompile.
+   */
+  setSoloSafe(stripIndex: number, soloSafe: boolean): void {
+    this.mixer.setSoloSafe(stripIndex, soloSafe);
+  }
+
+  /** Invert the polarity of the left and/or right channel of a strip. */
+  setPolarityInvert(stripIndex: number, invertLeft: boolean, invertRight: boolean): void {
+    this.mixer.setPolarityInvert(stripIndex, invertLeft, invertRight);
+  }
+
+  /** Set the strip's pan law. */
+  setPanLaw(stripIndex: number, panLaw: PanLaw | number): void {
+    this.mixer.setPanLaw(stripIndex, panLawCode(panLaw));
+  }
+
+  /**
+   * Set a per-strip channel delay in samples. This changes the strip's reported
+   * latency; recompile to re-run latency compensation.
+   */
+  setChannelDelaySamples(stripIndex: number, delaySamples: number): void {
+    this.mixer.setChannelDelaySamples(stripIndex, delaySamples);
+  }
+
+  /** Set the strip's live VCA gain offset in dB (not persisted to the scene). */
+  setVcaOffsetDb(stripIndex: number, offsetDb: number): void {
+    this.mixer.setVcaOffsetDb(stripIndex, offsetDb);
+  }
+
+  /** Set independent left/right pan positions (dual-pan mode). */
+  setDualPan(stripIndex: number, leftPan: number, rightPan: number): void {
+    this.mixer.setDualPan(stripIndex, leftPan, rightPan);
+  }
+
+  /**
+   * Add a send to a strip after construction.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param id - Send id
+   * @param destinationBusId - Destination bus id
+   * @param sendDb - Initial send level in dB
+   * @param timing - `'preFader'` or `'postFader'` (default: `'postFader'`)
+   * @returns The new send's index
+   */
+  addSend(
+    stripIndex: number,
+    id: string,
+    destinationBusId: string,
+    sendDb: number,
+    timing: SendTiming | number = 'postFader',
+  ): number {
+    return this.mixer.addSend(stripIndex, id, destinationBusId, sendDb, sendTimingCode(timing));
+  }
+
+  /** Set the send level (in dB) for an existing send by index. */
+  setSendDb(stripIndex: number, sendIndex: number, sendDb: number): void {
+    this.mixer.setSendDb(stripIndex, sendIndex, sendDb);
+  }
+
+  /**
+   * Read a strip's meter snapshot at the given tap point.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param tap - `'preFader'` or `'postFader'` (default: `'postFader'`)
+   */
+  meterTap(stripIndex: number, tap: MeterTap = 'postFader'): MixMeterSnapshot {
+    return this.mixer.meterTap(stripIndex, meterTapCode(tap));
+  }
+
+  /**
+   * Read a strip's meter snapshot. Alias of {@link meterTap}, provided for
+   * cross-binding (Node/Python) parity.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param tap - `'preFader'` or `'postFader'` (default: `'postFader'`)
+   */
+  stripMeter(stripIndex: number, tap: MeterTap = 'postFader'): MixMeterSnapshot {
+    return this.mixer.stripMeter(stripIndex, meterTapCode(tap));
+  }
+
+  /**
+   * Schedule sample-accurate fader automation on a strip.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param samplePos - Absolute samples from the start of processing
+   * @param faderDb - Target fader level in dB
+   * @param curve - Interpolation curve (default: `'linear'`)
+   */
+  scheduleFaderAutomation(
+    stripIndex: number,
+    samplePos: number,
+    faderDb: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.mixer.scheduleFaderAutomation(stripIndex, samplePos, faderDb, automationCurveCode(curve));
+  }
+
+  /**
+   * Schedule sample-accurate pan automation on a strip.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param samplePos - Absolute samples from the start of processing
+   * @param pan - Target pan position
+   * @param curve - Interpolation curve (default: `'linear'`)
+   */
+  schedulePanAutomation(
+    stripIndex: number,
+    samplePos: number,
+    pan: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.mixer.schedulePanAutomation(stripIndex, samplePos, pan, automationCurveCode(curve));
+  }
+
+  /**
+   * Schedule sample-accurate width automation on a strip.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param samplePos - Absolute samples from the start of processing
+   * @param width - Target stereo width
+   * @param curve - Interpolation curve (default: `'linear'`)
+   */
+  scheduleWidthAutomation(
+    stripIndex: number,
+    samplePos: number,
+    width: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.mixer.scheduleWidthAutomation(stripIndex, samplePos, width, automationCurveCode(curve));
+  }
+
+  /**
+   * Schedule sample-accurate send-level automation on a strip's send.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param sendIndex - Send index in the strip's add order
+   * @param samplePos - Absolute samples from the start of processing
+   * @param db - Target send level in dB
+   * @param curve - Interpolation curve (default: `'linear'`)
+   */
+  scheduleSendAutomation(
+    stripIndex: number,
+    sendIndex: number,
+    samplePos: number,
+    db: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.mixer.scheduleSendAutomation(
+      stripIndex,
+      sendIndex,
+      samplePos,
+      db,
+      automationCurveCode(curve),
+    );
+  }
+
+  /**
+   * Read up to `maxPoints` of a strip's most recent goniometer samples
+   * (oldest to newest).
+   */
+  readGoniometerLatest(stripIndex: number, maxPoints: number): GoniometerPoint[] {
+    return this.mixer.readGoniometerLatest(stripIndex, maxPoints);
   }
 
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */

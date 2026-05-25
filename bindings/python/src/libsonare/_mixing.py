@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from ._ffi import SonareMixGoniometerPoint
 from ._runtime import *  # noqa: F403
+from .types import GoniometerPoint
+
+# A strip is addressed either by its index in [0, strip_count()) or by its
+# string id (as declared in the scene JSON).
+StripRef = int | str
 
 
 def mixing_scene_preset_names() -> list[str]:
@@ -34,8 +40,14 @@ class Mixer:
 
     Built from a scene JSON string (see :func:`mixing_scene_preset_json`), it
     routes per-strip stereo blocks through a compiled routing graph (sends,
-    buses, inserts) into a stereo master. Insert-parameter automation is
-    scheduled by strip index; the underlying strip handles are never exposed.
+    buses, inserts) into a stereo master.
+
+    Strips are addressed by index in ``[0, strip_count())`` or by their string
+    id. Strip handles are *borrowed*: they are owned by the native mixer and
+    must not outlive it. This wrapper never exposes a raw handle and always
+    resolves a fresh handle from the live mixer for each operation, so a strip
+    method can only run while the mixer is open (:meth:`close` invalidates
+    every strip). Do not retain results across a :meth:`close` call.
     """
 
     def __init__(self, handle: int, sample_rate: int, block_size: int) -> None:
@@ -69,40 +81,280 @@ class Mixer:
             raise RuntimeError("libsonare was built without insert-automation support")
         return int(lib.sonare_mixer_strip_count(self._handle))
 
-    def schedule_insert_automation(
-        self,
-        strip_index: int,
-        insert_index: int,
-        param_id: int,
-        sample_pos: int,
-        value: float,
-        curve: int = 0,
-    ) -> None:
-        """Schedule a sample-accurate insert-parameter automation event.
+    def _strip_handle(self, strip: StripRef) -> ctypes.c_void_p:
+        """Resolve a strip reference to a borrowed native handle.
 
-        Args:
-            strip_index: Strip index in ``[0, strip_count())``.
-            insert_index: Index into the strip's combined pre/post insert chain.
-            param_id: Processor-specific parameter id.
-            sample_pos: Absolute sample position from the start of processing.
-            value: Target parameter value.
-            curve: ``0`` for linear, ``1`` for exponential interpolation.
+        Accepts an integer index in ``[0, strip_count())`` or a string strip id.
+        The returned handle is owned by the mixer and is only valid while the
+        mixer is open; callers must not store it.
         """
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_strip_at"):
+            raise RuntimeError("libsonare was built without strip-handle support")
+        if isinstance(strip, str):
+            handle = lib.sonare_mixer_strip_by_id(self._handle, strip.encode("utf-8"))
+            if not handle:
+                raise KeyError(f"mixer strip id not found: {strip}")
+        else:
+            handle = lib.sonare_mixer_strip_at(self._handle, ctypes.c_size_t(strip))
+            if not handle:
+                raise IndexError("mixer strip index out of range")
+        return ctypes.c_void_p(int(handle))
+
+    def strip_by_id(self, strip_id: str) -> int:
+        """Return the index of the strip with ``strip_id``.
+
+        Raises ``KeyError`` if no strip with that id exists. The returned index
+        is stable for the lifetime of the current topology.
+        """
+        self._require()
+        lib = _get_lib()
+        target = lib.sonare_mixer_strip_by_id(self._handle, strip_id.encode("utf-8"))
+        if not target:
+            raise KeyError(f"mixer strip id not found: {strip_id}")
+        for index in range(self.strip_count()):
+            handle = lib.sonare_mixer_strip_at(self._handle, ctypes.c_size_t(index))
+            if handle and int(handle) == int(target):
+                return index
+        raise KeyError(f"mixer strip id not found: {strip_id}")
+
+    def set_soloed(self, strip: StripRef, soloed: bool) -> None:
+        """Set a strip's solo state (takes effect without a recompile)."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_soloed(handle, ctypes.c_int(1 if soloed else 0)))
+
+    def set_solo_safe(self, strip: StripRef, solo_safe: bool) -> None:
+        """Mark a strip solo-safe so other strips' solo never implied-mutes it."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_solo_safe(handle, ctypes.c_int(1 if solo_safe else 0)))
+
+    def set_polarity_invert(self, strip: StripRef, invert_left: bool, invert_right: bool) -> None:
+        """Invert the polarity of the left and/or right channel of a strip."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_set_polarity_invert(
+                handle,
+                ctypes.c_int(1 if invert_left else 0),
+                ctypes.c_int(1 if invert_right else 0),
+            )
+        )
+
+    def set_pan_law(self, strip: StripRef, pan_law: PanLaw | str | int) -> None:
+        """Set a strip's pan law (``PanLaw`` enum, name, or int 0..3)."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
+
+    def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None:
+        """Set a per-strip channel delay in samples (recompiled on next compile)."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_set_channel_delay_samples(handle, ctypes.c_int(delay_samples))
+        )
+
+    def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None:
+        """Set a strip's live VCA gain offset in dB (not persisted to the scene)."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_vca_offset_db(handle, ctypes.c_float(offset_db)))
+
+    def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None:
+        """Set independent left/right pan positions for a strip (dual-pan mode)."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_set_dual_pan(
+                handle, ctypes.c_float(left), ctypes.c_float(right)
+            )
+        )
+
+    def add_send(
+        self,
+        strip: StripRef,
+        send_id: str,
+        destination_bus_id: str,
+        send_db: float = 0.0,
+        timing: int = 0,
+    ) -> int:
+        """Add a send from a strip to a bus and return its send index.
+
+        ``timing`` is ``0`` for pre-fader or ``1`` for post-fader. Call
+        :meth:`compile` after adding sends before processing.
+        """
+        handle = self._strip_handle(strip)
+        index_out = ctypes.c_size_t()
+        _check(
+            _get_lib().sonare_strip_add_send(
+                handle,
+                send_id.encode("utf-8"),
+                destination_bus_id.encode("utf-8"),
+                ctypes.c_float(send_db),
+                ctypes.c_int(timing),
+                ctypes.byref(index_out),
+            )
+        )
+        return int(index_out.value)
+
+    def set_send_db(self, strip: StripRef, index: int, db: float) -> None:
+        """Set the level in dB of an existing send on a strip (by send index)."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_set_send_db(handle, ctypes.c_size_t(index), ctypes.c_float(db))
+        )
+
+    def strip_meter(
+        self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
+    ) -> MixMeterSnapshot:
+        """Read a per-strip meter snapshot at the given tap point.
+
+        Args:
+            strip: Strip index or id.
+            tap: ``MeterTap`` enum, name (``"pre_fader"``/``"post_fader"``), or
+                int (``0`` pre-fader, ``1`` post-fader).
+
+        Returns:
+            A :class:`MixMeterSnapshot` with all peak/RMS/correlation/LUFS/true
+            -peak fields populated.
+        """
+        handle = self._strip_handle(strip)
+        lib = _get_lib()
+        snapshot = SonareMixMeterSnapshot()
+        if hasattr(lib, "sonare_strip_meter_tap"):
+            _check(
+                lib.sonare_strip_meter_tap(
+                    handle, ctypes.c_int(_meter_tap_value(tap)), ctypes.byref(snapshot)
+                )
+            )
+        else:
+            _check(lib.sonare_strip_meter(handle, ctypes.byref(snapshot)))
+        return _mix_meter_from_c(snapshot)
+
+    def meter_tap(
+        self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
+    ) -> MixMeterSnapshot:
+        """Alias of :meth:`strip_meter` matching the C ``meter_tap`` naming."""
+        return self.strip_meter(strip, tap)
+
+    def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]:
+        """Read up to ``max_points`` of the latest goniometer (vectorscope) data."""
+        if max_points <= 0:
+            return []
+        handle = self._strip_handle(strip)
+        buffer = (SonareMixGoniometerPoint * max_points)()
+        count = _get_lib().sonare_strip_read_goniometer_latest(
+            handle,
+            ctypes.cast(buffer, ctypes.POINTER(SonareMixGoniometerPoint)),
+            ctypes.c_size_t(max_points),
+        )
+        return [
+            GoniometerPoint(left=float(buffer[i].left), right=float(buffer[i].right))
+            for i in range(int(count))
+        ]
+
+    def schedule_fader_automation(
+        self,
+        strip: StripRef,
+        sample_pos: int,
+        fader_db: float,
+        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+    ) -> None:
+        """Schedule a sample-accurate fader (dB) automation event on a strip."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_schedule_fader_automation(
+                handle,
+                ctypes.c_int64(sample_pos),
+                ctypes.c_float(fader_db),
+                ctypes.c_int(_curve_value(curve)),
+            )
+        )
+
+    def schedule_pan_automation(
+        self,
+        strip: StripRef,
+        sample_pos: int,
+        pan: float,
+        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+    ) -> None:
+        """Schedule a sample-accurate pan automation event on a strip."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_schedule_pan_automation(
+                handle,
+                ctypes.c_int64(sample_pos),
+                ctypes.c_float(pan),
+                ctypes.c_int(_curve_value(curve)),
+            )
+        )
+
+    def schedule_width_automation(
+        self,
+        strip: StripRef,
+        sample_pos: int,
+        width: float,
+        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+    ) -> None:
+        """Schedule a sample-accurate stereo-width automation event on a strip."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_schedule_width_automation(
+                handle,
+                ctypes.c_int64(sample_pos),
+                ctypes.c_float(width),
+                ctypes.c_int(_curve_value(curve)),
+            )
+        )
+
+    def schedule_send_automation(
+        self,
+        strip: StripRef,
+        send_index: int,
+        sample_pos: int,
+        db: float,
+        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+    ) -> None:
+        """Schedule a sample-accurate send-level (dB) automation event on a strip."""
+        handle = self._strip_handle(strip)
+        _check(
+            _get_lib().sonare_strip_schedule_send_automation(
+                handle,
+                ctypes.c_size_t(send_index),
+                ctypes.c_int64(sample_pos),
+                ctypes.c_float(db),
+                ctypes.c_int(_curve_value(curve)),
+            )
+        )
+
+    def schedule_insert_automation(
+        self,
+        strip_index: StripRef,
+        insert_index: int,
+        param_id: int,
+        sample_pos: int,
+        value: float,
+        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+    ) -> None:
+        """Schedule a sample-accurate insert-parameter automation event.
+
+        Args:
+            strip_index: Strip index in ``[0, strip_count())`` or strip id.
+            insert_index: Index into the strip's combined pre/post insert chain.
+            param_id: Processor-specific parameter id.
+            sample_pos: Absolute sample position from the start of processing.
+            value: Target parameter value.
+            curve: ``AutomationCurve`` enum, name, or int (``0`` linear,
+                ``1`` exponential). Accepts a raw int for backward compatibility.
+        """
+        handle = self._strip_handle(strip_index)
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_strip_schedule_insert_automation"):
             raise RuntimeError("libsonare was built without insert-automation support")
-        strip = lib.sonare_mixer_strip_at(self._handle, ctypes.c_size_t(strip_index))
-        if not strip:
-            raise IndexError("mixer strip index out of range")
         _check(
             lib.sonare_strip_schedule_insert_automation(
-                ctypes.c_void_p(int(strip)),
+                handle,
                 ctypes.c_uint(insert_index),
                 ctypes.c_uint(param_id),
                 ctypes.c_int64(sample_pos),
                 ctypes.c_float(value),
-                ctypes.c_int(curve),
+                ctypes.c_int(_curve_value(curve)),
             )
         )
 

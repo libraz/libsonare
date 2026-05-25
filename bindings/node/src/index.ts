@@ -10,6 +10,7 @@ import type {
   DynamicsResult,
   EqBandInput,
   EqSpectrumSnapshot,
+  GoniometerPoint,
   HpssResult,
   Key,
   KeyCandidate,
@@ -21,18 +22,23 @@ import type {
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MeterTap,
   MfccResult,
   MixerProcessResult,
+  MixMeterSnapshot,
   MixOptions,
   MixResult,
   PairAnalysis,
   PairProcessor,
+  PanLaw,
   PitchResult,
   RhythmResult,
+  SendTiming,
   SoloProcessor,
   StereoAnalysis,
   StftDbResult,
   StftResult,
+  StripRef,
   TimbreResult,
 } from './types.js';
 
@@ -1341,11 +1347,71 @@ export function mixingScenePresetJson(preset: string): string {
   return addon.mixingScenePresetJson(preset);
 }
 
+const PAN_LAW_VALUES: Record<PanLaw, number> = {
+  const3dB: 0,
+  'const4.5dB': 1,
+  const6dB: 2,
+  linear0dB: 3,
+};
+
+const METER_TAP_VALUES: Record<MeterTap, number> = {
+  preFader: 0,
+  postFader: 1,
+};
+
+const SEND_TIMING_VALUES: Record<SendTiming, number> = {
+  preFader: 0,
+  postFader: 1,
+};
+
+function automationCurveValue(curve: AutomationCurve): number {
+  if (curve === 'linear') {
+    return 0;
+  }
+  if (curve === 'exponential') {
+    return 1;
+  }
+  throw new Error(`Invalid automation curve: ${curve}`);
+}
+
+function panLawValue(panLaw: PanLaw | number): number {
+  if (typeof panLaw === 'number') {
+    return panLaw;
+  }
+  const value = PAN_LAW_VALUES[panLaw];
+  if (value === undefined) {
+    throw new Error(`Invalid pan law: ${panLaw}`);
+  }
+  return value;
+}
+
+function meterTapValue(tap: MeterTap | number): number {
+  if (typeof tap === 'number') {
+    return tap;
+  }
+  const value = METER_TAP_VALUES[tap];
+  if (value === undefined) {
+    throw new Error(`Invalid meter tap: ${tap}`);
+  }
+  return value;
+}
+
+function sendTimingValue(timing: SendTiming | number): number {
+  if (typeof timing === 'number') {
+    return timing;
+  }
+  const value = SEND_TIMING_VALUES[timing];
+  if (value === undefined) {
+    throw new Error(`Invalid send timing: ${timing}`);
+  }
+  return value;
+}
+
 /**
  * Scene-based persistent stereo mixer. Built from a scene JSON string, it routes
  * per-strip stereo blocks through a compiled routing graph (sends, buses,
- * inserts) into a stereo master. Insert-parameter automation is scheduled by
- * strip index; the underlying strip handles are never exposed.
+ * inserts) into a stereo master. Strips are addressed by 0-based index or by
+ * their string id; the underlying strip handles are never exposed.
  */
 export class Mixer {
   private native: InstanceType<typeof addon.Mixer>;
@@ -1406,7 +1472,130 @@ export class Mixer {
       paramId,
       samplePos,
       value,
-      curve === 'exponential' ? 1 : 0,
+      automationCurveValue(curve),
+    );
+  }
+
+  /** Resolve a strip id to its 0-based index, or `null` if not found. */
+  stripById(id: string): number | null {
+    return this.native.stripById(id);
+  }
+
+  /** Set a strip's solo state. Takes effect on the next process (no recompile). */
+  setSoloed(strip: StripRef, soloed: boolean): void {
+    this.native.setSoloed(strip, soloed);
+  }
+
+  /** Mark a strip solo-safe so it is never implied-muted by another strip's solo. */
+  setSoloSafe(strip: StripRef, soloSafe: boolean): void {
+    this.native.setSoloSafe(strip, soloSafe);
+  }
+
+  /** Invert the polarity of a strip's left and/or right channel. */
+  setPolarityInvert(strip: StripRef, invertLeft: boolean, invertRight: boolean): void {
+    this.native.setPolarityInvert(strip, invertLeft, invertRight);
+  }
+
+  /** Set a strip's pan law (`'const3dB'` | `'const4.5dB'` | `'const6dB'` | `'linear0dB'`). */
+  setPanLaw(strip: StripRef, panLaw: PanLaw | number): void {
+    this.native.setPanLaw(strip, panLawValue(panLaw));
+  }
+
+  /** Set a per-strip channel delay in samples (recompiled at the next {@link compile}). */
+  setChannelDelaySamples(strip: StripRef, delaySamples: number): void {
+    this.native.setChannelDelaySamples(strip, delaySamples);
+  }
+
+  /** Set a strip's live VCA gain offset in dB (not persisted to the scene JSON). */
+  setVcaOffsetDb(strip: StripRef, offsetDb: number): void {
+    this.native.setVcaOffsetDb(strip, offsetDb);
+  }
+
+  /** Set a strip's independent left/right pan positions (dual-pan mode). */
+  setDualPan(strip: StripRef, leftPan: number, rightPan: number): void {
+    this.native.setDualPan(strip, leftPan, rightPan);
+  }
+
+  /**
+   * Add a post-construction send from a strip to a destination bus.
+   *
+   * @returns The 0-based index of the new send (use with {@link setSendDb} /
+   *   {@link scheduleSendAutomation}).
+   */
+  addSend(
+    strip: StripRef,
+    sendId: string,
+    destinationBusId: string,
+    sendDb = 0.0,
+    timing: SendTiming | number = 'postFader',
+  ): number {
+    return this.native.addSend(strip, sendId, destinationBusId, sendDb, sendTimingValue(timing));
+  }
+
+  /** Set the send level (dB) of a strip's send addressed by add-order index. */
+  setSendDb(strip: StripRef, sendIndex: number, sendDb: number): void {
+    this.native.setSendDb(strip, sendIndex, sendDb);
+  }
+
+  /** Read a strip's current (post-fader) meter snapshot. */
+  stripMeter(strip: StripRef): MixMeterSnapshot {
+    return this.native.stripMeter(strip);
+  }
+
+  /** Read a strip's meter snapshot at the given tap point (`'preFader'` | `'postFader'`). */
+  meterTap(strip: StripRef, tap: MeterTap | number = 'postFader'): MixMeterSnapshot {
+    return this.native.meterTap(strip, meterTapValue(tap));
+  }
+
+  /** Read up to `maxPoints` of the latest goniometer samples for a strip. */
+  readGoniometerLatest(strip: StripRef, maxPoints: number): GoniometerPoint[] {
+    return this.native.readGoniometerLatest(strip, maxPoints);
+  }
+
+  /** Schedule sample-accurate fader (dB) automation on a strip. */
+  scheduleFaderAutomation(
+    strip: StripRef,
+    samplePos: number,
+    faderDb: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleFaderAutomation(strip, samplePos, faderDb, automationCurveValue(curve));
+  }
+
+  /** Schedule sample-accurate pan automation on a strip. */
+  schedulePanAutomation(
+    strip: StripRef,
+    samplePos: number,
+    pan: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.schedulePanAutomation(strip, samplePos, pan, automationCurveValue(curve));
+  }
+
+  /** Schedule sample-accurate width automation on a strip. */
+  scheduleWidthAutomation(
+    strip: StripRef,
+    samplePos: number,
+    width: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleWidthAutomation(strip, samplePos, width, automationCurveValue(curve));
+  }
+
+  /** Schedule sample-accurate send-level (dB) automation on a strip's send. */
+  scheduleSendAutomation(
+    strip: StripRef,
+    sendIndex: number,
+    samplePos: number,
+    db: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleSendAutomation(
+      strip,
+      sendIndex,
+      samplePos,
+      db,
+      automationCurveValue(curve),
     );
   }
 
@@ -1448,6 +1637,7 @@ export type {
   DynamicsResult,
   EqBandInput,
   EqSpectrumSnapshot,
+  GoniometerPoint,
   HpssResult,
   Key,
   KeyCandidate,
@@ -1459,16 +1649,20 @@ export type {
   MasteringResult,
   MasteringStereoResult,
   MelSpectrogramResult,
+  MeterTap,
   MfccResult,
   MixerProcessResult,
   MixMeterSnapshot,
   MixOptions,
   MixResult,
+  PanLaw,
   PanMode,
   PitchResult,
   RhythmResult,
+  SendTiming,
   StftDbResult,
   StftResult,
+  StripRef,
   TimbreResult,
   TimeSignature,
 } from './types.js';

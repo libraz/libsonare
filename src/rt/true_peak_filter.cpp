@@ -92,6 +92,15 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
                                            float* const* output_oversampled, int num_channels,
                                            int num_samples,
                                            std::vector<std::vector<float>>& history) const {
+  std::vector<std::vector<float>> scratch;
+  upsample_with_history(input, output_oversampled, num_channels, num_samples, history, scratch);
+}
+
+void TruePeakFilter::upsample_with_history(const float* const* input,
+                                           float* const* output_oversampled, int num_channels,
+                                           int num_samples,
+                                           std::vector<std::vector<float>>& history,
+                                           std::vector<std::vector<float>>& scratch) const {
   validate_buffers(input, num_channels, num_samples);
   if (num_channels == 0 || num_samples == 0) return;
   if (output_oversampled == nullptr) {
@@ -100,6 +109,9 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
   const size_t history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
   if (history.size() != static_cast<size_t>(num_channels)) {
     history.assign(static_cast<size_t>(num_channels), std::vector<float>(history_size, 0.0f));
+  }
+  if (scratch.size() != static_cast<size_t>(num_channels)) {
+    scratch.assign(static_cast<size_t>(num_channels), {});
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -111,20 +123,25 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
       channel_history.assign(history_size, 0.0f);
     }
 
-    std::vector<float> extended;
-    extended.reserve(history_size + static_cast<size_t>(num_samples));
-    extended.insert(extended.end(), channel_history.begin(), channel_history.end());
-    extended.insert(extended.end(), input[ch], input[ch] + num_samples);
+    auto& extended = scratch[static_cast<size_t>(ch)];
+    const size_t extended_size = history_size + static_cast<size_t>(num_samples);
+    if (extended.size() < extended_size) {
+      extended.resize(extended_size, 0.0f);
+    }
+    std::copy(channel_history.begin(), channel_history.end(), extended.begin());
+    std::copy(input[ch], input[ch] + num_samples,
+              extended.begin() + static_cast<std::ptrdiff_t>(history_size));
     for (int i = 0; i < num_samples; ++i) {
       const size_t index = history_size + static_cast<size_t>(i);
       for (int phase = 0; phase < factor_; ++phase) {
         output_oversampled[ch][i * factor_ + phase] =
-            interpolate_polyphase_sample(extended.data(), extended.size(), index, phase, fir_);
+            interpolate_polyphase_sample(extended.data(), extended_size, index, phase, fir_);
       }
     }
 
-    const size_t keep = std::min(history_size, extended.size());
-    std::copy(extended.end() - static_cast<std::ptrdiff_t>(keep), extended.end(),
+    const size_t keep = std::min(history_size, extended_size);
+    std::copy(extended.begin() + static_cast<std::ptrdiff_t>(extended_size - keep),
+              extended.begin() + static_cast<std::ptrdiff_t>(extended_size),
               channel_history.end() - static_cast<std::ptrdiff_t>(keep));
     if (keep < history_size) {
       std::fill(channel_history.begin(), channel_history.end() - static_cast<std::ptrdiff_t>(keep),

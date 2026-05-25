@@ -6,11 +6,13 @@ from typing import Any, Literal, TypeAlias
 from .types import (
     AcousticResult,
     AnalysisResult,
+    AutomationCurve,
     BpmAnalysisResult,
     ChordAnalysisResult,
     ChromaResult,
     DynamicsResult,
     EqSpectrumSnapshot,
+    GoniometerPoint,
     HpssResult,
     Key,
     KeyCandidate,
@@ -21,9 +23,12 @@ from .types import (
     MasteringResult,
     MasteringStereoResult,
     MelSpectrogramResult,
+    MeterTap,
     MfccResult,
+    MixMeterSnapshot,
     MixResult,
     Mode,
+    PanLaw,
     PitchClass,
     PitchResult,
     RhythmResult,
@@ -32,6 +37,8 @@ from .types import (
 )
 
 FloatSamples: TypeAlias = Sequence[float] | list[float]
+StripRef: TypeAlias = int | str
+AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
@@ -307,14 +314,53 @@ class Mixer:
     ) -> Mixer: ...
     def compile(self) -> None: ...
     def strip_count(self) -> int: ...
+    def strip_by_id(self, strip_id: str) -> int: ...
+    def set_soloed(self, strip: StripRef, soloed: bool) -> None: ...
+    def set_solo_safe(self, strip: StripRef, solo_safe: bool) -> None: ...
+    def set_polarity_invert(
+        self, strip: StripRef, invert_left: bool, invert_right: bool
+    ) -> None: ...
+    def set_pan_law(self, strip: StripRef, pan_law: PanLaw | str | int) -> None: ...
+    def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None: ...
+    def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None: ...
+    def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None: ...
+    def add_send(
+        self,
+        strip: StripRef,
+        send_id: str,
+        destination_bus_id: str,
+        send_db: float = 0.0,
+        timing: int = 0,
+    ) -> int: ...
+    def set_send_db(self, strip: StripRef, index: int, db: float) -> None: ...
+    def strip_meter(self, strip: StripRef, tap: MeterTap | str | int = ...) -> MixMeterSnapshot: ...
+    def meter_tap(self, strip: StripRef, tap: MeterTap | str | int = ...) -> MixMeterSnapshot: ...
+    def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]: ...
+    def schedule_fader_automation(
+        self, strip: StripRef, sample_pos: int, fader_db: float, curve: AutomationCurveArg = ...
+    ) -> None: ...
+    def schedule_pan_automation(
+        self, strip: StripRef, sample_pos: int, pan: float, curve: AutomationCurveArg = ...
+    ) -> None: ...
+    def schedule_width_automation(
+        self, strip: StripRef, sample_pos: int, width: float, curve: AutomationCurveArg = ...
+    ) -> None: ...
+    def schedule_send_automation(
+        self,
+        strip: StripRef,
+        send_index: int,
+        sample_pos: int,
+        db: float,
+        curve: AutomationCurveArg = ...,
+    ) -> None: ...
     def schedule_insert_automation(
         self,
-        strip_index: int,
+        strip_index: StripRef,
         insert_index: int,
         param_id: int,
         sample_pos: int,
         value: float,
-        curve: int = 0,
+        curve: AutomationCurveArg = ...,
     ) -> None: ...
     def process_stereo(
         self,

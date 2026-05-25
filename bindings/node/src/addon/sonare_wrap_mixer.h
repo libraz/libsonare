@@ -11,8 +11,11 @@ namespace sonare_node {
 ///
 /// Persistent stereo mixer built from a scene JSON string. Routes per-strip
 /// stereo blocks through the compiled routing graph and sums to a stereo
-/// master. The raw SonareStrip* handles are never exposed to JS; insert
-/// automation is scheduled by strip index. JS surface:
+/// master. The raw SonareStrip* handles are never exposed to JS; strips are
+/// addressed by 0-based index or by their string id (see ResolveStrip).
+/// Beyond compile/process/automation, the wrapper exposes per-strip solo,
+/// polarity, pan-law, channel-delay, VCA, dual-pan, sends, metering, and
+/// goniometer reads. JS surface (abbreviated):
 ///   const mixer = new sonare.Mixer(sceneJson, sampleRate, blockSize);
 ///   mixer.compile();
 ///   mixer.stripCount();  // number
@@ -39,6 +42,37 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value ScheduleInsertAutomation(const Napi::CallbackInfo& info);
   Napi::Value ToSceneJson(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
+
+  // Strip-targeted state setters.
+  Napi::Value SetSoloed(const Napi::CallbackInfo& info);
+  Napi::Value SetSoloSafe(const Napi::CallbackInfo& info);
+  Napi::Value SetPolarityInvert(const Napi::CallbackInfo& info);
+  Napi::Value SetPanLaw(const Napi::CallbackInfo& info);
+  Napi::Value SetChannelDelaySamples(const Napi::CallbackInfo& info);
+  Napi::Value SetVcaOffsetDb(const Napi::CallbackInfo& info);
+  Napi::Value SetDualPan(const Napi::CallbackInfo& info);
+
+  // Sends.
+  Napi::Value AddSend(const Napi::CallbackInfo& info);
+  Napi::Value SetSendDb(const Napi::CallbackInfo& info);
+
+  // Metering.
+  Napi::Value StripMeter(const Napi::CallbackInfo& info);
+  Napi::Value MeterTap(const Napi::CallbackInfo& info);
+  Napi::Value ReadGoniometerLatest(const Napi::CallbackInfo& info);
+
+  // Strip lookup.
+  Napi::Value StripById(const Napi::CallbackInfo& info);
+
+  // Strip-targeted automation.
+  Napi::Value ScheduleFaderAutomation(const Napi::CallbackInfo& info);
+  Napi::Value SchedulePanAutomation(const Napi::CallbackInfo& info);
+  Napi::Value ScheduleWidthAutomation(const Napi::CallbackInfo& info);
+  Napi::Value ScheduleSendAutomation(const Napi::CallbackInfo& info);
+
+  // Resolves a strip from a JS reference: a number (index) or a string (id).
+  // Throws a JS exception and returns nullptr on failure.
+  SonareStrip* ResolveStrip(const Napi::CallbackInfo& info, const Napi::Value& ref);
 
   SonareMixer* mixer_ = nullptr;
   int sample_rate_ = 48000;

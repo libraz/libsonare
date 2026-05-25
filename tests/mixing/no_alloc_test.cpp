@@ -11,6 +11,7 @@
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/spectrum_registry.h"
+#include "mastering/maximizer/true_peak_limiter.h"
 #include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
@@ -163,6 +164,28 @@ TEST_CASE("BusProcessor post-sum inserts perform no heap allocation after prepar
   AllocationGuard guard;
   bus.sum_inputs(inputs, output, 2, kBlock);
   bus.process(output, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("TruePeakLimiter process performs no heap allocation after prepare",
+          "[mastering][maximizer][rt]") {
+  constexpr int kBlock = 256;
+  sonare::mastering::maximizer::TruePeakLimiter limiter({-1.0f, 1.0f, 20.0f, 4});
+  limiter.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = i == 0 ? 1.2f : 0.25f;
+    right[static_cast<size_t>(i)] = i == 1 ? -1.1f : -0.2f;
+  }
+  float* channels[] = {left.data(), right.data()};
+
+  limiter.process(channels, 2, kBlock);
+  limiter.reset();
+
+  AllocationGuard guard;
+  limiter.process(channels, 2, kBlock);
   REQUIRE(guard.count() == 0);
 }
 

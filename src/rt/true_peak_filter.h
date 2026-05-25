@@ -21,6 +21,10 @@ class TruePeakFilter {
   void upsample_with_history(const float* const* input, float* const* output_oversampled,
                              int num_channels, int num_samples,
                              std::vector<std::vector<float>>& history) const;
+  void upsample_with_history(const float* const* input, float* const* output_oversampled,
+                             int num_channels, int num_samples,
+                             std::vector<std::vector<float>>& history,
+                             std::vector<std::vector<float>>& scratch) const;
 
   int factor() const noexcept { return factor_; }
   int latency_samples() const noexcept { return fir_.taps_per_phase / 2; }

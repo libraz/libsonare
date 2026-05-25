@@ -15,6 +15,10 @@ void PannerProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   left_.prepare(sample_rate_, smoothing_ms_);
   right_.prepare(sample_rate_, smoothing_ms_);
+  dual_ll_.prepare(sample_rate_, smoothing_ms_);
+  dual_lr_.prepare(sample_rate_, smoothing_ms_);
+  dual_rl_.prepare(sample_rate_, smoothing_ms_);
+  dual_rr_.prepare(sample_rate_, smoothing_ms_);
   reset();
 }
 
@@ -62,15 +66,23 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
         compute_pan_gains(dual_pan_left_.load(std::memory_order_relaxed), law);
     const PanGains right_gains =
         compute_pan_gains(dual_pan_right_.load(std::memory_order_relaxed), law);
-    // Keep the main smoothers advancing once per sample for mode switches while the
-    // dual-pan gains themselves are applied sample-accurately as a routing matrix.
+    dual_ll_.set_target(left_gains.left);
+    dual_lr_.set_target(left_gains.right);
+    dual_rl_.set_target(right_gains.left);
+    dual_rr_.set_target(right_gains.right);
+    // Apply the dual-pan gains sample-accurately as a smoothed routing matrix while
+    // keeping the main smoothers advancing once per sample for continuous mode switches.
     for (int i = 0; i < num_samples; ++i) {
       (void)left_.process();
       (void)right_.process();
+      const float ll = dual_ll_.process();
+      const float lr = dual_lr_.process();
+      const float rl = dual_rl_.process();
+      const float rr = dual_rr_.process();
       const float in_l = channels[0][i];
       const float in_r = channels[1][i];
-      channels[0][i] = in_l * left_gains.left + in_r * right_gains.left;
-      channels[1][i] = in_l * left_gains.right + in_r * right_gains.right;
+      channels[0][i] = in_l * ll + in_r * rl;
+      channels[1][i] = in_l * lr + in_r * rr;
     }
     return;
   }
@@ -86,6 +98,16 @@ void PannerProcessor::reset() {
                                            pan_law_.load(std::memory_order_relaxed));
   left_.reset(gains.left);
   right_.reset(gains.right);
+
+  const PanLaw law = pan_law_.load(std::memory_order_relaxed);
+  const PanGains left_gains =
+      compute_pan_gains(dual_pan_left_.load(std::memory_order_relaxed), law);
+  const PanGains right_gains =
+      compute_pan_gains(dual_pan_right_.load(std::memory_order_relaxed), law);
+  dual_ll_.reset(left_gains.left);
+  dual_lr_.reset(left_gains.right);
+  dual_rl_.reset(right_gains.left);
+  dual_rr_.reset(right_gains.right);
 }
 
 void PannerProcessor::set_pan(float pan) noexcept {
