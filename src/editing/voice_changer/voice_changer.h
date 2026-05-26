@@ -3,11 +3,11 @@
 /// @file voice_changer.h
 /// @brief Offline voice changer facade combining pitch and formant controls.
 
-#include "analysis/voice_changer/formant_warp.h"
 #include "core/audio.h"
+#include "editing/voice_changer/formant_warp.h"
 #include "effects/time_stretch.h"
 
-namespace sonare::analysis::voice_changer {
+namespace sonare::editing::voice_changer {
 
 struct VoiceChangerConfig {
   float pitch_semitones = 0.0f;
@@ -26,4 +26,4 @@ class VoiceChanger {
   VoiceChangerConfig config_{};
 };
 
-}  // namespace sonare::analysis::voice_changer
+}  // namespace sonare::editing::voice_changer

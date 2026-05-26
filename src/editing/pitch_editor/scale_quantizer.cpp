@@ -1,9 +1,9 @@
-#include "analysis/pitch_editor/scale_quantizer.h"
+#include "editing/pitch_editor/scale_quantizer.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {}
 
@@ -32,4 +32,4 @@ bool ScaleQuantizer::pitch_class_enabled(int pitch_class) const noexcept {
   return (config_.mode_mask & (1U << relative)) != 0;
 }
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

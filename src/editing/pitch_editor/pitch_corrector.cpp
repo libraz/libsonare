@@ -1,4 +1,4 @@
-#include "analysis/pitch_editor/pitch_corrector.h"
+#include "editing/pitch_editor/pitch_corrector.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 using constants::kA4Hz;
 using constants::kCentsPerSemitone;
@@ -347,4 +347,4 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   return Audio::from_vector(std::move(result), sr);
 }
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

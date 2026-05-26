@@ -442,11 +442,11 @@ endif()
 
 if(BUILD_PITCH_EDITOR)
   add_library(sonare_pitch_editor STATIC
-    analysis/pitch_editor/f0_provider.cpp
-    analysis/pitch_editor/note_editor.cpp
-    analysis/pitch_editor/note_segmenter.cpp
-    analysis/pitch_editor/pitch_corrector.cpp
-    analysis/pitch_editor/scale_quantizer.cpp
+    editing/pitch_editor/f0_provider.cpp
+    editing/pitch_editor/note_editor.cpp
+    editing/pitch_editor/note_segmenter.cpp
+    editing/pitch_editor/pitch_corrector.cpp
+    editing/pitch_editor/scale_quantizer.cpp
   )
   target_include_directories(sonare_pitch_editor PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -469,9 +469,9 @@ endif()
 
 if(BUILD_VOICE_CHANGER)
   add_library(sonare_voice_changer STATIC
-    analysis/voice_changer/formant_warp.cpp
-    analysis/voice_changer/streaming_retune.cpp
-    analysis/voice_changer/voice_changer.cpp
+    editing/voice_changer/formant_warp.cpp
+    editing/voice_changer/streaming_retune.cpp
+    editing/voice_changer/voice_changer.cpp
   )
   target_include_directories(sonare_voice_changer PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

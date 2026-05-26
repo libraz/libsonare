@@ -5,12 +5,12 @@
 
 #include <vector>
 
-#include "analysis/pitch_editor/f0_provider.h"
-#include "analysis/pitch_editor/scale_quantizer.h"
 #include "core/audio.h"
+#include "editing/pitch_editor/f0_provider.h"
+#include "editing/pitch_editor/scale_quantizer.h"
 #include "effects/time_stretch.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 struct PitchCorrectionConfig {
   ScaleQuantizerConfig scale{};
@@ -65,4 +65,4 @@ class PitchCorrector {
   PitchCorrectionConfig config_{};
 };
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

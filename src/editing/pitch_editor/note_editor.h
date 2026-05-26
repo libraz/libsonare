@@ -5,11 +5,11 @@
 
 #include <vector>
 
-#include "analysis/pitch_editor/note_segmenter.h"
 #include "core/audio.h"
+#include "editing/pitch_editor/note_segmenter.h"
 #include "effects/time_stretch.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 struct NoteEditorConfig {
   float fade_ms = 5.0f;
@@ -31,4 +31,4 @@ class NoteEditor {
   NoteEditorConfig config_{};
 };
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

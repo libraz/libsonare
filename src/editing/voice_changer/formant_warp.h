@@ -5,7 +5,7 @@
 
 #include "core/audio.h"
 
-namespace sonare::analysis::voice_changer {
+namespace sonare::editing::voice_changer {
 
 struct FormantWarpConfig {
   float factor = 1.0f;
@@ -24,4 +24,4 @@ class FormantWarp {
   FormantWarpConfig config_{};
 };
 
-}  // namespace sonare::analysis::voice_changer
+}  // namespace sonare::editing::voice_changer

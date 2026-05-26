@@ -1,4 +1,4 @@
-#include "analysis/voice_changer/streaming_retune.h"
+#include "editing/voice_changer/streaming_retune.h"
 
 #include <algorithm>
 #include <cmath>
@@ -6,7 +6,7 @@
 
 #include "util/constants.h"
 
-namespace sonare::analysis::voice_changer {
+namespace sonare::editing::voice_changer {
 
 using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kSpectrumEpsilon;
@@ -145,4 +145,4 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
   }
 }
 
-}  // namespace sonare::analysis::voice_changer
+}  // namespace sonare::editing::voice_changer

@@ -1,9 +1,9 @@
-#include "analysis/pitch_editor/note_segmenter.h"
+#include "editing/pitch_editor/note_segmenter.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 NoteSegmenter::NoteSegmenter(NoteSegmenterConfig config) : config_(config) {}
 
@@ -67,7 +67,7 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
 }
 
 float NoteSegmenter::hz_to_cents(float hz, float reference_hz) {
-  return 1200.0f * std::log2(hz / reference_hz);
+  return constants::kCentsPerOctave * std::log2(hz / reference_hz);
 }
 
 NoteRegion NoteSegmenter::make_region(const F0Track& track, int start, int end) const {
@@ -88,4 +88,4 @@ NoteRegion NoteSegmenter::make_region(const F0Track& track, int start, int end) 
   return {start * track.hop_length, end * track.hop_length, median, start, end};
 }
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

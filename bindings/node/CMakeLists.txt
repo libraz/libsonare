@@ -123,11 +123,11 @@ list(APPEND SONARE_SOURCES ${SONARE_MASTERING_SOURCES})
 # Pitch editing and voice changing power the editing-oriented effects
 # (pitchCorrectToMidi, noteStretch, voiceChange).
 file(GLOB_RECURSE SONARE_PITCH_EDITOR_SOURCES CONFIGURE_DEPENDS
-  ${SONARE_ROOT}/src/analysis/pitch_editor/*.cpp
+  ${SONARE_ROOT}/src/editing/pitch_editor/*.cpp
 )
 list(APPEND SONARE_SOURCES ${SONARE_PITCH_EDITOR_SOURCES})
 file(GLOB_RECURSE SONARE_VOICE_CHANGER_SOURCES CONFIGURE_DEPENDS
-  ${SONARE_ROOT}/src/analysis/voice_changer/*.cpp
+  ${SONARE_ROOT}/src/editing/voice_changer/*.cpp
 )
 list(APPEND SONARE_SOURCES ${SONARE_VOICE_CHANGER_SOURCES})
 file(GLOB_RECURSE SONARE_MIXING_SOURCES CONFIGURE_DEPENDS

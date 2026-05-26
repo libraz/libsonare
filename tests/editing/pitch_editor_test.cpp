@@ -1,4 +1,4 @@
-#include "analysis/pitch_editor/pitch_editor.h"
+#include "editing/pitch_editor/pitch_editor.h"
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -10,7 +10,7 @@
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
-using namespace sonare::analysis::pitch_editor;
+using namespace sonare::editing::pitch_editor;
 
 namespace {
 

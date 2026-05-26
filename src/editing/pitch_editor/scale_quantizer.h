@@ -5,12 +5,14 @@
 
 #include <cstdint>
 
-namespace sonare::analysis::pitch_editor {
+#include "util/constants.h"
+
+namespace sonare::editing::pitch_editor {
 
 struct ScaleQuantizerConfig {
   int root = 0;
   uint16_t mode_mask = 0b101010110101;  // major scale, C as bit 0
-  float reference_midi = 69.0f;
+  float reference_midi = constants::kMidiA4;
 };
 
 class ScaleQuantizer {
@@ -25,4 +27,4 @@ class ScaleQuantizer {
   ScaleQuantizerConfig config_{};
 };
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace sonare::analysis::voice_changer {
+namespace sonare::editing::voice_changer {
 
 struct StreamingRetuneConfig {
   float semitones = 0.0f;
@@ -60,4 +60,4 @@ class StreamingRetune {
   std::size_t synth_pos_ = 0;     ///< Current grain write position in OLA.
 };
 
-}  // namespace sonare::analysis::voice_changer
+}  // namespace sonare::editing::voice_changer

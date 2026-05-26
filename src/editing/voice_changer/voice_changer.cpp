@@ -1,11 +1,11 @@
-#include "analysis/voice_changer/voice_changer.h"
+#include "editing/voice_changer/voice_changer.h"
 
 #include <cmath>
 
 #include "effects/pitch_shift.h"
 #include "util/exception.h"
 
-namespace sonare::analysis::voice_changer {
+namespace sonare::editing::voice_changer {
 
 VoiceChanger::VoiceChanger(VoiceChangerConfig config) : config_(config) {}
 
@@ -24,4 +24,4 @@ Audio VoiceChanger::process(const Audio& audio) const {
   return warp.process(shifted);
 }
 
-}  // namespace sonare::analysis::voice_changer
+}  // namespace sonare::editing::voice_changer

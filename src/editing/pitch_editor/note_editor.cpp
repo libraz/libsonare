@@ -1,4 +1,4 @@
-#include "analysis/pitch_editor/note_editor.h"
+#include "editing/pitch_editor/note_editor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -7,7 +7,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 using sonare::constants::kPi;
 
@@ -94,4 +94,4 @@ NoteRegion NoteEditor::clamp_region(const Audio& audio, const NoteRegion& region
   return clipped;
 }
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

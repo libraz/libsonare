@@ -1,6 +1,6 @@
-#include "analysis/pitch_editor/f0_provider.h"
+#include "editing/pitch_editor/f0_provider.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 PyinF0Provider::PyinF0Provider(PitchConfig config) : config_(config) {}
 
@@ -15,4 +15,4 @@ F0Track PyinF0Provider::detect(const Audio& audio) {
   return track;
 }
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

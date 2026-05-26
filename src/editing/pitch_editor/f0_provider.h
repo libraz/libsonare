@@ -8,7 +8,7 @@
 #include "core/audio.h"
 #include "feature/pitch.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 struct F0Track {
   std::vector<float> f0_hz;
@@ -36,4 +36,4 @@ class PyinF0Provider final : public F0Provider {
   PitchConfig config_{};
 };
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

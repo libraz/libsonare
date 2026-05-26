@@ -5,9 +5,10 @@
 
 #include <vector>
 
-#include "analysis/pitch_editor/f0_provider.h"
+#include "editing/pitch_editor/f0_provider.h"
+#include "util/constants.h"
 
-namespace sonare::analysis::pitch_editor {
+namespace sonare::editing::pitch_editor {
 
 struct NoteRegion {
   int onset_sample = 0;
@@ -20,7 +21,7 @@ struct NoteRegion {
 struct NoteSegmenterConfig {
   float segmentation_threshold_cents = 50.0f;
   float min_note_ms = 30.0f;
-  float reference_hz = 440.0f;
+  float reference_hz = constants::kA4Hz;
 };
 
 class NoteSegmenter {
@@ -35,4 +36,4 @@ class NoteSegmenter {
   NoteSegmenterConfig config_{};
 };
 
-}  // namespace sonare::analysis::pitch_editor
+}  // namespace sonare::editing::pitch_editor

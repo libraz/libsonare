@@ -5,13 +5,13 @@
 #include <complex>
 #include <vector>
 
-#include "analysis/voice_changer/voice_changer_core.h"
 #include "core/audio.h"
 #include "core/fft.h"
+#include "editing/voice_changer/voice_changer_core.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinRel;
-using namespace sonare::analysis::voice_changer;
+using namespace sonare::editing::voice_changer;
 
 namespace {
 
