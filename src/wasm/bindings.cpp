@@ -22,15 +22,13 @@
 #include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/key_analyzer.h"
+#include "analysis/melody_analyzer.h"
 #include "analysis/meter/lufs.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
-#include "analysis/pitch_editor/note_editor.h"
-#include "analysis/pitch_editor/pitch_corrector.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
-#include "analysis/voice_changer/voice_changer.h"
 #include "automation/parameter.h"
 #include "core/audio.h"
 #include "core/convert.h"
@@ -38,6 +36,9 @@
 #include "core/pcen.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
+#include "editing/pitch_editor/note_editor.h"
+#include "editing/pitch_editor/pitch_corrector.h"
+#include "editing/voice_changer/voice_changer.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
@@ -46,6 +47,7 @@
 #include "effects/time_stretch.h"
 #include "engine/realtime_engine.h"
 #include "feature/chroma.h"
+#include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/nnls_chroma.h"
 #include "feature/onset.h"
@@ -53,6 +55,7 @@
 #include "feature/rhythm.h"
 #include "feature/spectral.h"
 #include "feature/tonnetz.h"
+#include "feature/vqt.h"
 #include "graph/graph.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
@@ -615,11 +618,11 @@ val js_pitch_shift(val samples, int sample_rate, float semitones) {
 val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, float target_midi) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  analysis::pitch_editor::PitchCorrector corrector;
-  analysis::pitch_editor::F0Track track;
+  editing::pitch_editor::PitchCorrector corrector;
+  editing::pitch_editor::F0Track track;
   track.sample_rate = sample_rate;
   track.hop_length = 512;
-  track.f0_hz = {analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
   track.voiced = {true};
   track.voiced_prob = {1.0f};
   Audio result = corrector.correct_to_midi(audio, track, target_midi);
@@ -631,10 +634,10 @@ val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_s
                     float stretch_ratio) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  analysis::pitch_editor::NoteRegion region;
+  editing::pitch_editor::NoteRegion region;
   region.onset_sample = onset_sample;
   region.offset_sample = offset_sample;
-  analysis::pitch_editor::NoteEditor editor;
+  editing::pitch_editor::NoteEditor editor;
   Audio result = editor.stretch_note(audio, region, stretch_ratio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -643,10 +646,10 @@ val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_s
 val js_voice_change(val samples, int sample_rate, float pitch_semitones, float formant_factor) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  analysis::voice_changer::VoiceChangerConfig config;
+  editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
-  analysis::voice_changer::VoiceChanger changer(config);
+  editing::voice_changer::VoiceChanger changer(config);
   Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -1176,6 +1179,41 @@ class EqualizerWrapper {
 
   void setOutputPan(float pan) { processor_.set_output_pan(pan); }
 
+  // Borrows a mono external sidechain key for dynamic bands that opt into
+  // DynamicParams::external_sidechain. The samples are copied into an owned
+  // buffer so they remain valid until the next set/clear call.
+  void setSidechainMono(val samples) {
+    sidechain_left_ = float32ArrayToVector(samples);
+    sidechain_right_.clear();
+    if (sidechain_left_.empty()) {
+      processor_.clear_sidechain();
+      return;
+    }
+    const float* channels[] = {sidechain_left_.data()};
+    processor_.set_sidechain(channels, 1, static_cast<int>(sidechain_left_.size()));
+  }
+
+  // Borrows a stereo external sidechain key. Both channels must match in length.
+  void setSidechainStereo(val left_samples, val right_samples) {
+    sidechain_left_ = float32ArrayToVector(left_samples);
+    sidechain_right_ = float32ArrayToVector(right_samples);
+    if (sidechain_left_.size() != sidechain_right_.size()) {
+      throw std::invalid_argument("sidechain channel lengths must match");
+    }
+    if (sidechain_left_.empty()) {
+      processor_.clear_sidechain();
+      return;
+    }
+    const float* channels[] = {sidechain_left_.data(), sidechain_right_.data()};
+    processor_.set_sidechain(channels, 2, static_cast<int>(sidechain_left_.size()));
+  }
+
+  void clearSidechain() {
+    processor_.clear_sidechain();
+    sidechain_left_.clear();
+    sidechain_right_.clear();
+  }
+
   float lastAutoGainDb() const { return processor_.last_auto_gain_db(); }
 
   int latencySamples() const { return processor_.latency_samples(); }
@@ -1257,6 +1295,8 @@ class EqualizerWrapper {
   }
 
   mastering::eq::EqualizerProcessor processor_;
+  std::vector<float> sidechain_left_;
+  std::vector<float> sidechain_right_;
 };
 
 EqualizerWrapper* createEqualizer(val config) { return new EqualizerWrapper(config); }
@@ -1585,19 +1625,92 @@ class MixerWasm {
     return out;
   }
 
-  // Resolves a strip's index from its id. Throws if the id is not found.
-  unsigned int stripById(std::string id) {
+  // Resolves a strip's index from its id. Returns -1 when the id is not found;
+  // the TS wrapper maps -1 to null for cross-binding consistency (Node returns
+  // number | null).
+  int stripById(std::string id) {
     const size_t count = sonare_mixer_strip_count(mixer_);
     SonareStrip* target = sonare_mixer_strip_by_id(mixer_, id.c_str());
     if (target == nullptr) {
-      throw std::runtime_error(std::string("mixer strip id not found: ") + id);
+      return -1;
     }
     for (size_t index = 0; index < count; ++index) {
       if (sonare_mixer_strip_at(mixer_, index) == target) {
-        return static_cast<unsigned int>(index);
+        return static_cast<int>(index);
       }
     }
-    throw std::runtime_error(std::string("mixer strip id not found: ") + id);
+    return -1;
+  }
+
+  // Adds a bus to the mixer topology. role is one of "master", "aux", "submix"
+  // (empty defaults to "aux"). Marks the routing graph dirty; call compile (or
+  // process) to rebuild.
+  void addBus(std::string id, std::string role) {
+    SonareError err =
+        sonare_mixer_add_bus(mixer_, id.c_str(), role.empty() ? nullptr : role.c_str());
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to add bus: ") + sonare_error_message(err));
+    }
+  }
+
+  void removeBus(std::string id) {
+    SonareError err = sonare_mixer_remove_bus(mixer_, id.c_str());
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to remove bus: ") + sonare_error_message(err));
+    }
+  }
+
+  size_t busCount() const {
+    size_t count = 0;
+    SonareError err = sonare_mixer_bus_count(mixer_, &count);
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to read bus count: ") +
+                               sonare_error_message(err));
+    }
+    return count;
+  }
+
+  // Adds a VCA group with the given gain offset. members is an array of strip-id
+  // strings (may be empty).
+  void addVcaGroup(std::string id, float gain_db, val members) {
+    std::vector<std::string> member_storage;
+    std::vector<const char*> member_ptrs;
+    if (!members.isUndefined() && !members.isNull()) {
+      const int count = members["length"].as<int>();
+      member_storage.reserve(static_cast<size_t>(count));
+      member_ptrs.reserve(static_cast<size_t>(count));
+      for (int i = 0; i < count; ++i) {
+        member_storage.push_back(members[i].as<std::string>());
+      }
+      for (const auto& member : member_storage) {
+        member_ptrs.push_back(member.c_str());
+      }
+    }
+    SonareError err = sonare_mixer_add_vca_group(mixer_, id.c_str(), gain_db,
+                                                 member_ptrs.empty() ? nullptr : member_ptrs.data(),
+                                                 member_ptrs.size());
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to add VCA group: ") +
+                               sonare_error_message(err));
+    }
+  }
+
+  void removeVcaGroup(std::string id) {
+    SonareError err = sonare_mixer_remove_vca_group(mixer_, id.c_str());
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to remove VCA group: ") +
+                               sonare_error_message(err));
+    }
+  }
+
+  size_t vcaGroupCount() const {
+    size_t count = 0;
+    SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
+    if (err != SONARE_OK) {
+      throw std::runtime_error(std::string("failed to read VCA group count: ") +
+                               sonare_error_message(err));
+    }
+    return count;
   }
 
   std::string toSceneJson() const {
@@ -2166,6 +2279,122 @@ val js_nnls_chroma(val samples, int sample_rate) {
   std::vector<float> data_vec(chroma.data(), chroma.data() + chroma.n_chroma() * chroma.n_frames());
   out.set("data", vectorToFloat32Array(data_vec));
   return out;
+}
+
+// ============================================================================
+// Analysis - Sections / Melody
+// ============================================================================
+
+// Mirrors sonare_analyze_sections / SonareSectionResult and the Node/Python
+// analyzeSections: detects song-structure sections and returns an array of
+// { type, name, start, end, energyLevel, confidence }.
+val js_analyze_sections(val samples, int sample_rate, int n_fft, int hop_length,
+                        float min_section_sec) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  SectionConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.min_section_sec = min_section_sec;
+
+  SectionAnalyzer analyzer(audio, config);
+
+  val sections = val::array();
+  for (const Section& section : analyzer.sections()) {
+    val item = val::object();
+    item.set("type", static_cast<int>(section.type));
+    item.set("name", section.type_string());
+    item.set("start", section.start);
+    item.set("end", section.end);
+    item.set("energyLevel", section.energy_level);
+    item.set("confidence", section.confidence);
+    sections.call<void>("push", item);
+  }
+  return sections;
+}
+
+// Mirrors sonare_analyze_melody / SonareMelodyResult: extracts the melody
+// contour via YIN and returns { points: [{ time, frequency, confidence }],
+// pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
+val js_analyze_melody(val samples, int sample_rate, float fmin, float fmax, int frame_length,
+                      int hop_length, float threshold) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  MelodyConfig config;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.threshold = threshold;
+
+  MelodyAnalyzer analyzer(audio, config);
+  const MelodyContour& contour = analyzer.contour();
+
+  val points = val::array();
+  for (const PitchPoint& point : contour.pitches) {
+    val item = val::object();
+    item.set("time", point.time);
+    item.set("frequency", point.frequency);
+    item.set("confidence", point.confidence);
+    points.call<void>("push", item);
+  }
+
+  val out = val::object();
+  out.set("points", points);
+  out.set("pitchRangeOctaves", contour.pitch_range_octaves);
+  out.set("pitchStability", contour.pitch_stability);
+  out.set("meanFrequency", contour.mean_frequency);
+  out.set("vibratoRate", contour.vibrato_rate);
+  return out;
+}
+
+// ============================================================================
+// Features - Constant-Q / Variable-Q transforms
+// ============================================================================
+
+// Shared serializer for CQT/VQT magnitude results, mirroring SonareCqtResult:
+// { nBins, nFrames, hopLength, sampleRate, magnitude (nBins*nFrames row-major),
+// frequencies (nBins) }.
+val cqtResultToVal(const CqtResult& result) {
+  val out = val::object();
+  out.set("nBins", result.n_bins());
+  out.set("nFrames", result.n_frames());
+  out.set("hopLength", result.hop_length());
+  out.set("sampleRate", result.sample_rate());
+  out.set("magnitude", vectorToFloat32Array(result.magnitude()));
+  out.set("frequencies", vectorToFloat32Array(result.frequencies()));
+  return out;
+}
+
+val js_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
+           int bins_per_octave) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+
+  return cqtResultToVal(cqt(audio, config));
+}
+
+val js_vqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
+           int bins_per_octave, float gamma) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  VqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  config.gamma = gamma;
+
+  return cqtResultToVal(vqt(audio, config));
 }
 
 // ============================================================================
@@ -2860,12 +3089,16 @@ std::unique_ptr<rt::ProcessorBase> makeWasmGraphProcessor(val node) {
 
 class RealtimeEngineWasm {
  public:
-  RealtimeEngineWasm(double sample_rate, int max_block_size) {
-    engine_.prepare(sample_rate, max_block_size, 1024, 1024);
+  RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
+                     int telemetry_capacity) {
+    engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),
+                    capacity(telemetry_capacity));
   }
 
-  void prepare(double sample_rate, int max_block_size) {
-    engine_.prepare(sample_rate, max_block_size, 1024, 1024);
+  void prepare(double sample_rate, int max_block_size, int command_capacity,
+               int telemetry_capacity) {
+    engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),
+                    capacity(telemetry_capacity));
   }
 
   void play(int64_t render_frame) {
@@ -2900,7 +3133,10 @@ class RealtimeEngineWasm {
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kTransportSeekPpq;
     command.sample_time = render_frame;
-    command.arg.f = static_cast<float>(ppq);
+    // Engine reads the PPQ scalar from the full-precision double slot
+    // (kTransportSeekPpq -> transport_.seek_ppq(command.arg.d)); writing the
+    // float slot of the union would surface as garbage. Match the C API.
+    command.arg.d = ppq;
     if (!engine_.push_command(command)) {
       throw std::runtime_error("failed to queue seek command");
     }
@@ -3017,10 +3253,54 @@ class RealtimeEngineWasm {
     return markerToVal(marker);
   }
 
-  void seekMarker(int id) {
-    if (!engine_.seek_marker(static_cast<uint32_t>(id))) {
-      throw std::invalid_argument("unknown marker id");
+  void seekMarker(int id, int64_t render_frame) {
+    // Mirror the C API (sonare_engine_seek_marker): a sample-accurate seek is
+    // queued as a kSeekMarker command so it lands at the requested render frame
+    // instead of mutating transport state immediately.
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSeekMarker;
+    command.target_id = static_cast<uint32_t>(id);
+    command.sample_time = render_frame;
+    if (!engine_.push_command(command)) {
+      throw std::runtime_error("failed to queue seek marker command");
     }
+  }
+
+  void setParameter(int param_id, float value, int64_t render_frame) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSetParam;
+    command.target_id = static_cast<uint32_t>(param_id);
+    command.sample_time = render_frame;
+    command.arg.f = value;
+    if (!engine_.push_command(command)) {
+      throw std::runtime_error("failed to queue set parameter command");
+    }
+  }
+
+  void setParameterSmoothed(int param_id, float value, int64_t render_frame) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSetParamSmoothed;
+    command.target_id = static_cast<uint32_t>(param_id);
+    command.sample_time = render_frame;
+    command.arg.f = value;
+    if (!engine_.push_command(command)) {
+      throw std::runtime_error("failed to queue set parameter command");
+    }
+  }
+
+  val getTransportState() const {
+    const sonare::transport::TransportState state = engine_.transport().snapshot();
+    val out = val::object();
+    out.set("playing", state.playing);
+    out.set("looping", state.looping);
+    out.set("renderFrame", static_cast<double>(state.render_frame));
+    out.set("samplePosition", static_cast<double>(state.sample_position));
+    out.set("ppq", state.ppq_position);
+    out.set("bpm", state.bpm);
+    out.set("loopStartPpq", state.loop_start_ppq);
+    out.set("loopEndPpq", state.loop_end_ppq);
+    out.set("sampleRate", state.sample_rate);
+    return out;
   }
 
   void setLoopFromMarkers(int start_marker_id, int end_marker_id) {
@@ -3405,6 +3685,12 @@ class RealtimeEngineWasm {
   }
 
  private:
+  // Maps a JS-supplied queue depth to the engine's size_t capacity. A value <= 0
+  // selects the engine default (1024), matching the Node/Python bindings.
+  static size_t capacity(int requested) {
+    return requested > 0 ? static_cast<size_t>(requested) : 1024;
+  }
+
   struct ChannelBlock {
     std::vector<std::vector<float>> storage;
     std::vector<float*> pointers;
@@ -3642,6 +3928,12 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("scheduleWidthAutomation", &MixerWasm::scheduleWidthAutomation)
       .function("scheduleSendAutomation", &MixerWasm::scheduleSendAutomation)
       .function("readGoniometerLatest", &MixerWasm::readGoniometerLatest)
+      .function("addBus", &MixerWasm::addBus)
+      .function("removeBus", &MixerWasm::removeBus)
+      .function("busCount", &MixerWasm::busCount)
+      .function("addVcaGroup", &MixerWasm::addVcaGroup)
+      .function("removeVcaGroup", &MixerWasm::removeVcaGroup)
+      .function("vcaGroupCount", &MixerWasm::vcaGroupCount)
       .function("toSceneJson", &MixerWasm::toSceneJson);
   function("createMixerFromSceneJson", &createMixerFromSceneJson, allow_raw_pointers());
   function("mixerPresetJson", &js_mixer_preset_json);
@@ -3649,8 +3941,11 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("trim", &js_trim);
 
   class_<RealtimeEngineWasm>("RealtimeEngine")
-      .constructor<double, int>()
+      .constructor<double, int, int, int>()
       .function("prepare", &RealtimeEngineWasm::prepare)
+      .function("setParameter", &RealtimeEngineWasm::setParameter)
+      .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
+      .function("getTransportState", &RealtimeEngineWasm::getTransportState)
       .function("play", &RealtimeEngineWasm::play)
       .function("stop", &RealtimeEngineWasm::stop)
       .function("seekSample", &RealtimeEngineWasm::seekSample)
@@ -3702,6 +3997,14 @@ EMSCRIPTEN_BINDINGS(sonare) {
   // Features - Chroma
   function("chroma", &js_chroma);
   function("nnlsChroma", &js_nnls_chroma);
+
+  // Features - Constant-Q / Variable-Q
+  function("cqt", &js_cqt);
+  function("vqt", &js_vqt);
+
+  // Analysis - Sections / Melody
+  function("analyzeSections", &js_analyze_sections);
+  function("analyzeMelody", &js_analyze_melody);
 
   // Features - Spectral
   function("spectralCentroid", &js_spectral_centroid);
@@ -3776,6 +4079,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("setGainScale", &EqualizerWrapper::setGainScale)
       .function("setOutputGainDb", &EqualizerWrapper::setOutputGainDb)
       .function("setOutputPan", &EqualizerWrapper::setOutputPan)
+      .function("setSidechainMono", &EqualizerWrapper::setSidechainMono)
+      .function("setSidechainStereo", &EqualizerWrapper::setSidechainStereo)
+      .function("clearSidechain", &EqualizerWrapper::clearSidechain)
       .function("lastAutoGainDb", &EqualizerWrapper::lastAutoGainDb)
       .function("latencySamples", &EqualizerWrapper::latencySamples)
       .function("processMono", &EqualizerWrapper::processMono)

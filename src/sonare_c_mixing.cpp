@@ -815,6 +815,129 @@ size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
   return mixer->strips.size();
 }
 
+SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_count) {
+  if (!mixer || !out_count) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_count = mixer->strips.size();
+  return SONARE_OK;
+}
+
+SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char* role) {
+  if (!mixer || !id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string bus_id = id;
+  for (const auto& bus : mixer->buses) {
+    if (bus.id == bus_id) {
+      return SONARE_ERROR_INVALID_PARAMETER;  // duplicate bus id
+    }
+  }
+  mixer->buses.emplace_back(bus_id, role != nullptr ? std::string(role) : std::string("aux"));
+  mixer->compiled_dirty = true;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
+  if (!mixer || !id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string bus_id = id;
+  const auto before = mixer->buses.size();
+  mixer->buses.erase(
+      std::remove_if(mixer->buses.begin(), mixer->buses.end(),
+                     [&](const sonare::mixing::api::Bus& bus) { return bus.id == bus_id; }),
+      mixer->buses.end());
+  if (mixer->buses.size() == before) {
+    return SONARE_ERROR_INVALID_PARAMETER;  // no such bus
+  }
+  mixer->compiled_dirty = true;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) {
+  if (!mixer || !out_count) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_count = mixer->buses.size();
+  return SONARE_OK;
+}
+
+SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
+                                       const char* const* members, size_t member_count) {
+  if (!mixer || !id || (member_count > 0 && !members)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string group_id = id;
+  for (const auto& group : mixer->vca_groups) {
+    if (group.id == group_id) {
+      return SONARE_ERROR_INVALID_PARAMETER;  // duplicate group id
+    }
+  }
+  sonare::mixing::api::VcaGroup group;
+  group.id = group_id;
+  group.gain_db = gain_db;
+  group.members.reserve(member_count);
+  for (size_t i = 0; i < member_count; ++i) {
+    if (!members[i]) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    group.members.emplace_back(members[i]);
+  }
+  // Apply the group's gain offset to the live ChannelStrip of each member, the
+  // same control-only path scene load uses (last group touching a strip wins).
+  for (const auto& member : group.members) {
+    for (const auto& strip : mixer->strips) {
+      if (strip->id == member) {
+        strip->strip.set_vca_offset_db(gain_db);
+        break;
+      }
+    }
+  }
+  mixer->vca_groups.push_back(std::move(group));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
+  if (!mixer || !id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string group_id = id;
+  const auto it =
+      std::find_if(mixer->vca_groups.begin(), mixer->vca_groups.end(),
+                   [&](const sonare::mixing::api::VcaGroup& g) { return g.id == group_id; });
+  if (it == mixer->vca_groups.end()) {
+    return SONARE_ERROR_INVALID_PARAMETER;  // no such group
+  }
+  // Clear the live gain offset on the removed group's members.
+  for (const auto& member : it->members) {
+    for (const auto& strip : mixer->strips) {
+      if (strip->id == member) {
+        strip->strip.set_vca_offset_db(0.0f);
+        break;
+      }
+    }
+  }
+  mixer->vca_groups.erase(it);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count) {
+  if (!mixer || !out_count) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_count = mixer->vca_groups.size();
+  return SONARE_OK;
+}
+
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index) {
   if (!mixer || index >= mixer->strips.size()) {
     return nullptr;

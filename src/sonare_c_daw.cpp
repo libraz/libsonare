@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <deque>
 #include <memory>
 #include <string>
 #include <utility>
@@ -9,11 +8,11 @@
 
 #include "analysis/meter/lufs.h"
 #if defined(SONARE_WITH_PITCH_EDITOR)
-#include "analysis/pitch_editor/note_editor.h"
-#include "analysis/pitch_editor/pitch_corrector.h"
+#include "editing/pitch_editor/note_editor.h"
+#include "editing/pitch_editor/pitch_corrector.h"
 #endif
 #if defined(SONARE_WITH_VOICE_CHANGER)
-#include "analysis/voice_changer/voice_changer.h"
+#include "editing/voice_changer/voice_changer.h"
 #endif
 #include "automation/parameter.h"
 #include "core/audio.h"
@@ -93,14 +92,6 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
 
 }  // namespace
 #endif
-
-struct SonareRealtimeEngine {
-  engine::RealtimeEngine engine;
-  automation::ParameterRegistry parameters;
-  std::deque<std::string> parameter_strings;
-  std::deque<std::string> marker_strings;
-  std::vector<automation::AutomationLane> automation_lanes;
-};
 
 namespace {
 
@@ -208,7 +199,7 @@ engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& conf
   out.beat_gain = config.beat_gain;
   out.accent_gain = config.accent_gain;
   // The C ABI exposes only an explicit sample count; a positive value overrides
-  // the sample-rate-derived click_seconds default.
+  // the sample-rate-derived click_seconds default, while 0 selects that default.
   out.click_samples = config.click_samples;
   return out;
 }
@@ -225,11 +216,11 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  analysis::pitch_editor::PitchCorrector corrector;
-  analysis::pitch_editor::F0Track track;
+  editing::pitch_editor::PitchCorrector corrector;
+  editing::pitch_editor::F0Track track;
   track.sample_rate = sample_rate;
   track.hop_length = 512;
-  track.f0_hz = {analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
   track.voiced = {true};
   track.voiced_prob = {1.0f};
   Audio result = corrector.correct_to_midi(audio, track, target_midi);
@@ -243,7 +234,7 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
   (void)target_midi;
   (void)out;
   (void)out_length;
-  return SONARE_ERROR_UNKNOWN;
+  return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
 
@@ -300,7 +291,7 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekPpq;
   command.sample_time = render_frame;
-  command.arg.f = static_cast<float>(ppq);
+  command.arg.d = ppq;  // full double precision; engine applies without truncation
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
@@ -475,8 +466,11 @@ SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
                                         const SonareEngineMetronomeConfig* config) {
+  // click_samples == 0 is the documented "use the sample-rate-derived default"
+  // sentinel (the engine derives it from click_seconds and the sample rate).
+  // Only a negative explicit length is invalid.
   if (!engine || !config || config->beat_gain < 0.0f || config->accent_gain < 0.0f ||
-      config->click_samples <= 0) {
+      config->click_samples < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   engine->engine.set_metronome_config(metronome_from_c(*config));
@@ -654,7 +648,7 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return SONARE_ERROR_UNKNOWN;
+  return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
 
@@ -820,6 +814,77 @@ SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEn
   return SONARE_OK;
 }
 
+SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
+                                                SonareMeterTelemetryRecord* out, size_t max_records,
+                                                size_t* out_count) {
+  if (!engine || !out_count || (max_records > 0 && !out)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  size_t count = 0;
+  engine::MeterTelemetryRecord record{};
+  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
+    out[count].target_id = record.target_id;
+    out[count].render_frame = record.render_frame;
+    out[count].seq = record.seq;
+    out[count].peak_db_l = record.peak_db[0];
+    out[count].peak_db_r = record.peak_db[1];
+    out[count].rms_db_l = record.rms_db[0];
+    out[count].rms_db_r = record.rms_db[1];
+    out[count].true_peak_db_l = record.true_peak_db[0];
+    out[count].true_peak_db_r = record.true_peak_db[1];
+    out[count].max_true_peak_db = record.max_true_peak_db;
+    out[count].correlation = record.correlation;
+    out[count].mono_compat_width = record.mono_compat_width;
+    out[count].momentary_lufs = record.momentary_lufs;
+    out[count].short_term_lufs = record.short_term_lufs;
+    out[count].integrated_lufs = record.integrated_lufs;
+    out[count].gain_reduction_db = record.gain_reduction_db;
+    out[count].dropped_records = record.dropped_records;
+    ++count;
+  }
+  *out_count = count;
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t param_id,
+                                        float value, int64_t render_frame) {
+  if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
+  rt::Command command{};
+  command.type = rt::CommandType::kSetParam;
+  command.target_id = param_id;
+  command.sample_time = render_frame;
+  command.arg.f = value;
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+}
+
+SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
+                                                 float value, int64_t render_frame) {
+  if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
+  rt::Command command{};
+  command.type = rt::CommandType::kSetParamSmoothed;
+  command.target_id = param_id;
+  command.sample_time = render_frame;
+  command.arg.f = value;
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+}
+
+SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
+                                              SonareTransportState* out) {
+  if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  const transport::TransportState state = engine->engine.transport().snapshot();
+  out->playing = state.playing ? 1 : 0;
+  out->looping = state.looping ? 1 : 0;
+  out->render_frame = state.render_frame;
+  out->sample_position = state.sample_position;
+  out->ppq_position = state.ppq_position;
+  out->bpm = state.bpm;
+  out->loop_start_ppq = state.loop_start_ppq;
+  out->loop_end_ppq = state.loop_end_ppq;
+  out->sample_rate = state.sample_rate;
+  return SONARE_OK;
+}
+
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {
@@ -830,10 +895,10 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
 
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  analysis::pitch_editor::NoteRegion region;
+  editing::pitch_editor::NoteRegion region;
   region.onset_sample = onset_sample;
   region.offset_sample = offset_sample;
-  analysis::pitch_editor::NoteEditor editor;
+  editing::pitch_editor::NoteEditor editor;
   Audio result = editor.stretch_note(audio, region, stretch_ratio);
   return copy_audio_result(result, out, out_length);
   SONARE_C_CATCH
@@ -846,7 +911,7 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
   (void)stretch_ratio;
   (void)out;
   (void)out_length;
-  return SONARE_ERROR_UNKNOWN;
+  return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
 
@@ -860,10 +925,10 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  analysis::voice_changer::VoiceChangerConfig config;
+  editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
-  analysis::voice_changer::VoiceChanger changer(config);
+  editing::voice_changer::VoiceChanger changer(config);
   Audio result = changer.process(audio);
   return copy_audio_result(result, out, out_length);
   SONARE_C_CATCH
@@ -875,6 +940,6 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
   (void)formant_factor;
   (void)out;
   (void)out_length;
-  return SONARE_ERROR_UNKNOWN;
+  return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }

@@ -15,9 +15,11 @@
 #include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/key_analyzer.h"
+#include "analysis/melody_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "analysis/rhythm_analyzer.h"
+#include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
 #include "core/convert.h"
@@ -27,9 +29,11 @@
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
 #include "feature/chroma.h"
+#include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "feature/vqt.h"
 #include "quick.h"
 #include "sonare.h"
 #include "sonare_c_internal.h"
@@ -912,5 +916,155 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   std::vector<Chord> chords = detect_chords(audio, config);
   fill_chord_result(chords, out);
   return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
+                                    int hop_length, float min_section_sec,
+                                    SonareSectionResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (n_fft <= 0 || hop_length <= 0 || min_section_sec < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  out->sections = nullptr;
+  out->section_count = 0;
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  SectionConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.min_section_sec = min_section_sec;
+  SectionAnalyzer analyzer(audio, config);
+  const std::vector<Section>& sections = analyzer.sections();
+  if (!sections.empty()) {
+    auto data = std::make_unique<SonareSection[]>(sections.size());
+    for (size_t i = 0; i < sections.size(); ++i) {
+      data[i].type = static_cast<SonareSectionType>(sections[i].type);
+      data[i].start = sections[i].start;
+      data[i].end = sections[i].end;
+      data[i].energy_level = sections[i].energy_level;
+      data[i].confidence = sections[i].confidence;
+    }
+    out->sections = release_array(data);
+    out->section_count = sections.size();
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
+                                  float fmax, int frame_length, int hop_length, float threshold,
+                                  SonareMelodyResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (fmin <= 0.0f || fmax <= fmin || frame_length <= 0 || hop_length <= 0 || threshold <= 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  *out = {};
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  MelodyConfig config;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.threshold = threshold;
+  MelodyAnalyzer analyzer(audio, config);
+  const MelodyContour& contour = analyzer.contour();
+  out->pitch_range_octaves = contour.pitch_range_octaves;
+  out->pitch_stability = contour.pitch_stability;
+  out->mean_frequency = contour.mean_frequency;
+  out->vibrato_rate = contour.vibrato_rate;
+  if (!contour.pitches.empty()) {
+    auto data = std::make_unique<SonareMelodyPoint[]>(contour.pitches.size());
+    for (size_t i = 0; i < contour.pitches.size(); ++i) {
+      data[i].time = contour.pitches[i].time;
+      data[i].frequency = contour.pitches[i].frequency;
+      data[i].confidence = contour.pitches[i].confidence;
+    }
+    out->points = release_array(data);
+    out->point_count = contour.pitches.size();
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+namespace {
+
+SonareError fill_cqt_result(const CqtResult& result, SonareCqtResult* out) {
+  *out = {};
+  out->n_bins = result.n_bins();
+  out->n_frames = result.n_frames();
+  out->hop_length = result.hop_length();
+  out->sample_rate = result.sample_rate();
+  const std::vector<float>& magnitude = result.magnitude();
+  if (!magnitude.empty()) {
+    auto mag = std::make_unique<float[]>(magnitude.size());
+    std::copy(magnitude.begin(), magnitude.end(), mag.get());
+    out->magnitude = mag.release();
+  }
+  const std::vector<float>& freqs = result.frequencies();
+  if (!freqs.empty()) {
+    auto fr = std::make_unique<float[]>(freqs.size());
+    std::copy(freqs.begin(), freqs.end(), fr.get());
+    out->frequencies = fr.release();
+  }
+  return SONARE_OK;
+}
+
+}  // namespace
+
+SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                       float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  *out = {};
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  CqtResult result = cqt(audio, config);
+  return fill_cqt_result(result, out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                       float fmin, int n_bins, int bins_per_octave, float gamma,
+                       SonareCqtResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0 || gamma < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  *out = {};
+
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  VqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  config.gamma = gamma;
+  VqtResult result = vqt(audio, config);
+  return fill_cqt_result(result, out);
   SONARE_C_CATCH
 }

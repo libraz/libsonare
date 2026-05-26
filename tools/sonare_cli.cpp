@@ -23,12 +23,12 @@
 #include "analysis/melody_analyzer.h"
 #include "analysis/meter/lufs.h"
 #include "analysis/music_analyzer.h"
-#include "analysis/pitch_editor/note_editor.h"
-#include "analysis/pitch_editor/pitch_corrector.h"
+#include "editing/pitch_editor/note_editor.h"
+#include "editing/pitch_editor/pitch_corrector.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
-#include "analysis/voice_changer/voice_changer.h"
+#include "editing/voice_changer/voice_changer.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
 #include "core/convert.h"
@@ -1144,11 +1144,11 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
 
   const float current_midi = args.get_float("current-midi", 69.0f);
   const float target_midi = args.get_float("target-midi", 69.0f);
-  analysis::pitch_editor::PitchCorrector corrector;
-  analysis::pitch_editor::F0Track track;
+  editing::pitch_editor::PitchCorrector corrector;
+  editing::pitch_editor::F0Track track;
   track.sample_rate = audio.sample_rate();
   track.hop_length = args.hop_length;
-  track.f0_hz = {analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
   track.voiced = {true};
   track.voiced_prob = {1.0f};
 
@@ -1182,12 +1182,12 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
     return 1;
   }
 
-  analysis::pitch_editor::NoteRegion region;
+  editing::pitch_editor::NoteRegion region;
   region.onset_sample = args.get_int("onset", 0);
   region.offset_sample = args.get_int("offset", 0);
   const float ratio = args.get_float("ratio", 1.0f);
 
-  analysis::pitch_editor::NoteEditor editor;
+  editing::pitch_editor::NoteEditor editor;
   Audio result = editor.stretch_note(audio, region, ratio);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
@@ -1214,10 +1214,10 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     return 1;
   }
 
-  analysis::voice_changer::VoiceChangerConfig config;
+  editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = args.get_float("pitch-semitones", 0.0f);
   config.formant_factor = args.get_float("formant-factor", 1.0f);
-  analysis::voice_changer::VoiceChanger changer(config);
+  editing::voice_changer::VoiceChanger changer(config);
   Audio result = changer.process(audio);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 

@@ -19,6 +19,7 @@ typedef enum {
   SONARE_ERROR_DECODE_FAILED = 3,
   SONARE_ERROR_INVALID_PARAMETER = 4,
   SONARE_ERROR_OUT_OF_MEMORY = 5,
+  SONARE_ERROR_NOT_SUPPORTED = 6,
   SONARE_ERROR_UNKNOWN = 99
 } SonareError;
 
@@ -118,6 +119,41 @@ typedef struct {
   uint32_t value;
 } SonareEngineTelemetry;
 
+/* Mirrors engine::MeterTelemetryRecord: a fixed-size meter snapshot published by
+   the engine's meter tap. Drained with sonare_engine_drain_meter_telemetry. */
+typedef struct {
+  uint32_t target_id;
+  int64_t render_frame;
+  uint64_t seq;
+  float peak_db_l;
+  float peak_db_r;
+  float rms_db_l;
+  float rms_db_r;
+  float true_peak_db_l;
+  float true_peak_db_r;
+  float max_true_peak_db;
+  float correlation;
+  float mono_compat_width;
+  float momentary_lufs;
+  float short_term_lufs;
+  float integrated_lufs;
+  float gain_reduction_db;
+  uint32_t dropped_records;
+} SonareMeterTelemetryRecord;
+
+/* Read-only snapshot of the engine transport state. */
+typedef struct {
+  int playing;
+  int looping;
+  int64_t render_frame;
+  int64_t sample_position;
+  double ppq_position;
+  double bpm;
+  double loop_start_ppq;
+  double loop_end_ppq;
+  double sample_rate;
+} SonareTransportState;
+
 typedef struct {
   uint32_t id;
   char name[64];
@@ -145,6 +181,9 @@ typedef struct {
   int enabled;
   float beat_gain;
   float accent_gain;
+  /* Explicit click length in samples. 0 means "use the sample-rate-derived
+     default" (the engine derives the length from its click_seconds default and
+     the prepared sample rate). A negative value is rejected. */
   int click_samples;
 } SonareEngineMetronomeConfig;
 
@@ -513,6 +552,46 @@ typedef struct {
   size_t chord_count;
 } SonareChordAnalysisResult;
 
+/* Song-structure section types (mirrors sonare::SectionType ordinals). */
+typedef enum {
+  SONARE_SECTION_INTRO = 0,
+  SONARE_SECTION_VERSE = 1,
+  SONARE_SECTION_PRE_CHORUS = 2,
+  SONARE_SECTION_CHORUS = 3,
+  SONARE_SECTION_BRIDGE = 4,
+  SONARE_SECTION_INSTRUMENTAL = 5,
+  SONARE_SECTION_OUTRO = 6,
+  SONARE_SECTION_UNKNOWN = 7
+} SonareSectionType;
+
+typedef struct {
+  SonareSectionType type;
+  float start;        /* seconds */
+  float end;          /* seconds */
+  float energy_level; /* [0, 1] */
+  float confidence;   /* [0, 1] */
+} SonareSection;
+
+typedef struct {
+  SonareSection* sections; /* free with sonare_free_section_result */
+  size_t section_count;
+} SonareSectionResult;
+
+typedef struct {
+  float time;       /* seconds */
+  float frequency;  /* Hz (0 if unvoiced) */
+  float confidence; /* [0, 1] */
+} SonareMelodyPoint;
+
+typedef struct {
+  SonareMelodyPoint* points; /* free with sonare_free_melody_result */
+  size_t point_count;
+  float pitch_range_octaves;
+  float pitch_stability;
+  float mean_frequency;
+  float vibrato_rate;
+} SonareMelodyResult;
+
 typedef struct {
   float min_duration;
   float smoothing_window;
@@ -857,6 +936,34 @@ size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGo
 // Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
 // mixer is NULL.
 size_t sonare_mixer_strip_count(const SonareMixer* mixer);
+// Number of strips, distinguishing a NULL mixer from an empty one. Returns
+// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL, otherwise
+// @c SONARE_OK with the count written to @p out_count.
+SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_count);
+// Adds a bus to the mixer topology. @c role is one of "master", "aux", "submix"
+// (NULL defaults to "aux"). Mark the routing graph dirty; call
+// sonare_mixer_compile (or process) to rebuild. Returns
+// @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, or a bus with the
+// same id already exists.
+SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char* role);
+// Removes a bus by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id
+// is NULL or no bus with that id exists.
+SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id);
+// Number of buses in the mixer topology. Returns
+// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
+SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count);
+// Adds a VCA group with the given id and gain offset. @c members is an array of
+// @c member_count strip-id C strings (may be NULL when member_count is 0).
+// Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, members is
+// NULL while member_count > 0, or a group with the same id already exists.
+SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
+                                       const char* const* members, size_t member_count);
+// Removes a VCA group by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer
+// or id is NULL or no group with that id exists.
+SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id);
+// Number of VCA groups in the mixer topology. Returns
+// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
+SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count);
 // Borrowed strip handle by index in [0, count). Returns NULL if out of range or
 // mixer is NULL. The handle is owned by the mixer; do not free it.
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index);
@@ -1003,6 +1110,25 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          SonareEngineFreezeResult* out);
 SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
+/// @brief Drains pending meter telemetry records published by the engine.
+/// @param out Caller-owned array receiving up to @p max_records entries.
+/// @param max_records Capacity of @p out. May be 0 to query without copying.
+/// @param out_count Receives the number of records written.
+SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
+                                                SonareMeterTelemetryRecord* out, size_t max_records,
+                                                size_t* out_count);
+/// @brief Pushes a live parameter value to the engine (immediate jump).
+/// @param param_id Target parameter id.
+/// @param value New value.
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t param_id,
+                                        float value, int64_t render_frame);
+/// @brief Pushes a live parameter value to the engine using a smoothed ramp.
+SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
+                                                 float value, int64_t render_frame);
+/// @brief Reads the current engine transport state (playing/position/ppq/tempo).
+SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
+                                              SonareTransportState* out);
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
@@ -1037,12 +1163,47 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out);
+/// @brief Detects song-structure sections (intro/verse/chorus/...).
+SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
+                                    int hop_length, float min_section_sec,
+                                    SonareSectionResult* out);
+/// @brief Extracts the melody contour from monophonic audio via YIN.
+SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
+                                  float fmax, int frame_length, int hop_length, float threshold,
+                                  SonareMelodyResult* out);
 void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* result);
 void sonare_free_acoustic_result(SonareAcousticResult* result);
 void sonare_free_rhythm_result(SonareRhythmResult* result);
 void sonare_free_dynamics_result(SonareDynamicsResult* result);
 void sonare_free_timbre_result(SonareTimbreResult* result);
 void sonare_free_chord_analysis_result(SonareChordAnalysisResult* result);
+void sonare_free_section_result(SonareSectionResult* result);
+void sonare_free_melody_result(SonareMelodyResult* result);
+
+// ============================================================================
+// Features - Constant-Q / Variable-Q transforms
+// ============================================================================
+
+/* Forward CQT/VQT magnitude result. @c magnitude is [n_bins x n_frames]
+   row-major and @c frequencies has @c n_bins center frequencies (Hz). Free both
+   arrays with sonare_free_cqt_result. */
+typedef struct {
+  int n_bins;
+  int n_frames;
+  int hop_length;
+  int sample_rate;
+  float* magnitude;   /* n_bins * n_frames */
+  float* frequencies; /* n_bins */
+} SonareCqtResult;
+
+/// @brief Computes the Constant-Q Transform magnitude.
+SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                       float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out);
+/// @brief Computes the Variable-Q Transform magnitude (gamma controls Q).
+SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                       float fmin, int n_bins, int bins_per_octave, float gamma,
+                       SonareCqtResult* out);
+void sonare_free_cqt_result(SonareCqtResult* result);
 
 // ============================================================================
 // Features - Spectrogram

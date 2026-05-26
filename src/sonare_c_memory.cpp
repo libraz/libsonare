@@ -35,9 +35,12 @@ const char* sonare_error_message(SonareError error) {
       return "Invalid parameter";
     case SONARE_ERROR_OUT_OF_MEMORY:
       return "Out of memory";
-    default:
+    case SONARE_ERROR_NOT_SUPPORTED:
+      return "Not supported in this build";
+    case SONARE_ERROR_UNKNOWN:
       return "Unknown error";
   }
+  return "Unknown error";
 }
 
 const char* sonare_last_error_message(void) { return last_error_storage().c_str(); }
@@ -181,4 +184,29 @@ void sonare_free_bounce_result(SonareEngineBounceResult* result) {
   delete[] result->interleaved;
   result->interleaved = nullptr;
   result->sample_count = 0;
+}
+
+void sonare_free_section_result(SonareSectionResult* result) {
+  if (result) {
+    delete[] result->sections;
+    result->sections = nullptr;
+    result->section_count = 0;
+  }
+}
+
+void sonare_free_melody_result(SonareMelodyResult* result) {
+  if (result) {
+    delete[] result->points;
+    result->points = nullptr;
+    result->point_count = 0;
+  }
+}
+
+void sonare_free_cqt_result(SonareCqtResult* result) {
+  if (result) {
+    delete[] result->magnitude;
+    delete[] result->frequencies;
+    result->magnitude = nullptr;
+    result->frequencies = nullptr;
+  }
 }

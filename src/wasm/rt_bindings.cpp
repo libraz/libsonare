@@ -78,7 +78,10 @@ int sonare_rt_engine_seek_ppq(RealtimeEngine* engine, double ppq, int64_t render
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekPpq;
   command.sample_time = render_frame;
-  command.arg.f = static_cast<float>(ppq);
+  // Engine reads the PPQ scalar from the full-precision double slot of the arg
+  // union (kTransportSeekPpq -> transport_.seek_ppq(command.arg.d)). Match the
+  // C API; writing the float slot would surface as garbage.
+  command.arg.d = ppq;
   return engine->push_command(command) ? 1 : 0;
 }
 
