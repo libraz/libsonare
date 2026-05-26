@@ -58,6 +58,7 @@ import type {
   StereoAnalysis,
   StftDbResult,
   StftResult,
+  StreamingPlatform,
   StreamAnalyzerConfig,
   StreamAnalyzerStats,
   StreamFramesI16,
@@ -1400,6 +1401,30 @@ export function masteringStereoAnalyze(
   return addon.masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
 }
 
+export function masteringAssistantSuggest(
+  samples: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): string {
+  return addon.masteringAssistantSuggest(samples, sampleRate, params);
+}
+
+export function masteringAudioProfile(
+  samples: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): string {
+  return addon.masteringAudioProfile(samples, sampleRate, params);
+}
+
+export function masteringStreamingPreview(
+  samples: Float32Array,
+  sampleRate = 22050,
+  platforms: StreamingPlatform[] = [],
+): string {
+  return addon.masteringStreamingPreview(samples, sampleRate, platforms);
+}
+
 export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -60.0): Float32Array {
   return addon.trim(samples, sampleRate, thresholdDb);
 }
@@ -1886,6 +1911,12 @@ function automationCurveValue(curve: AutomationCurve): number {
   if (curve === 'exponential') {
     return 1;
   }
+  if (curve === 'hold') {
+    return 2;
+  }
+  if (curve === 's-curve') {
+    return 3;
+  }
   throw new Error(`Invalid automation curve: ${curve}`);
 }
 
@@ -2246,6 +2277,7 @@ export type {
   SendTiming,
   StftDbResult,
   StftResult,
+  StreamingPlatform,
   StreamAnalyzerConfig,
   StreamAnalyzerStats,
   StreamFramesI16,

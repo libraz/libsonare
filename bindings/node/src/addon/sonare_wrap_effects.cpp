@@ -14,7 +14,9 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/streaming_preview.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_utils.h"
 
@@ -1057,6 +1059,104 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
       info[0].As<Napi::String>().Utf8Value(), left.Data(), right.Data(), left.ElementLength(),
       info[3].As<Napi::Number>().Int32Value(), params);
   return Napi::String::New(env, json);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (samples, sampleRate, params?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto samples = info[0].As<Napi::Float32Array>();
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 3 && info[2].IsObject())
+    params = ParamsFromObject(info[2].As<Napi::Object>());
+  sonare::mastering::assistant::AssistantConfig config;
+  for (const auto& param : params) {
+    if (param.key == "targetLufs" || param.key == "target_lufs") {
+      config.target_lufs = static_cast<float>(param.value);
+    } else if (param.key == "ceilingDb" || param.key == "ceiling_db") {
+      config.ceiling_db = static_cast<float>(param.value);
+    } else if (param.key == "enableRepair" || param.key == "enable_repair") {
+      config.enable_repair = param.value != 0.0;
+    } else if (param.key == "preferStreamingSafe" || param.key == "prefer_streaming_safe") {
+      config.prefer_streaming_safe = param.value != 0.0;
+    }
+  }
+  const auto result = sonare::mastering::assistant::suggest_chain(
+      samples.Data(), samples.ElementLength(), info[1].As<Napi::Number>().Int32Value(), config);
+  return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (samples, sampleRate, params?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto samples = info[0].As<Napi::Float32Array>();
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 3 && info[2].IsObject())
+    params = ParamsFromObject(info[2].As<Napi::Object>());
+  sonare::mastering::assistant::AudioProfileConfig config;
+  for (const auto& param : params) {
+    if (param.key == "nFft" || param.key == "n_fft") {
+      config.n_fft = static_cast<int>(param.value);
+    } else if (param.key == "hopLength" || param.key == "hop_length") {
+      config.hop_length = static_cast<int>(param.value);
+    } else if (param.key == "truePeakOversample" || param.key == "true_peak_oversample") {
+      config.true_peak_oversample = static_cast<int>(param.value);
+    }
+  }
+  const auto profile = sonare::mastering::assistant::analyze_audio_profile(
+      samples.Data(), samples.ElementLength(), info[1].As<Napi::Number>().Int32Value(), config);
+  return Napi::String::New(env, sonare::mastering::assistant::audio_profile_to_json(profile));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (samples, sampleRate, platforms?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto samples = info[0].As<Napi::Float32Array>();
+  std::vector<sonare::mastering::maximizer::StreamingPlatform> platforms;
+  if (info.Length() >= 3 && info[2].IsArray()) {
+    Napi::Array input = info[2].As<Napi::Array>();
+    platforms.reserve(input.Length());
+    for (uint32_t index = 0; index < input.Length(); ++index) {
+      Napi::Value value = input.Get(index);
+      if (!value.IsObject()) {
+        Napi::TypeError::New(env, "platforms entries must be objects").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object object = value.As<Napi::Object>();
+      if (!object.Get("name").IsString() || !object.Get("targetLufs").IsNumber() ||
+          !object.Get("ceilingDb").IsNumber()) {
+        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDb")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      platforms.push_back({object.Get("name").As<Napi::String>().Utf8Value(),
+                           object.Get("targetLufs").As<Napi::Number>().FloatValue(),
+                           object.Get("ceilingDb").As<Napi::Number>().FloatValue()});
+    }
+  }
+  const sonare::Audio audio = sonare::Audio::from_buffer(samples.Data(), samples.ElementLength(),
+                                                         info[1].As<Napi::Number>().Int32Value());
+  const auto results = platforms.empty()
+                           ? sonare::mastering::maximizer::streaming_preview(audio)
+                           : sonare::mastering::maximizer::streaming_preview(audio, platforms);
+  return Napi::String::New(env, sonare::mastering::maximizer::streaming_preview_to_json(results));
   SONARE_NODE_CATCH(env)
 }
 

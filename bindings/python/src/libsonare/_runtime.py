@@ -72,7 +72,7 @@ def _pan_mode_value(value: str | int) -> int:
 
 
 def _curve_value(value: AutomationCurve | str | int) -> int:
-    """Resolve an automation curve to its C enum value (0 linear, 1 exponential)."""
+    """Resolve an automation curve to its C enum value."""
     if isinstance(value, AutomationCurve):
         return int(value)
     if isinstance(value, int):
@@ -82,6 +82,10 @@ def _curve_value(value: AutomationCurve | str | int) -> int:
         return int(AutomationCurve.LINEAR)
     if key in ("exponential", "exp"):
         return int(AutomationCurve.EXPONENTIAL)
+    if key in ("hold", "step"):
+        return int(AutomationCurve.HOLD)
+    if key in ("s-curve", "s_curve", "scurve", "smooth"):
+        return int(AutomationCurve.S_CURVE)
     raise ValueError(f"unknown automation curve: {value}")
 
 

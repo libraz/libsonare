@@ -37,6 +37,8 @@ class KeyProfile(IntEnum):
 class AutomationCurve(IntEnum):
     LINEAR: AutomationCurve
     EXPONENTIAL: AutomationCurve
+    HOLD: AutomationCurve
+    S_CURVE: AutomationCurve
 
 class PanLaw(IntEnum):
     CONST_3DB: PanLaw

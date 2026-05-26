@@ -655,6 +655,21 @@ interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
+  masteringAssistantSuggest: (
+    samples: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
+  masteringAudioProfile: (
+    samples: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
+  masteringStreamingPreview: (
+    samples: Float32Array,
+    sampleRate: number,
+    platforms: Array<{ name: string; targetLufs: number; ceilingDb: number }>,
+  ) => string;
   masteringChain: (
     samples: Float32Array,
     sampleRate: number,

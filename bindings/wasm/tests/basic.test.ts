@@ -22,6 +22,8 @@ import {
   init,
   isInitialized,
   mastering,
+  masteringAssistantSuggest,
+  masteringAudioProfile,
   masteringChain,
   masteringChainStereo,
   masteringChainStereoWithProgress,
@@ -35,6 +37,7 @@ import {
   masteringProcessStereo,
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
+  masteringStreamingPreview,
   mixingScenePresetJson,
   mixingScenePresetNames,
   mixStereo,
@@ -741,6 +744,67 @@ describe('Sonare WASM Module', () => {
         sampleRate,
       );
       expect(stereoJson).toContain('"correlation"');
+    });
+
+    it('should expose mastering assistant suggestions in WASM', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate * 3);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.2 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+      }
+      const json = masteringAssistantSuggest(samples, sampleRate, {
+        targetLufs: -13,
+        ceilingDb: -0.8,
+        enableRepair: true,
+      });
+      const result = JSON.parse(json);
+
+      expect(result).toHaveProperty('chainConfig');
+      expect(result).toHaveProperty('profile');
+      expect(Array.isArray(result.explanation)).toBe(true);
+      expect(Array.isArray(result.genreCandidates)).toBe(true);
+      expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
+      expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
+      expect(result.chainConfig.params['repair.declick.enabled']).toBe(1);
+    });
+
+    it('should expose mastering audio profiles in WASM', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate * 2);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.2 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
+      }
+      const json = masteringAudioProfile(samples, sampleRate, {
+        nFft: 1024,
+        hopLength: 256,
+      });
+      const result = JSON.parse(json);
+
+      expect(typeof result.durationSec).toBe('number');
+      expect(result.durationSec).toBeGreaterThan(1.9);
+      expect(result).toHaveProperty('loudness.integratedLufs');
+      expect(result).toHaveProperty('spectral.centroidHz');
+      expect(result).toHaveProperty('dynamics.attackDensity');
+      expect(Array.isArray(result.genreCandidates)).toBe(true);
+    });
+
+    it('should expose streaming platform loudness previews in WASM', () => {
+      const sampleRate = 22050;
+      const samples = new Float32Array(sampleRate);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+      }
+      const json = masteringStreamingPreview(samples, sampleRate, [
+        { name: 'Unit Test', targetLufs: -12, ceilingDb: -1 },
+      ]);
+      const result = JSON.parse(json);
+
+      expect(result.platforms).toHaveLength(1);
+      expect(result.platforms[0].name).toBe('Unit Test');
+      expect(typeof result.platforms[0].integratedLufs).toBe('number');
+      expect(typeof result.platforms[0].truePeakDb).toBe('number');
+      expect(typeof result.platforms[0].normalizationGainDb).toBe('number');
+      expect(typeof result.platforms[0].ceilingRisk).toBe('boolean');
     });
 
     it('should expose mixing presets and stereo mix in WASM', () => {

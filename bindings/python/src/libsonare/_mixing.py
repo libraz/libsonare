@@ -428,7 +428,8 @@ class Mixer:
             sample_pos: Absolute sample position from the start of processing.
             value: Target parameter value.
             curve: ``AutomationCurve`` enum, name, or int (``0`` linear,
-                ``1`` exponential). Accepts a raw int for backward compatibility.
+                ``1`` exponential, ``2`` hold, ``3`` s-curve). Accepts a raw
+                int for backward compatibility.
         """
         handle = self._strip_handle(strip_index)
         lib = _get_lib()

@@ -60,6 +60,7 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/suggester.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/equalizer.h"
@@ -68,6 +69,7 @@
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
 #include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/streaming_preview.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/saturation/exciter.h"
@@ -2137,6 +2139,73 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
                                               sample_rate, masteringParamsFromObject(params));
 }
 
+std::string js_mastering_assistant_suggest(val samples, int sample_rate, val params_obj) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
+  mastering::assistant::AssistantConfig config;
+  for (const auto& param : params) {
+    if (param.key == "targetLufs" || param.key == "target_lufs") {
+      config.target_lufs = static_cast<float>(param.value);
+    } else if (param.key == "ceilingDb" || param.key == "ceiling_db") {
+      config.ceiling_db = static_cast<float>(param.value);
+    } else if (param.key == "enableRepair" || param.key == "enable_repair") {
+      config.enable_repair = param.value != 0.0;
+    } else if (param.key == "preferStreamingSafe" || param.key == "prefer_streaming_safe") {
+      config.prefer_streaming_safe = param.value != 0.0;
+    }
+  }
+  const auto result =
+      mastering::assistant::suggest_chain(data.data(), data.size(), sample_rate, config);
+  return mastering::assistant::assistant_result_to_json(result);
+}
+
+std::string js_mastering_audio_profile(val samples, int sample_rate, val params_obj) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
+  mastering::assistant::AudioProfileConfig config;
+  for (const auto& param : params) {
+    if (param.key == "nFft" || param.key == "n_fft") {
+      config.n_fft = static_cast<int>(param.value);
+    } else if (param.key == "hopLength" || param.key == "hop_length") {
+      config.hop_length = static_cast<int>(param.value);
+    } else if (param.key == "truePeakOversample" || param.key == "true_peak_oversample") {
+      config.true_peak_oversample = static_cast<int>(param.value);
+    }
+  }
+  const auto profile =
+      mastering::assistant::analyze_audio_profile(data.data(), data.size(), sample_rate, config);
+  return mastering::assistant::audio_profile_to_json(profile);
+}
+
+std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(val platforms) {
+  std::vector<mastering::maximizer::StreamingPlatform> out;
+  if (platforms.isUndefined() || platforms.isNull()) {
+    return out;
+  }
+  if (!val::global("Array").call<bool>("isArray", platforms)) {
+    throw std::invalid_argument("platforms must be an array");
+  }
+  const int length = platforms["length"].as<int>();
+  out.reserve(static_cast<size_t>(length));
+  for (int index = 0; index < length; ++index) {
+    val platform = platforms[index];
+    out.push_back({stringProperty(platform, "name", ""),
+                   floatProperty(platform, "targetLufs", -14.0f),
+                   floatProperty(platform, "ceilingDb", -1.0f)});
+  }
+  return out;
+}
+
+std::string js_mastering_streaming_preview(val samples, int sample_rate, val platforms_obj) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  const Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  const auto platforms = streamingPlatformsFromVal(platforms_obj);
+  const auto results = platforms.empty()
+                           ? mastering::maximizer::streaming_preview(audio)
+                           : mastering::maximizer::streaming_preview(audio, platforms);
+  return mastering::maximizer::streaming_preview_to_json(results);
+}
+
 // ============================================================================
 // Features - Spectrogram
 // ============================================================================
@@ -3022,6 +3091,7 @@ class StreamAnalyzerWrapper {
     estimate.set("chordRoot", s.estimate.chord_root);
     estimate.set("chordQuality", s.estimate.chord_quality);
     estimate.set("chordConfidence", s.estimate.chord_confidence);
+    estimate.set("chordStartTime", s.estimate.chord_start_time);
 
     // Chord progression (time-based)
     val chordProgression = val::array();
@@ -3057,6 +3127,7 @@ class StreamAnalyzerWrapper {
       c.set("barIndex", chord.bar_index);
       c.set("root", chord.root);
       c.set("quality", chord.quality);
+      c.set("startTime", chord.start_time);
       c.set("confidence", chord.confidence);
       votedPattern.call<void>("push", c);
     }
@@ -3982,6 +4053,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("masteringPairProcess", &js_mastering_pair_process);
   function("masteringPairAnalyze", &js_mastering_pair_analyze);
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);
+  function("masteringAssistantSuggest", &js_mastering_assistant_suggest);
+  function("masteringAudioProfile", &js_mastering_audio_profile);
+  function("masteringStreamingPreview", &js_mastering_streaming_preview);
   function("masteringChain", &js_mastering_chain);
   function("masteringChainStereo", &js_mastering_chain_stereo);
   function("masteringChainWithProgress", &js_mastering_chain_with_progress);

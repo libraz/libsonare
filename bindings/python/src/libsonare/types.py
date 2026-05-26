@@ -73,9 +73,17 @@ class AutomationCurve(IntEnum):
 
     LINEAR = 0
     EXPONENTIAL = 1
+    HOLD = 2
+    S_CURVE = 3
 
     def __str__(self) -> str:
-        return "exponential" if self is AutomationCurve.EXPONENTIAL else "linear"
+        names = {
+            AutomationCurve.LINEAR: "linear",
+            AutomationCurve.EXPONENTIAL: "exponential",
+            AutomationCurve.HOLD: "hold",
+            AutomationCurve.S_CURVE: "s-curve",
+        }
+        return names[self]
 
 
 class PanLaw(IntEnum):

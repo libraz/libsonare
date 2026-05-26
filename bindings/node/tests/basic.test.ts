@@ -39,6 +39,8 @@ import {
   lufs,
   Mixer,
   mastering,
+  masteringAssistantSuggest,
+  masteringAudioProfile,
   masteringChain,
   masteringPairAnalysisNames,
   masteringPairAnalyze,
@@ -49,6 +51,7 @@ import {
   masteringProcessStereo,
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
+  masteringStreamingPreview,
   melSpectrogram,
   melToHz,
   mfcc,
@@ -354,6 +357,58 @@ describe('sonare native binding', () => {
         sampleRate,
       );
       expect(stereoJson).toContain('"correlation"');
+    });
+
+    it('exposes mastering assistant suggestions', () => {
+      const sampleRate = 22050;
+      const samples = generateSine(220, sampleRate, 3);
+      const json = masteringAssistantSuggest(samples, sampleRate, {
+        targetLufs: -13,
+        ceilingDb: -0.8,
+        enableRepair: true,
+      });
+      const result = JSON.parse(json);
+
+      expect(result).toHaveProperty('chainConfig');
+      expect(result).toHaveProperty('profile');
+      expect(Array.isArray(result.explanation)).toBe(true);
+      expect(Array.isArray(result.genreCandidates)).toBe(true);
+      expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
+      expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
+      expect(result.chainConfig.params['repair.declick.enabled']).toBe(1);
+    });
+
+    it('exposes mastering audio profiles', () => {
+      const sampleRate = 22050;
+      const samples = generateSine(330, sampleRate, 2);
+      const json = masteringAudioProfile(samples, sampleRate, {
+        nFft: 1024,
+        hopLength: 256,
+      });
+      const result = JSON.parse(json);
+
+      expect(typeof result.durationSec).toBe('number');
+      expect(result.durationSec).toBeGreaterThan(1.9);
+      expect(result).toHaveProperty('loudness.integratedLufs');
+      expect(result).toHaveProperty('spectral.centroidHz');
+      expect(result).toHaveProperty('dynamics.attackDensity');
+      expect(Array.isArray(result.genreCandidates)).toBe(true);
+    });
+
+    it('exposes streaming platform loudness previews', () => {
+      const sampleRate = 22050;
+      const samples = generateSine(440, sampleRate, 1);
+      const json = masteringStreamingPreview(samples, sampleRate, [
+        { name: 'Unit Test', targetLufs: -12, ceilingDb: -1 },
+      ]);
+      const result = JSON.parse(json);
+
+      expect(result.platforms).toHaveLength(1);
+      expect(result.platforms[0].name).toBe('Unit Test');
+      expect(typeof result.platforms[0].integratedLufs).toBe('number');
+      expect(typeof result.platforms[0].truePeakDb).toBe('number');
+      expect(typeof result.platforms[0].normalizationGainDb).toBe('number');
+      expect(typeof result.platforms[0].ceilingRisk).toBe('boolean');
     });
   });
 

@@ -14,6 +14,7 @@ from ._ffi import (
     SonareMasteringProgressCallback,
     SonareMasteringResult,
     SonareMasteringStereoResult,
+    SonareStreamingPlatform,
 )
 from ._runtime import *  # noqa: F403
 from .types import (
@@ -978,6 +979,110 @@ def mastering_stereo_analyze(
         left_array,
         right_array,
         ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def mastering_streaming_preview(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    platforms: Sequence[dict[str, float | str]] | None = None,
+) -> str:
+    """Preview streaming-platform normalization and ceiling risk as shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_streaming_preview"):
+        raise RuntimeError("libsonare was built without mastering streaming preview support")
+    c_array, length = _to_c_float_array(samples)
+
+    platform_buffers: list[bytes] = []
+    platform_array = None
+    platform_count = 0
+    if platforms:
+        platform_count = len(platforms)
+        array_type = SonareStreamingPlatform * platform_count
+        platform_buffers = [str(platform.get("name", "")).encode("utf-8") for platform in platforms]
+        platform_array = array_type(
+            *[
+                SonareStreamingPlatform(
+                    name=platform_buffers[index],
+                    target_lufs=float(
+                        platform.get("targetLufs", platform.get("target_lufs", -14.0))
+                    ),
+                    ceiling_db=float(platform.get("ceilingDb", platform.get("ceiling_db", -1.0))),
+                )
+                for index, platform in enumerate(platforms)
+            ]
+        )
+
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_streaming_preview(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        platform_array,
+        ctypes.c_size_t(platform_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def mastering_assistant_suggest(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> str:
+    """Analyze audio and suggest a mastering chain as shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_assistant_suggest"):
+        raise RuntimeError("libsonare was built without mastering assistant support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _mastering_params(params)
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_assistant_suggest(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        param_array,
+        ctypes.c_size_t(param_count),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def mastering_audio_profile(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> str:
+    """Analyze audio and return the mastering assistant profile as shared JSON."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_audio_profile"):
+        raise RuntimeError("libsonare was built without mastering audio profile support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _mastering_params(params)
+    json_ptr = ctypes.c_void_p()
+    rc = lib.sonare_mastering_audio_profile(
+        c_array,
+        ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
         param_array,
         ctypes.c_size_t(param_count),

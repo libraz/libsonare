@@ -93,6 +93,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringPairProcess(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStereoAnalyze(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringAssistantSuggest(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringAudioProfile(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringStreamingPreview(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
 
   // Features - Spectrogram

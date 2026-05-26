@@ -87,6 +87,7 @@ SoloProcessor: TypeAlias = Literal[
     "dynamics.limiter",
     "dynamics.parallelComp",
     "dynamics.sidechainRouter",
+    "dynamics.duckingProcessor",
     "dynamics.transientShaper",
     "dynamics.upwardCompressor",
     "dynamics.upwardExpander",
@@ -331,6 +332,16 @@ def mastering(
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
 ) -> MasteringResult: ...
+def mastering_assistant_suggest(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringParams | None = None,
+) -> str: ...
+def mastering_audio_profile(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringParams | None = None,
+) -> str: ...
 def mastering_processor_names() -> list[SoloProcessor]: ...
 def mastering_pair_processor_names() -> list[PairProcessor]: ...
 def mastering_pair_analysis_names() -> list[PairAnalysis]: ...
@@ -525,6 +536,11 @@ def mastering_stereo_analyze(
     right: FloatSamples,
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
+) -> str: ...
+def mastering_streaming_preview(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str: ...
 def trim(
     samples: FloatSamples, sample_rate: int = 22050, threshold_db: float = -60.0

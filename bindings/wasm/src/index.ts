@@ -64,6 +64,7 @@ import type {
   StereoAnalysis,
   StftPowerResult,
   StftResult,
+  StreamingPlatform,
   StreamingEqualizerConfig,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
@@ -157,6 +158,7 @@ export type {
   SoloProcessor,
   StereoAnalysis,
   StftResult,
+  StreamingPlatform,
   StreamingEqualizerConfig,
   Timbre,
   TimeSignature,
@@ -217,7 +219,18 @@ export interface MixerRealtimeBuffer {
 }
 
 function automationCurveCode(curve: AutomationCurve): number {
-  return curve === 'exponential' ? 1 : 0;
+  switch (curve) {
+    case 'linear':
+      return 0;
+    case 'exponential':
+      return 1;
+    case 'hold':
+      return 2;
+    case 's-curve':
+      return 3;
+    default:
+      throw new Error(`Invalid automation curve: ${curve}`);
+  }
 }
 
 function panLawCode(panLaw: PanLaw | number): number {
@@ -1189,6 +1202,39 @@ export function masteringStereoAnalyze(
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
+}
+
+export function masteringAssistantSuggest(
+  samples: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringAssistantSuggest(samples, sampleRate, params);
+}
+
+export function masteringAudioProfile(
+  samples: Float32Array,
+  sampleRate: number,
+  params: MasteringProcessorParams = {},
+): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringAudioProfile(samples, sampleRate, params);
+}
+
+export function masteringStreamingPreview(
+  samples: Float32Array,
+  sampleRate: number,
+  platforms: StreamingPlatform[] = [],
+): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masteringStreamingPreview(samples, sampleRate, platforms);
 }
 
 /**

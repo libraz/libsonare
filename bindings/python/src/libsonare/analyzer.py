@@ -101,6 +101,8 @@ from ._mastering import (
     master_audio,
     master_audio_stereo,
     mastering,
+    mastering_assistant_suggest,
+    mastering_audio_profile,
     mastering_chain,
     mastering_chain_stereo,
     mastering_pair_analysis_names,
@@ -113,6 +115,7 @@ from ._mastering import (
     mastering_processor_names,
     mastering_stereo_analysis_names,
     mastering_stereo_analyze,
+    mastering_streaming_preview,
 )
 from ._mixing import (
     Mixer,
@@ -156,6 +159,8 @@ __all__ = [
     "master_audio",
     "master_audio_stereo",
     "mastering",
+    "mastering_assistant_suggest",
+    "mastering_audio_profile",
     "mastering_chain",
     "mastering_chain_stereo",
     "mastering_pair_analysis_names",
@@ -168,6 +173,7 @@ __all__ = [
     "mastering_processor_names",
     "mastering_stereo_analysis_names",
     "mastering_stereo_analyze",
+    "mastering_streaming_preview",
     "Mixer",
     "mix_stereo",
     "mixing_scene_preset_json",

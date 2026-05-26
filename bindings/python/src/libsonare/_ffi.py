@@ -826,6 +826,16 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
     ]
 
 
+class SonareStreamingPlatform(ctypes.Structure):
+    """Maps to SonareStreamingPlatform in sonare_c.h."""
+
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("target_lufs", ctypes.c_float),
+        ("ceiling_db", ctypes.c_float),
+    ]
+
+
 SONARE_EQ_MAX_BANDS = 24
 SONARE_EQ_SPECTRUM_STREAM_CAPACITY = 256
 SONARE_EQ_SPECTRUM_PROFILE_BANDS = 16
@@ -2425,6 +2435,36 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_void_p),
         ]
+        if hasattr(lib, "sonare_mastering_streaming_preview"):
+            lib.sonare_mastering_streaming_preview.restype = ctypes.c_int32
+            lib.sonare_mastering_streaming_preview.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareStreamingPlatform),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+        if hasattr(lib, "sonare_mastering_assistant_suggest"):
+            lib.sonare_mastering_assistant_suggest.restype = ctypes.c_int32
+            lib.sonare_mastering_assistant_suggest.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+        if hasattr(lib, "sonare_mastering_audio_profile"):
+            lib.sonare_mastering_audio_profile.restype = ctypes.c_int32
+            lib.sonare_mastering_audio_profile.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
         lib.sonare_free_mastering_stereo_result.restype = None
         lib.sonare_free_mastering_stereo_result.argtypes = [
             ctypes.POINTER(SonareMasteringStereoResult)

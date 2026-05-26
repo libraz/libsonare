@@ -112,6 +112,12 @@ export type MasteringPreset =
   | 'trance'
   | 'gameOst';
 
+export interface StreamingPlatform {
+  name: string;
+  targetLufs: number;
+  ceilingDb: number;
+}
+
 export type SoloProcessor =
   | 'dynamics.brickwallLimiter'
   | 'dynamics.compressor'
@@ -121,6 +127,7 @@ export type SoloProcessor =
   | 'dynamics.limiter'
   | 'dynamics.parallelComp'
   | 'dynamics.sidechainRouter'
+  | 'dynamics.duckingProcessor'
   | 'dynamics.transientShaper'
   | 'dynamics.upwardCompressor'
   | 'dynamics.upwardExpander'
@@ -484,7 +491,7 @@ export interface MixerProcessResult {
  * Interpolation curve for scheduled automation events
  * (see {@link Mixer.scheduleInsertAutomation}).
  */
-export type AutomationCurve = 'linear' | 'exponential';
+export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
 
 /**
  * Pan law applied when computing left/right gains from a pan position

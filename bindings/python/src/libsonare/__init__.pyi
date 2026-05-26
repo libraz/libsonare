@@ -124,6 +124,12 @@ from .analyzer import (
     mastering as mastering,
 )
 from .analyzer import (
+    mastering_assistant_suggest as mastering_assistant_suggest,
+)
+from .analyzer import (
+    mastering_audio_profile as mastering_audio_profile,
+)
+from .analyzer import (
     mastering_chain as mastering_chain,
 )
 from .analyzer import (
@@ -158,6 +164,9 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_stereo_analyze as mastering_stereo_analyze,
+)
+from .analyzer import (
+    mastering_streaming_preview as mastering_streaming_preview,
 )
 from .analyzer import (
     mel_spectrogram as mel_spectrogram,

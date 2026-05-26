@@ -176,6 +176,14 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set(
       "masteringStereoAnalyze",
       Napi::Function::New(env, &SonareWrap::MasteringStereoAnalyze, "masteringStereoAnalyze"));
+  exports.Set("masteringAssistantSuggest",
+              Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggest,
+                                  "masteringAssistantSuggest"));
+  exports.Set("masteringAudioProfile", Napi::Function::New(env, &SonareWrap::MasteringAudioProfile,
+                                                           "masteringAudioProfile"));
+  exports.Set("masteringStreamingPreview",
+              Napi::Function::New(env, &SonareWrap::MasteringStreamingPreview,
+                                  "masteringStreamingPreview"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
 
   // Features - Spectrogram

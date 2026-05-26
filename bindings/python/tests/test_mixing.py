@@ -213,6 +213,8 @@ def test_automation_schedulers_accept_curve_enum(mixer) -> None:
     mixer.schedule_fader_automation("vocal", 0, -6.0, AutomationCurve.LINEAR)
     mixer.schedule_pan_automation("vocal", 128, 0.5, "linear")
     mixer.schedule_width_automation("vocal", 128, 1.2, AutomationCurve.EXPONENTIAL)
+    mixer.schedule_fader_automation("vocal", 256, -12.0, AutomationCurve.HOLD)
+    mixer.schedule_pan_automation("vocal", 384, -0.25, "s-curve")
 
     send_index = mixer.add_send("vocal", "auto-send", "vocal-verb", send_db=-10.0, timing=1)
     mixer.schedule_send_automation("vocal", send_index, 0, -3.0, 1)

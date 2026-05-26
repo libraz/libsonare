@@ -406,6 +406,67 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     assert '"correlation"' in stereo_json
 
 
+def test_mastering_streaming_preview_returns_shared_json() -> None:
+    """Streaming preview is exposed through the Python mastering API."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(sr)]
+
+    preview_json = libsonare.mastering_streaming_preview(
+        samples,
+        sample_rate=sr,
+        platforms=[{"name": "Unit Test", "targetLufs": 0.0, "ceilingDb": -6.0}],
+    )
+
+    assert '"platforms"' in preview_json
+    assert '"name":"Unit Test"' in preview_json
+    assert '"normalizationGainDb"' in preview_json
+    assert '"ceilingRisk":true' in preview_json
+
+
+def test_mastering_assistant_suggest_returns_shared_json() -> None:
+    """Mastering assistant suggestion is exposed through Python."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 220 * i / sr) for i in range(sr * 3)]
+
+    suggestion_json = libsonare.mastering_assistant_suggest(
+        samples,
+        sample_rate=sr,
+        params={"targetLufs": -13.0, "ceilingDb": -0.8},
+    )
+
+    assert '"chainConfig"' in suggestion_json
+    assert '"explanation"' in suggestion_json
+    assert '"genreCandidates"' in suggestion_json
+    assert '"loudness.targetLufs":-13' in suggestion_json
+    assert '"loudness.ceilingDb":-0.8' in suggestion_json
+
+
+def test_mastering_audio_profile_returns_shared_json() -> None:
+    """Mastering assistant audio profile is exposed through Python."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 330 * i / sr) for i in range(sr * 2)]
+
+    profile_json = libsonare.mastering_audio_profile(
+        samples,
+        sample_rate=sr,
+        params={"nFft": 1024, "hopLength": 256},
+    )
+
+    assert '"durationSec"' in profile_json
+    assert '"loudness"' in profile_json
+    assert '"integratedLufs"' in profile_json
+    assert '"spectral"' in profile_json
+    assert '"centroidHz"' in profile_json
+    assert '"dynamics"' in profile_json
+    assert '"genreCandidates"' in profile_json
+
+
 def test_mixing_presets_and_stereo_mix() -> None:
     """Mixing scene presets and simple stereo mix are exposed."""
     import libsonare
