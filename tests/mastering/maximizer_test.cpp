@@ -142,7 +142,9 @@ TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximiz
 
 TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximizer]") {
   AdaptiveRelease limiter({-6.0f, 0.0f, 10.0f, 120.0f});
-  limiter.prepare(48000.0, 512);
+  // Prepare for the full 2048-sample blocks processed below; process() must
+  // never be handed more samples than the prepared maximum block size.
+  limiter.prepare(48000.0, 2048);
 
   // Sustained sine -> low crest factor -> release should approach max_release_ms.
   auto signal = sine(1000.0f, 48000, 2048, 1.0f);
