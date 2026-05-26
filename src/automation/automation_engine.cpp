@@ -108,7 +108,6 @@ void AutomationEngine::collect_boundaries(double block_start_ppq, double block_e
   out->clear();
   const double lo = std::min(block_start_ppq, block_end_ppq);
   const double hi = std::max(block_start_ppq, block_end_ppq);
-  lanes_.acquire();
   const std::vector<AutomationLane>* lanes = lanes_.current();
   if (!lanes) return;
   for (const AutomationLane& lane : *lanes) {

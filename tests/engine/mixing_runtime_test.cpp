@@ -47,6 +47,7 @@ TEST_CASE("AutomationEngine can drive MixingRuntime fader parameter",
   sonare::automation::AutomationEngine automation;
   automation.prepare(48000.0, &tempo);
   automation.set_lanes({lane});
+  automation.acquire_lanes();
   automation.bind_target(sonare::engine::MixingRuntime::kFaderDb, &runtime);
 
   sonare::transport::TransportState state{};

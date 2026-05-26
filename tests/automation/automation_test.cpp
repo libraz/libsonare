@@ -70,6 +70,7 @@ TEST_CASE("AutomationEngine applies lane values through ProcessorBase set_parame
   sonare::automation::AutomationEngine engine;
   engine.prepare(48000.0, &tempo);
   engine.set_lanes({lane});
+  engine.acquire_lanes();
   engine.bind_target(7, &processor);
 
   sonare::transport::TransportState state{};
@@ -92,6 +93,7 @@ TEST_CASE("AutomationEngine skips non realtime-safe parameters", "[automation]")
   sonare::automation::AutomationEngine engine;
   engine.prepare(48000.0, &tempo);
   engine.set_lanes({lane});
+  engine.acquire_lanes();
   engine.bind_target(99, &processor);
 
   sonare::transport::TransportState state{};
@@ -111,6 +113,7 @@ TEST_CASE("AutomationEngine collects breakpoint boundaries", "[automation]") {
 
   sonare::automation::AutomationEngine engine;
   engine.set_lanes({first, second});
+  engine.acquire_lanes();
 
   sonare::automation::AutomationBoundaryList boundaries;
   engine.collect_boundaries(0.25, 2.0, &boundaries);

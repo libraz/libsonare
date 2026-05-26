@@ -222,6 +222,7 @@ TEST_CASE("AutomationEngine apply performs no heap allocation after prepare", "[
   sonare::automation::AutomationEngine engine;
   engine.prepare(48000.0, &tempo);
   engine.set_lanes({lane});
+  engine.acquire_lanes();
   engine.bind_target(7, &processor);
 
   sonare::transport::TransportState state{};
