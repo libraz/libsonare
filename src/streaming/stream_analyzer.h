@@ -188,8 +188,13 @@ class StreamAnalyzer {
   int frame_count_ = 0;
   int emitted_frame_count_ = 0;  // For emit_every_n_frames
 
-  // Overlap buffer (stores last n_fft - hop_length samples)
+  // Overlap buffer (stores last n_fft - hop_length samples).
+  // overlap_read_pos_ is the index of the current frame start within
+  // overlap_buffer_; frames advance the read position by hop_length instead of
+  // erasing per hop (O(N) memmove). The consumed prefix is compacted once per
+  // process() chunk rather than once per frame.
   std::vector<float> overlap_buffer_;
+  size_t overlap_read_pos_ = 0;
 
   // Output ring buffer
   std::deque<StreamFrame> output_buffer_;

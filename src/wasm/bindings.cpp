@@ -47,6 +47,7 @@
 #include "engine/realtime_engine.h"
 #include "feature/chroma.h"
 #include "feature/cqt.h"
+#include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/nnls_chroma.h"
 #include "feature/onset.h"
@@ -2231,6 +2232,71 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
   return out;
 }
 
+// Inverse: Mel power spectrogram [n_mels x n_frames] -> STFT power spectrogram
+// [(n_fft/2 + 1) x n_frames]. Mirrors feature::mel_to_stft.
+val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft,
+                   int hop_length) {
+  std::vector<float> data = float32ArrayToVector(mel_power);
+
+  MelConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_mels = n_mels;
+
+  std::vector<float> stft = mel_to_stft(data.data(), n_mels, n_frames, config, sample_rate);
+
+  val out = val::object();
+  out.set("nBins", n_fft / 2 + 1);
+  out.set("nFrames", n_frames);
+  out.set("power", vectorToFloat32Array(stft));
+  return out;
+}
+
+// Inverse: Mel power spectrogram -> audio via Griffin-Lim. Mirrors
+// feature::mel_to_audio.
+val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft,
+                    int hop_length, int n_iter) {
+  std::vector<float> data = float32ArrayToVector(mel_power);
+
+  MelConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_mels = n_mels;
+
+  Audio result = mel_to_audio(data.data(), n_mels, n_frames, config, n_iter, sample_rate);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram (dB scale).
+// Mirrors feature::mfcc_to_mel.
+val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels) {
+  std::vector<float> data = float32ArrayToVector(mfcc);
+
+  std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels);
+
+  val out = val::object();
+  out.set("nMels", n_mels);
+  out.set("nFrames", n_frames);
+  out.set("power", vectorToFloat32Array(mel));
+  return out;
+}
+
+// Inverse: MFCC matrix -> audio via Griffin-Lim. Mirrors feature::mfcc_to_audio.
+val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_rate, int n_fft,
+                     int hop_length, int n_iter) {
+  std::vector<float> data = float32ArrayToVector(mfcc);
+
+  MelConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_mels = n_mels;
+
+  Audio result = mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
 // ============================================================================
 // Features - Chroma
 // ============================================================================
@@ -3851,7 +3917,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("Chorus", SectionType::Chorus)
       .value("Bridge", SectionType::Bridge)
       .value("Instrumental", SectionType::Instrumental)
-      .value("Outro", SectionType::Outro);
+      .value("Outro", SectionType::Outro)
+      .value("Unknown", SectionType::Unknown);
 
   // Quick API (high-level)
   function("detectBpm", &js_detect_bpm);
@@ -3993,6 +4060,12 @@ EMSCRIPTEN_BINDINGS(sonare) {
   // Features - Mel Spectrogram
   function("melSpectrogram", &js_mel_spectrogram);
   function("mfcc", &js_mfcc);
+
+  // Features - Inverse reconstruction
+  function("melToStft", &js_mel_to_stft);
+  function("melToAudio", &js_mel_to_audio);
+  function("mfccToMel", &js_mfcc_to_mel);
+  function("mfccToAudio", &js_mfcc_to_audio);
 
   // Features - Chroma
   function("chroma", &js_chroma);

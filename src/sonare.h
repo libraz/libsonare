@@ -33,11 +33,13 @@
 // Features
 #include "feature/chroma.h"
 #include "feature/cqt.h"
+#include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/nnls_chroma.h"
 #include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "feature/tonnetz.h"
 #include "feature/vqt.h"
 
 // Effects

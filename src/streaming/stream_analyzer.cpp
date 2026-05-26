@@ -143,12 +143,15 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   int n_fft = config_.n_fft;
   int hop_length = config_.hop_length;
 
-  while (overlap_buffer_.size() >= static_cast<size_t>(n_fft)) {
+  /// Process frames using a read offset into overlap_buffer_ instead of erasing
+  /// hop_length samples per frame (which is an O(N) memmove every hop).
+  while (overlap_buffer_.size() - overlap_read_pos_ >= static_cast<size_t>(n_fft)) {
     /// Calculate sample offset for this frame (in original sample rate)
     size_t frame_sample_offset = cumulative_samples_;
 
     /// Process single frame
-    StreamFrame frame = process_single_frame(overlap_buffer_.data(), frame_sample_offset);
+    StreamFrame frame =
+        process_single_frame(overlap_buffer_.data() + overlap_read_pos_, frame_sample_offset);
 
     /// Check emit_every_n_frames
     ++emitted_frame_count_;
@@ -157,8 +160,8 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
       output_buffer_.push_back(std::move(frame));
     }
 
-    /// Slide buffer by hop_length
-    overlap_buffer_.erase(overlap_buffer_.begin(), overlap_buffer_.begin() + hop_length);
+    /// Slide read position by hop_length (deferred compaction below)
+    overlap_read_pos_ += static_cast<size_t>(hop_length);
 
     /// Update cumulative samples (in original sample rate)
     cumulative_samples_ += static_cast<size_t>(hop_length / resample_ratio_);
@@ -167,6 +170,14 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     /// Update progressive estimate if needed
     float current_time_sec = static_cast<float>(cumulative_samples_) / config_.sample_rate;
     update_progressive_estimate(current_time_sec);
+  }
+
+  /// Compact the consumed prefix once per chunk (single memmove) so the buffer
+  /// does not grow unbounded while keeping the unprocessed tail for overlap.
+  if (overlap_read_pos_ > 0) {
+    overlap_buffer_.erase(overlap_buffer_.begin(),
+                          overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
+    overlap_read_pos_ = 0;
   }
 }
 
@@ -207,10 +218,19 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
     }
     ++chroma_frame_count_;
 
-    /// Accumulate chroma frame for batch-style chord analysis
-    /// Store in column-major order: [chroma_bin][frame] for Chroma class compatibility
+    /// Accumulate chroma frame for batch-style chord analysis as a bounded
+    /// sliding window of the most recent kMaxChromaHistoryFrames frames. Without
+    /// a cap this vector grows without bound on long sessions; the cap keeps
+    /// memory bounded and prevents the frame-count int cast from overflowing.
     for (int c = 0; c < 12; ++c) {
       accumulated_chroma_.push_back(chroma_buffer_[c]);
+    }
+    constexpr size_t kStride = 12;
+    const size_t max_samples = kMaxChromaHistoryFrames * kStride;
+    if (accumulated_chroma_.size() > max_samples) {
+      const size_t excess = accumulated_chroma_.size() - max_samples;
+      accumulated_chroma_.erase(accumulated_chroma_.begin(),
+                                accumulated_chroma_.begin() + static_cast<std::ptrdiff_t>(excess));
     }
 
     /// Detect chord for this frame using smoothed chroma
@@ -528,9 +548,12 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 
     if (time_since_chord_analysis >= kChordAnalysisInterval &&
         chroma_frame_count_ >= kMinFramesForAnalysis) {
-      /// Transpose accumulated chroma from [frame][chroma] to [chroma][frame]
-      int n_frames = chroma_frame_count_;
-      std::vector<float> transposed_chroma(12 * n_frames);
+      /// Transpose accumulated chroma from [frame][chroma] to [chroma][frame].
+      /// Use the bounded window's actual frame count (not the all-time
+      /// chroma_frame_count_, which may exceed the retained window) so indexing
+      /// stays in range and the int cast cannot overflow.
+      int n_frames = static_cast<int>(accumulated_chroma_.size() / 12);
+      std::vector<float> transposed_chroma(static_cast<size_t>(12 * n_frames));
       for (int f = 0; f < n_frames; ++f) {
         for (int c = 0; c < 12; ++c) {
           transposed_chroma[c * n_frames + f] = accumulated_chroma_[f * 12 + c];

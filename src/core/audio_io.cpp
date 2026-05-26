@@ -2,7 +2,12 @@
 
 #include <algorithm>
 #include <cstring>
+
+// File-path I/O is unavailable in WebAssembly builds; the core exposes only the
+// buffer-based loaders there (see the load_buffer_* functions below).
+#ifndef __EMSCRIPTEN__
 #include <fstream>
+#endif
 
 #include "util/exception.h"
 
@@ -26,6 +31,7 @@ namespace {
 constexpr int kMinSupportedChannels = 1;
 
 #ifndef SONARE_WITH_FFMPEG
+#ifndef __EMSCRIPTEN__
 /// @brief Extracts a lowercase file extension (including the leading dot) from a path.
 /// @return The extension (e.g. ".m4a"), or an empty string if none is found.
 /// @note Only used by the unsupported-format messages; with FFmpeg enabled, any
@@ -44,6 +50,7 @@ std::string extract_extension(const std::string& path) {
   }
   return ext;
 }
+#endif  // !__EMSCRIPTEN__
 
 /// @brief Builds an actionable "unsupported format" error message for buffer input.
 std::string unsupported_buffer_message() {
@@ -53,6 +60,7 @@ std::string unsupported_buffer_message() {
          "or pass float samples to Audio.from_buffer().";
 }
 
+#ifndef __EMSCRIPTEN__
 /// @brief Builds an actionable "unsupported format" error message for file input.
 /// @param path The path being loaded (used to extract and display the extension).
 std::string unsupported_file_message(const std::string& path) {
@@ -63,6 +71,7 @@ std::string unsupported_file_message(const std::string& path) {
          "M4A/AAC/FLAC/OGG, or convert via: ffmpeg -i \"" +
          path + "\" output.wav";
 }
+#endif  // !__EMSCRIPTEN__
 #endif  // !SONARE_WITH_FFMPEG
 
 /// @brief RAII guard for MP3 decode buffer.
@@ -129,6 +138,7 @@ std::vector<float> int16_stereo_to_mono(const mp3d_sample_t* data, size_t total_
   return mono;
 }
 
+#ifndef __EMSCRIPTEN__
 /// @brief Reads entire file into memory.
 /// @param path Path to the file
 /// @param max_size Maximum allowed file size in bytes (0 = no limit)
@@ -153,6 +163,7 @@ std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 
   return buffer;
 }
+#endif  // !__EMSCRIPTEN__
 
 }  // namespace
 
@@ -230,6 +241,7 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   return {std::move(mono), sample_rate};
 }
 
+#ifndef __EMSCRIPTEN__
 AudioLoadResult load_wav(const std::string& path) {
   std::vector<uint8_t> data = read_file(path, kDefaultLoadOptions.max_file_size);
   return load_buffer_wav(data.data(), data.size());
@@ -239,6 +251,7 @@ AudioLoadResult load_mp3(const std::string& path) {
   std::vector<uint8_t> data = read_file(path, kDefaultLoadOptions.max_file_size);
   return load_buffer_mp3(data.data(), data.size());
 }
+#endif  // !__EMSCRIPTEN__
 
 AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
   AudioFormat format = detect_format(data, size);
@@ -257,6 +270,7 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
   }
 }
 
+#ifndef __EMSCRIPTEN__
 AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& options) {
   std::vector<uint8_t> data = read_file(path, options.max_file_size);
   AudioFormat format = detect_format(data.data(), data.size());
@@ -318,5 +332,6 @@ void save_wav(const std::string& path, const std::vector<float>& samples, int sa
               int bits_per_sample) {
   save_wav(path, samples.data(), samples.size(), sample_rate, bits_per_sample);
 }
+#endif  // !__EMSCRIPTEN__
 
 }  // namespace sonare

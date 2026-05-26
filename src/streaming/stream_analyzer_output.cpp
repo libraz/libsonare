@@ -135,6 +135,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   emitted_frame_count_ = 0;
 
   overlap_buffer_.clear();
+  overlap_read_pos_ = 0;
   output_buffer_.clear();
 
   if (config_.compute_mel) {
