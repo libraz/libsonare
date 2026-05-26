@@ -5,7 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
+#include "metering/lufs.h"
 
 namespace {
 
@@ -42,7 +42,7 @@ TEST_CASE("MeterTelemetryTap publishes peak RMS LUFS and goniometer data",
   }
 
   const auto offline =
-      sonare::analysis::meter::lufs_interleaved(interleaved.data(), kFrames, 2, kSampleRate);
+      sonare::metering::lufs_interleaved(interleaved.data(), kFrames, 2, kSampleRate);
   REQUIRE(latest.target_id == 42);
   REQUIRE(latest.peak_db[0] == Approx(-6.0206f).margin(0.01f));
   REQUIRE(latest.rms_db[0] == Approx(-6.0206f).margin(0.01f));

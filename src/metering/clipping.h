@@ -8,7 +8,7 @@
 
 #include "core/audio.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 struct ClippingRegion {
   size_t start_sample = 0;
@@ -27,4 +27,4 @@ struct ClippingResult {
 ClippingResult detect_clipping(const Audio& audio, float threshold = 0.999f,
                                size_t min_region_samples = 1);
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

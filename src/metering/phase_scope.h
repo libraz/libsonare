@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 struct PhaseScopePoint {
   float mid = 0.0f;
@@ -24,4 +24,4 @@ struct PhaseScopeResult {
 
 PhaseScopeResult phase_scope(const float* left, const float* right, size_t length);
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

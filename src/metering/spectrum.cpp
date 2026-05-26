@@ -1,4 +1,4 @@
-#include "analysis/meter/spectrum.h"
+#include "metering/spectrum.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 namespace {
 
 std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
@@ -93,4 +93,4 @@ std::vector<float> smooth_fractional_octave(const std::vector<float>& values,
   return smoothed;
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

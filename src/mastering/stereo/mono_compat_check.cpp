@@ -4,7 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "analysis/meter/stereo.h"
+#include "metering/stereo.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::stereo {
@@ -21,8 +21,8 @@ MonoCompatResult mono_compat_check(const float* left, const float* right, size_t
   }
 
   MonoCompatResult result;
-  result.correlation = analysis::meter::correlation(left, right, length);
-  result.width = analysis::meter::stereo_width(left, right, length);
+  result.correlation = metering::correlation(left, right, length);
+  result.width = metering::stereo_width(left, right, length);
 
   double side_sum = 0.0;
   for (size_t i = 0; i < length; ++i) {

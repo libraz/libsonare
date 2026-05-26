@@ -8,7 +8,7 @@
 #include "core/audio.h"
 #include "util/constants.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 struct DynamicRangeResult {
   float dynamic_range_db = 0.0f;
@@ -27,4 +27,4 @@ struct DynamicRangeConfig {
 
 DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& config = {});
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

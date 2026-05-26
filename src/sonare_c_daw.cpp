@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
+#include "metering/lufs.h"
 #if defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
@@ -714,7 +714,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   channels = resample_channels(channels, options->source_sample_rate, options->target_sample_rate);
   std::vector<float> interleaved = interleave_channels(channels);
   if (options->normalize_lufs) {
-    const auto loudness = analysis::meter::lufs_interleaved(
+    const auto loudness = metering::lufs_interleaved(
         interleaved.data(), channels[0].size(), options->num_channels, options->target_sample_rate);
     if (std::isfinite(loudness.integrated_lufs)) {
       const float gain = std::pow(10.0f, (options->target_lufs - loudness.integrated_lufs) / 20.0f);
@@ -733,7 +733,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
         config);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
   }
-  const auto loudness = analysis::meter::lufs_interleaved(
+  const auto loudness = metering::lufs_interleaved(
       interleaved.data(), channels[0].size(), options->num_channels, options->target_sample_rate);
   out->sample_count = interleaved.size();
   out->frames = static_cast<int64_t>(channels[0].size());

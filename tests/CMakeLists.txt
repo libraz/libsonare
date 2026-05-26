@@ -71,7 +71,7 @@ add_executable(sonare_tests
   analysis/chord_analyzer_test.cpp
   analysis/chord_synthetic_matrix_test.cpp
   analysis/boundary_detector_test.cpp
-  analysis/meter_basic_test.cpp
+  metering/meter_basic_test.cpp
   analysis/rhythm_analyzer_test.cpp
   analysis/timbre_analyzer_test.cpp
   analysis/melody_analyzer_test.cpp

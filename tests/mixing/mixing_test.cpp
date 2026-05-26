@@ -10,13 +10,13 @@
 #include <string>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/sidechain_router.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/linear_phase.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/maximizer/maximizer.h"
+#include "metering/lufs.h"
 #include "sonare_c.h"
 #include "util/constants.h"
 
@@ -1458,9 +1458,9 @@ TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixin
   REQUIRE_THAT(snap_b.momentary_lufs - snap_a.momentary_lufs, WithinAbs(6.0206f, 0.1f));
 
   // Optional reference-free cross-check against the offline meter on the same buffer.
-  // analysis/meter/lufs.cpp is part of sonare_core, so this links without CMake changes.
-  const auto offline = sonare::analysis::meter::lufs_interleaved(buffer.data(), buffer.size() / 2,
-                                                                 2, static_cast<int>(kSr));
+  // metering/lufs.cpp is part of sonare_core, so this links without CMake changes.
+  const auto offline = sonare::metering::lufs_interleaved(buffer.data(), buffer.size() / 2, 2,
+                                                          static_cast<int>(kSr));
   REQUIRE_THAT(snap_a.momentary_lufs, WithinAbs(offline.momentary_lufs, 0.7f));
 }
 

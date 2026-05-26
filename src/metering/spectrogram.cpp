@@ -1,10 +1,10 @@
-#include "analysis/meter/spectrogram.h"
+#include "metering/spectrogram.h"
 
 #include <algorithm>
 
 #include "util/exception.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 namespace {
 
 std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
@@ -46,4 +46,4 @@ MeterSpectrogramResult spectrogram(const Audio& audio, const MeterSpectrogramCon
   return result;
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

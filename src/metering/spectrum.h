@@ -7,7 +7,7 @@
 
 #include "core/audio.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 struct SpectrumConfig {
   int n_fft = 2048;
@@ -31,4 +31,4 @@ std::vector<float> smooth_fractional_octave(const std::vector<float>& values,
                                             const std::vector<float>& frequencies,
                                             int octave_fraction = 3);
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

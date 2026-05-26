@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "analysis/meter/lufs.h"
+#include "metering/lufs.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -102,7 +102,7 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
 
   // Loudness range (LRA): full EBU R128 / EBU Tech 3342 algorithm using K-weighted
   // short-term loudness (3 s windows, 100 ms hops, absolute + relative gating).
-  dynamics_.loudness_range_db = analysis::meter::ebur128_loudness_range(audio);
+  dynamics_.loudness_range_db = metering::ebur128_loudness_range(audio);
 
   // Determine if compressed
   // Low dynamic range and low crest factor suggest compression

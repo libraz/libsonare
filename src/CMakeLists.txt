@@ -62,15 +62,15 @@ set(SONARE_SOURCES
   effects/preemphasis.cpp
   effects/remix.cpp
   effects/silence.cpp
-  analysis/meter/basic.cpp
-  analysis/meter/clipping.cpp
-  analysis/meter/dynamic_range.cpp
-  analysis/meter/lufs.cpp
-  analysis/meter/phase_scope.cpp
-  analysis/meter/spectrum.cpp
-  analysis/meter/spectrogram.cpp
-  analysis/meter/stereo.cpp
-  analysis/meter/true_peak.cpp
+  metering/basic.cpp
+  metering/clipping.cpp
+  metering/dynamic_range.cpp
+  metering/lufs.cpp
+  metering/phase_scope.cpp
+  metering/spectrum.cpp
+  metering/spectrogram.cpp
+  metering/stereo.cpp
+  metering/true_peak.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
   analysis/acoustic_analyzer.cpp

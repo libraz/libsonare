@@ -21,7 +21,7 @@
 #include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/melody_analyzer.h"
-#include "analysis/meter/lufs.h"
+#include "metering/lufs.h"
 #include "analysis/music_analyzer.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
@@ -2420,7 +2420,7 @@ int cmd_nnls_chroma(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_lufs(const CliArgs& args, const Audio& audio) {
-  using namespace sonare::analysis::meter;
+  using namespace sonare::metering;
   LufsConfig config;
   LufsResult result = lufs(audio, config);
 

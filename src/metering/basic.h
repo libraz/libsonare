@@ -5,7 +5,7 @@
 
 #include "core/audio.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 float peak_db(const Audio& audio);
 float rms_db(const Audio& audio);
@@ -15,4 +15,4 @@ float silence_ratio(const Audio& audio, float threshold_db = -45.0f, int frame_l
                     int hop_length = 256);
 float dc_offset(const Audio& audio);
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

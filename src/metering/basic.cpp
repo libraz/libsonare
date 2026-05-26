@@ -1,15 +1,15 @@
-#include "analysis/meter/basic.h"
+#include "metering/basic.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-#include "analysis/meter/clipping.h"
+#include "metering/clipping.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 namespace {
 
 float frame_rms_db(const float* data, size_t start, size_t end) {
@@ -83,4 +83,4 @@ float dc_offset(const Audio& audio) {
   return static_cast<float>(sum / static_cast<double>(audio.size()));
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

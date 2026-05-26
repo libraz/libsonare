@@ -1,4 +1,4 @@
-#include "analysis/meter/stereo.h"
+#include "metering/stereo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 using sonare::constants::kInvSqrt2;
 
@@ -70,4 +70,4 @@ std::vector<VectorscopePoint> vectorscope(const float* left, const float* right,
   return points;
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

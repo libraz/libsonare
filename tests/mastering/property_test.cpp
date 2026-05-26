@@ -4,8 +4,6 @@
 #include <cmath>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
 #include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/presets.h"
@@ -15,6 +13,8 @@
 #include "mastering/eq/mid_side_eq.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/stereo/mid_side.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -312,8 +312,8 @@ TEST_CASE("Property: LUFS measurement is deterministic", "[mastering][property]"
   const auto samples = sine(997.0f, 48000, 48000, 0.25f);
   const auto audio = sonare::Audio::from_buffer(samples.data(), samples.size(), 48000);
 
-  const auto first = sonare::analysis::meter::lufs(audio);
-  const auto second = sonare::analysis::meter::lufs(audio);
+  const auto first = sonare::metering::lufs(audio);
+  const auto second = sonare::metering::lufs(audio);
 
   REQUIRE_THAT(second.integrated_lufs, WithinAbs(first.integrated_lufs, 1.0e-6f));
   REQUIRE_THAT(second.momentary_lufs, WithinAbs(first.momentary_lufs, 1.0e-6f));
@@ -325,8 +325,8 @@ TEST_CASE("Property: true peak measurement is deterministic", "[mastering][prope
   const auto samples = deterministic_signal(4096);
   const auto audio = sonare::Audio::from_buffer(samples.data(), samples.size(), 48000);
 
-  const float first = sonare::analysis::meter::true_peak_db(audio, 4);
-  const float second = sonare::analysis::meter::true_peak_db(audio, 4);
+  const float first = sonare::metering::true_peak_db(audio, 4);
+  const float second = sonare::metering::true_peak_db(audio, 4);
 
   REQUIRE_THAT(second, WithinAbs(first, 1.0e-6f));
 }

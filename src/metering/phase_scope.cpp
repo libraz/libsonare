@@ -1,13 +1,13 @@
-#include "analysis/meter/phase_scope.h"
+#include "metering/phase_scope.h"
 
 #include <algorithm>
 #include <cmath>
 
-#include "analysis/meter/stereo.h"
+#include "metering/stereo.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 using sonare::constants::kInvSqrt2;
 
@@ -42,4 +42,4 @@ PhaseScopeResult phase_scope(const float* left, const float* right, size_t lengt
   return result;
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

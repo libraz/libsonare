@@ -8,7 +8,7 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 struct MeterSpectrogramConfig {
   StftConfig stft;
@@ -32,4 +32,4 @@ struct MeterSpectrogramResult {
 
 MeterSpectrogramResult spectrogram(const Audio& audio, const MeterSpectrogramConfig& config = {});
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

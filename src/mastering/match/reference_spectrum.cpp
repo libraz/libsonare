@@ -7,9 +7,9 @@
 #include <stdexcept>
 #include <utility>
 
-#include "analysis/meter/spectrum.h"
 #include "core/fft.h"
 #include "core/window.h"
+#include "metering/spectrum.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::match {
@@ -63,8 +63,7 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
     magnitude[static_cast<size_t>(bin)] = static_cast<float>(std::sqrt(mean_power));
   }
   if (config.apply_octave_smoothing) {
-    magnitude =
-        analysis::meter::smooth_fractional_octave(magnitude, frequencies, config.octave_fraction);
+    magnitude = metering::smooth_fractional_octave(magnitude, frequencies, config.octave_fraction);
   }
 
   std::vector<float> db(static_cast<size_t>(n_bins), sonare::constants::kFloorDb);

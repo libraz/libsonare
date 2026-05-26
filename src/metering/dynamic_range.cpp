@@ -1,4 +1,4 @@
-#include "analysis/meter/dynamic_range.h"
+#include "metering/dynamic_range.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 namespace {
 
 float rms_db_for_window(const float* data, size_t start, size_t length, float floor_db) {
@@ -63,4 +63,4 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   return result;
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

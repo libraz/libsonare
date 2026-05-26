@@ -11,8 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
 #include "core/audio.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
@@ -29,6 +27,8 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 #include "util/db.h"
 
 namespace sonare::mastering::api {
@@ -123,7 +123,7 @@ std::vector<float> mono_mix(const std::vector<float>& left, const std::vector<fl
 
 float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
   Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-  return analysis::meter::lufs(audio).integrated_lufs;
+  return metering::lufs(audio).integrated_lufs;
 }
 
 void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float gain_db) {
@@ -322,8 +322,8 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   result.applied_gain_db = applied_gain_db;
   {
     Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    result.output_true_peak_dbtp = analysis::meter::true_peak_db(audio, 4);
-    result.output_lra = analysis::meter::lufs(audio).loudness_range;
+    result.output_true_peak_dbtp = metering::true_peak_db(audio, 4);
+    result.output_lra = metering::lufs(audio).loudness_range;
   }
   result.samples = std::move(data);
   return result;
@@ -499,11 +499,11 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    result.output_true_peak_dbtp = std::max(analysis::meter::true_peak_db(left_audio, 4),
-                                            analysis::meter::true_peak_db(right_audio, 4));
+    result.output_true_peak_dbtp =
+        std::max(metering::true_peak_db(left_audio, 4), metering::true_peak_db(right_audio, 4));
     std::vector<float> mono = mono_mix(left, right);
     Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
-    result.output_lra = analysis::meter::lufs(mono_audio).loudness_range;
+    result.output_lra = metering::lufs(mono_audio).loudness_range;
   }
   result.left = std::move(left);
   result.right = std::move(right);

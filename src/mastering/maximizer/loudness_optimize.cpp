@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 #include "util/db.h"
 
 namespace sonare::mastering::maximizer {
@@ -18,11 +18,11 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   if (audio.empty()) throw std::invalid_argument("audio must not be empty");
   if (config.true_peak_oversample < 1) throw std::invalid_argument("oversample must be positive");
 
-  const auto input_loudness = analysis::meter::lufs(audio);
+  const auto input_loudness = metering::lufs(audio);
   float gain_db = std::isfinite(input_loudness.integrated_lufs)
                       ? config.target_lufs - input_loudness.integrated_lufs
                       : 0.0f;
-  const float peak_db = analysis::meter::true_peak_db(audio, config.true_peak_oversample);
+  const float peak_db = metering::true_peak_db(audio, config.true_peak_oversample);
   if (std::isfinite(peak_db)) {
     // Headroom toward the ceiling estimated from the true (inter-sample) peak so
     // the static gain alone rarely exceeds the ceiling; the limiter below catches
@@ -65,7 +65,7 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   LoudnessOptimizeResult result;
   result.audio = Audio::from_vector(std::move(samples), audio.sample_rate());
   result.input_lufs = input_loudness.integrated_lufs;
-  result.output_lufs = analysis::meter::lufs(result.audio).integrated_lufs;
+  result.output_lufs = metering::lufs(result.audio).integrated_lufs;
   result.applied_gain_db = linear_to_db(gain);
   return result;
 }

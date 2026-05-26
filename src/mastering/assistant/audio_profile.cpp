@@ -9,13 +9,13 @@
 #include <numeric>
 
 #include "analysis/bpm_analyzer.h"
-#include "analysis/meter/basic.h"
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/spectral.h"
+#include "metering/basic.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::assistant {
@@ -155,11 +155,11 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
 
   profile.duration_sec = audio.duration();
 
-  const auto loudness = analysis::meter::lufs(audio);
+  const auto loudness = metering::lufs(audio);
   profile.loudness.integrated_lufs = loudness.integrated_lufs;
   profile.loudness.lra_lu = loudness.loudness_range;
-  profile.loudness.true_peak_db = analysis::meter::true_peak_db(audio, config.true_peak_oversample);
-  profile.loudness.crest_factor_db = analysis::meter::crest_factor_db(audio);
+  profile.loudness.true_peak_db = metering::true_peak_db(audio, config.true_peak_oversample);
+  profile.loudness.crest_factor_db = metering::crest_factor_db(audio);
 
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;
@@ -185,7 +185,7 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
   profile.spectral.flatness = mean_finite(spectral_flatness(spec));
   profile.spectral.rolloff_hz = mean_finite(spectral_rolloff(spec, audio.sample_rate()));
 
-  const auto short_term = analysis::meter::short_term_lufs(audio);
+  const auto short_term = metering::short_term_lufs(audio);
   profile.dynamics.short_term_lufs_std = stddev_finite(short_term);
 
   MelConfig mel_config;

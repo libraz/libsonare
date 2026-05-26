@@ -51,7 +51,7 @@ class FFT;
 ///    program — it gates short-term loudness against a relative threshold derived
 ///    from the global mean, then takes a 95th-10th percentile of the whole
 ///    distribution. This cannot be finalized until the stream ends, so it is an
-///    offline measure (analysis::meter::ebur128_loudness_range). Per-frame RMS
+///    offline measure (metering::ebur128_loudness_range). Per-frame RMS
 ///    energy is exposed as the closest causal proxy.
 ///  - Section / boundary structure: derived from a song-wide self-similarity
 ///    matrix; inherently requires the full signal and is omitted from streaming.

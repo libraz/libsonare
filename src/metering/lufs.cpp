@@ -1,4 +1,4 @@
-#include "analysis/meter/lufs.h"
+#include "metering/lufs.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 namespace {
 
 constexpr double kLoudnessOffset = -0.691;
@@ -349,4 +349,4 @@ std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config)
                                          config.short_term_duration_sec, config.block_overlap));
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

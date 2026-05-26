@@ -1,11 +1,11 @@
-#include "analysis/meter/clipping.h"
+#include "metering/clipping.h"
 
 #include <algorithm>
 #include <cmath>
 
 #include "util/exception.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_region_samples) {
   SONARE_CHECK(threshold >= 0.0f && threshold <= 1.0f, ErrorCode::InvalidParameter);
@@ -41,4 +41,4 @@ ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_r
   return result;
 }
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

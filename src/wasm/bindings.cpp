@@ -23,7 +23,6 @@
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/melody_analyzer.h"
-#include "analysis/meter/lufs.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "analysis/rhythm_analyzer.h"
@@ -75,6 +74,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "metering/lufs.h"
 #include "mixing/api/presets.h"
 #include "mixing/channel_strip.h"
 #include "quick.h"
@@ -240,7 +240,7 @@ std::vector<float> monoMix(const std::vector<float>& left, const std::vector<flo
 
 float integratedLufs(const std::vector<float>& samples, int sample_rate) {
   Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-  return analysis::meter::lufs(audio).integrated_lufs;
+  return metering::lufs(audio).integrated_lufs;
 }
 
 void applyGainDb(std::vector<float>& left, std::vector<float>& right, float gain_db) {
@@ -2766,7 +2766,7 @@ val js_tempogram_ratio(val tempogram_data, int win_length, int sample_rate, int 
 val js_lufs(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  analysis::meter::LufsResult result = analysis::meter::lufs(audio);
+  metering::LufsResult result = metering::lufs(audio);
   val out = val::object();
   out.set("integratedLufs", result.integrated_lufs);
   out.set("momentaryLufs", result.momentary_lufs);
@@ -2778,13 +2778,13 @@ val js_lufs(val samples, int sample_rate) {
 val js_momentary_lufs(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  return vectorToFloat32Array(analysis::meter::momentary_lufs(audio));
+  return vectorToFloat32Array(metering::momentary_lufs(audio));
 }
 
 val js_short_term_lufs(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  return vectorToFloat32Array(analysis::meter::short_term_lufs(audio));
+  return vectorToFloat32Array(metering::short_term_lufs(audio));
 }
 
 // ============================================================================
@@ -3556,8 +3556,8 @@ class RealtimeEngineWasm {
     const size_t frames = channels.empty() ? 0 : channels[0].size();
     if (boolProperty(options_val, "normalizeLufs", false)) {
       const float target_lufs = floatProperty(options_val, "targetLufs", -14.0f);
-      const auto loudness = analysis::meter::lufs_interleaved(interleaved.data(), frames,
-                                                              num_channels, target_sample_rate);
+      const auto loudness =
+          metering::lufs_interleaved(interleaved.data(), frames, num_channels, target_sample_rate);
       if (std::isfinite(loudness.integrated_lufs)) {
         const float gain = std::pow(10.0f, (target_lufs - loudness.integrated_lufs) / 20.0f);
         for (auto& sample : interleaved) {
@@ -3580,8 +3580,8 @@ class RealtimeEngineWasm {
       interleaved.assign(dithered.data(), dithered.data() + dithered.size());
     }
 
-    const auto loudness = analysis::meter::lufs_interleaved(interleaved.data(), frames,
-                                                            num_channels, target_sample_rate);
+    const auto loudness =
+        metering::lufs_interleaved(interleaved.data(), frames, num_channels, target_sample_rate);
     val out = val::object();
     out.set("interleaved", vectorToFloat32Array(interleaved));
     out.set("frames", static_cast<double>(frames));

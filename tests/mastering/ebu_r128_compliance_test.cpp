@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
 #include "dr_wav.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -74,7 +74,7 @@ float max_true_peak_db(const WavFixture& fixture) {
       channel[frame] =
           fixture.samples[frame * static_cast<size_t>(fixture.channels) + static_cast<size_t>(ch)];
     }
-    max_peak = std::max(max_peak, analysis::meter::true_peak(channel.data(), channel.size(), 4));
+    max_peak = std::max(max_peak, metering::true_peak(channel.data(), channel.size(), 4));
   }
   return max_peak > 0.0f ? 20.0f * std::log10(max_peak) : -std::numeric_limits<float>::infinity();
 }
@@ -131,8 +131,8 @@ TEST_CASE("EBU R128 optional loudness test vectors", "[mastering][ebu_r128]") {
 
     INFO("EBU vector: " << vector.filename);
     const WavFixture audio = load_wav_interleaved(audio_path);
-    const auto loudness = analysis::meter::lufs_interleaved(audio.samples.data(), audio.frames,
-                                                            audio.channels, audio.sample_rate);
+    const auto loudness = metering::lufs_interleaved(audio.samples.data(), audio.frames,
+                                                     audio.channels, audio.sample_rate);
 
     REQUIRE(std::isfinite(loudness.integrated_lufs));
     WARN("Report EBU R128 fixture " << vector.filename << " measured integrated_lufs "

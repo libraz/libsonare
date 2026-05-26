@@ -77,15 +77,15 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/util/sequence.cpp
   ${SONARE_ROOT}/src/util/vector_normalize.cpp
   ${SONARE_ROOT}/src/mastering/maximizer/loudness_optimize.cpp
-  ${SONARE_ROOT}/src/analysis/meter/basic.cpp
-  ${SONARE_ROOT}/src/analysis/meter/clipping.cpp
-  ${SONARE_ROOT}/src/analysis/meter/dynamic_range.cpp
-  ${SONARE_ROOT}/src/analysis/meter/lufs.cpp
-  ${SONARE_ROOT}/src/analysis/meter/phase_scope.cpp
-  ${SONARE_ROOT}/src/analysis/meter/spectrum.cpp
-  ${SONARE_ROOT}/src/analysis/meter/spectrogram.cpp
-  ${SONARE_ROOT}/src/analysis/meter/stereo.cpp
-  ${SONARE_ROOT}/src/analysis/meter/true_peak.cpp
+  ${SONARE_ROOT}/src/metering/basic.cpp
+  ${SONARE_ROOT}/src/metering/clipping.cpp
+  ${SONARE_ROOT}/src/metering/dynamic_range.cpp
+  ${SONARE_ROOT}/src/metering/lufs.cpp
+  ${SONARE_ROOT}/src/metering/phase_scope.cpp
+  ${SONARE_ROOT}/src/metering/spectrum.cpp
+  ${SONARE_ROOT}/src/metering/spectrogram.cpp
+  ${SONARE_ROOT}/src/metering/stereo.cpp
+  ${SONARE_ROOT}/src/metering/true_peak.cpp
   ${SONARE_ROOT}/src/analysis/key_profiles.cpp
   ${SONARE_ROOT}/src/analysis/chord_templates.cpp
   ${SONARE_ROOT}/src/analysis/acoustic_analyzer.cpp

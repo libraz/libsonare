@@ -17,7 +17,7 @@ namespace {
 constexpr double kLoudnessOffset = -0.691;
 }  // namespace
 
-// K-weighting biquad design mirrored from analysis/meter/lufs.cpp.
+// K-weighting biquad design mirrored from metering/lufs.cpp.
 MeterProcessor::Biquad MeterProcessor::high_shelf(double frequency, double sample_rate,
                                                   double gain_db, double q) {
   const double a = std::pow(10.0, gain_db / 40.0);

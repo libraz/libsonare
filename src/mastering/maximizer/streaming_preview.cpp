@@ -3,8 +3,8 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -13,8 +13,8 @@ std::vector<StreamingPreviewResult> streaming_preview(
   if (audio.empty()) throw std::invalid_argument("audio must not be empty");
   if (platforms.empty()) throw std::invalid_argument("platform list must not be empty");
 
-  const float integrated = analysis::meter::lufs(audio).integrated_lufs;
-  const float true_peak = analysis::meter::true_peak_db(audio, 4);
+  const float integrated = metering::lufs(audio).integrated_lufs;
+  const float true_peak = metering::true_peak_db(audio, 4);
   std::vector<StreamingPreviewResult> results;
   results.reserve(platforms.size());
   for (const auto& platform : platforms) {

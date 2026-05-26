@@ -4,7 +4,6 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "analysis/meter/lufs.h"
 #include "core/audio.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -78,6 +77,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "metering/lufs.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -112,7 +112,7 @@ void run_processor_stereo(Processor& processor, std::vector<float>& left, std::v
 
 float lufs_for(const std::vector<float>& samples, int sample_rate) {
   auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-  return analysis::meter::lufs(audio).integrated_lufs;
+  return metering::lufs(audio).integrated_lufs;
 }
 
 std::vector<float> mono_mix(const std::vector<float>& left, const std::vector<float>& right) {

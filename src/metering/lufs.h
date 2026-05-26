@@ -8,7 +8,7 @@
 
 #include "core/audio.h"
 
-namespace sonare::analysis::meter {
+namespace sonare::metering {
 
 struct LufsResult {
   float integrated_lufs = 0.0f;
@@ -41,4 +41,4 @@ std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config 
 /// @return Loudness range in LU (0 if insufficient data).
 float ebur128_loudness_range(const Audio& audio);
 
-}  // namespace sonare::analysis::meter
+}  // namespace sonare::metering

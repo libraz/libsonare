@@ -3,7 +3,6 @@
 #include <optional>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
 #include "core/audio.h"
 #include "core/convert.h"
 #include "core/db_convert.h"
@@ -12,6 +11,7 @@
 #include "effects/silence.h"
 #include "feature/rhythm.h"
 #include "feature/tonnetz.h"
+#include "metering/lufs.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "util/frame.h"
@@ -334,7 +334,7 @@ SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsR
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sr);
-  analysis::meter::LufsResult result = analysis::meter::lufs(audio);
+  metering::LufsResult result = metering::lufs(audio);
   out->integrated_lufs = result.integrated_lufs;
   out->momentary_lufs = result.momentary_lufs;
   out->short_term_lufs = result.short_term_lufs;
@@ -349,7 +349,7 @@ SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, f
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sr);
-  return copy_float_vector(analysis::meter::momentary_lufs(audio), out, out_length);
+  return copy_float_vector(metering::momentary_lufs(audio), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -359,6 +359,6 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, 
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
   Audio audio = Audio::from_buffer(samples, length, sr);
-  return copy_float_vector(analysis::meter::short_term_lufs(audio), out, out_length);
+  return copy_float_vector(metering::short_term_lufs(audio), out, out_length);
   SONARE_C_CATCH
 }
