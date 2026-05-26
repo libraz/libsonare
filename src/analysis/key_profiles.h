@@ -208,4 +208,19 @@ float profile_correlation(const std::array<float, 12>& chroma,
 /// @return Pearson correlation coefficient [-1, 1]
 float profile_correlation(const float* chroma, const std::array<float, 12>& profile);
 
+/// @brief Best major/minor key match for a chroma vector.
+struct MajorMinorKeyMatch {
+  int root = 0;           ///< Pitch class (0=C, ..., 11=B)
+  bool minor = false;     ///< True for minor, false for major
+  float correlation = 0;  ///< Raw profile correlation [-1, 1]
+};
+
+/// @brief Finds the best major/minor Krumhansl-Schmuckler-style key match.
+/// @param chroma Normalized chroma vector [12].
+/// @param profile_type Profile family to use.
+/// @return Best root/mode and raw correlation.
+MajorMinorKeyMatch find_best_major_minor_key(
+    const std::array<float, 12>& chroma,
+    KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler);
+
 }  // namespace sonare

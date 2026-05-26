@@ -73,6 +73,7 @@ set(SONARE_SOURCES
   metering/true_peak.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
+  analysis/progression_patterns.cpp
   analysis/acoustic_analyzer.cpp
   analysis/bpm_analyzer.cpp
   analysis/key_analyzer.cpp

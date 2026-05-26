@@ -257,4 +257,32 @@ float profile_correlation(const float* chroma, const std::array<float, 12>& prof
   return numerator / denominator;
 }
 
+MajorMinorKeyMatch find_best_major_minor_key(const std::array<float, 12>& chroma,
+                                             KeyProfileType profile_type) {
+  MajorMinorKeyMatch best;
+  best.correlation = -2.0f;
+
+  for (int root = 0; root < 12; ++root) {
+    const PitchClass pc = static_cast<PitchClass>(root);
+
+    auto major_profile = normalize_profile(get_major_profile(pc, profile_type));
+    const float major_corr = profile_correlation(chroma, major_profile);
+    if (major_corr > best.correlation) {
+      best.root = root;
+      best.minor = false;
+      best.correlation = major_corr;
+    }
+
+    auto minor_profile = normalize_profile(get_minor_profile(pc, profile_type));
+    const float minor_corr = profile_correlation(chroma, minor_profile);
+    if (minor_corr > best.correlation) {
+      best.root = root;
+      best.minor = true;
+      best.correlation = minor_corr;
+    }
+  }
+
+  return best;
+}
+
 }  // namespace sonare

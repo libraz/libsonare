@@ -266,14 +266,6 @@ class StreamAnalyzer {
   static constexpr size_t kMaxChromaHistoryFrames = 3000;   ///< ~35s at default settings
   std::vector<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
 
-  // Known chord progression patterns (degree, quality pairs)
-  // degree: 0=I, 2=II, 4=III, 5=IV, 7=V, 9=VI, 11=VII
-  struct ProgressionPattern {
-    std::string name;
-    std::vector<std::pair<int, int>> chords;  ///< (degree, quality) pairs
-  };
-  static const std::vector<ProgressionPattern>& get_known_patterns();
-
   // Internal methods
   void compute_retroactive_bar_chords();
   void compute_voted_pattern(int pattern_length = 4);

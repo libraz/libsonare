@@ -7,6 +7,7 @@
 #include "analysis/chord_analyzer.h"
 #include "analysis/chord_templates.h"
 #include "analysis/key_profiles.h"
+#include "analysis/progression_patterns.h"
 #include "core/fft.h"
 #include "core/resample.h"
 #include "core/window.h"
@@ -399,39 +400,13 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         }
       }
 
-      /// Find best matching key using profile correlation
-      int best_key = 0;
-      bool best_minor = false;
-      float best_corr = -2.0f;
-
-      for (int root = 0; root < 12; ++root) {
-        PitchClass pc = static_cast<PitchClass>(root);
-
-        /// Check major key
-        auto major_profile = normalize_profile(get_major_profile(pc));
-        float major_corr = profile_correlation(mean_chroma, major_profile);
-        if (major_corr > best_corr) {
-          best_corr = major_corr;
-          best_key = root;
-          best_minor = false;
-        }
-
-        /// Check minor key
-        auto minor_profile = normalize_profile(get_minor_profile(pc));
-        float minor_corr = profile_correlation(mean_chroma, minor_profile);
-        if (minor_corr > best_corr) {
-          best_corr = minor_corr;
-          best_key = root;
-          best_minor = true;
-        }
-      }
-
-      current_estimate_.key = best_key;
-      current_estimate_.key_minor = best_minor;
+      const MajorMinorKeyMatch key_match = find_best_major_minor_key(mean_chroma);
+      current_estimate_.key = key_match.root;
+      current_estimate_.key_minor = key_match.minor;
 
       /// Confidence based on correlation strength and time
       float time_factor = std::min(1.0f, current_time / 30.0f);
-      float corr_factor = (best_corr + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
+      float corr_factor = (key_match.correlation + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
       current_estimate_.key_confidence = corr_factor * time_factor;
 
       last_key_update_time_ = current_time;
@@ -758,35 +733,9 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     }
 
     /// Find chord with highest weighted vote (confidence-weighted)
-    /// Apply diatonic chord bonus based on detected key
+    /// Apply diatonic chord bonus based on detected key.
     int detected_key = current_estimate_.key;
-    bool key_minor = current_estimate_.key_minor;
-
-    /// Diatonic chords in major key: I, ii, iii, IV, V, vi, vii°
-    /// Semitones from root: 0(M), 2(m), 4(m), 5(M), 7(M), 9(m), 11(dim)
-    /// In minor key: i, ii°, III, iv, v/V, VI, VII
-    std::array<std::pair<int, int>, 7> diatonic_chords;
-    if (!key_minor) {
-      diatonic_chords = {{
-          {0, 0},   // I (Major)
-          {2, 1},   // ii (minor)
-          {4, 1},   // iii (minor)
-          {5, 0},   // IV (Major)
-          {7, 0},   // V (Major)
-          {9, 1},   // vi (minor)
-          {11, 2},  // vii° (diminished)
-      }};
-    } else {
-      diatonic_chords = {{
-          {0, 1},   // i (minor)
-          {2, 2},   // ii° (diminished)
-          {3, 0},   // III (Major)
-          {5, 1},   // iv (minor)
-          {7, 0},   // V (Major) - often used
-          {8, 0},   // VI (Major)
-          {10, 0},  // VII (Major)
-      }};
-    }
+    const auto diatonic_chords = diatonic_triads(current_estimate_.key_minor);
 
     int best_idx = 0;
     float best_score = 0.0f;
@@ -854,7 +803,7 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
 
   bool can_lock = (static_cast<int>(bars.size()) >= min_bars_for_lock);
 
-  const auto& patterns = get_known_patterns();
+  const auto& patterns = known_progression_patterns();
   int detected_key = current_estimate_.key;
   int pattern_length = static_cast<int>(voted.size());
 
@@ -922,52 +871,6 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   }
 }
 
-const std::vector<StreamAnalyzer::ProgressionPattern>& StreamAnalyzer::get_known_patterns() {
-  // degree: 0=I, 1=bII, 2=II, 3=bIII, 4=III, 5=IV, 6=bV, 7=V, 8=bVI, 9=VI, 10=bVII, 11=VII
-  // quality: 0=Major, 1=Minor
-  static const std::vector<ProgressionPattern> patterns = {
-      // Royal Road (王道進行): I - V - VIm - IV
-      {"royalRoad", {{0, 0}, {7, 0}, {9, 1}, {5, 0}}},
-
-      // Komuro (小室進行): VIm - IV - V - I
-      {"komuro", {{9, 1}, {5, 0}, {7, 0}, {0, 0}}},
-
-      // Canon (カノン進行): I - V - VIm - IIIm - IV - I - IV - V
-      {"canon", {{0, 0}, {7, 0}, {9, 1}, {4, 1}, {5, 0}, {0, 0}, {5, 0}, {7, 0}}},
-
-      // Just the Two of Us: IVM7 - IIIm7 - VIm
-      {"justTheTwoOfUs", {{5, 0}, {4, 1}, {9, 1}}},
-
-      // I - IV - V - I (Basic)
-      {"basic145", {{0, 0}, {5, 0}, {7, 0}, {0, 0}}},
-
-      // Blues (12-bar): I - I - I - I - IV - IV - I - I - V - IV - I - V
-      {"blues12",
-       {{0, 0},
-        {0, 0},
-        {0, 0},
-        {0, 0},
-        {5, 0},
-        {5, 0},
-        {0, 0},
-        {0, 0},
-        {7, 0},
-        {5, 0},
-        {0, 0},
-        {7, 0}}},
-
-      // Axis (VIm - IV - I - V)
-      {"axis", {{9, 1}, {5, 0}, {0, 0}, {7, 0}}},
-
-      // I - VIm - IV - V (50s)
-      {"fifties", {{0, 0}, {9, 1}, {5, 0}, {7, 0}}},
-
-      // I - V - VIm - IIIm (Sensitive)
-      {"sensitive", {{0, 0}, {7, 0}, {9, 1}, {4, 1}}},
-  };
-  return patterns;
-}
-
 void StreamAnalyzer::detect_progression_pattern() {
   // Skip if pattern is already locked
   if (pattern_locked_) {
@@ -979,7 +882,7 @@ void StreamAnalyzer::detect_progression_pattern() {
     return;
   }
 
-  const auto& patterns = get_known_patterns();
+  const auto& patterns = known_progression_patterns();
   int detected_key = current_estimate_.key;
 
   std::string best_pattern_name;
@@ -1006,41 +909,8 @@ void StreamAnalyzer::detect_progression_pattern() {
       const auto& bar = bars[bar_idx];
       float bar_conf = bar.confidence;
 
-      /// Calculate similarity score (0.0 to 1.0)
-      float similarity = 0.0f;
-
-      if (bar.root == expected_root && bar.quality == expected_quality) {
-        /// Exact match
-        similarity = 1.0f;
-      } else if (bar.root == expected_root) {
-        /// Same root, different quality (e.g., C vs Cm)
-        similarity = 0.6f;
-      } else {
-        /// Check for related chords
-        int root_diff = std::abs(bar.root - expected_root);
-        if (root_diff > 6) root_diff = 12 - root_diff;  /// Wrap around
-
-        if (root_diff == 0) {
-          similarity = 0.6f;  /// Same root
-        } else if (root_diff == 7 || root_diff == 5) {
-          /// Fifth or fourth relationship (e.g., C and G, or C and F)
-          similarity = 0.3f;
-        } else if (root_diff == 3 || root_diff == 4) {
-          /// Third relationship (relative major/minor)
-          similarity = 0.25f;
-        } else if (root_diff == 2) {
-          /// Second (close neighbor)
-          similarity = 0.15f;
-        } else if (root_diff == 1) {
-          /// Semitone (very close, might be tuning issue)
-          similarity = 0.2f;
-        }
-
-        /// Bonus if quality matches despite root mismatch
-        if (bar.quality == expected_quality) {
-          similarity += 0.1f;
-        }
-      }
+      const float similarity =
+          chord_similarity_score(bar.root, bar.quality, expected_root, expected_quality);
 
       /// Weight by detection confidence
       total_score += similarity * bar_conf;
