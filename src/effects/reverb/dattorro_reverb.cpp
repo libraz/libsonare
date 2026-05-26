@@ -167,7 +167,10 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     return;
   }
   float* left = channels[0];
-  float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
+  const bool stereo = num_channels > 1 && channels[1] != nullptr;
+  // For mono, alias right to left for reading the (identical) input, but only
+  // one output write is performed below so the left result is not clobbered.
+  float* right = stereo ? channels[1] : channels[0];
 
   const float decay = std::clamp(config_.decay, 0.0f, 0.98f);
   const float damp_d = std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f;
@@ -239,8 +242,14 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
                         delay_l1_.read_at(tap_r_l1_) - decay_ap_l_.read_at(tap_r_apl_) -
                         delay_l2_.read_at(tap_r_l2_);
 
-    left[i] = dry * in_l + wet * out_l;
-    right[i] = dry * in_r + wet * out_r;
+    if (stereo) {
+      left[i] = dry * in_l + wet * out_l;
+      right[i] = dry * in_r + wet * out_r;
+    } else {
+      // Mono: collapse the stereo reverb to a single channel so the lone output
+      // buffer is not written twice with different values.
+      left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
+    }
   }
 }
 

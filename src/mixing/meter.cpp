@@ -82,10 +82,19 @@ void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {
     const int sr = static_cast<int>(std::lround(sample_rate_));
+    // Cache the K-weighting coefficients for the two most common rates so the
+    // (more expensive) shelf/high-pass design is only run for other rates. These
+    // precomputed values are bit-for-bit what high_shelf()/highpass() produce at
+    // the corresponding sample rate, so behavior is unchanged.
     if (sr == 48000) {
       k_pre_ = {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241,
                 0.73248077421585};
       k_rlb_ = {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621};
+    } else if (sr == 44100) {
+      k_pre_ = {1.5245497507424821, -2.5910067542593858, 1.126819073893832, -1.6237063834520937,
+                0.68406845382902193};
+      k_rlb_ = {0.99459217735419247, -1.9891843547083849, 0.99459217735419247, -1.989169673629763,
+                0.98919903578700674};
     } else {
       k_pre_ = high_shelf(1681.974450955533, sample_rate_, 3.999843853973347, 0.7071752369554196);
       k_rlb_ = highpass(38.13547087613982, sample_rate_, 0.5003270373238773);

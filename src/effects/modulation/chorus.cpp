@@ -4,11 +4,24 @@
 
 namespace sonare::effects::modulation {
 
+namespace {
+// Minimum delay-buffer length so the buffer is never smaller than a typical
+// chorus range even for tiny configured delays.
+constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms
+}  // namespace
+
 Chorus::Chorus(ChorusConfig config) : config_(config) {}
 
 void Chorus::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  const int max_delay = static_cast<int>(sample_rate_ * 0.1);
+  // Size the buffer from the actual maximum modulated delay (center + full LFO
+  // depth) so the configured modulation is not silently clipped, with a 100 ms
+  // floor. The delay line additionally clamps reads to this length at runtime,
+  // so later parameter automation can never cause an out-of-bounds read.
+  const float max_delay_ms =
+      std::max(0.0f, config_.center_delay_ms) + std::max(0.0f, config_.depth_ms);
+  const float max_delay_seconds = std::max(kMinDelayBufferSeconds, max_delay_ms * 0.001f);
+  const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(max_delay_seconds)) + 1;
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
   }
