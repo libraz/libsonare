@@ -70,7 +70,7 @@ void normalize_chroma_frames(std::vector<float>& chroma, int n_chroma, int n_fra
     for (int c = 0; c < n_chroma; ++c) {
       max_value = std::max(max_value, chroma[c * n_frames + frame]);
     }
-    if (max_value > 1e-10f) {
+    if (max_value > constants::kEpsilon) {
       for (int c = 0; c < n_chroma; ++c) {
         chroma[c * n_frames + frame] /= max_value;
       }
@@ -138,7 +138,7 @@ std::vector<float> build_nnls_harmonic_template(const std::vector<float>& cqt_fr
       norm += value * value;
     }
     norm = std::sqrt(norm);
-    if (norm > 1e-10f) {
+    if (norm > constants::kEpsilon) {
       for (int bin = 0; bin < n_bins; ++bin) {
         matrix[bin * config.n_pitches + pitch] /= norm;
       }

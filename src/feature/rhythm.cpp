@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "core/fft.h"
+#include "core/window.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/constants.h"
@@ -15,38 +16,6 @@
 namespace sonare {
 
 namespace {
-
-/// @brief Build an analysis window matching librosa.filters.get_window for the
-///        supported WindowType values used by TempogramConfig.
-std::vector<float> make_window(WindowType type, int length) {
-  if (length <= 1) return std::vector<float>(length, 1.0f);
-  std::vector<float> w(length);
-  const double tp = constants::kTwoPiD;
-  switch (type) {
-    case WindowType::Hann:
-      for (int i = 0; i < length; ++i) {
-        // librosa uses a periodic Hann: 0.5 * (1 - cos(2*pi*i / N))
-        w[i] = static_cast<float>(0.5 * (1.0 - std::cos(tp * i / length)));
-      }
-      break;
-    case WindowType::Hamming:
-      for (int i = 0; i < length; ++i) {
-        w[i] = static_cast<float>(0.54 - 0.46 * std::cos(tp * i / length));
-      }
-      break;
-    case WindowType::Blackman:
-      for (int i = 0; i < length; ++i) {
-        const double t = static_cast<double>(i) / static_cast<double>(length);
-        w[i] = static_cast<float>(0.42 - 0.5 * std::cos(tp * t) + 0.08 * std::cos(2.0 * tp * t));
-      }
-      break;
-    case WindowType::Rectangular:
-    default:
-      std::fill(w.begin(), w.end(), 1.0f);
-      break;
-  }
-  return w;
-}
 
 /// @brief Center-pad the onset envelope by win_length/2 with reflect-equivalent
 ///        zero edges (librosa uses reflect padding; we use constant zeros which
@@ -74,7 +43,7 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*
   const int half = win / 2;
   const auto padded = pad_envelope(onset_envelope, half, config.center);
   const int n_frames = static_cast<int>(onset_envelope.size());
-  const auto window = make_window(config.window, win);
+  const auto window = create_window(config.window, win);
 
   std::vector<float> tg(static_cast<std::size_t>(win) * static_cast<std::size_t>(n_frames), 0.0f);
 
@@ -139,7 +108,7 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
   const int half = win / 2;
   const auto padded = pad_envelope(onset_envelope, half, config.center);
   const int n_frames = static_cast<int>(onset_envelope.size());
-  const auto window = make_window(config.window, win);
+  const auto window = create_window(config.window, win);
 
   // Use kissfft via core/fft.h.
   FFT fft(win);

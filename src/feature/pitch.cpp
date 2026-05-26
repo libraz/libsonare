@@ -4,7 +4,6 @@
 #include <cmath>
 #include <complex>
 #include <limits>
-#include <numeric>
 
 #include "core/convert.h"
 #include "core/fft.h"
@@ -21,7 +20,7 @@ namespace {
 /// @return Fractional offset from center sample
 float parabolic_interp(float ym1, float y0, float yp1) {
   float denom = ym1 - 2.0f * y0 + yp1;
-  if (std::abs(denom) < 1e-10f) {
+  if (std::abs(denom) < constants::kEpsilon) {
     return 0.0f;
   }
   return 0.5f * (ym1 - yp1) / denom;

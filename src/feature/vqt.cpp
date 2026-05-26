@@ -295,17 +295,45 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
                    sr);
 }
 
+Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
+                     int sr, int n_iter) {
+  if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
+  // VQT shares the CQT geometric frequency grid (vqt_frequencies == cqt_frequencies),
+  // so the CQT Griffin-Lim projection applies directly to VQT magnitudes.
+  return griffinlim_cqt(magnitude, n_bins, n_frames, config.to_cqt_config(), sr, n_iter);
+}
+
+Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter) {
+  if (vqt_result.empty()) return Audio();
+
+  const int n_bins = vqt_result.n_bins();
+  const int n_frames = vqt_result.n_frames();
+  const std::vector<float>& freqs = vqt_result.frequencies();
+
+  // Recover the VQT configuration from the stored result. The frequency grid is
+  // geometric: f_k = fmin * 2^(k / bins_per_octave).
+  VqtConfig config;
+  config.hop_length = vqt_result.hop_length();
+  config.n_bins = n_bins;
+  if (!freqs.empty()) {
+    config.fmin = freqs.front();
+  }
+  if (freqs.size() >= 2 && freqs[0] > 0.0f && freqs[1] > freqs[0]) {
+    const float ratio = std::log2(freqs[1] / freqs[0]);
+    if (ratio > 0.0f) {
+      config.bins_per_octave = std::max(1, static_cast<int>(std::lround(1.0f / ratio)));
+    }
+  }
+
+  return griffinlim_vqt(vqt_result.magnitude().data(), n_bins, n_frames, config, sr, n_iter);
+}
+
 Audio ivqt(const VqtResult& vqt_result, int length) {
-  // VQT inverse is similar to CQT inverse
-  // Suppress deprecation warning for internal call to icqt
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-  return icqt(vqt_result, length);
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
+  // High-quality reconstruction path: Griffin-Lim on the VQT magnitude. The
+  // legacy icqt pseudo-inverse remains directly callable for callers that
+  // depend on the previous (lower-quality) behavior.
+  (void)length;  // Griffin-Lim derives output length from the frame count.
+  return griffinlim_vqt(vqt_result, vqt_result.sample_rate());
 }
 
 }  // namespace sonare

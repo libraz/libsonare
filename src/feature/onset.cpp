@@ -4,13 +4,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
 
 namespace {
 
-constexpr float kAmin = 1e-10f;
+// librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
+constexpr float kAmin = constants::kEpsilon;
 constexpr float kPowerToDbScale = 4.342944819f;
 constexpr float kTopDb = 80.0f;
 

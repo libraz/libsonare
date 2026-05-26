@@ -33,7 +33,7 @@ std::vector<float> normalize_columns(std::vector<float> features, int n_chroma, 
       norm_val = std::sqrt(norm_val);
     }
 
-    if (norm_val > 1e-10f) {
+    if (norm_val > constants::kEpsilon) {
       for (int c = 0; c < n_chroma; ++c) {
         features[c * n_frames + t] /= norm_val;
       }
@@ -136,7 +136,7 @@ std::array<float, 12> Chroma::weighted_mean_energy(const std::vector<float>& fra
     }
   }
 
-  if (total_weight <= 1e-10f) {
+  if (total_weight <= constants::kEpsilon) {
     return mean_energy();
   }
 
@@ -175,7 +175,7 @@ std::vector<float> Chroma::normalize(int norm) const {
     }
 
     // Normalize
-    if (norm_val > 1e-10f) {
+    if (norm_val > constants::kEpsilon) {
       for (int c = 0; c < n_chroma_; ++c) {
         result[c * n_frames_ + t] = features_[c * n_frames_ + t] / norm_val;
       }
