@@ -276,6 +276,63 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
   return result;
 }
 
+float ebur128_loudness_range(const Audio& audio) {
+  if (audio.empty()) return 0.0f;
+
+  // EBU Tech 3342: short-term loudness, 3 s window, 100 ms hop.
+  constexpr double kWindowSec = 3.0;
+  constexpr double kHopSec = 0.1;
+  constexpr float kAbsoluteGateLufs = -70.0f;
+  constexpr float kRelativeGateLu = -20.0f;
+
+  const int sample_rate = audio.sample_rate();
+  const std::vector<float> weighted = k_weighted(audio);
+  if (weighted.empty()) return 0.0f;
+
+  const size_t block_size =
+      std::max<size_t>(1, static_cast<size_t>(std::round(kWindowSec * sample_rate)));
+  const size_t hop = std::max<size_t>(1, static_cast<size_t>(std::round(kHopSec * sample_rate)));
+
+  // Compute short-term loudness blocks (full-length blocks only, per EBU R128).
+  std::vector<float> short_term;
+  if (weighted.size() >= block_size) {
+    short_term.reserve((weighted.size() - block_size) / hop + 1);
+    for (size_t start = 0; start + block_size <= weighted.size(); start += hop) {
+      short_term.push_back(energy_to_lufs(mean_square(weighted.data(), start, block_size)));
+    }
+  }
+  if (short_term.size() < 2) return 0.0f;
+
+  // Absolute gate at -70 LUFS.
+  std::vector<float> abs_gated;
+  abs_gated.reserve(short_term.size());
+  for (float value : short_term) {
+    if (std::isfinite(value) && value >= kAbsoluteGateLufs) abs_gated.push_back(value);
+  }
+  if (abs_gated.size() < 2) return 0.0f;
+
+  // Relative gate 20 LU below the mean of the absolute-gated loudness.
+  // Average in the linear (energy) domain, then convert back to LUFS.
+  double mean_energy = 0.0;
+  for (float value : abs_gated) {
+    mean_energy += std::pow(10.0, (static_cast<double>(value) - kLoudnessOffset) / 10.0);
+  }
+  mean_energy /= static_cast<double>(abs_gated.size());
+  const float relative_gate = energy_to_lufs(mean_energy) + kRelativeGateLu;
+
+  std::vector<float> gated;
+  gated.reserve(abs_gated.size());
+  for (float value : abs_gated) {
+    if (value >= relative_gate) gated.push_back(value);
+  }
+  if (gated.size() < 2) return 0.0f;
+
+  std::sort(gated.begin(), gated.end());
+  const size_t low_index = static_cast<size_t>(std::round(0.10 * (gated.size() - 1)));
+  const size_t high_index = static_cast<size_t>(std::round(0.95 * (gated.size() - 1)));
+  return gated[high_index] - gated[low_index];
+}
+
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) {
   validate_config(config);
 

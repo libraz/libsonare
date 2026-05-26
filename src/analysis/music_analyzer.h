@@ -48,6 +48,7 @@ struct AnalysisResult {
   Timbre timbre;                  ///< Overall timbre
   Dynamics dynamics;              ///< Dynamics information
   RhythmFeatures rhythm;          ///< Rhythm features
+  MelodyContour melody;           ///< Melody contour (pitch trajectory + characteristics)
   std::string form;               ///< Song form (e.g., "IABABCO")
 };
 

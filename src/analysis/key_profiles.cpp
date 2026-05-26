@@ -207,7 +207,7 @@ std::array<float, 12> normalize_profile(const std::array<float, 12>& profile) {
   float sum = std::accumulate(profile.begin(), profile.end(), 0.0f);
 
   std::array<float, 12> normalized;
-  if (sum > 1e-10f) {
+  if (sum > constants::kEpsilon) {
     for (int i = 0; i < 12; ++i) {
       normalized[i] = profile[i] / sum;
     }
@@ -250,7 +250,7 @@ float profile_correlation(const float* chroma, const std::array<float, 12>& prof
 
   float denominator = std::sqrt(chroma_var * profile_var);
 
-  if (denominator < 1e-10f) {
+  if (denominator < constants::kEpsilon) {
     return 0.0f;
   }
 

@@ -71,9 +71,6 @@ class MelodyAnalyzer {
   bool has_melody() const { return !contour_.pitches.empty() && contour_.mean_frequency > 0.0f; }
 
  private:
-  void analyze();
-  float yin_pitch(const float* samples, int frame_size, int sr) const;
-  float parabolic_interpolation(const float* diff, int size, int tau) const;
   void compute_contour_features();
 
   MelodyContour contour_;

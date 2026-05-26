@@ -32,4 +32,13 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config = {});
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config = {});
 
+/// @brief Computes the EBU R128 Loudness Range (LRA) in LU.
+/// @param audio Input audio (mono)
+/// @details Implements the standard EBU Tech 3342 algorithm: K-weighted short-term
+///          loudness over 3 s windows with 100 ms hops, an absolute gate of -70 LUFS,
+///          and a relative gate 20 LU below the ungated mean loudness. The LRA is the
+///          difference between the 95th and 10th percentiles of the gated distribution.
+/// @return Loudness range in LU (0 if insufficient data).
+float ebur128_loudness_range(const Audio& audio);
+
 }  // namespace sonare::analysis::meter

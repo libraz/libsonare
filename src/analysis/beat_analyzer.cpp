@@ -13,6 +13,7 @@
 #include "core/convert.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -32,7 +33,7 @@ std::vector<float> compute_local_score(const std::vector<float>& onset_strength)
 
   // Normalize onset strength to [0, 1]
   float max_val = *std::max_element(onset_strength.begin(), onset_strength.end());
-  if (max_val < 1e-10f) {
+  if (max_val < constants::kEpsilon) {
     return std::vector<float>(onset_strength.size(), 0.0f);
   }
 

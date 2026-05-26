@@ -7,6 +7,7 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/rhythm.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -254,7 +255,7 @@ float refine_peak_lag(const std::vector<float>& autocorr, int lag) {
   const float center = autocorr[lag];
   const float right = autocorr[lag + 1];
   const float denominator = left - 2.0f * center + right;
-  if (std::abs(denominator) < 1e-10f) {
+  if (std::abs(denominator) < constants::kEpsilon) {
     return static_cast<float>(lag);
   }
 

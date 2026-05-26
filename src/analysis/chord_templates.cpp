@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 namespace {
@@ -100,7 +102,7 @@ float ChordTemplate::correlate(const float* chroma) const {
   }
 
   float denom = std::sqrt(chroma_norm_sq * pattern_norm_sq);
-  if (denom < 1e-10f) {
+  if (denom < constants::kEpsilon) {
     return 0.0f;
   }
 
@@ -116,7 +118,7 @@ float ChordTemplate::correlate(const float* chroma) const {
     }
   }
 
-  if (max_chroma < 1e-10f) {
+  if (max_chroma < constants::kEpsilon) {
     return cosine_sim;
   }
 

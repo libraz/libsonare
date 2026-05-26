@@ -3,6 +3,7 @@
 /// @file section_analyzer.h
 /// @brief Section analysis for detecting song structure.
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -76,8 +77,22 @@ class SectionAnalyzer {
  private:
   void analyze();
   void classify_sections();
-  SectionType classify_section(int section_idx) const;
   float compute_section_energy(float start, float end) const;
+
+  /// @brief Per-section descriptor used for self-similarity classification.
+  struct SectionDescriptor {
+    std::array<float, 12> chroma{};  ///< Mean (L2-normalized) chroma vector
+    float energy = 0.0f;             ///< Mean RMS energy [0, 1] after normalization
+    float vocal_likelihood = 0.0f;   ///< Estimated vocal presence [0, 1]
+  };
+
+  /// @brief Builds per-section chroma / energy / vocal-likelihood descriptors.
+  /// @details Computes a chromagram and spectrogram once, then aggregates the
+  /// per-frame features inside each section's time span.
+  std::vector<SectionDescriptor> build_descriptors() const;
+
+  /// @brief Computes the section-level self-similarity matrix (cosine of chroma).
+  std::vector<float> self_similarity(const std::vector<SectionDescriptor>& descriptors) const;
 
   std::vector<Section> sections_;
   std::vector<float> energy_curve_;

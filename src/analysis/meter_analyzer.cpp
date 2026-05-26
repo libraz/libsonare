@@ -5,6 +5,8 @@
 #include <limits>
 #include <numeric>
 
+#include "util/constants.h"
+
 namespace sonare {
 namespace {
 
@@ -13,7 +15,7 @@ float normalized_strength(const std::vector<float>& onset_strength, int frame) {
     return 0.0f;
   }
   const float max_value = *std::max_element(onset_strength.begin(), onset_strength.end());
-  if (max_value <= 1e-10f) return 0.0f;
+  if (max_value <= constants::kEpsilon) return 0.0f;
   return onset_strength[static_cast<size_t>(frame)] / max_value;
 }
 

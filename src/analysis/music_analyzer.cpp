@@ -9,6 +9,7 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "filters/iir.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 #ifndef __EMSCRIPTEN__
@@ -22,7 +23,7 @@ MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& conf
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Downsample to 22050 Hz for spectral analysis if sample rate is higher
-  constexpr int kAnalysisSampleRate = 22050;
+  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
   if (audio_.sample_rate() > kAnalysisSampleRate) {
     analysis_audio_ = resample(audio_, kAnalysisSampleRate);
     analysis_sr_ = kAnalysisSampleRate;
@@ -392,9 +393,13 @@ AnalysisResult MusicAnalyzer::analyze() {
   report_progress(0.80f, "dynamics");
   result.dynamics = dynamics_analyzer().dynamics();
 
-  // Rhythm (90-100%)
+  // Rhythm (90-95%)
   report_progress(0.90f, "rhythm");
   result.rhythm = rhythm_analyzer().features();
+
+  // Melody / pitch contour (95-100%)
+  report_progress(0.95f, "melody");
+  result.melody = melody_analyzer().contour();
 
   // Complete
   report_progress(1.0f, "complete");

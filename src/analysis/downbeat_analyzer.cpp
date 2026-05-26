@@ -7,6 +7,7 @@
 
 #include "analysis/chord_analyzer.h"
 #include "filters/iir.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -20,7 +21,7 @@ std::vector<float> normalize_to_unit(std::vector<float> values, size_t target_si
       max_value = std::max(max_value, value);
     }
   }
-  if (max_value <= 1e-10f) {
+  if (max_value <= constants::kEpsilon) {
     return std::vector<float>(target_size, 0.0f);
   }
   for (float& value : values) {

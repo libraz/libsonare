@@ -7,6 +7,7 @@
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -21,7 +22,7 @@ void normalize_feature(float* feature, int n) {
     norm += feature[i] * feature[i];
   }
 
-  if (norm > 1e-10f) {
+  if (norm > constants::kEpsilon) {
     norm = std::sqrt(norm);
     for (int i = 0; i < n; ++i) {
       feature[i] /= norm;
@@ -272,7 +273,7 @@ void BoundaryDetector::compute_novelty_curve() {
     max_val = std::max(max_val, val);
   }
 
-  if (max_val > 1e-10f) {
+  if (max_val > constants::kEpsilon) {
     for (float& val : novelty_curve_) {
       val = std::max(0.0f, val / max_val);
     }
