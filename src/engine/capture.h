@@ -30,6 +30,8 @@ class CaptureSink {
   uint32_t overflow_count() const noexcept { return overflow_count_; }
   bool armed() const noexcept { return armed_; }
   bool punch_enabled() const noexcept { return punch_enabled_; }
+  int64_t punch_start_sample() const noexcept { return punch_start_sample_; }
+  int64_t punch_end_sample() const noexcept { return punch_end_sample_; }
 
  private:
   CaptureSegment segment_{};

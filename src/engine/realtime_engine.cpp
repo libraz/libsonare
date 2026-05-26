@@ -1,6 +1,7 @@
 #include "engine/realtime_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "rt/scoped_no_denormals.h"
@@ -21,6 +22,7 @@ size_t next_power_of_two(size_t value) {
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity) {
   max_block_size_ = std::max(max_block_size, 1);
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   tempo_map_.prepare(sample_rate);
   transport_.prepare(sample_rate, &tempo_map_);
   clip_player_.prepare(sample_rate, max_block_size_);
@@ -28,9 +30,22 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   metronome_.prepare(sample_rate, &tempo_map_);
   meter_tap_.prepare(sample_rate, max_block_size_, 0, telemetry_capacity);
   automation_.prepare(sample_rate, &tempo_map_);
+  mixing_runtime_.prepare(sample_rate_, max_block_size_);
+  monitor_runtime_.prepare(sample_rate_, max_block_size_);
   commands_.reserve(next_power_of_two(std::max<size_t>(command_capacity, 2)));
+  // Telemetry is a single-producer queue with the audio thread as its only
+  // producer; reserve it here so process()/enqueue_telemetry never push to an
+  // unreserved (capacity 0) queue and silently drop records.
   telemetry_.reserve(next_power_of_two(std::max<size_t>(telemetry_capacity, 2)));
   pending_active_.fill(false);
+  // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
+  // the audio thread; mark all slots inactive.
+  for (SmoothedParam& slot : smoothed_params_) {
+    slot.active = false;
+    slot.target_id = 0;
+    slot.smoother.prepare(sample_rate_, param_smoothing_ms_);
+    slot.smoother.reset(0.0f);
+  }
   telemetry_overflow_count_ = 0;
 }
 
@@ -53,6 +68,11 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
   }
 
   const auto state = transport_.snapshot();
+  // Adopt the latest published clip / automation snapshots exactly once at
+  // block start. Every per-sub-block read below then sees a stable set, so a
+  // control-thread publish can never swap data mid-block.
+  clip_player_.acquire_clips();
+  automation_.acquire_lanes();
   drain_commands(state.render_frame, frames);
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
   const uint32_t non_rt_rejection_count_before = automation_.non_realtime_safe_rejection_count();
@@ -89,14 +109,27 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
     const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
     boundary_splitter_.add_automation(static_cast<int>(timeline_sample - state.sample_position));
   }
-  if (automation_.lane_count() > 0) {
-    constexpr int kAutomationControlPeriod = 64;
-    for (int offset = kAutomationControlPeriod; offset < frames;
-         offset += kAutomationControlPeriod) {
+  // Insert control-period boundaries so automation lanes and engine-level
+  // parameter smoothers are re-evaluated at a bounded cadence within the block.
+  if (automation_.lane_count() > 0 || any_smoothed_param_active()) {
+    for (int offset = kControlPeriod; offset < frames; offset += kControlPeriod) {
       boundary_splitter_.add_automation(offset);
     }
   }
 
+  // Punch in/out transitions must split sub-blocks at the exact sample so the
+  // capture sink starts/stops on a sub-block boundary rather than at block
+  // granularity. Register each punch edge that falls inside this block.
+  if (capture_sink_.armed() && capture_sink_.punch_enabled()) {
+    CaptureBoundaryList capture_boundaries;
+    collect_capture_boundaries(state.sample_position, frames, capture_sink_.punch_start_sample(),
+                               capture_sink_.punch_end_sample(), &capture_boundaries);
+    for (size_t i = 0; i < capture_boundaries.size; ++i) {
+      boundary_splitter_.add_marker(capture_boundaries.offsets[i]);
+    }
+  }
+
+  const uint32_t capture_overflow_before = capture_sink_.overflow_count();
   const BoundaryList& boundaries = boundary_splitter_.finish();
   int previous_offset = 0;
   for (size_t i = 0; i < boundaries.size(); ++i) {
@@ -106,9 +139,19 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
       transport_.advance(offset - previous_offset);
       previous_offset = offset;
     }
-    apply_due_commands(offset);
+    // Dispatch commands due at this boundary's render frame. Relying on the
+    // boundary render_frame (rather than a flat block-head comparison) makes
+    // command firing sample-accurate within the block.
+    apply_due_commands(boundaries[i].render_frame);
     const int next_offset = (i + 1 < boundaries.size()) ? boundaries[i + 1].offset : frames;
-    automation_.apply(transport_.snapshot(), 0, next_offset - offset);
+    const int sub_block_len = next_offset - offset;
+    // Evaluate automation at this sub-block's start using the advanced
+    // transport snapshot, so breakpoints that fell mid-block (and were added as
+    // boundary points above) are honored at their exact sub-block boundary.
+    automation_.apply(transport_.snapshot(), 0, sub_block_len);
+    // Advance engine-level smoothing ramps by this sub-block's length and push
+    // the interpolated values to their bound parameters at the same cadence.
+    tick_smoothed_params(sub_block_len);
   }
   if (frames > previous_offset) {
     process_subblock(io, num_channels, previous_offset, frames - previous_offset);
@@ -132,6 +175,15 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
     enqueue_error(TelemetryErrorCode::kBoundaryOverflow, state.render_frame, state.sample_position,
                   boundaries.dropped_count());
   }
+  // Surface capture overflow on the telemetry channel (not only via the polled
+  // capture_overflow_count() accessor) so the two stay consistent. The sink
+  // increments its counter when the capture segment is full; report the delta
+  // accrued during this block.
+  const uint32_t capture_overflow_delta = capture_sink_.overflow_count() - capture_overflow_before;
+  if (capture_overflow_delta > 0) {
+    enqueue_error(TelemetryErrorCode::kCaptureOverflow, state.render_frame, state.sample_position,
+                  capture_overflow_delta);
+  }
   enqueue_telemetry({TelemetryType::kProcessBlock, TelemetryErrorCode::kNone, state.render_frame,
                      end_state.sample_position, audible_timeline_sample(end_state.sample_position),
                      graph_latency_samples_q8_, static_cast<uint32_t>(frames)});
@@ -144,23 +196,53 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   }
 
   const int frames_per_block = std::max(1, std::min(block_size, max_block_size_));
-  std::vector<float*> block_channels(static_cast<size_t>(num_channels), nullptr);
+  // Reuse the member scratch: size it once here (offline path), then the
+  // per-block loop only rewrites pointers and never reallocates.
+  render_block_channels_.assign(static_cast<size_t>(num_channels), nullptr);
   for (int64_t frame = 0; frame < total_frames; frame += frames_per_block) {
     const int frames = static_cast<int>(std::min<int64_t>(frames_per_block, total_frames - frame));
     for (int ch = 0; ch < num_channels; ++ch) {
-      block_channels[static_cast<size_t>(ch)] = out[ch] ? out[ch] + frame : nullptr;
+      render_block_channels_[static_cast<size_t>(ch)] = out[ch] ? out[ch] + frame : nullptr;
     }
-    process(block_channels.data(), num_channels, frames);
+    process(render_block_channels_.data(), num_channels, frames);
   }
 }
 
 bool RealtimeEngine::push_command(const rt::Command& command) noexcept {
+  // Runs on the CONTROL thread. The telemetry_ SPSC queue's sole producer is
+  // the audio thread, so the control thread must NOT push to it. On a full
+  // command queue we bump an atomic overflow counter (control thread is its
+  // only writer) and report failure via the return value. pop_telemetry then
+  // synthesizes a kCommandQueueOverflow record from this counter, so dropped
+  // commands surface even without a process() call -- and without any
+  // control-thread write to the audio-thread-owned telemetry_ queue.
   if (commands_.push(command)) {
     return true;
   }
-  enqueue_error(TelemetryErrorCode::kCommandQueueOverflow, transport_.render_frame(),
-                transport_.sample_position(), 1);
+  command_overflow_count_.fetch_add(1, std::memory_order_relaxed);
   return false;
+}
+
+bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
+  // Consumer/control-thread side. Before draining the audio-thread telemetry_
+  // queue, surface any command-queue overflows accrued by push_command since
+  // the last drain. This keeps the control thread off telemetry_ as a producer
+  // while still reporting dropped commands.
+  const uint32_t total = command_overflow_count_.load(std::memory_order_relaxed);
+  if (total != command_overflow_reported_) {
+    const uint32_t delta = total - command_overflow_reported_;
+    command_overflow_reported_ = total;
+    out = Telemetry{};
+    out.type = TelemetryType::kError;
+    out.error = TelemetryErrorCode::kCommandQueueOverflow;
+    out.render_frame = transport_.render_frame();
+    out.timeline_sample = transport_.sample_position();
+    out.audible_timeline_sample = audible_timeline_sample(out.timeline_sample);
+    out.graph_latency_samples_q8 = graph_latency_samples_q8_;
+    out.value = delta;
+    return true;
+  }
+  return telemetry_.pop(out);
 }
 
 void RealtimeEngine::set_tempo(double bpm) { tempo_map_.set_segments({{0.0, bpm, 0.0}}); }
@@ -293,16 +375,19 @@ void RealtimeEngine::store_pending(const rt::Command& command) noexcept {
                 transport_.sample_position(), 1);
 }
 
-void RealtimeEngine::apply_due_commands(int offset) noexcept {
-  const int64_t render_time = transport_.render_frame();
+void RealtimeEngine::apply_due_commands(int64_t boundary_render_frame) noexcept {
+  // Fire every pending command whose sample_time falls at or before the current
+  // sub-block boundary's render frame. The boundary splitter registers each
+  // pending command's offset as a sub-block boundary, so a command with
+  // sample_time T fires precisely at the sub-block whose render-frame range
+  // begins at T -- intra-block sample accuracy, not all-at-once at block head.
   for (size_t i = 0; i < pending_.size(); ++i) {
     if (!pending_active_[i]) continue;
-    if (pending_[i].sample_time <= render_time) {
+    if (pending_[i].sample_time <= boundary_render_frame) {
       apply_command(pending_[i]);
       pending_active_[i] = false;
     }
   }
-  (void)offset;
   compact_pending();
 }
 
@@ -315,11 +400,11 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       automation_.set_parameter(command.target_id, command.arg.f);
       break;
     case rt::CommandType::kSetParamSmoothed:
-      // Engine-level smoothing ramps are not yet implemented, so a smoothed
-      // set currently resolves to an immediate RT-safe update. Target
-      // processors that smooth internally via ParamSmoother still ramp; this
-      // is intentional, not a stub error.
-      automation_.set_parameter(command.target_id, command.arg.f);
+      // Engine-level smoothing: start (or retarget) a one-pole ramp toward the
+      // requested value. The ramp is ticked once per control period in
+      // process() and pushed to the bound parameter, avoiding the zipper noise
+      // of an immediate jump for targets that do not smooth internally.
+      start_smoothed_param(command.target_id, command.arg.f);
       break;
     case rt::CommandType::kTransportPlay:
       transport_.play();
@@ -331,7 +416,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       transport_.seek_sample(command.arg.i);
       break;
     case rt::CommandType::kTransportSeekPpq:
-      transport_.seek_ppq(static_cast<double>(command.arg.f));
+      transport_.seek_ppq(command.arg.d);
       break;
     case rt::CommandType::kSeekMarker:
       if (!seek_marker(command.target_id)) {
@@ -339,14 +424,102 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
                       transport_.sample_position(), command.target_id);
       }
       break;
-    default:
-      // Reaching here means a command-vocabulary value that is not meant to
-      // flow through the realtime queue (tempo/loop/capture/metronome/etc. are
-      // applied via direct engine setters), so kUnknownTarget is the correct
-      // defensive response.
-      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+    case rt::CommandType::kSetTempoMap:
+    case rt::CommandType::kSetLoop:
+    case rt::CommandType::kSwapGraph:
+    case rt::CommandType::kSwapAutomation:
+    case rt::CommandType::kSetSoloMute:
+    case rt::CommandType::kAddClip:
+    case rt::CommandType::kRemoveClip:
+    case rt::CommandType::kArmRecord:
+    case rt::CommandType::kPunch:
+    case rt::CommandType::kSetMetronome:
+    case rt::CommandType::kSetMarker:
+      // These are part of the binding control vocabulary but are NOT applied
+      // through the realtime command queue: they own data that must be swapped
+      // via the RtPublisher pattern on direct engine setters (set_tempo,
+      // set_loop, swap_graph, set_clips, set_capture_*, set_metronome_config,
+      // set_markers, ...). Surfacing a dedicated reason (rather than the
+      // misleading kUnknownTarget) tells the host exactly why the command was
+      // dropped: it was enqueued through the wrong channel.
+      enqueue_error(TelemetryErrorCode::kNonQueueableCommand, transport_.render_frame(),
                     transport_.sample_position(), static_cast<uint32_t>(command.type));
       break;
+  }
+}
+
+bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) noexcept {
+  const bool bound = mixing_runtime_.bind(strip);
+  if (bound && max_block_size_ > 0) {
+    // Re-prepare so the freshly bound strip sees the engine's sample rate and
+    // block size. bind() runs on the control thread, so allocation is allowed.
+    mixing_runtime_.prepare(sample_rate_, max_block_size_);
+  }
+  return bound;
+}
+
+void RealtimeEngine::set_param_smoothing_ms(float smoothing_ms) noexcept {
+  param_smoothing_ms_ = std::max(smoothing_ms, 0.0f);
+  for (SmoothedParam& slot : smoothed_params_) {
+    slot.smoother.prepare(sample_rate_, param_smoothing_ms_);
+  }
+}
+
+void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {
+  if (target_id == 0) {
+    // 0 is the reserved invalid target id; treat as an unbound target so the
+    // failure surfaces through the same counter path as kSetParam.
+    automation_.set_parameter(target_id, value);
+    return;
+  }
+  // Reuse an existing slot for this target, or claim a free one. The ramp
+  // starts from the slot's current value (its last applied output) so repeated
+  // retargets remain continuous.
+  SmoothedParam* free_slot = nullptr;
+  for (SmoothedParam& slot : smoothed_params_) {
+    if (slot.active && slot.target_id == target_id) {
+      slot.smoother.set_target(value);
+      return;
+    }
+    if (!slot.active && free_slot == nullptr) {
+      free_slot = &slot;
+    }
+  }
+  if (free_slot == nullptr) {
+    // No free smoother slot; fall back to an immediate RT-safe set rather than
+    // dropping the change. Continuity is sacrificed only under saturation.
+    automation_.set_parameter(target_id, value);
+    return;
+  }
+  free_slot->active = true;
+  free_slot->target_id = target_id;
+  free_slot->smoother.set_target(value);
+}
+
+bool RealtimeEngine::any_smoothed_param_active() const noexcept {
+  for (const SmoothedParam& slot : smoothed_params_) {
+    if (slot.active) return true;
+  }
+  return false;
+}
+
+void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
+  if (num_steps <= 0) return;
+  constexpr float kSettleEpsilon = 1.0e-6f;
+  for (SmoothedParam& slot : smoothed_params_) {
+    if (!slot.active) continue;
+    float current = slot.smoother.current();
+    for (int step = 0; step < num_steps; ++step) {
+      current = slot.smoother.process();
+    }
+    automation_.set_parameter(slot.target_id, current);
+    // Retire the slot once the ramp has effectively settled at its target so
+    // the bank does not stay saturated with finished ramps.
+    if (std::abs(slot.smoother.target() - current) <= kSettleEpsilon) {
+      slot.smoother.reset(slot.smoother.target());
+      slot.active = false;
+      slot.target_id = 0;
+    }
   }
 }
 
@@ -362,6 +535,20 @@ void RealtimeEngine::process_subblock(float* const* io, int num_channels, int of
     clip_player_.process_at(sub_channels.data(), channels, num_frames,
                             transport_.sample_position());
     metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());
+    // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
+    // sample-accurately at the sub-block's timeline position when enabled.
+    if (mixing_enabled_) {
+      mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
+                                 transport_.sample_position());
+    }
+    // Solo/mute + PFL/AFL monitoring stage for any registered strips.
+    if (monitoring_enabled_) {
+      const size_t strip_count = monitor_runtime_.size();
+      for (size_t s = 0; s < strip_count; ++s) {
+        monitor_runtime_.process_strip(s, sub_channels.data(), channels, num_frames,
+                                       transport_.sample_position());
+      }
+    }
   }
 #if defined(SONARE_WITH_GRAPH)
   graph_runtime_.process(io, num_channels, offset, num_frames);

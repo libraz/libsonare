@@ -52,6 +52,15 @@ TruePeakFilter::TruePeakFilter(int num_channels, int factor)
   if (num_channels < 0) {
     throw std::invalid_argument("num_channels must be non-negative");
   }
+  prepare(num_channels, 0);
+}
+
+void TruePeakFilter::prepare(int num_channels, int max_block_size) {
+  const size_t channels = static_cast<size_t>(std::max(0, num_channels));
+  const size_t history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
+  const size_t extended_size = history_size + static_cast<size_t>(std::max(0, max_block_size));
+  internal_history_.assign(channels, std::vector<float>(history_size, 0.0f));
+  internal_scratch_.assign(channels, std::vector<float>(extended_size, 0.0f));
 }
 
 float TruePeakFilter::process(const float* const* input, int num_channels, int num_samples) const {
@@ -93,9 +102,19 @@ void TruePeakFilter::upsample(const float* const* input, float* const* output_ov
 
 void TruePeakFilter::upsample_with_history(const float* const* input,
                                            float* const* output_oversampled, int num_channels,
+                                           int num_samples) const {
+  // Fully internal path: history and scratch are member-owned and pre-sized by
+  // prepare(), so this is allocation-free on the audio thread for any channel
+  // count / block size within the prepared bounds.
+  upsample_with_history(input, output_oversampled, num_channels, num_samples, internal_history_,
+                        internal_scratch_);
+}
+
+void TruePeakFilter::upsample_with_history(const float* const* input,
+                                           float* const* output_oversampled, int num_channels,
                                            int num_samples,
                                            std::vector<std::vector<float>>& history) const {
-  // Route through the scratch-aware overload using a member-backed buffer so
+  // Route through the scratch-aware overload using a member-backed scratch so
   // this audio-thread-callable path performs no per-call allocation once the
   // scratch has grown to the working size.
   upsample_with_history(input, output_oversampled, num_channels, num_samples, history,

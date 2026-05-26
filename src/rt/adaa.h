@@ -39,8 +39,12 @@ class Adaa1 {
     prev_f1_ = nonlinearity_.antiderivative(x);
   }
 
-  int latency_samples() const noexcept { return 0; }
+  // ADAA1 introduces a half-sample group delay (the first divided difference is
+  // centered between x[n-1] and x[n]). 128 in Q8 is exactly 0.5 sample; the
+  // integer accessor is derived from it (128 >> 8 == 0) so the two views stay
+  // consistent instead of being independently hardcoded.
   int latency_samples_q8() const noexcept { return 128; }
+  int latency_samples() const noexcept { return latency_samples_q8() >> 8; }
 
  private:
   Nonlinearity nonlinearity_{};

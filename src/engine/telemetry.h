@@ -24,6 +24,11 @@ enum class TelemetryErrorCode : uint16_t {
   kUnknownTarget,
   kNonRealtimeSafeParameter,
   kNotPrepared,
+  // A known CommandType that is part of the binding control vocabulary but is
+  // not applied through the realtime command queue (it must be invoked via a
+  // direct engine setter). Distinct from kUnknownTarget, which means the
+  // command itself was queueable but referenced an unbound target.
+  kNonQueueableCommand,
 };
 
 struct Telemetry {

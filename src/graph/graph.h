@@ -68,6 +68,10 @@ class Graph {
   std::unordered_map<std::string, Node*> node_map_;
   std::vector<Connection> connections_;
   std::vector<RuntimeConnection> runtime_connections_;
+  // For each node in topo order (indexed by topo position), the indices into
+  // runtime_connections_ whose destination is that node. Built in compile() so
+  // process_block() is O(E) instead of O(nodes * edges).
+  std::vector<std::vector<int>> incoming_by_topo_;
   std::vector<Node*> topo_order_;
   std::vector<std::string> topo_order_ids_;
   std::unordered_map<std::string, int> topo_index_;

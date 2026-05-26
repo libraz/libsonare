@@ -112,13 +112,30 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   }
 
   const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
+  const int64_t loop_start = map.ppq_to_sample(loop_start_ppq_);
   const int64_t loop_end = map.ppq_to_sample(loop_end_ppq_);
-  if (sample_position_ < loop_end && sample_position_ + num_frames >= loop_end) {
-    const int offset = static_cast<int>(loop_end - sample_position_);
-    out->add({offset, render_frame_ + offset, loop_end});
-    return true;
+  const int64_t loop_len = loop_end - loop_start;
+  if (loop_len <= 0) return false;
+
+  // Report every loop wrap that falls inside this block, not just the first.
+  // With a short loop and a large block the playhead can wrap multiple times,
+  // and reporting only the first wrap would leave the over-wrapped tail of the
+  // block rendering from the wrong position (or as silence). We walk the
+  // wrap points by repeatedly subtracting loop_len from the running position.
+  const int64_t block_end = sample_position_ + num_frames;
+  int64_t position = sample_position_;
+  int64_t next_wrap = loop_end;
+  bool added = false;
+  while (next_wrap > position && next_wrap <= block_end) {
+    const int offset = static_cast<int>(next_wrap - sample_position_);
+    if (!out->add({offset, render_frame_ + offset, loop_end})) break;
+    added = true;
+    // After this wrap the playhead jumps back to loop_start; the following
+    // wrap occurs another loop_len of forward travel later.
+    position = next_wrap;
+    next_wrap += loop_len;
   }
-  return false;
+  return added;
 }
 
 }  // namespace sonare::transport

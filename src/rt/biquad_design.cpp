@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <stdexcept>
 
 #include "util/constants.h"
 #include "util/db.h"
@@ -27,9 +26,12 @@ struct PoleCoeffs {
   float p2 = 0.0f;
 };
 
-float checked_q(float q) {
-  if (!(q > 0.0f)) {
-    throw std::invalid_argument("Q must be positive");
+// RT-safe: coefficient recomputation may run on the audio thread (e.g. on a
+// parameter change), so this must never throw out of a noexcept callback.
+// A non-positive Q is clamped to a small positive value instead.
+float checked_q(float q) noexcept {
+  if (!(q > 0.0f) || !std::isfinite(q)) {
+    return 1.0e-6f;
   }
   return std::max(q, 1.0e-6f);
 }
@@ -40,9 +42,12 @@ float safe_div(float numerator, float denominator, float fallback) {
   return std::abs(denominator) > 1.0e-12f ? numerator / denominator : fallback;
 }
 
-BiquadCoeffs normalize(double b0, double b1, double b2, double a0, double a1, double a2) {
-  if (!(std::abs(a0) > 0.0)) {
-    throw std::runtime_error("invalid biquad coefficient normalization");
+// RT-safe: never throws. A degenerate a0 (zero or non-finite) cannot be
+// normalized, so fall back to a unity-gain passthrough biquad
+// (b0=1, all other taps 0) rather than terminating a noexcept callback.
+BiquadCoeffs normalize(double b0, double b1, double b2, double a0, double a1, double a2) noexcept {
+  if (!(std::abs(a0) > 0.0) || !std::isfinite(a0)) {
+    return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   }
 
   const double inv_a0 = 1.0 / a0;

@@ -66,6 +66,10 @@ void ClipPlayer::process_at(float* const* channels, int num_channels, int num_sa
                             int64_t timeline_sample) noexcept {
   if (!channels || num_channels <= 0 || num_samples <= 0) return;
 
+  // Adopt the latest published clip set. The engine drives a single block-start
+  // acquire_clips() so a clip set is never swapped mid-block between sub-blocks;
+  // this idempotent re-acquire (a wait-free pointer swap, no alloc) keeps the
+  // standalone ClipPlayer contract working (set_clips then process_at directly).
   clips_.acquire();
   const std::vector<ClipSchedule>* clips = clips_.current();
   if (!clips) return;
@@ -103,6 +107,8 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
   out->clear();
   if (num_frames <= 0) return;
   const int64_t block_end = block_start_sample + num_frames;
+  // Idempotent re-acquire so standalone callers (and the engine block-start
+  // acquire_clips()) both see the published set; a wait-free pointer swap.
   clips_.acquire();
   const std::vector<ClipSchedule>* clips = clips_.current();
   if (!clips) return;

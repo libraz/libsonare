@@ -61,11 +61,17 @@ void AutomationEngine::clear_targets() noexcept {
 
 void AutomationEngine::apply(const transport::TransportState& state, int sub_block_offset,
                              int sub_block_len) noexcept {
-  (void)sample_rate_;
-  if (sub_block_len <= 0 || !tempo_map_) return;
+  if (sub_block_len <= 0 || !tempo_map_ || !(sample_rate_ > 0.0)) return;
 
+  // Map the sub-block's timeline sample to a PPQ position. The tempo map owns
+  // the sample<->PPQ relationship, but its result is only meaningful once a
+  // valid sample rate has been prepared, so sample_rate_ gates the conversion.
   const int64_t timeline_sample = state.sample_position + sub_block_offset;
   const double ppq = tempo_map_->sample_to_ppq(timeline_sample);
+  // Adopt the latest published lane set. The engine drives a single block-start
+  // acquire_lanes() so lanes are never swapped mid-block between sub-blocks;
+  // this idempotent re-acquire (a wait-free pointer swap, no alloc) keeps the
+  // standalone AutomationEngine contract working (set_lanes then apply directly).
   lanes_.acquire();
   const std::vector<AutomationLane>* lanes = lanes_.current();
   if (!lanes) return;

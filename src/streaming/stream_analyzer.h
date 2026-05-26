@@ -25,6 +25,40 @@ class FFT;
 /// Timestamps represent "stream time" (input sample position), not necessarily
 /// AudioContext.currentTime. See documentation for synchronization guidance.
 ///
+/// @par Feature coverage vs. the batch MusicAnalyzer
+/// The streaming analyzer is causal and incremental: every feature it emits is
+/// computable from the samples seen so far, without revisiting the past or
+/// needing the full signal. This intentionally excludes some batch features.
+///
+/// Available (computed incrementally, per STFT frame or progressively):
+///  - Magnitude / mel / chroma spectra (StreamFrame::magnitude/mel/chroma).
+///  - Onset strength (StreamFrame::onset_strength).
+///  - Per-frame spectral features: spectral centroid, spectral flatness, and
+///    RMS energy (StreamFrame::spectral_centroid/spectral_flatness/rms_energy).
+///    These are the per-frame primitives behind the batch Timbre brightness /
+///    density measures; the aggregated Timbre summary is intentionally left to
+///    the offline analyzer (see "Not available" below).
+///  - Progressive BPM, key, and chord estimates (AnalyzerStats::estimate),
+///    including bar-synchronized chord progression and pattern locking.
+///
+/// Not available (require non-causal / global computation, by design):
+///  - Melody / pitch contour (YIN/pYIN): per-frame YIN is technically feasible
+///    but assumes a monophonic source and costs an extra autocorrelation over a
+///    full frame_length window per hop. It is omitted to keep the real-time path
+///    light and because polyphonic stream visualization rarely benefits from it.
+///    Callers needing a pitch track should run feature::yin_track offline.
+///  - Dynamics loudness range (EBU R128 LRA): LRA is defined over the *entire*
+///    program — it gates short-term loudness against a relative threshold derived
+///    from the global mean, then takes a 95th-10th percentile of the whole
+///    distribution. This cannot be finalized until the stream ends, so it is an
+///    offline measure (analysis::meter::ebur128_loudness_range). Per-frame RMS
+///    energy is exposed as the closest causal proxy.
+///  - Section / boundary structure: derived from a song-wide self-similarity
+///    matrix; inherently requires the full signal and is omitted from streaming.
+///  - Aggregated Timbre summary (timbre_analyzer): a whole-signal average of the
+///    spectral primitives that streaming already exposes per frame; compute it
+///    offline from the accumulated frames if a single summary is needed.
+///
 /// Usage:
 /// @code
 ///   StreamAnalyzer analyzer(config);

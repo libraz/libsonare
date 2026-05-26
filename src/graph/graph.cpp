@@ -80,6 +80,7 @@ bool Graph::compile() {
   topo_order_ids_.clear();
   topo_index_.clear();
   runtime_connections_.clear();
+  incoming_by_topo_.clear();
 
   std::unordered_map<std::string, int> indegree;
   std::unordered_map<std::string, std::vector<std::string>> outgoing;
@@ -160,6 +161,16 @@ bool Graph::compile() {
     runtime_connections_.push_back(std::move(runtime_connection));
   }
 
+  // Build the per-destination adjacency list keyed by the destination's topo
+  // position so process_block() can iterate only the edges feeding each node.
+  incoming_by_topo_.assign(topo_order_.size(), {});
+  for (size_t connection_index = 0; connection_index < runtime_connections_.size();
+       ++connection_index) {
+    const std::string& dest_id = runtime_connections_[connection_index].connection.dest_node;
+    incoming_by_topo_[static_cast<size_t>(topo_index_.at(dest_id))].push_back(
+        static_cast<int>(connection_index));
+  }
+
   compiled_ = true;
   return true;
 }
@@ -173,8 +184,18 @@ void Graph::prepare(double sample_rate, int max_block_size) {
   for (auto& node_ptr : nodes_) {
     node_ptr->prepare(sample_rate_, max_block_size_);
   }
-  for (RuntimeConnection& runtime_connection : runtime_connections_) {
-    prepare_delay_lines(runtime_connection);
+  // Topology must be compiled before processing. If a structural change
+  // invalidated a prior compile (or it was never compiled), (re)compile now so
+  // prepare() never leaves stale/empty runtime connections. compile() also sizes
+  // the per-connection delay lines because max_block_size_ is now set.
+  if (!compiled_) {
+    if (!compile()) {
+      throw std::runtime_error("graph topology could not be compiled (cycle or invalid edge)");
+    }
+  } else {
+    for (RuntimeConnection& runtime_connection : runtime_connections_) {
+      prepare_delay_lines(runtime_connection);
+    }
   }
 }
 
@@ -217,11 +238,11 @@ void Graph::process_block(int num_samples) {
     throw std::invalid_argument("num_samples out of prepared range");
   }
 
-  for (Node* current : topo_order_) {
-    for (RuntimeConnection& runtime_connection : runtime_connections_) {
-      if (runtime_connection.dest != current) {
-        continue;
-      }
+  for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
+    Node* current = topo_order_[topo_position];
+    for (const int connection_index : incoming_by_topo_[topo_position]) {
+      RuntimeConnection& runtime_connection =
+          runtime_connections_[static_cast<size_t>(connection_index)];
 
       const int source_port = runtime_connection.connection.source_port;
       const int dest_port = runtime_connection.connection.dest_port;

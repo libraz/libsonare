@@ -13,20 +13,36 @@ namespace sonare::rt {
 /// realtime engine.
 inline constexpr uint32_t kEngineAbiVersion = 2;
 
-// Only kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
-// kTransportSeekSample, kTransportSeekPpq, and kSeekMarker are processed
-// inline by RealtimeEngine::push_command/apply_command. The remaining values
-// form the higher-level binding control vocabulary applied through direct
-// engine setter methods (set_tempo, set_loop, set_capture_*,
-// set_metronome_config, set_clips, set_markers, swap_graph, etc.), not via
-// the realtime command queue.
+// The CommandType space is split into two disjoint groups:
+//
+//  (1) RT-QUEUE VOCABULARY -- safe to enqueue via push_command() and applied by
+//      apply_command() on the audio thread. These carry only POD scalars and
+//      perform in-place, allocation-free updates:
+//        kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
+//        kTransportSeekSample, kTransportSeekPpq, kSeekMarker.
+//
+//  (2) DIRECT-SETTER OPERATIONS -- known command names that must NOT flow
+//      through the realtime queue because they own data swapped via the
+//      RtPublisher pattern on control-thread setters (set_tempo, set_loop,
+//      swap_graph, set_clips, set_capture_*, set_metronome_config,
+//      set_markers, ...):
+//        kSetTempoMap, kSetLoop, kSwapGraph, kSwapAutomation, kSetSoloMute,
+//        kAddClip, kRemoveClip, kArmRecord, kPunch, kSetMetronome, kSetMarker.
+//
+// If a group-(2) value is pushed through the queue, apply_command() rejects it
+// with TelemetryErrorCode::kNonQueueableCommand (NOT the misleading
+// kUnknownTarget, which is reserved for queueable commands referencing an
+// unbound target). The two groups are kept in a single enum so the binding ABI
+// (kEngineAbiVersion) and the SharedArrayBuffer record layout stay stable.
 enum class CommandType : uint16_t {
+  // -- Group (1): RT-queue vocabulary --
   kSetParam,
   kSetParamSmoothed,
   kTransportPlay,
   kTransportStop,
   kTransportSeekSample,
   kTransportSeekPpq,
+  // -- Group (2): direct-setter operations (rejected if queued) --
   kSetTempoMap,
   kSetLoop,
   kSwapGraph,
@@ -38,11 +54,13 @@ enum class CommandType : uint16_t {
   kPunch,
   kSetMetronome,
   kSetMarker,
+  // -- Group (1) continued --
   kSeekMarker,
 };
 
 union CommandArg {
   float f;
+  double d;  // full-precision scalar (e.g. seek PPQ); shares the 64-bit slot
   int64_t i;
   void* ptr;
 };

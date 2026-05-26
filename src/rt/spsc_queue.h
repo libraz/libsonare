@@ -4,6 +4,7 @@
 /// @brief Wait-free single-producer/single-consumer ring buffer.
 
 #include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <stdexcept>
 #include <type_traits>
@@ -34,6 +35,10 @@ class SpscQueue {
   }
 
   bool push(const T& item) noexcept {
+    // A default-constructed queue has capacity 0: push/pop silently no-op,
+    // which would drop records (e.g. telemetry) without any signal. Catch the
+    // missing reserve() in debug builds; release builds still fail closed.
+    assert(capacity() != 0 && "SpscQueue::push before reserve(): records will be dropped");
     const size_t head = head_.load(std::memory_order_relaxed);
     const size_t tail = tail_.load(std::memory_order_acquire);
     if (head - tail >= capacity()) {
@@ -46,6 +51,7 @@ class SpscQueue {
   }
 
   bool pop(T& out) noexcept {
+    assert(capacity() != 0 && "SpscQueue::pop before reserve()");
     const size_t tail = tail_.load(std::memory_order_relaxed);
     const size_t head = head_.load(std::memory_order_acquire);
     if (head == tail) {
