@@ -10,6 +10,7 @@
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/ducking_processor.h"
 #include "mastering/dynamics/expander.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/limiter.h"
@@ -142,6 +143,9 @@ void configure_processor(const std::string& name, const ParamMap& params,
     run_processor(p, samples, sample_rate, latency_samples);
   } else if (name == "dynamics.sidechainRouter") {
     dynamics::SidechainRouter p(detail::sidechain_router_config(params));
+    run_processor(p, samples, sample_rate, latency_samples);
+  } else if (name == "dynamics.duckingProcessor") {
+    dynamics::DuckingProcessor p(detail::ducking_config(params));
     run_processor(p, samples, sample_rate, latency_samples);
   } else if (name == "dynamics.transientShaper") {
     dynamics::TransientShaper p(detail::transient_shaper_config(params));
@@ -473,15 +477,17 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     maximizer::TruePeakLimiter p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else {
-    std::vector<float> mono = detail::mono_mix(result.left, result.right);
-    configure_processor(name, map, mono, sample_rate, result.latency_samples,
-                        result.applied_gain_db);
-    for (size_t index = 0; index < result.left.size(); ++index) {
-      const float old_mid = 0.5f * (result.left[index] + result.right[index]);
-      const float delta = mono[index] - old_mid;
-      result.left[index] += delta;
-      result.right[index] += delta;
+    int left_latency = 0;
+    int right_latency = 0;
+    float left_gain_db = 0.0f;
+    float right_gain_db = 0.0f;
+    configure_processor(name, map, result.left, sample_rate, left_latency, left_gain_db);
+    configure_processor(name, map, result.right, sample_rate, right_latency, right_gain_db);
+    if (result.left.size() != result.right.size()) {
+      throw std::invalid_argument("stereo processor produced mismatched channel lengths: " + name);
     }
+    result.latency_samples = std::max(left_latency, right_latency);
+    result.applied_gain_db += 0.5f * (left_gain_db + right_gain_db);
   }
 
   result.output_lufs = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);

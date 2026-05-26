@@ -122,6 +122,9 @@ std::unique_ptr<Processor> build_dynamics(const std::string& name, const ParamMa
   if (name == "dynamics.sidechainRouter") {
     return make<dynamics::SidechainRouter>(detail::sidechain_router_config(params));
   }
+  if (name == "dynamics.duckingProcessor") {
+    return make<dynamics::DuckingProcessor>(detail::ducking_config(params));
+  }
   if (name == "dynamics.transientShaper") {
     return make<dynamics::TransientShaper>(detail::transient_shaper_config(params));
   }
@@ -278,6 +281,12 @@ std::unique_ptr<Processor> build_stereo(const std::string& name, const ParamMap&
 std::unique_ptr<Processor> build_maximizer(const std::string& name, const ParamMap& params) {
   if (name == "maximizer.maximizer") {
     return make<maximizer::Maximizer>(detail::maximizer_config(params));
+  }
+  if (name == "maximizer.loudnessOptimize") {
+    maximizer::TruePeakLimiterConfig config;
+    config.ceiling_db = f(params, "ceilingDb", config.ceiling_db);
+    config.oversample_factor = detail::i(params, "truePeakOversample", config.oversample_factor);
+    return make<maximizer::TruePeakLimiter>(config);
   }
   if (name == "maximizer.truePeakLimiter") {
     return make<maximizer::TruePeakLimiter>(detail::true_peak_limiter_config(params));
@@ -439,6 +448,7 @@ std::vector<std::string> insert_factory_names() {
       "dynamics.limiter",
       "dynamics.parallelComp",
       "dynamics.sidechainRouter",
+      "dynamics.duckingProcessor",
       "dynamics.transientShaper",
       "dynamics.upwardCompressor",
       "dynamics.upwardExpander",
@@ -476,6 +486,7 @@ std::vector<std::string> insert_factory_names() {
       "stereo.phaseAlign",
       "stereo.stereoBalance",
       "maximizer.maximizer",
+      "maximizer.loudnessOptimize",
       "maximizer.truePeakLimiter",
       "maximizer.softKneeMax",
       "maximizer.adaptiveRelease",

@@ -74,6 +74,26 @@ TEST_CASE("MasteringChain processes stereo audio with stereo stage", "[mastering
   REQUIRE(result.right.size() == right.size());
 }
 
+TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {
+  std::vector<float> left = {0.1f, 0.2f, 0.3f, 0.4f};
+  std::vector<float> right = {0.9f, 0.8f, 0.7f, 0.6f};
+  std::vector<Param> params = {{"bitDepth", 2.0}};
+
+  const auto stereo = apply_named_processor_stereo("saturation.bitcrusher", left.data(),
+                                                   right.data(), left.size(), 48000, params);
+  const auto expected_left =
+      apply_named_processor("saturation.bitcrusher", left.data(), left.size(), 48000, params);
+  const auto expected_right =
+      apply_named_processor("saturation.bitcrusher", right.data(), right.size(), 48000, params);
+
+  REQUIRE(stereo.left.size() == expected_left.samples.size());
+  REQUIRE(stereo.right.size() == expected_right.samples.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE_THAT(stereo.left[i], WithinAbs(expected_left.samples[i], 1.0e-6f));
+    REQUIRE_THAT(stereo.right[i], WithinAbs(expected_right.samples[i], 1.0e-6f));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // StreamingMasteringChain
 // ---------------------------------------------------------------------------

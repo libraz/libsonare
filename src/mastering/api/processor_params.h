@@ -18,6 +18,7 @@
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/ducking_processor.h"
 #include "mastering/dynamics/expander.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/limiter.h"
@@ -362,6 +363,17 @@ inline dynamics::SidechainRouterConfig sidechain_router_config(const ParamMap& p
   config.sidechain_hpf_hz = f(params, "sidechainHpfHz", config.sidechain_hpf_hz);
   config.mono_summing = b(params, "monoSumming", config.mono_summing);
   config.key_listen = b(params, "keyListen", config.key_listen);
+  return config;
+}
+
+inline dynamics::DuckingConfig ducking_config(const ParamMap& params) {
+  dynamics::DuckingConfig config;
+  config.threshold_db = f(params, "thresholdDb", config.threshold_db);
+  config.ratio = f(params, "ratio", config.ratio);
+  config.attack_ms = f(params, "attackMs", config.attack_ms);
+  config.release_ms = f(params, "releaseMs", config.release_ms);
+  config.range_db = f(params, "rangeDb", config.range_db);
+  config.lookahead_ms = f(params, "lookaheadMs", config.lookahead_ms);
   return config;
 }
 

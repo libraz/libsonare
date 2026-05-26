@@ -14,6 +14,7 @@ std::vector<std::string> processor_names() {
           "dynamics.limiter",
           "dynamics.parallelComp",
           "dynamics.sidechainRouter",
+          "dynamics.duckingProcessor",
           "dynamics.transientShaper",
           "dynamics.upwardCompressor",
           "dynamics.upwardExpander",
