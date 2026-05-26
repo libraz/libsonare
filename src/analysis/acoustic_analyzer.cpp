@@ -154,10 +154,15 @@ float percentile(std::vector<float> values, float q) {
     return nan_value();
   }
   q = std::clamp(q, 0.0f, 1.0f);
-  const size_t index = static_cast<size_t>(std::round(q * static_cast<float>(values.size() - 1)));
-  std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(index),
-                   values.end());
-  return values[index];
+  std::sort(values.begin(), values.end());
+  const float position = q * static_cast<float>(values.size() - 1);
+  const auto lower = static_cast<size_t>(std::floor(position));
+  const auto upper = static_cast<size_t>(std::ceil(position));
+  if (lower == upper) {
+    return values[lower];
+  }
+  const float weight = position - static_cast<float>(lower);
+  return values[lower] * (1.0f - weight) + values[upper] * weight;
 }
 
 std::vector<float> suppress_stationary_noise_spectral(const float* samples, size_t size,
