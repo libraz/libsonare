@@ -13,8 +13,8 @@ namespace sonare {
 
 namespace {
 
-std::vector<float> normalize_columns(std::vector<float> features, int n_chroma, int n_frames,
-                                     int norm) {
+std::vector<float> normalize_chroma_columns(std::vector<float> features, int n_chroma, int n_frames,
+                                            int norm) {
   for (int t = 0; t < n_frames; ++t) {
     float norm_val = 0.0f;
 
@@ -86,7 +86,7 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
 
   std::vector<float> chroma_features =
       apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_chroma);
-  chroma_features = normalize_columns(std::move(chroma_features), n_chroma, n_frames, 2);
+  chroma_features = normalize_chroma_columns(std::move(chroma_features), n_chroma, n_frames, 2);
 
   return Chroma(std::move(chroma_features), n_chroma, n_frames, sr, spec.hop_length());
 }
@@ -149,46 +149,7 @@ std::array<float, 12> Chroma::weighted_mean_energy(const std::vector<float>& fra
 }
 
 std::vector<float> Chroma::normalize(int norm) const {
-  std::vector<float> result(features_.size());
-
-  for (int t = 0; t < n_frames_; ++t) {
-    float norm_val = 0.0f;
-
-    // Compute norm
-    if (norm == 0) {
-      // Max norm (infinity norm)
-      for (int c = 0; c < n_chroma_; ++c) {
-        float val = std::abs(features_[c * n_frames_ + t]);
-        if (val > norm_val) norm_val = val;
-      }
-    } else if (norm == 1) {
-      // L1 norm
-      for (int c = 0; c < n_chroma_; ++c) {
-        norm_val += std::abs(features_[c * n_frames_ + t]);
-      }
-    } else {
-      // L2 norm (default)
-      for (int c = 0; c < n_chroma_; ++c) {
-        float val = features_[c * n_frames_ + t];
-        norm_val += val * val;
-      }
-      norm_val = std::sqrt(norm_val);
-    }
-
-    // Normalize
-    if (norm_val > constants::kEpsilon) {
-      for (int c = 0; c < n_chroma_; ++c) {
-        result[c * n_frames_ + t] = features_[c * n_frames_ + t] / norm_val;
-      }
-    } else {
-      // Zero out if norm is too small
-      for (int c = 0; c < n_chroma_; ++c) {
-        result[c * n_frames_ + t] = 0.0f;
-      }
-    }
-  }
-
-  return result;
+  return normalize_chroma_columns(features_, n_chroma_, n_frames_, norm);
 }
 
 std::vector<int> Chroma::dominant_pitch_class() const {
