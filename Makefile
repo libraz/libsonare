@@ -32,12 +32,12 @@ wasm:
 	cd bindings/wasm && yarn build:js
 
 test: build
-	ctest --test-dir $(BUILD_DIR) --output-on-failure
+	ctest --test-dir $(BUILD_DIR) --output-on-failure --parallel
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
 	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) -j
-	ctest --test-dir $(OPTIONAL_FIXTURE_BUILD_DIR) --output-on-failure -R "optional|fixture|EBU R128"
+	ctest --test-dir $(OPTIONAL_FIXTURE_BUILD_DIR) --output-on-failure -R "optional|fixture|EBU R128" --parallel
 
 test-librosa-live: build
 	$(RYE) sync --pyproject tests/librosa/pyproject.toml
