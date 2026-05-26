@@ -13,8 +13,18 @@ using sonare::constants::kSpectrumEpsilon;
 using sonare::constants::kTwoPi;
 
 namespace {
-constexpr int kGrainSize = 2048;        // ~46 ms at 44.1k; acceptable preview latency.
+constexpr double kDefaultGrainSeconds = 2048.0 / 44100.0;
 constexpr float kMaxSemitones = 24.0f;  // Clamp shift range to +/- 2 octaves.
+
+int resolve_grain_size(const StreamingRetuneConfig& config, double sample_rate,
+                       int max_block_size) noexcept {
+  const int requested = config.grain_size;
+  const int derived =
+      requested > 0 ? requested : static_cast<int>(std::lround(sample_rate * kDefaultGrainSeconds));
+  const int minimum = std::max(4, max_block_size);
+  const int grain = std::max(minimum, derived);
+  return grain + ((4 - grain % 4) % 4);
+}
 }  // namespace
 
 StreamingRetune::StreamingRetune(StreamingRetuneConfig config) : config_(config) {}
@@ -34,7 +44,7 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
 
-  grain_size_ = kGrainSize;
+  grain_size_ = resolve_grain_size(config_, sample_rate_, max_block_size_);
   hop_a_ = grain_size_ / 4;
   ring_cap_ = static_cast<std::size_t>(4 * grain_size_);
   accum_cap_ = static_cast<std::size_t>(2 * grain_size_);

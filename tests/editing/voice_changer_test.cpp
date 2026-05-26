@@ -115,6 +115,22 @@ TEST_CASE("StreamingRetune shifts block pitch up an octave", "[voice_changer]") 
   REQUIRE_THAT(dominant, WithinRel(2.0f * f0, 0.08f));
 }
 
+TEST_CASE("StreamingRetune derives grain size from sample rate unless configured",
+          "[voice_changer]") {
+  StreamingRetune low_rate;
+  low_rate.prepare(24000.0, 256);
+  StreamingRetune high_rate;
+  high_rate.prepare(96000.0, 256);
+
+  REQUIRE(low_rate.grain_size() >= 256);
+  REQUIRE(high_rate.grain_size() > low_rate.grain_size());
+  REQUIRE(high_rate.grain_size() % 4 == 0);
+
+  StreamingRetune configured({0.0f, 1.0f, 1024});
+  configured.prepare(96000.0, 256);
+  REQUIRE(configured.grain_size() == 1024);
+}
+
 TEST_CASE("FormantWarp raises the spectral envelope when factor > 1", "[voice_changer]") {
   constexpr int sample_rate = 22050;
   constexpr int n = sample_rate / 2;

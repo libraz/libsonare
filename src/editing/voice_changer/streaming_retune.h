@@ -12,6 +12,7 @@ namespace sonare::editing::voice_changer {
 struct StreamingRetuneConfig {
   float semitones = 0.0f;
   float mix = 1.0f;
+  int grain_size = 0;  ///< 0 = derive ~46 ms grain from sample rate in prepare().
 };
 
 /// @brief Low-latency streaming pitch shifter with cross-block continuity.
@@ -32,6 +33,7 @@ class StreamingRetune {
   const StreamingRetuneConfig& config() const noexcept { return config_; }
 
   void process_block(const float* input, float* output, int num_samples);
+  int grain_size() const noexcept { return grain_size_; }
 
  private:
   void update_ratio() noexcept;
