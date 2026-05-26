@@ -109,7 +109,8 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   if (genre == "speech") {
     result.config.dynamics.deesser.enabled = true;
     result.config.stereo.mono_maker.enabled = true;
-    result.config.stereo.mono_maker.config.amount = 1.0f;
+    result.config.stereo.mono_maker.config.amount =
+        std::clamp(config.speech_mono_amount, 0.0f, 1.0f);
     explain(result.explanation, "speech profile enables de-esser and mono compatibility");
   }
 

@@ -172,3 +172,16 @@ TEST_CASE("Assistant suggest_chain returns deterministic config and explanations
   REQUIRE(sonare::mastering::api::chain_config_to_json(result.config) ==
           sonare::mastering::api::chain_config_to_json(result_again.config));
 }
+
+TEST_CASE("Assistant exposes speech mono-maker amount", "[mastering][assistant]") {
+  assistant::AudioProfile profile;
+  profile.genre_candidates = {{"speech", 0.95f}, {"pop", 0.2f}};
+
+  assistant::AssistantConfig cfg;
+  cfg.speech_mono_amount = 0.35f;
+  auto result = assistant::suggest_chain(profile, cfg);
+
+  REQUIRE(result.config.dynamics.deesser.enabled);
+  REQUIRE(result.config.stereo.mono_maker.enabled);
+  REQUIRE(result.config.stereo.mono_maker.config.amount == 0.35f);
+}

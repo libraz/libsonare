@@ -73,6 +73,8 @@ sonare::mastering::assistant::AssistantConfig to_assistant_config(
       config.enable_repair = params[index].value != 0.0;
     } else if (key == "preferStreamingSafe" || key == "prefer_streaming_safe") {
       config.prefer_streaming_safe = params[index].value != 0.0;
+    } else if (key == "speechMonoAmount" || key == "speech_mono_amount") {
+      config.speech_mono_amount = static_cast<float>(params[index].value);
     }
   }
   return config;

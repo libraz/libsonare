@@ -18,6 +18,7 @@ struct AssistantConfig {
   float ceiling_db = -1.0f;
   bool enable_repair = false;
   bool prefer_streaming_safe = true;
+  float speech_mono_amount = 1.0f;
 };
 
 struct AssistantResult {

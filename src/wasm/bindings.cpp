@@ -2152,6 +2152,8 @@ std::string js_mastering_assistant_suggest(val samples, int sample_rate, val par
       config.enable_repair = param.value != 0.0;
     } else if (param.key == "preferStreamingSafe" || param.key == "prefer_streaming_safe") {
       config.prefer_streaming_safe = param.value != 0.0;
+    } else if (param.key == "speechMonoAmount" || param.key == "speech_mono_amount") {
+      config.speech_mono_amount = static_cast<float>(param.value);
     }
   }
   const auto result =
