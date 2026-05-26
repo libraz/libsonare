@@ -24,7 +24,7 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
-  gain_smoothing_coeff_ = coeff(sample_rate_, config_.gain_smoothing_ms);
+  gain_smoothing_coeff_ = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
   for (auto& follower : fast_followers_) {
     follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
   }
@@ -103,7 +103,7 @@ void TransientShaper::set_config(const TransientShaperConfig& config) {
   validate_config(config);
   config_ = config;
   if (prepared_) {
-    gain_smoothing_coeff_ = coeff(sample_rate_, config_.gain_smoothing_ms);
+    gain_smoothing_coeff_ = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
     for (auto& follower : fast_followers_) {
       follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
     }
@@ -167,7 +167,7 @@ bool TransientShaper::set_parameter(unsigned int param_id, float value) {
       // running gain state. RT-safe (no allocation).
       config_.gain_smoothing_ms = std::max(0.0f, value);
       if (prepared_) {
-        gain_smoothing_coeff_ = coeff(sample_rate_, config_.gain_smoothing_ms);
+        gain_smoothing_coeff_ = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
       }
       return true;
     default:
@@ -181,10 +181,6 @@ void TransientShaper::validate_config(const TransientShaperConfig& config) {
       config.max_gain_db < 0.0f || config.gain_smoothing_ms < 0.0f || config.lookahead_ms < 0.0f) {
     throw std::invalid_argument("invalid transient shaper configuration");
   }
-}
-
-float TransientShaper::coeff(double sample_rate, float ms) {
-  return time_to_coefficient(sample_rate, ms);
 }
 
 void TransientShaper::ensure_followers(int num_channels) {

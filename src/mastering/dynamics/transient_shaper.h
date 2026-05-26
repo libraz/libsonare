@@ -50,7 +50,6 @@ class TransientShaper : public common::ProcessorBase {
 
  private:
   static void validate_config(const TransientShaperConfig& config);
-  static float coeff(double sample_rate, float ms);
   void ensure_followers(int num_channels);
 
   TransientShaperConfig config_{};

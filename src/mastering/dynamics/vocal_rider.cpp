@@ -48,7 +48,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
-  const float smoothing = coeff(sample_rate_, config_.gain_smoothing_ms);
+  const float smoothing = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
   if (config_.linked_detection) {
     for (int i = 0; i < num_samples; ++i) {
       float linked_level = 0.0f;
@@ -162,10 +162,6 @@ void VocalRider::validate_config(const VocalRiderConfig& config) {
       config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {
     throw std::invalid_argument("invalid vocal rider configuration");
   }
-}
-
-float VocalRider::coeff(double sample_rate, float ms) {
-  return time_to_coefficient(sample_rate, ms);
 }
 
 void VocalRider::ensure_followers(int num_channels) {

@@ -41,7 +41,6 @@ class Gate : public common::ProcessorBase {
 
  private:
   static void validate_config(const GateConfig& config);
-  static float coeff(double sample_rate, float ms);
 
   GateConfig config_{};
   bool prepared_ = false;

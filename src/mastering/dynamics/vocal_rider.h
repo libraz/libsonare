@@ -47,7 +47,6 @@ class VocalRider : public common::ProcessorBase {
 
  private:
   static void validate_config(const VocalRiderConfig& config);
-  static float coeff(double sample_rate, float ms);
   void ensure_followers(int num_channels);
 
   VocalRiderConfig config_{};

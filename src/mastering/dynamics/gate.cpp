@@ -47,8 +47,8 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     hpf_x1_.assign(static_cast<size_t>(num_channels), 0.0f);
     hpf_y1_.assign(static_cast<size_t>(num_channels), 0.0f);
   }
-  const float attack = coeff(sample_rate_, config_.attack_ms);
-  const float release = coeff(sample_rate_, config_.release_ms);
+  const float attack = time_to_coefficient(sample_rate_, config_.attack_ms);
+  const float release = time_to_coefficient(sample_rate_, config_.release_ms);
   const int hold_samples =
       static_cast<int>(sample_rate_ * static_cast<double>(config_.hold_ms) * 0.001);
   last_gain_reduction_db_ = 0.0f;
@@ -132,7 +132,5 @@ void Gate::validate_config(const GateConfig& config) {
     throw std::invalid_argument("invalid gate configuration");
   }
 }
-
-float Gate::coeff(double sample_rate, float ms) { return time_to_coefficient(sample_rate, ms); }
 
 }  // namespace sonare::mastering::dynamics
