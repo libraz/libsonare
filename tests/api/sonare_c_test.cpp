@@ -334,6 +334,67 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized frames", "[c_api]") {
+  SonareStreamConfig config = {};
+  REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+  config.sample_rate = 22050;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_mels = 32;
+  config.window = SONARE_WINDOW_HAMMING;
+  config.output_format = SONARE_STREAM_OUTPUT_UINT8;
+
+  SECTION("rejects impossible overlap") {
+    SonareStreamConfig bad = config;
+    bad.hop_length = bad.n_fft + 1;
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(analyzer == nullptr);
+  }
+
+  SECTION("rejects invalid intervals and mel range") {
+    SonareStreamConfig bad = config;
+    bad.key_update_interval_sec = 0.0f;
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+
+    bad = config;
+    bad.fmin = 1000.0f;
+    bad.fmax = 500.0f;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("reads U8 and I16 frames") {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+    REQUIRE(analyzer != nullptr);
+
+    auto samples = generate_sine(440.0f, config.sample_rate, 0.25f);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+
+    SonareStreamFramesU8 u8 = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, 4, &u8) == SONARE_OK);
+    REQUIRE(u8.n_frames > 0);
+    REQUIRE(u8.n_frames <= 4);
+    REQUIRE(u8.n_mels == config.n_mels);
+    REQUIRE(u8.timestamps != nullptr);
+    REQUIRE(u8.mel != nullptr);
+    REQUIRE(u8.chroma != nullptr);
+    sonare_free_stream_frames_u8(&u8);
+
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    SonareStreamFramesI16 i16 = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, 4, &i16) == SONARE_OK);
+    REQUIRE(i16.n_frames > 0);
+    REQUIRE(i16.n_mels == config.n_mels);
+    REQUIRE(i16.mel != nullptr);
+    REQUIRE(i16.chroma != nullptr);
+    sonare_free_stream_frames_i16(&i16);
+
+    sonare_stream_analyzer_destroy(analyzer);
+  }
+}
+
 TEST_CASE("sonare_detect_beats", "[c_api]") {
   SECTION("detects beats from samples") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);

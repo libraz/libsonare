@@ -660,13 +660,9 @@ int16_t* copy_i16_vector(const std::vector<int16_t>& v) {
   return release_array(buf);
 }
 
-bool finite_positive(float value) {
-  return std::isfinite(value) && value > 0.0f;
-}
+bool finite_positive(float value) { return std::isfinite(value) && value > 0.0f; }
 
-bool finite_non_negative(float value) {
-  return std::isfinite(value) && value >= 0.0f;
-}
+bool finite_non_negative(float value) { return std::isfinite(value) && value >= 0.0f; }
 
 bool valid_window(int value) {
   return value >= SONARE_WINDOW_HANN && value <= SONARE_WINDOW_RECTANGULAR;
@@ -862,8 +858,7 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   SONARE_C_CATCH
 }
 
-SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
-                                                  size_t max_frames,
+SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                   SonareStreamFramesU8* out) {
   if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -887,8 +882,7 @@ SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer
 }
 
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
-                                                   size_t max_frames,
-                                                   SonareStreamFramesI16* out) {
+                                                   size_t max_frames, SonareStreamFramesI16* out) {
   if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};

@@ -1468,14 +1468,12 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
                                                SonareStreamFrames* out);
 
 /// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer.
-SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
-                                                  size_t max_frames,
+SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                   SonareStreamFramesU8* out);
 
 /// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer.
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
-                                                   size_t max_frames,
-                                                   SonareStreamFramesI16* out);
+                                                   size_t max_frames, SonareStreamFramesI16* out);
 
 /// @brief Resets analyzer state for a new stream.
 SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer, size_t base_sample_offset);

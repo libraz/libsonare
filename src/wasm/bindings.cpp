@@ -2235,13 +2235,15 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
 // Inverse: Mel power spectrogram [n_mels x n_frames] -> STFT power spectrogram
 // [(n_fft/2 + 1) x n_frames]. Mirrors feature::mel_to_stft.
 val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft,
-                   int hop_length) {
+                   int hop_length, float fmin, float fmax) {
   std::vector<float> data = float32ArrayToVector(mel_power);
 
   MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
 
   std::vector<float> stft = mel_to_stft(data.data(), n_mels, n_frames, config, sample_rate);
 
@@ -2255,13 +2257,15 @@ val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int
 // Inverse: Mel power spectrogram -> audio via Griffin-Lim. Mirrors
 // feature::mel_to_audio.
 val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft,
-                    int hop_length, int n_iter) {
+                    int hop_length, int n_iter, float fmin, float fmax) {
   std::vector<float> data = float32ArrayToVector(mel_power);
 
   MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
 
   Audio result = mel_to_audio(data.data(), n_mels, n_frames, config, n_iter, sample_rate);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -2284,13 +2288,15 @@ val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels) {
 
 // Inverse: MFCC matrix -> audio via Griffin-Lim. Mirrors feature::mfcc_to_audio.
 val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_rate, int n_fft,
-                     int hop_length, int n_iter) {
+                     int hop_length, int n_iter, float fmin, float fmax) {
   std::vector<float> data = float32ArrayToVector(mfcc);
 
   MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
 
   Audio result = mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -2892,12 +2898,17 @@ class StreamAnalyzerWrapper {
                         float fmax, float tuning_ref_hz, bool compute_magnitude, bool compute_mel,
                         bool compute_chroma, bool compute_onset, bool compute_spectral,
                         int emit_every_n_frames, int magnitude_downsample,
-                        float key_update_interval_sec, float bpm_update_interval_sec) {
+                        float key_update_interval_sec, float bpm_update_interval_sec, int window,
+                        int output_format) {
     StreamConfig config;
     config.sample_rate = sample_rate;
     config.n_fft = n_fft;
     config.hop_length = hop_length;
     config.n_mels = n_mels;
+    config.window = window == 1   ? WindowType::Hamming
+                    : window == 2 ? WindowType::Blackman
+                    : window == 3 ? WindowType::Rectangular
+                                  : WindowType::Hann;
     config.fmin = fmin;
     config.fmax = fmax;
     config.tuning_ref_hz = tuning_ref_hz;
@@ -2908,6 +2919,9 @@ class StreamAnalyzerWrapper {
     config.compute_spectral = compute_spectral;
     config.emit_every_n_frames = emit_every_n_frames;
     config.magnitude_downsample = magnitude_downsample;
+    config.output_format = output_format == 1   ? OutputFormat::Int16
+                           : output_format == 2 ? OutputFormat::Uint8
+                                                : OutputFormat::Float32;
     config.key_update_interval_sec = key_update_interval_sec;
     config.bpm_update_interval_sec = bpm_update_interval_sec;
     config_ = config;
@@ -2936,6 +2950,7 @@ class StreamAnalyzerWrapper {
 
     val out = val::object();
     out.set("nFrames", buffer.n_frames);
+    out.set("nMels", config_.n_mels);
     out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToFloat32Array(buffer.mel));
     out.set("chroma", vectorToFloat32Array(buffer.chroma));
@@ -4177,7 +4192,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   // Streaming - StreamAnalyzer
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
       .constructor<int, int, int, int, float, float, float, bool, bool, bool, bool, bool, int, int,
-                   float, float>()
+                   float, float, int, int>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("availableFrames", &StreamAnalyzerWrapper::availableFrames)
