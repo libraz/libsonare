@@ -16,6 +16,9 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/saturation/exciter.h"
@@ -36,6 +39,21 @@ struct DeclickStage {
   mastering::repair::DeclickConfig config{};
 };
 
+struct DeclipStage {
+  bool enabled = false;
+  mastering::repair::DeclipConfig config{};
+};
+
+struct DecrackleStage {
+  bool enabled = false;
+  mastering::repair::DecrackleConfig config{};
+};
+
+struct DehumStage {
+  bool enabled = false;
+  mastering::repair::DehumConfig config{};
+};
+
 struct DereverbStage {
   bool enabled = false;
   mastering::repair::DereverbClassicalConfig config{};
@@ -48,6 +66,9 @@ struct DenoiseStage {
 
 struct RepairChainConfig {
   DeclickStage declick{};
+  DeclipStage declip{};
+  DecrackleStage decrackle{};
+  DehumStage dehum{};
   DereverbStage dereverb{};
   DenoiseStage denoise{};
 };

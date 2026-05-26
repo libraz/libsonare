@@ -4,23 +4,12 @@
 #include <cmath>
 
 #include "core/fft.h"
+#include "metering/frequency_bins.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare::metering {
-namespace {
-
-std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
-  std::vector<float> frequencies(n_bins);
-  const float bin_width = static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-  for (int i = 0; i < n_bins; ++i) {
-    frequencies[i] = static_cast<float>(i) * bin_width;
-  }
-  return frequencies;
-}
-
-}  // namespace
 
 SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   SONARE_CHECK(config.n_fft > 0, ErrorCode::InvalidParameter);

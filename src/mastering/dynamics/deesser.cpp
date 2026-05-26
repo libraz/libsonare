@@ -17,18 +17,6 @@ using sonare::constants::kPiD;
 
 }  // namespace
 
-float DeEsser::Biquad::process(float x) {
-  const float y = b0 * x + z1;
-  z1 = b1 * x - a1 * y + z2;
-  z2 = b2 * x - a2 * y;
-  return y;
-}
-
-void DeEsser::Biquad::reset() {
-  z1 = 0.0f;
-  z2 = 0.0f;
-}
-
 DeEsser::DeEsser(DeEsserConfig config) : config_(config) { validate_config(config_); }
 
 void DeEsser::prepare(double sample_rate, int max_block_size) {

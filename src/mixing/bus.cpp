@@ -14,6 +14,7 @@ void BusProcessor::prepare(double sample_rate, int max_block_size) {
   for (auto& insert : inserts_) {
     insert->prepare(sample_rate_, max_block_size_);
   }
+  meter_.prepare(sample_rate_, max_block_size_);
 }
 
 void BusProcessor::process(float* const* channels, int num_channels, int num_samples) {
@@ -30,12 +31,14 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
     }
     inserts_[index]->process(channels, num_channels, num_samples);
   }
+  meter_.process(channels, num_channels, num_samples);
 }
 
 void BusProcessor::reset() {
   for (auto& insert : inserts_) {
     insert->reset();
   }
+  meter_.reset();
 }
 
 int BusProcessor::latency_samples() const noexcept { return latency_samples_q8() >> 8; }

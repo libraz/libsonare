@@ -1,10 +1,11 @@
 #include "mastering/api/insert_factory.h"
 
-#include <cctype>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "mastering/api/json_params.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -81,131 +82,13 @@ using detail::f;
 using detail::limiter_config;
 using detail::ParamMap;
 
-/// @brief Parses a flat JSON object ("{\"key\":value, ...}") into Params.
-/// @details Mirrors chain_json.cpp's parse_params_object: values may be a
-///          number, true, or false. Throws SonareException(InvalidParameter)
-///          on malformed input. Empty / whitespace / "{}" yields an empty list.
-class JsonObjectParser {
- public:
-  explicit JsonObjectParser(const std::string& text) : text_(text) {}
-
-  std::vector<Param> parse() {
-    std::vector<Param> params;
-    skip_ws();
-    if (pos_ >= text_.size()) {
-      return params;  // Empty string means defaults.
-    }
-    expect('{');
-    while (!consume('}')) {
-      std::string key = parse_string();
-      expect(':');
-      double value = 0.0;
-      if (peek("true")) {
-        pos_ += 4;
-        value = 1.0;
-      } else if (peek("false")) {
-        pos_ += 5;
-        value = 0.0;
-      } else {
-        value = parse_number();
-      }
-      params.push_back(Param{std::move(key), value});
-      if (!consume(',')) {
-        expect('}');
-        break;
-      }
-    }
-    skip_ws();
-    if (pos_ != text_.size()) {
-      fail("trailing data after JSON object");
-    }
-    return params;
+std::vector<Param> parse_insert_params_json(const std::string& json_params) {
+  try {
+    return detail::parse_flat_json_params(json_params, true);
+  } catch (const std::invalid_argument& e) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
   }
-
- private:
-  [[noreturn]] void fail(const std::string& message) const {
-    throw SonareException(ErrorCode::InvalidParameter, "make_insert: " + message);
-  }
-
-  std::string parse_string() {
-    skip_ws();
-    expect_raw('"');
-    std::string out;
-    while (pos_ < text_.size()) {
-      const char c = text_[pos_++];
-      if (c == '"') return out;
-      if (c == '\\') {
-        if (pos_ >= text_.size()) fail("unterminated JSON escape");
-        const char escaped = text_[pos_++];
-        if (escaped == '"' || escaped == '\\' || escaped == '/') {
-          out.push_back(escaped);
-        } else if (escaped == 'n') {
-          out.push_back('\n');
-        } else if (escaped == 't') {
-          out.push_back('\t');
-        } else {
-          fail("unsupported JSON string escape");
-        }
-      } else {
-        out.push_back(c);
-      }
-    }
-    fail("unterminated JSON string");
-  }
-
-  double parse_number() {
-    skip_ws();
-    const size_t start = pos_;
-    if (pos_ < text_.size() && text_[pos_] == '-') ++pos_;
-    while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    if (pos_ < text_.size() && text_[pos_] == '.') {
-      ++pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    }
-    if (pos_ < text_.size() && (text_[pos_] == 'e' || text_[pos_] == 'E')) {
-      ++pos_;
-      if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-')) ++pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    }
-    if (start == pos_) fail("expected JSON number");
-    return std::stod(text_.substr(start, pos_ - start));
-  }
-
-  bool consume(char c) {
-    skip_ws();
-    if (pos_ < text_.size() && text_[pos_] == c) {
-      ++pos_;
-      return true;
-    }
-    return false;
-  }
-
-  void expect(char c) {
-    skip_ws();
-    expect_raw(c);
-  }
-
-  void expect_raw(char c) {
-    if (pos_ >= text_.size() || text_[pos_] != c) {
-      fail(std::string("expected JSON character: ") + c);
-    }
-    ++pos_;
-  }
-
-  bool peek(const char* literal) const {
-    const std::string value(literal);
-    return text_.compare(pos_, value.size(), value) == 0;
-  }
-
-  void skip_ws() {
-    while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_]))) {
-      ++pos_;
-    }
-  }
-
-  const std::string& text_;
-  size_t pos_ = 0;
-};
+}
 
 using Processor = sonare::rt::ProcessorBase;
 
@@ -508,8 +391,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
                                                        const std::string& json_params) {
-  JsonObjectParser parser(json_params);
-  const std::vector<Param> param_list = parser.parse();
+  const std::vector<Param> param_list = parse_insert_params_json(json_params);
   const ParamMap params = detail::make_map(param_list);
 
   if (auto p = build_dynamics(name, params)) return p;
@@ -537,8 +419,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
     // Validate params for malformed JSON parity with make_insert(), then build a
     // real, IR-loaded convolution insert. load_ir() stores the IR and is safe to
     // call before prepare(); prepare() reapplies it to the FFT convolvers.
-    JsonObjectParser parser(json_params);
-    (void)parser.parse();
+    (void)parse_insert_params_json(json_params);
     auto reverb = std::make_unique<effects::reverb::ConvolutionReverb>();
     reverb->load_ir(impulse_response, ir_num_samples);
     return reverb;

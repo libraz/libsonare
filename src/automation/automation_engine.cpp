@@ -39,6 +39,7 @@ void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
   std::sort(lanes.begin(), lanes.end(), [](const AutomationLane& a, const AutomationLane& b) {
     return a.target_param_id() < b.target_param_id();
   });
+  lane_count_.store(lanes.size(), std::memory_order_relaxed);
   lanes_.publish(std::make_shared<const std::vector<AutomationLane>>(std::move(lanes)));
 }
 
@@ -121,9 +122,7 @@ void AutomationEngine::collect_boundaries(double block_start_ppq, double block_e
 }
 
 size_t AutomationEngine::lane_count() const noexcept {
-  lanes_.acquire();
-  const std::vector<AutomationLane>* lanes = lanes_.current();
-  return lanes ? lanes->size() : 0;
+  return lane_count_.load(std::memory_order_relaxed);
 }
 
 rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcept {

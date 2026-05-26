@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "mixing/meter.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mixing {
@@ -33,6 +34,7 @@ class BusProcessor : public rt::ProcessorBase {
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
   void clear_insert_sidechains() noexcept;
+  MeterSnapshot meter_snapshot() const noexcept { return meter_.snapshot(); }
 
   BusRole role() const noexcept { return role_; }
   int max_inputs() const noexcept { return max_inputs_; }
@@ -49,6 +51,7 @@ class BusProcessor : public rt::ProcessorBase {
   int max_inputs_ = 0;
   std::vector<std::unique_ptr<rt::ProcessorBase>> inserts_;
   std::vector<InsertSidechain> insert_sidechains_;
+  MeterProcessor meter_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
 };

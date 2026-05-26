@@ -24,6 +24,11 @@ enum class StftFormat {
   Power,      ///< Power spectrum (magnitude squared)
 };
 
+enum class PadMode {
+  Constant,  ///< Zero padding, matching current librosa.stft default
+  Reflect,   ///< Reflect input edges before/after the signal
+};
+
 /// @brief Configuration for STFT computation.
 struct StftConfig {
   int n_fft = 2048;                      ///< FFT size
@@ -31,6 +36,7 @@ struct StftConfig {
   int win_length = 0;                    ///< Window length (0 = n_fft)
   WindowType window = WindowType::Hann;  ///< Window function
   bool center = true;                    ///< Pad signal to center frames
+  PadMode pad_mode = PadMode::Constant;  ///< Padding mode used when center=true
 
   /// @brief Returns actual window length (defaults to n_fft if 0).
   int actual_win_length() const { return win_length > 0 ? win_length : n_fft; }

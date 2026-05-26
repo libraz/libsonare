@@ -133,14 +133,17 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 
   if (config_.measure_true_peak) {
     float max_true_peak = 0.0f;
-    for (int ch = 0; ch < meters; ++ch) {
+    for (int ch = 0; ch < num_channels; ++ch) {
       if (channels[ch] == nullptr) {
         continue;
       }
       const float* mono[] = {channels[ch]};
-      const float true_peak = std::max(sample_peaks[static_cast<size_t>(ch)],
-                                       true_peak_filter_.process(mono, 1, num_samples));
-      next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(true_peak);
+      const float sample_peak = ch < meters ? sample_peaks[static_cast<size_t>(ch)] : 0.0f;
+      const float true_peak =
+          std::max(sample_peak, true_peak_filter_.process(mono, 1, num_samples));
+      if (ch < meters) {
+        next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(true_peak);
+      }
       max_true_peak = std::max(max_true_peak, true_peak);
     }
     next.max_true_peak_db = linear_to_db(max_true_peak);
@@ -166,7 +169,8 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       side_energy += side_scaled * side_scaled;
     }
     const double denom = std::sqrt(sum_l * sum_r);
-    next.correlation = denom > 1.0e-12 ? static_cast<float>(sum_lr / denom) : 0.0f;
+    next.correlation =
+        denom > static_cast<double>(kEpsilon) ? static_cast<float>(sum_lr / denom) : 0.0f;
     next.mono_compat_side_rms = static_cast<float>(std::sqrt(side_sq_sum / num_samples));
     if (mid_energy > static_cast<double>(kEpsilon)) {
       next.mono_compat_width = static_cast<float>(std::sqrt(side_energy / mid_energy));

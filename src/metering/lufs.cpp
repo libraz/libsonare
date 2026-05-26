@@ -100,17 +100,21 @@ std::vector<double> block_energies(const std::vector<float>& samples, int sample
   return energies;
 }
 
-std::vector<double> block_energies_interleaved(const float* interleaved, size_t frames,
-                                               int channels, int sample_rate, float duration_sec,
-                                               float overlap) {
-  if (interleaved == nullptr || frames == 0) return {};
-
+std::vector<std::vector<float>> k_weighted_channels(const float* interleaved, size_t frames,
+                                                    int channels, int sample_rate) {
   std::vector<std::vector<float>> weighted_channels;
   weighted_channels.reserve(static_cast<size_t>(channels));
   for (int channel = 0; channel < channels; ++channel) {
     weighted_channels.push_back(
         k_weighted_channel(interleaved, frames, channels, channel, sample_rate));
   }
+  return weighted_channels;
+}
+
+std::vector<double> block_energies_weighted_channels(
+    const std::vector<std::vector<float>>& weighted_channels, size_t frames, int channels,
+    int sample_rate, float duration_sec, float overlap) {
+  if (weighted_channels.empty() || frames == 0) return {};
 
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
@@ -179,12 +183,10 @@ float last_or_silence(const std::vector<float>& values) {
 }
 
 float loudness_range_from_short_term(const std::vector<float>& values) {
-  // ITU-R BS.1770 / EBU R128 absolute gate: discard blocks quieter than -70 LUFS.
-  constexpr double kLufsAbsoluteGateLufs = -70.0;
   std::vector<float> finite;
   finite.reserve(values.size());
   for (float value : values) {
-    if (std::isfinite(value) && value >= static_cast<float>(kLufsAbsoluteGateLufs)) {
+    if (std::isfinite(value) && value >= kLufsAbsoluteGate) {
       finite.push_back(value);
     }
   }
@@ -217,13 +219,16 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
   SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
 
-  const std::vector<double> integrated_blocks = block_energies_interleaved(
-      samples, frames, channels, sample_rate, config.block_duration_sec, config.block_overlap);
-  const std::vector<float> momentary = energies_to_lufs(block_energies_interleaved(
-      samples, frames, channels, sample_rate, config.momentary_duration_sec, config.block_overlap));
+  const auto weighted_channels = k_weighted_channels(samples, frames, channels, sample_rate);
+  const std::vector<double> integrated_blocks =
+      block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
+                                       config.block_duration_sec, config.block_overlap);
+  const std::vector<float> momentary = energies_to_lufs(
+      block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
+                                       config.momentary_duration_sec, config.block_overlap));
   const std::vector<float> short_term = energies_to_lufs(
-      block_energies_interleaved(samples, frames, channels, sample_rate,
-                                 config.short_term_duration_sec, config.block_overlap));
+      block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
+                                       config.short_term_duration_sec, config.block_overlap));
 
   LufsResult result;
   result.integrated_lufs = gated_integrated_lufs(integrated_blocks, config);
@@ -239,9 +244,6 @@ float ebur128_loudness_range(const Audio& audio) {
   // EBU Tech 3342: short-term loudness, 3 s window, 100 ms hop.
   constexpr double kWindowSec = 3.0;
   constexpr double kHopSec = 0.1;
-  constexpr float kAbsoluteGateLufs = -70.0f;
-  constexpr float kRelativeGateLu = -20.0f;
-
   const int sample_rate = audio.sample_rate();
   const std::vector<float> weighted = k_weighted(audio);
   if (weighted.empty()) return 0.0f;
@@ -264,7 +266,7 @@ float ebur128_loudness_range(const Audio& audio) {
   std::vector<float> abs_gated;
   abs_gated.reserve(short_term.size());
   for (float value : short_term) {
-    if (std::isfinite(value) && value >= kAbsoluteGateLufs) abs_gated.push_back(value);
+    if (std::isfinite(value) && value >= kLufsAbsoluteGate) abs_gated.push_back(value);
   }
   if (abs_gated.size() < 2) return 0.0f;
 
@@ -275,7 +277,7 @@ float ebur128_loudness_range(const Audio& audio) {
     mean_energy += std::pow(10.0, (static_cast<double>(value) - rt::kLoudnessOffset) / 10.0);
   }
   mean_energy /= static_cast<double>(abs_gated.size());
-  const float relative_gate = energy_to_lufs(mean_energy) + kRelativeGateLu;
+  const float relative_gate = energy_to_lufs(mean_energy) + kLufsRangeRelativeGate;
 
   std::vector<float> gated;
   gated.reserve(abs_gated.size());

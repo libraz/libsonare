@@ -35,6 +35,15 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
   if (config_.repair.declick.enabled) {
     throw std::invalid_argument("StreamingMasteringChain does not support repair.declick");
   }
+  if (config_.repair.declip.enabled) {
+    throw std::invalid_argument("StreamingMasteringChain does not support repair.declip");
+  }
+  if (config_.repair.decrackle.enabled) {
+    throw std::invalid_argument("StreamingMasteringChain does not support repair.decrackle");
+  }
+  if (config_.repair.dehum.enabled) {
+    throw std::invalid_argument("StreamingMasteringChain does not support repair.dehum");
+  }
   if (config_.repair.dereverb.enabled) {
     throw std::invalid_argument("StreamingMasteringChain does not support repair.dereverb");
   }

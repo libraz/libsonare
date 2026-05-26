@@ -255,12 +255,20 @@ TEST_CASE("StreamingMasteringChain supports new dynamics stages", "[mastering][c
 
 TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chain]") {
   Param params[] = {
-      {"repair.declick.threshold", 0.5},
+      {"repair.declick.threshold", 0.5},    {"repair.declip.clipThreshold", 0.9},
+      {"repair.decrackle.mode", 1.0},       {"repair.dehum.fundamentalHz", 60.0},
       {"repair.dereverb.attenuation", 0.7},
   };
-  auto config = parse_chain_config_params(params, 2);
+  auto config = parse_chain_config_params(params, 5);
   REQUIRE(config.repair.declick.enabled);
   REQUIRE_THAT(config.repair.declick.config.threshold, WithinAbs(0.5f, 1e-6f));
+  REQUIRE(config.repair.declip.enabled);
+  REQUIRE_THAT(config.repair.declip.config.clip_threshold, WithinAbs(0.9f, 1e-6f));
+  REQUIRE(config.repair.decrackle.enabled);
+  REQUIRE(config.repair.decrackle.config.mode ==
+          ::sonare::mastering::repair::DecrackleMode::WaveletShrinkage);
+  REQUIRE(config.repair.dehum.enabled);
+  REQUIRE_THAT(config.repair.dehum.config.fundamental_hz, WithinAbs(60.0f, 1e-6f));
   REQUIRE(config.repair.dereverb.enabled);
   REQUIRE_THAT(config.repair.dereverb.config.attenuation, WithinAbs(0.7f, 1e-6f));
 }

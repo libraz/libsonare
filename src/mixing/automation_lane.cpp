@@ -36,6 +36,7 @@ void AutomationLane::clear() noexcept {
   tail_.store(head_.load(std::memory_order_acquire), std::memory_order_release);
   has_last_pushed_sample_ = false;
   last_pushed_sample_ = 0;
+  has_active_event_ = false;
 }
 
 size_t AutomationLane::increment(size_t index) const noexcept {

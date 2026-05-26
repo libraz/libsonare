@@ -114,16 +114,4 @@ void PresenceEnhancer::ensure_state(int num_channels) {
   }
 }
 
-float PresenceEnhancer::Biquad::process(float x) {
-  const float y = b0 * x + z1;
-  z1 = b1 * x - a1 * y + z2;
-  z2 = b2 * x - a2 * y;
-  return y;
-}
-
-void PresenceEnhancer::Biquad::reset() {
-  z1 = 0.0f;
-  z2 = 0.0f;
-}
-
 }  // namespace sonare::mastering::spectral

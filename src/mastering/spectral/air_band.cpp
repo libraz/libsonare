@@ -159,16 +159,4 @@ void AirBand::rebuild_filters(int num_channels) {
       make_highpass(config_.shelf_frequency_hz, sample_rate_, sonare::constants::kButterworthQD));
 }
 
-float AirBand::Biquad::process(float x) {
-  const float y = b0 * x + z1;
-  z1 = b1 * x - a1 * y + z2;
-  z2 = b2 * x - a2 * y;
-  return y;
-}
-
-void AirBand::Biquad::reset() {
-  z1 = 0.0f;
-  z2 = 0.0f;
-}
-
 }  // namespace sonare::mastering::spectral

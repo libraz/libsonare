@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "metering/clipping.h"
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -17,7 +18,7 @@ float frame_rms_db(const float* data, size_t start, size_t end) {
 
   const float frame_rms = rms(data + start, end - start);
   if (frame_rms < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return 20.0f * std::log10(frame_rms);
+  return linear_to_db(frame_rms);
 }
 
 }  // namespace
@@ -29,7 +30,7 @@ float peak_db(const Audio& audio) {
   const float peak = peak_abs(data, audio.size());
 
   if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return 20.0f * std::log10(peak);
+  return linear_to_db(peak);
 }
 
 float rms_db(const Audio& audio) {
@@ -38,7 +39,7 @@ float rms_db(const Audio& audio) {
   const float* data = audio.data();
   const float audio_rms = rms(data, audio.size());
   if (audio_rms < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return 20.0f * std::log10(audio_rms);
+  return linear_to_db(audio_rms);
 }
 
 float crest_factor_db(const Audio& audio) {

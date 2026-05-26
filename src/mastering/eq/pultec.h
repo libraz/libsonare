@@ -7,6 +7,7 @@
 
 #include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -58,6 +59,7 @@ class PultecEq : public common::ProcessorBase {
   void rebuild();
   static float clamp_amount(float amount);
   static float validate_frequency(float frequency_hz);
+  void update_component_coefficients();
   void prepare_component_state(int num_channels);
   float process_component_sample(float input, int channel);
 
@@ -78,6 +80,8 @@ class PultecEq : public common::ProcessorBase {
   float high_attenuation_ = 0.0f;
   PultecComponentModel component_model_ = PultecComponentModel::CurveOnly;
   float output_drive_ = 0.0f;
+  float low_component_alpha_ = sonare::constants::kTwoPi * 60.0f / 48000.0f;
+  float high_component_alpha_ = 0.75f;
 };
 
 }  // namespace sonare::mastering::eq

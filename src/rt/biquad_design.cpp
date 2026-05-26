@@ -367,6 +367,14 @@ float one_pole_lowpass_alpha(float frequency_hz, double sample_rate) {
   return static_cast<float>(std::clamp(g / (g + sample_rate), 0.0, 1.0));
 }
 
+float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate) {
+  if (!(frequency_hz > 0.0f)) return 0.0f;
+  if (!(sample_rate > 0.0)) return 1.0f;
+  const float exponent =
+      -sonare::constants::kTwoPi * frequency_hz / static_cast<float>(sample_rate);
+  return std::clamp(1.0f - std::exp(exponent), 0.0f, 1.0f);
+}
+
 BiquadCoeffsD rbj_high_shelf_d(double frequency, double sample_rate, double gain_db, double q) {
   return rbj_high_shelf_from_design_d(rbj_high_shelf_design_d(frequency, sample_rate, q), gain_db);
 }

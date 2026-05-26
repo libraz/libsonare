@@ -44,6 +44,7 @@ struct ChromaConfig {
 struct ChromaCqtConfig {
   CqtConfig cqt;
   int n_chroma = 12;
+  float tuning = 0.0f;     ///< Tuning deviation in fractional semitones/chroma bins.
   float threshold = 0.0f;  ///< Magnitudes below this fraction of the per-frame max are zeroed.
   bool normalize_frames = true;  ///< L-inf normalize per frame (matches librosa default norm=Inf).
 };
@@ -64,6 +65,7 @@ struct BassChromaConfig {
     return config;
   }();
   int n_chroma = 12;
+  float tuning = 0.0f;
   bool normalize_frames = true;
 };
 

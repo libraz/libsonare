@@ -161,6 +161,10 @@ export interface StreamAnalyzerConfig {
   magnitudeDownsample?: number;
   keyUpdateIntervalSec?: number;
   bpmUpdateIntervalSec?: number;
+  /** Window type: 0 Hann, 1 Hamming, 2 Blackman, 3 Rectangular. */
+  window?: number;
+  /** Output format: 0 Float32, 1 Int16, 2 Uint8. */
+  outputFormat?: number;
 }
 
 /** Structure-of-arrays frame buffer (`StreamAnalyzer.readFramesSoa`). */

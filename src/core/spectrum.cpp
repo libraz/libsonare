@@ -15,14 +15,30 @@ namespace sonare {
 
 namespace {
 
-/// @brief Pads signal with zeros for centered STFT.
-/// @details Uses constant zero padding.
-std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
+size_t reflect_index(int64_t index, size_t size) {
+  if (size <= 1) return 0;
+  const int64_t period = static_cast<int64_t>(2 * size - 2);
+  int64_t wrapped = index % period;
+  if (wrapped < 0) wrapped += period;
+  if (wrapped >= static_cast<int64_t>(size)) {
+    wrapped = period - wrapped;
+  }
+  return static_cast<size_t>(wrapped);
+}
+
+std::vector<float> pad_center(const float* data, size_t size, int pad_length, PadMode pad_mode) {
   std::vector<float> padded(size + 2 * pad_length, 0.0f);
-
-  // Copy original data to center
-  std::copy(data, data + size, padded.begin() + pad_length);
-
+  if (data == nullptr || size == 0) {
+    return padded;
+  }
+  if (pad_mode == PadMode::Constant) {
+    std::copy(data, data + size, padded.begin() + pad_length);
+    return padded;
+  }
+  for (size_t i = 0; i < padded.size(); ++i) {
+    const int64_t src = static_cast<int64_t>(i) - pad_length;
+    padded[i] = data[reflect_index(src, size)];
+  }
   return padded;
 }
 
@@ -78,7 +94,7 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   std::vector<float> padded_signal;
   if (config.center) {
     int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length);
+    padded_signal = pad_center(signal, signal_length, pad_length, config.pad_mode);
     signal = padded_signal.data();
     signal_length = padded_signal.size();
   }
@@ -394,11 +410,11 @@ namespace {
 std::vector<std::complex<float>> stft_with_window(const float* signal, size_t signal_length,
                                                   const std::vector<float>& padded_window,
                                                   int n_fft, int hop_length, bool center,
-                                                  int* out_n_frames) {
+                                                  PadMode pad_mode, int* out_n_frames) {
   std::vector<float> padded_signal;
   if (center) {
     int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length);
+    padded_signal = pad_center(signal, signal_length, pad_length, pad_mode);
     signal = padded_signal.data();
     signal_length = padded_signal.size();
   }
@@ -482,14 +498,16 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
-                                                         hop_length, config.center, &n_frames);
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames);
   int n_frames_t = 0;
-  std::vector<std::complex<float>> Stw =
-      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center, &n_frames_t);
+  std::vector<std::complex<float>> Stw = stft_with_window(
+      signal, signal_len, t_window, n_fft, hop_length, config.center, config.pad_mode, &n_frames_t);
   int n_frames_d = 0;
-  std::vector<std::complex<float>> Sdw = stft_with_window(signal, signal_len, dw_window, n_fft,
-                                                          hop_length, config.center, &n_frames_d);
+  std::vector<std::complex<float>> Sdw =
+      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames_d);
   SONARE_CHECK(n_frames == n_frames_t && n_frames == n_frames_d, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;
@@ -544,11 +562,13 @@ std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& co
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
-                                                         hop_length, config.center, &n_frames);
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames);
   int n_frames_d = 0;
-  std::vector<std::complex<float>> Sdw = stft_with_window(signal, signal_len, dw_window, n_fft,
-                                                          hop_length, config.center, &n_frames_d);
+  std::vector<std::complex<float>> Sdw =
+      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames_d);
   SONARE_CHECK(n_frames == n_frames_d, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;
@@ -592,11 +612,12 @@ std::vector<float> reassign_times(const Audio& audio, const StftConfig& config, 
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
-                                                         hop_length, config.center, &n_frames);
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames);
   int n_frames_t = 0;
-  std::vector<std::complex<float>> Stw =
-      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center, &n_frames_t);
+  std::vector<std::complex<float>> Stw = stft_with_window(
+      signal, signal_len, t_window, n_fft, hop_length, config.center, config.pad_mode, &n_frames_t);
   SONARE_CHECK(n_frames == n_frames_t, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;

@@ -31,6 +31,26 @@ double beta_2_18_cdf(double x) {
   return 1.0 - std::pow(1.0 - x, 18.0) * (1.0 + 18.0 * x);
 }
 
+size_t reflect_index(int64_t index, size_t size) {
+  if (size <= 1) return 0;
+  const int64_t period = static_cast<int64_t>(2 * size - 2);
+  int64_t wrapped = index % period;
+  if (wrapped < 0) wrapped += period;
+  if (wrapped >= static_cast<int64_t>(size)) {
+    wrapped = period - wrapped;
+  }
+  return static_cast<size_t>(wrapped);
+}
+
+std::vector<float> reflect_center_pad(const float* data, size_t size, int pad) {
+  std::vector<float> padded(size + 2 * static_cast<size_t>(pad), 0.0f);
+  if (data == nullptr || size == 0) return padded;
+  for (size_t i = 0; i < padded.size(); ++i) {
+    padded[i] = data[reflect_index(static_cast<int64_t>(i) - pad, size)];
+  }
+  return padded;
+}
+
 std::vector<float> librosa_yin_cmndf(const float* frame, int frame_length, int min_period,
                                      int max_period) {
   std::vector<double> acf(static_cast<size_t>(max_period) + 1, 0.0);
@@ -296,8 +316,15 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
-  int n_samples = static_cast<int>(audio.size());
-  int n_frames = 1 + (n_samples - config.frame_length) / config.hop_length;
+  std::vector<float> padded;
+  const float* data = audio.data();
+  int signal_samples = static_cast<int>(audio.size());
+  if (config.center) {
+    padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
+    data = padded.data();
+    signal_samples = static_cast<int>(padded.size());
+  }
+  int n_frames = 1 + (signal_samples - config.frame_length) / config.hop_length;
 
   if (n_frames <= 0) {
     return PitchResult();
@@ -307,8 +334,6 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   result.f0.resize(n_frames);
   result.voiced_prob.resize(n_frames);
   result.voiced_flag.resize(n_frames);
-
-  const float* data = audio.data();
 
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
@@ -335,8 +360,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
-  int n_samples = static_cast<int>(audio.size());
-  int n_frames = 1 + (n_samples - config.frame_length) / config.hop_length;
+  std::vector<float> padded;
+  const float* data = audio.data();
+  int signal_samples = static_cast<int>(audio.size());
+  if (config.center) {
+    padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
+    data = padded.data();
+    signal_samples = static_cast<int>(padded.size());
+  }
+  int n_frames = 1 + (signal_samples - config.frame_length) / config.hop_length;
 
   if (n_frames <= 0) {
     return PitchResult();
@@ -375,8 +407,6 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
         beta_2_18_cdf(thresholds[static_cast<size_t>(index + 1)]) -
         beta_2_18_cdf(thresholds[static_cast<size_t>(index)]);
   }
-
-  const float* data = audio.data();
 
   std::vector<std::vector<double>> observation(n_frames, std::vector<double>(n_states, 0.0));
   std::vector<double> voiced_prob(static_cast<size_t>(n_frames), 0.0);

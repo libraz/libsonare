@@ -311,7 +311,7 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
 
   std::vector<float> chroma =
       wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
-                         config.cqt.fmin, /*tuning=*/0.0f);
+                         config.cqt.fmin, config.tuning);
 
   if (config.threshold > 0.0f) {
     for (int t = 0; t < n_frames; ++t) {
@@ -353,7 +353,7 @@ Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
 
   std::vector<float> chroma =
       wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
-                         config.cqt.fmin, /*tuning=*/0.0f);
+                         config.cqt.fmin, config.tuning);
 
   if (config.normalize_frames && n_frames > 0) {
     chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);

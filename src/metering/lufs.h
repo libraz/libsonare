@@ -10,6 +10,10 @@
 
 namespace sonare::metering {
 
+inline constexpr float kLufsAbsoluteGate = -70.0f;
+inline constexpr float kLufsIntegratedRelativeGate = -10.0f;
+inline constexpr float kLufsRangeRelativeGate = -20.0f;
+
 struct LufsResult {
   float integrated_lufs = 0.0f;
   float momentary_lufs = 0.0f;
@@ -18,8 +22,8 @@ struct LufsResult {
 };
 
 struct LufsConfig {
-  float absolute_gate_lufs = -70.0f;
-  float relative_gate_lu = -10.0f;
+  float absolute_gate_lufs = kLufsAbsoluteGate;
+  float relative_gate_lu = kLufsIntegratedRelativeGate;
   float block_duration_sec = 0.400f;
   float block_overlap = 0.75f;
   float momentary_duration_sec = 0.400f;

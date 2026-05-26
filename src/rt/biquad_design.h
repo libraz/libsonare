@@ -49,6 +49,10 @@ float butterworth_stage_q(int order, int pair);
 /// @details `g = 2*pi*frequency_hz`; result is clamped to `[0, 1]`.
 float one_pole_lowpass_alpha(float frequency_hz, double sample_rate);
 
+/// @brief Matched-z one-pole low-pass coefficient `1 - exp(-2*pi*fc/fs)`.
+/// @details Returns a clamped coefficient in `[0, 1]`.
+float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate);
+
 /// @brief Normalized second-order section with double-precision coefficients.
 /// @details Used by the ITU-R BS.1770 K-weighting filters where the accumulation
 /// precision matters (long integration windows). Direct Form II transposed.

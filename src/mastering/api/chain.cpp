@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "mastering/api/audio_utils.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
@@ -20,6 +21,9 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/saturation/exciter.h"
@@ -29,7 +33,6 @@
 #include "mastering/stereo/mono_maker.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
-#include "util/db.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -110,35 +113,9 @@ float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
   return most_reduced;
 }
 
-std::vector<float> mono_mix(const std::vector<float>& left, const std::vector<float>& right) {
-  if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
-  }
-  std::vector<float> mono(left.size());
-  for (std::size_t i = 0; i < left.size(); ++i) {
-    mono[i] = 0.5f * (left[i] + right[i]);
-  }
-  return mono;
-}
-
 float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
   Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
   return metering::lufs(audio).integrated_lufs;
-}
-
-void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float gain_db) {
-  const float gain = db_to_linear(gain_db);
-  for (std::size_t i = 0; i < left.size(); ++i) {
-    left[i] *= gain;
-    right[i] *= gain;
-  }
-}
-
-void apply_gain_mono(std::vector<float>& samples, float gain_db) {
-  const float gain = db_to_linear(gain_db);
-  for (float& sample : samples) {
-    sample *= gain;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +125,9 @@ void apply_gain_mono(std::vector<float>& samples, float gain_db) {
 int count_enabled_mono_stages(const MasteringChainConfig& cfg) {
   int n = 0;
   if (cfg.repair.declick.enabled) ++n;
+  if (cfg.repair.declip.enabled) ++n;
+  if (cfg.repair.decrackle.enabled) ++n;
+  if (cfg.repair.dehum.enabled) ++n;
   if (cfg.repair.dereverb.enabled) ++n;
   if (cfg.repair.denoise.enabled) ++n;
   if (cfg.eq.tilt.enabled) ++n;
@@ -209,7 +189,31 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("repair.declick");
   }
 
-  // 2. repair.dereverb
+  // 2. repair.declip
+  if (config_.repair.declip.enabled) {
+    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    Audio repaired = mastering::repair::declip(input, config_.repair.declip.config);
+    data.assign(repaired.data(), repaired.data() + repaired.size());
+    report("repair.declip");
+  }
+
+  // 3. repair.decrackle
+  if (config_.repair.decrackle.enabled) {
+    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    Audio repaired = mastering::repair::decrackle(input, config_.repair.decrackle.config);
+    data.assign(repaired.data(), repaired.data() + repaired.size());
+    report("repair.decrackle");
+  }
+
+  // 4. repair.dehum
+  if (config_.repair.dehum.enabled) {
+    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    Audio repaired = mastering::repair::dehum(input, config_.repair.dehum.config);
+    data.assign(repaired.data(), repaired.data() + repaired.size());
+    report("repair.dehum");
+  }
+
+  // 5. repair.dereverb
   if (config_.repair.dereverb.enabled) {
     Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
     Audio repaired = mastering::repair::dereverb_classical(input, config_.repair.dereverb.config);
@@ -217,7 +221,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("repair.dereverb");
   }
 
-  // 3. repair.denoise
+  // 6. repair.denoise
   if (config_.repair.denoise.enabled) {
     Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
     Audio repaired = mastering::repair::denoise_classical(input, config_.repair.denoise.config);
@@ -303,7 +307,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     const float current_lufs = integrated_lufs(data, sample_rate);
     if (std::isfinite(current_lufs)) {
       const float gain_db = config_.loudness.target_lufs - current_lufs;
-      apply_gain_mono(data, gain_db);
+      detail::apply_gain_db(data, gain_db);
       applied_gain_db += gain_db;
     }
     mastering::maximizer::TruePeakLimiterConfig limiter_config;
@@ -337,7 +341,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   std::vector<float> left(left_in, left_in + length);
   std::vector<float> right(right_in, right_in + length);
 
-  result.input_lufs = integrated_lufs(mono_mix(left, right), sample_rate);
+  result.input_lufs = integrated_lufs(detail::mono_mix(left, right), sample_rate);
   float applied_gain_db = 0.0f;
 
   const int total = count_enabled_stereo_stages(config_);
@@ -361,7 +365,41 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("repair.declick");
   }
 
-  // 2. repair.dereverb (per-channel)
+  // 2. repair.declip (per-channel)
+  if (config_.repair.declip.enabled) {
+    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+    Audio left_repaired = mastering::repair::declip(left_audio, config_.repair.declip.config);
+    Audio right_repaired = mastering::repair::declip(right_audio, config_.repair.declip.config);
+    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
+    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    report("repair.declip");
+  }
+
+  // 3. repair.decrackle (per-channel)
+  if (config_.repair.decrackle.enabled) {
+    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+    Audio left_repaired = mastering::repair::decrackle(left_audio, config_.repair.decrackle.config);
+    Audio right_repaired =
+        mastering::repair::decrackle(right_audio, config_.repair.decrackle.config);
+    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
+    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    report("repair.decrackle");
+  }
+
+  // 4. repair.dehum (per-channel)
+  if (config_.repair.dehum.enabled) {
+    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+    Audio left_repaired = mastering::repair::dehum(left_audio, config_.repair.dehum.config);
+    Audio right_repaired = mastering::repair::dehum(right_audio, config_.repair.dehum.config);
+    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
+    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    report("repair.dehum");
+  }
+
+  // 5. repair.dereverb (per-channel)
   if (config_.repair.dereverb.enabled) {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
@@ -374,7 +412,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("repair.dereverb");
   }
 
-  // 3. repair.denoise (per-channel)
+  // 6. repair.denoise (per-channel)
   if (config_.repair.denoise.enabled) {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
@@ -476,10 +514,10 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
 
   // 15. loudness (stereo path: manual gain + TruePeakLimiter pass)
   if (config_.loudness.enabled) {
-    const float current_lufs = integrated_lufs(mono_mix(left, right), sample_rate);
+    const float current_lufs = integrated_lufs(detail::mono_mix(left, right), sample_rate);
     if (std::isfinite(current_lufs)) {
       const float gain_db = config_.loudness.target_lufs - current_lufs;
-      apply_gain_db(left, right, gain_db);
+      detail::apply_gain_db(left, right, gain_db);
       applied_gain_db += gain_db;
     }
     mastering::maximizer::TruePeakLimiterConfig limiter_config;
@@ -494,14 +532,14 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("loudness.optimize");
   }
 
-  result.output_lufs = integrated_lufs(mono_mix(left, right), sample_rate);
+  result.output_lufs = integrated_lufs(detail::mono_mix(left, right), sample_rate);
   result.applied_gain_db = applied_gain_db;
   {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
     result.output_true_peak_dbtp =
         std::max(metering::true_peak_db(left_audio, 4), metering::true_peak_db(right_audio, 4));
-    std::vector<float> mono = mono_mix(left, right);
+    std::vector<float> mono = detail::mono_mix(left, right);
     Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
     result.output_lra = metering::lufs(mono_audio).loudness_range;
   }

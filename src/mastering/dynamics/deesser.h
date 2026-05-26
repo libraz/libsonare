@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "mastering/common/biquad.h"
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
 
@@ -46,18 +47,7 @@ class DeEsser : public common::ProcessorBase {
   void ensure_state(int num_channels);
   void update_filter_coeff();
 
-  struct Biquad {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-
-    float process(float x);
-    void reset();
-  };
+  using Biquad = common::Biquad;
 
   DeEsserConfig config_{};
   double sample_rate_ = 48000.0;

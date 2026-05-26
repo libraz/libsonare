@@ -1,7 +1,6 @@
 /// @file chain_json.cpp
 /// @brief JSON serialization for MasteringChainConfig.
 
-#include <cctype>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -9,6 +8,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/json_params.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -28,6 +28,30 @@ std::vector<Param> flatten_chain_config(const MasteringChainConfig& cfg) {
             static_cast<double>(cfg.repair.declick.config.max_click_samples));
   add_param(params, "repair.declick.lpcOrder", cfg.repair.declick.config.lpc_order);
   add_param(params, "repair.declick.residualRatio", cfg.repair.declick.config.residual_ratio);
+
+  add_param(params, "repair.declip.enabled", cfg.repair.declip.enabled ? 1.0 : 0.0);
+  add_param(params, "repair.declip.clipThreshold", cfg.repair.declip.config.clip_threshold);
+  add_param(params, "repair.declip.lpcOrder", cfg.repair.declip.config.lpc_order);
+  add_param(params, "repair.declip.iterations", cfg.repair.declip.config.iterations);
+  add_param(params, "repair.declip.lpcBlend", cfg.repair.declip.config.lpc_blend);
+
+  add_param(params, "repair.decrackle.enabled", cfg.repair.decrackle.enabled ? 1.0 : 0.0);
+  add_param(params, "repair.decrackle.threshold", cfg.repair.decrackle.config.threshold);
+  add_param(params, "repair.decrackle.mode",
+            cfg.repair.decrackle.config.mode == mastering::repair::DecrackleMode::WaveletShrinkage
+                ? 1.0
+                : 0.0);
+  add_param(params, "repair.decrackle.levels", cfg.repair.decrackle.config.levels);
+
+  add_param(params, "repair.dehum.enabled", cfg.repair.dehum.enabled ? 1.0 : 0.0);
+  add_param(params, "repair.dehum.fundamentalHz", cfg.repair.dehum.config.fundamental_hz);
+  add_param(params, "repair.dehum.harmonics", cfg.repair.dehum.config.harmonics);
+  add_param(params, "repair.dehum.q", cfg.repair.dehum.config.q);
+  add_param(params, "repair.dehum.adaptive", cfg.repair.dehum.config.adaptive ? 1.0 : 0.0);
+  add_param(params, "repair.dehum.searchRangeHz", cfg.repair.dehum.config.search_range_hz);
+  add_param(params, "repair.dehum.adaptation", cfg.repair.dehum.config.adaptation);
+  add_param(params, "repair.dehum.frameSize", cfg.repair.dehum.config.frame_size);
+  add_param(params, "repair.dehum.pllBandwidth", cfg.repair.dehum.config.pll_bandwidth);
 
   add_param(params, "repair.dereverb.enabled", cfg.repair.dereverb.enabled ? 1.0 : 0.0);
   add_param(params, "repair.dereverb.threshold", cfg.repair.dereverb.config.threshold);
@@ -189,32 +213,33 @@ class JsonParamParser {
 
   std::vector<Param> parse() {
     std::vector<Param> params;
-    skip_ws();
-    expect('{');
+    detail::JsonParamReader reader(text_);
+    reader.skip_ws();
+    reader.expect('{');
     bool saw_version = false;
     bool saw_params = false;
-    while (!consume('}')) {
-      const std::string key = parse_string();
-      expect(':');
+    while (!reader.consume('}')) {
+      const std::string key = reader.parse_string();
+      reader.expect(':');
       if (key == "version") {
-        const double version = parse_number();
+        const double version = reader.parse_number();
         if (static_cast<int>(version) != 1) {
           throw std::invalid_argument("unsupported chain config JSON version");
         }
         saw_version = true;
       } else if (key == "params") {
-        params = parse_params_object();
+        params = reader.parse_flat_object();
         saw_params = true;
       } else {
         throw std::invalid_argument("unknown chain config JSON field: " + key);
       }
-      if (!consume(',')) {
-        expect('}');
+      if (!reader.consume(',')) {
+        reader.expect('}');
         break;
       }
     }
-    skip_ws();
-    if (pos_ != text_.size()) throw std::invalid_argument("trailing data after JSON object");
+    reader.skip_ws();
+    if (!reader.at_end()) throw std::invalid_argument("trailing data after JSON object");
     if (!saw_version || !saw_params) {
       throw std::invalid_argument("chain config JSON requires version and params");
     }
@@ -222,109 +247,7 @@ class JsonParamParser {
   }
 
  private:
-  std::vector<Param> parse_params_object() {
-    std::vector<Param> params;
-    expect('{');
-    while (!consume('}')) {
-      std::string key = parse_string();
-      expect(':');
-      double value = 0.0;
-      if (peek("true")) {
-        pos_ += 4;
-        value = 1.0;
-      } else if (peek("false")) {
-        pos_ += 5;
-        value = 0.0;
-      } else {
-        value = parse_number();
-      }
-      params.push_back(Param{std::move(key), value});
-      if (!consume(',')) {
-        expect('}');
-        break;
-      }
-    }
-    return params;
-  }
-
-  std::string parse_string() {
-    skip_ws();
-    expect_raw('"');
-    std::string out;
-    while (pos_ < text_.size()) {
-      const char c = text_[pos_++];
-      if (c == '"') return out;
-      if (c == '\\') {
-        if (pos_ >= text_.size()) throw std::invalid_argument("unterminated JSON escape");
-        const char escaped = text_[pos_++];
-        if (escaped == '"' || escaped == '\\' || escaped == '/') {
-          out.push_back(escaped);
-        } else if (escaped == 'n') {
-          out.push_back('\n');
-        } else if (escaped == 't') {
-          out.push_back('\t');
-        } else {
-          throw std::invalid_argument("unsupported JSON string escape");
-        }
-      } else {
-        out.push_back(c);
-      }
-    }
-    throw std::invalid_argument("unterminated JSON string");
-  }
-
-  double parse_number() {
-    skip_ws();
-    const size_t start = pos_;
-    if (pos_ < text_.size() && text_[pos_] == '-') ++pos_;
-    while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    if (pos_ < text_.size() && text_[pos_] == '.') {
-      ++pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    }
-    if (pos_ < text_.size() && (text_[pos_] == 'e' || text_[pos_] == 'E')) {
-      ++pos_;
-      if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-')) ++pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    }
-    if (start == pos_) throw std::invalid_argument("expected JSON number");
-    return std::stod(text_.substr(start, pos_ - start));
-  }
-
-  bool consume(char c) {
-    skip_ws();
-    if (pos_ < text_.size() && text_[pos_] == c) {
-      ++pos_;
-      return true;
-    }
-    return false;
-  }
-
-  void expect(char c) {
-    skip_ws();
-    expect_raw(c);
-  }
-
-  void expect_raw(char c) {
-    if (pos_ >= text_.size() || text_[pos_] != c) {
-      throw std::invalid_argument(std::string("expected JSON character: ") + c);
-    }
-    ++pos_;
-  }
-
-  bool peek(const char* literal) const {
-    const std::string value(literal);
-    return text_.compare(pos_, value.size(), value) == 0;
-  }
-
-  void skip_ws() {
-    while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_]))) {
-      ++pos_;
-    }
-  }
-
   const std::string& text_;
-  size_t pos_ = 0;
 };
 
 }  // namespace

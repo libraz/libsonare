@@ -5,12 +5,10 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
-#include "util/constants.h"
+#include "rt/biquad_design.h"
 #include "util/db.h"
 
 namespace sonare::mastering::saturation {
-
-using sonare::constants::kTwoPi;
 
 namespace {
 
@@ -170,7 +168,7 @@ float Tube::apply_miller_filter(int channel, float sample) {
   const float drive = db_to_linear(tube_config_.drive_db);
   const float cutoff = std::clamp(22000.0f / (1.0f + 0.08f * drive), 2500.0f,
                                   static_cast<float>(sample_rate_ * 0.45));
-  const float coeff = 1.0f - std::exp(-kTwoPi * cutoff / static_cast<float>(sample_rate_));
+  const float coeff = rt::one_pole_lowpass_alpha_matched(cutoff, sample_rate_);
   auto& state = miller_state_[static_cast<size_t>(channel)];
   state += coeff * (sample - state);
   return state;

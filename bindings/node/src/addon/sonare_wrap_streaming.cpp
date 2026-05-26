@@ -798,6 +798,16 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
         static_cast<float>(NumberKey(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
     config.bpm_update_interval_sec =
         static_cast<float>(NumberKey(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
+    const int window = static_cast<int>(NumberKey(opts, "window", static_cast<int>(config.window)));
+    config.window = window == 1   ? sonare::WindowType::Hamming
+                    : window == 2 ? sonare::WindowType::Blackman
+                    : window == 3 ? sonare::WindowType::Rectangular
+                                  : sonare::WindowType::Hann;
+    const int output_format =
+        static_cast<int>(NumberKey(opts, "outputFormat", static_cast<int>(config.output_format)));
+    config.output_format = output_format == 1   ? sonare::OutputFormat::Int16
+                           : output_format == 2 ? sonare::OutputFormat::Uint8
+                                                : sonare::OutputFormat::Float32;
   }
 
   config_ = config;

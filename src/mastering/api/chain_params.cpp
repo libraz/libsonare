@@ -40,6 +40,9 @@ bool resolve_enabled(const StageFlags& flags) {
 
 struct StageFlagsSet {
   StageFlags declick;
+  StageFlags declip;
+  StageFlags decrackle;
+  StageFlags dehum;
   StageFlags dereverb;
   StageFlags denoise;
   StageFlags tilt;
@@ -79,6 +82,64 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   } else if (key == "repair.declick.residualRatio") {
     cfg.repair.declick.config.residual_ratio = vf;
     mark_field(flags.declick);
+
+    // ---- repair.declip ----
+  } else if (key == "repair.declip.enabled") {
+    mark_enabled(flags.declip, v);
+  } else if (key == "repair.declip.clipThreshold") {
+    cfg.repair.declip.config.clip_threshold = vf;
+    mark_field(flags.declip);
+  } else if (key == "repair.declip.lpcOrder") {
+    cfg.repair.declip.config.lpc_order = vi;
+    mark_field(flags.declip);
+  } else if (key == "repair.declip.iterations") {
+    cfg.repair.declip.config.iterations = vi;
+    mark_field(flags.declip);
+  } else if (key == "repair.declip.lpcBlend") {
+    cfg.repair.declip.config.lpc_blend = vf;
+    mark_field(flags.declip);
+
+    // ---- repair.decrackle ----
+  } else if (key == "repair.decrackle.enabled") {
+    mark_enabled(flags.decrackle, v);
+  } else if (key == "repair.decrackle.threshold") {
+    cfg.repair.decrackle.config.threshold = vf;
+    mark_field(flags.decrackle);
+  } else if (key == "repair.decrackle.mode") {
+    cfg.repair.decrackle.config.mode = vi == 1 ? mastering::repair::DecrackleMode::WaveletShrinkage
+                                               : mastering::repair::DecrackleMode::Median;
+    mark_field(flags.decrackle);
+  } else if (key == "repair.decrackle.levels") {
+    cfg.repair.decrackle.config.levels = vi;
+    mark_field(flags.decrackle);
+
+    // ---- repair.dehum ----
+  } else if (key == "repair.dehum.enabled") {
+    mark_enabled(flags.dehum, v);
+  } else if (key == "repair.dehum.fundamentalHz") {
+    cfg.repair.dehum.config.fundamental_hz = vf;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.harmonics") {
+    cfg.repair.dehum.config.harmonics = vi;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.q") {
+    cfg.repair.dehum.config.q = vf;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.adaptive") {
+    cfg.repair.dehum.config.adaptive = v != 0.0;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.searchRangeHz") {
+    cfg.repair.dehum.config.search_range_hz = vf;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.adaptation") {
+    cfg.repair.dehum.config.adaptation = vf;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.frameSize") {
+    cfg.repair.dehum.config.frame_size = vi;
+    mark_field(flags.dehum);
+  } else if (key == "repair.dehum.pllBandwidth") {
+    cfg.repair.dehum.config.pll_bandwidth = vf;
+    mark_field(flags.dehum);
 
     // ---- repair.dereverb ----
   } else if (key == "repair.dereverb.enabled") {
@@ -445,6 +506,9 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
   }
 
   cfg.repair.declick.enabled = resolve_enabled(flags.declick);
+  cfg.repair.declip.enabled = resolve_enabled(flags.declip);
+  cfg.repair.decrackle.enabled = resolve_enabled(flags.decrackle);
+  cfg.repair.dehum.enabled = resolve_enabled(flags.dehum);
   cfg.repair.dereverb.enabled = resolve_enabled(flags.dereverb);
   cfg.repair.denoise.enabled = resolve_enabled(flags.denoise);
   cfg.eq.tilt.enabled = resolve_enabled(flags.tilt);
@@ -480,6 +544,15 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
 
   if (flags.declick.any_key_seen) {
     cfg.repair.declick.enabled = resolve_enabled(flags.declick);
+  }
+  if (flags.declip.any_key_seen) {
+    cfg.repair.declip.enabled = resolve_enabled(flags.declip);
+  }
+  if (flags.decrackle.any_key_seen) {
+    cfg.repair.decrackle.enabled = resolve_enabled(flags.decrackle);
+  }
+  if (flags.dehum.any_key_seen) {
+    cfg.repair.dehum.enabled = resolve_enabled(flags.dehum);
   }
   if (flags.dereverb.any_key_seen) {
     cfg.repair.dereverb.enabled = resolve_enabled(flags.dereverb);

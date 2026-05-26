@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "core/convert.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 
@@ -189,10 +190,15 @@ std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, 
   if (n_input <= 0 || bins_per_octave <= 0 || n_chroma <= 0) {
     throw std::invalid_argument("cq_to_chroma: invalid parameters");
   }
-  (void)fmin;  // Not required for the index-based mapping (matches librosa default tuning=0).
+  int pitch_class_offset = 0;
+  if (fmin > 0.0f) {
+    pitch_class_offset = static_cast<int>(std::lround(hz_to_midi(fmin))) % n_chroma;
+    if (pitch_class_offset < 0) pitch_class_offset += n_chroma;
+  }
   std::vector<float> out(static_cast<size_t>(n_chroma) * n_input, 0.0f);
   for (int i = 0; i < n_input; ++i) {
     int chroma_bin = ((i % bins_per_octave) * n_chroma) / bins_per_octave;
+    chroma_bin = (chroma_bin + pitch_class_offset) % n_chroma;
     if (chroma_bin < 0) chroma_bin += n_chroma;
     out[chroma_bin * n_input + i] = 1.0f;
   }

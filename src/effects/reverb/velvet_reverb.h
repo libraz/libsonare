@@ -37,6 +37,7 @@ class VelvetReverb : public rt::ProcessorBase {
   // changing any of them rebuilds the velvet-noise tap tables and ring buffers
   // (offline reconfiguration). dry_wet is RT-safe and only read in process().
   bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:
   struct Tap {

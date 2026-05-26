@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "core/audio.h"
+#include "mastering/api/audio_utils.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
@@ -113,22 +114,6 @@ void run_processor_stereo(Processor& processor, std::vector<float>& left, std::v
 float lufs_for(const std::vector<float>& samples, int sample_rate) {
   auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
   return metering::lufs(audio).integrated_lufs;
-}
-
-std::vector<float> mono_mix(const std::vector<float>& left, const std::vector<float>& right) {
-  std::vector<float> mono(left.size());
-  for (size_t index = 0; index < left.size(); ++index) {
-    mono[index] = 0.5f * (left[index] + right[index]);
-  }
-  return mono;
-}
-
-void apply_gain(std::vector<float>& left, std::vector<float>& right, float gain_db) {
-  const float gain = std::pow(10.0f, gain_db / 20.0f);
-  for (size_t index = 0; index < left.size(); ++index) {
-    left[index] *= gain;
-    right[index] *= gain;
-  }
 }
 
 void configure_processor(const std::string& name, const ParamMap& params,
@@ -414,7 +399,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   result.left.assign(left, left + length);
   result.right.assign(right, right + length);
   result.sample_rate = sample_rate;
-  result.input_lufs = lufs_for(mono_mix(result.left, result.right), sample_rate);
+  result.input_lufs = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);
   auto map = make_map(params);
 
   if (name == "stereo.autoPan") {
@@ -474,10 +459,10 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     multiband::MultibandDynamicEq p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "maximizer.loudnessOptimize") {
-    const float current = lufs_for(mono_mix(result.left, result.right), sample_rate);
+    const float current = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);
     if (std::isfinite(current)) {
       const float gain_db = f(map, "targetLufs", -14.0f) - current;
-      apply_gain(result.left, result.right, gain_db);
+      detail::apply_gain_db(result.left, result.right, gain_db);
       result.applied_gain_db += gain_db;
     }
     maximizer::TruePeakLimiterConfig config;
@@ -488,7 +473,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     maximizer::TruePeakLimiter p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else {
-    std::vector<float> mono = mono_mix(result.left, result.right);
+    std::vector<float> mono = detail::mono_mix(result.left, result.right);
     configure_processor(name, map, mono, sample_rate, result.latency_samples,
                         result.applied_gain_db);
     for (size_t index = 0; index < result.left.size(); ++index) {
@@ -499,7 +484,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     }
   }
 
-  result.output_lufs = lufs_for(mono_mix(result.left, result.right), sample_rate);
+  result.output_lufs = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);
   return result;
 }
 

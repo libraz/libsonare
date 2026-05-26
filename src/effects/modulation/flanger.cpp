@@ -3,12 +3,17 @@
 #include <algorithm>
 
 namespace sonare::effects::modulation {
+namespace {
+
+constexpr float kMaxFlangerDelayMs = 100.0f;
+
+}  // namespace
 
 Flanger::Flanger(FlangerConfig config) : config_(config) {}
 
 void Flanger::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  const int max_delay = static_cast<int>(sample_rate_ * 0.05);
+  const int max_delay = static_cast<int>(sample_rate_ * kMaxFlangerDelayMs * 0.001);
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
   }
@@ -52,10 +57,10 @@ bool Flanger::set_parameter(unsigned int param_id, float value) {
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      config_.depth_ms = std::max(0.0f, value);
+      config_.depth_ms = std::clamp(value, 0.0f, kMaxFlangerDelayMs);
       return true;
     case 2:
-      config_.center_delay_ms = std::max(0.0f, value);
+      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxFlangerDelayMs);
       return true;
     case 3:
       // process() clamps feedback to [-0.95, 0.95]; store the raw target.

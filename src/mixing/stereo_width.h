@@ -21,8 +21,7 @@ class StereoWidthProcessor : public rt::ProcessorBase {
   /// @brief Sets the stereo width factor.
   /// @param width Width in the range [0, 2]; values are clamped. 0 collapses to
   /// mono, 1 preserves the original stereo image, and 2 is the maximum widening.
-  /// Values above 1 can drive the side signal beyond the original amplitude and
-  /// are intentionally not amplitude-limited here.
+  /// Values above 1 apply equal-power M/S compensation to reduce clipping risk.
   void set_width(float width) noexcept;
   float width() const noexcept { return width_target_.load(std::memory_order_relaxed); }
 

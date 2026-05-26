@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -16,7 +17,7 @@ float rms_db_for_window(const float* data, size_t start, size_t length, float fl
 
   const float window_rms = rms(data + start, length);
   if (window_rms < kEpsilon) return floor_db;
-  return std::max(floor_db, 20.0f * std::log10(window_rms));
+  return std::max(floor_db, linear_to_db(window_rms));
 }
 
 float percentile_sorted(const std::vector<float>& sorted, float percentile) {

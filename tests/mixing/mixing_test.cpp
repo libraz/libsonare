@@ -500,6 +500,62 @@ TEST_CASE("AutomationLane consumes only the requested block and drops stale even
   REQUIRE(lane.push(reset_event));
 }
 
+TEST_CASE("AutomationLane emits exponential curve events between positive breakpoints",
+          "[mixing]") {
+  sonare::mixing::AutomationLane lane(8);
+  sonare::mixing::AutomationEvent first;
+  first.sample_pos = 10;
+  first.value = 1.0f;
+  first.curve = sonare::mixing::AutomationCurveType::Exponential;
+  first.target = {sonare::mixing::AutomationTargetKind::Width, 1, 0, 0};
+  sonare::mixing::AutomationEvent second = first;
+  second.sample_pos = 14;
+  second.value = 4.0f;
+
+  REQUIRE(lane.push(first));
+  REQUIRE(lane.push(second));
+
+  std::vector<sonare::mixing::AutomationBlockEvent> consumed;
+  const size_t count =
+      lane.consume_block(8, 8, [&](const auto& event) { consumed.push_back(event); });
+
+  REQUIRE(count == 5);
+  REQUIRE(consumed.size() == 5);
+  REQUIRE(consumed[0].offset == 2);
+  REQUIRE(consumed[1].offset == 3);
+  REQUIRE(consumed[2].offset == 4);
+  REQUIRE(consumed[3].offset == 5);
+  REQUIRE(consumed[4].offset == 6);
+  REQUIRE_THAT(consumed[2].event.value, WithinAbs(2.0f, 0.0001f));
+}
+
+TEST_CASE("AutomationLane continues exponential curves across blocks", "[mixing]") {
+  sonare::mixing::AutomationLane lane(4);
+  sonare::mixing::AutomationEvent first;
+  first.sample_pos = 0;
+  first.value = 1.0f;
+  first.curve = sonare::mixing::AutomationCurveType::Exponential;
+  first.target = {sonare::mixing::AutomationTargetKind::Fader, 1, 0, 0};
+  sonare::mixing::AutomationEvent second = first;
+  second.sample_pos = 100;
+  second.value = 16.0f;
+
+  REQUIRE(lane.push(first));
+  REQUIRE(lane.push(second));
+
+  std::vector<sonare::mixing::AutomationBlockEvent> first_block;
+  REQUIRE(lane.consume_block(0, 8, [&](const auto& event) { first_block.push_back(event); }) == 8);
+  REQUIRE(first_block.front().offset == 0);
+  REQUIRE(first_block.back().offset == 7);
+
+  std::vector<sonare::mixing::AutomationBlockEvent> second_block;
+  REQUIRE(lane.consume_block(48, 5, [&](const auto& event) { second_block.push_back(event); }) ==
+          5);
+  REQUIRE(second_block.front().offset == 0);
+  REQUIRE(second_block.back().offset == 4);
+  REQUIRE_THAT(second_block[2].event.value, WithinAbs(4.0f, 0.0001f));
+}
+
 TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[mixing]") {
   sonare::mixing::api::Scene scene;
   sonare::mixing::api::Strip vocal;
@@ -711,6 +767,23 @@ TEST_CASE("BusProcessor sums multiple stereo inputs", "[mixing]") {
   REQUIRE_THAT(out_l[1], WithinAbs(2.25f, 0.0001f));
   REQUIRE_THAT(out_r[0], WithinAbs(2.5f, 0.0001f));
   REQUIRE_THAT(out_r[3], WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("BusProcessor publishes post-insert meter snapshot", "[mixing]") {
+  std::array<float, 8> left{};
+  std::array<float, 8> right{};
+  left.fill(0.25f);
+  right.fill(0.25f);
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.prepare(48000.0, static_cast<int>(left.size()));
+  bus.process(channels, 2, static_cast<int>(left.size()));
+
+  const auto snapshot = bus.meter_snapshot();
+  REQUIRE(snapshot.seq == 1);
+  REQUIRE_THAT(snapshot.correlation, WithinAbs(1.0f, 0.0001f));
+  REQUIRE(snapshot.peak_db[0] > sonare::constants::kFloorDb);
 }
 
 TEST_CASE("GainProcessor applies fader and VCA offset", "[mixing]") {
@@ -1349,8 +1422,22 @@ TEST_CASE("StereoWidthProcessor converges to steady-state mid/side", "[mixing]")
     width.prepare(48000.0, kN);
     width.process(channels, 2, kN);
 
-    REQUIRE_THAT(left[kN - 1], WithinAbs(mid0 + 2.0f * side0, 0.001f));
-    REQUIRE_THAT(right[kN - 1], WithinAbs(mid0 - 2.0f * side0, 0.001f));
+    const float compensation = 0.5f;
+    REQUIRE_THAT(left[kN - 1], WithinAbs((mid0 + 2.0f * side0) * compensation, 0.001f));
+    REQUIRE_THAT(right[kN - 1], WithinAbs((mid0 - 2.0f * side0) * compensation, 0.001f));
+  }
+
+  SECTION("width=2 compensates pure side gain") {
+    std::vector<float> left(kN, 1.0f);
+    std::vector<float> right(kN, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+
+    sonare::mixing::StereoWidthProcessor width(2.0f);
+    width.prepare(48000.0, kN);
+    width.process(channels, 2, kN);
+
+    REQUIRE_THAT(std::abs(left[kN - 1]), WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(std::abs(right[kN - 1]), WithinAbs(1.0f, 0.001f));
   }
 }
 

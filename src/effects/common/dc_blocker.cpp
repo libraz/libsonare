@@ -1,22 +1,18 @@
 #include "effects/common/dc_blocker.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "util/constants.h"
 
 namespace sonare::effects::common {
 
-using sonare::constants::kTwoPi;
-
 DcBlocker::DcBlocker(float pole) { set_pole(pole); }
 
 void DcBlocker::prepare(double sample_rate, int) {
-  // Derive the pole from the desired corner frequency so the HPF stays at a
-  // fixed cutoff (~20 Hz) regardless of sample rate. For a one-pole high pass,
-  // pole = 1 - 2*pi*fc/sr (valid while fc << sr).
   if (sample_rate > 0.0) {
-    const float sr = static_cast<float>(sample_rate);
-    const float pole = 1.0f - kTwoPi * cutoff_hz_ / sr;
+    const float pole =
+        std::exp(-sonare::constants::kTwoPi * cutoff_hz_ / static_cast<float>(sample_rate));
     set_pole(pole);
   }
   reset();

@@ -18,6 +18,7 @@ void PultecEq::prepare(double sample_rate, int max_block_size) {
   }
   sample_rate_ = sample_rate;
   eq_.prepare(sample_rate, max_block_size);
+  update_component_coefficients();
   rebuild();
 }
 
@@ -46,6 +47,7 @@ void PultecEq::reset() {
 
 void PultecEq::set_low_frequency(float frequency_hz) {
   low_frequency_hz_ = validate_frequency(frequency_hz);
+  update_component_coefficients();
   rebuild();
 }
 
@@ -69,6 +71,7 @@ void PultecEq::set_high_boost(float frequency_hz, float amount, float bandwidth)
 void PultecEq::set_high_attenuation(float frequency_hz, float amount) {
   high_attenuation_frequency_hz_ = validate_frequency(frequency_hz);
   high_attenuation_ = clamp_amount(amount);
+  update_component_coefficients();
   rebuild();
 }
 
@@ -129,6 +132,7 @@ bool PultecEq::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       low_frequency_hz_ = std::clamp(value, 1.0e-3f, low_freq_max);
+      update_component_coefficients();
       break;
     case 1:
       low_boost_ = clamp_amount(value);
@@ -147,6 +151,7 @@ bool PultecEq::set_parameter(unsigned int param_id, float value) {
       break;
     case 6:
       high_attenuation_frequency_hz_ = std::clamp(value, 1.0e-3f, high_freq_max);
+      update_component_coefficients();
       break;
     case 7:
       high_attenuation_ = clamp_amount(value);
@@ -171,6 +176,13 @@ float PultecEq::validate_frequency(float frequency_hz) {
   return frequency_hz;
 }
 
+void PultecEq::update_component_coefficients() {
+  low_component_alpha_ =
+      std::clamp(kTwoPi * low_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.25f);
+  high_component_alpha_ = std::clamp(
+      kTwoPi * high_attenuation_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.75f);
+}
+
 void PultecEq::prepare_component_state(int num_channels) {
   if (num_channels <= 0) return;
   if (component_state_.size() == static_cast<size_t>(num_channels)) return;
@@ -181,12 +193,8 @@ float PultecEq::process_component_sample(float input, int channel) {
   float output = input;
   if (component_model_ == PultecComponentModel::Eqp1aWdf) {
     auto& state = component_state_[static_cast<size_t>(channel)];
-    const float low_alpha =
-        std::clamp(kTwoPi * low_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.25f);
-    const float high_alpha = std::clamp(
-        kTwoPi * high_attenuation_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.75f);
-    state.low_charge += low_alpha * (output - state.low_charge);
-    state.high_charge += high_alpha * (output - state.high_charge);
+    state.low_charge += low_component_alpha_ * (output - state.low_charge);
+    state.high_charge += high_component_alpha_ * (output - state.high_charge);
     const float low_reactive = state.low_charge;
     const float high_reactive = output - state.high_charge;
 

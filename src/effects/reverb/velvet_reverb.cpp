@@ -158,6 +158,10 @@ bool VelvetReverb::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+bool VelvetReverb::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id == 2;
+}
+
 void VelvetReverb::reset() {
   ring_l_.reset();
   ring_r_.reset();

@@ -4,6 +4,7 @@
 /// @brief RT-safe application of prepared PPQ automation lanes.
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -67,6 +68,7 @@ class AutomationEngine {
   double sample_rate_ = 48000.0;
   const transport::TempoMap* tempo_map_ = nullptr;
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
+  std::atomic<size_t> lane_count_{0};
   std::array<Target, 128> targets_{};
   uint32_t unknown_target_count_ = 0;
   uint32_t non_realtime_safe_rejection_count_ = 0;

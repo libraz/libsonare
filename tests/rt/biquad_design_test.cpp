@@ -2,6 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 
 #include "util/constants.h"
 
@@ -49,4 +50,15 @@ TEST_CASE("One-pole low-pass alpha helper matches legacy bilinear form", "[rt][b
                WithinAbs(static_cast<float>(g / (g + sample_rate)), 1.0e-7f));
   REQUIRE(sonare::rt::one_pole_lowpass_alpha(-1.0f, sample_rate) == 0.0f);
   REQUIRE(sonare::rt::one_pole_lowpass_alpha(1000.0f, -1.0) == 1.0f);
+}
+
+TEST_CASE("Matched one-pole low-pass alpha helper matches legacy exponential form",
+          "[rt][biquad]") {
+  constexpr float frequency = 180.0f;
+  constexpr double sample_rate = 48000.0;
+  const double expected = 1.0 - std::exp(-2.0 * sonare::constants::kPiD * frequency / sample_rate);
+  REQUIRE_THAT(sonare::rt::one_pole_lowpass_alpha_matched(frequency, sample_rate),
+               WithinAbs(static_cast<float>(expected), 1.0e-7f));
+  REQUIRE(sonare::rt::one_pole_lowpass_alpha_matched(-1.0f, sample_rate) == 0.0f);
+  REQUIRE(sonare::rt::one_pole_lowpass_alpha_matched(1000.0f, -1.0) == 1.0f);
 }

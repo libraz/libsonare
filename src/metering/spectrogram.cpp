@@ -2,19 +2,11 @@
 
 #include <algorithm>
 
+#include "metering/frequency_bins.h"
 #include "util/exception.h"
 
 namespace sonare::metering {
 namespace {
-
-std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
-  std::vector<float> frequencies(n_bins);
-  const float bin_width = static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-  for (int i = 0; i < n_bins; ++i) {
-    frequencies[i] = static_cast<float>(i) * bin_width;
-  }
-  return frequencies;
-}
 
 std::vector<float> frame_times(int n_frames, int hop_length, int sample_rate) {
   std::vector<float> times(n_frames);

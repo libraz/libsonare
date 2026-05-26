@@ -1,6 +1,7 @@
 #include "mixing/stereo_width.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace sonare::mixing {
 
@@ -26,10 +27,11 @@ void StereoWidthProcessor::process(float* const* channels, int num_channels, int
   smoother_.set_target(width_target_.load(std::memory_order_relaxed));
   for (int i = 0; i < num_samples; ++i) {
     const float w = smoother_.process();
+    const float output_gain = w > 1.0f ? 1.0f / w : 1.0f;
     const float mid = 0.5f * (channels[0][i] + channels[1][i]);
     const float side = 0.5f * (channels[0][i] - channels[1][i]) * w;
-    channels[0][i] = mid + side;
-    channels[1][i] = mid - side;
+    channels[0][i] = (mid + side) * output_gain;
+    channels[1][i] = (mid - side) * output_gain;
   }
 }
 
