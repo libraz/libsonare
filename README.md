@@ -8,29 +8,38 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**An audio DSP toolkit for C++, Python, and browsers — analysis, mastering, mixing, and editing.**
-Apache-2.0, no runtime dependencies, builds for native and WebAssembly.
+**A dependency-free audio DSP toolkit for C++, Python, and the browser —
+librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.**
 
-- **Analysis** — BPM, key, chord (HMM smoothing, inversions, key-context),
-  beat, downbeat, time signature, section, timbre, dynamics, pitch,
-  tempogram / PLP, NNLS chroma, EBU R128 loudness (LUFS), and room acoustics
-  (blind RT60/EDT or IR-based RT60/EDT/C50/C80/D50), with librosa-compatible
-  defaults.
-- **Mastering** — EQ, dynamics, multiband, stereo, saturation, repair, maximizer,
-  reference matching. 70+ named DSP processors (14 wired into the default
-  mastering chain), implemented against published references such as
-  ITU-R BS.1770-4 loudness/true-peak, Vicanek biquads, ADAA nonlinearities,
-  Lemire sliding max, and polyphase FIR oversampling.
-  Repair processors are classical DSP by design; denoise uses spectral
-  subtraction / MMSE-STSA / LogMMSE noise reduction rather than DNN source
-  separation or spectral repair.
-- **DAW DSP primitives** — time stretch / pitch shift, pitch correction,
-  note-region stretch, voice-change pitch+formant controls, realtime mixer
-  primitives, routing graph, creative delay/modulation/reverb FX, and ducking.
-- **Mixing** — channel strips, pan modes, width, sends, FX buses, goniometer /
-  true-peak metering, scene presets, and offline stereo rendering across C++,
-  C, Python, Node, WASM, and CLI surfaces.
-- **License** — Apache-2.0 across the entire stack (C++, Python, Node, WASM).
+Apache-2.0, zero runtime dependencies, one codebase for native and WebAssembly.
+The same processors that run in C++ run in the browser via WASM — no Python,
+no GPL/AGPL, no model weights.
+
+- **Analysis (librosa-compatible)** — BPM, key, chord (Viterbi/HMM smoothing,
+  inversions, key-context), beat, downbeat, time signature, section, timbre,
+  dynamics, pitch (YIN / pYIN), tempogram / PLP, NNLS chroma, EBU R128 loudness
+  (LUFS), and room acoustics (blind RT60/EDT, or ISO-style RT60/EDT/C50/C80/D50
+  from a measured IR). Defaults match librosa and are validated against
+  generated librosa reference values in CI.
+- **Mastering (77 named DSP processors, 14 in the default chain)** — EQ,
+  dynamics, multiband, stereo, saturation, repair, maximizer, and reference
+  matching, implemented against published references: ITU-R BS.1770-4 loudness
+  and inter-sample true-peak limiting, Linkwitz-Riley crossovers with all-pass
+  phase compensation, Vicanek matched-Z biquads, ADAA-antialiased clippers, a
+  Dempwolf 12AX7 triode model for tube saturation, Lemire sliding max, and
+  polyphase FIR oversampling. Repair is classical DSP by design (spectral
+  subtraction / MMSE-STSA / LogMMSE), not DNN source separation or spectral
+  repair.
+- **Mixing & routing** — a real-time-safe channel-strip / bus model
+  (denormal-guarded, lock-free parameter changes, plugin-delay compensation)
+  with pan modes, width, sends, FX buses, goniometer / true-peak metering,
+  scene presets, and offline stereo rendering.
+- **Editing & creative FX** — time stretch / pitch shift, pitch correction,
+  note-region stretch, voice-change pitch + formant controls, four reverb
+  engines (convolution, Dattorro plate, FDN, velvet-noise),
+  chorus / flanger / phaser, stereo delay, and ducking.
+- **Everywhere, one license** — Apache-2.0 across the entire stack
+  (C++, C, Python, Node, WASM, and CLI).
 
 ## Installation
 
@@ -385,20 +394,20 @@ std::cout << "BPM: " << result.bpm
 
 ### Mastering (70+ DSP processors)
 
-| Dynamics                  | EQ                        | Multiband / Stereo            |
-|---------------------------|---------------------------|-------------------------------|
-| Compressor                | Parametric / Graphic      | Multiband comp / EQ / limiter |
-| Limiter / Brickwall       | Linear / Minimum phase    | Stereo imager / M-S           |
-| Expander / Gate           | Dynamic EQ                | Haas / phase align            |
-| De-esser                  | Passive / stepped EQ      | Mono maker / compat           |
-| Transient shaper          | Tilt / shelving           |                               |
+| Dynamics                  | EQ                        | Multiband / Stereo                  |
+|---------------------------|---------------------------|-------------------------------------|
+| Compressor                | Parametric / Graphic      | Multiband comp / EQ / limiter       |
+| Limiter / Brickwall       | Linear / Minimum phase    | Linkwitz-Riley crossover (phase-comp)|
+| Expander / Gate           | Dynamic EQ                | Stereo imager / M-S / Haas          |
+| De-esser                  | Passive / stepped EQ      | Phase align / mono maker / compat   |
+| Transient shaper          | Tilt / shelving           |                                     |
 
-| Saturation / Repair               | Maximizer / Match                       | Building blocks            |
-|-----------------------------------|-----------------------------------------|----------------------------|
-| Tape / Tube / Transformer         | True-peak limiter (ITU-R BS.1770-4)     | Polyphase FIR oversampler  |
-| Exciter / Bitcrusher              | Loudness optimizer (LUFS target)        | ADAA nonlinearities        |
-| Declick / Declip / Decrackle      | Adaptive release                        | Vicanek biquad design      |
-| Denoise / Dereverb / Dehum        | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+| Saturation / Repair                | Maximizer / Match                       | Building blocks            |
+|------------------------------------|-----------------------------------------|----------------------------|
+| Tube (Dempwolf 12AX7) / Tape       | True-peak limiter (ITU-R BS.1770-4)     | Polyphase FIR oversampler  |
+| Transformer / Exciter / Bitcrusher | Loudness optimizer (LUFS target)        | ADAA-antialiased shaping   |
+| Declick / Declip / Decrackle       | Adaptive release                        | Vicanek matched-Z biquads  |
+| Denoise / Dereverb / Dehum         | Reference EQ / loudness / spectrum      | Partitioned convolver      |
 
 Repair is classical DSP by design. `denoise_classical` covers spectral
 subtraction, MMSE-STSA, and LogMMSE with explicit noise estimation; DNN

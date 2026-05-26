@@ -4,9 +4,15 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-An audio DSP toolkit for Python — analysis, mastering, mixing, and editing.
+A dependency-free audio DSP toolkit for Python — librosa-compatible analysis
+plus broadcast-grade mastering, mixing, and editing.
 
-Built on a C++ core with zero Python dependencies.
+Built on a C++ core with zero Python dependencies. Analysis defaults match
+librosa (validated against generated librosa reference values in CI), and
+mastering ships 77 named DSP processors implemented against published
+references (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers,
+Vicanek matched-Z biquads, ADAA-antialiased saturation) — Apache-2.0, no model
+weights.
 
 ## Installation
 

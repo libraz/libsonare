@@ -8,7 +8,12 @@
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
 A dependency-free audio DSP toolkit for browser and Node.js via WebAssembly —
-analysis, mastering, mixing, and editing.
+librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.
+The same C++ processors run client-side in the browser: 77 named mastering DSP
+processors implemented against published references (ITU-R BS.1770-4 true-peak
+limiting, Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
+saturation), with analysis defaults matching librosa — Apache-2.0, no Python,
+no model weights.
 
 > **Audio input:** This package expects already-decoded `Float32Array` mono
 > samples (it does not bundle a file decoder). Use the Web Audio API in the

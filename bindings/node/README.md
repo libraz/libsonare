@@ -8,8 +8,12 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-An audio DSP toolkit for Node.js — analysis, mastering, mixing, and editing —
-exposed as a native N-API addon built on the libsonare C++ core.
+A dependency-free audio DSP toolkit for Node.js — librosa-compatible analysis
+plus broadcast-grade mastering, mixing, and editing — exposed as a native N-API
+addon built on the libsonare C++ core. Mastering ships 77 named DSP processors
+implemented against published references (ITU-R BS.1770-4 true-peak limiting,
+Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
+saturation), all under Apache-2.0 with no model weights.
 
 Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
 audio files directly from disk or memory (WAV / MP3 out of the box, plus
