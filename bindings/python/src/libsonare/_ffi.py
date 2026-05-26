@@ -2240,6 +2240,20 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
     ]
+    lib.sonare_tempogram_with_mode.restype = ctypes.c_int32
+    lib.sonare_tempogram_with_mode.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
 
     lib.sonare_cyclic_tempogram.restype = ctypes.c_int32
     lib.sonare_cyclic_tempogram.argtypes = [

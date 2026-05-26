@@ -65,6 +65,7 @@ import type {
   StreamFramesSoa,
   StreamFramesU8,
   StripRef,
+  TempogramMode,
   TimbreResult,
 } from './types.js';
 
@@ -1802,8 +1803,9 @@ export function tempogram(
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
+  mode: TempogramMode = 'autocorrelation',
 ): { nFrames: number; winLength: number; data: Float32Array } {
-  return addon.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+  return addon.tempogram(onsetEnvelope, sampleRate, hopLength, winLength, mode);
 }
 
 export function cyclicTempogram(

@@ -1,4 +1,5 @@
 export type ProgressCallback = (progress: number, stage: string) => void;
+export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
 export interface WasmKeyResult {
   root: number;
@@ -1131,6 +1132,7 @@ export interface SonareModule {
     sampleRate: number,
     hopLength: number,
     winLength: number,
+    mode: TempogramMode,
   ) => WasmTempogramResult;
   cyclicTempogram: (
     onsetEnvelope: Float32Array,

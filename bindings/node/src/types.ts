@@ -15,6 +15,8 @@ export type KeyMode =
   | 'mixolydian'
   | 'locrian';
 
+export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
+
 export type KeyProfile =
   | 'ks'
   | 'krumhansl'

@@ -403,6 +403,10 @@ describe('Sonare WASM Module', () => {
       const temp = tempogram(onset, 22050, 512, 4);
       expect(temp.data).toBeInstanceOf(Float32Array);
       expect(temp.winLength).toBe(4);
+      const cosine = tempogram(onset, 22050, 512, 4, 'cosine');
+      expect(cosine.data).toBeInstanceOf(Float32Array);
+      expect(cosine.data.length).toBe(4 * onset.length);
+      expect(() => tempogram(onset, 22050, 512, 4, 'invalid' as never)).toThrow();
       expect(plp(onset, 22050, 512, 30, 300, 4)).toBeInstanceOf(Float32Array);
     });
   });

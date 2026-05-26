@@ -33,6 +33,8 @@ export const Mode = {
 
 export type Mode = (typeof Mode)[keyof typeof Mode];
 
+export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
+
 export const KeyProfile = {
   KrumhanslSchmuckler: 0,
   Temperley: 1,

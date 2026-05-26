@@ -1298,6 +1298,31 @@ TEST_CASE("sonare_fourier_tempogram", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_tempogram_with_mode", "[c_api]") {
+  const std::vector<float> env{0.2f, 1.0f, 0.4f, 0.0f, 0.8f, 0.1f, 0.5f, 0.3f,
+                               0.6f, 0.0f, 0.9f, 0.2f, 0.4f, 0.7f, 0.1f, 0.5f};
+  float* data = nullptr;
+  size_t out_length = 0;
+  int n_frames = 0;
+  SonareError err =
+      sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, SONARE_TEMPOGRAM_COSINE,
+                                 &data, &out_length, &n_frames);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(data != nullptr);
+  REQUIRE(n_frames == static_cast<int>(env.size()));
+  REQUIRE(out_length == env.size() * 8);
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(data[i]));
+    REQUIRE(data[i] >= -1.0f - 1.0e-6f);
+    REQUIRE(data[i] <= 1.0f + 1.0e-6f);
+  }
+  sonare_free_floats(data);
+
+  REQUIRE(sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, 99, &data, &out_length,
+                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("sonare_tempogram_ratio", "[c_api]") {
   SECTION("returns one finite value per factor") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);

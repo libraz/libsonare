@@ -40,6 +40,8 @@ from .types import (
     TimbreResult,
 )
 
+TempogramMode: TypeAlias = Literal["autocorrelation", "auto", "ac", "cosine"]
+
 FloatSamples: TypeAlias = Sequence[float] | list[float]
 StripRef: TypeAlias = int | str
 
@@ -679,6 +681,7 @@ def tempogram(
     win_length: int = 384,
     center: bool = True,
     norm: bool = True,
+    mode: TempogramMode = "autocorrelation",
 ) -> tuple[int, list[float]]: ...
 def cyclic_tempogram(
     onset_envelope: FloatSamples,

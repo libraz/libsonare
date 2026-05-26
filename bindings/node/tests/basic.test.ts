@@ -1022,6 +1022,19 @@ describe('sonare native binding', () => {
       expect(allFinite(ratio)).toBe(true);
     });
 
+    it('tempogram cosine mode is exposed', () => {
+      const onset = new Float32Array([0.2, 1.0, 0.4, 0.0, 0.8, 0.1, 0.5, 0.3]);
+      const result = tempogram(onset, SR, 1, 4, 'cosine');
+      expect(result.nFrames).toBe(onset.length);
+      expect(result.winLength).toBe(4);
+      expect(result.data.length).toBe(4 * onset.length);
+      expect(allFinite(result.data)).toBe(true);
+      for (const value of result.data) {
+        expect(value).toBeGreaterThanOrEqual(-1.000001);
+        expect(value).toBeLessThanOrEqual(1.000001);
+      }
+    });
+
     it('nnlsChroma returns a 12 x nFrames matrix', () => {
       const result = nnlsChroma(generateSine(440, SR, 2.0), SR);
       expect(result.nChroma).toBe(12);

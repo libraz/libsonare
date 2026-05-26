@@ -507,6 +507,7 @@ interface WasmRealtimeEngine {
 }
 
 type ProgressCallback = (progress: number, stage: string) => void;
+type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
 interface SonareModule {
   // Quick API (high-level)
@@ -912,6 +913,7 @@ interface SonareModule {
     sampleRate: number,
     hopLength: number,
     winLength: number,
+    mode: TempogramMode,
   ) => WasmTempogramResult;
   cyclicTempogram: (
     onsetEnvelope: Float32Array,

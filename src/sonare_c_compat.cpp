@@ -242,21 +242,35 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
-                             int hop_length, int win_length, int center, int norm, float** out,
-                             size_t* out_length, int* out_n_frames) {
+SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t length, int sample_rate,
+                                       int hop_length, int win_length, int center, int norm,
+                                       int mode, float** out, size_t* out_length,
+                                       int* out_n_frames) {
   if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
+  if (mode != SONARE_TEMPOGRAM_AUTOCORRELATION && mode != SONARE_TEMPOGRAM_COSINE) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
   config.center = center != 0;
   config.norm = norm != 0;
+  config.mode =
+      mode == SONARE_TEMPOGRAM_COSINE ? TempogramMode::kCosine : TempogramMode::kAutocorrelation;
   std::vector<float> input(onset_envelope, onset_envelope + length);
   *out_n_frames = static_cast<int>(input.size());
   return copy_float_vector(tempogram(input, sample_rate, config), out, out_length);
   SONARE_C_CATCH
+}
+
+SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
+                             int hop_length, int win_length, int center, int norm, float** out,
+                             size_t* out_length, int* out_n_frames) {
+  return sonare_tempogram_with_mode(onset_envelope, length, sample_rate, hop_length, win_length,
+                                    center, norm, SONARE_TEMPOGRAM_AUTOCORRELATION, out, out_length,
+                                    out_n_frames);
 }
 
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,

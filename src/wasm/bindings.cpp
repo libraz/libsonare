@@ -2834,11 +2834,28 @@ val js_tonnetz(val chromagram, int n_chroma, int n_frames) {
   return vectorToFloat32Array(tonnetz(data.data(), n_chroma, n_frames));
 }
 
-val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length) {
+TempogramMode tempogramModeFromValue(val mode) {
+  if (mode.isUndefined() || mode.isNull()) return TempogramMode::kAutocorrelation;
+  if (mode.typeOf().as<std::string>() == "number") {
+    const int mode_id = mode.as<int>();
+    if (mode_id == SONARE_TEMPOGRAM_AUTOCORRELATION) return TempogramMode::kAutocorrelation;
+    if (mode_id == SONARE_TEMPOGRAM_COSINE) return TempogramMode::kCosine;
+    throw std::invalid_argument("tempogram mode must be 'autocorrelation' or 'cosine'");
+  }
+  const std::string value = mode.as<std::string>();
+  if (value == "autocorrelation" || value == "auto" || value == "ac") {
+    return TempogramMode::kAutocorrelation;
+  }
+  if (value == "cosine") return TempogramMode::kCosine;
+  throw std::invalid_argument("tempogram mode must be 'autocorrelation' or 'cosine'");
+}
+
+val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
+  config.mode = tempogramModeFromValue(mode);
   auto result = tempogram(data, sample_rate, config);
   val out = val::object();
   out.set("nFrames", static_cast<int>(data.size()));

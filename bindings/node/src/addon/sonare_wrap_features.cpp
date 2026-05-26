@@ -60,6 +60,22 @@ std::vector<int> IntVectorFromValue(const Napi::Value& value) {
   throw Napi::TypeError::New(value.Env(), "Expected Int32Array or number[]");
 }
 
+int TempogramModeFromValue(const Napi::Value& value) {
+  if (value.IsUndefined() || value.IsNull()) return SONARE_TEMPOGRAM_AUTOCORRELATION;
+  if (value.IsNumber()) {
+    const int mode = value.As<Napi::Number>().Int32Value();
+    if (mode == SONARE_TEMPOGRAM_AUTOCORRELATION || mode == SONARE_TEMPOGRAM_COSINE) return mode;
+  }
+  if (value.IsString()) {
+    const std::string mode = value.As<Napi::String>().Utf8Value();
+    if (mode == "autocorrelation" || mode == "auto" || mode == "ac") {
+      return SONARE_TEMPOGRAM_AUTOCORRELATION;
+    }
+    if (mode == "cosine") return SONARE_TEMPOGRAM_COSINE;
+  }
+  throw Napi::TypeError::New(value.Env(), "Expected tempogram mode 'autocorrelation' or 'cosine'");
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
@@ -1062,11 +1078,18 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
   int win =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 384;
+  int mode = SONARE_TEMPOGRAM_AUTOCORRELATION;
+  try {
+    mode = info.Length() >= 5 ? TempogramModeFromValue(info[4]) : SONARE_TEMPOGRAM_AUTOCORRELATION;
+  } catch (const Napi::Error& err) {
+    err.ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, 1, 1, &out,
-                                     &count, &n_frames);
+  SonareError err = sonare_tempogram_with_mode(arr.Data(), arr.ElementLength(), sr, hop, win, 1, 1,
+                                               mode, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);

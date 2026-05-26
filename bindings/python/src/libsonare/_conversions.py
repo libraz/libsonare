@@ -408,14 +408,18 @@ def tempogram(
     win_length: int = 384,
     center: bool = True,
     norm: bool = True,
+    mode: str = "autocorrelation",
 ) -> tuple[int, list[float]]:
-    """Compute autocorrelation tempogram. Returns (n_frames, row-major matrix)."""
+    """Compute tempogram. Returns (n_frames, row-major matrix)."""
+    mode_id = {"autocorrelation": 0, "auto": 0, "ac": 0, "cosine": 1}.get(mode)
+    if mode_id is None:
+        raise ValueError("mode must be 'autocorrelation' or 'cosine'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope)
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_tempogram(
+    rc = lib.sonare_tempogram_with_mode(
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
@@ -423,6 +427,7 @@ def tempogram(
         ctypes.c_int(win_length),
         ctypes.c_int(1 if center else 0),
         ctypes.c_int(1 if norm else 0),
+        ctypes.c_int(mode_id),
         ctypes.byref(out),
         ctypes.byref(out_length),
         ctypes.byref(n_frames),

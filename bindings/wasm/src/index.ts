@@ -66,6 +66,7 @@ import type {
   StftResult,
   StreamingPlatform,
   StreamingEqualizerConfig,
+  TempogramMode,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
 import type {
@@ -2835,11 +2836,12 @@ export function tempogram(
   sampleRate: number,
   hopLength = 512,
   winLength = 384,
+  mode: TempogramMode = 'autocorrelation',
 ): WasmTempogramResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+  return module.tempogram(onsetEnvelope, sampleRate, hopLength, winLength, mode);
 }
 
 export function cyclicTempogram(

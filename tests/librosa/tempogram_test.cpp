@@ -2,6 +2,7 @@
 /// @brief Smoke + statistics tests for tempogram / fourier_tempogram.
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdlib>
@@ -207,6 +208,37 @@ TEST_CASE("cyclic_tempogram folds octave-equivalent tempi", "[tempogram][unit]")
   };
 
   REQUIRE(std::abs(strongest_bin(c60, 60) - strongest_bin(c120, 60)) <= 1);
+}
+
+TEST_CASE("tempogram cosine mode is scale invariant", "[tempogram][unit]") {
+  std::vector<float> env{0.2f, 1.0f, 0.4f, 0.0f, 0.8f, 0.1f, 0.5f, 0.3f,
+                         0.6f, 0.0f, 0.9f, 0.2f, 0.4f, 0.7f, 0.1f, 0.5f};
+  std::vector<float> scaled = env;
+  for (float& value : scaled) {
+    value *= 3.0f;
+  }
+
+  TempogramConfig cfg;
+  cfg.hop_length = 1;
+  cfg.win_length = 8;
+  cfg.center = false;
+  cfg.norm = false;
+
+  cfg.mode = TempogramMode::kAutocorrelation;
+  const auto ac = tempogram(env, 8, cfg);
+  const auto ac_scaled = tempogram(scaled, 8, cfg);
+  REQUIRE(ac.size() == ac_scaled.size());
+  REQUIRE(ac_scaled[0] == Catch::Approx(ac[0] * 9.0f).margin(1.0e-5f));
+
+  cfg.mode = TempogramMode::kCosine;
+  const auto cosine = tempogram(env, 8, cfg);
+  const auto cosine_scaled = tempogram(scaled, 8, cfg);
+  REQUIRE(cosine.size() == cosine_scaled.size());
+  for (size_t i = 0; i < cosine.size(); ++i) {
+    REQUIRE(cosine_scaled[i] == Catch::Approx(cosine[i]).margin(1.0e-5f));
+    REQUIRE(cosine[i] >= -1.0f - 1.0e-6f);
+    REQUIRE(cosine[i] <= 1.0f + 1.0e-6f);
+  }
 }
 
 TEST_CASE("tempogram_ratio returns one value per factor", "[tempogram][unit]") {

@@ -253,6 +253,12 @@ def test_compat_silence_and_rhythm_utilities() -> None:
     temp = libsonare.tempogram(onset, sample_rate=22050, hop_length=512, win_length=4)
     assert temp[0] == len(onset)
     assert len(temp[1]) == 4 * len(onset)
+    cosine = libsonare.tempogram(
+        onset, sample_rate=22050, hop_length=512, win_length=4, mode="cosine"
+    )
+    assert cosine[0] == len(onset)
+    assert len(cosine[1]) == 4 * len(onset)
+    assert all(-1.000001 <= value <= 1.000001 for value in cosine[1])
     assert len(libsonare.plp(onset, sample_rate=22050, hop_length=512, win_length=4)) == len(onset)
 
 

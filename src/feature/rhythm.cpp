@@ -57,14 +57,27 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*
       const double v = (idx >= 0 && idx < static_cast<int>(padded.size())) ? padded[idx] : 0.0;
       frame[i] = v * window[i];
     }
-    // Compute biased autocorrelation up to lag = win - 1.
+    // Compute similarity up to lag = win - 1.
     std::fill(ac.begin(), ac.end(), 0.0);
     for (int lag = 0; lag < win; ++lag) {
       double s = 0.0;
+      double lhs_sq = 0.0;
+      double rhs_sq = 0.0;
       for (int i = 0; i + lag < win; ++i) {
-        s += frame[i] * frame[i + lag];
+        const double lhs = frame[i];
+        const double rhs = frame[i + lag];
+        s += lhs * rhs;
+        if (config.mode == TempogramMode::kCosine) {
+          lhs_sq += lhs * lhs;
+          rhs_sq += rhs * rhs;
+        }
       }
-      ac[lag] = s;
+      if (config.mode == TempogramMode::kCosine) {
+        const double denom = std::sqrt(lhs_sq * rhs_sq);
+        ac[lag] = denom > static_cast<double>(constants::kEpsilon) ? s / denom : 0.0;
+      } else {
+        ac[lag] = s;
+      }
     }
     // Optional L2 normalize per column.
     if (config.norm) {

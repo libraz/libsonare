@@ -60,6 +60,11 @@ typedef enum {
   SONARE_KEY_PROFILE_BELLMAN_BUDGE = 6
 } SonareKeyProfileType;
 
+typedef enum {
+  SONARE_TEMPOGRAM_AUTOCORRELATION = 0,
+  SONARE_TEMPOGRAM_COSINE = 1
+} SonareTempogramMode;
+
 // Opaque types
 typedef struct SonareAudio SonareAudio;
 typedef struct SonareAnalyzer SonareAnalyzer;
@@ -1634,6 +1639,10 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
 SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                              int hop_length, int win_length, int center, int norm, float** out,
                              size_t* out_length, int* out_n_frames);
+SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t length, int sample_rate,
+                                       int hop_length, int win_length, int center, int norm,
+                                       int mode, float** out, size_t* out_length,
+                                       int* out_n_frames);
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                                     int hop_length, int win_length, float bpm_min, int n_bins,
                                     float** out, size_t* out_length, int* out_n_frames);
