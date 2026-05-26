@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -645,6 +646,91 @@ int* copy_int_vector(const std::vector<int>& v) {
   return release_array(buf);
 }
 
+uint8_t* copy_u8_vector(const std::vector<uint8_t>& v) {
+  if (v.empty()) return nullptr;
+  std::unique_ptr<uint8_t[]> buf(new uint8_t[v.size()]);
+  std::memcpy(buf.get(), v.data(), v.size() * sizeof(uint8_t));
+  return release_array(buf);
+}
+
+int16_t* copy_i16_vector(const std::vector<int16_t>& v) {
+  if (v.empty()) return nullptr;
+  std::unique_ptr<int16_t[]> buf(new int16_t[v.size()]);
+  std::memcpy(buf.get(), v.data(), v.size() * sizeof(int16_t));
+  return release_array(buf);
+}
+
+bool finite_positive(float value) {
+  return std::isfinite(value) && value > 0.0f;
+}
+
+bool finite_non_negative(float value) {
+  return std::isfinite(value) && value >= 0.0f;
+}
+
+bool valid_window(int value) {
+  return value >= SONARE_WINDOW_HANN && value <= SONARE_WINDOW_RECTANGULAR;
+}
+
+bool valid_output_format(int value) {
+  return value >= SONARE_STREAM_OUTPUT_FLOAT32 && value <= SONARE_STREAM_OUTPUT_UINT8;
+}
+
+WindowType to_window_type(int value) {
+  switch (static_cast<SonareWindowType>(value)) {
+    case SONARE_WINDOW_HAMMING:
+      return WindowType::Hamming;
+    case SONARE_WINDOW_BLACKMAN:
+      return WindowType::Blackman;
+    case SONARE_WINDOW_RECTANGULAR:
+      return WindowType::Rectangular;
+    case SONARE_WINDOW_HANN:
+    default:
+      return WindowType::Hann;
+  }
+}
+
+OutputFormat to_output_format(int value) {
+  switch (static_cast<SonareStreamOutputFormat>(value)) {
+    case SONARE_STREAM_OUTPUT_INT16:
+      return OutputFormat::Int16;
+    case SONARE_STREAM_OUTPUT_UINT8:
+      return OutputFormat::Uint8;
+    case SONARE_STREAM_OUTPUT_FLOAT32:
+    default:
+      return OutputFormat::Float32;
+  }
+}
+
+SonareStreamChordChange* copy_chord_changes(const std::vector<ChordChange>& v) {
+  if (v.empty()) return nullptr;
+  std::unique_ptr<SonareStreamChordChange[]> buf(new SonareStreamChordChange[v.size()]);
+  for (size_t i = 0; i < v.size(); ++i) {
+    buf[i] = {v[i].root, v[i].quality, v[i].start_time, v[i].confidence};
+  }
+  return release_array(buf);
+}
+
+SonareStreamBarChord* copy_bar_chords(const std::vector<BarChord>& v) {
+  if (v.empty()) return nullptr;
+  std::unique_ptr<SonareStreamBarChord[]> buf(new SonareStreamBarChord[v.size()]);
+  for (size_t i = 0; i < v.size(); ++i) {
+    buf[i] = {v[i].bar_index, v[i].root, v[i].quality, v[i].start_time, v[i].confidence};
+  }
+  return release_array(buf);
+}
+
+SonareStreamPatternScore* copy_pattern_scores(const std::vector<std::pair<std::string, float>>& v) {
+  if (v.empty()) return nullptr;
+  std::unique_ptr<SonareStreamPatternScore[]> buf(new SonareStreamPatternScore[v.size()]);
+  for (size_t i = 0; i < v.size(); ++i) {
+    std::strncpy(buf[i].name, v[i].first.c_str(), sizeof(buf[i].name) - 1);
+    buf[i].name[sizeof(buf[i].name) - 1] = '\0';
+    buf[i].score = v[i].second;
+  }
+  return release_array(buf);
+}
+
 }  // namespace
 
 SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
@@ -654,10 +740,20 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   config->n_fft = defaults.n_fft;
   config->hop_length = defaults.hop_length;
   config->n_mels = defaults.n_mels;
+  config->fmin = defaults.fmin;
+  config->fmax = defaults.fmax;
+  config->tuning_ref_hz = defaults.tuning_ref_hz;
+  config->compute_magnitude = defaults.compute_magnitude ? 1 : 0;
   config->compute_mel = defaults.compute_mel ? 1 : 0;
   config->compute_chroma = defaults.compute_chroma ? 1 : 0;
   config->compute_onset = defaults.compute_onset ? 1 : 0;
+  config->compute_spectral = defaults.compute_spectral ? 1 : 0;
   config->emit_every_n_frames = defaults.emit_every_n_frames;
+  config->magnitude_downsample = defaults.magnitude_downsample;
+  config->key_update_interval_sec = defaults.key_update_interval_sec;
+  config->bpm_update_interval_sec = defaults.bpm_update_interval_sec;
+  config->window = SONARE_WINDOW_HANN;
+  config->output_format = SONARE_STREAM_OUTPUT_FLOAT32;
   return SONARE_OK;
 }
 
@@ -665,7 +761,14 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out) {
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
   if (config->sample_rate <= 0 || config->n_fft <= 0 || config->hop_length <= 0 ||
-      config->n_mels <= 0 || config->emit_every_n_frames <= 0) {
+      config->hop_length > config->n_fft || config->n_mels <= 0 ||
+      config->emit_every_n_frames <= 0 || config->magnitude_downsample <= 0 ||
+      !finite_non_negative(config->fmin) || !finite_non_negative(config->fmax) ||
+      (config->fmax > 0.0f && config->fmax <= config->fmin) ||
+      !finite_positive(config->tuning_ref_hz) ||
+      !finite_positive(config->key_update_interval_sec) ||
+      !finite_positive(config->bpm_update_interval_sec) || !valid_window(config->window) ||
+      !valid_output_format(config->output_format)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -677,10 +780,20 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.n_fft = config->n_fft;
   cfg.hop_length = config->hop_length;
   cfg.n_mels = config->n_mels;
+  cfg.fmin = config->fmin;
+  cfg.fmax = config->fmax;
+  cfg.tuning_ref_hz = config->tuning_ref_hz;
+  cfg.window = to_window_type(config->window);
+  cfg.compute_magnitude = config->compute_magnitude != 0;
   cfg.compute_mel = config->compute_mel != 0;
   cfg.compute_chroma = config->compute_chroma != 0;
   cfg.compute_onset = config->compute_onset != 0;
+  cfg.compute_spectral = config->compute_spectral != 0;
   cfg.emit_every_n_frames = config->emit_every_n_frames;
+  cfg.magnitude_downsample = config->magnitude_downsample;
+  cfg.output_format = to_output_format(config->output_format);
+  cfg.key_update_interval_sec = config->key_update_interval_sec;
+  cfg.bpm_update_interval_sec = config->bpm_update_interval_sec;
 
   auto handle = std::make_unique<SonareStreamAnalyzer>();
   handle->analyzer = std::make_unique<StreamAnalyzer>(cfg);
@@ -749,6 +862,54 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   SONARE_C_CATCH
 }
 
+SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer,
+                                                  size_t max_frames,
+                                                  SonareStreamFramesU8* out) {
+  if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+
+  *out = {};
+
+  SONARE_C_TRY
+  QuantizedFrameBufferU8 buffer;
+  analyzer->analyzer->read_frames_quantized_u8(max_frames, buffer);
+
+  out->n_frames = static_cast<int>(buffer.n_frames);
+  out->n_mels = buffer.n_mels;
+  out->timestamps = copy_float_vector(buffer.timestamps);
+  out->mel = copy_u8_vector(buffer.mel);
+  out->chroma = copy_u8_vector(buffer.chroma);
+  out->onset_strength = copy_u8_vector(buffer.onset_strength);
+  out->rms_energy = copy_u8_vector(buffer.rms_energy);
+  out->spectral_centroid = copy_u8_vector(buffer.spectral_centroid);
+  out->spectral_flatness = copy_u8_vector(buffer.spectral_flatness);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
+                                                   size_t max_frames,
+                                                   SonareStreamFramesI16* out) {
+  if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+
+  *out = {};
+
+  SONARE_C_TRY
+  QuantizedFrameBufferI16 buffer;
+  analyzer->analyzer->read_frames_quantized_i16(max_frames, buffer);
+
+  out->n_frames = static_cast<int>(buffer.n_frames);
+  out->n_mels = buffer.n_mels;
+  out->timestamps = copy_float_vector(buffer.timestamps);
+  out->mel = copy_i16_vector(buffer.mel);
+  out->chroma = copy_i16_vector(buffer.chroma);
+  out->onset_strength = copy_i16_vector(buffer.onset_strength);
+  out->rms_energy = copy_i16_vector(buffer.rms_energy);
+  out->spectral_centroid = copy_i16_vector(buffer.spectral_centroid);
+  out->spectral_flatness = copy_i16_vector(buffer.spectral_flatness);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer,
                                          size_t base_sample_offset) {
   if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
@@ -780,11 +941,33 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   out->chord_start_time = s.estimate.chord_start_time;
   out->current_bar = s.estimate.current_bar;
   out->bar_duration = s.estimate.bar_duration;
+  out->chord_progression_count = s.estimate.chord_progression.size();
+  out->chord_progression = copy_chord_changes(s.estimate.chord_progression);
+  out->bar_chord_progression_count = s.estimate.bar_chord_progression.size();
+  out->bar_chord_progression = copy_bar_chords(s.estimate.bar_chord_progression);
+  out->pattern_length = s.estimate.pattern_length;
+  out->voted_pattern_count = s.estimate.voted_pattern.size();
+  out->voted_pattern = copy_bar_chords(s.estimate.voted_pattern);
+  std::strncpy(out->detected_pattern_name, s.estimate.detected_pattern_name.c_str(),
+               sizeof(out->detected_pattern_name) - 1);
+  out->detected_pattern_name[sizeof(out->detected_pattern_name) - 1] = '\0';
+  out->detected_pattern_score = s.estimate.detected_pattern_score;
+  out->all_pattern_scores_count = s.estimate.all_pattern_scores.size();
+  out->all_pattern_scores = copy_pattern_scores(s.estimate.all_pattern_scores);
   out->accumulated_seconds = s.estimate.accumulated_seconds;
   out->used_frames = s.estimate.used_frames;
   out->updated = s.estimate.updated ? 1 : 0;
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+void sonare_free_stream_stats(SonareStreamStats* stats) {
+  if (!stats) return;
+  delete[] stats->chord_progression;
+  delete[] stats->bar_chord_progression;
+  delete[] stats->voted_pattern;
+  delete[] stats->all_pattern_scores;
+  *stats = {};
 }
 
 SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, int* out_count) {
@@ -851,5 +1034,29 @@ void sonare_free_stream_frames(SonareStreamFrames* frames) {
   delete[] frames->chord_root;
   delete[] frames->chord_quality;
   delete[] frames->chord_confidence;
+  *frames = {};
+}
+
+void sonare_free_stream_frames_u8(SonareStreamFramesU8* frames) {
+  if (!frames) return;
+  delete[] frames->timestamps;
+  delete[] frames->mel;
+  delete[] frames->chroma;
+  delete[] frames->onset_strength;
+  delete[] frames->rms_energy;
+  delete[] frames->spectral_centroid;
+  delete[] frames->spectral_flatness;
+  *frames = {};
+}
+
+void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames) {
+  if (!frames) return;
+  delete[] frames->timestamps;
+  delete[] frames->mel;
+  delete[] frames->chroma;
+  delete[] frames->onset_strength;
+  delete[] frames->rms_energy;
+  delete[] frames->spectral_centroid;
+  delete[] frames->spectral_flatness;
   *frames = {};
 }

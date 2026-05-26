@@ -2888,17 +2888,28 @@ val vectorToInt16Array(const std::vector<int16_t>& vec) {
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
-  StreamAnalyzerWrapper(int sample_rate, int n_fft, int hop_length, int n_mels, bool compute_mel,
-                        bool compute_chroma, bool compute_onset, int emit_every_n_frames) {
+  StreamAnalyzerWrapper(int sample_rate, int n_fft, int hop_length, int n_mels, float fmin,
+                        float fmax, float tuning_ref_hz, bool compute_magnitude, bool compute_mel,
+                        bool compute_chroma, bool compute_onset, bool compute_spectral,
+                        int emit_every_n_frames, int magnitude_downsample,
+                        float key_update_interval_sec, float bpm_update_interval_sec) {
     StreamConfig config;
     config.sample_rate = sample_rate;
     config.n_fft = n_fft;
     config.hop_length = hop_length;
     config.n_mels = n_mels;
+    config.fmin = fmin;
+    config.fmax = fmax;
+    config.tuning_ref_hz = tuning_ref_hz;
+    config.compute_magnitude = compute_magnitude;
     config.compute_mel = compute_mel;
     config.compute_chroma = compute_chroma;
     config.compute_onset = compute_onset;
+    config.compute_spectral = compute_spectral;
     config.emit_every_n_frames = emit_every_n_frames;
+    config.magnitude_downsample = magnitude_downsample;
+    config.key_update_interval_sec = key_update_interval_sec;
+    config.bpm_update_interval_sec = bpm_update_interval_sec;
     config_ = config;
     analyzer_ = std::make_unique<StreamAnalyzer>(config);
   }
@@ -4165,7 +4176,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   // Streaming - StreamAnalyzer
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
-      .constructor<int, int, int, int, bool, bool, bool, int>()
+      .constructor<int, int, int, int, float, float, float, bool, bool, bool, bool, bool, int, int,
+                   float, float>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("availableFrames", &StreamAnalyzerWrapper::availableFrames)
