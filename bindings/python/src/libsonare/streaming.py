@@ -7,10 +7,17 @@ from collections.abc import Sequence
 
 from ._runtime import (
     SonareStreamConfig,
+    SonareStreamFramesI16,
+    SonareStreamFramesU8,
     SonareStreamFrames,
     SonareStreamStats,
+    StreamBarChord,
+    StreamChordChange,
     StreamConfig,
+    StreamFramesI16,
+    StreamFramesU8,
     StreamFrames,
+    StreamPatternScore,
     StreamStats,
     _check,
     _get_lib,
@@ -37,10 +44,20 @@ class StreamAnalyzer:
             raw.n_fft = int(config.n_fft)
             raw.hop_length = int(config.hop_length)
             raw.n_mels = int(config.n_mels)
+            raw.fmin = float(config.fmin)
+            raw.fmax = float(config.fmax)
+            raw.tuning_ref_hz = float(config.tuning_ref_hz)
+            raw.compute_magnitude = int(config.compute_magnitude)
             raw.compute_mel = int(config.compute_mel)
             raw.compute_chroma = int(config.compute_chroma)
             raw.compute_onset = int(config.compute_onset)
+            raw.compute_spectral = int(config.compute_spectral)
             raw.emit_every_n_frames = int(config.emit_every_n_frames)
+            raw.magnitude_downsample = int(config.magnitude_downsample)
+            raw.key_update_interval_sec = float(config.key_update_interval_sec)
+            raw.bpm_update_interval_sec = float(config.bpm_update_interval_sec)
+            raw.window = int(config.window)
+            raw.output_format = int(config.output_format)
         handle = ctypes.c_void_p()
         _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
         self._handle: ctypes.c_void_p | None = handle
@@ -120,6 +137,34 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames(ctypes.byref(raw))
 
+    def read_frames_u8(self, max_frames: int) -> StreamFramesU8:
+        """Read up to ``max_frames`` frames as 8-bit quantized arrays."""
+        lib = _get_lib()
+        raw = SonareStreamFramesU8()
+        _check(
+            lib.sonare_stream_analyzer_read_frames_u8(
+                self._require_handle(), ctypes.c_size_t(int(max_frames)), ctypes.byref(raw)
+            )
+        )
+        try:
+            return _stream_frames_u8_from_c(raw)
+        finally:
+            lib.sonare_free_stream_frames_u8(ctypes.byref(raw))
+
+    def read_frames_i16(self, max_frames: int) -> StreamFramesI16:
+        """Read up to ``max_frames`` frames as 16-bit quantized arrays."""
+        lib = _get_lib()
+        raw = SonareStreamFramesI16()
+        _check(
+            lib.sonare_stream_analyzer_read_frames_i16(
+                self._require_handle(), ctypes.c_size_t(int(max_frames)), ctypes.byref(raw)
+            )
+        )
+        try:
+            return _stream_frames_i16_from_c(raw)
+        finally:
+            lib.sonare_free_stream_frames_i16(ctypes.byref(raw))
+
     def reset(self, base_sample_offset: int = 0) -> None:
         """Reset analyzer state for a new stream."""
         _check(
@@ -131,8 +176,13 @@ class StreamAnalyzer:
     def stats(self) -> StreamStats:
         """Read the current statistics and progressive estimate snapshot."""
         raw = SonareStreamStats()
-        _check(_get_lib().sonare_stream_analyzer_stats(self._require_handle(), ctypes.byref(raw)))
-        return _stream_stats_from_c(raw)
+        lib = _get_lib()
+        _check(lib.sonare_stream_analyzer_stats(self._require_handle(), ctypes.byref(raw)))
+        try:
+            return _stream_stats_from_c(raw)
+        finally:
+            if hasattr(lib, "sonare_free_stream_stats"):
+                lib.sonare_free_stream_stats(ctypes.byref(raw))
 
     def frame_count(self) -> int:
         """Return the total number of frames processed."""
@@ -197,6 +247,59 @@ def _ints(ptr: ctypes.POINTER(ctypes.c_int32), count: int) -> list[int]:
     return [int(ptr[i]) for i in range(count)]
 
 
+def _u8s(ptr: ctypes.POINTER(ctypes.c_uint8), count: int) -> list[int]:
+    if not ptr or count <= 0:
+        return []
+    return [int(ptr[i]) for i in range(count)]
+
+
+def _i16s(ptr: ctypes.POINTER(ctypes.c_int16), count: int) -> list[int]:
+    if not ptr or count <= 0:
+        return []
+    return [int(ptr[i]) for i in range(count)]
+
+
+def _chord_changes(ptr, count: int) -> list[StreamChordChange]:
+    if not ptr or count <= 0:
+        return []
+    return [
+        StreamChordChange(
+            root=int(ptr[i].root),
+            quality=int(ptr[i].quality),
+            start_time=float(ptr[i].start_time),
+            confidence=float(ptr[i].confidence),
+        )
+        for i in range(count)
+    ]
+
+
+def _bar_chords(ptr, count: int) -> list[StreamBarChord]:
+    if not ptr or count <= 0:
+        return []
+    return [
+        StreamBarChord(
+            bar_index=int(ptr[i].bar_index),
+            root=int(ptr[i].root),
+            quality=int(ptr[i].quality),
+            start_time=float(ptr[i].start_time),
+            confidence=float(ptr[i].confidence),
+        )
+        for i in range(count)
+    ]
+
+
+def _pattern_scores(ptr, count: int) -> list[StreamPatternScore]:
+    if not ptr or count <= 0:
+        return []
+    return [
+        StreamPatternScore(
+            name=bytes(ptr[i].name).split(b"\0", 1)[0].decode("utf-8"),
+            score=float(ptr[i].score),
+        )
+        for i in range(count)
+    ]
+
+
 def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
     n = int(raw.n_frames)
     n_mels = int(raw.n_mels)
@@ -213,6 +316,38 @@ def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
         chord_root=_ints(raw.chord_root, n),
         chord_quality=_ints(raw.chord_quality, n),
         chord_confidence=_floats(raw.chord_confidence, n),
+    )
+
+
+def _stream_frames_u8_from_c(raw: SonareStreamFramesU8) -> StreamFramesU8:
+    n = int(raw.n_frames)
+    n_mels = int(raw.n_mels)
+    return StreamFramesU8(
+        n_frames=n,
+        n_mels=n_mels,
+        timestamps=_floats(raw.timestamps, n),
+        mel=_u8s(raw.mel, n * n_mels),
+        chroma=_u8s(raw.chroma, n * 12),
+        onset_strength=_u8s(raw.onset_strength, n),
+        rms_energy=_u8s(raw.rms_energy, n),
+        spectral_centroid=_u8s(raw.spectral_centroid, n),
+        spectral_flatness=_u8s(raw.spectral_flatness, n),
+    )
+
+
+def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
+    n = int(raw.n_frames)
+    n_mels = int(raw.n_mels)
+    return StreamFramesI16(
+        n_frames=n,
+        n_mels=n_mels,
+        timestamps=_floats(raw.timestamps, n),
+        mel=_i16s(raw.mel, n * n_mels),
+        chroma=_i16s(raw.chroma, n * 12),
+        onset_strength=_i16s(raw.onset_strength, n),
+        rms_energy=_i16s(raw.rms_energy, n),
+        spectral_centroid=_i16s(raw.spectral_centroid, n),
+        spectral_flatness=_i16s(raw.spectral_flatness, n),
     )
 
 
@@ -233,6 +368,17 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         chord_start_time=float(raw.chord_start_time),
         current_bar=int(raw.current_bar),
         bar_duration=float(raw.bar_duration),
+        chord_progression=_chord_changes(raw.chord_progression, int(raw.chord_progression_count)),
+        bar_chord_progression=_bar_chords(
+            raw.bar_chord_progression, int(raw.bar_chord_progression_count)
+        ),
+        voted_pattern=_bar_chords(raw.voted_pattern, int(raw.voted_pattern_count)),
+        pattern_length=int(raw.pattern_length),
+        detected_pattern_name=bytes(raw.detected_pattern_name).split(b"\0", 1)[0].decode("utf-8"),
+        detected_pattern_score=float(raw.detected_pattern_score),
+        all_pattern_scores=_pattern_scores(
+            raw.all_pattern_scores, int(raw.all_pattern_scores_count)
+        ),
         accumulated_seconds=float(raw.accumulated_seconds),
         used_frames=int(raw.used_frames),
         updated=bool(raw.updated),

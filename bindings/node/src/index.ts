@@ -1459,7 +1459,7 @@ export function cqt(
   samples: Float32Array,
   sampleRate = 22050,
   hopLength = 512,
-  fmin = 32.703,
+  fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
 ): CqtResult {
@@ -1471,7 +1471,7 @@ export function vqt(
   samples: Float32Array,
   sampleRate = 22050,
   hopLength = 512,
-  fmin = 32.703,
+  fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
   gamma = 0.0,

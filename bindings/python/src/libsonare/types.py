@@ -925,7 +925,17 @@ class Section:
 
     @property
     def name(self) -> str:
-        return self.type.name.lower()
+        names = {
+            SectionType.INTRO: "Intro",
+            SectionType.VERSE: "Verse",
+            SectionType.PRE_CHORUS: "PreChorus",
+            SectionType.CHORUS: "Chorus",
+            SectionType.BRIDGE: "Bridge",
+            SectionType.INSTRUMENTAL: "Instrumental",
+            SectionType.OUTRO: "Outro",
+            SectionType.UNKNOWN: "Unknown",
+        }
+        return names[self.type]
 
 
 @dataclass(frozen=True, slots=True)
@@ -992,10 +1002,20 @@ class StreamConfig:
     n_fft: int = 2048
     hop_length: int = 512
     n_mels: int = 128
+    fmin: float = 0.0
+    fmax: float = 0.0
+    tuning_ref_hz: float = 440.0
+    compute_magnitude: bool = True
     compute_mel: bool = True
     compute_chroma: bool = True
     compute_onset: bool = True
+    compute_spectral: bool = True
     emit_every_n_frames: int = 1
+    magnitude_downsample: int = 1
+    key_update_interval_sec: float = 5.0
+    bpm_update_interval_sec: float = 10.0
+    window: int = 0
+    output_format: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1021,6 +1041,55 @@ class StreamFrames:
 
 
 @dataclass(frozen=True, slots=True)
+class StreamFramesU8:
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[int]
+    chroma: list[int]
+    onset_strength: list[int]
+    rms_energy: list[int]
+    spectral_centroid: list[int]
+    spectral_flatness: list[int]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamFramesI16:
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[int]
+    chroma: list[int]
+    onset_strength: list[int]
+    rms_energy: list[int]
+    spectral_centroid: list[int]
+    spectral_flatness: list[int]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamChordChange:
+    root: int
+    quality: int
+    start_time: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class StreamBarChord:
+    bar_index: int
+    root: int
+    quality: int
+    start_time: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class StreamPatternScore:
+    name: str
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
 class StreamStats:
     """Progressive estimate and counters snapshot from :class:`StreamAnalyzer`."""
 
@@ -1039,6 +1108,13 @@ class StreamStats:
     chord_start_time: float
     current_bar: int
     bar_duration: float
+    chord_progression: list[StreamChordChange]
+    bar_chord_progression: list[StreamBarChord]
+    voted_pattern: list[StreamBarChord]
+    pattern_length: int
+    detected_pattern_name: str
+    detected_pattern_score: float
+    all_pattern_scores: list[StreamPatternScore]
     accumulated_seconds: float
     used_frames: int
     updated: bool

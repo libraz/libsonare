@@ -83,6 +83,30 @@ export interface FrameBuffer {
   chordConfidence: Float32Array;
 }
 
+export interface StreamFramesU8 {
+  nFrames: number;
+  nMels: number;
+  timestamps: Float32Array;
+  mel: Uint8Array;
+  chroma: Uint8Array;
+  onsetStrength: Uint8Array;
+  rmsEnergy: Uint8Array;
+  spectralCentroid: Uint8Array;
+  spectralFlatness: Uint8Array;
+}
+
+export interface StreamFramesI16 {
+  nFrames: number;
+  nMels: number;
+  timestamps: Float32Array;
+  mel: Int16Array;
+  chroma: Int16Array;
+  onsetStrength: Int16Array;
+  rmsEnergy: Int16Array;
+  spectralCentroid: Int16Array;
+  spectralFlatness: Int16Array;
+}
+
 /**
  * Configuration for StreamAnalyzer
  */
@@ -91,8 +115,16 @@ export interface StreamConfig {
   nFft?: number;
   hopLength?: number;
   nMels?: number;
+  fmin?: number;
+  fmax?: number;
+  tuningRefHz?: number;
+  computeMagnitude?: boolean;
   computeMel?: boolean;
   computeChroma?: boolean;
   computeOnset?: boolean;
+  computeSpectral?: boolean;
   emitEveryNFrames?: number;
+  magnitudeDownsample?: number;
+  keyUpdateIntervalSec?: number;
+  bpmUpdateIntervalSec?: number;
 }

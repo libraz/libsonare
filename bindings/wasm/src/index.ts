@@ -67,7 +67,13 @@ import type {
   StreamingEqualizerConfig,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
-import type { AnalyzerStats, FrameBuffer, StreamConfig } from './stream_types';
+import type {
+  AnalyzerStats,
+  FrameBuffer,
+  StreamConfig,
+  StreamFramesI16,
+  StreamFramesU8,
+} from './stream_types';
 import type {
   ProgressCallback,
   SonareModule,
@@ -170,6 +176,8 @@ export type {
   PatternScore,
   ProgressiveEstimate,
   StreamConfig,
+  StreamFramesI16,
+  StreamFramesU8,
 } from './stream_types';
 export type { ProgressCallback } from './wasm_types';
 
@@ -333,6 +341,7 @@ export class RealtimeEngine {
     if (!module) {
       throw new Error('Module not initialized. Call init() first.');
     }
+    const wasmModule = module;
     const capabilities = engineCapabilities();
     if (!capabilities.abiCompatible) {
       throw new Error(
@@ -2817,7 +2826,7 @@ export function nnlsChroma(samples: Float32Array, sampleRate = 22050): WasmNnlsC
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 32.7, C1)
+ * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
  * @param nBins - Number of frequency bins (default: 84)
  * @param binsPerOctave - Bins per octave (default: 12)
  * @returns CQT magnitude result
@@ -2826,7 +2835,7 @@ export function cqt(
   samples: Float32Array,
   sampleRate = 22050,
   hopLength = 512,
-  fmin = 32.7,
+  fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
 ): CqtResult {
@@ -2842,7 +2851,7 @@ export function cqt(
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 32.7, C1)
+ * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
  * @param nBins - Number of frequency bins (default: 84)
  * @param binsPerOctave - Bins per octave (default: 12)
  * @param gamma - Bandwidth offset; 0 is equivalent to CQT (default: 0)
@@ -2852,7 +2861,7 @@ export function vqt(
   samples: Float32Array,
   sampleRate = 22050,
   hopLength = 512,
-  fmin = 32.7,
+  fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
   gamma = 0,
@@ -3333,16 +3342,75 @@ export class StreamAnalyzer {
     if (!module) {
       throw new Error('Module not initialized. Call init() first.');
     }
-    this.analyzer = new module.StreamAnalyzer(
+    const wasmModule = module;
+    const args = [
       config.sampleRate,
       config.nFft ?? 2048,
       config.hopLength ?? 512,
       config.nMels ?? 128,
+      config.fmin ?? 0,
+      config.fmax ?? 0,
+      config.tuningRefHz ?? 440,
+      config.computeMagnitude ?? true,
       config.computeMel ?? true,
       config.computeChroma ?? true,
       config.computeOnset ?? true,
+      config.computeSpectral ?? true,
       config.emitEveryNFrames ?? 1,
-    );
+      config.magnitudeDownsample ?? 1,
+      config.keyUpdateIntervalSec ?? 5,
+      config.bpmUpdateIntervalSec ?? 10,
+    ] as const;
+    const isArityError = (error: unknown): boolean => {
+      const message = String((error as { message?: unknown } | null)?.message ?? error);
+      return message.includes('invalid number of parameters');
+    };
+    const createLegacy = (): WasmStreamAnalyzer => {
+      const LegacyStreamAnalyzer = wasmModule.StreamAnalyzer as unknown as new (
+        sampleRate: number,
+        nFft: number,
+        hopLength: number,
+        nMels: number,
+        computeMel: boolean,
+        computeChroma: boolean,
+        computeOnset: boolean,
+        emitEveryNFrames: number,
+      ) => WasmStreamAnalyzer;
+      return new LegacyStreamAnalyzer(
+        args[0],
+        args[1],
+        args[2],
+        args[3],
+        args[8],
+        args[9],
+        args[10],
+        args[12],
+      );
+    };
+    const hasExtendedConfig =
+      config.fmin !== undefined ||
+      config.fmax !== undefined ||
+      config.tuningRefHz !== undefined ||
+      config.computeMagnitude !== undefined ||
+      config.computeSpectral !== undefined ||
+      config.magnitudeDownsample !== undefined ||
+      config.keyUpdateIntervalSec !== undefined ||
+      config.bpmUpdateIntervalSec !== undefined;
+    if (hasExtendedConfig) {
+      try {
+        this.analyzer = new wasmModule.StreamAnalyzer(...args);
+      } catch (error) {
+        if (!isArityError(error)) throw error;
+        this.analyzer = createLegacy();
+      }
+    } else {
+      try {
+        this.analyzer = createLegacy();
+      } catch (error) {
+        if (!isArityError(error)) throw error;
+        this.analyzer = new wasmModule.StreamAnalyzer(...args);
+      }
+    }
   }
 
   /**
@@ -3379,6 +3447,14 @@ export class StreamAnalyzer {
    */
   readFrames(maxFrames: number): FrameBuffer {
     return this.analyzer.readFramesSoa(maxFrames);
+  }
+
+  readFramesU8(maxFrames: number): StreamFramesU8 {
+    return this.analyzer.readFramesU8(maxFrames) as StreamFramesU8;
+  }
+
+  readFramesI16(maxFrames: number): StreamFramesI16 {
+    return this.analyzer.readFramesI16(maxFrames) as StreamFramesI16;
   }
 
   /**

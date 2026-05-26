@@ -13,6 +13,7 @@
 #include "feature/spectral.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_utils.h"
+#include "util/constants.h"
 
 using namespace sonare_node;
 
@@ -1293,8 +1294,9 @@ Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) {
       info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
   const int hop_length =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
-  const float fmin =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 32.703f;
+  const float fmin = info.Length() >= 4 && info[3].IsNumber()
+                         ? info[3].As<Napi::Number>().FloatValue()
+                         : sonare::constants::kC1Hz;
   const int n_bins =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 84;
   const int bins_per_octave =
@@ -1325,8 +1327,9 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
       info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
   const int hop_length =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
-  const float fmin =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 32.703f;
+  const float fmin = info.Length() >= 4 && info[3].IsNumber()
+                         ? info[3].As<Napi::Number>().FloatValue()
+                         : sonare::constants::kC1Hz;
   const int n_bins =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 84;
   const int bins_per_octave =

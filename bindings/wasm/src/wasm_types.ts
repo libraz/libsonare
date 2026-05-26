@@ -1165,10 +1165,18 @@ export interface SonareModule {
     nFft: number,
     hopLength: number,
     nMels: number,
+    fmin: number,
+    fmax: number,
+    tuningRefHz: number,
+    computeMagnitude: boolean,
     computeMel: boolean,
     computeChroma: boolean,
     computeOnset: boolean,
+    computeSpectral: boolean,
     emitEveryNFrames: number,
+    magnitudeDownsample: number,
+    keyUpdateIntervalSec: number,
+    bpmUpdateIntervalSec: number,
   ) => WasmStreamAnalyzer;
   RealtimeEngine: new (
     sampleRate: number,

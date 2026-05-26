@@ -547,10 +547,46 @@ class SonareStreamConfig(ctypes.Structure):
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
+        ("fmin", ctypes.c_float),
+        ("fmax", ctypes.c_float),
+        ("tuning_ref_hz", ctypes.c_float),
+        ("compute_magnitude", ctypes.c_int32),
         ("compute_mel", ctypes.c_int32),
         ("compute_chroma", ctypes.c_int32),
         ("compute_onset", ctypes.c_int32),
+        ("compute_spectral", ctypes.c_int32),
         ("emit_every_n_frames", ctypes.c_int32),
+        ("magnitude_downsample", ctypes.c_int32),
+        ("key_update_interval_sec", ctypes.c_float),
+        ("bpm_update_interval_sec", ctypes.c_float),
+        ("window", ctypes.c_int32),
+        ("output_format", ctypes.c_int32),
+    ]
+
+
+class SonareStreamChordChange(ctypes.Structure):
+    _fields_ = [
+        ("root", ctypes.c_int32),
+        ("quality", ctypes.c_int32),
+        ("start_time", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareStreamBarChord(ctypes.Structure):
+    _fields_ = [
+        ("bar_index", ctypes.c_int32),
+        ("root", ctypes.c_int32),
+        ("quality", ctypes.c_int32),
+        ("start_time", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareStreamPatternScore(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char * 64),
+        ("score", ctypes.c_float),
     ]
 
 
@@ -573,6 +609,34 @@ class SonareStreamFrames(ctypes.Structure):
     ]
 
 
+class SonareStreamFramesU8(ctypes.Structure):
+    _fields_ = [
+        ("n_frames", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("mel", ctypes.POINTER(ctypes.c_uint8)),
+        ("chroma", ctypes.POINTER(ctypes.c_uint8)),
+        ("onset_strength", ctypes.POINTER(ctypes.c_uint8)),
+        ("rms_energy", ctypes.POINTER(ctypes.c_uint8)),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_uint8)),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_uint8)),
+    ]
+
+
+class SonareStreamFramesI16(ctypes.Structure):
+    _fields_ = [
+        ("n_frames", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("mel", ctypes.POINTER(ctypes.c_int16)),
+        ("chroma", ctypes.POINTER(ctypes.c_int16)),
+        ("onset_strength", ctypes.POINTER(ctypes.c_int16)),
+        ("rms_energy", ctypes.POINTER(ctypes.c_int16)),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_int16)),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_int16)),
+    ]
+
+
 class SonareStreamStats(ctypes.Structure):
     """Maps to SonareStreamStats in sonare_c.h."""
 
@@ -592,6 +656,17 @@ class SonareStreamStats(ctypes.Structure):
         ("chord_start_time", ctypes.c_float),
         ("current_bar", ctypes.c_int32),
         ("bar_duration", ctypes.c_float),
+        ("chord_progression_count", ctypes.c_size_t),
+        ("chord_progression", ctypes.POINTER(SonareStreamChordChange)),
+        ("bar_chord_progression_count", ctypes.c_size_t),
+        ("bar_chord_progression", ctypes.POINTER(SonareStreamBarChord)),
+        ("pattern_length", ctypes.c_int32),
+        ("voted_pattern_count", ctypes.c_size_t),
+        ("voted_pattern", ctypes.POINTER(SonareStreamBarChord)),
+        ("detected_pattern_name", ctypes.c_char * 64),
+        ("detected_pattern_score", ctypes.c_float),
+        ("all_pattern_scores_count", ctypes.c_size_t),
+        ("all_pattern_scores", ctypes.POINTER(SonareStreamPatternScore)),
         ("accumulated_seconds", ctypes.c_float),
         ("used_frames", ctypes.c_int32),
         ("updated", ctypes.c_int32),
@@ -1328,6 +1403,20 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.c_size_t,
             ctypes.POINTER(SonareStreamFrames),
         ]
+        if hasattr(lib, "sonare_stream_analyzer_read_frames_u8"):
+            lib.sonare_stream_analyzer_read_frames_u8.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_read_frames_u8.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamFramesU8),
+            ]
+        if hasattr(lib, "sonare_stream_analyzer_read_frames_i16"):
+            lib.sonare_stream_analyzer_read_frames_i16.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_read_frames_i16.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamFramesI16),
+            ]
         lib.sonare_stream_analyzer_reset.restype = ctypes.c_int32
         lib.sonare_stream_analyzer_reset.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
         lib.sonare_stream_analyzer_stats.restype = ctypes.c_int32
@@ -1335,6 +1424,9 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.c_void_p,
             ctypes.POINTER(SonareStreamStats),
         ]
+        if hasattr(lib, "sonare_free_stream_stats"):
+            lib.sonare_free_stream_stats.restype = None
+            lib.sonare_free_stream_stats.argtypes = [ctypes.POINTER(SonareStreamStats)]
         lib.sonare_stream_analyzer_frame_count.restype = ctypes.c_int32
         lib.sonare_stream_analyzer_frame_count.argtypes = [
             ctypes.c_void_p,
@@ -1367,6 +1459,12 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ]
         lib.sonare_free_stream_frames.restype = None
         lib.sonare_free_stream_frames.argtypes = [ctypes.POINTER(SonareStreamFrames)]
+        if hasattr(lib, "sonare_free_stream_frames_u8"):
+            lib.sonare_free_stream_frames_u8.restype = None
+            lib.sonare_free_stream_frames_u8.argtypes = [ctypes.POINTER(SonareStreamFramesU8)]
+        if hasattr(lib, "sonare_free_stream_frames_i16"):
+            lib.sonare_free_stream_frames_i16.restype = None
+            lib.sonare_free_stream_frames_i16.argtypes = [ctypes.POINTER(SonareStreamFramesI16)]
 
     # --- Memory management ---
 
