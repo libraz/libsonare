@@ -910,3 +910,147 @@ class CqtResult:
         magnitude: list[float],
         frequencies: list[float],
     ) -> None: ...
+
+class StreamConfig:
+    sample_rate: int
+    n_fft: int
+    hop_length: int
+    n_mels: int
+    fmin: float
+    fmax: float
+    tuning_ref_hz: float
+    compute_magnitude: bool
+    compute_mel: bool
+    compute_chroma: bool
+    compute_onset: bool
+    compute_spectral: bool
+    emit_every_n_frames: int
+    magnitude_downsample: int
+    key_update_interval_sec: float
+    bpm_update_interval_sec: float
+    window: int
+    output_format: int
+    def __init__(
+        self,
+        sample_rate: int = 44100,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+        fmin: float = 0.0,
+        fmax: float = 0.0,
+        tuning_ref_hz: float = 440.0,
+        compute_magnitude: bool = True,
+        compute_mel: bool = True,
+        compute_chroma: bool = True,
+        compute_onset: bool = True,
+        compute_spectral: bool = True,
+        emit_every_n_frames: int = 1,
+        magnitude_downsample: int = 1,
+        key_update_interval_sec: float = 5.0,
+        bpm_update_interval_sec: float = 10.0,
+        window: int = 0,
+        output_format: int = 0,
+    ) -> None: ...
+
+class StreamFrames:
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[float]
+    chroma: list[float]
+    onset_strength: list[float]
+    rms_energy: list[float]
+    spectral_centroid: list[float]
+    spectral_flatness: list[float]
+    chord_root: list[int]
+    chord_quality: list[int]
+    chord_confidence: list[float]
+    def __init__(
+        self,
+        n_frames: int,
+        n_mels: int,
+        timestamps: list[float],
+        mel: list[float],
+        chroma: list[float],
+        onset_strength: list[float],
+        rms_energy: list[float],
+        spectral_centroid: list[float],
+        spectral_flatness: list[float],
+        chord_root: list[int],
+        chord_quality: list[int],
+        chord_confidence: list[float],
+    ) -> None: ...
+
+class StreamFramesU8:
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[int]
+    chroma: list[int]
+    onset_strength: list[int]
+    rms_energy: list[int]
+    spectral_centroid: list[int]
+    spectral_flatness: list[int]
+    def __init__(
+        self,
+        n_frames: int,
+        n_mels: int,
+        timestamps: list[float],
+        mel: list[int],
+        chroma: list[int],
+        onset_strength: list[int],
+        rms_energy: list[int],
+        spectral_centroid: list[int],
+        spectral_flatness: list[int],
+    ) -> None: ...
+
+class StreamFramesI16(StreamFramesU8): ...
+
+class StreamChordChange:
+    root: int
+    quality: int
+    start_time: float
+    confidence: float
+    def __init__(self, root: int, quality: int, start_time: float, confidence: float) -> None: ...
+
+class StreamBarChord:
+    bar_index: int
+    root: int
+    quality: int
+    start_time: float
+    confidence: float
+    def __init__(
+        self, bar_index: int, root: int, quality: int, start_time: float, confidence: float
+    ) -> None: ...
+
+class StreamPatternScore:
+    name: str
+    score: float
+    def __init__(self, name: str, score: float) -> None: ...
+
+class StreamStats:
+    total_frames: int
+    total_samples: int
+    duration_seconds: float
+    bpm: float
+    bpm_confidence: float
+    bpm_candidate_count: int
+    key: int
+    key_minor: bool
+    key_confidence: float
+    chord_root: int
+    chord_quality: int
+    chord_confidence: float
+    chord_start_time: float
+    current_bar: int
+    bar_duration: float
+    chord_progression: list[StreamChordChange]
+    bar_chord_progression: list[StreamBarChord]
+    voted_pattern: list[StreamBarChord]
+    pattern_length: int
+    detected_pattern_name: str
+    detected_pattern_score: float
+    all_pattern_scores: list[StreamPatternScore]
+    accumulated_seconds: float
+    used_frames: int
+    updated: bool

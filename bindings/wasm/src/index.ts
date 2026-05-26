@@ -3555,6 +3555,7 @@ export class StreamAnalyzer {
         chordRoot: s.estimate.chordRoot as PitchClass,
         chordQuality: s.estimate.chordQuality as ChordQuality,
         chordConfidence: s.estimate.chordConfidence,
+        chordStartTime: s.estimate.chordStartTime,
         chordProgression: s.estimate.chordProgression.map((c) => ({
           root: c.root as PitchClass,
           quality: c.quality as ChordQuality,

@@ -42,6 +42,7 @@ export interface ProgressiveEstimate {
   chordRoot: PitchClass;
   chordQuality: ChordQuality;
   chordConfidence: number;
+  chordStartTime: number;
   chordProgression: ChordChange[];
   barChordProgression: BarChord[];
   currentBar: number;

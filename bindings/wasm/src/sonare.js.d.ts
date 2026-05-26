@@ -1241,6 +1241,7 @@ interface WasmProgressiveEstimate {
   chordRoot: number;
   chordQuality: number;
   chordConfidence: number;
+  chordStartTime: number;
   chordProgression: WasmChordChange[];
   barChordProgression: WasmBarChord[];
   currentBar: number;

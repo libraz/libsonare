@@ -296,6 +296,7 @@ from .analyzer import (
 )
 from .audio import Audio as Audio
 from .engine import RealtimeEngine as RealtimeEngine
+from .streaming import StreamAnalyzer as StreamAnalyzer
 from .types import (
     AcousticResult as AcousticResult,
 )
@@ -466,6 +467,30 @@ from .types import (
 )
 from .types import (
     StftResult as StftResult,
+)
+from .types import (
+    StreamBarChord as StreamBarChord,
+)
+from .types import (
+    StreamChordChange as StreamChordChange,
+)
+from .types import (
+    StreamConfig as StreamConfig,
+)
+from .types import (
+    StreamFrames as StreamFrames,
+)
+from .types import (
+    StreamFramesI16 as StreamFramesI16,
+)
+from .types import (
+    StreamFramesU8 as StreamFramesU8,
+)
+from .types import (
+    StreamPatternScore as StreamPatternScore,
+)
+from .types import (
+    StreamStats as StreamStats,
 )
 from .types import (
     TimbreResult as TimbreResult,
