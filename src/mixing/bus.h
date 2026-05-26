@@ -3,6 +3,7 @@
 /// @file bus.h
 /// @brief Summing bus primitive for subgroup, aux and master buses.
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -40,8 +41,10 @@ class BusProcessor : public rt::ProcessorBase {
   int max_inputs() const noexcept { return max_inputs_; }
 
  private:
+  static constexpr int kMaxSidechainChannels = 8;
+
   struct InsertSidechain {
-    const float* const* channels = nullptr;
+    std::array<const float*, kMaxSidechainChannels> channels{};
     int num_channels = 0;
     int num_samples = 0;
     bool managed = false;

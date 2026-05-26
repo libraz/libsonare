@@ -3,6 +3,7 @@
 /// @file channel_strip.h
 /// @brief Commercial-grade channel strip: EQ, fader, pan, meter, and aux sends.
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -165,7 +166,7 @@ class ChannelStrip : public rt::ProcessorBase {
                             size_t first_insert_index, int sidechain_offset);
 
   struct InsertSidechain {
-    const float* const* channels = nullptr;
+    std::array<const float*, kMaxStackChannels> channels{};
     int num_channels = 0;
     int num_samples = 0;
     bool managed = false;

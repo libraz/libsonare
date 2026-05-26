@@ -21,9 +21,8 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   for (size_t index = 0; index < inserts_.size(); ++index) {
     const InsertSidechain* key =
         index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
-    if (key != nullptr && key->channels != nullptr && key->num_channels > 0 &&
-        key->num_samples >= num_samples) {
-      inserts_[index]->set_sidechain(key->channels, key->num_channels, num_samples);
+    if (key != nullptr && key->num_channels > 0 && key->num_samples >= num_samples) {
+      inserts_[index]->set_sidechain(key->channels.data(), key->num_channels, num_samples);
     } else if (key != nullptr && key->managed) {
       inserts_[index]->clear_sidechain();
     } else {
@@ -102,10 +101,19 @@ void BusProcessor::set_insert_sidechain(unsigned int insert_index, const float* 
     insert_sidechains_.resize(inserts_.size());
   }
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
-    insert_sidechains_[index] = {nullptr, 0, 0, true};
+    insert_sidechains_[index] = {{}, 0, 0, true};
     return;
   }
-  insert_sidechains_[index] = {channels, num_channels, num_samples, true};
+  const int n = std::min(num_channels, kMaxSidechainChannels);
+  InsertSidechain entry;
+  entry.channels = {};
+  for (int ch = 0; ch < n; ++ch) {
+    entry.channels[static_cast<size_t>(ch)] = channels[ch];
+  }
+  entry.num_channels = n;
+  entry.num_samples = num_samples;
+  entry.managed = true;
+  insert_sidechains_[index] = entry;
 }
 
 void BusProcessor::clear_insert_sidechains() noexcept {

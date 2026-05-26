@@ -379,8 +379,7 @@ void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::Processo
     const size_t index = first_insert_index + local;
     const InsertSidechain* key =
         index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
-    if (key != nullptr && key->channels != nullptr && key->num_channels > 0 &&
-        key->num_samples > sidechain_offset) {
+    if (key != nullptr && key->num_channels > 0 && key->num_samples > sidechain_offset) {
       const int rows = std::min<int>(key->num_channels, kPreparedChannels);
       const int remaining = key->num_samples - sidechain_offset;
       for (int ch = 0; ch < rows; ++ch) {
@@ -602,10 +601,19 @@ void ChannelStrip::set_insert_sidechain(unsigned int insert_index, const float* 
     insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
   }
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
-    insert_sidechains_[index] = {nullptr, 0, 0, true};
+    insert_sidechains_[index] = {{}, 0, 0, true};
     return;
   }
-  insert_sidechains_[index] = {channels, num_channels, num_samples, true};
+  const int n = std::min(num_channels, kMaxStackChannels);
+  InsertSidechain entry;
+  entry.channels = {};
+  for (int ch = 0; ch < n; ++ch) {
+    entry.channels[static_cast<size_t>(ch)] = channels[ch];
+  }
+  entry.num_channels = n;
+  entry.num_samples = num_samples;
+  entry.managed = true;
+  insert_sidechains_[index] = entry;
 }
 
 void ChannelStrip::clear_insert_sidechains() noexcept {
