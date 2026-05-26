@@ -31,4 +31,6 @@ std::vector<StreamingPreviewResult> streaming_preview(
                             {"YouTube", -14.0f, -1.0f},
                         });
 
+std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>& results);
+
 }  // namespace sonare::mastering::maximizer

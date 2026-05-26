@@ -1,10 +1,12 @@
 #include "mastering/maximizer/streaming_preview.h"
 
 #include <cmath>
+#include <sstream>
 #include <stdexcept>
 
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
+#include "util/json_escape.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -24,6 +26,22 @@ std::vector<StreamingPreviewResult> streaming_preview(
                        std::isfinite(true_peak) && true_peak + gain > platform.ceiling_db});
   }
   return results;
+}
+
+std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>& results) {
+  std::ostringstream json;
+  json << "{\"platforms\":[";
+  for (size_t index = 0; index < results.size(); ++index) {
+    const auto& result = results[index];
+    if (index > 0) json << ',';
+    json << "{\"name\":\"" << sonare::util::escape_json_string(result.name)
+         << "\",\"integratedLufs\":" << result.integrated_lufs
+         << ",\"truePeakDb\":" << result.true_peak_db
+         << ",\"normalizationGainDb\":" << result.normalization_gain_db
+         << ",\"ceilingRisk\":" << (result.ceiling_risk ? "true" : "false") << '}';
+  }
+  json << "]}";
+  return json.str();
 }
 
 }  // namespace sonare::mastering::maximizer

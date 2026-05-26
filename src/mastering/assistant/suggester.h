@@ -31,5 +31,6 @@ AssistantResult suggest_chain(const float* samples, std::size_t length, int samp
                               const AssistantConfig& config = {});
 AssistantResult suggest_chain(const Audio& audio, const AssistantConfig& config = {});
 AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig& config = {});
+std::string assistant_result_to_json(const AssistantResult& result);
 
 }  // namespace sonare::mastering::assistant

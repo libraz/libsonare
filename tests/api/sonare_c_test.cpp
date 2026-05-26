@@ -1091,6 +1091,65 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
             nullptr);
   }
 
+  SECTION("streaming preview is reachable through the C API") {
+    auto samples = generate_sine(1000.0f, 48000, 1.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    SonareStreamingPlatform platforms[] = {{"Unit Test", 0.0f, -6.0f}};
+
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_streaming_preview(samples.data(), samples.size(), 48000, platforms, 1,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"platforms\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"name\":\"Unit Test\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"normalizationGainDb\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"ceilingRisk\":true") != nullptr);
+    sonare_free_string(json);
+
+    json = nullptr;
+    REQUIRE(sonare_mastering_streaming_preview(samples.data(), samples.size(), 48000, nullptr, 0,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"Spotify\"") != nullptr);
+    sonare_free_string(json);
+  }
+
+  SECTION("assistant suggestion is reachable through the C API") {
+    auto samples = generate_sine(220.0f, 48000, 3.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    SonareMasteringParam params[] = {{"targetLufs", -13.0}, {"ceilingDb", -0.8}};
+
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, params, 2,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"chainConfig\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"explanation\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"genreCandidates\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-13") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.ceilingDb\":-0.8") != nullptr);
+    sonare_free_string(json);
+  }
+
+  SECTION("assistant audio profile is reachable through the C API") {
+    auto samples = generate_sine(330.0f, 48000, 2.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    SonareMasteringParam params[] = {{"nFft", 1024.0}, {"hopLength", 256.0}};
+
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_audio_profile(samples.data(), samples.size(), 48000, params, 2,
+                                           &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"durationSec\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"integratedLufs\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"spectral\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"centroidHz\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"dynamics\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"genreCandidates\"") != nullptr);
+    sonare_free_string(json);
+  }
+
   SECTION("all listed processors execute through the shared stereo entrypoint") {
     auto left = generate_sine(440.0f, 44100, 0.25f);
     auto right = generate_sine(660.0f, 44100, 0.25f);
@@ -1107,7 +1166,12 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                                       &result) == SONARE_OK);
       REQUIRE(result.left != nullptr);
       REQUIRE(result.right != nullptr);
-      REQUIRE(result.length == left.size());
+      if (name == "repair.trimSilence") {
+        REQUIRE(result.length <= left.size());
+        REQUIRE(result.length > 0);
+      } else {
+        REQUIRE(result.length == left.size());
+      }
       REQUIRE(std::isfinite(result.output_lufs));
       sonare_free_mastering_stereo_result(&result);
     }

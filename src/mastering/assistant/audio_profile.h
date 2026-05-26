@@ -61,5 +61,6 @@ struct AudioProfileConfig {
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
                                    const AudioProfileConfig& config = {});
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config = {});
+std::string audio_profile_to_json(const AudioProfile& profile);
 
 }  // namespace sonare::mastering::assistant

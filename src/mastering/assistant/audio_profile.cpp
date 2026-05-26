@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <sstream>
 
 #include "analysis/bpm_analyzer.h"
 #include "core/spectrum.h"
@@ -17,6 +18,7 @@
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
 #include "util/constants.h"
+#include "util/json_escape.h"
 
 namespace sonare::mastering::assistant {
 namespace {
@@ -210,6 +212,37 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
 
   profile.genre_candidates = infer_genres(profile.bpm, profile.spectral, profile.dynamics);
   return profile;
+}
+
+std::string audio_profile_to_json(const AudioProfile& profile) {
+  std::ostringstream json;
+  json << "{\"durationSec\":" << profile.duration_sec << ",\"bpm\":" << profile.bpm
+       << ",\"bpmConfidence\":" << profile.bpm_confidence << ",\"loudness\":{"
+       << "\"integratedLufs\":" << profile.loudness.integrated_lufs
+       << ",\"lraLu\":" << profile.loudness.lra_lu
+       << ",\"truePeakDb\":" << profile.loudness.true_peak_db
+       << ",\"crestFactorDb\":" << profile.loudness.crest_factor_db << "},\"spectral\":{"
+       << "\"subRmsDb\":" << profile.spectral.sub_rms_db
+       << ",\"lowRmsDb\":" << profile.spectral.low_rms_db
+       << ",\"lowMidRmsDb\":" << profile.spectral.low_mid_rms_db
+       << ",\"midRmsDb\":" << profile.spectral.mid_rms_db
+       << ",\"highMidRmsDb\":" << profile.spectral.high_mid_rms_db
+       << ",\"highRmsDb\":" << profile.spectral.high_rms_db
+       << ",\"airRmsDb\":" << profile.spectral.air_rms_db
+       << ",\"centroidHz\":" << profile.spectral.centroid_hz
+       << ",\"flatness\":" << profile.spectral.flatness
+       << ",\"rolloffHz\":" << profile.spectral.rolloff_hz << "},\"dynamics\":{"
+       << "\"shortTermLufsStd\":" << profile.dynamics.short_term_lufs_std
+       << ",\"attackDensity\":" << profile.dynamics.attack_density
+       << ",\"sustainRatio\":" << profile.dynamics.sustain_ratio << "},\"genreCandidates\":[";
+  for (size_t index = 0; index < profile.genre_candidates.size(); ++index) {
+    if (index > 0) json << ',';
+    const auto& candidate = profile.genre_candidates[index];
+    json << "{\"name\":\"" << sonare::util::escape_json_string(candidate.name)
+         << "\",\"score\":" << candidate.score << '}';
+  }
+  json << "]}";
+  return json.str();
 }
 
 }  // namespace sonare::mastering::assistant

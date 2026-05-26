@@ -10,12 +10,15 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/suggester.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
 #include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/streaming_preview.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
+#include "util/json_escape.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -54,6 +57,42 @@ std::vector<sonare::mastering::api::Param> to_params(const SonareMasteringParam*
     }
   }
   return out;
+}
+
+sonare::mastering::assistant::AssistantConfig to_assistant_config(
+    const SonareMasteringParam* params, size_t count) {
+  sonare::mastering::assistant::AssistantConfig config;
+  for (size_t index = 0; index < count; ++index) {
+    if (!params[index].key) continue;
+    const std::string key = params[index].key;
+    if (key == "targetLufs" || key == "target_lufs") {
+      config.target_lufs = static_cast<float>(params[index].value);
+    } else if (key == "ceilingDb" || key == "ceiling_db") {
+      config.ceiling_db = static_cast<float>(params[index].value);
+    } else if (key == "enableRepair" || key == "enable_repair") {
+      config.enable_repair = params[index].value != 0.0;
+    } else if (key == "preferStreamingSafe" || key == "prefer_streaming_safe") {
+      config.prefer_streaming_safe = params[index].value != 0.0;
+    }
+  }
+  return config;
+}
+
+sonare::mastering::assistant::AudioProfileConfig to_audio_profile_config(
+    const SonareMasteringParam* params, size_t count) {
+  sonare::mastering::assistant::AudioProfileConfig config;
+  for (size_t index = 0; index < count; ++index) {
+    if (!params[index].key) continue;
+    const std::string key = params[index].key;
+    if (key == "nFft" || key == "n_fft") {
+      config.n_fft = static_cast<int>(params[index].value);
+    } else if (key == "hopLength" || key == "hop_length") {
+      config.hop_length = static_cast<int>(params[index].value);
+    } else if (key == "truePeakOversample" || key == "true_peak_oversample") {
+      config.true_peak_oversample = static_cast<int>(params[index].value);
+    }
+  }
+  return config;
 }
 
 void set_mastering_result(const sonare::mastering::api::MonoResult& result,
@@ -748,6 +787,70 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
   auto json = sonare::mastering::api::analyze_named_stereo(
       analysis_name, left, right, length, sample_rate, to_params(params, param_count));
   *json_out = copy_string(json);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
+                                               const SonareStreamingPlatform* platforms,
+                                               size_t platform_count, char** json_out) {
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
+  cpp_platforms.reserve(platform_count);
+  for (size_t index = 0; index < platform_count; ++index) {
+    if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
+    cpp_platforms.push_back(
+        {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
+  }
+
+  const Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  const auto results = platform_count == 0
+                           ? sonare::mastering::maximizer::streaming_preview(audio)
+                           : sonare::mastering::maximizer::streaming_preview(audio, cpp_platforms);
+
+  *json_out = copy_string(sonare::mastering::maximizer::streaming_preview_to_json(results));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
+                                               const SonareMasteringParam* params,
+                                               size_t param_count, char** json_out) {
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = to_assistant_config(params, param_count);
+  const auto result =
+      sonare::mastering::assistant::suggest_chain(samples, length, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::assistant::assistant_result_to_json(result));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
+                                           const SonareMasteringParam* params, size_t param_count,
+                                           char** json_out) {
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = to_audio_profile_config(params, param_count);
+  const auto profile =
+      sonare::mastering::assistant::analyze_audio_profile(samples, length, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::assistant::audio_profile_to_json(profile));
   return SONARE_OK;
   SONARE_C_CATCH
 }

@@ -781,6 +781,34 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
                                             char** json_out);
 
 typedef struct {
+  const char* name;
+  float target_lufs;
+  float ceiling_db;
+} SonareStreamingPlatform;
+
+/// @brief Preview platform normalization gain and ceiling risk as JSON.
+/// @details Pass NULL/0 for @p platforms to use the built-in platform list.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
+                                               const SonareStreamingPlatform* platforms,
+                                               size_t platform_count, char** json_out);
+
+/// @brief Analyze audio and suggest a mastering chain as JSON.
+/// @details @p params accepts targetLufs, ceilingDb, enableRepair,
+/// and preferStreamingSafe. The returned string must be released with
+/// sonare_free_string().
+SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
+                                               const SonareMasteringParam* params,
+                                               size_t param_count, char** json_out);
+
+/// @brief Analyze audio and return mastering assistant profile JSON.
+/// @details @p params accepts nFft, hopLength, and truePeakOversample.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
+                                           const SonareMasteringParam* params, size_t param_count,
+                                           char** json_out);
+
+typedef struct {
   float pre_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
   float pre_right[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
   float post_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];

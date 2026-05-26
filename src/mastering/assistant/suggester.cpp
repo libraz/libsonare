@@ -5,9 +5,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 #include <string>
 
 #include "mastering/api/presets.h"
+#include "util/json_escape.h"
 
 namespace sonare::mastering::assistant {
 namespace {
@@ -120,6 +122,34 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   }
 
   return result;
+}
+
+std::string assistant_result_to_json(const AssistantResult& result) {
+  std::ostringstream json;
+  json << "{\"chainConfig\":" << api::chain_config_to_json(result.config) << ",\"explanation\":[";
+  for (size_t index = 0; index < result.explanation.size(); ++index) {
+    if (index > 0) json << ',';
+    json << '"' << sonare::util::escape_json_string(result.explanation[index]) << '"';
+  }
+  json << "],\"genreCandidates\":[";
+  for (size_t index = 0; index < result.genre_candidates.size(); ++index) {
+    if (index > 0) json << ',';
+    const auto& candidate = result.genre_candidates[index];
+    json << "{\"name\":\"" << sonare::util::escape_json_string(candidate.name)
+         << "\",\"score\":" << candidate.score << '}';
+  }
+  json << "],\"profile\":{\"durationSec\":" << result.profile.duration_sec
+       << ",\"bpm\":" << result.profile.bpm
+       << ",\"bpmConfidence\":" << result.profile.bpm_confidence
+       << ",\"integratedLufs\":" << result.profile.loudness.integrated_lufs
+       << ",\"lraLu\":" << result.profile.loudness.lra_lu
+       << ",\"truePeakDb\":" << result.profile.loudness.true_peak_db
+       << ",\"crestFactorDb\":" << result.profile.loudness.crest_factor_db
+       << ",\"spectralCentroidHz\":" << result.profile.spectral.centroid_hz
+       << ",\"spectralFlatness\":" << result.profile.spectral.flatness
+       << ",\"attackDensity\":" << result.profile.dynamics.attack_density
+       << ",\"sustainRatio\":" << result.profile.dynamics.sustain_ratio << "}}";
+  return json.str();
 }
 
 }  // namespace sonare::mastering::assistant

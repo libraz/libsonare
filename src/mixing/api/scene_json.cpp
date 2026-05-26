@@ -6,30 +6,10 @@
 #include <utility>
 
 #include "mixing/api/scene.h"
+#include "util/json_escape.h"
 
 namespace sonare::mixing::api {
 namespace {
-
-std::string escape_json(const std::string& value) {
-  std::ostringstream out;
-  for (char c : value) {
-    switch (c) {
-      case '"':
-        out << "\\\"";
-        break;
-      case '\\':
-        out << "\\\\";
-        break;
-      case '\n':
-        out << "\\n";
-        break;
-      default:
-        out << c;
-        break;
-    }
-  }
-  return out.str();
-}
 
 const char* to_string(InsertSlot slot) { return slot == InsertSlot::PreFader ? "pre" : "post"; }
 
@@ -427,7 +407,7 @@ std::string scene_to_json(const Scene& scene) {
     if (i > 0) out << ",";
     out << "{";
     write_key(out, "id");
-    out << "\"" << escape_json(strip.id) << "\",";
+    out << "\"" << sonare::util::escape_json_string(strip.id) << "\",";
     write_key(out, "inputTrimDb");
     out << strip.input_trim_db << ",";
     write_key(out, "faderDb");
@@ -462,10 +442,11 @@ std::string scene_to_json(const Scene& scene) {
       const auto& insert = strip.inserts[j];
       if (j > 0) out << ",";
       out << "{\"slot\":\"" << to_string(insert.slot) << "\",\"processor\":\""
-          << escape_json(insert.processor_name) << "\",\"params\":\""
-          << escape_json(insert.params_json) << "\"";
+          << sonare::util::escape_json_string(insert.processor_name) << "\",\"params\":\""
+          << sonare::util::escape_json_string(insert.params_json) << "\"";
       if (!insert.sidechain_key.empty()) {
-        out << ",\"sidechainKey\":\"" << escape_json(insert.sidechain_key) << "\"";
+        out << ",\"sidechainKey\":\"" << sonare::util::escape_json_string(insert.sidechain_key)
+            << "\"";
       }
       out << "}";
     }
@@ -475,9 +456,11 @@ std::string scene_to_json(const Scene& scene) {
     for (size_t j = 0; j < strip.sends.size(); ++j) {
       const auto& send = strip.sends[j];
       if (j > 0) out << ",";
-      out << "{\"id\":\"" << escape_json(send.id) << "\",\"destinationBusId\":\""
-          << escape_json(send.destination_bus_id) << "\",\"sendDb\":" << send.send_db
-          << ",\"timing\":\"" << to_string(send.timing) << "\"}";
+      out << "{\"id\":\"" << sonare::util::escape_json_string(send.id)
+          << "\",\"destinationBusId\":\""
+          << sonare::util::escape_json_string(send.destination_bus_id)
+          << "\",\"sendDb\":" << send.send_db << ",\"timing\":\"" << to_string(send.timing)
+          << "\"}";
     }
     out << "]}";
   }
@@ -487,16 +470,17 @@ std::string scene_to_json(const Scene& scene) {
   for (size_t i = 0; i < scene.buses.size(); ++i) {
     const auto& bus = scene.buses[i];
     if (i > 0) out << ",";
-    out << "{\"id\":\"" << escape_json(bus.id) << "\",\"role\":\"" << escape_json(bus.role)
-        << "\",\"inserts\":[";
+    out << "{\"id\":\"" << sonare::util::escape_json_string(bus.id) << "\",\"role\":\""
+        << sonare::util::escape_json_string(bus.role) << "\",\"inserts\":[";
     for (size_t j = 0; j < bus.inserts.size(); ++j) {
       const auto& insert = bus.inserts[j];
       if (j > 0) out << ",";
       out << "{\"slot\":\"" << to_string(insert.slot) << "\",\"processor\":\""
-          << escape_json(insert.processor_name) << "\",\"params\":\""
-          << escape_json(insert.params_json) << "\"";
+          << sonare::util::escape_json_string(insert.processor_name) << "\",\"params\":\""
+          << sonare::util::escape_json_string(insert.params_json) << "\"";
       if (!insert.sidechain_key.empty()) {
-        out << ",\"sidechainKey\":\"" << escape_json(insert.sidechain_key) << "\"";
+        out << ",\"sidechainKey\":\"" << sonare::util::escape_json_string(insert.sidechain_key)
+            << "\"";
       }
       out << "}";
     }
@@ -508,11 +492,11 @@ std::string scene_to_json(const Scene& scene) {
   for (size_t i = 0; i < scene.vca_groups.size(); ++i) {
     const auto& group = scene.vca_groups[i];
     if (i > 0) out << ",";
-    out << "{\"id\":\"" << escape_json(group.id) << "\",\"gainDb\":" << group.gain_db
-        << ",\"members\":[";
+    out << "{\"id\":\"" << sonare::util::escape_json_string(group.id)
+        << "\",\"gainDb\":" << group.gain_db << ",\"members\":[";
     for (size_t j = 0; j < group.members.size(); ++j) {
       if (j > 0) out << ",";
-      out << "\"" << escape_json(group.members[j]) << "\"";
+      out << "\"" << sonare::util::escape_json_string(group.members[j]) << "\"";
     }
     out << "]}";
   }
@@ -522,8 +506,9 @@ std::string scene_to_json(const Scene& scene) {
   for (size_t i = 0; i < scene.connections.size(); ++i) {
     const auto& connection = scene.connections[i];
     if (i > 0) out << ",";
-    out << "{\"source\":\"" << escape_json(connection.source) << "\",\"destination\":\""
-        << escape_json(connection.destination) << "\"}";
+    out << "{\"source\":\"" << sonare::util::escape_json_string(connection.source)
+        << "\",\"destination\":\"" << sonare::util::escape_json_string(connection.destination)
+        << "\"}";
   }
   out << "]}";
   return out.str();
