@@ -735,8 +735,8 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   float ref =
       info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 1.0f;
-  float amin =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 1e-10f;
+  float amin = info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue()
+                                                        : sonare::constants::kEpsilon;
   float top_db =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 80.0f;
   float* out = nullptr;

@@ -7,6 +7,7 @@
 
 #include "core/audio.h"
 #include "core/spectrum.h"
+#include "util/constants.h"
 
 namespace sonare {
 
@@ -142,7 +143,7 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 ///          magnitude <= `threshold` to zero).
 /// @param y Input signal.
 /// @param n Number of samples.
-/// @param threshold Magnitudes <= threshold are treated as zero (default 1e-10).
+/// @param threshold Magnitudes <= threshold are treated as zero (default constants::kEpsilon).
 /// @param ref_magnitude If true, scale `threshold` by `max(|y|)` (default false).
 /// @param pad If true, index 0 is always reported as a zero-crossing (default true).
 /// @param zero_pos If true, the sign of zero is considered positive
@@ -150,9 +151,9 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 ///        compared (default true).
 /// @return Sorted vector of zero-crossing indices.
 /// @throw std::invalid_argument if `y` is null with `n > 0` or `threshold < 0`.
-std::vector<int> zero_crossings(const float* y, size_t n, float threshold = 1e-10f,
+std::vector<int> zero_crossings(const float* y, size_t n, float threshold = constants::kEpsilon,
                                 bool ref_magnitude = false, bool pad = true, bool zero_pos = true);
-std::vector<int> zero_crossings(const std::vector<float>& y, float threshold = 1e-10f,
+std::vector<int> zero_crossings(const std::vector<float>& y, float threshold = constants::kEpsilon,
                                 bool ref_magnitude = false, bool pad = true, bool zero_pos = true);
 
 }  // namespace sonare

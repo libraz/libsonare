@@ -7,13 +7,14 @@
 
 #include "core/audio.h"
 #include "core/spectrum.h"
+#include "util/constants.h"
 
 namespace sonare::metering {
 
 struct MeterSpectrogramConfig {
   StftConfig stft;
   float db_ref = 1.0f;
-  float db_amin = 1e-10f;
+  float db_amin = constants::kEpsilon;
   float top_db = -1.0f;
 };
 

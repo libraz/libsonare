@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
 
 namespace sonare::metering {
 
@@ -14,7 +15,7 @@ struct SpectrumConfig {
   bool apply_octave_smoothing = false;
   int octave_fraction = 3;
   float db_ref = 1.0f;
-  float db_amin = 1e-10f;
+  float db_amin = constants::kEpsilon;
 };
 
 struct SpectrumResult {
