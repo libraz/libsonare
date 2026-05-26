@@ -104,6 +104,17 @@ if(NOT Eigen3_FOUND)
     target_include_directories(Eigen3::Eigen SYSTEM INTERFACE ${eigen3_SOURCE_DIR})
   else()
     FetchContent_MakeAvailable(Eigen3)
+    # Mark the fetched Eigen headers as system includes so MSVC /W4 /WX (and
+    # -Wall -Werror) do not error on warnings originating inside Eigen. A
+    # find_package'd Eigen is already exported as a system include; only this
+    # fetched fallback (used on Windows CI, which has no system Eigen) needs it.
+    if(TARGET eigen)
+      get_target_property(_sonare_eigen_inc eigen INTERFACE_INCLUDE_DIRECTORIES)
+      if(_sonare_eigen_inc)
+        set_target_properties(eigen PROPERTIES
+          INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_sonare_eigen_inc}")
+      endif()
+    endif()
   endif()
 endif()
 
