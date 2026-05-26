@@ -344,8 +344,10 @@ void LinearPhaseEq::rebuild_kernel() {
   const int half = config_.kernel_size / 2;
   for (int i = 0; i < config_.kernel_size; ++i) {
     const int source = (i - half + config_.fft_size) % config_.fft_size;
+    // Symmetric Hann (periodic=false): linear-phase FIR taps require a symmetric
+    // window for unity DC gain and a symmetric impulse response.
     kernel_[static_cast<size_t>(i)] =
-        zero_phase[static_cast<size_t>(source)] * hann_value(i, config_.kernel_size);
+        zero_phase[static_cast<size_t>(source)] * hann_value(i, config_.kernel_size, false);
   }
 
   latency_samples_ = half;

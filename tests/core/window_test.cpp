@@ -14,10 +14,11 @@ TEST_CASE("hann_window", "[window]") {
   auto win = hann_window(4);
 
   REQUIRE(win.size() == 4);
+  // Periodic (librosa fftbins=True) Hann: 0.5 * (1 - cos(2*pi*i/length)).
   REQUIRE_THAT(win[0], WithinAbs(0.0f, 1e-6f));
-  REQUIRE_THAT(win[1], WithinAbs(0.75f, 1e-6f));
-  REQUIRE_THAT(win[2], WithinAbs(0.75f, 1e-6f));
-  REQUIRE_THAT(win[3], WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(win[1], WithinAbs(0.5f, 1e-6f));
+  REQUIRE_THAT(win[2], WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(win[3], WithinAbs(0.5f, 1e-6f));
 }
 
 TEST_CASE("hamming_window", "[window]") {
