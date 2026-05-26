@@ -43,15 +43,17 @@ void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
   lanes_.publish(std::make_shared<const std::vector<AutomationLane>>(std::move(lanes)));
 }
 
-void AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept {
-  if (param_id == 0) return;  // 0 is reserved as the invalid/none id.
+bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept {
+  if (param_id == 0 || processor == nullptr) return false;  // 0 is reserved as invalid/none.
   for (Target& target : targets_) {
     if (target.param_id == param_id || target.processor == nullptr) {
       target.param_id = param_id;
       target.processor = processor;
-      return;
+      return true;
     }
   }
+  bind_target_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+  return false;
 }
 
 void AutomationEngine::clear_targets() noexcept {
@@ -74,7 +76,12 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
   // re-acquiring (which would otherwise allow a mid-block swap between
   // sub-blocks and violate the single-acquisition contract).
   const std::vector<AutomationLane>* lanes = lanes_.current();
-  if (!lanes) return;
+  if (!lanes) {
+    if (lane_count_.load(std::memory_order_relaxed) > 0) {
+      stale_lane_apply_count_.fetch_add(1, std::memory_order_relaxed);
+    }
+    return;
+  }
   for (const AutomationLane& lane : *lanes) {
     rt::ProcessorBase* processor = target_for(lane.target_param_id());
     if (!processor) {
@@ -110,7 +117,12 @@ void AutomationEngine::collect_boundaries(double block_start_ppq, double block_e
   const double lo = std::min(block_start_ppq, block_end_ppq);
   const double hi = std::max(block_start_ppq, block_end_ppq);
   const std::vector<AutomationLane>* lanes = lanes_.current();
-  if (!lanes) return;
+  if (!lanes) {
+    if (lane_count_.load(std::memory_order_relaxed) > 0) {
+      stale_lane_apply_count_.fetch_add(1, std::memory_order_relaxed);
+    }
+    return;
+  }
   for (const AutomationLane& lane : *lanes) {
     double next = lane.next_breakpoint_after(lo);
     while (next <= hi) {

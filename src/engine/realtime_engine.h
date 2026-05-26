@@ -158,6 +158,8 @@ class RealtimeEngine {
   // Pre-allocated channel pointer scratch reused by render_offline so the
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
+  std::vector<float> monitor_bus_storage_{};
+  std::array<float*, 64> monitor_bus_channels_{};
 
   bool mixing_enabled_ = false;
   bool monitoring_enabled_ = false;

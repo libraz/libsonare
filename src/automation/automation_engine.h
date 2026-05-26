@@ -33,7 +33,7 @@ class AutomationEngine {
  public:
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
   void set_lanes(std::vector<AutomationLane> lanes);
-  void bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
+  bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
   void clear_targets() noexcept;
 
   /// Adopt the latest published lane set on the audio thread. Call once at
@@ -56,6 +56,12 @@ class AutomationEngine {
   uint32_t non_realtime_safe_rejection_count() const noexcept {
     return non_realtime_safe_rejection_count_.load(std::memory_order_relaxed);
   }
+  uint32_t bind_target_overflow_count() const noexcept {
+    return bind_target_overflow_count_.load(std::memory_order_relaxed);
+  }
+  uint32_t stale_lane_apply_count() const noexcept {
+    return stale_lane_apply_count_.load(std::memory_order_relaxed);
+  }
 
  private:
   // param_id 0 is reserved as the invalid/none sentinel: an unbound slot keeps
@@ -74,6 +80,8 @@ class AutomationEngine {
   std::array<Target, 128> targets_{};
   std::atomic<uint32_t> unknown_target_count_{0};
   std::atomic<uint32_t> non_realtime_safe_rejection_count_{0};
+  std::atomic<uint32_t> bind_target_overflow_count_{0};
+  mutable std::atomic<uint32_t> stale_lane_apply_count_{0};
 };
 
 }  // namespace sonare::automation

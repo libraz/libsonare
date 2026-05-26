@@ -85,6 +85,25 @@ TEST_CASE("RealtimeEngine rejects registering one strip in mixing and monitor ru
   REQUIRE_FALSE(monitor_first.bind_mixing_strip(&other));
 }
 
+TEST_CASE("RealtimeEngine routes monitor PFL bus into output", "[engine][realtime]") {
+  constexpr int kFrames = 16;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  sonare::mixing::ChannelStrip strip({-6.0206f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kFrames);
+  REQUIRE(engine.add_monitor_strip(&strip));
+  engine.set_monitoring_enabled(true);
+  engine.monitor().set_monitor_mode(0, sonare::engine::MonitorMode::kPfl);
+
+  std::array<float, kFrames> left{};
+  left.fill(1.0f);
+  float* io[] = {left.data()};
+  engine.process(io, 1, kFrames);
+
+  REQUIRE(left.back() > 1.70f);
+  REQUIRE(left.back() < 1.72f);
+}
+
 TEST_CASE("RealtimeEngine applies scheduled transport commands inside a block",
           "[engine][realtime]") {
   constexpr int kFrames = 128;
@@ -102,6 +121,30 @@ TEST_CASE("RealtimeEngine applies scheduled transport commands inside a block",
 
   REQUIRE(engine.transport().render_frame() == 128);
   REQUIRE(engine.transport().sample_position() == 96);
+}
+
+TEST_CASE("RealtimeEngine defers commands scheduled at block end to the next block",
+          "[engine][realtime]") {
+  constexpr int kFrames = 128;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = kFrames;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, kFrames);
+
+  REQUIRE_FALSE(engine.transport().snapshot().playing);
+  REQUIRE(engine.transport().render_frame() == kFrames);
+  REQUIRE(engine.transport().sample_position() == 0);
+
+  engine.process(io, 1, kFrames);
+  REQUIRE(engine.transport().snapshot().playing);
+  REQUIRE(engine.transport().sample_position() == kFrames);
 }
 
 TEST_CASE("RealtimeEngine silences oversized blocks and emits telemetry", "[engine][realtime]") {

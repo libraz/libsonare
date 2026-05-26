@@ -32,6 +32,12 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   automation_.prepare(sample_rate, &tempo_map_);
   mixing_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
+  monitor_bus_storage_.assign(static_cast<size_t>(max_block_size_) * monitor_bus_channels_.size(),
+                              0.0f);
+  for (size_t ch = 0; ch < monitor_bus_channels_.size(); ++ch) {
+    monitor_bus_channels_[ch] =
+        monitor_bus_storage_.data() + ch * static_cast<size_t>(max_block_size_);
+  }
   commands_.reserve(next_power_of_two(std::max<size_t>(command_capacity, 2)));
   // Telemetry is a single-producer queue with the audio thread as its only
   // producer; reserve it here so process()/enqueue_telemetry never push to an
@@ -98,7 +104,7 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
     if (!pending_active_[i]) continue;
     const auto sample_time = pending_[i].sample_time;
     if (sample_time >= state.render_frame &&
-        sample_time <= state.render_frame + static_cast<int64_t>(frames)) {
+        sample_time < state.render_frame + static_cast<int64_t>(frames)) {
       boundary_splitter_.add_command(static_cast<int>(sample_time - state.render_frame));
     }
   }
@@ -140,10 +146,12 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
       transport_.advance(offset - previous_offset);
       previous_offset = offset;
     }
-    // Dispatch commands due at this boundary's render frame. Relying on the
-    // boundary render_frame (rather than a flat block-head comparison) makes
-    // command firing sample-accurate within the block.
-    apply_due_commands(boundaries[i].render_frame);
+    // Dispatch commands due at this boundary's render frame. A boundary at the
+    // exclusive block end belongs to the next process() call, so leave those
+    // commands pending.
+    if (offset < frames) {
+      apply_due_commands(boundaries[i].render_frame);
+    }
     const int next_offset = (i + 1 < boundaries.size()) ? boundaries[i + 1].offset : frames;
     const int sub_block_len = next_offset - offset;
     // Evaluate automation at this sub-block's start using the advanced
@@ -339,8 +347,7 @@ bool RealtimeEngine::bind_graph_parameter(uint32_t param_id, const char* node_id
   if (!node) {
     return false;
   }
-  automation_.bind_target(param_id, &node->processor());
-  return true;
+  return automation_.bind_target(param_id, &node->processor());
 }
 #endif
 
@@ -349,7 +356,7 @@ void RealtimeEngine::drain_commands(int64_t block_render_frame, int num_frames) 
   for (size_t i = 0; i < kMaxCommandsPerBlock && commands_.pop(command); ++i) {
     if (command.sample_time < 0 || command.sample_time <= block_render_frame) {
       command.sample_time = block_render_frame;
-    } else if (command.sample_time >
+    } else if (command.sample_time >=
                block_render_frame + static_cast<int64_t>(std::max(num_frames, 0))) {
       store_pending(command);
       continue;
@@ -562,10 +569,22 @@ void RealtimeEngine::process_subblock(float* const* io, int num_channels, int of
     }
     // Solo/mute + PFL/AFL monitoring stage for any registered strips.
     if (monitoring_enabled_) {
+      for (int ch = 0; ch < channels; ++ch) {
+        std::fill(monitor_bus_channels_[static_cast<size_t>(ch)],
+                  monitor_bus_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+      }
       const size_t strip_count = monitor_runtime_.size();
       for (size_t s = 0; s < strip_count; ++s) {
         monitor_runtime_.process_strip(s, sub_channels.data(), channels, num_frames,
-                                       transport_.sample_position());
+                                       transport_.sample_position(), monitor_bus_channels_.data());
+      }
+      for (int ch = 0; ch < channels; ++ch) {
+        float* out = sub_channels[static_cast<size_t>(ch)];
+        const float* monitor = monitor_bus_channels_[static_cast<size_t>(ch)];
+        if (!out || !monitor) continue;
+        for (int i = 0; i < num_frames; ++i) {
+          out[i] += monitor[i];
+        }
       }
     }
   }

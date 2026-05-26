@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <string>
+#include <vector>
 
 #include "automation/automation_engine.h"
 #include "automation/parameter.h"
@@ -100,6 +101,39 @@ TEST_CASE("AutomationEngine skips non realtime-safe parameters", "[automation]")
   engine.apply(state, 0, 64);
 
   REQUIRE(processor.set_count == 0);
+}
+
+TEST_CASE("AutomationEngine reports target binding table overflow", "[automation]") {
+  sonare::automation::AutomationEngine engine;
+  std::vector<CaptureProcessor> processors(129);
+
+  for (uint32_t id = 1; id <= 128; ++id) {
+    REQUIRE(engine.bind_target(id, &processors[id - 1]));
+  }
+  REQUIRE_FALSE(engine.bind_target(129, &processors.back()));
+  REQUIRE(engine.bind_target_overflow_count() == 1);
+  REQUIRE_FALSE(engine.bind_target(0, &processors.front()));
+  REQUIRE_FALSE(engine.bind_target(130, nullptr));
+}
+
+TEST_CASE("AutomationEngine reports apply before lane acquisition", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::kLinear}});
+
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_lanes({lane});
+
+  sonare::transport::TransportState state{};
+  engine.apply(state, 0, 64);
+
+  REQUIRE(engine.stale_lane_apply_count() == 1);
+  engine.acquire_lanes();
+  engine.apply(state, 0, 64);
+  REQUIRE(engine.stale_lane_apply_count() == 1);
 }
 
 TEST_CASE("AutomationEngine collects breakpoint boundaries", "[automation]") {
