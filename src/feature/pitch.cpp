@@ -10,6 +10,7 @@
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/reflect_padding.h"
 
 namespace sonare {
 
@@ -29,26 +30,6 @@ float parabolic_interp(float ym1, float y0, float yp1) {
 double beta_2_18_cdf(double x) {
   x = std::clamp(x, 0.0, 1.0);
   return 1.0 - std::pow(1.0 - x, 18.0) * (1.0 + 18.0 * x);
-}
-
-size_t reflect_index(int64_t index, size_t size) {
-  if (size <= 1) return 0;
-  const int64_t period = static_cast<int64_t>(2 * size - 2);
-  int64_t wrapped = index % period;
-  if (wrapped < 0) wrapped += period;
-  if (wrapped >= static_cast<int64_t>(size)) {
-    wrapped = period - wrapped;
-  }
-  return static_cast<size_t>(wrapped);
-}
-
-std::vector<float> reflect_center_pad(const float* data, size_t size, int pad) {
-  std::vector<float> padded(size + 2 * static_cast<size_t>(pad), 0.0f);
-  if (data == nullptr || size == 0) return padded;
-  for (size_t i = 0; i < padded.size(); ++i) {
-    padded[i] = data[reflect_index(static_cast<int64_t>(i) - pad, size)];
-  }
-  return padded;
 }
 
 std::vector<float> librosa_yin_cmndf(const float* frame, int frame_length, int min_period,

@@ -10,21 +10,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/reflect_padding.h"
 
 namespace sonare {
 
 namespace {
-
-size_t reflect_index(int64_t index, size_t size) {
-  if (size <= 1) return 0;
-  const int64_t period = static_cast<int64_t>(2 * size - 2);
-  int64_t wrapped = index % period;
-  if (wrapped < 0) wrapped += period;
-  if (wrapped >= static_cast<int64_t>(size)) {
-    wrapped = period - wrapped;
-  }
-  return static_cast<size_t>(wrapped);
-}
 
 std::vector<float> pad_center(const float* data, size_t size, int pad_length, PadMode pad_mode) {
   std::vector<float> padded(size + 2 * pad_length, 0.0f);
@@ -329,6 +319,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 
   // Previous angles for momentum
   std::vector<float> prev_angles(n_bins * n_frames, 0.0f);
+  const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   // Create spectrogram wrapper for iSTFT
   StftConfig stft_config;
@@ -340,8 +331,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   for (int iter = 0; iter < config.n_iter; ++iter) {
     // Create spectrogram and do iSTFT
     Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
-                                                 hop_length, sample_rate);
-    Audio reconstructed = spec.to_audio();
+                                                 hop_length, sample_rate, true);
+    Audio reconstructed = spec.to_audio(target_length);
 
     // Forward STFT of reconstructed signal
     Spectrogram new_spec = Spectrogram::compute(reconstructed, stft_config);
@@ -370,9 +361,9 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   }
 
   // Final reconstruction
-  Spectrogram final_spec =
-      Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate);
-  return final_spec.to_audio();
+  Spectrogram final_spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
+                                                     hop_length, sample_rate, true);
+  return final_spec.to_audio(target_length);
 }
 
 Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft,

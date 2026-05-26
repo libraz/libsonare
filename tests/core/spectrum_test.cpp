@@ -377,6 +377,28 @@ TEST_CASE("Griffin-Lim preserves centered STFT extent", "[spectrum]") {
   REQUIRE(reconstructed.size() == static_cast<size_t>(samples));
 }
 
+TEST_CASE("Griffin-Lim preserves inferred centered extent for non-multiple lengths", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 2301;
+  constexpr int n_fft = 512;
+  constexpr int hop_length = 128;
+  Audio audio = Audio::from_vector(generate_sine(samples, 440.0f, sr), sr);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.center = true;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 1;
+  Audio reconstructed = griffin_lim(spec.magnitude(), spec.n_bins(), spec.n_frames(), n_fft,
+                                    hop_length, sr, gl_config);
+
+  const auto expected = static_cast<size_t>((spec.n_frames() - 1) * hop_length);
+  REQUIRE(reconstructed.size() == expected);
+}
+
 TEST_CASE("Spectrogram from_complex", "[spectrum]") {
   constexpr int n_bins = 5;
   constexpr int n_frames = 3;
