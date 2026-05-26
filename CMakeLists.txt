@@ -6,8 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Prevent <windows.h> (pulled in transitively by dr_libs on MSVC) from defining
-# the min/max function-like macros that clobber std::min/std::max.
-add_compile_definitions($<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>)
+# the min/max function-like macros that clobber std::min/std::max. Also silence
+# MSVC's C4996 deprecation of standard C functions (e.g. strncpy in the C API),
+# which are used correctly and portably.
+add_compile_definitions(
+  $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>
+  $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+)
 
 option(BUILD_TESTING "Build tests" ON)
 option(BUILD_WASM "Build for WebAssembly" OFF)
@@ -88,34 +93,26 @@ if(NOT Eigen3_FOUND)
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
   )
-  if(BUILD_WASM)
-    if(POLICY CMP0169)
-      cmake_policy(PUSH)
-      cmake_policy(SET CMP0169 OLD)
-    endif()
-    FetchContent_GetProperties(Eigen3)
-    if(NOT eigen3_POPULATED)
-      FetchContent_Populate(Eigen3)
-    endif()
-    if(POLICY CMP0169)
-      cmake_policy(POP)
-    endif()
-    add_library(Eigen3::Eigen INTERFACE IMPORTED)
-    target_include_directories(Eigen3::Eigen SYSTEM INTERFACE ${eigen3_SOURCE_DIR})
-  else()
-    FetchContent_MakeAvailable(Eigen3)
-    # Mark the fetched Eigen headers as system includes so MSVC /W4 /WX (and
-    # -Wall -Werror) do not error on warnings originating inside Eigen. A
-    # find_package'd Eigen is already exported as a system include; only this
-    # fetched fallback (used on Windows CI, which has no system Eigen) needs it.
-    if(TARGET eigen)
-      get_target_property(_sonare_eigen_inc eigen INTERFACE_INCLUDE_DIRECTORIES)
-      if(_sonare_eigen_inc)
-        set_target_properties(eigen PROPERTIES
-          INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_sonare_eigen_inc}")
-      endif()
-    endif()
+  # Populate Eigen's headers only; do NOT run its CMake project. Eigen is
+  # header-only for our use, and add_subdirectory()/MakeAvailable would register
+  # Eigen's own ~880 unit tests into our CTest (they fail as "Unable to find
+  # executable" because we never build them) and pull in its targets. A bare
+  # populate + manual INTERFACE target avoids that on every platform that lacks
+  # a system Eigen (Windows and macOS CI, WASM). SYSTEM marks the headers so
+  # MSVC /W4 /WX and -Wall -Werror do not error on warnings inside Eigen.
+  if(POLICY CMP0169)
+    cmake_policy(PUSH)
+    cmake_policy(SET CMP0169 OLD)
   endif()
+  FetchContent_GetProperties(Eigen3)
+  if(NOT eigen3_POPULATED)
+    FetchContent_Populate(Eigen3)
+  endif()
+  if(POLICY CMP0169)
+    cmake_policy(POP)
+  endif()
+  add_library(Eigen3::Eigen INTERFACE IMPORTED)
+  target_include_directories(Eigen3::Eigen SYSTEM INTERFACE ${eigen3_SOURCE_DIR})
 endif()
 
 # サブディレクトリ
