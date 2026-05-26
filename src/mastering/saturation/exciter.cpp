@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -86,19 +87,17 @@ void Exciter::compute_coeffs() {
   const float cutoff =
       std::clamp(config_.frequency_hz, 10.0f, static_cast<float>(sample_rate_ * 0.49));
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
-  const float alpha = std::sin(w0) / (2.0f * config_.q);
-  const float cosw = std::cos(w0);
-  const float a0 = 1.0f + alpha;
-  bandpass_coeffs_.b0 = alpha / a0;
-  bandpass_coeffs_.b1 = 0.0f;
-  bandpass_coeffs_.b2 = -alpha / a0;
-  bandpass_coeffs_.a1 = -2.0f * cosw / a0;
-  bandpass_coeffs_.a2 = (1.0f - alpha) / a0;
-  allpass_coeffs_.b0 = (1.0f - alpha) / a0;
-  allpass_coeffs_.b1 = -2.0f * cosw / a0;
+  const auto coeffs = rt::rbj_bandpass(w0, config_.q);
+  bandpass_coeffs_.b0 = coeffs.b0;
+  bandpass_coeffs_.b1 = coeffs.b1;
+  bandpass_coeffs_.b2 = coeffs.b2;
+  bandpass_coeffs_.a1 = coeffs.a1;
+  bandpass_coeffs_.a2 = coeffs.a2;
+  allpass_coeffs_.b0 = coeffs.a2;
+  allpass_coeffs_.b1 = coeffs.a1;
   allpass_coeffs_.b2 = 1.0f;
-  allpass_coeffs_.a1 = -2.0f * cosw / a0;
-  allpass_coeffs_.a2 = (1.0f - alpha) / a0;
+  allpass_coeffs_.a1 = coeffs.a1;
+  allpass_coeffs_.a2 = coeffs.a2;
 }
 
 void Exciter::update_coeff() {

@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -189,14 +190,12 @@ void Tape::update_filters(double sample_rate) {
   const float gain = db_to_linear(config_.head_bump_db) - 1.0f;
   const float q = 1.0f;
   const float w0 = static_cast<float>(kTwoPiD * frequency / sample_rate);
-  const float alpha = std::sin(w0) / (2.0f * q);
-  const float cosw = std::cos(w0);
-  const float a0 = 1.0f + alpha;
-  head_bump_coeffs_.b0 = alpha * gain / a0;
-  head_bump_coeffs_.b1 = 0.0f;
-  head_bump_coeffs_.b2 = -alpha * gain / a0;
-  head_bump_coeffs_.a1 = -2.0f * cosw / a0;
-  head_bump_coeffs_.a2 = (1.0f - alpha) / a0;
+  const auto coeffs = rt::rbj_bandpass(w0, q);
+  head_bump_coeffs_.b0 = coeffs.b0 * gain;
+  head_bump_coeffs_.b1 = coeffs.b1 * gain;
+  head_bump_coeffs_.b2 = coeffs.b2 * gain;
+  head_bump_coeffs_.a1 = coeffs.a1;
+  head_bump_coeffs_.a2 = coeffs.a2;
   for (auto& filter : head_bump_) {
     const float z1 = filter.z1;
     const float z2 = filter.z2;

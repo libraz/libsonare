@@ -3,100 +3,51 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/biquad_design.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare {
+namespace {
+
+BiquadCoeffs to_filter_coeffs(const rt::BiquadCoeffs& c) { return {c.b0, c.b1, c.b2, c.a1, c.a2}; }
+
+float normalized_omega(float frequency_hz, int sr) {
+  return constants::kTwoPi * frequency_hz / static_cast<float>(sr);
+}
+
+}  // namespace
 
 BiquadCoeffs highpass_coeffs(float cutoff_hz, int sr) {
   SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
-
-  // Butterworth highpass (2nd order)
-  float omega = 2.0f * kPi * cutoff_hz / sr;
-  float cos_omega = std::cos(omega);
-  float sin_omega = std::sin(omega);
-  float alpha = sin_omega / std::sqrt(2.0f);  // Q = 1/sqrt(2) for Butterworth
-
-  float a0 = 1.0f + alpha;
-
-  BiquadCoeffs coeffs;
-  coeffs.b0 = (1.0f + cos_omega) / 2.0f / a0;
-  coeffs.b1 = -(1.0f + cos_omega) / a0;
-  coeffs.b2 = (1.0f + cos_omega) / 2.0f / a0;
-  coeffs.a1 = -2.0f * cos_omega / a0;
-  coeffs.a2 = (1.0f - alpha) / a0;
-
-  return coeffs;
+  return to_filter_coeffs(
+      rt::rbj_highpass(normalized_omega(cutoff_hz, sr), constants::kButterworthQ));
 }
 
 BiquadCoeffs lowpass_coeffs(float cutoff_hz, int sr) {
   SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
-
-  // Butterworth lowpass (2nd order)
-  float omega = 2.0f * kPi * cutoff_hz / sr;
-  float cos_omega = std::cos(omega);
-  float sin_omega = std::sin(omega);
-  float alpha = sin_omega / std::sqrt(2.0f);  // Q = 1/sqrt(2) for Butterworth
-
-  float a0 = 1.0f + alpha;
-
-  BiquadCoeffs coeffs;
-  coeffs.b0 = (1.0f - cos_omega) / 2.0f / a0;
-  coeffs.b1 = (1.0f - cos_omega) / a0;
-  coeffs.b2 = (1.0f - cos_omega) / 2.0f / a0;
-  coeffs.a1 = -2.0f * cos_omega / a0;
-  coeffs.a2 = (1.0f - alpha) / a0;
-
-  return coeffs;
+  return to_filter_coeffs(
+      rt::rbj_lowpass(normalized_omega(cutoff_hz, sr), constants::kButterworthQ));
 }
 
 BiquadCoeffs bandpass_coeffs(float center_hz, float bandwidth_hz, int sr) {
   SONARE_CHECK(center_hz > 0 && bandwidth_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(center_hz < sr / 2.0f, ErrorCode::InvalidParameter);
 
-  float omega = 2.0f * kPi * center_hz / sr;
-  float cos_omega = std::cos(omega);
-  float sin_omega = std::sin(omega);
-
   // Q = center / bandwidth
-  float Q = center_hz / bandwidth_hz;
-  float alpha = sin_omega / (2.0f * Q);
-
-  float a0 = 1.0f + alpha;
-
-  BiquadCoeffs coeffs;
-  coeffs.b0 = alpha / a0;
-  coeffs.b1 = 0.0f;
-  coeffs.b2 = -alpha / a0;
-  coeffs.a1 = -2.0f * cos_omega / a0;
-  coeffs.a2 = (1.0f - alpha) / a0;
-
-  return coeffs;
+  const float q = center_hz / bandwidth_hz;
+  return to_filter_coeffs(rt::rbj_bandpass(normalized_omega(center_hz, sr), q));
 }
 
 BiquadCoeffs notch_coeffs(float center_hz, float bandwidth_hz, int sr) {
   SONARE_CHECK(center_hz > 0 && bandwidth_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(center_hz < sr / 2.0f, ErrorCode::InvalidParameter);
 
-  float omega = 2.0f * kPi * center_hz / sr;
-  float cos_omega = std::cos(omega);
-  float sin_omega = std::sin(omega);
-
-  float Q = center_hz / bandwidth_hz;
-  float alpha = sin_omega / (2.0f * Q);
-
-  float a0 = 1.0f + alpha;
-
-  BiquadCoeffs coeffs;
-  coeffs.b0 = 1.0f / a0;
-  coeffs.b1 = -2.0f * cos_omega / a0;
-  coeffs.b2 = 1.0f / a0;
-  coeffs.a1 = -2.0f * cos_omega / a0;
-  coeffs.a2 = (1.0f - alpha) / a0;
-
-  return coeffs;
+  const float q = center_hz / bandwidth_hz;
+  return to_filter_coeffs(rt::rbj_notch(normalized_omega(center_hz, sr), q));
 }
 
 std::vector<float> apply_biquad(const float* input, size_t size, const BiquadCoeffs& coeffs) {
@@ -156,36 +107,11 @@ CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
   constexpr float kQ1 = 0.5411961f;  // 1/(2*cos(pi/8))
   constexpr float kQ2 = 1.3065630f;  // 1/(2*cos(3*pi/8))
 
-  float omega = 2.0f * kPi * cutoff_hz / sr;
-  float cos_omega = std::cos(omega);
-  float sin_omega = std::sin(omega);
-
   CascadedBiquad cascade;
   cascade.sections.resize(2);
-
-  // Section 1 (Q = Q1)
-  {
-    float alpha = sin_omega / (2.0f * kQ1);
-    float a0 = 1.0f + alpha;
-    BiquadCoeffs& c = cascade.sections[0];
-    c.b0 = (1.0f + cos_omega) / 2.0f / a0;
-    c.b1 = -(1.0f + cos_omega) / a0;
-    c.b2 = (1.0f + cos_omega) / 2.0f / a0;
-    c.a1 = -2.0f * cos_omega / a0;
-    c.a2 = (1.0f - alpha) / a0;
-  }
-
-  // Section 2 (Q = Q2)
-  {
-    float alpha = sin_omega / (2.0f * kQ2);
-    float a0 = 1.0f + alpha;
-    BiquadCoeffs& c = cascade.sections[1];
-    c.b0 = (1.0f + cos_omega) / 2.0f / a0;
-    c.b1 = -(1.0f + cos_omega) / a0;
-    c.b2 = (1.0f + cos_omega) / 2.0f / a0;
-    c.a1 = -2.0f * cos_omega / a0;
-    c.a2 = (1.0f - alpha) / a0;
-  }
+  const float w0 = normalized_omega(cutoff_hz, sr);
+  cascade.sections[0] = to_filter_coeffs(rt::rbj_highpass(w0, kQ1));
+  cascade.sections[1] = to_filter_coeffs(rt::rbj_highpass(w0, kQ2));
 
   return cascade;
 }
@@ -197,36 +123,11 @@ CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
   constexpr float kQ1 = 0.5411961f;
   constexpr float kQ2 = 1.3065630f;
 
-  float omega = 2.0f * kPi * cutoff_hz / sr;
-  float cos_omega = std::cos(omega);
-  float sin_omega = std::sin(omega);
-
   CascadedBiquad cascade;
   cascade.sections.resize(2);
-
-  // Section 1 (Q = Q1)
-  {
-    float alpha = sin_omega / (2.0f * kQ1);
-    float a0 = 1.0f + alpha;
-    BiquadCoeffs& c = cascade.sections[0];
-    c.b0 = (1.0f - cos_omega) / 2.0f / a0;
-    c.b1 = (1.0f - cos_omega) / a0;
-    c.b2 = (1.0f - cos_omega) / 2.0f / a0;
-    c.a1 = -2.0f * cos_omega / a0;
-    c.a2 = (1.0f - alpha) / a0;
-  }
-
-  // Section 2 (Q = Q2)
-  {
-    float alpha = sin_omega / (2.0f * kQ2);
-    float a0 = 1.0f + alpha;
-    BiquadCoeffs& c = cascade.sections[1];
-    c.b0 = (1.0f - cos_omega) / 2.0f / a0;
-    c.b1 = (1.0f - cos_omega) / a0;
-    c.b2 = (1.0f - cos_omega) / 2.0f / a0;
-    c.a1 = -2.0f * cos_omega / a0;
-    c.a2 = (1.0f - alpha) / a0;
-  }
+  const float w0 = normalized_omega(cutoff_hz, sr);
+  cascade.sections[0] = to_filter_coeffs(rt::rbj_lowpass(w0, kQ1));
+  cascade.sections[1] = to_filter_coeffs(rt::rbj_lowpass(w0, kQ2));
 
   return cascade;
 }

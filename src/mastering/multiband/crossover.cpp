@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "core/window.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::multiband {
@@ -32,6 +33,15 @@ double scaled_digital_frequency(double base_hz, double scale, double sample_rate
   const double warped = std::tan(kPiD * base / sample_rate);
   const double scaled = std::max(scale, 1.0e-9) * warped;
   return std::clamp(sample_rate * std::atan(scaled) / kPiD, 1.0, sample_rate * 0.49);
+}
+
+float normalized_omega(double frequency_hz, double sample_rate) {
+  return static_cast<float>(2.0 * kPiD * frequency_hz / sample_rate);
+}
+
+rt::BiquadCoeffs rbj_allpass_from_denominator(const rt::BiquadCoeffs& denominator_source) {
+  return {denominator_source.a2, denominator_source.a1, 1.0f, denominator_source.a1,
+          denominator_source.a2};
 }
 
 std::vector<SectionSpec> butterworth_section_specs(int order) {
@@ -331,33 +341,29 @@ std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope 
 
 void Crossover::install_coefficients() {
   const auto sections = filter_sections(config_.slope, config_.mode);
+  const auto assign_biquad = [](Biquad& target, const rt::BiquadCoeffs& coeffs) {
+    target.b0 = coeffs.b0;
+    target.b1 = coeffs.b1;
+    target.b2 = coeffs.b2;
+    target.a1 = coeffs.a1;
+    target.a2 = coeffs.a2;
+  };
+
   for (size_t split_index = 0; split_index < states_.size(); ++split_index) {
     const double f =
         std::clamp(static_cast<double>(config_.cutoffs_hz[split_index]), 1.0, sample_rate_ * 0.49);
     if (is_lr2_linkwitz_riley(config_.slope, config_.mode)) {
-      const double k = std::tan(kPiD * f / sample_rate_);
-      const double inv = 1.0 / (1.0 + k);
-      const double lp_b = k * inv;
-      const double hp_b = inv;
-      const double a1 = (k - 1.0) * inv;
+      const float w0 = normalized_omega(f, sample_rate_);
+      const auto lp_coeffs = rt::first_order_lowpass(w0);
+      const auto hp_coeffs = rt::first_order_highpass(w0);
+      const rt::BiquadCoeffs ap_coeffs{lp_coeffs.a1, 1.0f, 0.0f, lp_coeffs.a1, 0.0f};
 
       for (auto& channel_states : states_[split_index]) {
         for (size_t stage_index = 0; stage_index < channel_states.lowpass.size() &&
                                      stage_index < channel_states.highpass.size();
              ++stage_index) {
-          auto& lp = channel_states.lowpass[stage_index];
-          lp.b0 = static_cast<float>(lp_b);
-          lp.b1 = static_cast<float>(lp_b);
-          lp.b2 = 0.0f;
-          lp.a1 = static_cast<float>(a1);
-          lp.a2 = 0.0f;
-
-          auto& hp = channel_states.highpass[stage_index];
-          hp.b0 = static_cast<float>(hp_b);
-          hp.b1 = static_cast<float>(-hp_b);
-          hp.b2 = 0.0f;
-          hp.a1 = static_cast<float>(a1);
-          hp.a2 = 0.0f;
+          assign_biquad(channel_states.lowpass[stage_index], lp_coeffs);
+          assign_biquad(channel_states.highpass[stage_index], hp_coeffs);
         }
       }
 
@@ -368,11 +374,7 @@ void Crossover::install_coefficients() {
           }
           auto& allpass_stages = channel_states.allpass_by_split[split_index];
           for (auto& ap : allpass_stages) {
-            ap.b0 = static_cast<float>(a1);
-            ap.b1 = 1.0f;
-            ap.b2 = 0.0f;
-            ap.a1 = static_cast<float>(a1);
-            ap.a2 = 0.0f;
+            assign_biquad(ap, ap_coeffs);
           }
         }
       }
@@ -384,47 +386,16 @@ void Crossover::install_coefficients() {
                          k < channel_states.highpass.size();
            ++k) {
         const auto& section = sections[k];
-        const double lp_w0 =
-            2.0 * kPiD *
-            scaled_digital_frequency(f, section.lowpass_frequency_scale, sample_rate_) /
-            sample_rate_;
-        const double lp_cos_w0 = std::cos(lp_w0);
-        const double lp_sin_w0 = std::sin(lp_w0);
-        const double lp_alpha = lp_sin_w0 / (2.0 * section.q);
-
-        const double lp_b0 = (1.0 - lp_cos_w0) * 0.5;
-        const double lp_b1 = 1.0 - lp_cos_w0;
-        const double lp_b2 = (1.0 - lp_cos_w0) * 0.5;
-        const double lp_a0 = 1.0 + lp_alpha;
-        const double lp_a1 = -2.0 * lp_cos_w0;
-        const double lp_a2 = 1.0 - lp_alpha;
-        const double lp_inv = 1.0 / lp_a0;
-
-        auto& lp = channel_states.lowpass[k];
-        lp.b0 = static_cast<float>(lp_b0 * lp_inv);
-        lp.b1 = static_cast<float>(lp_b1 * lp_inv);
-        lp.b2 = static_cast<float>(lp_b2 * lp_inv);
-        lp.a1 = static_cast<float>(lp_a1 * lp_inv);
-        lp.a2 = static_cast<float>(lp_a2 * lp_inv);
-
-        const double hp_w0 =
-            2.0 * kPiD *
-            scaled_digital_frequency(f, section.highpass_frequency_scale, sample_rate_) /
-            sample_rate_;
-        const double hp_cos_w0 = std::cos(hp_w0);
-        const double hp_sin_w0 = std::sin(hp_w0);
-        const double hp_alpha = hp_sin_w0 / (2.0 * section.q);
-        const double hp_a0 = 1.0 + hp_alpha;
-        const double hp_a1 = -2.0 * hp_cos_w0;
-        const double hp_a2 = 1.0 - hp_alpha;
-        const double hp_inv = 1.0 / hp_a0;
-
-        auto& hp = channel_states.highpass[k];
-        hp.b0 = static_cast<float>((1.0 + hp_cos_w0) * 0.5 * hp_inv);
-        hp.b1 = static_cast<float>(-(1.0 + hp_cos_w0) * hp_inv);
-        hp.b2 = static_cast<float>((1.0 + hp_cos_w0) * 0.5 * hp_inv);
-        hp.a1 = static_cast<float>(hp_a1 * hp_inv);
-        hp.a2 = static_cast<float>(hp_a2 * hp_inv);
+        const float lp_w0 = normalized_omega(
+            scaled_digital_frequency(f, section.lowpass_frequency_scale, sample_rate_),
+            sample_rate_);
+        const float hp_w0 = normalized_omega(
+            scaled_digital_frequency(f, section.highpass_frequency_scale, sample_rate_),
+            sample_rate_);
+        assign_biquad(channel_states.lowpass[k],
+                      rt::rbj_lowpass(lp_w0, static_cast<float>(section.q)));
+        assign_biquad(channel_states.highpass[k],
+                      rt::rbj_highpass(hp_w0, static_cast<float>(section.q)));
       }
     }
 
@@ -435,25 +406,11 @@ void Crossover::install_coefficients() {
         }
         auto& allpass_stages = channel_states.allpass_by_split[split_index];
         for (size_t k = 0; k < sections.size() && k < allpass_stages.size(); ++k) {
-          const double w0 =
-              2.0 * kPiD *
-              scaled_digital_frequency(f, sections[k].lowpass_frequency_scale, sample_rate_) /
-              sample_rate_;
-          const double cos_w0 = std::cos(w0);
-          const double sin_w0 = std::sin(w0);
-          const double alpha = sin_w0 / (2.0 * sections[k].q);
-
-          const double a0 = 1.0 + alpha;
-          const double a1 = -2.0 * cos_w0;
-          const double a2 = 1.0 - alpha;
-          const double inv = 1.0 / a0;
-
-          auto& ap = allpass_stages[k];
-          ap.b0 = static_cast<float>(a2 * inv);
-          ap.b1 = static_cast<float>(a1 * inv);
-          ap.b2 = 1.0f;
-          ap.a1 = static_cast<float>(a1 * inv);
-          ap.a2 = static_cast<float>(a2 * inv);
+          const float w0 = normalized_omega(
+              scaled_digital_frequency(f, sections[k].lowpass_frequency_scale, sample_rate_),
+              sample_rate_);
+          const auto lp_coeffs = rt::rbj_lowpass(w0, static_cast<float>(sections[k].q));
+          assign_biquad(allpass_stages[k], rbj_allpass_from_denominator(lp_coeffs));
         }
       }
     }

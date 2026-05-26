@@ -17,6 +17,7 @@
 #include "mastering/eq/parametric.h"
 #include "mastering/maximizer/maximizer.h"
 #include "metering/lufs.h"
+#include "mixing/meter.h"
 #include "sonare_c.h"
 #include "util/constants.h"
 
@@ -78,6 +79,36 @@ class TestQ8LatencyProcessor final : public sonare::rt::ProcessorBase {
  private:
   int latency_q8_ = 0;
 };
+
+TEST_CASE("MeterProcessor 44.1kHz LUFS matches offline BS.1770 path", "[mixing]") {
+  constexpr int kSampleRate = 44100;
+  constexpr int kFrames = kSampleRate * 3;
+  constexpr int kBlock = 256;
+
+  std::vector<float> left(kFrames);
+  std::vector<float> right(kFrames);
+  std::vector<float> interleaved(static_cast<size_t>(kFrames) * 2);
+  for (int i = 0; i < kFrames; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kSampleRate);
+    left[i] = 0.25f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
+    right[i] = 0.20f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 660.0f * t);
+    interleaved[static_cast<size_t>(2 * i)] = left[i];
+    interleaved[static_cast<size_t>(2 * i + 1)] = right[i];
+  }
+
+  sonare::mixing::MeterProcessor meter;
+  meter.prepare(kSampleRate, kBlock);
+  for (int offset = 0; offset < kFrames; offset += kBlock) {
+    const int frames = std::min(kBlock, kFrames - offset);
+    float* channels[] = {left.data() + offset, right.data() + offset};
+    meter.process(channels, 2, frames);
+  }
+
+  const auto streaming = meter.snapshot();
+  const auto offline =
+      sonare::metering::lufs_interleaved(interleaved.data(), kFrames, 2, kSampleRate);
+  REQUIRE_THAT(streaming.integrated_lufs, WithinAbs(offline.integrated_lufs, 0.2f));
+}
 
 class ScaleProcessor final : public sonare::rt::ProcessorBase {
  public:

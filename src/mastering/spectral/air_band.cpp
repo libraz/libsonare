@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -14,18 +15,15 @@ namespace {
 using sonare::constants::kPiD;
 
 AirBand::Biquad make_highpass(double frequency_hz, double sample_rate, double q) {
-  const double w0 = 2.0 * kPiD * std::clamp(frequency_hz, 20.0, sample_rate * 0.49) / sample_rate;
-  const double c = std::cos(w0);
-  const double s = std::sin(w0);
-  const double alpha = s / (2.0 * q);
-  const double a0 = 1.0 + alpha;
-  const double inv = 1.0 / a0;
+  const float w0 = static_cast<float>(
+      2.0 * kPiD * std::clamp(frequency_hz, 20.0, sample_rate * 0.49) / sample_rate);
+  const auto coeffs = rt::rbj_highpass(w0, static_cast<float>(q));
   AirBand::Biquad b;
-  b.b0 = static_cast<float>((1.0 + c) * 0.5 * inv);
-  b.b1 = static_cast<float>(-(1.0 + c) * inv);
-  b.b2 = static_cast<float>((1.0 + c) * 0.5 * inv);
-  b.a1 = static_cast<float>(-2.0 * c * inv);
-  b.a2 = static_cast<float>((1.0 - alpha) * inv);
+  b.b0 = coeffs.b0;
+  b.b1 = coeffs.b1;
+  b.b2 = coeffs.b2;
+  b.a1 = coeffs.a1;
+  b.a2 = coeffs.a2;
   return b;
 }
 

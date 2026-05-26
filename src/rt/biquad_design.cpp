@@ -385,6 +385,16 @@ BiquadCoeffsD rbj_highpass_d(double frequency, double sample_rate, double q) {
           -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
 }
 
+BiquadCoeffsD rbj_bandpass_d(double frequency, double sample_rate, double q) {
+  const double omega = 2.0 * kPiD * frequency / sample_rate;
+  const double sin_omega = std::sin(omega);
+  const double cos_omega = std::cos(omega);
+  const double alpha = sin_omega / (2.0 * q);
+  const double a0 = 1.0 + alpha;
+
+  return {alpha / a0, 0.0, -alpha / a0, -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
+}
+
 KWeightingCoeffs k_weighting_coefficients(double sample_rate) {
   // ITU-R BS.1770 reference coefficients are specified at 48 kHz; return them
   // verbatim to stay bit-exact with the standard, and derive other rates.

@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -182,13 +183,12 @@ void DeEsser::update_filter_coeff() {
   const float cutoff = std::clamp(config_.frequency_hz, 10.0f, nyquist * 0.98f);
   const float q = 1.5f;
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
-  const float alpha = std::sin(w0) / (2.0f * q);
-  const float a0 = 1.0f + alpha;
-  filter_coeffs_.b0 = alpha / a0;
-  filter_coeffs_.b1 = 0.0f;
-  filter_coeffs_.b2 = -alpha / a0;
-  filter_coeffs_.a1 = -2.0f * std::cos(w0) / a0;
-  filter_coeffs_.a2 = (1.0f - alpha) / a0;
+  const auto coeffs = rt::rbj_bandpass(w0, q);
+  filter_coeffs_.b0 = coeffs.b0;
+  filter_coeffs_.b1 = coeffs.b1;
+  filter_coeffs_.b2 = coeffs.b2;
+  filter_coeffs_.a1 = coeffs.a1;
+  filter_coeffs_.a2 = coeffs.a2;
   for (auto& filter : bandpass_) {
     const float z1 = filter.z1;
     const float z2 = filter.z2;

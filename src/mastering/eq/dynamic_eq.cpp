@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -252,17 +253,15 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
       band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz : band.frequency_hz;
   const double frequency =
       std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate * 0.5 - 1.0);
-  const double omega = kTwoPiD * frequency / sample_rate;
-  const double sin_w0 = std::sin(omega);
-  const double cos_w0 = std::cos(omega);
-  const double alpha = sin_w0 / (2.0 * std::max(static_cast<double>(band.sidechain_q), 1.0e-6));
-  const double a0 = 1.0 + alpha;
+  const auto coeffs =
+      rt::rbj_bandpass(static_cast<float>(kTwoPiD * frequency / sample_rate),
+                       static_cast<float>(std::max(static_cast<double>(band.sidechain_q), 1.0e-6)));
   Biquad prototype;
-  prototype.b0 = alpha / a0;
-  prototype.b1 = 0.0;
-  prototype.b2 = -alpha / a0;
-  prototype.a1 = -2.0 * cos_w0 / a0;
-  prototype.a2 = (1.0 - alpha) / a0;
+  prototype.b0 = coeffs.b0;
+  prototype.b1 = coeffs.b1;
+  prototype.b2 = coeffs.b2;
+  prototype.a1 = coeffs.a1;
+  prototype.a2 = coeffs.a2;
 
   const double attack =
       band.attack_ms <= 0.0f
