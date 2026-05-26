@@ -79,9 +79,7 @@ class RealtimeEngine {
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
 
   // Solo/mute + PFL/AFL monitoring stage applied to a registered set of strips.
-  bool add_monitor_strip(mixing::ChannelStrip* strip) noexcept {
-    return monitor_runtime_.add_strip(strip);
-  }
+  bool add_monitor_strip(mixing::ChannelStrip* strip) noexcept;
   bool remove_monitor_strip(mixing::ChannelStrip* strip) noexcept {
     return monitor_runtime_.remove_strip(strip);
   }
@@ -91,7 +89,9 @@ class RealtimeEngine {
 
   // Default ramp time for engine-level kSetParamSmoothed commands, in ms.
   void set_param_smoothing_ms(float smoothing_ms) noexcept;
-  float param_smoothing_ms() const noexcept { return param_smoothing_ms_; }
+  float param_smoothing_ms() const noexcept {
+    return param_smoothing_ms_.load(std::memory_order_relaxed);
+  }
   void set_graph_latency_samples_q8(int latency_q8) noexcept;
   int graph_latency_samples_q8() const noexcept { return graph_latency_samples_q8_; }
   int64_t audible_timeline_sample(int64_t timeline_sample) const noexcept;
@@ -161,7 +161,8 @@ class RealtimeEngine {
 
   bool mixing_enabled_ = false;
   bool monitoring_enabled_ = false;
-  float param_smoothing_ms_ = 20.0f;
+  std::atomic<float> param_smoothing_ms_{20.0f};
+  float applied_param_smoothing_ms_ = 20.0f;  // audio thread only
   double sample_rate_ = 48000.0;
   uint32_t telemetry_overflow_count_ = 0;
   int graph_latency_samples_q8_ = 0;

@@ -25,6 +25,7 @@ class MonitorRuntime {
   void prepare(double sample_rate, int max_block_size, float smoothing_ms = 5.0f) noexcept;
   bool add_strip(mixing::ChannelStrip* strip) noexcept;
   bool remove_strip(mixing::ChannelStrip* strip) noexcept;
+  bool contains(mixing::ChannelStrip* strip) const noexcept;
 
   void set_mute(size_t index, bool muted) noexcept;
   void set_solo(size_t index, bool soloed) noexcept;

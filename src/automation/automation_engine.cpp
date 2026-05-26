@@ -78,11 +78,11 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
   for (const AutomationLane& lane : *lanes) {
     rt::ProcessorBase* processor = target_for(lane.target_param_id());
     if (!processor) {
-      ++unknown_target_count_;
+      unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
     if (!processor->parameter_is_realtime_safe(lane.target_param_id())) {
-      ++non_realtime_safe_rejection_count_;
+      non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
     processor->set_parameter(lane.target_param_id(), lane.value_at(ppq));
@@ -92,11 +92,11 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
 bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
   rt::ProcessorBase* processor = target_for(param_id);
   if (!processor) {
-    ++unknown_target_count_;
+    unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
   if (!processor->parameter_is_realtime_safe(param_id)) {
-    ++non_realtime_safe_rejection_count_;
+    non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
   processor->set_parameter(param_id, value);

@@ -43,7 +43,8 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   for (SmoothedParam& slot : smoothed_params_) {
     slot.active = false;
     slot.target_id = 0;
-    slot.smoother.prepare(sample_rate_, param_smoothing_ms_);
+    applied_param_smoothing_ms_ = param_smoothing_ms_.load(std::memory_order_relaxed);
+    slot.smoother.prepare(sample_rate_, applied_param_smoothing_ms_);
     slot.smoother.reset(0.0f);
   }
   telemetry_overflow_count_ = 0;
@@ -449,6 +450,9 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 }
 
 bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) noexcept {
+  if (strip != nullptr && monitor_runtime_.contains(strip)) {
+    return false;
+  }
   const bool bound = mixing_runtime_.bind(strip);
   if (bound && max_block_size_ > 0) {
     // Re-prepare so the freshly bound strip sees the engine's sample rate and
@@ -458,11 +462,15 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) noexcept {
   return bound;
 }
 
-void RealtimeEngine::set_param_smoothing_ms(float smoothing_ms) noexcept {
-  param_smoothing_ms_ = std::max(smoothing_ms, 0.0f);
-  for (SmoothedParam& slot : smoothed_params_) {
-    slot.smoother.prepare(sample_rate_, param_smoothing_ms_);
+bool RealtimeEngine::add_monitor_strip(mixing::ChannelStrip* strip) noexcept {
+  if (strip != nullptr && mixing_runtime_.strip() == strip) {
+    return false;
   }
+  return monitor_runtime_.add_strip(strip);
+}
+
+void RealtimeEngine::set_param_smoothing_ms(float smoothing_ms) noexcept {
+  param_smoothing_ms_.store(std::max(smoothing_ms, 0.0f), std::memory_order_relaxed);
 }
 
 void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {
@@ -505,6 +513,17 @@ bool RealtimeEngine::any_smoothed_param_active() const noexcept {
 
 void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   if (num_steps <= 0) return;
+  const float requested_smoothing_ms = param_smoothing_ms_.load(std::memory_order_relaxed);
+  if (requested_smoothing_ms != applied_param_smoothing_ms_) {
+    applied_param_smoothing_ms_ = requested_smoothing_ms;
+    for (SmoothedParam& slot : smoothed_params_) {
+      const float current = slot.smoother.current();
+      const float target = slot.smoother.target();
+      slot.smoother.prepare(sample_rate_, applied_param_smoothing_ms_);
+      slot.smoother.reset(current);
+      slot.smoother.set_target(target);
+    }
+  }
   constexpr float kSettleEpsilon = 1.0e-6f;
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;

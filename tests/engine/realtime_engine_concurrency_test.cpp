@@ -61,6 +61,7 @@ TEST_CASE("RealtimeEngine survives concurrent control mutation while processing"
 
       engine.set_tempo(100.0 + static_cast<double>(i % 80));
       engine.set_time_signature(4, 4);
+      engine.set_param_smoothing_ms(static_cast<float>(i % 50));
 
       std::vector<sonare::engine::ClipSchedule> clips;
       clips.emplace_back(static_cast<uint32_t>(i % 4 + 1),

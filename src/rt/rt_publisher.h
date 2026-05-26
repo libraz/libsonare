@@ -88,15 +88,15 @@ class RtPublisher {
   /// Call once at block start.
   void acquire() noexcept {
     std::shared_ptr<const T> popped;
-    bool adopted = false;
-    while (publish_ring_.pop(popped)) {
+    while (!audio_current_ || retire_ring_.can_push()) {
+      if (!publish_ring_.pop(popped)) {
+        break;
+      }
       if (audio_current_) {
         retire_ring_.push(std::move(audio_current_));
       }
       audio_current_ = std::move(popped);
-      adopted = true;
     }
-    (void)adopted;
   }
 
   /// Raw pointer to the snapshot currently held by the audio thread, or nullptr
@@ -141,6 +141,12 @@ class RtPublisher {
       out = std::move(slots_[index]);
       tail_.store(tail + 1, std::memory_order_release);
       return true;
+    }
+
+    bool can_push() const noexcept {
+      const size_t head = head_.load(std::memory_order_relaxed);
+      const size_t tail = tail_.load(std::memory_order_acquire);
+      return head - tail < kCapacity;
     }
 
    private:

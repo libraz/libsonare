@@ -41,6 +41,14 @@ bool MonitorRuntime::remove_strip(mixing::ChannelStrip* strip) noexcept {
   return false;
 }
 
+bool MonitorRuntime::contains(mixing::ChannelStrip* strip) const noexcept {
+  if (!strip) return false;
+  for (size_t i = 0; i < size_; ++i) {
+    if (strips_[i].strip == strip) return true;
+  }
+  return false;
+}
+
 void MonitorRuntime::set_mute(size_t index, bool muted) noexcept {
   if (!valid_index(index)) return;
   strips_[index].muted = muted;

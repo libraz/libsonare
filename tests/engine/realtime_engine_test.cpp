@@ -69,6 +69,22 @@ TEST_CASE("RealtimeEngine pass-through output is deterministic", "[engine][realt
   REQUIRE(a.transport().sample_position() == kFrames);
 }
 
+TEST_CASE("RealtimeEngine rejects registering one strip in mixing and monitor runtimes",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  sonare::mixing::ChannelStrip strip;
+
+  REQUIRE(engine.bind_mixing_strip(&strip));
+  REQUIRE_FALSE(engine.add_monitor_strip(&strip));
+
+  sonare::engine::RealtimeEngine monitor_first;
+  monitor_first.prepare(48000.0, 64);
+  sonare::mixing::ChannelStrip other;
+  REQUIRE(monitor_first.add_monitor_strip(&other));
+  REQUIRE_FALSE(monitor_first.bind_mixing_strip(&other));
+}
+
 TEST_CASE("RealtimeEngine applies scheduled transport commands inside a block",
           "[engine][realtime]") {
   constexpr int kFrames = 128;

@@ -50,9 +50,11 @@ class AutomationEngine {
                           AutomationBoundaryList* out) const noexcept;
 
   size_t lane_count() const noexcept;
-  uint32_t unknown_target_count() const noexcept { return unknown_target_count_; }
+  uint32_t unknown_target_count() const noexcept {
+    return unknown_target_count_.load(std::memory_order_relaxed);
+  }
   uint32_t non_realtime_safe_rejection_count() const noexcept {
-    return non_realtime_safe_rejection_count_;
+    return non_realtime_safe_rejection_count_.load(std::memory_order_relaxed);
   }
 
  private:
@@ -70,8 +72,8 @@ class AutomationEngine {
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};
   std::array<Target, 128> targets_{};
-  uint32_t unknown_target_count_ = 0;
-  uint32_t non_realtime_safe_rejection_count_ = 0;
+  std::atomic<uint32_t> unknown_target_count_{0};
+  std::atomic<uint32_t> non_realtime_safe_rejection_count_{0};
 };
 
 }  // namespace sonare::automation
