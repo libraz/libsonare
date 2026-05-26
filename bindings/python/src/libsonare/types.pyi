@@ -48,6 +48,20 @@ class MeterTap(IntEnum):
     PRE_FADER: MeterTap
     POST_FADER: MeterTap
 
+class SendTiming(IntEnum):
+    PRE_FADER: SendTiming
+    POST_FADER: SendTiming
+
+class SectionType(IntEnum):
+    INTRO: SectionType
+    VERSE: SectionType
+    PRE_CHORUS: SectionType
+    CHORUS: SectionType
+    BRIDGE: SectionType
+    INSTRUMENTAL: SectionType
+    OUTRO: SectionType
+    UNKNOWN: SectionType
+
 class EngineTelemetryType(IntEnum):
     PROCESS_BLOCK: EngineTelemetryType
     ERROR: EngineTelemetryType
@@ -772,4 +786,125 @@ class EngineGraphSpec:
         output_node: str,
         num_channels: int = 2,
         parameter_bindings: list[EngineGraphParameterBinding] | None = None,
+    ) -> None: ...
+
+class MeterTelemetryRecord:
+    target_id: int
+    render_frame: int
+    seq: int
+    peak_db_l: float
+    peak_db_r: float
+    rms_db_l: float
+    rms_db_r: float
+    true_peak_db_l: float
+    true_peak_db_r: float
+    max_true_peak_db: float
+    correlation: float
+    mono_compat_width: float
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    dropped_records: int
+    def __init__(
+        self,
+        target_id: int,
+        render_frame: int,
+        seq: int,
+        peak_db_l: float,
+        peak_db_r: float,
+        rms_db_l: float,
+        rms_db_r: float,
+        true_peak_db_l: float,
+        true_peak_db_r: float,
+        max_true_peak_db: float,
+        correlation: float,
+        mono_compat_width: float,
+        momentary_lufs: float,
+        short_term_lufs: float,
+        integrated_lufs: float,
+        gain_reduction_db: float,
+        dropped_records: int,
+    ) -> None: ...
+
+class TransportState:
+    playing: bool
+    looping: bool
+    render_frame: int
+    sample_position: int
+    ppq_position: float
+    bpm: float
+    loop_start_ppq: float
+    loop_end_ppq: float
+    sample_rate: float
+    def __init__(
+        self,
+        playing: bool,
+        looping: bool,
+        render_frame: int,
+        sample_position: int,
+        ppq_position: float,
+        bpm: float,
+        loop_start_ppq: float,
+        loop_end_ppq: float,
+        sample_rate: float,
+    ) -> None: ...
+
+class Section:
+    type: SectionType
+    start: float
+    end: float
+    energy_level: float
+    confidence: float
+    def __init__(
+        self,
+        type: SectionType,
+        start: float,
+        end: float,
+        energy_level: float,
+        confidence: float,
+    ) -> None: ...
+    @property
+    def name(self) -> str: ...
+
+class SectionResult:
+    sections: list[Section]
+    def __init__(self, sections: list[Section]) -> None: ...
+
+class MelodyPoint:
+    time: float
+    frequency: float
+    confidence: float
+    def __init__(self, time: float, frequency: float, confidence: float) -> None: ...
+
+class MelodyResult:
+    points: list[MelodyPoint]
+    pitch_range_octaves: float
+    pitch_stability: float
+    mean_frequency: float
+    vibrato_rate: float
+    def __init__(
+        self,
+        points: list[MelodyPoint],
+        pitch_range_octaves: float,
+        pitch_stability: float,
+        mean_frequency: float,
+        vibrato_rate: float,
+    ) -> None: ...
+
+class CqtResult:
+    n_bins: int
+    n_frames: int
+    hop_length: int
+    sample_rate: int
+    magnitude: list[float]
+    frequencies: list[float]
+    def __init__(
+        self,
+        n_bins: int,
+        n_frames: int,
+        hop_length: int,
+        sample_rate: int,
+        magnitude: list[float],
+        frequencies: list[float],
     ) -> None: ...

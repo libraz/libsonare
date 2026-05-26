@@ -45,6 +45,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value DetectDownbeats(const Napi::CallbackInfo& info);
   static Napi::Value DetectOnsets(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeWithProgress(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeSections(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeMelody(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeBpm(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeImpulseResponse(const Napi::CallbackInfo& info);
   static Napi::Value DetectAcoustic(const Napi::CallbackInfo& info);
@@ -102,6 +105,10 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
 
   // Features - Chroma
   static Napi::Value ChromaFn(const Napi::CallbackInfo& info);
+
+  // Features - Constant-Q / Variable-Q transforms
+  static Napi::Value Cqt(const Napi::CallbackInfo& info);
+  static Napi::Value Vqt(const Napi::CallbackInfo& info);
 
   // Features - Spectral
   static Napi::Value SpectralCentroid(const Napi::CallbackInfo& info);

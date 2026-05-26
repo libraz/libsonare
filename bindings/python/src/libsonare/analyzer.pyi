@@ -10,6 +10,7 @@ from .types import (
     BpmAnalysisResult,
     ChordAnalysisResult,
     ChromaResult,
+    CqtResult,
     DynamicsResult,
     EqSpectrumSnapshot,
     GoniometerPoint,
@@ -22,6 +23,7 @@ from .types import (
     MasteringChainStereoResult,
     MasteringResult,
     MasteringStereoResult,
+    MelodyResult,
     MelSpectrogramResult,
     MeterTap,
     MfccResult,
@@ -32,6 +34,8 @@ from .types import (
     PitchClass,
     PitchResult,
     RhythmResult,
+    SectionResult,
+    SendTiming,
     StftResult,
     TimbreResult,
 )
@@ -249,6 +253,39 @@ def detect_chords(
     detect_inversions: bool = False,
     chroma_method: str = "stft",
 ) -> ChordAnalysisResult: ...
+def analyze_sections(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    min_section_sec: float = 8.0,
+) -> SectionResult: ...
+def analyze_melody(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    fmin: float = 65.0,
+    fmax: float = 2093.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+    threshold: float = 0.1,
+) -> MelodyResult: ...
+def cqt(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = ...,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+) -> CqtResult: ...
+def vqt(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = ...,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+    gamma: float = 0.0,
+) -> CqtResult: ...
 def version() -> str: ...
 def has_ffmpeg_support() -> bool: ...
 def hpss(
@@ -337,6 +374,14 @@ class Mixer:
     def compile(self) -> None: ...
     def strip_count(self) -> int: ...
     def strip_by_id(self, strip_id: str) -> int: ...
+    def add_bus(self, bus_id: str, role: str | None = None) -> None: ...
+    def remove_bus(self, bus_id: str) -> None: ...
+    def bus_count(self) -> int: ...
+    def add_vca_group(
+        self, group_id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
+    ) -> None: ...
+    def remove_vca_group(self, group_id: str) -> None: ...
+    def vca_group_count(self) -> int: ...
     def set_soloed(self, strip: StripRef, soloed: bool) -> None: ...
     def set_solo_safe(self, strip: StripRef, solo_safe: bool) -> None: ...
     def set_polarity_invert(
@@ -352,7 +397,7 @@ class Mixer:
         send_id: str,
         destination_bus_id: str,
         send_db: float = 0.0,
-        timing: int = 0,
+        timing: SendTiming | str | int = ...,
     ) -> int: ...
     def set_send_db(self, strip: StripRef, index: int, db: float) -> None: ...
     def strip_meter(self, strip: StripRef, tap: MeterTap | str | int = ...) -> MixMeterSnapshot: ...

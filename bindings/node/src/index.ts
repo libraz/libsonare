@@ -1,33 +1,31 @@
 import { createRequire } from 'node:module';
 import type {
   AcousticResult,
+  AnalysisProgressCallback,
   AnalysisResult,
   AutomationCurve,
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordChromaMethod,
   ChromaResult,
+  CqtResult,
   DynamicsResult,
+  EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
-  EngineFreezeOptions,
-  EngineFreezeResult,
-  EngineAutomationPoint,
-  EngineAutomationPointCurve,
   EngineCaptureStatus,
   EngineClip,
-  EngineGraphConnection,
-  EngineGraphMix,
-  EngineGraphNode,
-  EngineGraphNodeType,
-  EngineGraphParameterBinding,
+  EngineFreezeOptions,
+  EngineFreezeResult,
   EngineGraphSpec,
   EngineMarker,
+  EngineMeterTelemetry,
   EngineMetronomeConfig,
   EngineParameterInfo,
+  EngineTelemetry,
+  EngineTransportState,
   EqBandInput,
   EqSpectrumSnapshot,
-  EngineTelemetry,
   GoniometerPoint,
   HpssResult,
   Key,
@@ -39,6 +37,7 @@ import type {
   MasteringPreset,
   MasteringResult,
   MasteringStereoResult,
+  MelodyResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
@@ -51,6 +50,7 @@ import type {
   PanLaw,
   PitchResult,
   RhythmResult,
+  Section,
   SendTiming,
   SoloProcessor,
   StereoAnalysis,
@@ -609,6 +609,18 @@ export class RealtimeEngine {
     return this.native.captureStatus();
   }
 
+  /**
+   * Read the recorded samples out of the capture buffer.
+   *
+   * Returns one `Float32Array` per capture channel, each sliced to the number
+   * of frames recorded so far (see {@link captureStatus}). Call after capture
+   * to retrieve the audio written into the buffers passed to
+   * {@link setCaptureBuffer}.
+   */
+  capturedAudio(): Float32Array[] {
+    return this.native.capturedAudio();
+  }
+
   setGraph(spec: EngineGraphSpec): void {
     this.native.setGraph(spec);
   }
@@ -639,6 +651,32 @@ export class RealtimeEngine {
 
   drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
     return this.native.drainTelemetry(maxRecords);
+  }
+
+  /** Drain pending meter telemetry records published by the engine's meter tap. */
+  drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
+    return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  /**
+   * Push a live parameter value to the engine (immediate jump).
+   *
+   * @param paramId - Target parameter id
+   * @param value - New value
+   * @param renderFrame - Render-frame time to apply, or `-1` for immediate
+   */
+  setParameter(paramId: number, value: number, renderFrame = -1): void {
+    this.native.setParameter(paramId, value, renderFrame);
+  }
+
+  /** Push a live parameter value to the engine using a smoothed ramp. */
+  setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
+    this.native.setParameterSmoothed(paramId, value, renderFrame);
+  }
+
+  /** Read the current engine transport state (playing/position/ppq/tempo). */
+  getTransportState(): EngineTransportState {
+    return this.native.getTransportState();
   }
 
   destroy(): void {
@@ -690,6 +728,45 @@ export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32
 
 export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResult {
   return addon.analyze(samples, sampleRate);
+}
+
+/**
+ * Run the full music analysis, reporting per-stage progress.
+ *
+ * The progress callback is invoked synchronously during analysis with a
+ * normalized progress value in `[0, 1]` and the current stage name. The result
+ * shape matches {@link analyze}.
+ */
+export function analyzeWithProgress(
+  samples: Float32Array,
+  sampleRate: number,
+  onProgress: AnalysisProgressCallback,
+): AnalysisResult {
+  return addon.analyzeWithProgress(samples, sampleRate, onProgress);
+}
+
+/** Detect song-structure sections (intro/verse/chorus/...). */
+export function analyzeSections(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  minSectionSec = 8.0,
+): Section[] {
+  return addon.analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec);
+}
+
+/** Extract the melody contour from monophonic audio via YIN. */
+export function analyzeMelody(
+  samples: Float32Array,
+  sampleRate = 22050,
+  fmin = 65.0,
+  fmax = 2093.0,
+  frameLength = 2048,
+  hopLength = 512,
+  threshold = 0.1,
+): MelodyResult {
+  return addon.analyzeMelody(samples, sampleRate, fmin, fmax, frameLength, hopLength, threshold);
 }
 
 export function analyzeBpm(
@@ -1277,6 +1354,31 @@ export function chroma(
   return addon.chroma(samples, sampleRate, nFft, hopLength);
 }
 
+/** Compute the Constant-Q Transform magnitude. */
+export function cqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.703,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  return addon.cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/** Compute the Variable-Q Transform magnitude (`gamma` controls Q). */
+export function vqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.703,
+  nBins = 84,
+  binsPerOctave = 12,
+  gamma = 0.0,
+): CqtResult {
+  return addon.vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
+}
+
 export function spectralCentroid(
   samples: Float32Array,
   sampleRate = 22050,
@@ -1728,6 +1830,49 @@ export class Mixer {
     return this.native.stripById(id);
   }
 
+  /**
+   * Add a bus to the mixer topology.
+   *
+   * @param id - Unique bus id
+   * @param role - Bus role (`'master'` | `'aux'` | `'submix'`); defaults to `'aux'`
+   *
+   * Marks the routing graph dirty; call {@link compile} (or process) to rebuild.
+   */
+  addBus(id: string, role?: 'master' | 'aux' | 'submix' | string): void {
+    this.native.addBus(id, role);
+  }
+
+  /** Remove a bus by id. */
+  removeBus(id: string): void {
+    this.native.removeBus(id);
+  }
+
+  /** Number of buses in the mixer topology. */
+  busCount(): number {
+    return this.native.busCount();
+  }
+
+  /**
+   * Add a VCA group with the given id and gain offset.
+   *
+   * @param id - Unique group id
+   * @param gainDb - Group gain offset in dB
+   * @param members - Strip ids that belong to the group
+   */
+  addVcaGroup(id: string, gainDb: number, members: string[] = []): void {
+    this.native.addVcaGroup(id, gainDb, members);
+  }
+
+  /** Remove a VCA group by id. */
+  removeVcaGroup(id: string): void {
+    this.native.removeVcaGroup(id);
+  }
+
+  /** Number of VCA groups in the mixer topology. */
+  vcaGroupCount(): number {
+    return this.native.vcaGroupCount();
+  }
+
   /** Set a strip's solo state. Takes effect on the next process (no recompile). */
   setSoloed(strip: StripRef, soloed: boolean): void {
     this.native.setSoloed(strip, soloed);
@@ -1873,6 +2018,7 @@ export function mixStereo(
 
 export type {
   AcousticResult,
+  AnalysisProgressCallback,
   AnalysisResult,
   AutomationCurve,
   BpmAnalysisResult,
@@ -1881,6 +2027,7 @@ export type {
   ChordAnalysisResult,
   ChordChromaMethod,
   ChromaResult,
+  CqtResult,
   DynamicsResult,
   EngineAutomationPoint,
   EngineAutomationPointCurve,
@@ -1893,13 +2040,15 @@ export type {
   EngineGraphParameterBinding,
   EngineGraphSpec,
   EngineMarker,
+  EngineMeterTelemetry,
   EngineMetronomeConfig,
   EngineParameterInfo,
-  EqBandInput,
-  EqSpectrumSnapshot,
   EngineTelemetry,
   EngineTelemetryError,
   EngineTelemetryType,
+  EngineTransportState,
+  EqBandInput,
+  EqSpectrumSnapshot,
   GoniometerPoint,
   HpssResult,
   Key,
@@ -1911,6 +2060,8 @@ export type {
   MasteringChainStereoResult,
   MasteringResult,
   MasteringStereoResult,
+  MelodyPoint,
+  MelodyResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
@@ -1922,6 +2073,8 @@ export type {
   PanMode,
   PitchResult,
   RhythmResult,
+  Section,
+  SectionTypeOrdinal,
   SendTiming,
   StftDbResult,
   StftResult,

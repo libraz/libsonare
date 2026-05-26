@@ -1,3 +1,30 @@
+/**
+ * Type definitions for the standalone realtime WASM module (`sonare-rt`).
+ *
+ * This is a DELIBERATELY REDUCED surface optimized for the AudioWorklet hot
+ * path: a thin C ABI over {@link RealtimeEngine} that avoids embind, JS `val`
+ * marshalling, and string handling so the audio render quantum stays
+ * allocation- and GC-free. Use the full {@link RealtimeEngine} class from the
+ * main `sonare` bundle when you need the complete feature set.
+ *
+ * Omitted here (available only on the full embind `RealtimeEngine`):
+ * - Parameter registry & automation: `addParameter`, `parameterInfo`,
+ *   `setAutomationLane`, `automationLaneCount`, `setParameter`,
+ *   `setParameterSmoothed`.
+ * - Transport read-back: `getTransportState` (transport is driven from the
+ *   worklet; state is mirrored on the main thread there).
+ * - Markers beyond seek: `setMarkers`, `markerCount`, `marker`,
+ *   `setLoopFromMarkers`, `setTimeSignature`, `countInEndSample`.
+ * - Graph topology: `setGraph`, `graphNodeCount`, `graphConnectionCount`.
+ * - Clip scheduling: `setClips`, `clipCount`, `freezeOffline`.
+ * - Capture read-back & offline rendering: `setCaptureBuffer`, `captureStatus`,
+ *   `capturedAudio`, `resetCapture`, `renderOffline`, `bounceOffline`.
+ * - Meter telemetry: `drainMeterTelemetry`.
+ *
+ * The exposed surface intentionally covers only transport, tempo/loop, marker
+ * seek, metronome, capture arming/punch, block processing, and basic telemetry
+ * drain.
+ */
 export interface SonareRtModuleOptions {
   locateFile?: (path: string, scriptDirectory: string) => string;
   wasmBinary?: ArrayBuffer | Uint8Array;

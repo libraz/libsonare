@@ -67,6 +67,46 @@ class SonareEngineTelemetry(ctypes.Structure):
     ]
 
 
+class SonareMeterTelemetryRecord(ctypes.Structure):
+    """Maps to SonareMeterTelemetryRecord in sonare_c.h."""
+
+    _fields_ = [
+        ("target_id", ctypes.c_uint32),
+        ("render_frame", ctypes.c_int64),
+        ("seq", ctypes.c_uint64),
+        ("peak_db_l", ctypes.c_float),
+        ("peak_db_r", ctypes.c_float),
+        ("rms_db_l", ctypes.c_float),
+        ("rms_db_r", ctypes.c_float),
+        ("true_peak_db_l", ctypes.c_float),
+        ("true_peak_db_r", ctypes.c_float),
+        ("max_true_peak_db", ctypes.c_float),
+        ("correlation", ctypes.c_float),
+        ("mono_compat_width", ctypes.c_float),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+        ("gain_reduction_db", ctypes.c_float),
+        ("dropped_records", ctypes.c_uint32),
+    ]
+
+
+class SonareTransportState(ctypes.Structure):
+    """Maps to SonareTransportState in sonare_c.h."""
+
+    _fields_ = [
+        ("playing", ctypes.c_int),
+        ("looping", ctypes.c_int),
+        ("render_frame", ctypes.c_int64),
+        ("sample_position", ctypes.c_int64),
+        ("ppq_position", ctypes.c_double),
+        ("bpm", ctypes.c_double),
+        ("loop_start_ppq", ctypes.c_double),
+        ("loop_end_ppq", ctypes.c_double),
+        ("sample_rate", ctypes.c_double),
+    ]
+
+
 class SonareParameterInfo(ctypes.Structure):
     """Maps to SonareParameterInfo in sonare_c.h."""
 
@@ -432,6 +472,63 @@ class SonareChordDetectionOptions(ctypes.Structure):
     ]
 
 
+class SonareSection(ctypes.Structure):
+    """Maps to SonareSection in sonare_c.h."""
+
+    _fields_ = [
+        ("type", ctypes.c_int32),
+        ("start", ctypes.c_float),
+        ("end", ctypes.c_float),
+        ("energy_level", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareSectionResult(ctypes.Structure):
+    """Maps to SonareSectionResult in sonare_c.h."""
+
+    _fields_ = [
+        ("sections", ctypes.POINTER(SonareSection)),
+        ("section_count", ctypes.c_size_t),
+    ]
+
+
+class SonareMelodyPoint(ctypes.Structure):
+    """Maps to SonareMelodyPoint in sonare_c.h."""
+
+    _fields_ = [
+        ("time", ctypes.c_float),
+        ("frequency", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareMelodyResult(ctypes.Structure):
+    """Maps to SonareMelodyResult in sonare_c.h."""
+
+    _fields_ = [
+        ("points", ctypes.POINTER(SonareMelodyPoint)),
+        ("point_count", ctypes.c_size_t),
+        ("pitch_range_octaves", ctypes.c_float),
+        ("pitch_stability", ctypes.c_float),
+        ("mean_frequency", ctypes.c_float),
+        ("vibrato_rate", ctypes.c_float),
+    ]
+
+
+class SonareCqtResult(ctypes.Structure):
+    """Maps to SonareCqtResult in sonare_c.h."""
+
+    _fields_ = [
+        ("n_bins", ctypes.c_int32),
+        ("n_frames", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("sample_rate", ctypes.c_int32),
+        ("magnitude", ctypes.POINTER(ctypes.c_float)),
+        ("frequencies", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
 class SonareStftResult(ctypes.Structure):
     """Maps to SonareStftResult in sonare_c.h."""
 
@@ -625,6 +722,7 @@ SONARE_ERROR_INVALID_FORMAT = 2
 SONARE_ERROR_DECODE_FAILED = 3
 SONARE_ERROR_INVALID_PARAMETER = 4
 SONARE_ERROR_OUT_OF_MEMORY = 5
+SONARE_ERROR_NOT_SUPPORTED = 6
 SONARE_ERROR_UNKNOWN = 99
 
 
@@ -1012,6 +1110,63 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareChordAnalysisResult),
     ]
 
+    if hasattr(lib, "sonare_analyze_sections"):
+        lib.sonare_analyze_sections.restype = ctypes.c_int32
+        lib.sonare_analyze_sections.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareSectionResult),
+        ]
+        lib.sonare_free_section_result.restype = None
+        lib.sonare_free_section_result.argtypes = [ctypes.POINTER(SonareSectionResult)]
+
+    if hasattr(lib, "sonare_analyze_melody"):
+        lib.sonare_analyze_melody.restype = ctypes.c_int32
+        lib.sonare_analyze_melody.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareMelodyResult),
+        ]
+        lib.sonare_free_melody_result.restype = None
+        lib.sonare_free_melody_result.argtypes = [ctypes.POINTER(SonareMelodyResult)]
+
+    if hasattr(lib, "sonare_cqt"):
+        lib.sonare_cqt.restype = ctypes.c_int32
+        lib.sonare_cqt.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareCqtResult),
+        ]
+        lib.sonare_vqt.restype = ctypes.c_int32
+        lib.sonare_vqt.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareCqtResult),
+        ]
+        lib.sonare_free_cqt_result.restype = None
+        lib.sonare_free_cqt_result.argtypes = [ctypes.POINTER(SonareCqtResult)]
+
     # --- Memory management ---
 
     # sonare_free_floats
@@ -1358,6 +1513,35 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_engine_drain_meter_telemetry"):
+        lib.sonare_engine_drain_meter_telemetry.restype = ctypes.c_int32
+        lib.sonare_engine_drain_meter_telemetry.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMeterTelemetryRecord),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_set_parameter"):
+        lib.sonare_engine_set_parameter.restype = ctypes.c_int32
+        lib.sonare_engine_set_parameter.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_int64,
+        ]
+        lib.sonare_engine_set_parameter_smoothed.restype = ctypes.c_int32
+        lib.sonare_engine_set_parameter_smoothed.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_get_transport_state"):
+        lib.sonare_engine_get_transport_state.restype = ctypes.c_int32
+        lib.sonare_engine_get_transport_state.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareTransportState),
+        ]
 
     # sonare_normalize
     lib.sonare_normalize.restype = ctypes.c_int32
@@ -2222,6 +2406,41 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         if hasattr(lib, "sonare_mixer_compile"):
             lib.sonare_mixer_compile.restype = ctypes.c_int32
             lib.sonare_mixer_compile.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_mixer_get_strip_count"):
+            lib.sonare_mixer_get_strip_count.restype = ctypes.c_int32
+            lib.sonare_mixer_get_strip_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+        if hasattr(lib, "sonare_mixer_add_bus"):
+            lib.sonare_mixer_add_bus.restype = ctypes.c_int32
+            lib.sonare_mixer_add_bus.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_char_p,
+                ctypes.c_char_p,
+            ]
+            lib.sonare_mixer_remove_bus.restype = ctypes.c_int32
+            lib.sonare_mixer_remove_bus.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            lib.sonare_mixer_bus_count.restype = ctypes.c_int32
+            lib.sonare_mixer_bus_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+            lib.sonare_mixer_add_vca_group.restype = ctypes.c_int32
+            lib.sonare_mixer_add_vca_group.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_char_p,
+                ctypes.c_float,
+                ctypes.POINTER(ctypes.c_char_p),
+                ctypes.c_size_t,
+            ]
+            lib.sonare_mixer_remove_vca_group.restype = ctypes.c_int32
+            lib.sonare_mixer_remove_vca_group.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            lib.sonare_mixer_vca_group_count.restype = ctypes.c_int32
+            lib.sonare_mixer_vca_group_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
         if hasattr(lib, "sonare_mixer_strip_count"):
             lib.sonare_mixer_strip_count.restype = ctypes.c_size_t
             lib.sonare_mixer_strip_count.argtypes = [ctypes.c_void_p]

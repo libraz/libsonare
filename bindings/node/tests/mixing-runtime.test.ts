@@ -200,4 +200,24 @@ describe('Mixer argument validation', () => {
       mixer.scheduleSendAutomation('host', sendIndex, 0, -3, 'exponential'),
     ).not.toThrow();
   });
+
+  it('manages buses imperatively', () => {
+    const before = mixer.busCount();
+    expect(before).toBeGreaterThanOrEqual(0);
+    mixer.addBus('extra-aux', 'aux');
+    expect(mixer.busCount()).toBe(before + 1);
+    mixer.removeBus('extra-aux');
+    expect(mixer.busCount()).toBe(before);
+  });
+
+  it('manages VCA groups imperatively', () => {
+    const before = mixer.vcaGroupCount();
+    mixer.addVcaGroup('test-vca-group', -2, ['host', 'guest']);
+    expect(mixer.vcaGroupCount()).toBe(before + 1);
+    mixer.removeVcaGroup('test-vca-group');
+    expect(mixer.vcaGroupCount()).toBe(before);
+    // members default to an empty group.
+    expect(() => mixer.addVcaGroup('test-vca-empty', 0)).not.toThrow();
+    mixer.removeVcaGroup('test-vca-empty');
+  });
 });

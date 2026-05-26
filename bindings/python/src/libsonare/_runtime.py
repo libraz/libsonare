@@ -122,6 +122,20 @@ def _meter_tap_value(value: MeterTap | str | int) -> int:
     raise ValueError(f"unknown meter tap: {value}")
 
 
+def _send_timing_value(value: SendTiming | str | int) -> int:
+    """Resolve a send timing to its C enum value (0 pre-fader, 1 post-fader)."""
+    if isinstance(value, SendTiming):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    key = value.replace("_", "-").lower()
+    if key in ("pre-fader", "pre", "prefader"):
+        return int(SendTiming.PRE_FADER)
+    if key in ("post-fader", "post", "postfader"):
+        return int(SendTiming.POST_FADER)
+    raise ValueError(f"unknown send timing: {value}")
+
+
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
     return MixMeterSnapshot(
         peak_db_l=float(snapshot.peak_db_l),

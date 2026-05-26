@@ -64,6 +64,14 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   // Strip lookup.
   Napi::Value StripById(const Napi::CallbackInfo& info);
 
+  // Imperative topology: buses and VCA groups.
+  Napi::Value AddBus(const Napi::CallbackInfo& info);
+  Napi::Value RemoveBus(const Napi::CallbackInfo& info);
+  Napi::Value BusCount(const Napi::CallbackInfo& info);
+  Napi::Value AddVcaGroup(const Napi::CallbackInfo& info);
+  Napi::Value RemoveVcaGroup(const Napi::CallbackInfo& info);
+  Napi::Value VcaGroupCount(const Napi::CallbackInfo& info);
+
   // Strip-targeted automation.
   Napi::Value ScheduleFaderAutomation(const Napi::CallbackInfo& info);
   Napi::Value SchedulePanAutomation(const Napi::CallbackInfo& info);

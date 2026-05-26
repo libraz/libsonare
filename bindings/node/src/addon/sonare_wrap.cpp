@@ -85,6 +85,12 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::DetectDownbeats, "detectDownbeats"));
   exports.Set("detectOnsets", Napi::Function::New(env, &SonareWrap::DetectOnsets, "detectOnsets"));
   exports.Set("analyze", Napi::Function::New(env, &SonareWrap::Analyze, "analyze"));
+  exports.Set("analyzeWithProgress",
+              Napi::Function::New(env, &SonareWrap::AnalyzeWithProgress, "analyzeWithProgress"));
+  exports.Set("analyzeSections",
+              Napi::Function::New(env, &SonareWrap::AnalyzeSections, "analyzeSections"));
+  exports.Set("analyzeMelody",
+              Napi::Function::New(env, &SonareWrap::AnalyzeMelody, "analyzeMelody"));
   exports.Set("analyzeBpm", Napi::Function::New(env, &SonareWrap::AnalyzeBpm, "analyzeBpm"));
   exports.Set(
       "analyzeImpulseResponse",
@@ -183,6 +189,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Features - Chroma
   exports.Set("chroma", Napi::Function::New(env, &SonareWrap::ChromaFn, "chroma"));
+
+  // Features - Constant-Q / Variable-Q transforms
+  exports.Set("cqt", Napi::Function::New(env, &SonareWrap::Cqt, "cqt"));
+  exports.Set("vqt", Napi::Function::New(env, &SonareWrap::Vqt, "vqt"));
 
   // Features - Spectral
   exports.Set("spectralCentroid",

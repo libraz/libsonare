@@ -1460,3 +1460,45 @@ def test_cli_new_commands_smoke(command: str) -> None:
         result = _run_cli([command, wav_path, "--json"])
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip()
+
+
+def test_analyze_sections_returns_section_result() -> None:
+    from libsonare import Section, SectionResult, SectionType, analyze_sections
+
+    samples = _generate_sine(220, 22050, 6.0) + _generate_sine(440, 22050, 6.0)
+    result = analyze_sections(samples, sample_rate=22050, min_section_sec=2.0)
+    assert isinstance(result, SectionResult)
+    assert isinstance(result.sections, list)
+    for section in result.sections:
+        assert isinstance(section, Section)
+        assert isinstance(section.type, SectionType)
+        assert section.end >= section.start
+        assert isinstance(section.name, str)
+
+
+def test_analyze_melody_returns_melody_result() -> None:
+    from libsonare import MelodyPoint, MelodyResult, analyze_melody
+
+    samples = _generate_sine(220, 22050, 2.0)
+    result = analyze_melody(samples, sample_rate=22050)
+    assert isinstance(result, MelodyResult)
+    assert isinstance(result.points, list)
+    assert math.isfinite(result.mean_frequency)
+    for point in result.points[:8]:
+        assert isinstance(point, MelodyPoint)
+        assert math.isfinite(point.time)
+
+
+def test_cqt_and_vqt_return_cqt_result() -> None:
+    from libsonare import CqtResult, cqt, vqt
+
+    samples = _generate_sine(220, 22050, 1.0)
+    for result in (
+        cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
+        vqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12, gamma=10.0),
+    ):
+        assert isinstance(result, CqtResult)
+        assert result.n_bins == 24
+        assert result.n_frames > 0
+        assert len(result.magnitude) == result.n_bins * result.n_frames
+        assert len(result.frequencies) == result.n_bins

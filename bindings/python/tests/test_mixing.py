@@ -169,6 +169,43 @@ def test_sends_add_and_set_level(mixer) -> None:
     mixer.set_send_db("vocal", index, -6.0)
 
 
+def test_add_send_accepts_send_timing_enum_name_and_int(mixer) -> None:
+    """add_send accepts a SendTiming enum, a name, and a raw int; invalid raises."""
+    from libsonare import SendTiming
+
+    i0 = mixer.add_send("vocal", "send-enum", "vocal-verb", timing=SendTiming.POST_FADER)
+    i1 = mixer.add_send("vocal", "send-name", "vocal-verb", timing="pre_fader")
+    i2 = mixer.add_send("vocal", "send-int", "vocal-verb", timing=1)
+    assert all(isinstance(i, int) and i >= 0 for i in (i0, i1, i2))
+    with pytest.raises(ValueError):
+        mixer.add_send("vocal", "send-bad", "vocal-verb", timing="sideways")
+
+
+def test_bus_add_remove_and_count(mixer) -> None:
+    """add_bus / bus_count / remove_bus manage the mixer bus topology."""
+    before = mixer.bus_count()
+    assert isinstance(before, int)
+    mixer.add_bus("py-aux-bus", "aux")
+    assert mixer.bus_count() == before + 1
+    mixer.remove_bus("py-aux-bus")
+    assert mixer.bus_count() == before
+
+
+def test_vca_group_add_remove_and_count(mixer) -> None:
+    """add_vca_group / vca_group_count / remove_vca_group manage VCA groups."""
+    before = mixer.vca_group_count()
+    assert isinstance(before, int)
+    mixer.add_vca_group("py-vca", gain_db=-3.0, members=["vocal"])
+    assert mixer.vca_group_count() == before + 1
+    mixer.remove_vca_group("py-vca")
+    assert mixer.vca_group_count() == before
+
+
+def test_get_strip_count_matches_strip_count(mixer) -> None:
+    """strip_count (now backed by sonare_mixer_get_strip_count) is consistent."""
+    assert mixer.strip_count() == 2
+
+
 def test_automation_schedulers_accept_curve_enum(mixer) -> None:
     """Automation schedulers accept the AutomationCurve enum, names, and ints."""
     from libsonare import AutomationCurve

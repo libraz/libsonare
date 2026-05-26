@@ -94,6 +94,26 @@ class MeterTap(IntEnum):
     POST_FADER = 1
 
 
+class SendTiming(IntEnum):
+    """Pre/post-fader timing of a mixer strip send."""
+
+    PRE_FADER = 0
+    POST_FADER = 1
+
+
+class SectionType(IntEnum):
+    """Song-structure section type (mirrors sonare::SectionType ordinals)."""
+
+    INTRO = 0
+    VERSE = 1
+    PRE_CHORUS = 2
+    CHORUS = 3
+    BRIDGE = 4
+    INSTRUMENTAL = 5
+    OUTRO = 6
+    UNKNOWN = 7
+
+
 class EngineTelemetryType(IntEnum):
     """Realtime engine telemetry record type."""
 
@@ -853,3 +873,95 @@ class EngineGraphSpec:
     output_node: str
     num_channels: int = 2
     parameter_bindings: list[EngineGraphParameterBinding] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MeterTelemetryRecord:
+    """A meter snapshot drained from the realtime engine's meter tap."""
+
+    target_id: int
+    render_frame: int
+    seq: int
+    peak_db_l: float
+    peak_db_r: float
+    rms_db_l: float
+    rms_db_r: float
+    true_peak_db_l: float
+    true_peak_db_r: float
+    max_true_peak_db: float
+    correlation: float
+    mono_compat_width: float
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    dropped_records: int
+
+
+@dataclass(frozen=True, slots=True)
+class TransportState:
+    """Read-only snapshot of the realtime engine transport state."""
+
+    playing: bool
+    looping: bool
+    render_frame: int
+    sample_position: int
+    ppq_position: float
+    bpm: float
+    loop_start_ppq: float
+    loop_end_ppq: float
+    sample_rate: float
+
+
+@dataclass(frozen=True, slots=True)
+class Section:
+    """A detected song-structure section."""
+
+    type: SectionType
+    start: float
+    end: float
+    energy_level: float
+    confidence: float
+
+    @property
+    def name(self) -> str:
+        return self.type.name.lower()
+
+
+@dataclass(frozen=True, slots=True)
+class SectionResult:
+    """Song-structure analysis result."""
+
+    sections: list[Section]
+
+
+@dataclass(frozen=True, slots=True)
+class MelodyPoint:
+    """A single point on a melody contour."""
+
+    time: float
+    frequency: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class MelodyResult:
+    """Melody contour analysis result."""
+
+    points: list[MelodyPoint]
+    pitch_range_octaves: float
+    pitch_stability: float
+    mean_frequency: float
+    vibrato_rate: float
+
+
+@dataclass(frozen=True, slots=True)
+class CqtResult:
+    """Constant-Q / Variable-Q transform magnitude result."""
+
+    n_bins: int
+    n_frames: int
+    hop_length: int
+    sample_rate: int
+    magnitude: list[float]
+    frequencies: list[float]

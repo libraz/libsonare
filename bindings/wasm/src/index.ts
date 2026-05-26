@@ -26,6 +26,7 @@ import type {
   ChordDetectionOptions,
   ChordQuality,
   ChromaResult,
+  CqtResult,
   EqBand,
   EqMatchOptions,
   EqSpectrumSnapshot,
@@ -43,6 +44,7 @@ import type {
   MasteringResult,
   MasteringStereoChainResult,
   MasteringStereoResult,
+  MelodyResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
@@ -54,6 +56,7 @@ import type {
   PairProcessor,
   PanLaw,
   PitchResult,
+  Section,
   SectionType,
   SendTiming,
   SoloProcessor,
@@ -85,6 +88,7 @@ import type {
   WasmEngineMetronomeConfig,
   WasmEngineParameterInfo,
   WasmEngineTelemetry,
+  WasmEngineTransportState,
   WasmKeyCandidateResult,
   WasmNnlsChromaResult,
   WasmStreamAnalyzer,
@@ -102,6 +106,7 @@ export type {
   ChordAnalysisResult,
   ChordDetectionOptions,
   ChromaResult,
+  CqtResult,
   Dynamics,
   EqBand,
   EqBandPhase,
@@ -124,6 +129,8 @@ export type {
   MasteringResult,
   MasteringStereoChainResult,
   MasteringStereoResult,
+  MelodyPoint,
+  MelodyResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
@@ -177,6 +184,7 @@ export type EngineFreezeOptions = WasmEngineFreezeOptions;
 export type EngineFreezeResult = WasmEngineFreezeResult;
 export type EngineTelemetry = WasmEngineTelemetry;
 export type EngineMeterTelemetry = WasmEngineMeterTelemetry;
+export type EngineTransportState = WasmEngineTransportState;
 
 export const EXPECTED_ENGINE_ABI_VERSION = 2;
 
@@ -314,7 +322,12 @@ export function engineCapabilities(): EngineCapabilities {
 export class RealtimeEngine {
   private native: WasmRealtimeEngine;
 
-  constructor(sampleRate = 48000, maxBlockSize = 128) {
+  constructor(
+    sampleRate = 48000,
+    maxBlockSize = 128,
+    commandCapacity = 1024,
+    telemetryCapacity = 1024,
+  ) {
     if (!module) {
       throw new Error('Module not initialized. Call init() first.');
     }
@@ -324,11 +337,36 @@ export class RealtimeEngine {
         `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
       );
     }
-    this.native = new module.RealtimeEngine(sampleRate, maxBlockSize);
+    this.native = new module.RealtimeEngine(
+      sampleRate,
+      maxBlockSize,
+      commandCapacity,
+      telemetryCapacity,
+    );
   }
 
-  prepare(sampleRate: number, maxBlockSize: number): void {
-    this.native.prepare(sampleRate, maxBlockSize);
+  prepare(
+    sampleRate: number,
+    maxBlockSize: number,
+    commandCapacity = 1024,
+    telemetryCapacity = 1024,
+  ): void {
+    this.native.prepare(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity);
+  }
+
+  /** Queue a sample-accurate parameter change (engine kSetParam). */
+  setParameter(paramId: number, value: number, renderFrame = -1): void {
+    this.native.setParameter(paramId, value, renderFrame);
+  }
+
+  /** Queue a smoothed parameter change (engine kSetParamSmoothed). */
+  setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
+    this.native.setParameterSmoothed(paramId, value, renderFrame);
+  }
+
+  /** Read back the current transport state snapshot. */
+  getTransportState(): EngineTransportState {
+    return this.native.getTransportState();
   }
 
   play(renderFrame = -1): void {
@@ -399,8 +437,8 @@ export class RealtimeEngine {
     return this.native.marker(id);
   }
 
-  seekMarker(id: number): void {
-    this.native.seekMarker(id);
+  seekMarker(markerId: number, renderFrame = -1): void {
+    this.native.seekMarker(markerId, renderFrame);
   }
 
   setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
@@ -1309,6 +1347,14 @@ export function mixingScenePresetNames(): string[] {
   return module.mixingScenePresetNames();
 }
 
+/**
+ * Get a built-in mixing scene preset serialized as JSON. This is the canonical
+ * name shared with the Node and Python bindings; the returned JSON loads
+ * directly into a {@link Mixer} via {@link Mixer.fromSceneJson}.
+ *
+ * @param preset - Preset name (see {@link mixingScenePresetNames})
+ * @returns Scene JSON string
+ */
 export function mixingScenePresetJson(preset: string): string {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -1497,6 +1543,29 @@ export class StreamingEqualizer {
     this.eq.setOutputPan(pan);
   }
 
+  /**
+   * Provide a mono external sidechain key for dynamic bands that opt into
+   * `external_sidechain`. The samples are copied into an owned buffer.
+   */
+  setSidechainMono(samples: Float32Array): void {
+    this.eq.setSidechainMono(samples);
+  }
+
+  /**
+   * Provide a stereo external sidechain key. Both channels must match length.
+   */
+  setSidechainStereo(left: Float32Array, right: Float32Array): void {
+    if (left.length !== right.length) {
+      throw new Error('Sidechain channel lengths must match.');
+    }
+    this.eq.setSidechainStereo(left, right);
+  }
+
+  /** Release any borrowed external sidechain buffers. */
+  clearSidechain(): void {
+    this.eq.clearSidechain();
+  }
+
   /** Auto-gain applied on the most recent block, in dB. */
   lastAutoGainDb(): number {
     return this.eq.lastAutoGainDb();
@@ -1557,11 +1626,13 @@ export class StreamingEqualizer {
 // ============================================================================
 
 /**
- * Get a built-in mixing scene preset serialized as JSON.
+ * Get a built-in mixing scene preset serialized as JSON, normalized through the
+ * C mixer API (the same path {@link Mixer.fromSceneJson} uses to load it).
  *
- * Unlike {@link mixingScenePresetJson}, this round-trips through the C mixer
- * API (normalizing the scene the same way {@link Mixer} would), so it is the
- * canonical source for a preset you intend to load into a {@link Mixer}.
+ * @deprecated Use {@link mixingScenePresetJson}, the canonical name shared with
+ * the Node and Python bindings. This alias is retained for backwards
+ * compatibility and may be removed in a future release. Both functions return a
+ * scene JSON string that loads cleanly into a {@link Mixer}.
  *
  * @param preset - Preset name (see {@link mixingScenePresetNames})
  * @returns Scene JSON string
@@ -1722,9 +1793,50 @@ export class Mixer {
     );
   }
 
-  /** Resolve a strip's index in `[0, stripCount())` from its scene id. */
-  stripById(id: string): number {
-    return this.mixer.stripById(id);
+  /**
+   * Resolve a strip's index in `[0, stripCount())` from its scene id, or `null`
+   * when no strip with that id exists (matches the Node binding's `number | null`).
+   */
+  stripById(id: string): number | null {
+    const index = this.mixer.stripById(id);
+    return index < 0 ? null : index;
+  }
+
+  /**
+   * Add a bus to the mixer topology. `role` is one of `'master'`, `'aux'`, or
+   * `'submix'` (defaults to `'aux'`). Marks the routing graph dirty; call
+   * {@link compile} (or {@link processStereo}) to rebuild.
+   */
+  addBus(id: string, role = 'aux'): void {
+    this.mixer.addBus(id, role);
+  }
+
+  /** Remove a bus by id. Marks the routing graph dirty. */
+  removeBus(id: string): void {
+    this.mixer.removeBus(id);
+  }
+
+  /** Number of buses in the mixer topology. */
+  busCount(): number {
+    return this.mixer.busCount();
+  }
+
+  /**
+   * Add a VCA group with the given gain offset (dB). `members` is a list of
+   * strip ids governed by the group (may be empty).
+   */
+  addVcaGroup(id: string, gainDb = 0.0, members: string[] = []): void {
+    this.mixer.addVcaGroup(id, gainDb, members);
+  }
+
+  /** Remove a VCA group by id. */
+  removeVcaGroup(id: string): void {
+    this.mixer.removeVcaGroup(id);
+  }
+
+  /** Number of VCA groups in the mixer topology. */
+  vcaGroupCount(): number {
+    return this.mixer.vcaGroupCount();
   }
 
   /**
@@ -2576,6 +2688,110 @@ export function nnlsChroma(samples: Float32Array, sampleRate = 22050): WasmNnlsC
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.nnlsChroma(samples, sampleRate);
+}
+
+/**
+ * Compute the Constant-Q Transform magnitude.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param fmin - Minimum frequency in Hz (default: 32.7, C1)
+ * @param nBins - Number of frequency bins (default: 84)
+ * @param binsPerOctave - Bins per octave (default: 12)
+ * @returns CQT magnitude result
+ */
+export function cqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.7,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/**
+ * Compute the Variable-Q Transform magnitude (gamma controls Q).
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param fmin - Minimum frequency in Hz (default: 32.7, C1)
+ * @param nBins - Number of frequency bins (default: 84)
+ * @param binsPerOctave - Bins per octave (default: 12)
+ * @param gamma - Bandwidth offset; 0 is equivalent to CQT (default: 0)
+ * @returns VQT magnitude result (same shape as CQT)
+ */
+export function vqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.7,
+  nBins = 84,
+  binsPerOctave = 12,
+  gamma = 0,
+): CqtResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
+}
+
+/**
+ * Detect song-structure sections (intro/verse/chorus/...).
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param nFft - FFT size (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @param minSectionSec - Minimum section duration in seconds (default: 8.0)
+ * @returns Array of detected sections
+ */
+export function analyzeSections(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  minSectionSec = 8.0,
+): Section[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module
+    .analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec)
+    .map((s) => ({ ...s, type: s.type as SectionType }));
+}
+
+/**
+ * Extract the melody contour from monophonic audio via YIN.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param fmin - Minimum frequency in Hz (default: 65.0)
+ * @param fmax - Maximum frequency in Hz (default: 2093.0)
+ * @param frameLength - Frame length in samples (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @param threshold - YIN threshold; lower is stricter (default: 0.1)
+ * @returns Melody contour with per-frame pitch points and summary stats
+ */
+export function analyzeMelody(
+  samples: Float32Array,
+  sampleRate = 22050,
+  fmin = 65.0,
+  fmax = 2093.0,
+  frameLength = 2048,
+  hopLength = 512,
+  threshold = 0.1,
+): MelodyResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.analyzeMelody(samples, sampleRate, fmin, fmax, frameLength, hopLength, threshold);
 }
 
 /**

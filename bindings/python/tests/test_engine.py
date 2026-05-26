@@ -31,6 +31,51 @@ def test_engine_abi_version() -> None:
     assert engine_abi_version() > 0
 
 
+def test_engine_transport_state_and_live_parameters() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_tempo(90.0)
+        engine.set_loop(0.0, 4.0, enabled=True)
+        engine.add_parameter(
+            ParameterInfo(
+                id=3,
+                name="gain",
+                unit="dB",
+                min_value=-60.0,
+                max_value=12.0,
+                default_value=0.0,
+                rt_safe=True,
+                default_curve=AutomationPointCurve.LINEAR,
+            )
+        )
+        engine.set_parameter(3, 1.5)
+        engine.set_parameter_smoothed(3, 0.5, render_frame=0)
+        engine.play()
+        engine.process([[0.1] * 128, [0.1] * 128])
+
+        state = engine.transport_state()
+        assert isinstance(state.playing, bool)
+        assert state.playing
+        assert state.bpm == pytest.approx(90.0)
+        assert state.looping
+        assert state.loop_end_ppq == pytest.approx(4.0)
+        assert state.sample_rate == pytest.approx(48000.0)
+        assert isinstance(state.sample_position, int)
+
+        # Meter telemetry always drains to a list (possibly empty without a
+        # configured meter tap).
+        records = engine.drain_meter_telemetry()
+        assert isinstance(records, list)
+
+
+def test_engine_destroy_and_delete_aliases() -> None:
+    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=128)
+    engine.destroy()
+    # delete() is the second cross-binding alias and is safe to call again.
+    engine.delete()
+    with pytest.raises(RuntimeError):
+        engine.play()
+
+
 def test_realtime_engine_process_and_telemetry() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_tempo(60.0)
@@ -172,7 +217,9 @@ def test_realtime_engine_offline_render_matches_process() -> None:
     assert bounced.num_channels == 2
     assert bounced.sample_rate == 24000
     assert len(bounced.interleaved) == 256
-    assert math.isfinite(bounced.integrated_lufs)
+    # Integrated LUFS is finite for audible material, or -inf (the LUFS floor)
+    # for signals below the gating threshold (e.g. this very short bounce).
+    assert math.isfinite(bounced.integrated_lufs) or bounced.integrated_lufs == float("-inf")
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as freeze_engine:
         freeze_engine.set_clips(

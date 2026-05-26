@@ -621,3 +621,109 @@ def short_term_lufs(
         samples,
         ctypes.c_int(sample_rate),
     )
+
+
+# ============================================================================
+# Features - Constant-Q / Variable-Q transforms
+# ============================================================================
+
+
+def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
+    total = out.n_bins * out.n_frames
+    return CqtResult(
+        n_bins=int(out.n_bins),
+        n_frames=int(out.n_frames),
+        hop_length=int(out.hop_length),
+        sample_rate=int(out.sample_rate),
+        magnitude=[float(out.magnitude[i]) for i in range(total)],
+        frequencies=[float(out.frequencies[i]) for i in range(out.n_bins)],
+    )
+
+
+def cqt(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+) -> CqtResult:
+    """Compute the Constant-Q Transform magnitude.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: Hop length in samples (default 512).
+        fmin: Lowest center frequency in Hz (default C1).
+        n_bins: Total number of frequency bins (default 84).
+        bins_per_octave: Bins per octave (default 12).
+
+    Returns:
+        A :class:`CqtResult` with the magnitude matrix and bin frequencies.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_cqt"):
+        raise RuntimeError("libsonare was built without CQT support")
+    c_array, length = _to_c_float_array(samples)
+    out = SonareCqtResult()
+    rc = lib.sonare_cqt(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_int(n_bins),
+        ctypes.c_int(bins_per_octave),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return _cqt_result_from_c(out)
+    finally:
+        lib.sonare_free_cqt_result(ctypes.byref(out))
+
+
+def vqt(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+    gamma: float = 0.0,
+) -> CqtResult:
+    """Compute the Variable-Q Transform magnitude (``gamma`` controls Q).
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: Hop length in samples (default 512).
+        fmin: Lowest center frequency in Hz (default C1).
+        n_bins: Total number of frequency bins (default 84).
+        bins_per_octave: Bins per octave (default 12).
+        gamma: Bandwidth-offset parameter controlling Q (default 0.0).
+
+    Returns:
+        A :class:`CqtResult` with the magnitude matrix and bin frequencies.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_vqt"):
+        raise RuntimeError("libsonare was built without VQT support")
+    c_array, length = _to_c_float_array(samples)
+    out = SonareCqtResult()
+    rc = lib.sonare_vqt(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_int(n_bins),
+        ctypes.c_int(bins_per_octave),
+        ctypes.c_float(gamma),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return _cqt_result_from_c(out)
+    finally:
+        lib.sonare_free_cqt_result(ctypes.byref(out))

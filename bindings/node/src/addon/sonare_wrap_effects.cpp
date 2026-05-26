@@ -3,10 +3,10 @@
 #include <string>
 #include <vector>
 
-#include "analysis/pitch_editor/note_editor.h"
-#include "analysis/pitch_editor/pitch_corrector.h"
-#include "analysis/voice_changer/voice_changer.h"
 #include "core/audio.h"
+#include "editing/pitch_editor/note_editor.h"
+#include "editing/pitch_editor/pitch_corrector.h"
+#include "editing/voice_changer/voice_changer.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
@@ -170,11 +170,11 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   float target_midi = info[3].As<Napi::Number>().FloatValue();
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::analysis::pitch_editor::PitchCorrector corrector;
-  sonare::analysis::pitch_editor::F0Track track;
+  sonare::editing::pitch_editor::PitchCorrector corrector;
+  sonare::editing::pitch_editor::F0Track track;
   track.sample_rate = sr;
   track.hop_length = 512;
-  track.f0_hz = {sonare::analysis::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+  track.f0_hz = {sonare::editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
   track.voiced = {true};
   track.voiced_prob = {1.0f};
   sonare::Audio result = corrector.correct_to_midi(audio, track, target_midi);
@@ -205,10 +205,10 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   float stretch_ratio = info[4].As<Napi::Number>().FloatValue();
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::analysis::pitch_editor::NoteRegion region;
+  sonare::editing::pitch_editor::NoteRegion region;
   region.onset_sample = onset_sample;
   region.offset_sample = offset_sample;
-  sonare::analysis::pitch_editor::NoteEditor editor;
+  sonare::editing::pitch_editor::NoteEditor editor;
   sonare::Audio result = editor.stretch_note(audio, region, stretch_ratio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
@@ -234,10 +234,10 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   float formant_factor = info[3].As<Napi::Number>().FloatValue();
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::analysis::voice_changer::VoiceChangerConfig config;
+  sonare::editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
-  sonare::analysis::voice_changer::VoiceChanger changer(config);
+  sonare::editing::voice_changer::VoiceChanger changer(config);
   sonare::Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);

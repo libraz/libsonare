@@ -7,7 +7,9 @@ from ._analysis import (
     analyze_bpm,
     analyze_dynamics,
     analyze_impulse_response,
+    analyze_melody,
     analyze_rhythm,
+    analyze_sections,
     analyze_timbre,
     detect_acoustic,
     detect_beats,
@@ -71,6 +73,7 @@ from ._effects import (
 )
 from ._features import (
     chroma,
+    cqt,
     lufs,
     mel_spectrogram,
     mfcc,
@@ -85,6 +88,7 @@ from ._features import (
     spectral_rolloff,
     stft,
     stft_db,
+    vqt,
     zero_crossing_rate,
 )
 from ._mastering import (
@@ -118,7 +122,9 @@ __all__ = [
     "analyze_bpm",
     "analyze_dynamics",
     "analyze_impulse_response",
+    "analyze_melody",
     "analyze_rhythm",
+    "analyze_sections",
     "analyze_timbre",
     "detect_acoustic",
     "detect_beats",
@@ -163,6 +169,7 @@ __all__ = [
     "mixing_scene_preset_json",
     "mixing_scene_preset_names",
     "chroma",
+    "cqt",
     "lufs",
     "mel_spectrogram",
     "mfcc",
@@ -177,6 +184,7 @@ __all__ = [
     "spectral_rolloff",
     "stft",
     "stft_db",
+    "vqt",
     "zero_crossing_rate",
     "amplitude_to_db",
     "cyclic_tempogram",

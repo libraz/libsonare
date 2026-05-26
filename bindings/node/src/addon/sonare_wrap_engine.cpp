@@ -95,6 +95,34 @@ Napi::Object TelemetryToObject(Napi::Env env, const SonareEngineTelemetry& telem
   return out;
 }
 
+Napi::Object MeterTelemetryToObject(Napi::Env env, const SonareMeterTelemetryRecord& record) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("targetId", Napi::Number::New(env, record.target_id));
+  out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
+  out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
+  Napi::Array peak_db = Napi::Array::New(env, 2);
+  peak_db.Set(0u, Napi::Number::New(env, record.peak_db_l));
+  peak_db.Set(1u, Napi::Number::New(env, record.peak_db_r));
+  out.Set("peakDb", peak_db);
+  Napi::Array rms_db = Napi::Array::New(env, 2);
+  rms_db.Set(0u, Napi::Number::New(env, record.rms_db_l));
+  rms_db.Set(1u, Napi::Number::New(env, record.rms_db_r));
+  out.Set("rmsDb", rms_db);
+  Napi::Array true_peak_db = Napi::Array::New(env, 2);
+  true_peak_db.Set(0u, Napi::Number::New(env, record.true_peak_db_l));
+  true_peak_db.Set(1u, Napi::Number::New(env, record.true_peak_db_r));
+  out.Set("truePeakDb", true_peak_db);
+  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_db));
+  out.Set("correlation", Napi::Number::New(env, record.correlation));
+  out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));
+  out.Set("momentaryLufs", Napi::Number::New(env, record.momentary_lufs));
+  out.Set("shortTermLufs", Napi::Number::New(env, record.short_term_lufs));
+  out.Set("integratedLufs", Napi::Number::New(env, record.integrated_lufs));
+  out.Set("gainReductionDb", Napi::Number::New(env, record.gain_reduction_db));
+  out.Set("droppedRecords", Napi::Number::New(env, record.dropped_records));
+  return out;
+}
+
 struct ChannelBlock {
   std::vector<std::vector<float>> storage;
   std::vector<float*> pointers;
@@ -213,6 +241,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetCapturePunch>("setCapturePunch"),
           InstanceMethod<&RealtimeEngineWrap::ResetCapture>("resetCapture"),
           InstanceMethod<&RealtimeEngineWrap::CaptureStatus>("captureStatus"),
+          InstanceMethod<&RealtimeEngineWrap::CapturedAudio>("capturedAudio"),
           InstanceMethod<&RealtimeEngineWrap::SetGraph>("setGraph"),
           InstanceMethod<&RealtimeEngineWrap::GraphNodeCount>("graphNodeCount"),
           InstanceMethod<&RealtimeEngineWrap::GraphConnectionCount>("graphConnectionCount"),
@@ -221,6 +250,10 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::BounceOffline>("bounceOffline"),
           InstanceMethod<&RealtimeEngineWrap::FreezeOffline>("freezeOffline"),
           InstanceMethod<&RealtimeEngineWrap::DrainTelemetry>("drainTelemetry"),
+          InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetry>("drainMeterTelemetry"),
+          InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),
+          InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
+          InstanceMethod<&RealtimeEngineWrap::GetTransportState>("getTransportState"),
           InstanceMethod<&RealtimeEngineWrap::Destroy>("destroy"),
       });
   exports.Set("RealtimeEngine", func);
@@ -652,6 +685,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
   if (env.IsExceptionPending()) return env.Undefined();
   capture_refs_ = std::move(refs);
   capture_ptrs_ = std::move(ptrs);
+  capture_capacity_frames_ = frames;
   return env.Undefined();
 }
 
@@ -690,6 +724,35 @@ Napi::Value RealtimeEngineWrap::CaptureStatus(const Napi::CallbackInfo& info) {
   out.Set("overflowCount", Napi::Number::New(env, status.overflow_count));
   out.Set("armed", Napi::Boolean::New(env, status.armed != 0));
   out.Set("punchEnabled", Napi::Boolean::New(env, status.punch_enabled != 0));
+  return out;
+}
+
+Napi::Value RealtimeEngineWrap::CapturedAudio(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (engine_ == nullptr) {
+    Napi::Error::New(env, "RealtimeEngine is destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareEngineCaptureStatus status{};
+  ThrowIfError(env, sonare_engine_capture_status(engine_, &status));
+  if (env.IsExceptionPending()) return env.Undefined();
+
+  // Clamp the captured frame count to the JS-supplied buffer capacity so that we
+  // never read past the Float32Arrays handed to setCaptureBuffer().
+  int64_t frames = status.captured_frames;
+  if (frames < 0) frames = 0;
+  if (frames > capture_capacity_frames_) frames = capture_capacity_frames_;
+
+  Napi::Array out = Napi::Array::New(env, capture_refs_.size());
+  for (size_t ch = 0; ch < capture_refs_.size(); ++ch) {
+    Napi::Float32Array source = capture_refs_[ch].Value();
+    const size_t count = static_cast<size_t>(frames);
+    auto channel = Napi::Float32Array::New(env, count);
+    if (count > 0) {
+      std::memcpy(channel.Data(), source.Data(), count * sizeof(float));
+    }
+    out.Set(static_cast<uint32_t>(ch), channel);
+  }
   return out;
 }
 
@@ -882,6 +945,59 @@ Napi::Value RealtimeEngineWrap::DrainTelemetry(const Napi::CallbackInfo& info) {
   for (size_t i = 0; i < written; ++i) {
     out.Set(static_cast<uint32_t>(i), TelemetryToObject(env, records[i]));
   }
+  return out;
+}
+
+Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const size_t max_records = info.Length() > 0 && !info[0].IsUndefined()
+                                 ? static_cast<size_t>(info[0].As<Napi::Number>().Int64Value())
+                                 : 1024;
+  std::vector<SonareMeterTelemetryRecord> records(max_records);
+  size_t written = 0;
+  ThrowIfError(
+      env, sonare_engine_drain_meter_telemetry(engine_, records.data(), records.size(), &written));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array out = Napi::Array::New(env, written);
+  for (size_t i = 0; i < written; ++i) {
+    out.Set(static_cast<uint32_t>(i), MeterTelemetryToObject(env, records[i]));
+  }
+  return out;
+}
+
+Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t param_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const float value = info.Length() > 1 ? info[1].As<Napi::Number>().FloatValue() : 0.0f;
+  ThrowIfError(env,
+               sonare_engine_set_parameter(engine_, param_id, value, OptionalInt64(info, 2, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t param_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const float value = info.Length() > 1 ? info[1].As<Napi::Number>().FloatValue() : 0.0f;
+  ThrowIfError(env, sonare_engine_set_parameter_smoothed(engine_, param_id, value,
+                                                         OptionalInt64(info, 2, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareTransportState state{};
+  ThrowIfError(env, sonare_engine_get_transport_state(engine_, &state));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("isPlaying", Napi::Boolean::New(env, state.playing != 0));
+  out.Set("looping", Napi::Boolean::New(env, state.looping != 0));
+  out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(state.render_frame)));
+  out.Set("samplePosition", Napi::Number::New(env, static_cast<double>(state.sample_position)));
+  out.Set("ppq", Napi::Number::New(env, state.ppq_position));
+  out.Set("bpm", Napi::Number::New(env, state.bpm));
+  out.Set("loopStartPpq", Napi::Number::New(env, state.loop_start_ppq));
+  out.Set("loopEndPpq", Napi::Number::New(env, state.loop_end_ppq));
+  out.Set("sampleRate", Napi::Number::New(env, state.sample_rate));
   return out;
 }
 

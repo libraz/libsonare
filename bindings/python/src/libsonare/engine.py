@@ -25,6 +25,7 @@ from ._runtime import (
     EngineTelemetry,
     EngineTelemetryError,
     EngineTelemetryType,
+    MeterTelemetryRecord,
     ParameterInfo,
     SonareAutomationPoint,
     SonareEngineBounceOptions,
@@ -41,7 +42,10 @@ from ._runtime import (
     SonareEngineMarker,
     SonareEngineMetronomeConfig,
     SonareEngineTelemetry,
+    SonareMeterTelemetryRecord,
     SonareParameterInfo,
+    SonareTransportState,
+    TransportState,
     _check,
     _get_lib,
 )
@@ -82,6 +86,15 @@ class RealtimeEngine:
         if self._handle is not None:
             _get_lib().sonare_engine_destroy(self._handle)
             self._handle = None
+
+    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
+    def destroy(self) -> None:
+        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
+        self.close()
+
+    def delete(self) -> None:
+        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
+        self.close()
 
     def __enter__(self) -> RealtimeEngine:
         return self
@@ -451,6 +464,67 @@ class RealtimeEngine:
         )
         return [_telemetry_from_c(raw[i]) for i in range(written.value)]
 
+    def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
+        """Drain pending meter telemetry records published by the engine."""
+        if max_records <= 0:
+            return []
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_drain_meter_telemetry"):
+            raise RuntimeError("libsonare was built without meter-telemetry support")
+        raw = (SonareMeterTelemetryRecord * int(max_records))()
+        written = ctypes.c_size_t()
+        _check(
+            lib.sonare_engine_drain_meter_telemetry(
+                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+            )
+        )
+        return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
+
+    def set_parameter(self, param_id: int, value: float, render_frame: int = -1) -> None:
+        """Push a live parameter value to the engine (immediate jump).
+
+        ``render_frame`` is the render-frame time to apply, or ``-1`` for
+        immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_parameter"):
+            raise RuntimeError("libsonare was built without live-parameter support")
+        _check(
+            lib.sonare_engine_set_parameter(
+                self._require_handle(), int(param_id), float(value), int(render_frame)
+            )
+        )
+
+    def set_parameter_smoothed(self, param_id: int, value: float, render_frame: int = -1) -> None:
+        """Push a live parameter value to the engine using a smoothed ramp."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_parameter_smoothed"):
+            raise RuntimeError("libsonare was built without live-parameter support")
+        _check(
+            lib.sonare_engine_set_parameter_smoothed(
+                self._require_handle(), int(param_id), float(value), int(render_frame)
+            )
+        )
+
+    def transport_state(self) -> TransportState:
+        """Read the current engine transport state (playing/position/ppq/tempo)."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_get_transport_state"):
+            raise RuntimeError("libsonare was built without transport-state support")
+        raw = SonareTransportState()
+        _check(lib.sonare_engine_get_transport_state(self._require_handle(), ctypes.byref(raw)))
+        return TransportState(
+            playing=bool(raw.playing),
+            looping=bool(raw.looping),
+            render_frame=int(raw.render_frame),
+            sample_position=int(raw.sample_position),
+            ppq_position=float(raw.ppq_position),
+            bpm=float(raw.bpm),
+            loop_start_ppq=float(raw.loop_start_ppq),
+            loop_end_ppq=float(raw.loop_end_ppq),
+            sample_rate=float(raw.sample_rate),
+        )
+
     @staticmethod
     def _channel_arrays(
         channels: Sequence[Sequence[float]],
@@ -604,4 +678,26 @@ def _telemetry_from_c(raw: SonareEngineTelemetry) -> EngineTelemetry:
         audible_timeline_sample=int(raw.audible_timeline_sample),
         graph_latency_samples_q8=int(raw.graph_latency_samples_q8),
         value=int(raw.value),
+    )
+
+
+def _meter_telemetry_from_c(raw: SonareMeterTelemetryRecord) -> MeterTelemetryRecord:
+    return MeterTelemetryRecord(
+        target_id=int(raw.target_id),
+        render_frame=int(raw.render_frame),
+        seq=int(raw.seq),
+        peak_db_l=float(raw.peak_db_l),
+        peak_db_r=float(raw.peak_db_r),
+        rms_db_l=float(raw.rms_db_l),
+        rms_db_r=float(raw.rms_db_r),
+        true_peak_db_l=float(raw.true_peak_db_l),
+        true_peak_db_r=float(raw.true_peak_db_r),
+        max_true_peak_db=float(raw.max_true_peak_db),
+        correlation=float(raw.correlation),
+        mono_compat_width=float(raw.mono_compat_width),
+        momentary_lufs=float(raw.momentary_lufs),
+        short_term_lufs=float(raw.short_term_lufs),
+        integrated_lufs=float(raw.integrated_lufs),
+        gain_reduction_db=float(raw.gain_reduction_db),
+        dropped_records=int(raw.dropped_records),
     )

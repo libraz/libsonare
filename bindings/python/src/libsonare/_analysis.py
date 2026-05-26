@@ -14,9 +14,14 @@ from .types import (
     Key,
     KeyCandidate,
     KeyProfile,
+    MelodyPoint,
+    MelodyResult,
     Mode,
     PitchClass,
     RhythmResult,
+    Section,
+    SectionResult,
+    SectionType,
     TimbreResult,
     TimeSignature,
 )
@@ -650,6 +655,116 @@ def detect_chords(
         )
     finally:
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
+
+
+def analyze_sections(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    min_section_sec: float = 8.0,
+) -> SectionResult:
+    """Detect song-structure sections (intro/verse/chorus/...).
+
+    Args:
+        samples: Mono audio samples (1D float).
+        sample_rate: Sample rate in Hz (default 22050).
+        n_fft: FFT window size used for the structural features.
+        hop_length: Hop length in samples.
+        min_section_sec: Minimum section duration in seconds.
+
+    Returns:
+        A :class:`SectionResult` with a list of detected :class:`Section`.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_analyze_sections"):
+        raise RuntimeError("libsonare was built without section-analysis support")
+    c_array, length = _to_c_float_array(samples)
+    out = SonareSectionResult()
+    rc = lib.sonare_analyze_sections(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(min_section_sec),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return SectionResult(
+            sections=[
+                Section(
+                    type=SectionType(int(out.sections[i].type)),
+                    start=float(out.sections[i].start),
+                    end=float(out.sections[i].end),
+                    energy_level=float(out.sections[i].energy_level),
+                    confidence=float(out.sections[i].confidence),
+                )
+                for i in range(out.section_count)
+            ]
+        )
+    finally:
+        lib.sonare_free_section_result(ctypes.byref(out))
+
+
+def analyze_melody(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    fmin: float = 65.0,
+    fmax: float = 2093.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+    threshold: float = 0.1,
+) -> MelodyResult:
+    """Extract the melody contour from monophonic audio via YIN.
+
+    Args:
+        samples: Mono audio samples (1D float).
+        sample_rate: Sample rate in Hz (default 22050).
+        fmin: Minimum detectable frequency in Hz.
+        fmax: Maximum detectable frequency in Hz.
+        frame_length: Analysis frame length in samples.
+        hop_length: Hop length in samples.
+        threshold: YIN absolute threshold.
+
+    Returns:
+        A :class:`MelodyResult` with the contour points and summary stats.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_analyze_melody"):
+        raise RuntimeError("libsonare was built without melody-analysis support")
+    c_array, length = _to_c_float_array(samples)
+    out = SonareMelodyResult()
+    rc = lib.sonare_analyze_melody(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(threshold),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return MelodyResult(
+            points=[
+                MelodyPoint(
+                    time=float(out.points[i].time),
+                    frequency=float(out.points[i].frequency),
+                    confidence=float(out.points[i].confidence),
+                )
+                for i in range(out.point_count)
+            ],
+            pitch_range_octaves=float(out.pitch_range_octaves),
+            pitch_stability=float(out.pitch_stability),
+            mean_frequency=float(out.mean_frequency),
+            vibrato_rate=float(out.vibrato_rate),
+        )
+    finally:
+        lib.sonare_free_melody_result(ctypes.byref(out))
 
 
 def version() -> str:

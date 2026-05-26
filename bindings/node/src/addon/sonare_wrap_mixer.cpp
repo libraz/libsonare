@@ -59,6 +59,12 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::MeterTap>("meterTap"),
           InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest"),
           InstanceMethod<&MixerWrap::StripById>("stripById"),
+          InstanceMethod<&MixerWrap::AddBus>("addBus"),
+          InstanceMethod<&MixerWrap::RemoveBus>("removeBus"),
+          InstanceMethod<&MixerWrap::BusCount>("busCount"),
+          InstanceMethod<&MixerWrap::AddVcaGroup>("addVcaGroup"),
+          InstanceMethod<&MixerWrap::RemoveVcaGroup>("removeVcaGroup"),
+          InstanceMethod<&MixerWrap::VcaGroupCount>("vcaGroupCount"),
           InstanceMethod<&MixerWrap::ScheduleFaderAutomation>("scheduleFaderAutomation"),
           InstanceMethod<&MixerWrap::SchedulePanAutomation>("schedulePanAutomation"),
           InstanceMethod<&MixerWrap::ScheduleWidthAutomation>("scheduleWidthAutomation"),
@@ -566,6 +572,141 @@ Napi::Value MixerWrap::StripById(const Napi::CallbackInfo& info) {
     }
   }
   return env.Null();
+}
+
+Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (id: string, role?: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const bool has_role = info.Length() >= 2 && info[1].IsString();
+  const std::string role = has_role ? info[1].As<Napi::String>().Utf8Value() : std::string();
+  SonareError err = sonare_mixer_add_bus(mixer_, id.c_str(), has_role ? role.c_str() : nullptr);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to add bus: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  SonareError err = sonare_mixer_remove_bus(mixer_, id.c_str());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to remove bus: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  size_t count = 0;
+  SonareError err = sonare_mixer_bus_count(mixer_, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to query bus count: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (id: string, gainDb: number, members?: string[])")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const float gain_db = info[1].As<Napi::Number>().FloatValue();
+
+  std::vector<std::string> member_storage;
+  std::vector<const char*> member_ptrs;
+  if (info.Length() >= 3 && info[2].IsArray()) {
+    Napi::Array members = info[2].As<Napi::Array>();
+    member_storage.reserve(members.Length());
+    member_ptrs.reserve(members.Length());
+    for (uint32_t i = 0; i < members.Length(); ++i) {
+      Napi::Value value = members.Get(i);
+      if (!value.IsString()) {
+        Napi::TypeError::New(env, "VCA group members must be strings").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      member_storage.push_back(value.As<Napi::String>().Utf8Value());
+    }
+    for (const auto& member : member_storage) {
+      member_ptrs.push_back(member.c_str());
+    }
+  }
+
+  SonareError err = sonare_mixer_add_vca_group(mixer_, id.c_str(), gain_db,
+                                               member_ptrs.empty() ? nullptr : member_ptrs.data(),
+                                               member_ptrs.size());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to add VCA group: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  SonareError err = sonare_mixer_remove_vca_group(mixer_, id.c_str());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to remove VCA group: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  size_t count = 0;
+  SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to query VCA group count: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
 }
 
 Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {

@@ -69,6 +69,60 @@ export interface AnalysisResult {
   beats: Array<{ time: number; strength: undefined }>;
 }
 
+/** Progress callback for {@link analyzeWithProgress}. */
+export type AnalysisProgressCallback = (progress: number, stage: string) => void;
+
+/** Song-structure section type ordinal (mirrors the C `SonareSectionType`). */
+export type SectionTypeOrdinal = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export interface Section {
+  /** Section type ordinal (0=Intro, 1=Verse, ... 7=Unknown). */
+  type: SectionTypeOrdinal;
+  /** Human-readable section name (e.g. `'Chorus'`). */
+  name: string;
+  /** Section start time in seconds. */
+  start: number;
+  /** Section end time in seconds. */
+  end: number;
+  /** Relative energy level in `[0, 1]`. */
+  energyLevel: number;
+  /** Detection confidence in `[0, 1]`. */
+  confidence: number;
+}
+
+export interface MelodyPoint {
+  /** Frame time in seconds. */
+  time: number;
+  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
+  frequency: number;
+  /** Voicing confidence in `[0, 1]`. */
+  confidence: number;
+}
+
+export interface MelodyResult {
+  points: MelodyPoint[];
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+}
+
+/** Constant-Q / Variable-Q transform magnitude result. */
+export interface CqtResult {
+  /** Number of frequency bins. */
+  nBins: number;
+  /** Number of time frames. */
+  nFrames: number;
+  /** Hop length in samples. */
+  hopLength: number;
+  /** Sample rate in Hz. */
+  sampleRate: number;
+  /** Row-major `[nBins x nFrames]` magnitude matrix. */
+  magnitude: Float32Array;
+  /** Center frequency (Hz) of each of the `nBins` bins. */
+  frequencies: Float32Array;
+}
+
 export interface BpmCandidate {
   bpm: number;
   confidence: number;
@@ -411,6 +465,60 @@ export interface EngineTelemetry {
   audibleTimelineSample: number;
   graphLatencySamplesQ8: number;
   value: number;
+}
+
+/** Meter telemetry record drained from {@link RealtimeEngine.drainMeterTelemetry}. */
+export interface EngineMeterTelemetry {
+  /** Meter tap target id (e.g. master/bus identifier). */
+  targetId: number;
+  /** Render-frame timestamp of the snapshot. */
+  renderFrame: number;
+  /** Monotonic sequence number. */
+  seq: number;
+  /** Per-channel peak level in dB `[left, right]`. */
+  peakDb: [number, number];
+  /** Per-channel RMS level in dB `[left, right]`. */
+  rmsDb: [number, number];
+  /** Per-channel true-peak level in dB `[left, right]`. */
+  truePeakDb: [number, number];
+  /** Maximum true-peak across channels in dB. */
+  maxTruePeakDb: number;
+  /** Stereo correlation in `[-1, 1]`. */
+  correlation: number;
+  /** Mono-compatibility width metric. */
+  monoCompatWidth: number;
+  /** Momentary loudness (LUFS). */
+  momentaryLufs: number;
+  /** Short-term loudness (LUFS). */
+  shortTermLufs: number;
+  /** Integrated loudness (LUFS). */
+  integratedLufs: number;
+  /** Gain reduction in dB. */
+  gainReductionDb: number;
+  /** Number of records dropped before this snapshot. */
+  droppedRecords: number;
+}
+
+/** Read-only engine transport snapshot from {@link RealtimeEngine.getTransportState}. */
+export interface EngineTransportState {
+  /** Whether the transport is currently playing. */
+  isPlaying: boolean;
+  /** Whether looping is enabled. */
+  looping: boolean;
+  /** Current render-frame counter. */
+  renderFrame: number;
+  /** Current timeline position in samples. */
+  samplePosition: number;
+  /** Current position in pulses-per-quarter-note. */
+  ppq: number;
+  /** Current tempo in beats per minute. */
+  bpm: number;
+  /** Loop start in PPQ. */
+  loopStartPpq: number;
+  /** Loop end in PPQ. */
+  loopEndPpq: number;
+  /** Engine sample rate in Hz. */
+  sampleRate: number;
 }
 
 export type EngineAutomationPointCurve = 0 | 1 | 2 | 3;

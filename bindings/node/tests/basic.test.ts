@@ -9,9 +9,13 @@ import {
   analyze,
   analyzeBpm,
   analyzeDynamics,
+  analyzeMelody,
   analyzeRhythm,
+  analyzeSections,
   analyzeTimbre,
+  analyzeWithProgress,
   chroma,
+  cqt,
   dbToAmplitude,
   dbToPower,
   deemphasis,
@@ -86,6 +90,7 @@ import {
   trimSilence,
   vectorNormalize,
   version,
+  vqt,
   zeroCrossingRate,
 } from '../src/index.js';
 
@@ -149,6 +154,60 @@ describe('sonare native binding', () => {
       expect(result).toHaveProperty('beats');
       expect(result.beatTimes).toBeInstanceOf(Float32Array);
       expect(Array.isArray(result.beats)).toBe(true);
+    });
+
+    it('analyzeWithProgress reports progress and matches analyze shape', () => {
+      const samples = generateSine(220, SR, 2);
+      const progress: number[] = [];
+      const result = analyzeWithProgress(samples, SR, (p, _stage) => {
+        progress.push(p);
+      });
+      expect(result).toHaveProperty('bpm');
+      expect(result).toHaveProperty('key');
+      expect(result).toHaveProperty('timeSignature');
+      expect(result.beatTimes).toBeInstanceOf(Float32Array);
+      expect(progress.length).toBeGreaterThan(0);
+      for (const p of progress) {
+        expect(p).toBeGreaterThanOrEqual(0);
+        expect(p).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('analyzeSections returns an array of sections', () => {
+      const samples = generateSine(220, SR, 4);
+      const sections = analyzeSections(samples, SR);
+      expect(Array.isArray(sections)).toBe(true);
+      for (const section of sections) {
+        expect(typeof section.type).toBe('number');
+        expect(typeof section.name).toBe('string');
+        expect(section.end).toBeGreaterThanOrEqual(section.start);
+      }
+    });
+
+    it('analyzeMelody returns a melody contour', () => {
+      const samples = generateSine(220, SR, 1);
+      const melody = analyzeMelody(samples, SR);
+      expect(Array.isArray(melody.points)).toBe(true);
+      expect(typeof melody.meanFrequency).toBe('number');
+      expect(typeof melody.pitchStability).toBe('number');
+      for (const point of melody.points) {
+        expect(typeof point.time).toBe('number');
+        expect(typeof point.frequency).toBe('number');
+      }
+    });
+
+    it('cqt and vqt return magnitude matrices', () => {
+      const samples = generateSine(220, SR, 1);
+      const cqtResult = cqt(samples, SR);
+      expect(cqtResult.nBins).toBe(84);
+      expect(cqtResult.nFrames).toBeGreaterThan(0);
+      expect(cqtResult.magnitude.length).toBe(cqtResult.nBins * cqtResult.nFrames);
+      expect(cqtResult.frequencies.length).toBe(cqtResult.nBins);
+
+      const vqtResult = vqt(samples, SR);
+      expect(vqtResult.nBins).toBe(84);
+      expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
+      expect(vqtResult.frequencies.length).toBe(vqtResult.nBins);
     });
 
     it('analysis primitives expose detailed BPM and rhythm data', () => {

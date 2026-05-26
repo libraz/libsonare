@@ -196,6 +196,29 @@ interface WasmNnlsChromaResult {
   data: Float32Array;
 }
 
+interface WasmMelodyPoint {
+  time: number;
+  frequency: number;
+  confidence: number;
+}
+
+interface WasmMelodyResult {
+  points: WasmMelodyPoint[];
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+}
+
+interface WasmCqtResult {
+  nBins: number;
+  nFrames: number;
+  hopLength: number;
+  sampleRate: number;
+  magnitude: Float32Array;
+  frequencies: Float32Array;
+}
+
 interface WasmLufsResult {
   integratedLufs: number;
   momentaryLufs: number;
@@ -371,6 +394,18 @@ interface WasmEngineCaptureStatus {
   punchEnabled: boolean;
 }
 
+interface WasmEngineTransportState {
+  playing: boolean;
+  looping: boolean;
+  renderFrame: number;
+  samplePosition: number;
+  ppq: number;
+  bpm: number;
+  loopStartPpq: number;
+  loopEndPpq: number;
+  sampleRate: number;
+}
+
 interface WasmEngineBounceOptions {
   totalFrames: number;
   blockSize?: number;
@@ -408,7 +443,15 @@ interface WasmEngineFreezeResult {
 }
 
 interface WasmRealtimeEngine {
-  prepare: (sampleRate: number, maxBlockSize: number) => void;
+  prepare: (
+    sampleRate: number,
+    maxBlockSize: number,
+    commandCapacity: number,
+    telemetryCapacity: number,
+  ) => void;
+  setParameter: (paramId: number, value: number, renderFrame: number) => void;
+  setParameterSmoothed: (paramId: number, value: number, renderFrame: number) => void;
+  getTransportState: () => WasmEngineTransportState;
   play: (renderFrame: number) => void;
   stop: (renderFrame: number) => void;
   seekSample: (timelineSample: number, renderFrame: number) => void;
@@ -426,7 +469,7 @@ interface WasmRealtimeEngine {
   markerCount: () => number;
   markerByIndex: (index: number) => WasmEngineMarker;
   marker: (id: number) => WasmEngineMarker;
-  seekMarker: (id: number) => void;
+  seekMarker: (id: number, renderFrame: number) => void;
   setLoopFromMarkers: (startMarkerId: number, endMarkerId: number) => void;
   setMetronome: (config: WasmEngineMetronomeConfig) => void;
   metronome: () => Required<WasmEngineMetronomeConfig>;
@@ -819,6 +862,39 @@ interface SonareModule {
     winLength: number,
   ) => Float32Array;
   nnlsChroma: (samples: Float32Array, sampleRate: number) => WasmNnlsChromaResult;
+  cqt: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    fmin: number,
+    nBins: number,
+    binsPerOctave: number,
+  ) => WasmCqtResult;
+  vqt: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    fmin: number,
+    nBins: number,
+    binsPerOctave: number,
+    gamma: number,
+  ) => WasmCqtResult;
+  analyzeSections: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    minSectionSec: number,
+  ) => WasmSectionResult[];
+  analyzeMelody: (
+    samples: Float32Array,
+    sampleRate: number,
+    fmin: number,
+    fmax: number,
+    frameLength: number,
+    hopLength: number,
+    threshold: number,
+  ) => WasmMelodyResult;
   onsetEnvelope: (
     samples: Float32Array,
     sampleRate: number,
@@ -905,7 +981,12 @@ interface SonareModule {
     emitEveryNFrames: number,
   ) => WasmStreamAnalyzer;
 
-  RealtimeEngine: new (sampleRate: number, maxBlockSize: number) => WasmRealtimeEngine;
+  RealtimeEngine: new (
+    sampleRate: number,
+    maxBlockSize: number,
+    commandCapacity: number,
+    telemetryCapacity: number,
+  ) => WasmRealtimeEngine;
 
   // Streaming - StreamingMasteringChain
   createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
@@ -950,6 +1031,9 @@ interface WasmStreamingEqualizer {
   setGainScale: (scale: number) => void;
   setOutputGainDb: (gainDb: number) => void;
   setOutputPan: (pan: number) => void;
+  setSidechainMono: (samples: Float32Array) => void;
+  setSidechainStereo: (left: Float32Array, right: Float32Array) => void;
+  clearSidechain: () => void;
   lastAutoGainDb: () => number;
   latencySamples: () => number;
   processMono: (samples: Float32Array) => Float32Array;
@@ -1032,6 +1116,12 @@ interface WasmMixer {
     curve: number,
   ) => void;
   readGoniometerLatest: (stripIndex: number, maxPoints: number) => WasmGoniometerPoint[];
+  addBus: (id: string, role: string) => void;
+  removeBus: (id: string) => void;
+  busCount: () => number;
+  addVcaGroup: (id: string, gainDb: number, members: string[]) => void;
+  removeVcaGroup: (id: string) => void;
+  vcaGroupCount: () => number;
   toSceneJson: () => string;
   delete: () => void;
 }

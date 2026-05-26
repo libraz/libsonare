@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from .analyzer import (
+    Mixer as Mixer,
+)
+from .analyzer import (
     StreamingEqualizer as StreamingEqualizer,
 )
 from .analyzer import (
@@ -22,13 +25,22 @@ from .analyzer import (
     analyze_impulse_response as analyze_impulse_response,
 )
 from .analyzer import (
+    analyze_melody as analyze_melody,
+)
+from .analyzer import (
     analyze_rhythm as analyze_rhythm,
+)
+from .analyzer import (
+    analyze_sections as analyze_sections,
 )
 from .analyzer import (
     analyze_timbre as analyze_timbre,
 )
 from .analyzer import (
     chroma as chroma,
+)
+from .analyzer import (
+    cqt as cqt,
 )
 from .analyzer import (
     cyclic_tempogram as cyclic_tempogram,
@@ -268,6 +280,9 @@ from .analyzer import (
     voice_change as voice_change,
 )
 from .analyzer import (
+    vqt as vqt,
+)
+from .analyzer import (
     zero_crossing_rate as zero_crossing_rate,
 )
 from .audio import Audio as Audio
@@ -301,6 +316,9 @@ from .types import (
 )
 from .types import (
     ChromaResult as ChromaResult,
+)
+from .types import (
+    CqtResult as CqtResult,
 )
 from .types import (
     DynamicsResult as DynamicsResult,
@@ -387,10 +405,19 @@ from .types import (
     MasteringStereoResult as MasteringStereoResult,
 )
 from .types import (
+    MelodyPoint as MelodyPoint,
+)
+from .types import (
+    MelodyResult as MelodyResult,
+)
+from .types import (
     MelSpectrogramResult as MelSpectrogramResult,
 )
 from .types import (
     MeterTap as MeterTap,
+)
+from .types import (
+    MeterTelemetryRecord as MeterTelemetryRecord,
 )
 from .types import (
     MfccResult as MfccResult,
@@ -417,6 +444,18 @@ from .types import (
     RhythmResult as RhythmResult,
 )
 from .types import (
+    Section as Section,
+)
+from .types import (
+    SectionResult as SectionResult,
+)
+from .types import (
+    SectionType as SectionType,
+)
+from .types import (
+    SendTiming as SendTiming,
+)
+from .types import (
     StftResult as StftResult,
 )
 from .types import (
@@ -424,6 +463,9 @@ from .types import (
 )
 from .types import (
     TimeSignature as TimeSignature,
+)
+from .types import (
+    TransportState as TransportState,
 )
 
 __version__: str

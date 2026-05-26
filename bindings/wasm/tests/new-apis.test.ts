@@ -6,11 +6,15 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  analyzeMelody,
+  analyzeSections,
   Audio,
+  cqt,
   fourierTempogram,
   init,
   lufs,
   Mixer,
+  mixerScenePresetJson,
   mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
@@ -18,10 +22,13 @@ import {
   onsetEnvelope,
   pitchCorrectToMidi,
   plp,
+  RealtimeEngine,
   shortTermLufs,
+  StreamingEqualizer,
   tempogram,
   tempogramRatio,
   voiceChange,
+  vqt,
 } from '../dist/index.js';
 
 const SR = 22050;
@@ -307,8 +314,11 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('exposes live mixer controls and meter readers', () => {
       const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
-      const vocal = mixer.stripById('vocal');
-      expect(vocal).toBe(0);
+      const vocalIndex = mixer.stripById('vocal');
+      expect(vocalIndex).toBe(0);
+      // stripById returns number | null; an unknown id resolves to null.
+      expect(mixer.stripById('definitely-not-a-strip')).toBeNull();
+      const vocal = vocalIndex as number;
 
       mixer.setSoloSafe(vocal, true);
       mixer.setSoloed(vocal, false);
@@ -350,6 +360,144 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(Number.isFinite(audio.lufs().integratedLufs)).toBe(true);
       expect(audio.momentaryLufs().length).toBeGreaterThan(0);
       expect(audio.shortTermLufs().length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('RealtimeEngine parameter/transport parity', () => {
+    it('honors tunable queue capacities and reads back transport state', () => {
+      const engine = new RealtimeEngine(48000, 128, 32, 32);
+      engine.setTempo(120);
+      engine.addParameter({
+        id: 5,
+        name: 'gain',
+        unit: 'dB',
+        minValue: -60,
+        maxValue: 12,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 1,
+      });
+
+      // Sample-accurate + smoothed parameter changes queue without throwing.
+      expect(() => engine.setParameter(5, 6)).not.toThrow();
+      expect(() => engine.setParameterSmoothed(5, -3, -1)).not.toThrow();
+
+      engine.play();
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+
+      const state = engine.getTransportState();
+      expect(state.playing).toBe(true);
+      expect(state.sampleRate).toBe(48000);
+      expect(state.bpm).toBe(120);
+      expect(state.samplePosition).toBe(128);
+      engine.destroy();
+    });
+
+    it('seeks markers at a scheduled render frame', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(60);
+      engine.setMarkers([{ id: 9, ppq: 4, name: 'verse' }]);
+      // Seek to marker 9 (4 quarter notes at 60bpm = 4s = 192000 samples),
+      // scheduled at the head of the block.
+      expect(() => engine.seekMarker(9, -1)).not.toThrow();
+      engine.play();
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+      const state = engine.getTransportState();
+      expect(state.samplePosition).toBe(192000 + 128);
+      engine.destroy();
+    });
+  });
+
+  describe('StreamingEqualizer sidechain parity', () => {
+    it('accepts mono/stereo sidechain and clears it', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        const key = new Float32Array(128).fill(0.5);
+        expect(() => eq.setSidechainMono(key)).not.toThrow();
+        expect(() => eq.setSidechainStereo(key, key)).not.toThrow();
+        expect(() => eq.clearSidechain()).not.toThrow();
+        // Mismatched stereo lengths must throw before reaching WASM.
+        expect(() => eq.setSidechainStereo(key, new Float32Array(64))).toThrow();
+        // Processing still works after a sidechain round-trip.
+        const out = eq.processMono(new Float32Array(128).fill(0.25));
+        expect(out.length).toBe(128);
+      } finally {
+        eq.delete();
+      }
+    });
+  });
+
+  describe('Mixer imperative topology', () => {
+    it('adds/removes buses and VCA groups and reports counts', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 128);
+      try {
+        const busesBefore = mixer.busCount();
+        mixer.addBus('parallel-comp', 'aux');
+        expect(mixer.busCount()).toBe(busesBefore + 1);
+        mixer.removeBus('parallel-comp');
+        expect(mixer.busCount()).toBe(busesBefore);
+
+        const vcasBefore = mixer.vcaGroupCount();
+        mixer.addVcaGroup('all', -3, ['vocal']);
+        expect(mixer.vcaGroupCount()).toBe(vcasBefore + 1);
+        mixer.removeVcaGroup('all');
+        expect(mixer.vcaGroupCount()).toBe(vcasBefore);
+
+        mixer.compile();
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('mixerScenePresetJson aliases the canonical preset JSON', () => {
+      const json = mixerScenePresetJson('vocalReverbSend');
+      expect(json).toContain('"vocal-verb"');
+    });
+  });
+
+  describe('sections / melody / CQT / VQT parity', () => {
+    it('computes CQT and VQT magnitude grids', () => {
+      const cqtResult = cqt(signal, SR, 512, 32.7, 24, 12);
+      expect(cqtResult.nBins).toBe(24);
+      expect(cqtResult.nFrames).toBeGreaterThan(0);
+      expect(cqtResult.frequencies.length).toBe(24);
+      expect(cqtResult.magnitude.length).toBe(cqtResult.nBins * cqtResult.nFrames);
+      expect(cqtResult.sampleRate).toBe(SR);
+      expect(allFinite(cqtResult.magnitude)).toBe(true);
+
+      const vqtResult = vqt(signal, SR, 512, 32.7, 24, 12, 10);
+      expect(vqtResult.nBins).toBe(24);
+      expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
+      expect(allFinite(vqtResult.magnitude)).toBe(true);
+    });
+
+    it('analyzes melody contour with summary stats', () => {
+      // 440 Hz tone is squarely within the default melody fmin/fmax range.
+      const tone = generateSine(440, SR, 1.0);
+      const melody = analyzeMelody(tone, SR);
+      expect(Array.isArray(melody.points)).toBe(true);
+      expect(melody.points.length).toBeGreaterThan(0);
+      expect(Number.isFinite(melody.meanFrequency)).toBe(true);
+      expect(Number.isFinite(melody.pitchRangeOctaves)).toBe(true);
+      expect(Number.isFinite(melody.pitchStability)).toBe(true);
+      expect(Number.isFinite(melody.vibratoRate)).toBe(true);
+      const first = melody.points[0];
+      expect(Number.isFinite(first.time)).toBe(true);
+      expect(Number.isFinite(first.frequency)).toBe(true);
+      expect(Number.isFinite(first.confidence)).toBe(true);
+    });
+
+    it('analyzes song-structure sections', () => {
+      const sections = analyzeSections(signal, SR);
+      expect(Array.isArray(sections)).toBe(true);
+      for (const section of sections) {
+        expect(typeof section.name).toBe('string');
+        expect(Number.isFinite(section.start)).toBe(true);
+        expect(Number.isFinite(section.end)).toBe(true);
+        expect(section.end).toBeGreaterThanOrEqual(section.start);
+        expect(Number.isFinite(section.energyLevel)).toBe(true);
+        expect(Number.isFinite(section.confidence)).toBe(true);
+      }
     });
   });
 });

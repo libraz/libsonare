@@ -1246,3 +1246,101 @@ Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
   return VecToFloat32(env, result);
   SONARE_NODE_CATCH(env)
 }
+
+// ============================================================================
+// Features - Constant-Q / Variable-Q transforms
+// ============================================================================
+
+namespace {
+
+Napi::Value CqtResultToObject(Napi::Env env, const SonareCqtResult& result) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("nBins", Napi::Number::New(env, result.n_bins));
+  out.Set("nFrames", Napi::Number::New(env, result.n_frames));
+  out.Set("hopLength", Napi::Number::New(env, result.hop_length));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+
+  const size_t magnitude_count =
+      static_cast<size_t>(result.n_bins) * static_cast<size_t>(result.n_frames);
+  auto magnitude = Napi::Float32Array::New(env, magnitude_count);
+  if (magnitude_count > 0 && result.magnitude != nullptr) {
+    std::memcpy(magnitude.Data(), result.magnitude, magnitude_count * sizeof(float));
+  }
+  out.Set("magnitude", magnitude);
+
+  auto frequencies = Napi::Float32Array::New(env, static_cast<size_t>(result.n_bins));
+  if (result.n_bins > 0 && result.frequencies != nullptr) {
+    std::memcpy(frequencies.Data(), result.frequencies,
+                static_cast<size_t>(result.n_bins) * sizeof(float));
+  }
+  out.Set("frequencies", frequencies);
+  return out;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  const int hop_length =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
+  const float fmin =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 32.703f;
+  const int n_bins =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 84;
+  const int bins_per_octave =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
+
+  SonareCqtResult result{};
+  SonareError err = sonare_cqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
+                               bins_per_octave, &result);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Value out = CqtResultToObject(env, result);
+  sonare_free_cqt_result(&result);
+  return out;
+}
+
+Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  const int hop_length =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
+  const float fmin =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 32.703f;
+  const int n_bins =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 84;
+  const int bins_per_octave =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
+  const float gamma =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
+
+  SonareCqtResult result{};
+  SonareError err = sonare_vqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
+                               bins_per_octave, gamma, &result);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Value out = CqtResultToObject(env, result);
+  sonare_free_cqt_result(&result);
+  return out;
+}

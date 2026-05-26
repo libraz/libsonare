@@ -77,9 +77,94 @@ class Mixer:
         """Return the number of strips in the mixer."""
         self._require()
         lib = _get_lib()
+        if hasattr(lib, "sonare_mixer_get_strip_count"):
+            out = ctypes.c_size_t()
+            _check(lib.sonare_mixer_get_strip_count(self._handle, ctypes.byref(out)))
+            return int(out.value)
         if not hasattr(lib, "sonare_mixer_strip_count"):
             raise RuntimeError("libsonare was built without insert-automation support")
         return int(lib.sonare_mixer_strip_count(self._handle))
+
+    def add_bus(self, bus_id: str, role: str | None = None) -> None:
+        """Add a bus to the mixer topology.
+
+        ``role`` is one of ``"master"``, ``"aux"``, or ``"submix"`` (``None``
+        defaults to ``"aux"``). The routing graph is marked dirty; call
+        :meth:`compile` (or :meth:`process_stereo`) to rebuild.
+        """
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_add_bus"):
+            raise RuntimeError("libsonare was built without mixer bus support")
+        _check(
+            lib.sonare_mixer_add_bus(
+                self._handle,
+                bus_id.encode("utf-8"),
+                role.encode("utf-8") if role is not None else None,
+            )
+        )
+
+    def remove_bus(self, bus_id: str) -> None:
+        """Remove a bus by id from the mixer topology."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_remove_bus"):
+            raise RuntimeError("libsonare was built without mixer bus support")
+        _check(lib.sonare_mixer_remove_bus(self._handle, bus_id.encode("utf-8")))
+
+    def bus_count(self) -> int:
+        """Return the number of buses in the mixer topology."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_bus_count"):
+            raise RuntimeError("libsonare was built without mixer bus support")
+        out = ctypes.c_size_t()
+        _check(lib.sonare_mixer_bus_count(self._handle, ctypes.byref(out)))
+        return int(out.value)
+
+    def add_vca_group(
+        self, group_id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
+    ) -> None:
+        """Add a VCA group with the given id, gain offset, and strip members."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_add_vca_group"):
+            raise RuntimeError("libsonare was built without mixer VCA support")
+        member_list = list(members or [])
+        if member_list:
+            member_array = (ctypes.c_char_p * len(member_list))(
+                *[m.encode("utf-8") for m in member_list]
+            )
+            member_ptr = ctypes.cast(member_array, ctypes.POINTER(ctypes.c_char_p))
+        else:
+            member_ptr = None
+        _check(
+            lib.sonare_mixer_add_vca_group(
+                self._handle,
+                group_id.encode("utf-8"),
+                ctypes.c_float(gain_db),
+                member_ptr,
+                ctypes.c_size_t(len(member_list)),
+            )
+        )
+
+    def remove_vca_group(self, group_id: str) -> None:
+        """Remove a VCA group by id from the mixer topology."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_remove_vca_group"):
+            raise RuntimeError("libsonare was built without mixer VCA support")
+        _check(lib.sonare_mixer_remove_vca_group(self._handle, group_id.encode("utf-8")))
+
+    def vca_group_count(self) -> int:
+        """Return the number of VCA groups in the mixer topology."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_vca_group_count"):
+            raise RuntimeError("libsonare was built without mixer VCA support")
+        out = ctypes.c_size_t()
+        _check(lib.sonare_mixer_vca_group_count(self._handle, ctypes.byref(out)))
+        return int(out.value)
 
     def _strip_handle(self, strip: StripRef) -> ctypes.c_void_p:
         """Resolve a strip reference to a borrowed native handle.
@@ -172,12 +257,14 @@ class Mixer:
         send_id: str,
         destination_bus_id: str,
         send_db: float = 0.0,
-        timing: int = 0,
+        timing: SendTiming | str | int = SendTiming.PRE_FADER,
     ) -> int:
         """Add a send from a strip to a bus and return its send index.
 
-        ``timing`` is ``0`` for pre-fader or ``1`` for post-fader. Call
-        :meth:`compile` after adding sends before processing.
+        ``timing`` accepts a :class:`SendTiming` enum, a name
+        (``"pre_fader"``/``"post_fader"`` or ``"pre"``/``"post"``), or an int
+        (``0`` pre-fader, ``1`` post-fader). Call :meth:`compile` after adding
+        sends before processing.
         """
         handle = self._strip_handle(strip)
         index_out = ctypes.c_size_t()
@@ -187,7 +274,7 @@ class Mixer:
                 send_id.encode("utf-8"),
                 destination_bus_id.encode("utf-8"),
                 ctypes.c_float(send_db),
-                ctypes.c_int(timing),
+                ctypes.c_int(_send_timing_value(timing)),
                 ctypes.byref(index_out),
             )
         )

@@ -44,6 +44,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetCapturePunch(const Napi::CallbackInfo& info);
   Napi::Value ResetCapture(const Napi::CallbackInfo& info);
   Napi::Value CaptureStatus(const Napi::CallbackInfo& info);
+  Napi::Value CapturedAudio(const Napi::CallbackInfo& info);
   Napi::Value SetGraph(const Napi::CallbackInfo& info);
   Napi::Value GraphNodeCount(const Napi::CallbackInfo& info);
   Napi::Value GraphConnectionCount(const Napi::CallbackInfo& info);
@@ -52,11 +53,16 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value BounceOffline(const Napi::CallbackInfo& info);
   Napi::Value FreezeOffline(const Napi::CallbackInfo& info);
   Napi::Value DrainTelemetry(const Napi::CallbackInfo& info);
+  Napi::Value DrainMeterTelemetry(const Napi::CallbackInfo& info);
+  Napi::Value SetParameter(const Napi::CallbackInfo& info);
+  Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
+  Napi::Value GetTransportState(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
   SonareRealtimeEngine* engine_ = nullptr;
   std::vector<Napi::Reference<Napi::Float32Array>> capture_refs_;
   std::vector<float*> capture_ptrs_;
+  int64_t capture_capacity_frames_ = 0;
 };
 
 #endif  // SONARE_NODE_SONARE_WRAP_ENGINE_H_

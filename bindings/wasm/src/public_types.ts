@@ -296,6 +296,48 @@ export interface Section {
 }
 
 /**
+ * A single melody contour point (mirrors the C `SonareMelodyPoint`).
+ */
+export interface MelodyPoint {
+  /** Frame time in seconds. */
+  time: number;
+  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
+  frequency: number;
+  /** Voicing confidence in `[0, 1]`. */
+  confidence: number;
+}
+
+/**
+ * Melody analysis result (mirrors the C `SonareMelodyResult`).
+ */
+export interface MelodyResult {
+  points: MelodyPoint[];
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+}
+
+/**
+ * Constant-Q / Variable-Q transform magnitude result (mirrors the C
+ * `SonareCqtResult`).
+ */
+export interface CqtResult {
+  /** Number of frequency bins. */
+  nBins: number;
+  /** Number of time frames. */
+  nFrames: number;
+  /** Hop length in samples. */
+  hopLength: number;
+  /** Sample rate in Hz. */
+  sampleRate: number;
+  /** Row-major `[nBins x nFrames]` magnitude matrix. */
+  magnitude: Float32Array;
+  /** Center frequency (Hz) of each of the `nBins` bins. */
+  frequencies: Float32Array;
+}
+
+/**
  * Timbre characteristics
  */
 export interface Timbre {
