@@ -185,3 +185,29 @@ TEST_CASE("Assistant exposes speech mono-maker amount", "[mastering][assistant]"
   REQUIRE(result.config.stereo.mono_maker.enabled);
   REQUIRE(result.config.stereo.mono_maker.config.amount == 0.35f);
 }
+
+TEST_CASE("Assistant target platform and streaming-safe preference affect suggestions",
+          "[mastering][assistant]") {
+  assistant::AudioProfile profile;
+  profile.spectral.flatness = 0.6f;
+  profile.genre_candidates = {{"pop", 0.9f}};
+
+  assistant::AssistantConfig broadcast;
+  broadcast.target_platform = "broadcast";
+  auto broadcast_result = assistant::suggest_chain(profile, broadcast);
+  REQUIRE(broadcast_result.config.loudness.target_lufs == -23.0f);
+
+  assistant::AssistantConfig streaming_safe;
+  streaming_safe.enable_repair = true;
+  streaming_safe.prefer_streaming_safe = true;
+  auto safe_result = assistant::suggest_chain(profile, streaming_safe);
+  REQUIRE(safe_result.config.repair.declick.enabled);
+  REQUIRE_FALSE(safe_result.config.repair.denoise.enabled);
+
+  assistant::AssistantConfig offline_repair;
+  offline_repair.enable_repair = true;
+  offline_repair.prefer_streaming_safe = false;
+  auto repair_result = assistant::suggest_chain(profile, offline_repair);
+  REQUIRE(repair_result.config.repair.declick.enabled);
+  REQUIRE(repair_result.config.repair.denoise.enabled);
+}

@@ -42,6 +42,30 @@ void set_loudness(api::MasteringChainConfig& chain, float target_lufs, float cei
 
 void explain(std::vector<std::string>& out, std::string text) { out.push_back(std::move(text)); }
 
+void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs,
+                               float* ceiling_db) {
+  *target_lufs = config.target_lufs;
+  *ceiling_db = config.ceiling_db;
+
+  const AssistantConfig defaults;
+  const bool loudness_is_default = config.target_lufs == defaults.target_lufs;
+  const bool ceiling_is_default = config.ceiling_db == defaults.ceiling_db;
+  if (!loudness_is_default && !ceiling_is_default) {
+    return;
+  }
+
+  if (config.target_platform == "broadcast") {
+    if (loudness_is_default) *target_lufs = -23.0f;
+    if (ceiling_is_default) *ceiling_db = -1.0f;
+  } else if (config.target_platform == "podcast") {
+    if (loudness_is_default) *target_lufs = -16.0f;
+    if (ceiling_is_default) *ceiling_db = -1.0f;
+  } else if (config.target_platform == "club" || config.target_platform == "cd") {
+    if (loudness_is_default) *target_lufs = -9.0f;
+    if (ceiling_is_default) *ceiling_db = -0.3f;
+  }
+}
+
 }  // namespace
 
 AssistantResult suggest_chain(const float* samples, std::size_t length, int sample_rate,
@@ -65,7 +89,10 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   result.config = api::preset_config(preset_for_genre(genre));
   explain(result.explanation, "base preset selected from top genre candidate: " + genre);
 
-  set_loudness(result.config, config.target_lufs, config.ceiling_db);
+  float target_lufs = config.target_lufs;
+  float ceiling_db = config.ceiling_db;
+  resolve_platform_loudness(config, &target_lufs, &ceiling_db);
+  set_loudness(result.config, target_lufs, ceiling_db);
   explain(result.explanation, "target loudness and ceiling applied from AssistantConfig");
 
   const bool dark = profile.spectral.centroid_hz > 0.0f && profile.spectral.centroid_hz < 1500.0f;
@@ -116,10 +143,12 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
 
   if (config.enable_repair) {
     result.config.repair.declick.enabled = true;
-    if (profile.spectral.flatness > 0.35f) {
+    if (profile.spectral.flatness > 0.35f && !config.prefer_streaming_safe) {
       result.config.repair.denoise.enabled = true;
     }
-    explain(result.explanation, "repair stages enabled by AssistantConfig");
+    explain(result.explanation, config.prefer_streaming_safe
+                                    ? "streaming-safe repair enabled by AssistantConfig"
+                                    : "repair stages enabled by AssistantConfig");
   }
 
   return result;
