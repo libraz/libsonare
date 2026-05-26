@@ -85,7 +85,7 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
       assign_biquad(shelf, rt::rbj_high_shelf_from_design_d(shelf_design, dynamic_gain_db));
       const float shelved = shelf.process(channels[ch][i]);
       const float harmonic = std::tanh(high * 4.0f) * config_.amount;
-      channels[ch][i] = std::clamp(shelved + harmonic, -1.5f, 1.5f);
+      channels[ch][i] = shelved + harmonic;
     }
     previous_[static_cast<size_t>(ch)] = previous;
     envelope_[static_cast<size_t>(ch)] = envelope;
@@ -143,10 +143,30 @@ void AirBand::validate_config(const AirBandConfig& config) {
 }
 
 void AirBand::ensure_state(int num_channels) {
-  if (previous_.size() != static_cast<size_t>(num_channels)) {
-    previous_.assign(static_cast<size_t>(num_channels), 0.0f);
-    envelope_.assign(static_cast<size_t>(num_channels), 0.0f);
-    rebuild_filters(num_channels);
+  const auto target_size = static_cast<size_t>(num_channels);
+  if (previous_.size() != target_size || envelope_.size() != target_size ||
+      shelf_.size() != target_size || detector_.size() != target_size) {
+    const size_t old_previous_size = previous_.size();
+    const size_t old_envelope_size = envelope_.size();
+    const size_t old_shelf_size = shelf_.size();
+    const size_t old_detector_size = detector_.size();
+    previous_.resize(target_size, 0.0f);
+    envelope_.resize(target_size, 0.0f);
+    shelf_.resize(target_size);
+    detector_.resize(target_size);
+    for (size_t i = old_previous_size; i < target_size; ++i) {
+      previous_[i] = 0.0f;
+    }
+    for (size_t i = old_envelope_size; i < target_size; ++i) {
+      envelope_[i] = 0.0f;
+    }
+    for (size_t i = old_shelf_size; i < target_size; ++i) {
+      shelf_[i] = make_high_shelf(config_.shelf_frequency_hz, sample_rate_, 0.0f);
+    }
+    for (size_t i = old_detector_size; i < target_size; ++i) {
+      detector_[i] = make_highpass(config_.shelf_frequency_hz, sample_rate_,
+                                   sonare::constants::kButterworthQD);
+    }
   }
 }
 

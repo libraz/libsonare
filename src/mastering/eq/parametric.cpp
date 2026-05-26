@@ -46,7 +46,7 @@ void ParametricEq::prepare_channels(int num_channels) {
   }
   num_channels_ = num_channels;
   for (auto& band_states : states_) {
-    band_states.assign(static_cast<size_t>(num_channels), {});
+    band_states.resize(static_cast<size_t>(num_channels));
   }
 }
 
@@ -68,7 +68,7 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
   } else if (num_channels_ != num_channels && num_channels_ == 0) {
     num_channels_ = num_channels;
     for (auto& band_states : states_) {
-      band_states.assign(static_cast<size_t>(num_channels), {});
+      band_states.resize(static_cast<size_t>(num_channels));
     }
   }
 

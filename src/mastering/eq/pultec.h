@@ -69,7 +69,8 @@ class PultecEq : public common::ProcessorBase {
     float high_charge = 0.0f;
   };
   std::vector<ComponentState> component_state_;
-  double sample_rate_ = 48000.0;
+  static constexpr double kDefaultSampleRate = 48000.0;
+  double sample_rate_ = kDefaultSampleRate;
   float low_frequency_hz_ = 60.0f;
   float low_boost_ = 0.0f;
   float low_attenuation_ = 0.0f;
@@ -80,7 +81,8 @@ class PultecEq : public common::ProcessorBase {
   float high_attenuation_ = 0.0f;
   PultecComponentModel component_model_ = PultecComponentModel::CurveOnly;
   float output_drive_ = 0.0f;
-  float low_component_alpha_ = sonare::constants::kTwoPi * 60.0f / 48000.0f;
+  float low_component_alpha_ =
+      sonare::constants::kTwoPi * 60.0f / static_cast<float>(kDefaultSampleRate);
   float high_component_alpha_ = 0.75f;
 };
 

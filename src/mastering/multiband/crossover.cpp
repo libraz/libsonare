@@ -48,8 +48,7 @@ std::vector<SectionSpec> butterworth_section_specs(int order) {
   std::vector<SectionSpec> sections;
   const int pairs = order / 2;
   for (int k = 0; k < pairs; ++k) {
-    const double theta = kPiD * (2 * k + 1) / (2.0 * order);
-    sections.push_back({1.0, 1.0, 1.0 / (2.0 * std::sin(theta))});
+    sections.push_back({1.0, 1.0, rt::butterworth_stage_q(order, k)});
   }
   return sections;
 }

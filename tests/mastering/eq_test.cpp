@@ -57,6 +57,15 @@ float peak_abs(const std::vector<float>& samples) {
   return peak;
 }
 
+float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
+  const size_t count = std::min(lhs.size(), rhs.size());
+  float peak = 0.0f;
+  for (size_t i = 0; i < count; ++i) {
+    peak = std::max(peak, std::abs(lhs[i] - rhs[i]));
+  }
+  return peak;
+}
+
 float kernel_magnitude_at(const std::vector<float>& kernel, double frequency_hz,
                           double sample_rate) {
   std::complex<double> response{0.0, 0.0};
@@ -1943,6 +1952,31 @@ TEST_CASE("PultecEq component model adds passive loss and output nonlinearity", 
   REQUIRE(rms_tail(component_audio, 512) < rms_tail(curve_audio, 512));
   REQUIRE(peak_abs(component_audio) <= 1.1f);
   REQUIRE(component.component_model() == PultecComponentModel::Eqp1aWdf);
+}
+
+TEST_CASE("PultecEq component model preserves channel state when channel count grows",
+          "[mastering][eq]") {
+  PultecEq mono_path;
+  PultecEq stereo_path;
+  mono_path.prepare(48000.0, 512);
+  stereo_path.prepare(48000.0, 512);
+  mono_path.set_component_model(PultecComponentModel::Eqp1aWdf);
+  stereo_path.set_component_model(PultecComponentModel::Eqp1aWdf);
+  mono_path.set_low_boost(5.0f);
+  stereo_path.set_low_boost(5.0f);
+
+  auto warmup = sine(60.0f, 48000, 4096, 0.5f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  auto expected_left = sine(60.0f, 48000, 512, 0.5f);
+  auto actual_left = expected_left;
+  auto actual_right = expected_left;
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
 TEST_CASE("ApiStyleEq snaps frequency and gain to stepped controls", "[mastering][eq]") {

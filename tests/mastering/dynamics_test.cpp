@@ -53,6 +53,15 @@ float peak_abs(const std::vector<float>& samples, size_t skip = 0) {
   return peak;
 }
 
+float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
+  const size_t count = std::min(lhs.size(), rhs.size());
+  float peak = 0.0f;
+  for (size_t i = 0; i < count; ++i) {
+    peak = std::max(peak, std::abs(lhs[i] - rhs[i]));
+  }
+  return peak;
+}
+
 void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
@@ -294,12 +303,34 @@ TEST_CASE("UpwardCompressor raises quiet signal below threshold", "[mastering][d
   REQUIRE(rms_tail(quiet, 4096) / quiet_before > 2.0f);
   REQUIRE(rms_tail(loud, 4096) / loud_before < 1.05f);
   REQUIRE(upward.last_gain_db() == 0.0f);
+  REQUIRE(upward.last_gain_reduction_db() == upward.last_gain_db());
 }
 
 TEST_CASE("UpwardCompressor validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(UpwardCompressor({-24.0f, 0.5f, 10.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardCompressor({-24.0f, 2.0f, -1.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardCompressor({-24.0f, 2.0f, 10.0f, 100.0f, -1.0f}));
+}
+
+TEST_CASE("UpwardCompressor preserves existing channel state when channel count grows",
+          "[mastering][dynamics]") {
+  UpwardCompressor mono_path({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  UpwardCompressor stereo_path({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  mono_path.prepare(48000.0, 1024);
+  stereo_path.prepare(48000.0, 1024);
+
+  std::vector<float> warmup(4096, 0.02f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  std::vector<float> expected_left(512, 0.02f);
+  std::vector<float> actual_left = expected_left;
+  std::vector<float> actual_right(512, 0.02f);
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
 TEST_CASE("UpwardExpander raises signal above threshold and leaves quiet signal alone",
@@ -319,12 +350,34 @@ TEST_CASE("UpwardExpander raises signal above threshold and leaves quiet signal 
   REQUIRE(rms_tail(quiet, 4096) / quiet_before < 1.05f);
   REQUIRE(rms_tail(loud, 4096) / loud_before > 1.4f);
   REQUIRE(upward.last_gain_db() > 3.0f);
+  REQUIRE(upward.last_gain_reduction_db() == upward.last_gain_db());
 }
 
 TEST_CASE("UpwardExpander validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(UpwardExpander({-24.0f, 0.5f, 10.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, -1.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, 10.0f, 100.0f, -1.0f}));
+}
+
+TEST_CASE("UpwardExpander preserves existing channel state when channel count grows",
+          "[mastering][dynamics]") {
+  UpwardExpander mono_path({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  UpwardExpander stereo_path({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  mono_path.prepare(48000.0, 1024);
+  stereo_path.prepare(48000.0, 1024);
+
+  std::vector<float> warmup(4096, 0.5f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  std::vector<float> expected_left(512, 0.5f);
+  std::vector<float> actual_left = expected_left;
+  std::vector<float> actual_right(512, 0.5f);
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
 TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[mastering][dynamics]") {
@@ -344,6 +397,27 @@ TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[masterin
   REQUIRE(rms_tail(high, 4096) / high_before < 0.65f);
   REQUIRE(rms_tail(low, 4096) / low_before > 0.75f);
   REQUIRE(high_reduction_db < -1.0f);
+}
+
+TEST_CASE("DeEsser preserves existing channel filter state when channel count grows",
+          "[mastering][dynamics]") {
+  DeEsser mono_path({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  DeEsser stereo_path({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  mono_path.prepare(48000.0, 1024);
+  stereo_path.prepare(48000.0, 1024);
+
+  auto warmup = sine(8000.0f, 48000, 4096, 0.5f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  auto expected_left = sine(8000.0f, 48000, 512, 0.5f);
+  auto actual_left = expected_left;
+  auto actual_right = expected_left;
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
 TEST_CASE("DeEsser validates configuration", "[mastering][dynamics]") {

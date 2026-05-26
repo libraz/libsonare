@@ -29,6 +29,7 @@ class UpwardExpander : public common::ProcessorBase {
   void set_config(const UpwardExpanderConfig& config);
   const UpwardExpanderConfig& config() const { return config_; }
   float last_gain_db() const { return last_gain_db_; }
+  float last_gain_reduction_db() const override { return last_gain_db_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = threshold_db

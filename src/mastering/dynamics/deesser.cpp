@@ -154,15 +154,26 @@ float DeEsser::gain_reduction_db(float input_db, const DeEsserConfig& config) {
 }
 
 void DeEsser::ensure_state(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
+  const auto target_size = static_cast<size_t>(num_channels);
+  if (followers_.size() == target_size && bandpass_.size() == target_size &&
+      bandpass2_.size() == target_size) {
     return;
   }
 
-  bandpass_.assign(static_cast<size_t>(num_channels), filter_coeffs_);
-  bandpass2_.assign(static_cast<size_t>(num_channels), filter_coeffs_);
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+  const size_t old_bandpass_size = bandpass_.size();
+  const size_t old_bandpass2_size = bandpass2_.size();
+  const size_t old_followers_size = followers_.size();
+  bandpass_.resize(target_size);
+  bandpass2_.resize(target_size);
+  followers_.resize(target_size);
+  for (size_t i = old_bandpass_size; i < target_size; ++i) {
+    bandpass_[i] = filter_coeffs_;
+  }
+  for (size_t i = old_bandpass2_size; i < target_size; ++i) {
+    bandpass2_[i] = filter_coeffs_;
+  }
+  for (size_t i = old_followers_size; i < target_size; ++i) {
+    followers_[i].prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }
 }
 

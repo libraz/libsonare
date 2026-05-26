@@ -53,7 +53,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
     for (int i = 0; i < num_samples; ++i) {
       const float presence = bandpass_[static_cast<size_t>(ch)].process(channels[ch][i]);
       const float harmonic = std::tanh(presence * config_.drive);
-      channels[ch][i] = std::clamp(channels[ch][i] + harmonic * config_.amount, -1.5f, 1.5f);
+      channels[ch][i] += harmonic * config_.amount;
     }
   }
 }
@@ -108,9 +108,13 @@ void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
 }
 
 void PresenceEnhancer::ensure_state(int num_channels) {
-  if (bandpass_.size() != static_cast<size_t>(num_channels)) {
-    bandpass_.assign(static_cast<size_t>(num_channels),
-                     make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q));
+  const auto target_size = static_cast<size_t>(num_channels);
+  if (bandpass_.size() != target_size) {
+    const size_t old_size = bandpass_.size();
+    bandpass_.resize(target_size);
+    for (size_t i = old_size; i < target_size; ++i) {
+      bandpass_[i] = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
+    }
   }
 }
 

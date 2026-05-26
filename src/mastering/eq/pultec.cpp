@@ -186,7 +186,7 @@ void PultecEq::update_component_coefficients() {
 void PultecEq::prepare_component_state(int num_channels) {
   if (num_channels <= 0) return;
   if (component_state_.size() == static_cast<size_t>(num_channels)) return;
-  component_state_.assign(static_cast<size_t>(num_channels), {});
+  component_state_.resize(static_cast<size_t>(num_channels));
 }
 
 float PultecEq::process_component_sample(float input, int channel) {
