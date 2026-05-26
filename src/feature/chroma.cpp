@@ -15,37 +15,13 @@ namespace {
 
 std::vector<float> normalize_chroma_columns(std::vector<float> features, int n_chroma, int n_frames,
                                             int norm) {
-  for (int t = 0; t < n_frames; ++t) {
-    float norm_val = 0.0f;
-
-    if (norm == 0) {
-      for (int c = 0; c < n_chroma; ++c) {
-        norm_val = std::max(norm_val, std::abs(features[c * n_frames + t]));
-      }
-    } else if (norm == 1) {
-      for (int c = 0; c < n_chroma; ++c) {
-        norm_val += std::abs(features[c * n_frames + t]);
-      }
-    } else {
-      for (int c = 0; c < n_chroma; ++c) {
-        float val = features[c * n_frames + t];
-        norm_val += val * val;
-      }
-      norm_val = std::sqrt(norm_val);
-    }
-
-    if (norm_val > constants::kEpsilon) {
-      for (int c = 0; c < n_chroma; ++c) {
-        features[c * n_frames + t] /= norm_val;
-      }
-    } else {
-      for (int c = 0; c < n_chroma; ++c) {
-        features[c * n_frames + t] = 0.0f;
-      }
-    }
+  NormType norm_type = NormType::L2;
+  if (norm == 0) {
+    norm_type = NormType::Inf;
+  } else if (norm == 1) {
+    norm_type = NormType::L1;
   }
-
-  return features;
+  return normalize_matrix(features.data(), n_chroma, n_frames, /*axis=*/0, norm_type);
 }
 
 }  // namespace

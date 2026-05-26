@@ -7,6 +7,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/nnls.h"
+#include "util/vector_normalize.h"
 
 namespace sonare {
 
@@ -56,7 +57,8 @@ std::vector<float> whiten_rows(const std::vector<float>& magnitude, int n_bins, 
         var += diff * diff;
       }
       const float stddev = std::sqrt(var / static_cast<float>(end - start));
-      // Small regularizer to avoid division by zero on flat rows.
+      // Domain-specific z-score floor: larger than constants::kEpsilon so flat
+      // CQT rows do not get over-amplified by near-zero variance.
       constexpr float kStddevFloor = 1e-6f;
       out[bin * n_frames + frame] =
           std::max(0.0f, (magnitude[bin * n_frames + frame] - mean) / (stddev + kStddevFloor));
@@ -67,17 +69,7 @@ std::vector<float> whiten_rows(const std::vector<float>& magnitude, int n_bins, 
 }
 
 void normalize_chroma_frames(std::vector<float>& chroma, int n_chroma, int n_frames) {
-  for (int frame = 0; frame < n_frames; ++frame) {
-    float max_value = 0.0f;
-    for (int c = 0; c < n_chroma; ++c) {
-      max_value = std::max(max_value, chroma[c * n_frames + frame]);
-    }
-    if (max_value > constants::kEpsilon) {
-      for (int c = 0; c < n_chroma; ++c) {
-        chroma[c * n_frames + frame] /= max_value;
-      }
-    }
-  }
+  chroma = normalize_matrix(chroma.data(), n_chroma, n_frames, /*axis=*/0, NormType::Inf);
 }
 
 std::vector<float> cqt_magnitude_to_chroma(const CqtResult& cqt_result, int bins_per_octave) {
