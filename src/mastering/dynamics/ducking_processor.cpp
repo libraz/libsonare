@@ -1,7 +1,6 @@
 #include "mastering/dynamics/ducking_processor.h"
 
 #include <algorithm>
-#include <cmath>
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
@@ -12,7 +11,10 @@ DuckingProcessor::DuckingProcessor(DuckingConfig config)
     : config_(config), router_(to_router_config(config)) {}
 
 void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  if (!(sample_rate > 0.0)) {
+    throw std::invalid_argument("sample_rate must be positive");
+  }
+  sample_rate_ = sample_rate;
   router_.prepare(sample_rate_, max_block_size);
 }
 
@@ -23,10 +25,7 @@ void DuckingProcessor::process(float* const* channels, int num_channels, int num
 
 void DuckingProcessor::reset() { router_.reset(); }
 
-int DuckingProcessor::latency_samples() const noexcept {
-  return static_cast<int>(
-      std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate_));
-}
+int DuckingProcessor::latency_samples() const noexcept { return router_.latency_samples(); }
 
 void DuckingProcessor::set_key_input(const float* const* channels, int num_channels,
                                      int num_samples) {

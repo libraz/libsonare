@@ -1,6 +1,8 @@
 #include "mastering/final/dither.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <random>
 #include <stdexcept>
 #include <utility>
@@ -56,8 +58,13 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
     }
 
     const float dithered = sample + (dist(rng) + dist(rng)) * lsb + feedback * lsb;
+    // Noise-shaping feedback can push the dithered value beyond full scale;
+    // clamp before quantizing so the output never leaves [-1, 1] regardless of
+    // the downstream clamp setting. The error feedback uses the clamped output
+    // so the shaper accounts for the clamping as part of the quantization step.
+    const float clamped = std::clamp(dithered, -1.0f, 1.0f);
     // Quantize the dithered signal to the target LSB resolution.
-    const float quantized = std::round(dithered / lsb) * lsb;
+    const float quantized = std::round(clamped / lsb) * lsb;
     const float quant_error = (dithered - quantized) / lsb;
 
     // Shift the error history (newest at index 0).

@@ -57,20 +57,6 @@ int slope_db_oct(CutFilterSlope slope) {
   throw std::invalid_argument("unsupported cut filter slope");
 }
 
-common::BiquadCoeffs first_order_lowpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(k * inv);
-  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
-common::BiquadCoeffs first_order_highpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(inv);
-  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
 }  // namespace
 
 void CutFilter::prepare(double sample_rate, int max_block_size) {
@@ -227,8 +213,9 @@ void CutFilter::build_sections(std::array<Section, kMaxSections>& sections, EqBa
       static_cast<float>(2.0 * kPiD * static_cast<double>(frequency_hz) / sample_rate_);
   size_t section_index = 0;
   if ((order % 2) != 0) {
-    sections[section_index++] = {
-        type == EqBandType::HighPass ? first_order_highpass(w0) : first_order_lowpass(w0), true};
+    sections[section_index++] = {type == EqBandType::HighPass ? common::first_order_highpass(w0)
+                                                              : common::first_order_lowpass(w0),
+                                 true};
   }
 
   const int pair_count = order / 2;

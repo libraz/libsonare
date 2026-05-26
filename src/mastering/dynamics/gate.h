@@ -51,7 +51,8 @@ class Gate : public common::ProcessorBase {
   float last_gain_reduction_db_ = 0.0f;
   int hold_samples_remaining_ = 0;
   bool gate_open_ = false;
-  float hpf_coeff_ = 0.0f;
+  float hpf_b0_ = 1.0f;
+  float hpf_a1_ = 0.0f;
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;
 };

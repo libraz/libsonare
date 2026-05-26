@@ -65,7 +65,9 @@ void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
     }
 
     if (level == 0) {
-      noise_sigma = median_abs(details) / 0.67448975f;
+      // Phi^-1(0.75): scales MAD to Gaussian sigma
+      static constexpr float kMadGaussianConstant = 0.67448975f;
+      noise_sigma = median_abs(details) / kMadGaussianConstant;
     }
     const float level_threshold = bayes_shrink_threshold(details, noise_sigma, threshold);
     for (size_t i = 0; i < pairs; ++i) {

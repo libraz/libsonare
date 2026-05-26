@@ -16,6 +16,8 @@ constexpr std::array<float, GraphicEq::kNumBands> kCenterFrequencies = {
 
 constexpr float kBaseQ = 3.2f;
 constexpr float kMaxQ = 7.5f;
+// Gain magnitude (dB) at which the Q curve reaches kMaxQ.
+constexpr float kMaxGainForQ = 12.0f;
 
 }  // namespace
 
@@ -89,7 +91,7 @@ size_t GraphicEq::nearest_band(float frequency_hz) const {
 }
 
 float GraphicEq::band_q_for_gain_db(float gain_db) {
-  const float amount = std::min(std::abs(gain_db), 12.0f) / 12.0f;
+  const float amount = std::min(std::abs(gain_db), kMaxGainForQ) / kMaxGainForQ;
   return kBaseQ + (kMaxQ - kBaseQ) * amount;
 }
 

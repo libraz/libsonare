@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -14,7 +15,6 @@ namespace sonare::mastering::dynamics {
 namespace {
 
 using sonare::constants::kFloorDb;
-using sonare::constants::kPiD;
 
 constexpr float kRmsWindowMs = 10.0f;
 constexpr float kLogRmsWindowMs = 50.0f;
@@ -76,6 +76,11 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
   const float makeup_db = compute_makeup_db(config_);
 
+  if (hpf_x1_.size() != static_cast<size_t>(num_channels)) {
+    hpf_x1_.assign(static_cast<size_t>(num_channels), 0.0f);
+    hpf_y1_.assign(static_cast<size_t>(num_channels), 0.0f);
+  }
+
   const float inv_channels = 1.0f / static_cast<float>(num_channels);
   float max_reduction = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
@@ -90,9 +95,10 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     for (int ch = 0; ch < num_channels; ++ch) {
       float s = channels[ch][i];
       if (config_.sidechain_hpf_enabled) {
-        const float y = hpf_b0_ * (s - hpf_x1_) + hpf_a1_ * hpf_y1_;
-        hpf_x1_ = s;
-        hpf_y1_ = y;
+        const auto idx = static_cast<size_t>(ch);
+        const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
+        hpf_x1_[idx] = s;
+        hpf_y1_[idx] = y;
         s = y;
       }
       peak_lin = std::max(peak_lin, std::abs(s));
@@ -141,8 +147,8 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
 void Compressor::reset() {
   rms_state_ = 0.0f;
-  hpf_x1_ = 0.0f;
-  hpf_y1_ = 0.0f;
+  std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
+  std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   pdr_state_db_ = 0.0f;
   reduction_smoother_.reset(0.0f);
   last_gain_reduction_db_ = 0.0f;
@@ -226,13 +232,12 @@ void Compressor::update_coefficients() {
   rms_coeff_ = time_to_coefficient(sample_rate_, kRmsWindowMs);
   log_rms_coeff_ = time_to_coefficient(sample_rate_, kLogRmsWindowMs);
   pdr_coeff_ = time_to_coefficient(sample_rate_, config_.pdr_time_ms);
-  const float cutoff =
-      std::clamp(config_.sidechain_hpf_hz, 1.0f, static_cast<float>(sample_rate_ * 0.49));
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Same
   // 6 dB/oct slope as a 1-pole RC, but the cutoff is frequency-accurate.
-  const double g = std::tan(kPiD * static_cast<double>(cutoff) / sample_rate_);
-  hpf_b0_ = static_cast<float>(1.0 / (1.0 + g));
-  hpf_a1_ = static_cast<float>((1.0 - g) / (1.0 + g));
+  const auto hpf =
+      common::onepole_highpass_coeffs(static_cast<double>(config_.sidechain_hpf_hz), sample_rate_);
+  hpf_b0_ = hpf.b0;
+  hpf_a1_ = hpf.a1;
 }
 
 }  // namespace sonare::mastering::dynamics

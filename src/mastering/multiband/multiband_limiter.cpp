@@ -83,6 +83,16 @@ void MultibandLimiter::reset() {
   std::fill(last_gain_reductions_db_.begin(), last_gain_reductions_db_.end(), 0.0f);
 }
 
+int MultibandLimiter::latency_samples() const noexcept {
+  // All bands share the same lookahead configuration, so the per-band limiter
+  // latency is uniform; report band 0's latency. Guard against an empty band
+  // list (e.g. before prepare()).
+  if (limiters_.empty()) {
+    return 0;
+  }
+  return limiters_[0].latency_samples();
+}
+
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   validate_config(config);
   config_ = config;

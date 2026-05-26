@@ -31,6 +31,7 @@ class SidechainRouter : public common::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int latency_samples() const noexcept override { return lookahead_samples_; }
 
   // Borrows channel pointers until the next set_sidechain(), clear_sidechain(),
   // or process() call that consumes them. The caller owns the buffers and must
@@ -72,7 +73,8 @@ class SidechainRouter : public common::ProcessorBase {
   std::vector<common::LookaheadBuffer> gain_lookahead_;
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;
-  float hpf_coeff_ = 0.0f;
+  float hpf_b0_ = 1.0f;
+  float hpf_a1_ = 0.0f;
   float last_gain_reduction_db_ = 0.0f;
 };
 

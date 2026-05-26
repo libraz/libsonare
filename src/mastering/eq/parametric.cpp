@@ -13,20 +13,6 @@ namespace {
 
 using sonare::constants::kPiD;
 
-common::BiquadCoeffs first_order_lowpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(k * inv);
-  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
-common::BiquadCoeffs first_order_highpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(inv);
-  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
 float safe_q(float q) {
   if (!(q > 0.0f)) {
     throw std::invalid_argument("EQ band Q must be positive");
@@ -196,10 +182,10 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
   };
   if (band.slope_db_oct == 6) {
     if (band.type == EqBandType::LowPass) {
-      return from_common(first_order_lowpass(w0f));
+      return from_common(common::first_order_lowpass(w0f));
     }
     if (band.type == EqBandType::HighPass) {
-      return from_common(first_order_highpass(w0f));
+      return from_common(common::first_order_highpass(w0f));
     }
   }
 

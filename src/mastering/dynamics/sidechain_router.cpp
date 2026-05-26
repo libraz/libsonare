@@ -4,14 +4,13 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
-#include "util/constants.h"
 #include "util/db.h"
 
 namespace sonare::mastering::dynamics {
 
 namespace {
-using sonare::constants::kTwoPi;
 // The library targets mono/stereo only; preallocate detector state for two
 // channels so the audio thread never resizes the HPF state.
 constexpr int kMaxChannels = 2;
@@ -34,11 +33,10 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
       std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate_));
   prepared_ = true;
   if (config_.sidechain_hpf_enabled) {
-    const float cutoff =
-        std::clamp(config_.sidechain_hpf_hz, 1.0f, static_cast<float>(sample_rate_ * 0.49));
-    const float rc = 1.0f / (kTwoPi * cutoff);
-    const float dt = 1.0f / static_cast<float>(sample_rate_);
-    hpf_coeff_ = rc / (rc + dt);
+    const auto hpf = common::onepole_highpass_coeffs(static_cast<double>(config_.sidechain_hpf_hz),
+                                                     sample_rate_);
+    hpf_b0_ = hpf.b0;
+    hpf_a1_ = hpf.a1;
   }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
@@ -277,7 +275,7 @@ float SidechainRouter::detector_sample(float* const* channels, int channel, int 
   }
   if (config_.sidechain_hpf_enabled && detector_channel < static_cast<int>(hpf_x1_.size())) {
     auto idx = static_cast<size_t>(detector_channel);
-    const float y = hpf_coeff_ * (hpf_y1_[idx] + detector - hpf_x1_[idx]);
+    const float y = hpf_b0_ * (detector - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
     hpf_x1_[idx] = detector;
     hpf_y1_[idx] = y;
     detector = y;

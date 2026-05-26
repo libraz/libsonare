@@ -3,6 +3,8 @@
 /// @file compressor.h
 /// @brief Feed-forward compressor with soft knee and makeup gain.
 
+#include <vector>
+
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
 
@@ -64,8 +66,10 @@ class Compressor : public common::ProcessorBase {
   float log_rms_coeff_ = 0.0f;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
-  float hpf_x1_ = 0.0f;
-  float hpf_y1_ = 0.0f;
+  // Per-channel sidechain HPF state, sized to the channel count on first
+  // process() so stereo channels do not share (and corrupt) filter memory.
+  std::vector<float> hpf_x1_;
+  std::vector<float> hpf_y1_;
   float pdr_state_db_ = 0.0f;
   float pdr_coeff_ = 0.0f;
   // Log-domain attack/release smoothing on the gain-reduction signal (in dB).

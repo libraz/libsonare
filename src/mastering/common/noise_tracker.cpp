@@ -15,14 +15,22 @@ float clamp_probability(float value) { return std::clamp(value, 0.0f, 1.0f); }
 
 }  // namespace
 
-NoiseTracker::NoiseTracker(int n_bins, int sample_rate, Mode mode)
-    : n_bins_(n_bins), sample_rate_(sample_rate), mode_(mode) {
+NoiseTracker::NoiseTracker(int n_bins, int sample_rate, Mode mode, int hop_length)
+    : n_bins_(n_bins), sample_rate_(sample_rate), hop_length_(hop_length), mode_(mode) {
   if (n_bins_ <= 0) {
     throw std::invalid_argument("n_bins must be positive");
   }
   if (sample_rate_ <= 0) {
     throw std::invalid_argument("sample_rate must be positive");
   }
+  if (hop_length_ <= 0) {
+    throw std::invalid_argument("hop_length must be positive");
+  }
+  // Scale the minimum-tracking window to roughly 0.5 s of frames so the noise
+  // floor adapts on a fixed time scale regardless of hop size / sample rate.
+  constexpr double kMinWindowSeconds = 0.5;
+  min_window_frames_ =
+      std::max(10, static_cast<int>(std::lround(kMinWindowSeconds * sample_rate_ / hop_length_)));
   noise_psd_.assign(static_cast<size_t>(n_bins_), kFloor);
   speech_presence_.assign(static_cast<size_t>(n_bins_), 0.0f);
   smoothed_power_.assign(static_cast<size_t>(n_bins_), kFloor);

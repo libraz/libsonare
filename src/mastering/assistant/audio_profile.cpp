@@ -74,7 +74,7 @@ float band_rms_db(const std::vector<float>& magnitude, int n_bins, int n_frames,
 float attack_density(const std::vector<float>& onset, float duration_sec) {
   if (onset.size() < 3 || duration_sec <= 0.0f) return 0.0f;
   const float max_value = *std::max_element(onset.begin(), onset.end());
-  if (max_value <= 1.0e-6f) return 0.0f;
+  if (max_value <= sonare::constants::kEpsilon) return 0.0f;
   const float threshold = max_value * 0.30f;
   int peaks = 0;
   for (size_t i = 1; i + 1 < onset.size(); ++i) {
@@ -88,7 +88,7 @@ float attack_density(const std::vector<float>& onset, float duration_sec) {
 float sustain_ratio(const std::vector<float>& rms) {
   if (rms.empty()) return 0.0f;
   const float max_value = *std::max_element(rms.begin(), rms.end());
-  if (max_value <= 1.0e-8f) return 0.0f;
+  if (max_value <= sonare::constants::kSpectrumEpsilon) return 0.0f;
   int sustained = 0;
   for (float value : rms) {
     if (value >= max_value * 0.35f) ++sustained;

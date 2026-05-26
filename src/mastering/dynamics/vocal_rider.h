@@ -55,6 +55,9 @@ class VocalRider : public common::ProcessorBase {
   bool prepared_ = false;
   std::vector<common::EnvelopeFollower> followers_;
   float linked_gain_state_db_ = 0.0f;
+  // Per-channel smoothed gain state for the unlinked path, persisted across
+  // blocks so toggling linked/unlinked does not introduce a discontinuity.
+  std::vector<float> unlinked_gain_state_db_;
   float last_gain_db_ = 0.0f;
 };
 

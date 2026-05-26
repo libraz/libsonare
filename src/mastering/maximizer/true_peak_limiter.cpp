@@ -6,8 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "mastering/common/sliding_max.h"
-#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
@@ -323,10 +323,19 @@ float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
   crest_peak_ =
       std::max(linked_peak, crest_coeff_ * crest_peak_ + (1.0f - crest_coeff_) * linked_peak);
   crest_rms_ = crest_coeff_ * crest_rms_ + (1.0f - crest_coeff_) * linked_peak * linked_peak;
-  const float rms = std::sqrt(std::max(crest_rms_, 1e-12f));
+  // Floor on the smoothed RMS to avoid division by zero on silence.
+  constexpr float kCrestRmsFloor = 1e-12f;
+  // Crest factor maps to a transient amount via (crest - offset) / range, where a
+  // steady tone (crest ~= 1..2) yields ~0 and sharp transients saturate toward 1.
+  constexpr float kCrestTransientOffset = 2.0f;
+  constexpr float kCrestTransientRange = 8.0f;
+  // Maximum fraction by which the release is shortened for full transients.
+  constexpr float kMaxReleaseShorten = 0.75f;
+  const float rms = std::sqrt(std::max(crest_rms_, kCrestRmsFloor));
   const float crest = crest_peak_ / rms;
-  const float transient = std::clamp((crest - 2.0f) / 8.0f, 0.0f, 1.0f);
-  const float release_scale = 1.0f - 0.75f * transient;
+  const float transient =
+      std::clamp((crest - kCrestTransientOffset) / kCrestTransientRange, 0.0f, 1.0f);
+  const float release_scale = 1.0f - kMaxReleaseShorten * transient;
   return time_to_coefficient(sample_rate_, config_.release_ms * release_scale);
 }
 

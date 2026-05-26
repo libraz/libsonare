@@ -69,7 +69,7 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
   std::vector<float> db(static_cast<size_t>(n_bins), sonare::constants::kFloorDb);
   Eigen::Map<const Eigen::ArrayXf> mag_map(magnitude.data(), n_bins);
   Eigen::Map<Eigen::ArrayXf> db_map(db.data(), n_bins);
-  db_map = (mag_map.cwiseMax(1e-10f)).log10() * 20.0f;
+  db_map = (mag_map.cwiseMax(sonare::constants::kEpsilon)).log10() * 20.0f;
   return {std::move(frequencies), std::move(db), audio.sample_rate()};
 }
 

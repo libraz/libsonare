@@ -73,7 +73,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
-      float gain_state = linked_gain_state_db_;
+      float& gain_state = unlinked_gain_state_db_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         const float level = follower.process(channels[ch][i]);
         const float level_db = linear_to_db(level);
@@ -98,6 +98,7 @@ void VocalRider::reset() {
     follower.reset();
   }
   linked_gain_state_db_ = 0.0f;
+  std::fill(unlinked_gain_state_db_.begin(), unlinked_gain_state_db_.end(), 0.0f);
   last_gain_db_ = 0.0f;
 }
 

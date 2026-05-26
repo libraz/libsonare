@@ -93,7 +93,7 @@ std::vector<double> estimate_noise_psd_frames(const Spectrogram& spec,
   if (config.noise_estimator == DenoiseNoiseEstimator::Mcra) {
     mode = common::NoiseTracker::Mode::Mcra;
   }
-  common::NoiseTracker tracker(bins, spec.sample_rate(), mode);
+  common::NoiseTracker tracker(bins, spec.sample_rate(), mode, config.hop_length);
   std::vector<float> frame_power(static_cast<size_t>(bins), 0.0f);
   const auto& power = spec.power();
 

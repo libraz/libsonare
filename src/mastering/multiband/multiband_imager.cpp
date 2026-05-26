@@ -97,27 +97,34 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
 
       auto& left = scratch_.bands[static_cast<size_t>(band)][0];
       auto& right = scratch_.bands[static_cast<size_t>(band)][1];
+      // The decorrelation allpass only contributes when widening (width > 1)
+      // with a non-zero amount; otherwise running it would waste CPU and could
+      // subtly alter the signal, so skip it entirely.
+      const bool use_decorrelation =
+          band_config.decorrelation_amount > 0.0f && band_config.width > 1.0f;
+      auto& stages = allpass_[static_cast<size_t>(band)];
       for (int i = 0; i < num_samples; ++i) {
         const size_t index = static_cast<size_t>(i);
         const float mid = 0.5f * (left[index] + right[index]);
         const float input_side = 0.5f * (left[index] - right[index]);
         const float original_energy = mid * mid + input_side * input_side;
-        float decorated_side = input_side;
-        auto& stages = allpass_[static_cast<size_t>(band)];
-        for (auto& stage : stages) {
-          decorated_side = stage.process(decorated_side);
-        }
         float side = input_side * band_config.width;
-        if (band_config.decorrelation_amount > 0.0f && band_config.width > 1.0f) {
+        if (use_decorrelation) {
+          float decorated_side = input_side;
+          for (auto& stage : stages) {
+            decorated_side = stage.process(decorated_side);
+          }
           const float extra_width = std::min(band_config.width - 1.0f, 1.0f);
           const float mix = band_config.decorrelation_amount * extra_width;
           side = (1.0f - mix) * side + mix * decorated_side * band_config.width;
         }
         float out_mid = mid;
-        if (band_config.preserve_energy && band_config.width > 1.0f) {
-          const float widened_energy = out_mid * out_mid + side * side;
-          if (widened_energy > 0.0f && original_energy > 0.0f) {
-            const float scale = std::sqrt(original_energy / widened_energy);
+        // Preserve total M/S energy for both widening and narrowing so the
+        // perceived loudness stays consistent across width settings.
+        if (band_config.preserve_energy && band_config.width != 1.0f) {
+          const float adjusted_energy = out_mid * out_mid + side * side;
+          if (adjusted_energy > 0.0f && original_energy > 0.0f) {
+            const float scale = std::sqrt(original_energy / adjusted_energy);
             out_mid *= scale;
             side *= scale;
           }

@@ -4,16 +4,12 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
-#include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
 namespace sonare::mastering::dynamics {
-
-namespace {
-using sonare::constants::kTwoPi;
-}  // namespace
 
 Gate::Gate(GateConfig config) : config_(config) { validate_config(config_); }
 
@@ -27,12 +23,11 @@ void Gate::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  const float cutoff = config_.key_hpf_hz;
-  if (cutoff > 0.0f) {
-    const float rc =
-        1.0f / (kTwoPi * std::clamp(cutoff, 1.0f, static_cast<float>(sample_rate_ * 0.49)));
-    const float dt = 1.0f / static_cast<float>(sample_rate_);
-    hpf_coeff_ = rc / (rc + dt);
+  if (config_.key_hpf_hz > 0.0f) {
+    const auto hpf =
+        common::onepole_highpass_coeffs(static_cast<double>(config_.key_hpf_hz), sample_rate_);
+    hpf_b0_ = hpf.b0;
+    hpf_a1_ = hpf.a1;
   }
   prepared_ = true;
   reset();
@@ -62,7 +57,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
       float s = channels[ch][i];
       if (config_.key_hpf_hz > 0.0f) {
         const auto idx = static_cast<size_t>(ch);
-        const float y = hpf_coeff_ * (hpf_y1_[idx] + s - hpf_x1_[idx]);
+        const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
         hpf_x1_[idx] = s;
         hpf_y1_[idx] = y;
         s = y;
