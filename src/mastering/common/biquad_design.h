@@ -10,7 +10,29 @@
 #include "util/constants.h"
 
 namespace sonare::mastering::common {
-using namespace ::sonare::rt;
+using ::sonare::rt::biquad_magnitude;
+using ::sonare::rt::BiquadCoeffs;
+using ::sonare::rt::BiquadCoeffsD;
+using ::sonare::rt::first_order_highpass;
+using ::sonare::rt::first_order_lowpass;
+using ::sonare::rt::k_weighting_coefficients;
+using ::sonare::rt::KWeightingCoeffs;
+using ::sonare::rt::rbj_bandpass;
+using ::sonare::rt::rbj_high_shelf;
+using ::sonare::rt::rbj_high_shelf_d;
+using ::sonare::rt::rbj_highpass;
+using ::sonare::rt::rbj_highpass_d;
+using ::sonare::rt::rbj_low_shelf;
+using ::sonare::rt::rbj_lowpass;
+using ::sonare::rt::rbj_notch;
+using ::sonare::rt::rbj_peak;
+using ::sonare::rt::vicanek_bandpass;
+using ::sonare::rt::vicanek_high_shelf;
+using ::sonare::rt::vicanek_highpass;
+using ::sonare::rt::vicanek_low_shelf;
+using ::sonare::rt::vicanek_lowpass;
+using ::sonare::rt::vicanek_notch;
+using ::sonare::rt::vicanek_peak;
 
 /// @brief Coefficients for a bilinear-transformed one-pole highpass.
 ///
@@ -34,24 +56,6 @@ inline OnePoleHighpassCoeffs onepole_highpass_coeffs(double cutoff_hz, double sa
   c.b0 = static_cast<float>(1.0 / (1.0 + g));
   c.a1 = static_cast<float>((1.0 - g) / (1.0 + g));
   return c;
-}
-
-/// @brief First-order (6 dB/oct) lowpass via bilinear transform.
-/// @param w0 Normalized angular cutoff (2*pi*fc/fs).
-inline BiquadCoeffs first_order_lowpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(k * inv);
-  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
-/// @brief First-order (6 dB/oct) highpass via bilinear transform.
-/// @param w0 Normalized angular cutoff (2*pi*fc/fs).
-inline BiquadCoeffs first_order_highpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(inv);
-  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
 }
 
 }  // namespace sonare::mastering::common

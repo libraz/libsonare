@@ -3,5 +3,5 @@
 #include "rt/scoped_no_denormals.h"
 
 namespace sonare::mastering::common {
-using namespace ::sonare::rt;
+using ::sonare::rt::ScopedNoDenormals;
 }

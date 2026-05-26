@@ -12,13 +12,11 @@
 namespace sonare::metering {
 namespace {
 
-constexpr double kLoudnessOffset = -0.691;
-
 using Biquad = rt::BiquadCoeffsD;
 
 float energy_to_lufs(double energy) {
   if (energy < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return static_cast<float>(kLoudnessOffset + 10.0 * std::log10(energy));
+  return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
 }
 
 std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
@@ -274,7 +272,7 @@ float ebur128_loudness_range(const Audio& audio) {
   // Average in the linear (energy) domain, then convert back to LUFS.
   double mean_energy = 0.0;
   for (float value : abs_gated) {
-    mean_energy += std::pow(10.0, (static_cast<double>(value) - kLoudnessOffset) / 10.0);
+    mean_energy += std::pow(10.0, (static_cast<double>(value) - rt::kLoudnessOffset) / 10.0);
   }
   mean_energy /= static_cast<double>(abs_gated.size());
   const float relative_gate = energy_to_lufs(mean_energy) + kRelativeGateLu;

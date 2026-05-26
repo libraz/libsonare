@@ -5,6 +5,8 @@
 
 namespace sonare::rt {
 
+inline constexpr double kLoudnessOffset = -0.691;
+
 struct BiquadCoeffs {
   float b0 = 1.0f;
   float b1 = 0.0f;
@@ -28,6 +30,14 @@ BiquadCoeffs rbj_notch(float w0, float q);
 BiquadCoeffs rbj_peak(float w0, float q, float gain_db);
 BiquadCoeffs rbj_high_shelf(float w0, float q, float gain_db);
 BiquadCoeffs rbj_low_shelf(float w0, float q, float gain_db);
+
+/// @brief First-order (6 dB/oct) lowpass via bilinear transform.
+/// @param w0 Normalized angular cutoff (2*pi*fc/fs).
+BiquadCoeffs first_order_lowpass(float w0);
+
+/// @brief First-order (6 dB/oct) highpass via bilinear transform.
+/// @param w0 Normalized angular cutoff (2*pi*fc/fs).
+BiquadCoeffs first_order_highpass(float w0);
 
 /// @brief Evaluate |H(e^jw)| for normalized biquad coefficients.
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega);

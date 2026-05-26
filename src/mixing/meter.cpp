@@ -13,10 +13,6 @@ namespace sonare::mixing {
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
-namespace {
-constexpr double kLoudnessOffset = -0.691;
-}  // namespace
-
 // K-weighting biquad design shared with metering/lufs.cpp via rt::biquad_design.
 MeterProcessor::Biquad MeterProcessor::high_shelf(double frequency, double sample_rate,
                                                   double gain_db, double q) {
@@ -48,7 +44,7 @@ double MeterProcessor::filter_sample(int channel, double x) noexcept {
 float MeterProcessor::energy_to_lufs(double energy) const noexcept {
   // Finite floor instead of -inf so the meter always shows a bounded value.
   if (energy < static_cast<double>(kEpsilon)) return kFloorDb;
-  return static_cast<float>(kLoudnessOffset + 10.0 * std::log10(energy));
+  return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
 }
 
 void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
@@ -62,24 +58,9 @@ void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
   }
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {
-    const int sr = static_cast<int>(std::lround(sample_rate_));
-    // Cache the K-weighting coefficients for the two most common rates so the
-    // (more expensive) shelf/high-pass design is only run for other rates. These
-    // precomputed values are bit-for-bit what high_shelf()/highpass() produce at
-    // the corresponding sample rate, so behavior is unchanged.
-    if (sr == 48000) {
-      k_pre_ = {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241,
-                0.73248077421585};
-      k_rlb_ = {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621};
-    } else if (sr == 44100) {
-      k_pre_ = {1.5245497507424821, -2.5910067542593858, 1.126819073893832, -1.6237063834520937,
-                0.68406845382902193};
-      k_rlb_ = {0.99459217735419247, -1.9891843547083849, 0.99459217735419247, -1.989169673629763,
-                0.98919903578700674};
-    } else {
-      k_pre_ = high_shelf(1681.974450955533, sample_rate_, 3.999843853973347, 0.7071752369554196);
-      k_rlb_ = highpass(38.13547087613982, sample_rate_, 0.5003270373238773);
-    }
+    const auto coeffs = rt::k_weighting_coefficients(sample_rate_);
+    k_pre_ = {coeffs.pre.b0, coeffs.pre.b1, coeffs.pre.b2, coeffs.pre.a1, coeffs.pre.a2};
+    k_rlb_ = {coeffs.rlb.b0, coeffs.rlb.b1, coeffs.rlb.b2, coeffs.rlb.a1, coeffs.rlb.a2};
 
     momentary_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.400 * sample_rate_)));
     short_term_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(3.0 * sample_rate_)));
@@ -179,8 +160,8 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       next.mono_compat_peak = std::max(next.mono_compat_peak, static_cast<float>(std::abs(mono)));
       side_sq_sum += side * side;
 
-      const double mid = (left + right) * constants::kInvSqrt2;
-      const double side_scaled = (left - right) * constants::kInvSqrt2;
+      const double mid = (left + right) * constants::kInvSqrt2D;
+      const double side_scaled = (left - right) * constants::kInvSqrt2D;
       mid_energy += mid * mid;
       side_energy += side_scaled * side_scaled;
     }

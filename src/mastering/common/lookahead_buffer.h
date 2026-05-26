@@ -3,5 +3,5 @@
 #include "rt/lookahead_buffer.h"
 
 namespace sonare::mastering::common {
-using namespace ::sonare::rt;
+using ::sonare::rt::LookaheadBuffer;
 }

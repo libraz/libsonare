@@ -99,20 +99,6 @@ common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) 
   return {};
 }
 
-common::BiquadCoeffs first_order_lowpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(k * inv);
-  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
-common::BiquadCoeffs first_order_highpass(float w0) {
-  const double k = std::tan(static_cast<double>(w0) * 0.5);
-  const double inv = 1.0 / (1.0 + k);
-  const float b0 = static_cast<float>(inv);
-  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
-}
-
 bool is_cut_band(EqBandType type) noexcept {
   return type == EqBandType::LowPass || type == EqBandType::HighPass;
 }
@@ -153,9 +139,10 @@ float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double samp
       static_cast<float>(sonare::constants::kTwoPi * center / static_cast<double>(sample_rate));
   float magnitude = 1.0f;
   if ((order % 2) != 0) {
-    magnitude *= common::biquad_magnitude(
-        band.type == EqBandType::HighPass ? first_order_highpass(w0) : first_order_lowpass(w0),
-        omega);
+    magnitude *= common::biquad_magnitude(band.type == EqBandType::HighPass
+                                              ? common::first_order_highpass(w0)
+                                              : common::first_order_lowpass(w0),
+                                          omega);
   }
   const int pair_count = order / 2;
   for (int pair = pair_count - 1; pair >= 0; --pair) {

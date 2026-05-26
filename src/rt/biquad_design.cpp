@@ -121,6 +121,20 @@ BiquadCoeffs rbj_highpass(float w0, float q) {
                    -2.0 * cos_w0, 1.0 - alpha);
 }
 
+BiquadCoeffs first_order_lowpass(float w0) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double inv = 1.0 / (1.0 + k);
+  const float b0 = static_cast<float>(k * inv);
+  return {b0, b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
+}
+
+BiquadCoeffs first_order_highpass(float w0) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double inv = 1.0 / (1.0 + k);
+  const float b0 = static_cast<float>(inv);
+  return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
+}
+
 BiquadCoeffs rbj_bandpass(float w0, float q) {
   const double q_value = checked_q(q);
   const double cos_w0 = std::cos(w0);
