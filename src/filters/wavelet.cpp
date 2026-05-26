@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare {
@@ -173,18 +174,13 @@ std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float
       out[i * 6 + 3] = 1.0f;
       continue;
     }
-    // RBJ constant-skirt-gain bandpass with Q = 25 (matches our iirt default).
-    const double Q = 25.0;
-    const double w0 = constants::kTwoPiD * fc / sr;
-    const double cos_w = std::cos(w0);
-    const double sin_w = std::sin(w0);
-    const double alpha = sin_w / (2.0 * Q);
-    out[i * 6 + 0] = static_cast<float>(alpha);
-    out[i * 6 + 1] = 0.0f;
-    out[i * 6 + 2] = static_cast<float>(-alpha);
-    out[i * 6 + 3] = static_cast<float>(1.0 + alpha);
-    out[i * 6 + 4] = static_cast<float>(-2.0 * cos_w);
-    out[i * 6 + 5] = static_cast<float>(1.0 - alpha);
+    const auto coeffs = rt::rbj_bandpass_raw_d(fc, static_cast<double>(sr), 25.0);
+    out[i * 6 + 0] = static_cast<float>(coeffs.b0);
+    out[i * 6 + 1] = static_cast<float>(coeffs.b1);
+    out[i * 6 + 2] = static_cast<float>(coeffs.b2);
+    out[i * 6 + 3] = static_cast<float>(coeffs.a0);
+    out[i * 6 + 4] = static_cast<float>(coeffs.a1);
+    out[i * 6 + 5] = static_cast<float>(coeffs.a2);
   }
   return out;
 }

@@ -53,6 +53,15 @@ struct BiquadCoeffsD {
   double a2 = 0.0;
 };
 
+struct RawBiquadCoeffsD {
+  double b0 = 1.0;
+  double b1 = 0.0;
+  double b2 = 0.0;
+  double a0 = 1.0;
+  double a1 = 0.0;
+  double a2 = 0.0;
+};
+
 /// @brief RBJ high-shelf design in double precision (normalized by a0).
 BiquadCoeffsD rbj_high_shelf_d(double frequency, double sample_rate, double gain_db, double q);
 
@@ -61,6 +70,9 @@ BiquadCoeffsD rbj_highpass_d(double frequency, double sample_rate, double q);
 
 /// @brief RBJ constant-skirt-gain band-pass design in double precision (normalized by a0).
 BiquadCoeffsD rbj_bandpass_d(double frequency, double sample_rate, double q);
+
+/// @brief RBJ constant-skirt-gain band-pass design before a0 normalization.
+RawBiquadCoeffsD rbj_bandpass_raw_d(double frequency, double sample_rate, double q);
 
 /// @brief The two ITU-R BS.1770 K-weighting biquads (pre-filter shelf + RLB high-pass).
 struct KWeightingCoeffs {

@@ -386,13 +386,18 @@ BiquadCoeffsD rbj_highpass_d(double frequency, double sample_rate, double q) {
 }
 
 BiquadCoeffsD rbj_bandpass_d(double frequency, double sample_rate, double q) {
+  const auto raw = rbj_bandpass_raw_d(frequency, sample_rate, q);
+  return {raw.b0 / raw.a0, raw.b1 / raw.a0, raw.b2 / raw.a0, raw.a1 / raw.a0, raw.a2 / raw.a0};
+}
+
+RawBiquadCoeffsD rbj_bandpass_raw_d(double frequency, double sample_rate, double q) {
   const double omega = 2.0 * kPiD * frequency / sample_rate;
   const double sin_omega = std::sin(omega);
   const double cos_omega = std::cos(omega);
   const double alpha = sin_omega / (2.0 * q);
   const double a0 = 1.0 + alpha;
 
-  return {alpha / a0, 0.0, -alpha / a0, -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
+  return {alpha, 0.0, -alpha, a0, -2.0 * cos_omega, 1.0 - alpha};
 }
 
 KWeightingCoeffs k_weighting_coefficients(double sample_rate) {

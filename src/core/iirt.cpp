@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare {
@@ -13,24 +14,6 @@ namespace {
 struct BiquadCoeffs {
   double b0, b1, b2, a1, a2;
 };
-
-/// @brief Designs a constant-skirt-gain biquad bandpass (RBJ cookbook).
-/// @return Coefficients normalized so a0 == 1.
-BiquadCoeffs design_bandpass(double f0, double Q, double sr) {
-  const double w0 = constants::kTwoPiD * f0 / sr;
-  const double cos_w = std::cos(w0);
-  const double sin_w = std::sin(w0);
-  const double alpha = sin_w / (2.0 * Q);
-
-  const double a0 = 1.0 + alpha;
-  const double b0 = alpha;
-  const double b1 = 0.0;
-  const double b2 = -alpha;
-  const double a1 = -2.0 * cos_w;
-  const double a2 = 1.0 - alpha;
-
-  return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
-}
 
 /// @brief Per-section runtime state (Direct Form I delay elements).
 struct BiquadState {
@@ -46,7 +29,8 @@ bool is_stable(const BiquadCoeffs& c) {
 /// @brief Designs an order-@p order bandpass as a cascade of @p order/2 IDENTICAL RBJ
 ///        bandpass biquads centered on @p f0, each with the raw band quality factor
 ///        @p band_q (no per-section Q scaling).
-/// @details Each section is `design_bandpass(f0, band_q, sr)`; cascading @p order/2 of
+/// @details Each section uses the shared RBJ constant-skirt-gain bandpass design;
+///          cascading @p order/2 of
 ///          them yields a steeper, stable skirt while keeping the peak fixed at @p f0.
 ///          At @p order == 2 this reduces exactly to a single RBJ bandpass with the
 ///          requested Q, matching the historical default behaviour bit-for-bit.
@@ -58,7 +42,8 @@ std::vector<BiquadCoeffs> design_butterworth_bandpass(double f0, double band_q, 
   const int n_sections = order / 2;
   std::vector<BiquadCoeffs> sos;
   sos.reserve(static_cast<size_t>(n_sections));
-  const BiquadCoeffs section = design_bandpass(f0, band_q, sr);
+  const auto coeffs = rt::rbj_bandpass_d(f0, sr, band_q);
+  const BiquadCoeffs section{coeffs.b0, coeffs.b1, coeffs.b2, coeffs.a1, coeffs.a2};
   for (int k = 0; k < n_sections; ++k) {
     sos.push_back(section);
   }

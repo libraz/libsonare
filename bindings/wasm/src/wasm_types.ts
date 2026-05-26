@@ -353,6 +353,30 @@ export interface WasmFrameBuffer {
   chordConfidence: Float32Array;
 }
 
+export interface WasmStreamFramesU8 {
+  nFrames: number;
+  nMels: number;
+  timestamps: Float32Array;
+  mel: Uint8Array;
+  chroma: Uint8Array;
+  onsetStrength: Uint8Array;
+  rmsEnergy: Uint8Array;
+  spectralCentroid: Uint8Array;
+  spectralFlatness: Uint8Array;
+}
+
+export interface WasmStreamFramesI16 {
+  nFrames: number;
+  nMels: number;
+  timestamps: Float32Array;
+  mel: Int16Array;
+  chroma: Int16Array;
+  onsetStrength: Int16Array;
+  rmsEnergy: Int16Array;
+  spectralCentroid: Int16Array;
+  spectralFlatness: Int16Array;
+}
+
 export interface WasmStreamingMasteringChain {
   prepare: (sampleRate: number, maxBlockSize: number, numChannels: number) => void;
   processMono: (samples: Float32Array) => Float32Array;
@@ -698,8 +722,8 @@ export interface WasmStreamAnalyzer {
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
   availableFrames: () => number;
   readFramesSoa: (maxFrames: number) => WasmFrameBuffer;
-  readFramesU8: (maxFrames: number) => unknown;
-  readFramesI16: (maxFrames: number) => unknown;
+  readFramesU8: (maxFrames: number) => WasmStreamFramesU8;
+  readFramesI16: (maxFrames: number) => WasmStreamFramesI16;
   reset: (baseSampleOffset?: number) => void;
   stats: () => WasmAnalyzerStats;
   frameCount: () => number;
