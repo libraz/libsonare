@@ -32,4 +32,32 @@ BiquadCoeffs rbj_low_shelf(float w0, float q, float gain_db);
 /// @brief Evaluate |H(e^jw)| for normalized biquad coefficients.
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega);
 
+/// @brief Normalized second-order section with double-precision coefficients.
+/// @details Used by the ITU-R BS.1770 K-weighting filters where the accumulation
+/// precision matters (long integration windows). Direct Form II transposed.
+struct BiquadCoeffsD {
+  double b0 = 1.0;
+  double b1 = 0.0;
+  double b2 = 0.0;
+  double a1 = 0.0;
+  double a2 = 0.0;
+};
+
+/// @brief RBJ high-shelf design in double precision (normalized by a0).
+BiquadCoeffsD rbj_high_shelf_d(double frequency, double sample_rate, double gain_db, double q);
+
+/// @brief RBJ high-pass design in double precision (normalized by a0).
+BiquadCoeffsD rbj_highpass_d(double frequency, double sample_rate, double q);
+
+/// @brief The two ITU-R BS.1770 K-weighting biquads (pre-filter shelf + RLB high-pass).
+struct KWeightingCoeffs {
+  BiquadCoeffsD pre;  ///< Stage 1: high-shelf pre-filter.
+  BiquadCoeffsD rlb;  ///< Stage 2: RLB high-pass.
+};
+
+/// @brief Designs the ITU-R BS.1770 K-weighting coefficients for @p sample_rate.
+/// @details Returns the exact reference coefficients for 48000 Hz, otherwise
+/// derives the shelf + high-pass via the analytic BS.1770 formulas.
+KWeightingCoeffs k_weighting_coefficients(double sample_rate);
+
 }  // namespace sonare::rt

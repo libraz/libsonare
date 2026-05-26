@@ -12,6 +12,7 @@ namespace sonare::rt {
 using sonare::constants::kButterworthQ;
 using sonare::constants::kHalfPi;
 using sonare::constants::kPi;
+using sonare::constants::kPiD;
 
 namespace {
 
@@ -339,6 +340,51 @@ BiquadCoeffs vicanek_low_shelf(float w0, float gain_db) {
 
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega) {
   return magnitude_at(coeffs, omega);
+}
+
+BiquadCoeffsD rbj_high_shelf_d(double frequency, double sample_rate, double gain_db, double q) {
+  const double a = std::pow(10.0, gain_db / 40.0);
+  const double omega = 2.0 * kPiD * frequency / sample_rate;
+  const double sin_omega = std::sin(omega);
+  const double cos_omega = std::cos(omega);
+  const double alpha = sin_omega / (2.0 * q);
+  const double two_sqrt_a_alpha = 2.0 * std::sqrt(a) * alpha;
+
+  const double b0 = a * ((a + 1.0) + (a - 1.0) * cos_omega + two_sqrt_a_alpha);
+  const double b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_omega);
+  const double b2 = a * ((a + 1.0) + (a - 1.0) * cos_omega - two_sqrt_a_alpha);
+  const double a0 = (a + 1.0) - (a - 1.0) * cos_omega + two_sqrt_a_alpha;
+  const double a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_omega);
+  const double a2 = (a + 1.0) - (a - 1.0) * cos_omega - two_sqrt_a_alpha;
+
+  return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+}
+
+BiquadCoeffsD rbj_highpass_d(double frequency, double sample_rate, double q) {
+  const double omega = 2.0 * kPiD * frequency / sample_rate;
+  const double sin_omega = std::sin(omega);
+  const double cos_omega = std::cos(omega);
+  const double alpha = sin_omega / (2.0 * q);
+  const double a0 = 1.0 + alpha;
+
+  return {(1.0 + cos_omega) * 0.5 / a0, -(1.0 + cos_omega) / a0, (1.0 + cos_omega) * 0.5 / a0,
+          -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
+}
+
+KWeightingCoeffs k_weighting_coefficients(double sample_rate) {
+  // ITU-R BS.1770 reference coefficients are specified at 48 kHz; return them
+  // verbatim to stay bit-exact with the standard, and derive other rates.
+  if (sample_rate == 48000.0) {
+    return {
+        {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241,
+         0.73248077421585},
+        {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621},
+    };
+  }
+  return {
+      rbj_high_shelf_d(1681.974450955533, sample_rate, 3.999843853973347, 0.7071752369554196),
+      rbj_highpass_d(38.13547087613982, sample_rate, 0.5003270373238773),
+  };
 }
 
 }  // namespace sonare::rt

@@ -5,6 +5,7 @@
 #include <limits>
 #include <numeric>
 
+#include "rt/biquad_design.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -13,62 +14,16 @@ namespace {
 
 constexpr double kLoudnessOffset = -0.691;
 
-struct Biquad {
-  double b0 = 1.0;
-  double b1 = 0.0;
-  double b2 = 0.0;
-  double a1 = 0.0;
-  double a2 = 0.0;
-};
+using Biquad = rt::BiquadCoeffsD;
 
 float energy_to_lufs(double energy) {
   if (energy < kEpsilon) return -std::numeric_limits<float>::infinity();
   return static_cast<float>(kLoudnessOffset + 10.0 * std::log10(energy));
 }
 
-Biquad high_shelf(double frequency, double sample_rate, double gain_db, double q) {
-  const double a = std::pow(10.0, gain_db / 40.0);
-  const double omega = 2.0 * static_cast<double>(kPi) * frequency / sample_rate;
-  const double sin_omega = std::sin(omega);
-  const double cos_omega = std::cos(omega);
-  const double alpha = sin_omega / (2.0 * q);
-  const double two_sqrt_a_alpha = 2.0 * std::sqrt(a) * alpha;
-
-  const double b0 = a * ((a + 1.0) + (a - 1.0) * cos_omega + two_sqrt_a_alpha);
-  const double b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_omega);
-  const double b2 = a * ((a + 1.0) + (a - 1.0) * cos_omega - two_sqrt_a_alpha);
-  const double a0 = (a + 1.0) - (a - 1.0) * cos_omega + two_sqrt_a_alpha;
-  const double a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_omega);
-  const double a2 = (a + 1.0) - (a - 1.0) * cos_omega - two_sqrt_a_alpha;
-
-  return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
-}
-
-Biquad highpass(double frequency, double sample_rate, double q) {
-  const double omega = 2.0 * static_cast<double>(kPi) * frequency / sample_rate;
-  const double sin_omega = std::sin(omega);
-  const double cos_omega = std::cos(omega);
-  const double alpha = sin_omega / (2.0 * q);
-  const double a0 = 1.0 + alpha;
-
-  return {(1.0 + cos_omega) * 0.5 / a0, -(1.0 + cos_omega) / a0, (1.0 + cos_omega) * 0.5 / a0,
-          -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
-}
-
 std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
-  if (sample_rate == 48000) {
-    return {
-        {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241,
-         0.73248077421585},
-        {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621},
-    };
-  }
-
-  const double sr = static_cast<double>(sample_rate);
-  return {
-      high_shelf(1681.974450955533, sr, 3.999843853973347, 0.7071752369554196),
-      highpass(38.13547087613982, sr, 0.5003270373238773),
-  };
+  const auto coeffs = rt::k_weighting_coefficients(static_cast<double>(sample_rate));
+  return {coeffs.pre, coeffs.rlb};
 }
 
 std::vector<float> apply_biquad_double(const float* input, size_t size, const Biquad& coeffs) {
@@ -226,10 +181,14 @@ float last_or_silence(const std::vector<float>& values) {
 }
 
 float loudness_range_from_short_term(const std::vector<float>& values) {
+  // ITU-R BS.1770 / EBU R128 absolute gate: discard blocks quieter than -70 LUFS.
+  constexpr double kLufsAbsoluteGateLufs = -70.0;
   std::vector<float> finite;
   finite.reserve(values.size());
   for (float value : values) {
-    if (std::isfinite(value) && value >= -70.0f) finite.push_back(value);
+    if (std::isfinite(value) && value >= static_cast<float>(kLufsAbsoluteGateLufs)) {
+      finite.push_back(value);
+    }
   }
 
   if (finite.size() < 2) return 0.0f;

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -11,41 +12,21 @@ namespace sonare::mixing {
 
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
-using sonare::constants::kPiD;
 
 namespace {
 constexpr double kLoudnessOffset = -0.691;
 }  // namespace
 
-// K-weighting biquad design mirrored from metering/lufs.cpp.
+// K-weighting biquad design shared with metering/lufs.cpp via rt::biquad_design.
 MeterProcessor::Biquad MeterProcessor::high_shelf(double frequency, double sample_rate,
                                                   double gain_db, double q) {
-  const double a = std::pow(10.0, gain_db / 40.0);
-  const double omega = 2.0 * kPiD * frequency / sample_rate;
-  const double sin_omega = std::sin(omega);
-  const double cos_omega = std::cos(omega);
-  const double alpha = sin_omega / (2.0 * q);
-  const double two_sqrt_a_alpha = 2.0 * std::sqrt(a) * alpha;
-
-  const double b0 = a * ((a + 1.0) + (a - 1.0) * cos_omega + two_sqrt_a_alpha);
-  const double b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_omega);
-  const double b2 = a * ((a + 1.0) + (a - 1.0) * cos_omega - two_sqrt_a_alpha);
-  const double a0 = (a + 1.0) - (a - 1.0) * cos_omega + two_sqrt_a_alpha;
-  const double a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_omega);
-  const double a2 = (a + 1.0) - (a - 1.0) * cos_omega - two_sqrt_a_alpha;
-
-  return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+  const rt::BiquadCoeffsD c = rt::rbj_high_shelf_d(frequency, sample_rate, gain_db, q);
+  return {c.b0, c.b1, c.b2, c.a1, c.a2};
 }
 
 MeterProcessor::Biquad MeterProcessor::highpass(double frequency, double sample_rate, double q) {
-  const double omega = 2.0 * kPiD * frequency / sample_rate;
-  const double sin_omega = std::sin(omega);
-  const double cos_omega = std::cos(omega);
-  const double alpha = sin_omega / (2.0 * q);
-  const double a0 = 1.0 + alpha;
-
-  return {(1.0 + cos_omega) * 0.5 / a0, -(1.0 + cos_omega) / a0, (1.0 + cos_omega) * 0.5 / a0,
-          -2.0 * cos_omega / a0, (1.0 - alpha) / a0};
+  const rt::BiquadCoeffsD c = rt::rbj_highpass_d(frequency, sample_rate, q);
+  return {c.b0, c.b1, c.b2, c.a1, c.a2};
 }
 
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
@@ -218,6 +199,16 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 
   if (config_.measure_lufs && !energy_ring_.empty()) {
     const int lufs_channels = std::min(num_channels, 2);
+    // Count the channels actually carrying audio. A true-mono bus presents a
+    // single non-null channel; BS.1770 then weights that one channel, but the
+    // loudness is referenced to a dual-mono pair (a centered mono source must
+    // read identically whether routed as 1 or 2 channels). Without this scale
+    // the single-channel energy is ~3 dB below the equivalent dual-mono energy.
+    int active_channels = 0;
+    for (int ch = 0; ch < lufs_channels; ++ch) {
+      if (channels[ch] != nullptr) ++active_channels;
+    }
+    const double mono_energy_scale = (active_channels == 1) ? 2.0 : 1.0;
     for (int i = 0; i < num_samples; ++i) {
       // Combined K-weighted squared energy summed across stereo channels (BS.1770 weight 1.0 each).
       double combined = 0.0;
@@ -226,6 +217,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
         const double y = filter_sample(ch, static_cast<double>(channels[ch][i]));
         combined += y * y;
       }
+      combined *= mono_energy_scale;
 
       // Slide both running sums over the single ring; subtract the value leaving each window.
       const double leaving_short = energy_ring_[ring_pos_];
