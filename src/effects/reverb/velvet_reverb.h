@@ -28,11 +28,14 @@ class VelvetReverb : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
-  // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = dry_wet (clamped to [0, 1] in process())
-  // Note: decay, reverb_time_s and density_hz are not automatable; changing
-  // any of them rebuilds the velvet-noise tap tables and the ring buffers,
-  // which requires prepare().
+  // Shape parameters (index order matches sibling reverbs):
+  //   0 = decay
+  //   1 = reverb_time_s
+  //   2 = dry_wet (clamped to [0, 1] in process())
+  //   3 = density_hz
+  // Note: decay, reverb_time_s and density_hz are NOT lock-free / RT-safe;
+  // changing any of them rebuilds the velvet-noise tap tables and ring buffers
+  // (offline reconfiguration). dry_wet is RT-safe and only read in process().
   bool set_parameter(unsigned int param_id, float value) override;
 
  private:
@@ -57,6 +60,9 @@ class VelvetReverb : public rt::ProcessorBase {
                    int num_pulses, float decay_rate, double sr) const;
 
   VelvetReverbConfig config_{};
+  double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
+  bool prepared_ = false;
   Ring ring_l_;
   Ring ring_r_;
   std::vector<Tap> taps_l_;

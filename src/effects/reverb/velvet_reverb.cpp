@@ -65,6 +65,9 @@ void VelvetReverb::build_table(std::vector<Tap>& taps, std::uint32_t seed_offset
 
 void VelvetReverb::prepare(double sample_rate, int max_block_size) {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sr;
+  max_block_size_ = max_block_size;
+  prepared_ = true;
 
   const float rho = std::clamp(config_.density_hz, 1000.0f, 3000.0f);
   const int grid_ls = std::max(1, static_cast<int>(std::lround(sr / rho)));
@@ -134,7 +137,21 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
 bool VelvetReverb::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      // Rebuilds tap tables / ring buffers (not RT-safe). prepare() clamps.
+      config_.decay = value;
+      if (prepared_) prepare(sample_rate_, max_block_size_);
+      return true;
+    case 1:
+      config_.reverb_time_s = value;
+      if (prepared_) prepare(sample_rate_, max_block_size_);
+      return true;
+    case 2:
+      // RT-safe: only read in process(), where it is clamped to [0, 1].
       config_.dry_wet = value;
+      return true;
+    case 3:
+      config_.density_hz = value;
+      if (prepared_) prepare(sample_rate_, max_block_size_);
       return true;
     default:
       return false;

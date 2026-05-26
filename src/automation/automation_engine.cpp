@@ -68,11 +68,10 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
   // valid sample rate has been prepared, so sample_rate_ gates the conversion.
   const int64_t timeline_sample = state.sample_position + sub_block_offset;
   const double ppq = tempo_map_->sample_to_ppq(timeline_sample);
-  // Adopt the latest published lane set. The engine drives a single block-start
-  // acquire_lanes() so lanes are never swapped mid-block between sub-blocks;
-  // this idempotent re-acquire (a wait-free pointer swap, no alloc) keeps the
-  // standalone AutomationEngine contract working (set_lanes then apply directly).
-  lanes_.acquire();
+  // Lanes are acquired exactly once per block via acquire_lanes(); they are
+  // never swapped mid-block, so apply() reads the already-current set without
+  // re-acquiring (which would otherwise allow a mid-block swap between
+  // sub-blocks and violate the single-acquisition contract).
   const std::vector<AutomationLane>* lanes = lanes_.current();
   if (!lanes) return;
   for (const AutomationLane& lane : *lanes) {

@@ -161,6 +161,14 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   }
 
   if (effectively_muted()) {
+    // The events were already drained from the SPSC lanes above; discarding them
+    // would leave parameter state stale on unmute. Apply them (advancing fader /
+    // pan / width / insert parameters to their block-final values) before the
+    // muted passthrough so the strip resumes with correct parameters.
+    for (size_t i = 0; i < fader_count; ++i) apply_automation_event(fader_events[i].event);
+    for (size_t i = 0; i < pan_count; ++i) apply_automation_event(pan_events[i].event);
+    for (size_t i = 0; i < width_count; ++i) apply_automation_event(width_events[i].event);
+    for (size_t i = 0; i < insert_count; ++i) apply_automation_event(insert_events[i].event);
     process_unsegmented(channels, num_channels, num_samples);
     return;
   }
