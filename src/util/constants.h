@@ -38,12 +38,15 @@ inline constexpr float kEpsilon = 1e-10f;         ///< Generic near-zero epsilon
 inline constexpr float kSpectrumEpsilon = 1e-8f;  ///< Larger epsilon for log-magnitude operations
 inline constexpr float kFloorDb = -120.0f;        ///< Numerical dB floor
 inline constexpr double kFloorDbD = -120.0;
-inline constexpr float kSilenceDb = -80.0f;  ///< Silence threshold
+inline constexpr float kSilenceDb = -80.0f;             ///< Silence threshold
+inline constexpr float kPowerToDbScale = 4.342944819f;  ///< 10 / ln(10)
+inline constexpr float kDefaultTopDb = 80.0f;           ///< Librosa-style dynamic-range clip
 
 // ============================================================
 // Music
 // ============================================================
 inline constexpr float kA4Hz = 440.0f;
+inline constexpr float kC1Hz = 32.70319566257483f;
 inline constexpr float kMidiA4 = 69.0f;
 inline constexpr float kSemitonesPerOctave = 12.0f;
 inline constexpr float kCentsPerOctave = 1200.0f;

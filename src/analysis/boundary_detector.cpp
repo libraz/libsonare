@@ -99,7 +99,7 @@ void BoundaryDetector::compute_features() {
     MelConfig mel_config;
     mel_config.n_fft = config_.n_fft;
     mel_config.hop_length = config_.hop_length;
-    mel_config.n_mels = 128;
+    mel_config.n_mels = constants::kDefaultNMels;
 
     MelSpectrogram mel = MelSpectrogram::compute(audio_, mel_config);
     auto mfcc = mel.mfcc(config_.n_mfcc);

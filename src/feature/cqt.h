@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -19,7 +20,7 @@ using CqtProgressCallback = std::function<void(float progress)>;
 /// @brief CQT configuration.
 struct CqtConfig {
   int hop_length = 512;                  ///< Hop length in samples
-  float fmin = 32.7f;                    ///< Minimum frequency in Hz (C1 = 32.7 Hz)
+  float fmin = constants::kC1Hz;         ///< Minimum frequency in Hz (C1)
   int n_bins = 84;                       ///< Number of frequency bins (7 octaves * 12)
   int bins_per_octave = 12;              ///< Bins per octave (12 for semitones)
   float filter_scale = 1.0f;             ///< Filter length scale factor

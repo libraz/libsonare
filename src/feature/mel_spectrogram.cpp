@@ -84,7 +84,7 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   // Clipping is done in dB scale: max(log_spec, log_spec.max() - top_db)
   std::vector<float> log_mel(power_.size());
   const float amin = kEpsilon;
-  constexpr float top_db = 80.0f;  // MFCC dynamic-range clip (librosa default)
+  constexpr float top_db = constants::kDefaultTopDb;
 
   // First pass: convert to dB and find max
   float max_db = -1e30f;

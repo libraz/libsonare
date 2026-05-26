@@ -6,6 +6,8 @@
 #include <complex>
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 /// @brief Complex Morlet (or, for `is_cqt=false`, scipy.signal.morlet2) wavelet
@@ -34,7 +36,7 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr,
 /// @details Returns a flattened matrix `[(n_octaves * bins_per_octave) x 6]`
 /// where each row is `(b0, b1, b2, a0, a1, a2)`.
 std::vector<float> semitone_filterbank(int n_octaves = 7, int bins_per_octave = 12,
-                                       float fmin = 32.7f, int sr = 22050);
+                                       float fmin = constants::kC1Hz, int sr = 22050);
 
 /// @brief CQT-to-chroma projection matrix.
 /// @return Row-major `[n_chroma x n_input]`.

@@ -266,8 +266,8 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     // Step 3: Compute CQT-based chroma with larger hop for speed
     CqtConfig cqt_config;
     cqt_config.hop_length = chroma_hop;
-    cqt_config.fmin = 32.7f;  // C1
-    cqt_config.n_bins = 84;   // 7 octaves * 12 bins
+    cqt_config.fmin = constants::kC1Hz;
+    cqt_config.n_bins = 84;  // 7 octaves * 12 bins
     cqt_config.bins_per_octave = 12;
 
     CqtResult cqt_result = cqt(filtered_audio, cqt_config);
@@ -282,7 +282,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       // Use reduced CQT for bass (lower 4 octaves = 48 bins)
       CqtConfig bass_cqt_config;
       bass_cqt_config.hop_length = chroma_hop;
-      bass_cqt_config.fmin = 32.7f;
+      bass_cqt_config.fmin = constants::kC1Hz;
       bass_cqt_config.n_bins = 48;  // 4 octaves (bass-focused)
       bass_cqt_config.bins_per_octave = 12;
 

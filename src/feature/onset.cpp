@@ -13,10 +13,6 @@ namespace {
 
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
 constexpr float kAmin = constants::kEpsilon;
-// Power-to-dB scale: 10 / ln(10) = 10 * log10(e). std::log is not constexpr in
-// C++17, so the precomputed literal is kept (matches 10/std::log(10.0f)).
-constexpr float kPowerToDbScale = 4.342944819f;
-constexpr float kTopDb = 80.0f;
 
 }  // namespace
 
@@ -35,9 +31,9 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
 
   /// Convert power to decibels before differencing.
   Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
-      power_map.array().max(kAmin).log() * kPowerToDbScale;
+      power_map.array().max(kAmin).log() * constants::kPowerToDbScale;
   float max_db = log_power.maxCoeff();
-  log_power = (log_power.array() - max_db).max(-kTopDb);
+  log_power = (log_power.array() - max_db).max(-constants::kDefaultTopDb);
 
   /// @details Compute first-order difference and half-wave rectification.
   /// diff = log_power[:, lag:] - log_power[:, :-lag]
@@ -103,9 +99,9 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
 
   // Compute log power using Eigen
   Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
-      power_map.array().max(kAmin).log() * kPowerToDbScale;
+      power_map.array().max(kAmin).log() * constants::kPowerToDbScale;
   float max_db = log_power.maxCoeff();
-  log_power = (log_power.array() - max_db).max(-kTopDb);
+  log_power = (log_power.array() - max_db).max(-constants::kDefaultTopDb);
 
   // Divide Mel bands into n_bands groups
   int mels_per_band = n_mels / n_bands;
