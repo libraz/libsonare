@@ -71,6 +71,10 @@ class BoundaryDetector {
 
  private:
   void compute_features();
+  /// @brief Combines and L2-normalizes flattened MFCC/chroma features.
+  /// @details Shared by both constructors. Sets n_frames_, n_features_, features_.
+  void combine_features(const std::vector<float>& mfcc_features, int mfcc_frames,
+                        const std::vector<float>& chroma_features, int chroma_frames);
   void compute_self_similarity();
   void compute_novelty_curve();
   void detect_boundaries();

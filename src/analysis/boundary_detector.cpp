@@ -83,42 +83,7 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
     }
   }
 
-  // Combine features
-  if (config_.use_mfcc && config_.use_chroma) {
-    n_frames_ = std::min(mfcc_frames, chroma_frames);
-    n_features_ = config_.n_mfcc + config_.n_chroma;
-
-    features_.resize(n_frames_ * n_features_);
-
-    for (int f = 0; f < n_frames_; ++f) {
-      // Copy MFCC
-      for (int c = 0; c < config_.n_mfcc; ++c) {
-        features_[f * n_features_ + c] = mfcc_features[f * config_.n_mfcc + c];
-      }
-      // Copy chroma
-      for (int c = 0; c < config_.n_chroma; ++c) {
-        features_[f * n_features_ + config_.n_mfcc + c] = chroma_features[f * config_.n_chroma + c];
-      }
-      // Normalize combined feature
-      normalize_feature(&features_[f * n_features_], n_features_);
-    }
-  } else if (config_.use_mfcc) {
-    n_frames_ = mfcc_frames;
-    n_features_ = config_.n_mfcc;
-    features_ = std::move(mfcc_features);
-
-    for (int f = 0; f < n_frames_; ++f) {
-      normalize_feature(&features_[f * n_features_], n_features_);
-    }
-  } else if (config_.use_chroma) {
-    n_frames_ = chroma_frames;
-    n_features_ = config_.n_chroma;
-    features_ = std::move(chroma_features);
-
-    for (int f = 0; f < n_frames_; ++f) {
-      normalize_feature(&features_[f * n_features_], n_features_);
-    }
-  }
+  combine_features(mfcc_features, mfcc_frames, chroma_features, chroma_frames);
 
   compute_self_similarity();
   compute_novelty_curve();
@@ -171,7 +136,12 @@ void BoundaryDetector::compute_features() {
     }
   }
 
-  // Combine features
+  combine_features(mfcc_features, mfcc_frames, chroma_features, chroma_frames);
+}
+
+void BoundaryDetector::combine_features(const std::vector<float>& mfcc_features, int mfcc_frames,
+                                        const std::vector<float>& chroma_features,
+                                        int chroma_frames) {
   if (config_.use_mfcc && config_.use_chroma) {
     n_frames_ = std::min(mfcc_frames, chroma_frames);
     n_features_ = config_.n_mfcc + config_.n_chroma;
@@ -193,7 +163,7 @@ void BoundaryDetector::compute_features() {
   } else if (config_.use_mfcc) {
     n_frames_ = mfcc_frames;
     n_features_ = config_.n_mfcc;
-    features_ = std::move(mfcc_features);
+    features_ = mfcc_features;
 
     for (int f = 0; f < n_frames_; ++f) {
       normalize_feature(&features_[f * n_features_], n_features_);
@@ -201,7 +171,7 @@ void BoundaryDetector::compute_features() {
   } else if (config_.use_chroma) {
     n_frames_ = chroma_frames;
     n_features_ = config_.n_chroma;
-    features_ = std::move(chroma_features);
+    features_ = chroma_features;
 
     for (int f = 0; f < n_frames_; ++f) {
       normalize_feature(&features_[f * n_features_], n_features_);

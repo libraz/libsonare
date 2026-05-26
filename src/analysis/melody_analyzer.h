@@ -18,11 +18,11 @@ struct PitchPoint {
 
 /// @brief Melody contour characteristics.
 struct MelodyContour {
-  std::vector<PitchPoint> pitches;  ///< Pitch trajectory
-  float pitch_range_octaves;        ///< Range of melody in octaves
-  float pitch_stability;            ///< Pitch stability [0, 1] (1 = very stable)
-  float mean_frequency;             ///< Mean pitch frequency in Hz
-  float vibrato_rate;               ///< Vibrato rate in Hz (0 if no vibrato)
+  std::vector<PitchPoint> pitches;   ///< Pitch trajectory
+  float pitch_range_octaves = 0.0f;  ///< Range of melody in octaves
+  float pitch_stability = 0.0f;      ///< Pitch stability [0, 1] (1 = very stable)
+  float mean_frequency = 0.0f;       ///< Mean pitch frequency in Hz
+  float vibrato_rate = 0.0f;         ///< Vibrato rate in Hz (0 if no vibrato)
 };
 
 /// @brief Configuration for melody analysis.

@@ -45,9 +45,11 @@ void MelodyAnalyzer::compute_contour_features() {
 
   // Filter out unvoiced frames
   std::vector<float> voiced_frequencies;
+  std::vector<float> voiced_times;
   for (const auto& p : contour_.pitches) {
     if (p.frequency > 0.0f) {
       voiced_frequencies.push_back(p.frequency);
+      voiced_times.push_back(p.time);
     }
   }
 
@@ -106,8 +108,10 @@ void MelodyAnalyzer::compute_contour_features() {
       }
     }
 
-    // Convert to vibrato rate (Hz)
-    float duration = contour_.pitches.back().time - contour_.pitches.front().time;
+    // Convert to vibrato rate (Hz). The numerator counts zero crossings over the
+    // voiced subset, so the denominator must span the same voiced frames (not the
+    // full timeline including unvoiced gaps) to keep the ratio consistent.
+    float duration = voiced_times.back() - voiced_times.front();
     if (duration > 0.0f) {
       contour_.vibrato_rate = static_cast<float>(zero_crossings) / (2.0f * duration);
     }

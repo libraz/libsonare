@@ -52,21 +52,32 @@ struct CachedCqtKernel {
 /// @brief Maximum number of cached CQT kernels
 constexpr size_t kMaxCqtCacheSize = 8;
 
-/// @brief Global CQT kernel cache with LRU eviction
-std::mutex g_kernel_cache_mutex;
-std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> g_kernel_cache;
-std::list<CqtKernelCacheKey> g_kernel_cache_lru;
+/// @brief CQT kernel cache state with LRU eviction.
+/// @details Wrapped in a function-local static (Meyers singleton) so its
+/// construction and destruction order are well-defined; the mutex still guards
+/// concurrent access.
+struct CqtKernelCache {
+  std::mutex mutex;
+  std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> map;
+  std::list<CqtKernelCacheKey> lru;
+};
+
+CqtKernelCache& cqt_kernel_cache() {
+  static CqtKernelCache cache;
+  return cache;
+}
 
 /// @brief Get or create cached CQT kernel with Eigen matrix
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   CqtKernelCacheKey key{sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave};
 
-  std::lock_guard<std::mutex> lock(g_kernel_cache_mutex);
-  auto it = g_kernel_cache.find(key);
-  if (it != g_kernel_cache.end()) {
+  CqtKernelCache& cache = cqt_kernel_cache();
+  std::lock_guard<std::mutex> lock(cache.mutex);
+  auto it = cache.map.find(key);
+  if (it != cache.map.end()) {
     // Move to front of LRU list (most recently used)
-    g_kernel_cache_lru.remove(key);
-    g_kernel_cache_lru.push_front(key);
+    cache.lru.remove(key);
+    cache.lru.push_front(key);
     return it->second;
   }
 
@@ -86,15 +97,15 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   }
 
   // Evict oldest entry if cache is full
-  while (g_kernel_cache.size() >= kMaxCqtCacheSize && !g_kernel_cache_lru.empty()) {
-    auto oldest_key = g_kernel_cache_lru.back();
-    g_kernel_cache_lru.pop_back();
-    g_kernel_cache.erase(oldest_key);
+  while (cache.map.size() >= kMaxCqtCacheSize && !cache.lru.empty()) {
+    auto oldest_key = cache.lru.back();
+    cache.lru.pop_back();
+    cache.map.erase(oldest_key);
   }
 
   CachedCqtKernel cached{kernel, eigen_matrix};
-  g_kernel_cache[key] = cached;
-  g_kernel_cache_lru.push_front(key);
+  cache.map[key] = cached;
+  cache.lru.push_front(key);
   return cached;
 }
 
@@ -637,7 +648,7 @@ std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
     for (int c = 0; c < n_chroma; ++c) {
       max_val = std::max(max_val, chroma[c * n_frames + t]);
     }
-    if (max_val > 1e-6f) {
+    if (max_val > constants::kEpsilon) {
       for (int c = 0; c < n_chroma; ++c) {
         chroma[c * n_frames + t] /= max_val;
       }

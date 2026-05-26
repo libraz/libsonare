@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "core/convert.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/vector_normalize.h"
@@ -220,14 +221,30 @@ float Chroma::at(int chroma, int frame) const {
 namespace {
 
 /// @brief Wraps CQT magnitude bins onto @p n_chroma pitch classes.
+/// @details CQT bin 0 corresponds to @p fmin, whose pitch class is generally not C.
+///          The fold `(b % bins_per_octave) * n_chroma / bins_per_octave` assigns the
+///          lowest bin of each octave to class 0, so we add the pitch-class offset of
+///          @p fmin (with @p tuning, in fractional semitones) and take a positive modulo
+///          to align chroma class 0 with C, matching librosa.feature.chroma_cqt.
 std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames,
-                                      int bins_per_octave, int n_chroma) {
+                                      int bins_per_octave, int n_chroma, float fmin, float tuning) {
   std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
+  // Pitch class of fmin relative to C. hz_to_midi yields MIDI numbers where C is a
+  // multiple of 12 (pitch class 0), so (round(midi) mod 12) is the C-relative class.
+  // Account for tuning (fractional semitones) before rounding.
+  int pitch_class_offset = 0;
+  if (fmin > 0.0f && n_chroma > 0) {
+    const float midi = hz_to_midi(fmin) + tuning;
+    int pc = static_cast<int>(std::lround(midi)) % n_chroma;
+    if (pc < 0) pc += n_chroma;
+    pitch_class_offset = pc;
+  }
   // librosa.feature.chroma_cqt expects bins_per_octave to be a multiple of n_chroma.
   // Each chroma bin gets the mean of all CQT bins falling onto that pitch class.
   std::vector<int> counts(n_chroma, 0);
   for (int b = 0; b < n_bins; ++b) {
     int idx = ((b % bins_per_octave) * n_chroma) / bins_per_octave;
+    idx = (idx + pitch_class_offset) % n_chroma;
     if (idx < 0) idx += n_chroma;
     counts[idx] += 1;
     for (int t = 0; t < n_frames; ++t) {
@@ -293,7 +310,8 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   int n_frames = result.n_frames();
 
   std::vector<float> chroma =
-      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma);
+      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
+                         config.cqt.fmin, /*tuning=*/0.0f);
 
   if (config.threshold > 0.0f) {
     for (int t = 0; t < n_frames; ++t) {
@@ -321,25 +339,26 @@ Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
   SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
 
-  ChromaConfig stft_config;
-  stft_config.n_fft = 4096;
-  stft_config.hop_length = config.cqt.hop_length;
-  stft_config.fmin = config.cqt.fmin;
-  stft_config.n_octaves = std::max(1, config.cqt.n_bins / config.cqt.bins_per_octave);
-
-  Chroma result = Chroma::compute(audio, stft_config);
+  // Run a CQT over the bass frequency range (fmin / bins_per_octave / n_bins all
+  // come from config.cqt, so the number of octaves covered is honored by n_bins),
+  // then fold the magnitude bins onto chroma classes.
+  CqtResult result = cqt(audio, config.cqt);
   if (result.empty()) {
     return Chroma();
   }
 
-  std::vector<float> chroma(result.data(),
-                            result.data() + static_cast<size_t>(result.n_chroma()) *
-                                                static_cast<size_t>(result.n_frames()));
-  if (config.normalize_frames && result.n_frames() > 0) {
-    chroma = normalize_matrix(chroma.data(), config.n_chroma, result.n_frames(), /*axis=*/0,
-                              NormType::Inf);
+  const std::vector<float>& mag = result.magnitude();
+  int n_bins = result.n_bins();
+  int n_frames = result.n_frames();
+
+  std::vector<float> chroma =
+      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
+                         config.cqt.fmin, /*tuning=*/0.0f);
+
+  if (config.normalize_frames && n_frames > 0) {
+    chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);
   }
-  return Chroma(std::move(chroma), config.n_chroma, result.n_frames(), audio.sample_rate(),
+  return Chroma(std::move(chroma), config.n_chroma, n_frames, audio.sample_rate(),
                 config.cqt.hop_length);
 }
 

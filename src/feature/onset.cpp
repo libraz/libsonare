@@ -13,6 +13,8 @@ namespace {
 
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
 constexpr float kAmin = constants::kEpsilon;
+// Power-to-dB scale: 10 / ln(10) = 10 * log10(e). std::log is not constexpr in
+// C++17, so the precomputed literal is kept (matches 10/std::log(10.0f)).
 constexpr float kPowerToDbScale = 4.342944819f;
 constexpr float kTopDb = 80.0f;
 

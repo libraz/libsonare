@@ -56,8 +56,10 @@ std::vector<float> whiten_rows(const std::vector<float>& magnitude, int n_bins, 
         var += diff * diff;
       }
       const float stddev = std::sqrt(var / static_cast<float>(end - start));
+      // Small regularizer to avoid division by zero on flat rows.
+      constexpr float kStddevFloor = 1e-6f;
       out[bin * n_frames + frame] =
-          std::max(0.0f, (magnitude[bin * n_frames + frame] - mean) / (stddev + 1e-6f));
+          std::max(0.0f, (magnitude[bin * n_frames + frame] - mean) / (stddev + kStddevFloor));
     }
   }
 
@@ -189,16 +191,21 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
 
   // Blend in plain STFT chroma as an intentional robustness fallback for
   // sparse/pure-tone content, where NNLS/CQT salience can be ambiguous.
-  ChromaConfig stft_config;
-  stft_config.n_fft = 4096;
-  stft_config.hop_length = config.cqt.hop_length;
-  Chroma stft_chroma = Chroma::compute(audio, stft_config);
-  if (!stft_chroma.empty()) {
-    const int common_frames = std::min(n_frames, stft_chroma.n_frames());
-    for (int c = 0; c < 12; ++c) {
-      for (int frame = 0; frame < common_frames; ++frame) {
-        const size_t idx = static_cast<size_t>(c) * n_frames + frame;
-        chroma[idx] = 0.45f * chroma[idx] + 0.55f * stft_chroma.at(c, frame);
+  // Callers can disable or tune this via the config.
+  if (config.enable_stft_blend) {
+    ChromaConfig stft_config;
+    stft_config.n_fft = config.stft_blend_n_fft;
+    stft_config.hop_length = config.cqt.hop_length;
+    Chroma stft_chroma = Chroma::compute(audio, stft_config);
+    if (!stft_chroma.empty()) {
+      const float stft_w = config.stft_blend_weight;
+      const float nnls_w = 1.0f - stft_w;
+      const int common_frames = std::min(n_frames, stft_chroma.n_frames());
+      for (int c = 0; c < 12; ++c) {
+        for (int frame = 0; frame < common_frames; ++frame) {
+          const size_t idx = static_cast<size_t>(c) * n_frames + frame;
+          chroma[idx] = nnls_w * chroma[idx] + stft_w * stft_chroma.at(c, frame);
+        }
       }
     }
   }

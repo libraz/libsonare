@@ -161,7 +161,7 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
 
-  constexpr float kAmin = 1e-10f;
+  constexpr float kAmin = constants::kEpsilon;
 
   // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
@@ -258,8 +258,8 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   std::vector<float> contrast((n_bands + 1) * n_frames, 0.0f);
   std::vector<float> peak_db(peak.size());
   std::vector<float> valley_db(valley.size());
-  power_to_db(peak.data(), peak.size(), 1.0f, 1e-10f, 80.0f, peak_db.data());
-  power_to_db(valley.data(), valley.size(), 1.0f, 1e-10f, 80.0f, valley_db.data());
+  power_to_db(peak.data(), peak.size(), 1.0f, constants::kEpsilon, 80.0f, peak_db.data());
+  power_to_db(valley.data(), valley.size(), 1.0f, constants::kEpsilon, 80.0f, valley_db.data());
 
   for (size_t i = 0; i < contrast.size(); ++i) {
     contrast[i] = peak_db[i] - valley_db[i];

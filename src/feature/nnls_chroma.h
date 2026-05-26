@@ -27,6 +27,12 @@ struct NnlsChromaConfig {
   int max_iter = 100;            ///< NNLS iterations per frame
   float tolerance = 1e-4f;       ///< NNLS KKT tolerance
   bool normalize_frames = true;  ///< L-infinity normalize chroma frames
+
+  /// @brief Blend a plain STFT chroma into the NNLS result for robustness on
+  /// sparse/pure-tone content where CQT salience can be ambiguous.
+  bool enable_stft_blend = true;    ///< Disable to use NNLS/CQT salience only.
+  float stft_blend_weight = 0.55f;  ///< Weight applied to the STFT chroma in the blend.
+  int stft_blend_n_fft = 4096;      ///< FFT size used for the STFT chroma fallback.
 };
 
 /// @brief Builds a log-frequency harmonic template matrix for NNLS.

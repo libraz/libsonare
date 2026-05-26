@@ -14,6 +14,8 @@
 
 namespace sonare {
 
+using sonare::constants::kTwoPi;
+
 namespace {
 
 /// @brief Cache key for VQT kernel
@@ -52,22 +54,33 @@ struct CachedVqtKernel {
 /// @brief Maximum number of cached VQT kernels
 constexpr size_t kMaxVqtCacheSize = 8;
 
-/// @brief Global VQT kernel cache with LRU eviction
-std::mutex g_vqt_cache_mutex;
-std::unordered_map<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> g_vqt_cache;
-std::list<VqtKernelCacheKey> g_vqt_cache_lru;
+/// @brief VQT kernel cache state with LRU eviction.
+/// @details Wrapped in a function-local static (Meyers singleton) so its
+/// construction and destruction order are well-defined; the mutex still guards
+/// concurrent access.
+struct VqtKernelCache {
+  std::mutex mutex;
+  std::unordered_map<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> map;
+  std::list<VqtKernelCacheKey> lru;
+};
+
+VqtKernelCache& vqt_kernel_cache() {
+  static VqtKernelCache cache;
+  return cache;
+}
 
 /// @brief Get or create cached VQT kernel with Eigen matrix
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   VqtKernelCacheKey key{
       sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave, config.gamma};
 
-  std::lock_guard<std::mutex> lock(g_vqt_cache_mutex);
-  auto it = g_vqt_cache.find(key);
-  if (it != g_vqt_cache.end()) {
+  VqtKernelCache& cache = vqt_kernel_cache();
+  std::lock_guard<std::mutex> lock(cache.mutex);
+  auto it = cache.map.find(key);
+  if (it != cache.map.end()) {
     // Move to front of LRU list (most recently used)
-    g_vqt_cache_lru.remove(key);
-    g_vqt_cache_lru.push_front(key);
+    cache.lru.remove(key);
+    cache.lru.push_front(key);
     return it->second;
   }
 
@@ -87,15 +100,15 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   }
 
   // Evict oldest entry if cache is full
-  while (g_vqt_cache.size() >= kMaxVqtCacheSize && !g_vqt_cache_lru.empty()) {
-    auto oldest_key = g_vqt_cache_lru.back();
-    g_vqt_cache_lru.pop_back();
-    g_vqt_cache.erase(oldest_key);
+  while (cache.map.size() >= kMaxVqtCacheSize && !cache.lru.empty()) {
+    auto oldest_key = cache.lru.back();
+    cache.lru.pop_back();
+    cache.map.erase(oldest_key);
   }
 
   CachedVqtKernel cached{std::shared_ptr<VqtKernel>(std::move(kernel)), eigen_matrix};
-  g_vqt_cache[key] = cached;
-  g_vqt_cache_lru.push_front(key);
+  cache.map[key] = cached;
+  cache.lru.push_front(key);
   return cached;
 }
 
