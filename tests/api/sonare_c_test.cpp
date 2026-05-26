@@ -1712,6 +1712,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+
   SonareEngineCaptureStatus capture_status{};
   REQUIRE(sonare_engine_capture_status(engine, &capture_status) == SONARE_OK);
   REQUIRE(capture_status.captured_frames == 128);
@@ -1752,6 +1753,33 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   sonare_engine_destroy(engine);
 }
 #endif
+
+TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
+
+  std::array<float, 16> left{};
+  std::array<float, 16> right{};
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* channels[] = {left.data(), right.data()};
+
+  std::array<float, 16> monitor_left{};
+  std::array<float, 16> monitor_right{};
+  monitor_left.fill(99.0f);
+  monitor_right.fill(99.0f);
+  float* monitor_channels[] = {monitor_left.data(), monitor_right.data()};
+
+  REQUIRE(sonare_engine_process_with_monitor(engine, channels, monitor_channels, 2, 16) ==
+          SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
+  REQUIRE(monitor_left[0] == Catch::Approx(0.0f).margin(0.0001f));
+  REQUIRE(monitor_right[0] == Catch::Approx(0.0f).margin(0.0001f));
+
+  sonare_engine_destroy(engine);
+}
 
 #ifdef SONARE_WITH_VOICE_CHANGER
 TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]") {

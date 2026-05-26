@@ -389,6 +389,23 @@ class RealtimeEngine:
         )
         return [[float(array[i]) for i in range(frame_count)] for array in arrays]
 
+    def process_with_monitor(
+        self, channels: Sequence[Sequence[float]]
+    ) -> tuple[list[list[float]], list[list[float]]]:
+        arrays, ptrs, frame_count = self._channel_arrays(channels)
+        monitor_arrays = [(ctypes.c_float * frame_count)(*([0.0] * frame_count)) for _ in arrays]
+        monitor_ptrs = (ctypes.POINTER(ctypes.c_float) * len(monitor_arrays))(
+            *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in monitor_arrays]
+        )
+        _check(
+            _get_lib().sonare_engine_process_with_monitor(
+                self._require_handle(), ptrs, monitor_ptrs, len(arrays), int(frame_count)
+            )
+        )
+        output = [[float(array[i]) for i in range(frame_count)] for array in arrays]
+        monitor = [[float(array[i]) for i in range(frame_count)] for array in monitor_arrays]
+        return output, monitor
+
     def render_offline(
         self, channels: Sequence[Sequence[float]], *, block_size: int = 128
     ) -> list[list[float]]:

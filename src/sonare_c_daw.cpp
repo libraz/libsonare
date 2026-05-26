@@ -679,6 +679,14 @@ SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* ch
   return SONARE_OK;
 }
 
+SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
+                                               float* const* monitor_out, int num_channels,
+                                               int num_frames) {
+  if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.process_with_monitor(channels, monitor_out, num_channels, num_frames);
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
                                          int num_channels, int64_t total_frames, int block_size) {
   if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size <= 0) {

@@ -79,6 +79,10 @@ class EngineTelemetryError(IntEnum):
     UNKNOWN_TARGET: EngineTelemetryError
     NON_REALTIME_SAFE_PARAMETER: EngineTelemetryError
     NOT_PREPARED: EngineTelemetryError
+    NON_QUEUEABLE_COMMAND: EngineTelemetryError
+    AUTOMATION_BIND_TARGET_OVERFLOW: EngineTelemetryError
+    STALE_AUTOMATION_LANES: EngineTelemetryError
+    SMOOTHED_PARAMETER_CAPACITY: EngineTelemetryError
 
 class AutomationPointCurve(IntEnum):
     HOLD: AutomationPointCurve

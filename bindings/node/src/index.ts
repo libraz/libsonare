@@ -646,6 +646,13 @@ export class RealtimeEngine {
     return this.native.process(channels);
   }
 
+  processWithMonitor(channels: Float32Array[]): {
+    output: Float32Array[];
+    monitor: Float32Array[];
+  } {
+    return this.native.processWithMonitor(channels);
+  }
+
   renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {
     return this.native.renderOffline(channels, blockSize);
   }

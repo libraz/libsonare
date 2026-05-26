@@ -73,6 +73,7 @@ import {
   preemphasis,
   resample,
   rmsEnergy,
+  RealtimeEngine,
   StreamingEqualizer,
   StreamingMasteringChain,
   samplesToFrames,
@@ -1094,6 +1095,26 @@ describe('sonare native binding', () => {
         expect(audio.shortTermLufs().length).toBeGreaterThan(0);
       } finally {
         audio.destroy();
+      }
+    });
+  });
+
+  describe('RealtimeEngine', () => {
+    it('processWithMonitor returns output and monitor buses', () => {
+      const engine = new RealtimeEngine(48000, 16);
+      try {
+        const result = engine.processWithMonitor([
+          new Float32Array(16).fill(0.25),
+          new Float32Array(16).fill(-0.25),
+        ]);
+        expect(result.output).toHaveLength(2);
+        expect(result.monitor).toHaveLength(2);
+        expect(result.output[0][0]).toBeCloseTo(0.25);
+        expect(result.output[1][0]).toBeCloseTo(-0.25);
+        expect(result.monitor[0][0]).toBeCloseTo(0);
+        expect(result.monitor[1][0]).toBeCloseTo(0);
+      } finally {
+        engine.destroy();
       }
     });
   });

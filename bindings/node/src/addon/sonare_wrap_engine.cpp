@@ -246,6 +246,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::GraphNodeCount>("graphNodeCount"),
           InstanceMethod<&RealtimeEngineWrap::GraphConnectionCount>("graphConnectionCount"),
           InstanceMethod<&RealtimeEngineWrap::Process>("process"),
+          InstanceMethod<&RealtimeEngineWrap::ProcessWithMonitor>("processWithMonitor"),
           InstanceMethod<&RealtimeEngineWrap::RenderOffline>("renderOffline"),
           InstanceMethod<&RealtimeEngineWrap::BounceOffline>("bounceOffline"),
           InstanceMethod<&RealtimeEngineWrap::FreezeOffline>("freezeOffline"),
@@ -857,6 +858,31 @@ Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
                                           static_cast<int>(block.pointers.size()), block.frames));
   if (env.IsExceptionPending()) return env.Undefined();
   return ChannelsToJs(env, block);
+}
+
+Napi::Value RealtimeEngineWrap::ProcessWithMonitor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ChannelBlock block = ReadChannels(info, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
+
+  ChannelBlock monitor;
+  monitor.frames = block.frames;
+  monitor.storage.resize(block.storage.size());
+  monitor.pointers.reserve(block.storage.size());
+  for (size_t ch = 0; ch < block.storage.size(); ++ch) {
+    monitor.storage[ch].assign(static_cast<size_t>(block.frames), 0.0f);
+    monitor.pointers.push_back(monitor.storage[ch].data());
+  }
+
+  ThrowIfError(env, sonare_engine_process_with_monitor(
+                        engine_, block.pointers.data(), monitor.pointers.data(),
+                        static_cast<int>(block.pointers.size()), block.frames));
+  if (env.IsExceptionPending()) return env.Undefined();
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("output", ChannelsToJs(env, block));
+  result.Set("monitor", ChannelsToJs(env, monitor));
+  return result;
 }
 
 Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {

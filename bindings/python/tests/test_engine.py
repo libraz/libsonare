@@ -76,6 +76,15 @@ def test_engine_destroy_and_delete_aliases() -> None:
         engine.play()
 
 
+def test_realtime_engine_process_with_monitor_returns_separate_bus() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=16) as engine:
+        output, monitor = engine.process_with_monitor([[0.25] * 16, [-0.25] * 16])
+        assert output[0][0] == pytest.approx(0.25)
+        assert output[1][0] == pytest.approx(-0.25)
+        assert monitor[0][0] == pytest.approx(0.0)
+        assert monitor[1][0] == pytest.approx(0.0)
+
+
 def test_realtime_engine_process_and_telemetry() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_tempo(60.0)

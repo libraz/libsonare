@@ -17,6 +17,14 @@ size_t next_power_of_two(size_t value) {
   return out;
 }
 
+int64_t block_end_frame(int64_t block_start, int num_frames) noexcept {
+  return block_start + static_cast<int64_t>(std::max(num_frames, 0));
+}
+
+bool command_belongs_to_block(int64_t sample_time, int64_t block_start, int num_frames) noexcept {
+  return sample_time >= block_start && sample_time < block_end_frame(block_start, num_frames);
+}
+
 }  // namespace
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
@@ -46,28 +54,42 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   pending_active_.fill(false);
   // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
   // the audio thread; mark all slots inactive.
+  applied_param_smoothing_ms_ = param_smoothing_ms_.load(std::memory_order_relaxed);
   for (SmoothedParam& slot : smoothed_params_) {
     slot.active = false;
     slot.target_id = 0;
-    applied_param_smoothing_ms_ = param_smoothing_ms_.load(std::memory_order_relaxed);
     slot.smoother.prepare(sample_rate_, applied_param_smoothing_ms_);
     slot.smoother.reset(0.0f);
   }
   telemetry_overflow_count_ = 0;
+  automation_bind_overflow_reported_ = automation_.bind_target_overflow_count();
+  automation_stale_lane_reported_ = automation_.stale_lane_apply_count();
 }
 
 void RealtimeEngine::process(float* const* io, int num_channels, int num_frames) noexcept {
+  process_impl(io, nullptr, num_channels, num_frames, true);
+}
+
+void RealtimeEngine::process_with_monitor(float* const* io, float* const* monitor_out,
+                                          int num_channels, int num_frames) noexcept {
+  process_impl(io, monitor_out, num_channels, num_frames, false);
+}
+
+void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, int num_channels,
+                                  int num_frames, bool fold_monitor_to_main) noexcept {
   rt::ScopedNoDenormals no_denormals;
 
   const int frames = std::max(num_frames, 0);
   if (max_block_size_ <= 0) {
     silence(io, num_channels, frames);
+    silence(monitor_out, num_channels, frames);
     enqueue_error(TelemetryErrorCode::kNotPrepared, 0, 0, static_cast<uint32_t>(frames));
     return;
   }
   if (frames > max_block_size_) {
     const auto state = transport_.snapshot();
     silence(io, num_channels, frames);
+    silence(monitor_out, num_channels, frames);
     transport_.advance(frames);
     enqueue_error(TelemetryErrorCode::kMaxBlockExceeded, state.render_frame, state.sample_position,
                   static_cast<uint32_t>(frames));
@@ -103,8 +125,7 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
   for (size_t i = 0; i < pending_.size(); ++i) {
     if (!pending_active_[i]) continue;
     const auto sample_time = pending_[i].sample_time;
-    if (sample_time >= state.render_frame &&
-        sample_time < state.render_frame + static_cast<int64_t>(frames)) {
+    if (command_belongs_to_block(sample_time, state.render_frame, frames)) {
       boundary_splitter_.add_command(static_cast<int>(sample_time - state.render_frame));
     }
   }
@@ -142,7 +163,8 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
   for (size_t i = 0; i < boundaries.size(); ++i) {
     const int offset = boundaries[i].offset;
     if (offset > previous_offset) {
-      process_subblock(io, num_channels, previous_offset, offset - previous_offset);
+      process_subblock(io, monitor_out, num_channels, previous_offset, offset - previous_offset,
+                       fold_monitor_to_main);
       transport_.advance(offset - previous_offset);
       previous_offset = offset;
     }
@@ -163,7 +185,8 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
     tick_smoothed_params(sub_block_len);
   }
   if (frames > previous_offset) {
-    process_subblock(io, num_channels, previous_offset, frames - previous_offset);
+    process_subblock(io, monitor_out, num_channels, previous_offset, frames - previous_offset,
+                     fold_monitor_to_main);
     transport_.advance(frames - previous_offset);
   }
 
@@ -179,6 +202,20 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
   if (non_rt_rejection_delta > 0) {
     enqueue_error(TelemetryErrorCode::kNonRealtimeSafeParameter, state.render_frame,
                   state.sample_position, non_rt_rejection_delta);
+  }
+  const uint32_t bind_overflow_total = automation_.bind_target_overflow_count();
+  if (bind_overflow_total != automation_bind_overflow_reported_) {
+    const uint32_t delta = bind_overflow_total - automation_bind_overflow_reported_;
+    automation_bind_overflow_reported_ = bind_overflow_total;
+    enqueue_error(TelemetryErrorCode::kAutomationBindTargetOverflow, state.render_frame,
+                  state.sample_position, delta);
+  }
+  const uint32_t stale_lane_total = automation_.stale_lane_apply_count();
+  if (stale_lane_total != automation_stale_lane_reported_) {
+    const uint32_t delta = stale_lane_total - automation_stale_lane_reported_;
+    automation_stale_lane_reported_ = stale_lane_total;
+    enqueue_error(TelemetryErrorCode::kStaleAutomationLanes, state.render_frame,
+                  state.sample_position, delta);
   }
   if (boundaries.overflowed()) {
     enqueue_error(TelemetryErrorCode::kBoundaryOverflow, state.render_frame, state.sample_position,
@@ -356,8 +393,7 @@ void RealtimeEngine::drain_commands(int64_t block_render_frame, int num_frames) 
   for (size_t i = 0; i < kMaxCommandsPerBlock && commands_.pop(command); ++i) {
     if (command.sample_time < 0 || command.sample_time <= block_render_frame) {
       command.sample_time = block_render_frame;
-    } else if (command.sample_time >=
-               block_render_frame + static_cast<int64_t>(std::max(num_frames, 0))) {
+    } else if (!command_belongs_to_block(command.sample_time, block_render_frame, num_frames)) {
       store_pending(command);
       continue;
     }
@@ -501,8 +537,10 @@ void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
     }
   }
   if (free_slot == nullptr) {
-    // No free smoother slot; fall back to an immediate RT-safe set rather than
-    // dropping the change. Continuity is sacrificed only under saturation.
+    enqueue_error(TelemetryErrorCode::kSmoothedParameterCapacity, transport_.render_frame(),
+                  transport_.sample_position(), target_id);
+    // Preserve the command instead of dropping it. Under saturation we lose
+    // smoothing continuity, but the target still reaches the requested value.
     automation_.set_parameter(target_id, value);
     return;
   }
@@ -549,12 +587,22 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   }
 }
 
-void RealtimeEngine::process_subblock(float* const* io, int num_channels, int offset,
-                                      int num_frames) noexcept {
-  std::array<float*, 64> sub_channels{};
+void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_out, int num_channels,
+                                      int offset, int num_frames,
+                                      bool fold_monitor_to_main) noexcept {
+  std::array<float*, kMaxAudioChannels> sub_channels{};
   int channels = 0;
+  const int scratch_channels =
+      std::min<int>(std::max(num_channels, 0), static_cast<int>(sub_channels.size()));
+  if (monitor_out && num_frames > 0 && offset >= 0) {
+    for (int ch = 0; ch < scratch_channels; ++ch) {
+      if (monitor_out[ch]) {
+        std::fill(monitor_out[ch] + offset, monitor_out[ch] + offset + num_frames, 0.0f);
+      }
+    }
+  }
   if (io && num_channels > 0 && num_frames > 0 && offset >= 0) {
-    channels = std::min<int>(num_channels, static_cast<int>(sub_channels.size()));
+    channels = scratch_channels;
     for (int ch = 0; ch < channels; ++ch) {
       sub_channels[static_cast<size_t>(ch)] = io[ch] ? io[ch] + offset : nullptr;
     }
@@ -567,7 +615,9 @@ void RealtimeEngine::process_subblock(float* const* io, int num_channels, int of
       mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
                                  transport_.sample_position());
     }
-    // Solo/mute + PFL/AFL monitoring stage for any registered strips.
+    // Solo/mute + PFL/AFL monitoring stage for any registered strips. Existing
+    // process() callers keep foldback compatibility; process_with_monitor()
+    // receives the cue bus separately without contaminating the main output.
     if (monitoring_enabled_) {
       for (int ch = 0; ch < channels; ++ch) {
         std::fill(monitor_bus_channels_[static_cast<size_t>(ch)],
@@ -581,7 +631,11 @@ void RealtimeEngine::process_subblock(float* const* io, int num_channels, int of
       for (int ch = 0; ch < channels; ++ch) {
         float* out = sub_channels[static_cast<size_t>(ch)];
         const float* monitor = monitor_bus_channels_[static_cast<size_t>(ch)];
-        if (!out || !monitor) continue;
+        float* cue = monitor_out && monitor_out[ch] ? monitor_out[ch] + offset : nullptr;
+        if (cue) {
+          std::copy(monitor, monitor + num_frames, cue);
+        }
+        if (!fold_monitor_to_main || !out || !monitor) continue;
         for (int i = 0; i < num_frames; ++i) {
           out[i] += monitor[i];
         }

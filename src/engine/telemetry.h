@@ -29,6 +29,9 @@ enum class TelemetryErrorCode : uint16_t {
   // direct engine setter). Distinct from kUnknownTarget, which means the
   // command itself was queueable but referenced an unbound target.
   kNonQueueableCommand,
+  kAutomationBindTargetOverflow,
+  kStaleAutomationLanes,
+  kSmoothedParameterCapacity,
 };
 
 struct Telemetry {

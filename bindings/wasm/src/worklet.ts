@@ -192,6 +192,10 @@ export enum SonareEngineTelemetryError {
   UnknownTarget = 7,
   NonRealtimeSafeParameter = 8,
   NotPrepared = 9,
+  NonQueueableCommand = 10,
+  AutomationBindTargetOverflow = 11,
+  StaleAutomationLanes = 12,
+  SmoothedParameterCapacity = 13,
 }
 
 interface WorkletTransport {

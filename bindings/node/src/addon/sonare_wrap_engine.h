@@ -49,6 +49,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value GraphNodeCount(const Napi::CallbackInfo& info);
   Napi::Value GraphConnectionCount(const Napi::CallbackInfo& info);
   Napi::Value Process(const Napi::CallbackInfo& info);
+  Napi::Value ProcessWithMonitor(const Napi::CallbackInfo& info);
   Napi::Value RenderOffline(const Napi::CallbackInfo& info);
   Napi::Value BounceOffline(const Napi::CallbackInfo& info);
   Napi::Value FreezeOffline(const Napi::CallbackInfo& info);

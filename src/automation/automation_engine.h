@@ -47,7 +47,7 @@ class AutomationEngine {
   /// failures bump the same internal counters apply() uses.
   bool set_parameter(uint32_t param_id, float value) noexcept;
   void collect_boundaries(double block_start_ppq, double block_end_ppq,
-                          AutomationBoundaryList* out) const noexcept;
+                          AutomationBoundaryList* out) noexcept;
 
   size_t lane_count() const noexcept;
   uint32_t unknown_target_count() const noexcept {
@@ -81,7 +81,7 @@ class AutomationEngine {
   std::atomic<uint32_t> unknown_target_count_{0};
   std::atomic<uint32_t> non_realtime_safe_rejection_count_{0};
   std::atomic<uint32_t> bind_target_overflow_count_{0};
-  mutable std::atomic<uint32_t> stale_lane_apply_count_{0};
+  std::atomic<uint32_t> stale_lane_apply_count_{0};
 };
 
 }  // namespace sonare::automation

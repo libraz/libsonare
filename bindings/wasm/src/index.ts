@@ -95,6 +95,7 @@ import type {
   WasmEngineMeterTelemetry,
   WasmEngineMetronomeConfig,
   WasmEngineParameterInfo,
+  WasmEngineProcessWithMonitorResult,
   WasmEngineTelemetry,
   WasmEngineTransportState,
   WasmFourierTempogramResult,
@@ -528,6 +529,10 @@ export class RealtimeEngine {
 
   process(channels: Float32Array[]): Float32Array[] {
     return this.native.process(channels);
+  }
+
+  processWithMonitor(channels: Float32Array[]): WasmEngineProcessWithMonitorResult {
+    return this.native.processWithMonitor(channels);
   }
 
   renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {

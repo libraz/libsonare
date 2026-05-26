@@ -111,7 +111,7 @@ bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
 }
 
 void AutomationEngine::collect_boundaries(double block_start_ppq, double block_end_ppq,
-                                          AutomationBoundaryList* out) const noexcept {
+                                          AutomationBoundaryList* out) noexcept {
   if (!out) return;
   out->clear();
   const double lo = std::min(block_start_ppq, block_end_ppq);

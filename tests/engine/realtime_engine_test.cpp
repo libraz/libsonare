@@ -1,6 +1,7 @@
 #include "engine/realtime_engine.h"
 
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
@@ -102,6 +103,29 @@ TEST_CASE("RealtimeEngine routes monitor PFL bus into output", "[engine][realtim
 
   REQUIRE(left.back() > 1.70f);
   REQUIRE(left.back() < 1.72f);
+}
+
+TEST_CASE("RealtimeEngine can route monitor PFL bus separately from output", "[engine][realtime]") {
+  constexpr int kFrames = 16;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  sonare::mixing::ChannelStrip strip({-6.0206f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kFrames);
+  REQUIRE(engine.add_monitor_strip(&strip));
+  engine.set_monitoring_enabled(true);
+  engine.monitor().set_monitor_mode(0, sonare::engine::MonitorMode::kPfl);
+
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> cue{};
+  left.fill(1.0f);
+  float* io[] = {left.data()};
+  float* monitor[] = {cue.data()};
+  engine.process_with_monitor(io, monitor, 1, kFrames);
+
+  REQUIRE(cue.front() == Catch::Approx(1.0f).margin(1.0e-6f));
+  REQUIRE(cue.back() == Catch::Approx(1.0f).margin(1.0e-6f));
+  REQUIRE(left.back() > 0.70f);
+  REQUIRE(left.back() < 0.72f);
 }
 
 TEST_CASE("RealtimeEngine applies scheduled transport commands inside a block",

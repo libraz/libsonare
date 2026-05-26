@@ -1131,6 +1131,9 @@ SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t*
 SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count);
 SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
                                   int num_channels, int num_frames);
+SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
+                                               float* const* monitor_out, int num_channels,
+                                               int num_frames);
 SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
                                          int num_channels, int64_t total_frames, int block_size);
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,

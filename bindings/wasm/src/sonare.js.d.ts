@@ -454,6 +454,11 @@ interface WasmEngineFreezeResult {
   numChannels: number;
 }
 
+interface WasmEngineProcessWithMonitorResult {
+  output: Float32Array[];
+  monitor: Float32Array[];
+}
+
 interface WasmRealtimeEngine {
   prepare: (
     sampleRate: number,
@@ -498,6 +503,7 @@ interface WasmRealtimeEngine {
   captureStatus: () => WasmEngineCaptureStatus;
   capturedAudio: () => Float32Array[];
   process: (channels: Float32Array[]) => Float32Array[];
+  processWithMonitor: (channels: Float32Array[]) => WasmEngineProcessWithMonitorResult;
   renderOffline: (channels: Float32Array[], blockSize: number) => Float32Array[];
   bounceOffline: (options: WasmEngineBounceOptions) => WasmEngineBounceResult;
   freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;

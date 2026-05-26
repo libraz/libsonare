@@ -3702,6 +3702,24 @@ class RealtimeEngineWasm {
     return channelsToJs(block);
   }
 
+  val processWithMonitor(val channels_val) {
+    ChannelBlock block = readChannels(channels_val);
+    ChannelBlock monitor;
+    monitor.frames = block.frames;
+    monitor.storage.assign(block.storage.size(),
+                           std::vector<float>(static_cast<size_t>(block.frames), 0.0f));
+    monitor.pointers.reserve(monitor.storage.size());
+    for (auto& channel : monitor.storage) {
+      monitor.pointers.push_back(channel.data());
+    }
+    engine_.process_with_monitor(block.pointers.data(), monitor.pointers.data(),
+                                 static_cast<int>(block.storage.size()), block.frames);
+    val out = val::object();
+    out.set("output", channelsToJs(block));
+    out.set("monitor", channelsToJs(monitor));
+    return out;
+  }
+
   val renderOffline(val channels_val, int block_size) {
     ChannelBlock block = readChannels(channels_val);
     engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
@@ -4167,6 +4185,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("captureStatus", &RealtimeEngineWasm::captureStatus)
       .function("capturedAudio", &RealtimeEngineWasm::capturedAudio)
       .function("process", &RealtimeEngineWasm::process)
+      .function("processWithMonitor", &RealtimeEngineWasm::processWithMonitor)
       .function("renderOffline", &RealtimeEngineWasm::renderOffline)
       .function("bounceOffline", &RealtimeEngineWasm::bounceOffline)
       .function("freezeOffline", &RealtimeEngineWasm::freezeOffline)

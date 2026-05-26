@@ -41,6 +41,8 @@ class RealtimeEngine {
                size_t telemetry_capacity = 1024);
 
   void process(float* const* io, int num_channels, int num_frames) noexcept;
+  void process_with_monitor(float* const* io, float* const* monitor_out, int num_channels,
+                            int num_frames) noexcept;
   void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size);
 
   bool push_command(const rt::Command& command) noexcept;
@@ -114,7 +116,10 @@ class RealtimeEngine {
   void store_pending(const rt::Command& command) noexcept;
   void apply_due_commands(int64_t boundary_render_frame) noexcept;
   void apply_command(const rt::Command& command) noexcept;
-  void process_subblock(float* const* io, int num_channels, int offset, int num_frames) noexcept;
+  void process_impl(float* const* io, float* const* monitor_out, int num_channels, int num_frames,
+                    bool fold_monitor_to_main) noexcept;
+  void process_subblock(float* const* io, float* const* monitor_out, int num_channels, int offset,
+                        int num_frames, bool fold_monitor_to_main) noexcept;
   void silence(float* const* io, int num_channels, int num_frames) noexcept;
   void start_smoothed_param(uint32_t target_id, float value) noexcept;
   void tick_smoothed_params(int num_steps) noexcept;
@@ -159,7 +164,8 @@ class RealtimeEngine {
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
   std::vector<float> monitor_bus_storage_{};
-  std::array<float*, 64> monitor_bus_channels_{};
+  static constexpr size_t kMaxAudioChannels = 64;
+  std::array<float*, kMaxAudioChannels> monitor_bus_channels_{};
 
   bool mixing_enabled_ = false;
   bool monitoring_enabled_ = false;
@@ -178,6 +184,8 @@ class RealtimeEngine {
   // still surfacing dropped commands without requiring a process() call.
   std::atomic<uint32_t> command_overflow_count_{0};
   uint32_t command_overflow_reported_ = 0;
+  uint32_t automation_bind_overflow_reported_ = 0;
+  uint32_t automation_stale_lane_reported_ = 0;
 };
 
 }  // namespace sonare::engine

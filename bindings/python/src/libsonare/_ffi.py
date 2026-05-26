@@ -1793,6 +1793,14 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_int,
     ]
+    lib.sonare_engine_process_with_monitor.restype = ctypes.c_int32
+    lib.sonare_engine_process_with_monitor.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
     lib.sonare_engine_render_offline.restype = ctypes.c_int32
     lib.sonare_engine_render_offline.argtypes = [
         ctypes.c_void_p,
