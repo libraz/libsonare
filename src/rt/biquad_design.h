@@ -3,6 +3,11 @@
 /// @file biquad_design.h
 /// @brief Biquad coefficient design helpers.
 
+#include <algorithm>
+#include <cmath>
+
+#include "util/constants.h"
+
 namespace sonare::rt {
 
 inline constexpr double kLoudnessOffset = -0.691;
@@ -52,6 +57,27 @@ float one_pole_lowpass_alpha(float frequency_hz, double sample_rate);
 /// @brief Matched-z one-pole low-pass coefficient `1 - exp(-2*pi*fc/fs)`.
 /// @details Returns a clamped coefficient in `[0, 1]`.
 float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate);
+
+/// @brief Coefficients for a bilinear-transformed one-pole highpass.
+///
+/// The difference equation is y[n] = b0 * (x[n] - x[n-1]) + a1 * y[n-1], which
+/// realizes a 6 dB/oct highpass whose cutoff is frequency-accurate.
+struct OnePoleHighpassCoeffs {
+  float b0 = 1.0f;
+  float a1 = 0.0f;
+};
+
+/// @brief Designs a one-pole highpass for @p cutoff_hz at @p sample_rate.
+/// @details Math is performed in double precision and the cutoff is clamped to
+/// a stable audio range.
+inline OnePoleHighpassCoeffs onepole_highpass_coeffs(double cutoff_hz, double sample_rate) {
+  const double clamped = std::clamp(cutoff_hz, 1.0, sample_rate * 0.49);
+  const double g = std::tan(sonare::constants::kPiD * clamped / sample_rate);
+  OnePoleHighpassCoeffs c;
+  c.b0 = static_cast<float>(1.0 / (1.0 + g));
+  c.a1 = static_cast<float>((1.0 - g) / (1.0 + g));
+  return c;
+}
 
 /// @brief Normalized second-order section with double-precision coefficients.
 /// @details Used by the ITU-R BS.1770 K-weighting filters where the accumulation
