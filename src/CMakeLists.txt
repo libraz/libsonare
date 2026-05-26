@@ -3,7 +3,7 @@ add_library(kissfft STATIC
   ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
   ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
 )
-target_include_directories(kissfft PUBLIC ${CMAKE_SOURCE_DIR}/third_party/kissfft)
+target_include_directories(kissfft SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/third_party/kissfft)
 target_compile_definitions(kissfft PRIVATE KISS_FFT_FIXED=0)
 # Disable warnings for third-party code
 if(MSVC)
@@ -157,6 +157,8 @@ add_library(sonare_core STATIC ${SONARE_SOURCES})
 
 target_include_directories(sonare_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(sonare_core SYSTEM PUBLIC
   ${CMAKE_SOURCE_DIR}/third_party/kissfft
   ${CMAKE_SOURCE_DIR}/third_party/dr_libs
   ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -193,6 +195,8 @@ add_library(sonare_rt STATIC
 )
 target_include_directories(sonare_rt PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(sonare_rt SYSTEM PUBLIC
   ${CMAKE_SOURCE_DIR}/third_party/kissfft
   ${CMAKE_SOURCE_DIR}/third_party/dr_libs
   ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -209,6 +213,8 @@ add_library(sonare_automation STATIC
 )
 target_include_directories(sonare_automation PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(sonare_automation SYSTEM PUBLIC
   ${CMAKE_SOURCE_DIR}/third_party/kissfft
   ${CMAKE_SOURCE_DIR}/third_party/dr_libs
   ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -317,6 +323,8 @@ if(BUILD_MASTERING)
   )
   target_include_directories(sonare_mastering PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_mastering SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -351,6 +359,8 @@ if(BUILD_MIXING)
   )
   target_include_directories(sonare_mixing PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_mixing SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -368,6 +378,8 @@ if(BUILD_GRAPH)
   )
   target_include_directories(sonare_graph PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_graph SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -400,6 +412,8 @@ endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
 target_include_directories(sonare_engine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(sonare_engine SYSTEM PUBLIC
   ${CMAKE_SOURCE_DIR}/third_party/kissfft
   ${CMAKE_SOURCE_DIR}/third_party/dr_libs
   ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -431,6 +445,8 @@ if(BUILD_FX)
   )
   target_include_directories(sonare_fx PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_fx SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -451,6 +467,8 @@ if(BUILD_PITCH_EDITOR)
   )
   target_include_directories(sonare_pitch_editor PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_pitch_editor SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -476,6 +494,8 @@ if(BUILD_VOICE_CHANGER)
   )
   target_include_directories(sonare_voice_changer PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_voice_changer SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
@@ -505,6 +525,8 @@ if(BUILD_SHARED)
   )
   target_include_directories(sonare_shared PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_shared SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${CMAKE_SOURCE_DIR}/third_party/dr_libs
     ${CMAKE_SOURCE_DIR}/third_party/minimp3

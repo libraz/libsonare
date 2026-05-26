@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Prevent <windows.h> (pulled in transitively by dr_libs on MSVC) from defining
+# the min/max function-like macros that clobber std::min/std::max.
+add_compile_definitions($<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>)
+
 option(BUILD_TESTING "Build tests" ON)
 option(BUILD_WASM "Build for WebAssembly" OFF)
 option(BUILD_SHARED "Build shared library" OFF)
@@ -56,7 +60,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 警告設定 (サードパーティに波及させないためターゲット単位で適用)
 set(SONARE_WARNING_FLAGS
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4324 /external:W0>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
 )
 
@@ -97,7 +101,7 @@ if(NOT Eigen3_FOUND)
       cmake_policy(POP)
     endif()
     add_library(Eigen3::Eigen INTERFACE IMPORTED)
-    target_include_directories(Eigen3::Eigen INTERFACE ${eigen3_SOURCE_DIR})
+    target_include_directories(Eigen3::Eigen SYSTEM INTERFACE ${eigen3_SOURCE_DIR})
   else()
     FetchContent_MakeAvailable(Eigen3)
   endif()

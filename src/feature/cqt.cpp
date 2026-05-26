@@ -373,7 +373,7 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     return Audio();
   }
 
-  int bins_per_octave = constants::kSemitonesPerOctave;
+  int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
   if (frequencies.size() >= 2 && frequencies[0] > 0.0f && frequencies[1] > frequencies[0]) {
     const float ratio = frequencies[1] / frequencies[0];
     const float estimated_bpo = 1.0f / std::log2(ratio);
