@@ -194,6 +194,12 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("cqt", Napi::Function::New(env, &SonareWrap::Cqt, "cqt"));
   exports.Set("vqt", Napi::Function::New(env, &SonareWrap::Vqt, "vqt"));
 
+  // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
+  exports.Set("melToStft", Napi::Function::New(env, &SonareWrap::MelToStft, "melToStft"));
+  exports.Set("melToAudio", Napi::Function::New(env, &SonareWrap::MelToAudio, "melToAudio"));
+  exports.Set("mfccToMel", Napi::Function::New(env, &SonareWrap::MfccToMel, "mfccToMel"));
+  exports.Set("mfccToAudio", Napi::Function::New(env, &SonareWrap::MfccToAudio, "mfccToAudio"));
+
   // Features - Spectral
   exports.Set("spectralCentroid",
               Napi::Function::New(env, &SonareWrap::SpectralCentroid, "spectralCentroid"));
@@ -263,6 +269,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Streaming - StreamingEqualizer
   StreamingEqualizerWrap::Init(env, exports);
+
+  // Streaming - StreamAnalyzer (real-time frame analyzer)
+  StreamAnalyzerWrap::Init(env, exports);
 
   // Mixing - scene-based Mixer
   MixerWrap::Init(env, exports);

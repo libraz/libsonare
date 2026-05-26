@@ -110,6 +110,12 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Cqt(const Napi::CallbackInfo& info);
   static Napi::Value Vqt(const Napi::CallbackInfo& info);
 
+  // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
+  static Napi::Value MelToStft(const Napi::CallbackInfo& info);
+  static Napi::Value MelToAudio(const Napi::CallbackInfo& info);
+  static Napi::Value MfccToMel(const Napi::CallbackInfo& info);
+  static Napi::Value MfccToAudio(const Napi::CallbackInfo& info);
+
   // Features - Spectral
   static Napi::Value SpectralCentroid(const Napi::CallbackInfo& info);
   static Napi::Value SpectralBandwidth(const Napi::CallbackInfo& info);

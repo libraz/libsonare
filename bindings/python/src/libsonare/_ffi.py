@@ -529,6 +529,75 @@ class SonareCqtResult(ctypes.Structure):
     ]
 
 
+class SonareInverseResult(ctypes.Structure):
+    """Maps to SonareInverseResult in sonare_c.h."""
+
+    _fields_ = [
+        ("rows", ctypes.c_int32),
+        ("n_frames", ctypes.c_int32),
+        ("data", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareStreamConfig(ctypes.Structure):
+    """Maps to SonareStreamConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("sample_rate", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("compute_mel", ctypes.c_int32),
+        ("compute_chroma", ctypes.c_int32),
+        ("compute_onset", ctypes.c_int32),
+        ("emit_every_n_frames", ctypes.c_int32),
+    ]
+
+
+class SonareStreamFrames(ctypes.Structure):
+    """Maps to SonareStreamFrames in sonare_c.h."""
+
+    _fields_ = [
+        ("n_frames", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("mel", ctypes.POINTER(ctypes.c_float)),
+        ("chroma", ctypes.POINTER(ctypes.c_float)),
+        ("onset_strength", ctypes.POINTER(ctypes.c_float)),
+        ("rms_energy", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_float)),
+        ("chord_root", ctypes.POINTER(ctypes.c_int32)),
+        ("chord_quality", ctypes.POINTER(ctypes.c_int32)),
+        ("chord_confidence", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareStreamStats(ctypes.Structure):
+    """Maps to SonareStreamStats in sonare_c.h."""
+
+    _fields_ = [
+        ("total_frames", ctypes.c_int32),
+        ("total_samples", ctypes.c_size_t),
+        ("duration_seconds", ctypes.c_float),
+        ("bpm", ctypes.c_float),
+        ("bpm_confidence", ctypes.c_float),
+        ("bpm_candidate_count", ctypes.c_int32),
+        ("key", ctypes.c_int32),
+        ("key_minor", ctypes.c_int32),
+        ("key_confidence", ctypes.c_float),
+        ("chord_root", ctypes.c_int32),
+        ("chord_quality", ctypes.c_int32),
+        ("chord_confidence", ctypes.c_float),
+        ("chord_start_time", ctypes.c_float),
+        ("current_bar", ctypes.c_int32),
+        ("bar_duration", ctypes.c_float),
+        ("accumulated_seconds", ctypes.c_float),
+        ("used_frames", ctypes.c_int32),
+        ("updated", ctypes.c_int32),
+    ]
+
+
 class SonareStftResult(ctypes.Structure):
     """Maps to SonareStftResult in sonare_c.h."""
 
@@ -1166,6 +1235,138 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ]
         lib.sonare_free_cqt_result.restype = None
         lib.sonare_free_cqt_result.argtypes = [ctypes.POINTER(SonareCqtResult)]
+
+    # --- Features - Inverse reconstruction ---
+
+    if hasattr(lib, "sonare_mel_to_stft"):
+        lib.sonare_mel_to_stft.restype = ctypes.c_int32
+        lib.sonare_mel_to_stft.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.POINTER(SonareInverseResult),
+        ]
+        lib.sonare_mel_to_audio.restype = ctypes.c_int32
+        lib.sonare_mel_to_audio.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_mfcc_to_mel.restype = ctypes.c_int32
+        lib.sonare_mfcc_to_mel.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareInverseResult),
+        ]
+        lib.sonare_mfcc_to_audio.restype = ctypes.c_int32
+        lib.sonare_mfcc_to_audio.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_free_inverse_result.restype = None
+        lib.sonare_free_inverse_result.argtypes = [ctypes.POINTER(SonareInverseResult)]
+
+    # --- Streaming - StreamAnalyzer ---
+
+    if hasattr(lib, "sonare_stream_analyzer_create"):
+        lib.sonare_stream_analyzer_config_default.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_config_default.argtypes = [
+            ctypes.POINTER(SonareStreamConfig),
+        ]
+        lib.sonare_stream_analyzer_create.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_create.argtypes = [
+            ctypes.POINTER(SonareStreamConfig),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_stream_analyzer_destroy.restype = None
+        lib.sonare_stream_analyzer_destroy.argtypes = [ctypes.c_void_p]
+        lib.sonare_stream_analyzer_process.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_process.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_stream_analyzer_process_with_offset.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_process_with_offset.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+        ]
+        lib.sonare_stream_analyzer_available_frames.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_available_frames.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_stream_analyzer_read_frames.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_read_frames.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareStreamFrames),
+        ]
+        lib.sonare_stream_analyzer_reset.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_reset.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        lib.sonare_stream_analyzer_stats.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_stats.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareStreamStats),
+        ]
+        lib.sonare_stream_analyzer_frame_count.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_frame_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.sonare_stream_analyzer_current_time.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_current_time.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+        ]
+        lib.sonare_stream_analyzer_sample_rate.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_sample_rate.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.sonare_stream_analyzer_set_expected_duration.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_expected_duration.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
+        lib.sonare_stream_analyzer_set_normalization_gain.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_normalization_gain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
+        lib.sonare_stream_analyzer_set_tuning_ref_hz.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_tuning_ref_hz.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
+        lib.sonare_free_stream_frames.restype = None
+        lib.sonare_free_stream_frames.argtypes = [ctypes.POINTER(SonareStreamFrames)]
 
     # --- Memory management ---
 

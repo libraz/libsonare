@@ -193,6 +193,18 @@ export interface WasmMfccResult {
   coefficients: Float32Array;
 }
 
+export interface WasmStftPowerResult {
+  nBins: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
+export interface WasmMelPowerResult {
+  nMels: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
 export interface WasmChromaResult {
   nChroma: number;
   nFrames: number;
@@ -920,6 +932,40 @@ export interface SonareModule {
     nMels: number,
     nMfcc: number,
   ) => WasmMfccResult;
+
+  melToStft: (
+    melPower: Float32Array,
+    nMels: number,
+    nFrames: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+  ) => WasmStftPowerResult;
+  melToAudio: (
+    melPower: Float32Array,
+    nMels: number,
+    nFrames: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nIter: number,
+  ) => Float32Array;
+  mfccToMel: (
+    mfcc: Float32Array,
+    nMfcc: number,
+    nFrames: number,
+    nMels: number,
+  ) => WasmMelPowerResult;
+  mfccToAudio: (
+    mfcc: Float32Array,
+    nMfcc: number,
+    nFrames: number,
+    nMels: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nIter: number,
+  ) => Float32Array;
 
   chroma: (
     samples: Float32Array,

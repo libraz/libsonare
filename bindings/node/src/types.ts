@@ -123,6 +123,144 @@ export interface CqtResult {
   frequencies: Float32Array;
 }
 
+/** Reconstructed linear-magnitude STFT from a mel spectrogram (`melToStft`). */
+export interface InverseStftResult {
+  /** Number of STFT frequency bins (`nFft / 2 + 1`). */
+  nBins: number;
+  /** Number of time frames. */
+  nFrames: number;
+  /** Row-major `[nBins x nFrames]` magnitude matrix. */
+  power: Float32Array;
+}
+
+/** Reconstructed mel spectrogram from MFCCs (`mfccToMel`). */
+export interface InverseMelResult {
+  /** Number of mel bands. */
+  nMels: number;
+  /** Number of time frames. */
+  nFrames: number;
+  /** Row-major `[nMels x nFrames]` mel power matrix. */
+  power: Float32Array;
+}
+
+/** Construction options for {@link StreamAnalyzer}. Mirrors `sonare::StreamConfig`. */
+export interface StreamAnalyzerConfig {
+  sampleRate?: number;
+  nFft?: number;
+  hopLength?: number;
+  nMels?: number;
+  fmin?: number;
+  fmax?: number;
+  tuningRefHz?: number;
+  computeMagnitude?: boolean;
+  computeMel?: boolean;
+  computeChroma?: boolean;
+  computeOnset?: boolean;
+  computeSpectral?: boolean;
+  emitEveryNFrames?: number;
+  magnitudeDownsample?: number;
+  keyUpdateIntervalSec?: number;
+  bpmUpdateIntervalSec?: number;
+}
+
+/** Structure-of-arrays frame buffer (`StreamAnalyzer.readFramesSoa`). */
+export interface StreamFramesSoa {
+  nFrames: number;
+  timestamps: Float32Array;
+  mel: Float32Array;
+  chroma: Float32Array;
+  onsetStrength: Float32Array;
+  rmsEnergy: Float32Array;
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+  chordRoot: Int32Array;
+  chordQuality: Int32Array;
+  chordConfidence: Float32Array;
+}
+
+/** Quantized (uint8) frame buffer (`StreamAnalyzer.readFramesU8`). */
+export interface StreamFramesU8 {
+  nFrames: number;
+  nMels: number;
+  timestamps: Float32Array;
+  mel: Uint8Array;
+  chroma: Uint8Array;
+  onsetStrength: Uint8Array;
+  rmsEnergy: Uint8Array;
+  spectralCentroid: Uint8Array;
+  spectralFlatness: Uint8Array;
+}
+
+/** Quantized (int16) frame buffer (`StreamAnalyzer.readFramesI16`). */
+export interface StreamFramesI16 {
+  nFrames: number;
+  nMels: number;
+  timestamps: Float32Array;
+  mel: Int16Array;
+  chroma: Int16Array;
+  onsetStrength: Int16Array;
+  rmsEnergy: Int16Array;
+  spectralCentroid: Int16Array;
+  spectralFlatness: Int16Array;
+}
+
+/** A chord change in a progressive estimate (semitone root, quality ordinal). */
+export interface StreamChordChange {
+  root: number;
+  quality: number;
+  startTime: number;
+  confidence: number;
+}
+
+/** A per-bar chord in a progressive estimate. */
+export interface StreamBarChord {
+  barIndex: number;
+  root: number;
+  quality: number;
+  startTime: number;
+  confidence: number;
+}
+
+/** A named chord-pattern match score. */
+export interface StreamPatternScore {
+  name: string;
+  score: number;
+}
+
+/** Progressive (incremental) musical estimate from {@link StreamAnalyzer.stats}. */
+export interface StreamProgressiveEstimate {
+  bpm: number;
+  bpmConfidence: number;
+  bpmCandidateCount: number;
+  key: number;
+  keyMinor: boolean;
+  keyConfidence: number;
+  chordRoot: number;
+  chordQuality: number;
+  chordConfidence: number;
+  chordStartTime: number;
+  chordProgression: StreamChordChange[];
+  barChordProgression: StreamBarChord[];
+  currentBar: number;
+  barDuration: number;
+  votedPattern: StreamBarChord[];
+  patternLength: number;
+  detectedPatternName: string;
+  detectedPatternScore: number;
+  allPatternScores: StreamPatternScore[];
+  accumulatedSeconds: number;
+  usedFrames: number;
+  updated: boolean;
+}
+
+/** Snapshot returned by {@link StreamAnalyzer.stats}. */
+export interface StreamAnalyzerStats {
+  totalFrames: number;
+  totalSamples: number;
+  durationSeconds: number;
+  estimate: StreamProgressiveEstimate;
+}
+
 export interface BpmCandidate {
   bpm: number;
   confidence: number;

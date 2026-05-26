@@ -965,3 +965,80 @@ class CqtResult:
     sample_rate: int
     magnitude: list[float]
     frequencies: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class InverseResult:
+    """Inverse spectrogram reconstruction result.
+
+    ``data`` is a row-major ``[rows x n_frames]`` matrix (``rows`` are the
+    reconstructed frequency/Mel bins).
+    """
+
+    rows: int
+    n_frames: int
+    data: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamConfig:
+    """Construction config for :class:`StreamAnalyzer`.
+
+    Defaults mirror the C ``sonare_stream_analyzer_config_default`` values
+    (real-time 44100 Hz / n_fft 2048).
+    """
+
+    sample_rate: int = 44100
+    n_fft: int = 2048
+    hop_length: int = 512
+    n_mels: int = 128
+    compute_mel: bool = True
+    compute_chroma: bool = True
+    compute_onset: bool = True
+    emit_every_n_frames: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class StreamFrames:
+    """Structure-of-arrays batch of analyzed frames from :class:`StreamAnalyzer`.
+
+    Matrix fields are flattened row-major ``[n_frames x stride]`` lists
+    (``mel`` stride is ``n_mels``, ``chroma`` stride is 12).
+    """
+
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[float]
+    chroma: list[float]
+    onset_strength: list[float]
+    rms_energy: list[float]
+    spectral_centroid: list[float]
+    spectral_flatness: list[float]
+    chord_root: list[int]
+    chord_quality: list[int]
+    chord_confidence: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamStats:
+    """Progressive estimate and counters snapshot from :class:`StreamAnalyzer`."""
+
+    total_frames: int
+    total_samples: int
+    duration_seconds: float
+    bpm: float
+    bpm_confidence: float
+    bpm_candidate_count: int
+    key: int
+    key_minor: bool
+    key_confidence: float
+    chord_root: int
+    chord_quality: int
+    chord_confidence: float
+    chord_start_time: float
+    current_bar: int
+    bar_duration: float
+    accumulated_seconds: float
+    used_frames: int
+    updated: bool

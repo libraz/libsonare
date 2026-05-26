@@ -205,6 +205,7 @@ export const SectionType = {
   Bridge: 4,
   Instrumental: 5,
   Outro: 6,
+  Unknown: 7,
 } as const;
 
 export type SectionType = (typeof SectionType)[keyof typeof SectionType];
@@ -697,6 +698,24 @@ export interface MfccResult {
   nMfcc: number;
   nFrames: number;
   coefficients: Float32Array;
+}
+
+/**
+ * STFT power spectrogram result (from inverse Mel reconstruction)
+ */
+export interface StftPowerResult {
+  nBins: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
+/**
+ * Mel power spectrogram result (from inverse MFCC reconstruction)
+ */
+export interface MelPowerResult {
+  nMels: number;
+  nFrames: number;
+  power: Float32Array;
 }
 
 /**

@@ -45,6 +45,7 @@ import type {
   MasteringStereoChainResult,
   MasteringStereoResult,
   MelodyResult,
+  MelPowerResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
@@ -61,6 +62,7 @@ import type {
   SendTiming,
   SoloProcessor,
   StereoAnalysis,
+  StftPowerResult,
   StftResult,
   StreamingEqualizerConfig,
 } from './public_types';
@@ -73,12 +75,10 @@ import type {
   WasmAnalysisResult,
   WasmChordAnalysisResult,
   WasmCyclicTempogramResult,
-  WasmFourierTempogramResult,
-  WasmFrameResult,
-  WasmEngineCaptureStatus,
   WasmEngineAutomationPoint,
   WasmEngineBounceOptions,
   WasmEngineBounceResult,
+  WasmEngineCaptureStatus,
   WasmEngineClip,
   WasmEngineFreezeOptions,
   WasmEngineFreezeResult,
@@ -89,10 +89,12 @@ import type {
   WasmEngineParameterInfo,
   WasmEngineTelemetry,
   WasmEngineTransportState,
+  WasmFourierTempogramResult,
+  WasmFrameResult,
   WasmKeyCandidateResult,
   WasmNnlsChromaResult,
-  WasmStreamAnalyzer,
   WasmRealtimeEngine,
+  WasmStreamAnalyzer,
   WasmTempogramResult,
   WasmTrimResult,
 } from './wasm_types';
@@ -2140,6 +2142,125 @@ export function mfcc(
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc);
+}
+
+// ============================================================================
+// Features - Inverse reconstruction
+// ============================================================================
+
+/**
+ * Approximate inverse of a Mel filterbank: Mel power spectrogram -> STFT power
+ * spectrogram. Mirrors `feature::mel_to_stft`.
+ *
+ * @param melPower - Mel power spectrogram [nMels x nFrames] row-major
+ * @param nMels - Number of Mel bands
+ * @param nFrames - Number of time frames
+ * @param sampleRate - Sample rate in Hz
+ * @param nFft - FFT size (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @returns STFT power spectrogram result
+ */
+export function melToStft(
+  melPower: Float32Array,
+  nMels: number,
+  nFrames: number,
+  sampleRate: number,
+  nFft = 2048,
+  hopLength = 512,
+): StftPowerResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.melToStft(melPower, nMels, nFrames, sampleRate, nFft, hopLength);
+}
+
+/**
+ * Reconstruct audio from a Mel power spectrogram via Griffin-Lim. Mirrors
+ * `feature::mel_to_audio`.
+ *
+ * @param melPower - Mel power spectrogram [nMels x nFrames] row-major
+ * @param nMels - Number of Mel bands
+ * @param nFrames - Number of time frames
+ * @param sampleRate - Sample rate in Hz
+ * @param nFft - FFT size (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @param nIter - Griffin-Lim iterations (default: 32)
+ * @returns Reconstructed audio samples (mono, float32)
+ */
+export function melToAudio(
+  melPower: Float32Array,
+  nMels: number,
+  nFrames: number,
+  sampleRate: number,
+  nFft = 2048,
+  hopLength = 512,
+  nIter = 32,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.melToAudio(melPower, nMels, nFrames, sampleRate, nFft, hopLength, nIter);
+}
+
+/**
+ * Invert MFCC coefficients back to a Mel power spectrogram. Mirrors
+ * `feature::mfcc_to_mel`.
+ *
+ * @param mfccCoefficients - MFCC matrix [nMfcc x nFrames] row-major
+ * @param nMfcc - Number of MFCC coefficients
+ * @param nFrames - Number of time frames
+ * @param nMels - Number of Mel bins to reconstruct (default: 128)
+ * @returns Mel power spectrogram result
+ */
+export function mfccToMel(
+  mfccCoefficients: Float32Array,
+  nMfcc: number,
+  nFrames: number,
+  nMels = 128,
+): MelPowerResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.mfccToMel(mfccCoefficients, nMfcc, nFrames, nMels);
+}
+
+/**
+ * Reconstruct audio directly from MFCC coefficients via Griffin-Lim. Mirrors
+ * `feature::mfcc_to_audio`.
+ *
+ * @param mfccCoefficients - MFCC matrix [nMfcc x nFrames] row-major
+ * @param nMfcc - Number of MFCC coefficients
+ * @param nFrames - Number of time frames
+ * @param nMels - Number of Mel bins (default: 128)
+ * @param sampleRate - Sample rate in Hz
+ * @param nFft - FFT size (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @param nIter - Griffin-Lim iterations (default: 32)
+ * @returns Reconstructed audio samples (mono, float32)
+ */
+export function mfccToAudio(
+  mfccCoefficients: Float32Array,
+  nMfcc: number,
+  nFrames: number,
+  nMels: number,
+  sampleRate: number,
+  nFft = 2048,
+  hopLength = 512,
+  nIter = 32,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.mfccToAudio(
+    mfccCoefficients,
+    nMfcc,
+    nFrames,
+    nMels,
+    sampleRate,
+    nFft,
+    hopLength,
+    nIter,
+  );
 }
 
 // ============================================================================

@@ -143,6 +143,18 @@ interface WasmMfccResult {
   coefficients: Float32Array;
 }
 
+interface WasmStftPowerResult {
+  nBins: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
+interface WasmMelPowerResult {
+  nMels: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
 interface WasmChromaResult {
   nChroma: number;
   nFrames: number;
@@ -722,6 +734,41 @@ interface SonareModule {
     nMfcc: number,
   ) => WasmMfccResult;
 
+  // Features - Inverse reconstruction
+  melToStft: (
+    melPower: Float32Array,
+    nMels: number,
+    nFrames: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+  ) => WasmStftPowerResult;
+  melToAudio: (
+    melPower: Float32Array,
+    nMels: number,
+    nFrames: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nIter: number,
+  ) => Float32Array;
+  mfccToMel: (
+    mfcc: Float32Array,
+    nMfcc: number,
+    nFrames: number,
+    nMels: number,
+  ) => WasmMelPowerResult;
+  mfccToAudio: (
+    mfcc: Float32Array,
+    nMfcc: number,
+    nFrames: number,
+    nMels: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nIter: number,
+  ) => Float32Array;
+
   // Features - Chroma
   chroma: (
     samples: Float32Array,
@@ -967,6 +1014,7 @@ interface SonareModule {
     Bridge: { value: 4 };
     Instrumental: { value: 5 };
     Outro: { value: 6 };
+    Unknown: { value: 7 };
   };
 
   // Streaming - StreamAnalyzer

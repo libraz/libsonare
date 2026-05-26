@@ -1,0 +1,141 @@
+"""Round-trip / ABI validation for the newly wired inverse + StreamAnalyzer API."""
+
+import math
+
+import libsonare as ls
+
+
+def _is_finite_list(xs):
+    return all(math.isfinite(float(x)) for x in xs)
+
+
+def _sine(n, freq, sr):
+    return [0.5 * math.sin(2.0 * math.pi * freq * i / sr) for i in range(n)]
+
+
+def test_mel_inverse_roundtrip():
+    sr = 22050
+    n_fft = 2048
+    hop = 512
+    n_mels = 128
+    audio = _sine(sr, 440.0, sr)  # 1 second
+
+    mel = ls.mel_spectrogram(audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels)
+    n_frames = mel.n_frames
+    assert n_frames > 0
+    assert len(mel.power) == n_mels * n_frames
+
+    stft = ls.mel_to_stft(mel.power, n_mels, n_frames, sample_rate=sr, n_fft=n_fft)
+    assert stft.rows == n_fft // 2 + 1
+    assert stft.n_frames == n_frames
+    assert len(stft.data) == stft.rows * stft.n_frames
+    assert _is_finite_list(stft.data)
+    assert max(stft.data) > 0.0  # reconstructed magnitude is non-trivial
+
+    out = ls.mel_to_audio(mel.power, n_mels, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop)
+    assert len(out) >= (n_frames - 1) * hop
+    assert _is_finite_list(out)
+    assert max(abs(x) for x in out) > 0.0
+
+
+def test_mfcc_inverse_roundtrip():
+    sr = 22050
+    n_fft = 2048
+    hop = 512
+    n_mels = 128
+    audio = _sine(sr, 220.0, sr)
+
+    mf = ls.mfcc(audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mfcc=20)
+    n_frames = mf.n_frames
+    assert n_frames > 0
+    assert len(mf.coefficients) == 20 * n_frames
+
+    mel = ls.mfcc_to_mel(mf.coefficients, 20, n_frames, n_mels=n_mels)
+    assert mel.rows == n_mels
+    assert mel.n_frames == n_frames
+    assert len(mel.data) == n_mels * n_frames
+    assert _is_finite_list(mel.data)
+
+    out = ls.mfcc_to_audio(
+        mf.coefficients, 20, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
+    )
+    assert len(out) >= (n_frames - 1) * hop
+    assert _is_finite_list(out)
+
+
+def test_stream_analyzer_abi_and_stats():
+    sr = 22050
+    n_samples = sr * 4  # 4 seconds
+    audio = _sine(n_samples, 440.0, sr)
+
+    cfg = ls.StreamConfig(sample_rate=sr, n_fft=2048, hop_length=512, n_mels=128)
+    with ls.StreamAnalyzer(cfg) as sa:
+        # Feed in two blocks to exercise cumulative offset tracking.
+        half = n_samples // 2
+        sa.process(audio[:half])
+        sa.process(audio[half:])
+
+        assert sa.sample_rate() == sr
+        assert sa.frame_count() > 0
+
+        stats = sa.stats()
+        # --- Critical ABI / struct-padding checks ---
+        # total_samples is a size_t immediately after an int32 field and before a
+        # float field. The analyzer reports samples consumed into complete frames
+        # (total_frames * hop_length), with a sub-frame remainder still buffered.
+        hop = cfg.hop_length
+        assert stats.total_samples == stats.total_frames * hop
+        # Bounded by what we fed (within one analysis window).
+        assert n_samples - cfg.n_fft <= stats.total_samples <= n_samples
+        # ABI cross-check: the size_t field and the float field that straddle the
+        # padding boundary must be mutually consistent. Misaligned padding would
+        # make these disagree.
+        assert abs(stats.duration_seconds - stats.total_samples / sr) < 1e-3, (
+            f"ABI mismatch: duration_seconds {stats.duration_seconds} != "
+            f"total_samples/sr {stats.total_samples / sr}"
+        )
+        assert stats.total_frames > 0
+        # Field-by-field sanity: every numeric field must be finite & in range.
+        assert math.isfinite(stats.bpm) and stats.bpm >= 0.0
+        assert 0.0 <= stats.bpm_confidence <= 1.0
+        assert stats.bpm_candidate_count >= 0
+        assert -1 <= stats.key <= 11
+        assert isinstance(stats.key_minor, bool)
+        assert 0.0 <= stats.key_confidence <= 1.0
+        assert -1 <= stats.chord_root <= 11
+        assert math.isfinite(stats.chord_confidence)
+        assert math.isfinite(stats.bar_duration) and stats.bar_duration >= 0.0
+        assert stats.used_frames >= 0
+
+        # current_time should reflect consumed audio (<= fed, consistent with stats).
+        assert abs(sa.current_time() - stats.total_samples / sr) < 0.1
+
+        # Drain frames; verify SOA array lengths are internally consistent.
+        avail = sa.available_frames()
+        if avail > 0:
+            frames = sa.read_frames(avail)
+            assert frames.n_frames == avail
+            assert frames.n_mels == 128
+            assert len(frames.timestamps) == avail
+            assert len(frames.mel) == avail * frames.n_mels
+            assert len(frames.chroma) == avail * 12
+            assert len(frames.onset_strength) == avail
+            assert len(frames.chord_root) == avail
+            assert _is_finite_list(frames.timestamps)
+            assert _is_finite_list(frames.mel)
+
+
+def test_stream_analyzer_reset():
+    sr = 22050
+    cfg = ls.StreamConfig(sample_rate=sr)
+    sa = ls.StreamAnalyzer(cfg)
+    try:
+        sa.process(_sine(sr, 330.0, sr))
+        before = sa.stats()
+        assert before.total_samples > 0
+        assert before.total_samples == before.total_frames * cfg.hop_length
+        sa.reset()
+        assert sa.stats().total_samples == 0
+        assert sa.frame_count() == 0
+    finally:
+        sa.close()

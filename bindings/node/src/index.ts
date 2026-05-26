@@ -28,6 +28,8 @@ import type {
   EqSpectrumSnapshot,
   GoniometerPoint,
   HpssResult,
+  InverseMelResult,
+  InverseStftResult,
   Key,
   KeyCandidate,
   KeyDetectionOptions,
@@ -56,6 +58,11 @@ import type {
   StereoAnalysis,
   StftDbResult,
   StftResult,
+  StreamAnalyzerConfig,
+  StreamAnalyzerStats,
+  StreamFramesI16,
+  StreamFramesSoa,
+  StreamFramesU8,
   StripRef,
   TimbreResult,
 } from './types.js';
@@ -1092,6 +1099,99 @@ export class StreamingMasteringChain {
   }
 }
 
+/**
+ * Stateful real-time / streaming music analyzer.
+ *
+ * Feed mono blocks with {@link process}; drain analysis frames with
+ * {@link readFramesSoa} (or quantized variants) and query the running musical
+ * estimate (BPM/key/chord/pattern) with {@link stats}.
+ *
+ * @example
+ * ```typescript
+ * const analyzer = new StreamAnalyzer({ sampleRate: 44100 });
+ * analyzer.process(block);
+ * const frames = analyzer.readFramesSoa(analyzer.availableFrames());
+ * const { estimate } = analyzer.stats();
+ * ```
+ */
+export class StreamAnalyzer {
+  private native: InstanceType<typeof addon.StreamAnalyzer>;
+
+  constructor(config: StreamAnalyzerConfig = {}) {
+    this.native = new addon.StreamAnalyzer(config);
+  }
+
+  /** Feed a mono block of samples. */
+  process(samples: Float32Array): void {
+    this.native.process(samples);
+  }
+
+  /** Feed a mono block anchored at an absolute sample offset. */
+  processWithOffset(samples: Float32Array, sampleOffset: number): void {
+    this.native.processWithOffset(samples, sampleOffset);
+  }
+
+  /** Number of analysis frames ready to read. */
+  availableFrames(): number {
+    return this.native.availableFrames();
+  }
+
+  /** Drain up to `maxFrames` frames as float32 structure-of-arrays. */
+  readFramesSoa(maxFrames: number): StreamFramesSoa {
+    return this.native.readFramesSoa(maxFrames);
+  }
+
+  /** Drain up to `maxFrames` frames as uint8-quantized arrays. */
+  readFramesU8(maxFrames: number): StreamFramesU8 {
+    return this.native.readFramesU8(maxFrames);
+  }
+
+  /** Drain up to `maxFrames` frames as int16-quantized arrays. */
+  readFramesI16(maxFrames: number): StreamFramesI16 {
+    return this.native.readFramesI16(maxFrames);
+  }
+
+  /** Reset analyzer state; optionally re-anchor to a base sample offset. */
+  reset(baseOffset = 0): void {
+    this.native.reset(baseOffset);
+  }
+
+  /** Current progressive musical estimate and totals. */
+  stats(): StreamAnalyzerStats {
+    return this.native.stats();
+  }
+
+  /** Total frames processed so far. */
+  frameCount(): number {
+    return this.native.frameCount();
+  }
+
+  /** Current analysis time in seconds. */
+  currentTime(): number {
+    return this.native.currentTime();
+  }
+
+  /** Configured sample rate in Hz. */
+  sampleRate(): number {
+    return this.native.sampleRate();
+  }
+
+  /** Hint the expected total duration (seconds) to tune progressive estimates. */
+  setExpectedDuration(seconds: number): void {
+    this.native.setExpectedDuration(seconds);
+  }
+
+  /** Set a normalization gain applied to incoming samples. */
+  setNormalizationGain(gain: number): void {
+    this.native.setNormalizationGain(gain);
+  }
+
+  /** Set the tuning reference frequency (Hz) for key/chroma analysis. */
+  setTuningRefHz(hz: number): void {
+    this.native.setTuningRefHz(hz);
+  }
+}
+
 const EQ_PHASE_MODES: Record<string, number> = {
   zero: 1,
   'zero-latency': 1,
@@ -1377,6 +1477,55 @@ export function vqt(
   gamma = 0.0,
 ): CqtResult {
   return addon.vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
+}
+
+/** Reconstruct a linear STFT magnitude from a mel spectrogram. */
+export function melToStft(
+  mel: Float32Array,
+  nMels: number,
+  nFrames: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+): InverseStftResult {
+  return addon.melToStft(mel, nMels, nFrames, sampleRate, nFft, hopLength);
+}
+
+/** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
+export function melToAudio(
+  mel: Float32Array,
+  nMels: number,
+  nFrames: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nIter = 32,
+): Float32Array {
+  return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, nIter);
+}
+
+/** Reconstruct a mel spectrogram from MFCCs (`nMels` mel bands, dB scale). */
+export function mfccToMel(
+  mfcc: Float32Array,
+  nMfcc: number,
+  nFrames: number,
+  nMels = 128,
+): InverseMelResult {
+  return addon.mfccToMel(mfcc, nMfcc, nFrames, nMels);
+}
+
+/** Reconstruct audio from MFCCs via Griffin-Lim. */
+export function mfccToAudio(
+  mfcc: Float32Array,
+  nMfcc: number,
+  nFrames: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nIter = 32,
+): Float32Array {
+  return addon.mfccToAudio(mfcc, nMfcc, nFrames, sampleRate, nFft, hopLength, nMels, nIter);
 }
 
 export function spectralCentroid(
@@ -2051,6 +2200,8 @@ export type {
   EqSpectrumSnapshot,
   GoniometerPoint,
   HpssResult,
+  InverseMelResult,
+  InverseStftResult,
   Key,
   KeyCandidate,
   KeyDetectionOptions,
@@ -2078,6 +2229,11 @@ export type {
   SendTiming,
   StftDbResult,
   StftResult,
+  StreamAnalyzerConfig,
+  StreamAnalyzerStats,
+  StreamFramesI16,
+  StreamFramesSoa,
+  StreamFramesU8,
   StripRef,
   TimbreResult,
   TimeSignature,
