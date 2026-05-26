@@ -3,10 +3,10 @@
 /// @file gate.h
 /// @brief Noise gate built on the expander curve.
 
-#include <cstddef>
 #include <vector>
 
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -22,8 +22,6 @@ struct GateConfig {
 
 class Gate : public common::ProcessorBase {
  public:
-  static constexpr size_t kPreparedChannels = 64;
-
   explicit Gate(GateConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;

@@ -23,8 +23,8 @@ void UpwardCompressor::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
-  if (followers_.size() < kPreparedChannels) {
-    followers_.resize(kPreparedChannels);
+  if (followers_.size() < kRealtimePreparedChannels) {
+    followers_.resize(kRealtimePreparedChannels);
   }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);

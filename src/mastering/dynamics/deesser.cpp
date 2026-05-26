@@ -30,14 +30,14 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   update_filter_coeff();
-  if (bandpass_.size() < kPreparedChannels) {
-    bandpass_.resize(kPreparedChannels, filter_coeffs_);
+  if (bandpass_.size() < kRealtimePreparedChannels) {
+    bandpass_.resize(kRealtimePreparedChannels, filter_coeffs_);
   }
-  if (bandpass2_.size() < kPreparedChannels) {
-    bandpass2_.resize(kPreparedChannels, filter_coeffs_);
+  if (bandpass2_.size() < kRealtimePreparedChannels) {
+    bandpass2_.resize(kRealtimePreparedChannels, filter_coeffs_);
   }
-  if (followers_.size() < kPreparedChannels) {
-    followers_.resize(kPreparedChannels);
+  if (followers_.size() < kRealtimePreparedChannels) {
+    followers_.resize(kRealtimePreparedChannels);
   }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);

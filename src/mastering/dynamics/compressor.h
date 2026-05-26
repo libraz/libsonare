@@ -3,11 +3,11 @@
 /// @file compressor.h
 /// @brief Feed-forward compressor with soft knee and makeup gain.
 
-#include <cstddef>
 #include <vector>
 
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -57,7 +57,6 @@ class Compressor : public common::ProcessorBase {
   static float gain_reduction_db(float input_db, const CompressorConfig& config);
   void update_coefficients();
 
-  static constexpr size_t kPreparedChannels = 64;
   CompressorConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;

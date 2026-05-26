@@ -3,11 +3,11 @@
 /// @file expander.h
 /// @brief Downward expander.
 
-#include <cstddef>
 #include <vector>
 
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -44,7 +44,6 @@ class Expander : public common::ProcessorBase {
   static float gain_reduction_db(float input_db, const ExpanderConfig& config);
   void ensure_followers(int num_channels);
 
-  static constexpr size_t kPreparedChannels = 64;
   ExpanderConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;

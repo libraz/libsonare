@@ -30,7 +30,7 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
-  const size_t channel_count = kPreparedChannels;
+  const size_t channel_count = kRealtimePreparedChannels;
   gain_smoothing_coeff_ = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
   fast_followers_.assign(channel_count, {});
   slow_followers_.assign(channel_count, {});

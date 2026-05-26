@@ -8,6 +8,7 @@
 
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -26,8 +27,6 @@ struct TransientShaperConfig {
 
 class TransientShaper : public common::ProcessorBase {
  public:
-  static constexpr size_t kPreparedChannels = 64;
-
   explicit TransientShaper(TransientShaperConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
