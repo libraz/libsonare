@@ -13,6 +13,11 @@ import {
   fourierTempogram,
   init,
   lufs,
+  melSpectrogram,
+  melToAudio,
+  melToStft,
+  mfcc,
+  mfccToAudio,
   Mixer,
   mixerScenePresetJson,
   mixingScenePresetJson,
@@ -456,6 +461,41 @@ describe('v1.2 feature additions (WASM)', () => {
   });
 
   describe('sections / melody / CQT / VQT parity', () => {
+    it('passes fmin/fmax through inverse Mel and MFCC paths', () => {
+      const tone = generateSine(440, SR, 0.5);
+      const nFft = 1024;
+      const hop = 256;
+      const nMels = 40;
+      const fmin = 80;
+      const fmax = 4000;
+
+      const mel = melSpectrogram(tone, SR, nFft, hop, nMels);
+      const stft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, hop, fmin, fmax);
+      expect(stft.nBins).toBe(nFft / 2 + 1);
+      expect(stft.nFrames).toBe(mel.nFrames);
+      expect(allFinite(stft.power)).toBe(true);
+
+      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, 2, fmin, fmax);
+      expect(audio.length).toBeGreaterThan(0);
+      expect(allFinite(audio)).toBe(true);
+
+      const coeffs = mfcc(tone, SR, nFft, hop, nMels, 13);
+      const mfccAudio = mfccToAudio(
+        coeffs.coefficients,
+        13,
+        coeffs.nFrames,
+        nMels,
+        SR,
+        nFft,
+        hop,
+        2,
+        fmin,
+        fmax,
+      );
+      expect(mfccAudio.length).toBeGreaterThan(0);
+      expect(allFinite(mfccAudio)).toBe(true);
+    });
+
     it('computes CQT and VQT magnitude grids', () => {
       const cqtResult = cqt(signal, SR, 512, 32.7, 24, 12);
       expect(cqtResult.nBins).toBe(24);

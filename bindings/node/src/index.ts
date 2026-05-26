@@ -1487,8 +1487,10 @@ export function melToStft(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
+  fmin = 0,
+  fmax = 0,
 ): InverseStftResult {
-  return addon.melToStft(mel, nMels, nFrames, sampleRate, nFft, hopLength);
+  return addon.melToStft(mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax);
 }
 
 /** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
@@ -1500,8 +1502,10 @@ export function melToAudio(
   nFft = 2048,
   hopLength = 512,
   nIter = 32,
+  fmin = 0,
+  fmax = 0,
 ): Float32Array {
-  return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, nIter);
+  return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, nIter, fmin, fmax);
 }
 
 /** Reconstruct a mel spectrogram from MFCCs (`nMels` mel bands, dB scale). */
@@ -1524,8 +1528,21 @@ export function mfccToAudio(
   hopLength = 512,
   nMels = 128,
   nIter = 32,
+  fmin = 0,
+  fmax = 0,
 ): Float32Array {
-  return addon.mfccToAudio(mfcc, nMfcc, nFrames, sampleRate, nFft, hopLength, nMels, nIter);
+  return addon.mfccToAudio(
+    mfcc,
+    nMfcc,
+    nFrames,
+    sampleRate,
+    nFft,
+    hopLength,
+    nMels,
+    nIter,
+    fmin,
+    fmax,
+  );
 }
 
 export function spectralCentroid(

@@ -2176,11 +2176,13 @@ export function melToStft(
   sampleRate: number,
   nFft = 2048,
   hopLength = 512,
+  fmin = 0,
+  fmax = 0,
 ): StftPowerResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.melToStft(melPower, nMels, nFrames, sampleRate, nFft, hopLength);
+  return module.melToStft(melPower, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax);
 }
 
 /**
@@ -2204,11 +2206,23 @@ export function melToAudio(
   nFft = 2048,
   hopLength = 512,
   nIter = 32,
+  fmin = 0,
+  fmax = 0,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.melToAudio(melPower, nMels, nFrames, sampleRate, nFft, hopLength, nIter);
+  return module.melToAudio(
+    melPower,
+    nMels,
+    nFrames,
+    sampleRate,
+    nFft,
+    hopLength,
+    nIter,
+    fmin,
+    fmax,
+  );
 }
 
 /**
@@ -2256,6 +2270,8 @@ export function mfccToAudio(
   nFft = 2048,
   hopLength = 512,
   nIter = 32,
+  fmin = 0,
+  fmax = 0,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -2269,6 +2285,8 @@ export function mfccToAudio(
     nFft,
     hopLength,
     nIter,
+    fmin,
+    fmax,
   );
 }
 
@@ -3360,6 +3378,8 @@ export class StreamAnalyzer {
       config.magnitudeDownsample ?? 1,
       config.keyUpdateIntervalSec ?? 5,
       config.bpmUpdateIntervalSec ?? 10,
+      config.window ?? 0,
+      config.outputFormat ?? 0,
     ] as const;
     const isArityError = (error: unknown): boolean => {
       const message = String((error as { message?: unknown } | null)?.message ?? error);
@@ -3395,7 +3415,9 @@ export class StreamAnalyzer {
       config.computeSpectral !== undefined ||
       config.magnitudeDownsample !== undefined ||
       config.keyUpdateIntervalSec !== undefined ||
-      config.bpmUpdateIntervalSec !== undefined;
+      config.bpmUpdateIntervalSec !== undefined ||
+      config.window !== undefined ||
+      config.outputFormat !== undefined;
     if (hasExtendedConfig) {
       try {
         this.analyzer = new wasmModule.StreamAnalyzer(...args);

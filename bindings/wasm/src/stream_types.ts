@@ -127,4 +127,6 @@ export interface StreamConfig {
   magnitudeDownsample?: number;
   keyUpdateIntervalSec?: number;
   bpmUpdateIntervalSec?: number;
+  window?: number;
+  outputFormat?: number;
 }

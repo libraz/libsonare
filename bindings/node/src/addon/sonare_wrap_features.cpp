@@ -1359,7 +1359,7 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
 // row-major [n_mels x n_frames] power spectrogram; the MFCC matrix is a
 // row-major [n_mfcc x n_frames] coefficient matrix.
 
-// melToStft(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?)
+// melToStft(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?, fmin?, fmax?)
 // -> { nBins, nFrames, power: Float32Array }
 Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -1382,11 +1382,17 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
   const int hop_length =
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
+  const float fmin =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
+  const float fmax =
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
 
   std::vector<float> stft = sonare::mel_to_stft(typed.Data(), n_mels, n_frames, config, sr);
 
@@ -1398,7 +1404,7 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-// melToAudio(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?, nIter?)
+// melToAudio(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?, nIter?, fmin?, fmax?)
 // -> Float32Array (reconstructed audio)
 Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -1423,11 +1429,17 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
   const int n_iter =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 32;
+  const float fmin =
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
+  const float fmax =
+      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().FloatValue() : 0.0f;
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
 
   sonare::Audio result = sonare::mel_to_audio(typed.Data(), n_mels, n_frames, config, n_iter, sr);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -1463,7 +1475,7 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-// mfccToAudio(mfcc, nMfcc, nFrames, sampleRate?, nFft?, hopLength?, nMels?, nIter?)
+// mfccToAudio(mfcc, nMfcc, nFrames, sampleRate?, nFft?, hopLength?, nMels?, nIter?, fmin?, fmax?)
 // -> Float32Array (reconstructed audio)
 Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -1490,11 +1502,17 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 128;
   const int n_iter =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().Int32Value() : 32;
+  const float fmin =
+      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().FloatValue() : 0.0f;
+  const float fmax =
+      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().FloatValue() : 0.0f;
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
 
   sonare::Audio result = sonare::mfcc_to_audio(typed.Data(), n_mfcc, n_frames, config, n_iter, sr);
   std::vector<float> out_vec(result.data(), result.data() + result.size());

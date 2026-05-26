@@ -7,16 +7,16 @@ from collections.abc import Sequence
 
 from ._runtime import (
     SonareStreamConfig,
+    SonareStreamFrames,
     SonareStreamFramesI16,
     SonareStreamFramesU8,
-    SonareStreamFrames,
     SonareStreamStats,
     StreamBarChord,
     StreamChordChange,
     StreamConfig,
+    StreamFrames,
     StreamFramesI16,
     StreamFramesU8,
-    StreamFrames,
     StreamPatternScore,
     StreamStats,
     _check,

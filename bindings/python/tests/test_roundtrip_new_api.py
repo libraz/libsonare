@@ -125,6 +125,26 @@ def test_stream_analyzer_abi_and_stats():
             assert _is_finite_list(frames.mel)
 
 
+def test_stream_analyzer_quantized_python_api():
+    sr = 22050
+    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window=1)
+    with ls.StreamAnalyzer(cfg) as sa:
+        sa.process(_sine(sr // 2, 440.0, sr))
+        frames = sa.read_frames_u8(4)
+        assert 0 < frames.n_frames <= 4
+        assert frames.n_mels == 32
+        assert len(frames.mel) == frames.n_frames * frames.n_mels
+        assert len(frames.chroma) == frames.n_frames * 12
+        assert all(0 <= value <= 255 for value in frames.mel)
+
+        sa.process(_sine(sr // 2, 440.0, sr))
+        frames16 = sa.read_frames_i16(4)
+        assert 0 < frames16.n_frames <= 4
+        assert frames16.n_mels == 32
+        assert len(frames16.mel) == frames16.n_frames * frames16.n_mels
+        assert all(-32768 <= value <= 32767 for value in frames16.chroma)
+
+
 def test_stream_analyzer_reset():
     sr = 22050
     cfg = ls.StreamConfig(sample_rate=sr)

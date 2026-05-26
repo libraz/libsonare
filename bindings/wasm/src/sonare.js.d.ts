@@ -742,6 +742,8 @@ interface SonareModule {
     sampleRate: number,
     nFft: number,
     hopLength: number,
+    fmin: number,
+    fmax: number,
   ) => WasmStftPowerResult;
   melToAudio: (
     melPower: Float32Array,
@@ -751,6 +753,8 @@ interface SonareModule {
     nFft: number,
     hopLength: number,
     nIter: number,
+    fmin: number,
+    fmax: number,
   ) => Float32Array;
   mfccToMel: (
     mfcc: Float32Array,
@@ -767,6 +771,8 @@ interface SonareModule {
     nFft: number,
     hopLength: number,
     nIter: number,
+    fmin: number,
+    fmax: number,
   ) => Float32Array;
 
   // Features - Chroma
@@ -1035,6 +1041,8 @@ interface SonareModule {
     magnitudeDownsample: number,
     keyUpdateIntervalSec: number,
     bpmUpdateIntervalSec: number,
+    window: number,
+    outputFormat: number,
   ) => WasmStreamAnalyzer;
 
   RealtimeEngine: new (
