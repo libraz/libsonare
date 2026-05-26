@@ -44,7 +44,7 @@ rt::BiquadCoeffs rbj_allpass_from_denominator(const rt::BiquadCoeffs& denominato
           denominator_source.a2};
 }
 
-std::vector<SectionSpec> butterworth_section_specs(int order) {
+std::vector<SectionSpec> unscaled_rt_butterworth_sections(int order) {
   std::vector<SectionSpec> sections;
   const int pairs = order / 2;
   for (int k = 0; k < pairs; ++k) {
@@ -68,7 +68,7 @@ std::vector<SectionSpec> bessel_section_specs(int order) {
               {1.9531957590221913, 1.0 / 1.9531957590221913, 0.7108520744416966},
               {2.1887262305275494, 1.0 / 2.1887262305275494, 1.2256694254081753}};
   }
-  return butterworth_section_specs(order);
+  return unscaled_rt_butterworth_sections(order);
 }
 
 }  // namespace
@@ -317,7 +317,7 @@ std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope 
       // low/high-pass coefficients directly.
       return {{1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}};
     }
-    const auto half_sections = butterworth_section_specs(half);
+    const auto half_sections = unscaled_rt_butterworth_sections(half);
     std::vector<FilterSection> sections;
     sections.reserve(half_sections.size() * 2);
     for (const auto& section : half_sections) {
@@ -335,7 +335,7 @@ std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope 
     return to_filter_sections(bessel_section_specs(order));
   }
 
-  return to_filter_sections(butterworth_section_specs(order));
+  return to_filter_sections(unscaled_rt_butterworth_sections(order));
 }
 
 void Crossover::install_coefficients() {
