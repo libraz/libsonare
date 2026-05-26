@@ -55,6 +55,7 @@ class MultibandExpander : public common::ProcessorBase {
   int max_block_size_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
+  CrossoverScratch scratch_;
   std::vector<dynamics::Expander> expanders_;
   std::vector<float> last_gain_reductions_db_;
 };

@@ -12,6 +12,10 @@
 namespace sonare::mastering::assistant {
 namespace {
 
+// Shelf frequency used when enabling the "air" band on dark/dull material. This
+// is the conventional high-shelf corner for adding presence/air to a master.
+constexpr float kAirShelfFrequencyHz = 12000.0f;
+
 std::string primary_genre(const AudioProfile& profile) {
   if (profile.genre_candidates.empty()) return "pop";
   return profile.genre_candidates.front().name;
@@ -67,7 +71,7 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   if (dark || dull_air) {
     result.config.spectral.air_band.enabled = true;
     result.config.spectral.air_band.config.amount = dark ? 0.55f : 0.35f;
-    result.config.spectral.air_band.config.shelf_frequency_hz = 12000.0f;
+    result.config.spectral.air_band.config.shelf_frequency_hz = kAirShelfFrequencyHz;
     explain(result.explanation, "air band enabled because the spectral profile is dark");
   }
 

@@ -25,6 +25,9 @@ void MultibandCompressor::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
+  // Pre-size split scratch for stereo so the steady-state audio path is
+  // allocation-free; it is grown on demand only if a wider block arrives.
+  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
   for (auto& compressor : compressors_) {
     compressor.prepare(sample_rate_, max_block_size_);
   }
@@ -51,23 +54,20 @@ void MultibandCompressor::process(float* const* channels, int num_channels, int 
     }
   }
 
-  auto split = crossover_.split(channels, num_channels, num_samples);
-  for (int band = 0; band < split.num_bands(); ++band) {
-    std::vector<float*> band_channels(static_cast<size_t>(num_channels));
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_channels[static_cast<size_t>(ch)] =
-          split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)].data();
-    }
-    compressors_[static_cast<size_t>(band)].process(band_channels.data(), num_channels,
-                                                    num_samples);
+  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  crossover_.split_into(channels, num_channels, num_samples, scratch_);
+  const int num_bands = scratch_.num_bands();
+  for (int band = 0; band < num_bands; ++band) {
+    compressors_[static_cast<size_t>(band)].process(
+        scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         compressors_[static_cast<size_t>(band)].last_gain_reduction_db();
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {
     std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < split.num_bands(); ++band) {
-      const auto& band_samples = split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+    for (int band = 0; band < num_bands; ++band) {
+      const auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] += band_samples[static_cast<size_t>(i)];
       }

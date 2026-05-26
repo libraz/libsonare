@@ -19,6 +19,24 @@ using sonare::constants::kPiD;
 constexpr float kRmsWindowMs = 10.0f;
 constexpr float kLogRmsWindowMs = 50.0f;
 
+// Fraction of the theoretical full makeup gain applied by the auto-makeup
+// heuristic. The full static makeup that exactly restores the pre-compression
+// level of a signal sitting at the threshold is
+// (-threshold_db) * (1 - 1/ratio); applying all of it tends to overshoot on
+// real program material because the average level is well below threshold, so
+// we apply half of it as a conservative perceptual compromise.
+constexpr float kAutoMakeupFraction = 0.5f;
+
+// Computes the total makeup gain in dB. Auto-makeup and an explicit
+// makeup_gain_db are mutually exclusive to avoid double-compensation: if the
+// user has dialed in any manual makeup, it overrides the auto heuristic.
+float compute_makeup_db(const CompressorConfig& config) {
+  if (config.makeup_gain_db != 0.0f || !config.auto_makeup) {
+    return config.makeup_gain_db;
+  }
+  return std::max(0.0f, -config.threshold_db) * (1.0f - 1.0f / config.ratio) * kAutoMakeupFraction;
+}
+
 }  // namespace
 
 Compressor::Compressor(CompressorConfig config) : config_(config) { validate_config(config_); }
@@ -56,17 +74,19 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     }
   }
 
-  const float makeup_db =
-      config_.makeup_gain_db + (config_.auto_makeup ? std::max(0.0f, -config_.threshold_db) *
-                                                          (1.0f - 1.0f / config_.ratio) * 0.5f
-                                                    : 0.0f);
+  const float makeup_db = compute_makeup_db(config_);
 
+  const float inv_channels = 1.0f / static_cast<float>(num_channels);
   float max_reduction = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
-    // Linked detection: take the loudest channel each sample so all channels
-    // receive the same gain (preserves stereo image).
+    // Linked detection: derive a single detector level from all channels each
+    // sample so every channel receives the same gain (preserves stereo image).
+    // Peak uses the loudest channel; RMS uses the mean power across channels so
+    // the two detectors are consistent and anti-correlated content does not
+    // collapse the detected level (which max(L^2, R^2) avoided but max-peak did
+    // not, leaving the two paths inconsistent).
     float peak_lin = 0.0f;
-    float power_lin = 0.0f;
+    float power_sum = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
       float s = channels[ch][i];
       if (config_.sidechain_hpf_enabled) {
@@ -76,8 +96,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
         s = y;
       }
       peak_lin = std::max(peak_lin, std::abs(s));
-      power_lin = std::max(power_lin, s * s);
+      power_sum += s * s;
     }
+    const float power_lin = power_sum * inv_channels;
 
     float level_db = kFloorDb;
     switch (config_.detector) {

@@ -121,10 +121,27 @@ std::vector<float> minimum_phase_kernel(const std::vector<float>& magnitude_bins
   fft.inverse(minimum_spectrum_bins.data(), impulse.data());
 
   std::vector<float> kernel(static_cast<size_t>(kernel_size), 0.0f);
+  // Apply a decaying (half-Hann) tail taper. A minimum-phase impulse is causal
+  // with its energy front-loaded, so a symmetric window (as used in the
+  // zero-phase branch) would wrongly attenuate the leading energy. Tapering only
+  // the tail toward zero suppresses the truncation discontinuity / ripple while
+  // preserving the early response.
   for (int i = 0; i < kernel_size; ++i) {
-    kernel[static_cast<size_t>(i)] = impulse[static_cast<size_t>(i)];
+    // Second half of a length-(2*kernel_size-1) Hann window: 1.0 at i=0 falling
+    // to ~0 at i=kernel_size-1.
+    const double phase = kPiD * static_cast<double>(i) / static_cast<double>(kernel_size);
+    const float taper = static_cast<float>(0.5 * (1.0 + std::cos(phase)));
+    kernel[static_cast<size_t>(i)] = impulse[static_cast<size_t>(i)] * taper;
   }
   return kernel;
+}
+
+int next_power_of_two(size_t value) {
+  size_t result = 1;
+  while (result < value) {
+    result <<= 1;
+  }
+  return static_cast<int>(result);
 }
 
 std::vector<float> apply_fir_partitioned(const Audio& audio, const std::vector<float>& kernel,
@@ -216,8 +233,10 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
   const int half = config.kernel_size / 2;
   for (int i = 0; i < config.kernel_size; ++i) {
     const int source = (i - half + config.fft_size) % config.fft_size;
+    // Symmetric Hann (periodic=false): FIR match-EQ taps need a symmetric window
+    // for linear phase and unity DC gain.
     kernel[static_cast<size_t>(i)] =
-        zero_phase[static_cast<size_t>(source)] * hann_value(i, config.kernel_size);
+        zero_phase[static_cast<size_t>(source)] * hann_value(i, config.kernel_size, false);
   }
 
   return kernel;
@@ -253,34 +272,58 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
   }
 
   const size_t length = std::min(source.size(), reference.size());
-  const auto score_lag = [&](int lag) {
-    double cross = 0.0;
-    double source_energy = 0.0;
-    double reference_energy = 0.0;
-    const size_t source_start = lag < 0 ? static_cast<size_t>(-lag) : 0;
-    const size_t reference_start = lag > 0 ? static_cast<size_t>(lag) : 0;
-    const size_t count =
-        length - static_cast<size_t>(std::min<int>(std::abs(lag), static_cast<int>(length)));
-    for (size_t i = 0; i < count; ++i) {
-      const float s = source[source_start + i];
-      const float r = reference[reference_start + i];
-      cross += static_cast<double>(s) * r;
-      source_energy += static_cast<double>(s) * s;
-      reference_energy += static_cast<double>(r) * r;
-    }
-    if (source_energy <= 0.0 || reference_energy <= 0.0) {
-      return -1.0;
-    }
-    return cross / std::sqrt(source_energy * reference_energy);
-  };
+  const int clamped_max_delay = static_cast<int>(
+      std::min<size_t>(static_cast<size_t>(max_abs_delay), length == 0 ? 0 : length - 1));
+  if (clamped_max_delay <= 0) {
+    return 0.0f;
+  }
 
+  // FFT-based cross-correlation (O(N log N)) replacing the previous
+  // O(N * max_delay) brute force. With s, r zero-padded to a common power-of-two
+  // size, ifft(conj(FFT(s)) * FFT(r))[m] equals sum_i s[i] * r[i + m] (mod n),
+  // i.e. the unnormalized cross-correlation. We map circular lags to signed lags
+  // and normalize by the global signal energies so the score is comparable to
+  // the previous Pearson-style correlation.
+  const int n_fft = next_power_of_two(length + static_cast<size_t>(clamped_max_delay) + 1);
+  FFT fft(n_fft);
+
+  std::vector<float> source_padded(static_cast<size_t>(n_fft), 0.0f);
+  std::vector<float> reference_padded(static_cast<size_t>(n_fft), 0.0f);
+  double source_energy = 0.0;
+  double reference_energy = 0.0;
+  for (size_t i = 0; i < length; ++i) {
+    const float s = source[i];
+    const float r = reference[i];
+    source_padded[i] = s;
+    reference_padded[i] = r;
+    source_energy += static_cast<double>(s) * s;
+    reference_energy += static_cast<double>(r) * r;
+  }
+  if (source_energy <= 0.0 || reference_energy <= 0.0) {
+    return 0.0f;
+  }
+
+  const int n_bins = fft.n_bins();
+  std::vector<std::complex<float>> source_spectrum(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>> reference_spectrum(static_cast<size_t>(n_bins));
+  fft.forward(source_padded.data(), source_spectrum.data());
+  fft.forward(reference_padded.data(), reference_spectrum.data());
+
+  std::vector<std::complex<float>> product(static_cast<size_t>(n_bins));
+  for (int bin = 0; bin < n_bins; ++bin) {
+    product[static_cast<size_t>(bin)] = std::conj(source_spectrum[static_cast<size_t>(bin)]) *
+                                        reference_spectrum[static_cast<size_t>(bin)];
+  }
+  std::vector<float> correlation(static_cast<size_t>(n_fft), 0.0f);
+  fft.inverse(product.data(), correlation.data());
+
+  const float inv_norm = static_cast<float>(1.0 / std::sqrt(source_energy * reference_energy));
   int best_lag = 0;
-  double best_score = -1.0;
-  for (int lag = -max_abs_delay; lag <= max_abs_delay; ++lag) {
-    if (static_cast<size_t>(std::abs(lag)) >= length) {
-      continue;
-    }
-    const double score = score_lag(lag);
+  float best_score = -1.0f;
+  for (int lag = -clamped_max_delay; lag <= clamped_max_delay; ++lag) {
+    // Positive lag => reference leads (index n_fft + ... wraps for negatives).
+    const int index = lag >= 0 ? lag : n_fft + lag;
+    const float score = correlation[static_cast<size_t>(index)] * inv_norm;
     if (score > best_score) {
       best_score = score;
       best_lag = lag;

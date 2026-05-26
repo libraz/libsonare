@@ -56,6 +56,9 @@ class TransientShaper : public common::ProcessorBase {
   TransientShaperConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
+  // Gain-smoother coefficient, cached because it depends only on sample rate and
+  // gain_smoothing_ms; recomputed on prepare()/set_config()/set_parameter(8).
+  float gain_smoothing_coeff_ = 0.0f;
   std::vector<common::EnvelopeFollower> fast_followers_;
   std::vector<common::EnvelopeFollower> slow_followers_;
   std::vector<float> gain_state_db_;

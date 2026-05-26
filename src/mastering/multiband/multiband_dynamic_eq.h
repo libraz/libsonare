@@ -58,6 +58,7 @@ class MultibandDynamicEq : public common::ProcessorBase {
   int max_block_size_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
+  CrossoverScratch scratch_;
   std::vector<eq::DynamicEq> processors_;
   std::vector<float> last_detector_db_;
   std::vector<std::vector<float>> last_applied_gain_db_;

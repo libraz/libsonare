@@ -6,8 +6,22 @@
 #include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::multiband {
+
+constexpr float MultibandImager::kDecorrelationFrequenciesHz[];
+
+float MultibandImager::allpass_coefficient(float frequency_hz, double sample_rate) noexcept {
+  // First-order all-pass break-frequency coefficient via the bilinear transform:
+  //   c = (tan(pi*fc/fs) - 1) / (tan(pi*fc/fs) + 1)
+  // matched to the difference equation y = -c*x + x1 + c*y1. The cutoff is
+  // clamped below Nyquist so high target frequencies stay well-defined at low
+  // sample rates.
+  const double fc = std::clamp(static_cast<double>(frequency_hz), 1.0, sample_rate * 0.49);
+  const double t = std::tan(sonare::constants::kPiD * fc / sample_rate);
+  return static_cast<float>((t - 1.0) / (t + 1.0));
+}
 
 float MultibandImager::Allpass::process(float input) noexcept {
   const float output = -coefficient * input + x1 + coefficient * y1;
@@ -38,12 +52,15 @@ void MultibandImager::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
+  // Pre-size split scratch for stereo so the steady-state audio path is
+  // allocation-free; it is grown on demand only if a wider block arrives.
+  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
   allpass_.resize(config_.bands.size());
   for (auto& band_stages : allpass_) {
-    band_stages[0].coefficient = 0.63f;
-    band_stages[1].coefficient = -0.51f;
-    band_stages[2].coefficient = 0.42f;
-    band_stages[3].coefficient = -0.34f;
+    for (int stage = 0; stage < kNumAllpassStages; ++stage) {
+      band_stages[static_cast<size_t>(stage)].coefficient =
+          allpass_coefficient(kDecorrelationFrequenciesHz[stage], sample_rate_);
+    }
   }
   reset();
 }
@@ -68,16 +85,18 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
     }
   }
 
-  auto split = crossover_.split(channels, num_channels, num_samples);
+  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  crossover_.split_into(channels, num_channels, num_samples, scratch_);
+  const int num_bands = scratch_.num_bands();
   if (num_channels >= 2) {
-    for (int band = 0; band < split.num_bands(); ++band) {
+    for (int band = 0; band < num_bands; ++band) {
       const auto& band_config = config_.bands[static_cast<size_t>(band)];
       if (!band_config.enabled || band_config.width == 1.0f) {
         continue;
       }
 
-      auto& left = split.bands[static_cast<size_t>(band)][0];
-      auto& right = split.bands[static_cast<size_t>(band)][1];
+      auto& left = scratch_.bands[static_cast<size_t>(band)][0];
+      auto& right = scratch_.bands[static_cast<size_t>(band)][1];
       for (int i = 0; i < num_samples; ++i) {
         const size_t index = static_cast<size_t>(i);
         const float mid = 0.5f * (left[index] + right[index]);
@@ -111,8 +130,8 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
 
   for (int ch = 0; ch < num_channels; ++ch) {
     std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < split.num_bands(); ++band) {
-      const auto& band_samples = split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+    for (int band = 0; band < num_bands; ++band) {
+      const auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] += band_samples[static_cast<size_t>(i)];
       }

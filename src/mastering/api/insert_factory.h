@@ -30,6 +30,24 @@ namespace sonare::mastering::api {
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
                                                        const std::string& json_params);
 
+/// @brief Construct a streaming insert that needs an impulse response.
+/// @param name Processor name. For "effects.reverb.convolution" the returned
+///             ConvolutionReverb is loaded with @p impulse_response so the
+///             effect actually convolves. For every other name this behaves
+///             exactly like make_insert() and @p impulse_response is ignored.
+/// @param json_params A JSON object string (see make_insert()).
+/// @param impulse_response IR samples to load (may be empty, which leaves a
+///             passthrough convolver until an IR is provided).
+/// @param ir_num_samples Number of samples in @p impulse_response.
+/// @return A heap-allocated processor, or nullptr if @p name is unknown (or if
+///         @p name is the convolution insert but the build lacks FX support).
+/// @throws sonare::SonareException (InvalidParameter) when @p json_params is
+///         malformed or the IR pointer/size is inconsistent.
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string& name,
+                                                               const std::string& json_params,
+                                                               const float* impulse_response,
+                                                               int ir_num_samples);
+
 /// @brief Names that make_insert() can build (a stable, sorted list).
 std::vector<std::string> insert_factory_names();
 

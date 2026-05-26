@@ -29,6 +29,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "util/db.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -52,10 +53,10 @@ void run_processor_mono(common::ProcessorBase& processor, std::vector<float>& sa
     processor.process(channels, 1, n);
     return;
   }
-  // Re-prepare for the padded length, then process N signal + `latency` zeros and
-  // drop the leading `latency` output samples so the result is time-aligned and
-  // the delayed tail is flushed out.
-  processor.reset();
+  // Re-prepare for the padded length (prepare() reinitializes processor state,
+  // so a separate reset() before it would be redundant), then process N signal +
+  // `latency` zeros and drop the leading `latency` output samples so the result
+  // is time-aligned and the delayed tail is flushed out.
   processor.prepare(sample_rate, n + latency);
   std::vector<float> padded(samples.begin(), samples.end());
   padded.resize(static_cast<std::size_t>(n) + latency, 0.0f);
@@ -82,10 +83,10 @@ void run_processor_stereo(common::ProcessorBase& processor, std::vector<float>& 
     processor.process(channels, 2, n);
     return;
   }
-  // Re-prepare for the padded length, then process N signal + `latency` zeros and
-  // drop the leading `latency` output samples so the result is time-aligned and
-  // the delayed tail is flushed out.
-  processor.reset();
+  // Re-prepare for the padded length (prepare() reinitializes processor state,
+  // so a separate reset() before it would be redundant), then process N signal +
+  // `latency` zeros and drop the leading `latency` output samples so the result
+  // is time-aligned and the delayed tail is flushed out.
   processor.prepare(sample_rate, n + latency);
   std::vector<float> padded_left(left.begin(), left.end());
   std::vector<float> padded_right(right.begin(), right.end());
@@ -126,7 +127,7 @@ float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
 }
 
 void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float gain_db) {
-  const float gain = std::pow(10.0f, gain_db / 20.0f);
+  const float gain = db_to_linear(gain_db);
   for (std::size_t i = 0; i < left.size(); ++i) {
     left[i] *= gain;
     right[i] *= gain;
@@ -134,7 +135,7 @@ void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float ga
 }
 
 void apply_gain_mono(std::vector<float>& samples, float gain_db) {
-  const float gain = std::pow(10.0f, gain_db / 20.0f);
+  const float gain = db_to_linear(gain_db);
   for (float& sample : samples) {
     sample *= gain;
   }

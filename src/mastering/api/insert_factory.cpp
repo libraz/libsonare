@@ -493,9 +493,11 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     return make<VelvetReverb>(config);
   }
   if (name == "effects.reverb.convolution") {
-    // No IR param is wired here; constructs as a near-passthrough until an IR is
-    // loaded via load_ir(). dryWet/decay are not part of ConvolutionReverb's
-    // config, so no params are translated.
+    // Constructs as a near-passthrough until an IR is supplied. The IR cannot be
+    // expressed through the scalar JSON params, so callers that need a working
+    // convolution insert must use make_insert_with_ir(); via plain make_insert()
+    // the convolver stays a passthrough. dryWet/decay are not part of
+    // ConvolutionReverb's config, so no params are translated.
     return make<ConvolutionReverb>();
   }
   return nullptr;
@@ -521,6 +523,29 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
   if (auto p = build_effects(name, params)) return p;
 #endif
   return nullptr;
+}
+
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string& name,
+                                                               const std::string& json_params,
+                                                               const float* impulse_response,
+                                                               int ir_num_samples) {
+  if (ir_num_samples < 0 || (ir_num_samples > 0 && impulse_response == nullptr)) {
+    throw SonareException(ErrorCode::InvalidParameter, "make_insert_with_ir: invalid IR");
+  }
+#ifdef SONARE_HAVE_FX
+  if (name == "effects.reverb.convolution") {
+    // Validate params for malformed JSON parity with make_insert(), then build a
+    // real, IR-loaded convolution insert. load_ir() stores the IR and is safe to
+    // call before prepare(); prepare() reapplies it to the FFT convolvers.
+    JsonObjectParser parser(json_params);
+    (void)parser.parse();
+    auto reverb = std::make_unique<effects::reverb::ConvolutionReverb>();
+    reverb->load_ir(impulse_response, ir_num_samples);
+    return reverb;
+  }
+#endif
+  // Every other insert ignores the IR and falls back to the standard factory.
+  return make_insert(name, json_params);
 }
 
 std::vector<std::string> insert_factory_names() {

@@ -80,29 +80,29 @@ void Crossover::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
+  coeffs_dirty_ = true;
   if (config_.mode == CrossoverMode::FirLinearPhase) {
     rebuild_fir_kernels();
     rebuild_fir_state(fir_delay_history_.empty() ? 0 : static_cast<int>(fir_delay_history_.size()));
   } else {
+    // Build IIR state and coefficients now so the per-block split path does not
+    // re-run install_coefficients() unless the channel count or config changes.
     rebuild_state(states_.empty() ? 0 : static_cast<int>(states_[0].size()));
   }
   reset();
 }
 
-CrossoverOutput Crossover::split(float* const* channels, int num_channels, int num_samples) {
-  if (!prepared_) {
+namespace {
+
+void validate_split_args(bool prepared, float* const* channels, int num_channels, int num_samples) {
+  if (!prepared) {
     throw std::logic_error("Crossover must be prepared before processing");
   }
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }
-
-  CrossoverOutput output;
-  output.bands.assign(static_cast<size_t>(num_bands()),
-                      std::vector<std::vector<float>>(static_cast<size_t>(num_channels),
-                                                      std::vector<float>(num_samples, 0.0f)));
   if (num_channels == 0 || num_samples == 0) {
-    return output;
+    return;
   }
   if (channels == nullptr) {
     throw std::invalid_argument("channels must not be null");
@@ -112,10 +112,81 @@ CrossoverOutput Crossover::split(float* const* channels, int num_channels, int n
       throw std::invalid_argument("channel buffer must not be null");
     }
   }
-  if (config_.mode == CrossoverMode::FirLinearPhase) {
-    return split_fir(channels, num_channels, num_samples);
-  }
+}
 
+}  // namespace
+
+CrossoverOutput Crossover::split(float* const* channels, int num_channels, int num_samples) {
+  validate_split_args(prepared_, channels, num_channels, num_samples);
+
+  CrossoverOutput output;
+  output.bands.assign(static_cast<size_t>(num_bands()),
+                      std::vector<std::vector<float>>(static_cast<size_t>(num_channels),
+                                                      std::vector<float>(num_samples, 0.0f)));
+  if (num_channels == 0 || num_samples == 0) {
+    return output;
+  }
+  if (config_.mode == CrossoverMode::FirLinearPhase) {
+    process_block_fir(channels, num_channels, num_samples, output.bands);
+  } else {
+    process_block_iir(channels, num_channels, num_samples, output.bands);
+  }
+  return output;
+}
+
+void Crossover::prepare_scratch(CrossoverScratch& scratch, int num_channels,
+                                int max_samples) const {
+  if (num_channels < 0) {
+    throw std::invalid_argument("num_channels must be non-negative");
+  }
+  const int sample_capacity = max_samples >= 0 ? max_samples : max_block_size_;
+  if (sample_capacity < 0) {
+    throw std::invalid_argument("max_samples must be non-negative");
+  }
+  const size_t bands = static_cast<size_t>(num_bands());
+  const size_t channels = static_cast<size_t>(num_channels);
+  const size_t samples = static_cast<size_t>(sample_capacity);
+  scratch.bands.assign(
+      bands, std::vector<std::vector<float>>(channels, std::vector<float>(samples, 0.0f)));
+  scratch.band_channels.assign(bands, std::vector<float*>(channels, nullptr));
+  for (size_t band = 0; band < bands; ++band) {
+    for (size_t ch = 0; ch < channels; ++ch) {
+      scratch.band_channels[band][ch] = scratch.bands[band][ch].data();
+    }
+  }
+}
+
+bool Crossover::ensure_scratch(CrossoverScratch& scratch, int num_channels, int num_samples) const {
+  if (scratch.num_bands() == num_bands() && scratch.num_channels() == num_channels &&
+      scratch.capacity_samples() >= num_samples) {
+    return false;
+  }
+  prepare_scratch(scratch, num_channels, num_samples);
+  return true;
+}
+
+void Crossover::split_into(float* const* channels, int num_channels, int num_samples,
+                           CrossoverScratch& scratch) {
+  validate_split_args(prepared_, channels, num_channels, num_samples);
+  if (num_channels == 0 || num_samples == 0) {
+    return;
+  }
+  if (scratch.num_bands() != num_bands() || scratch.num_channels() != num_channels ||
+      scratch.capacity_samples() < num_samples) {
+    throw std::logic_error("CrossoverScratch must be prepared for this channel/band/block size");
+  }
+  if (config_.mode == CrossoverMode::FirLinearPhase) {
+    process_block_fir(channels, num_channels, num_samples, scratch.bands);
+  } else {
+    process_block_iir(channels, num_channels, num_samples, scratch.bands);
+  }
+}
+
+void Crossover::process_block_iir(float* const* channels, int num_channels, int num_samples,
+                                  std::vector<std::vector<std::vector<float>>>& out_bands) {
+  // Ensure filter state matches the channel count; coefficients are only
+  // reinstalled when the shape changed or a config/sample-rate change marked
+  // them dirty, keeping the steady-state path allocation-free.
   rebuild_state(num_channels);
   const int splits = static_cast<int>(config_.cutoffs_hz.size());
 
@@ -133,15 +204,13 @@ CrossoverOutput Crossover::split(float* const* channels, int num_channels, int n
             low = allpass(low, split_index, compensation_split, ch);
           }
         }
-        output.bands[static_cast<size_t>(split_index)][static_cast<size_t>(ch)]
-                    [static_cast<size_t>(i)] = low;
+        out_bands[static_cast<size_t>(split_index)][static_cast<size_t>(ch)]
+                 [static_cast<size_t>(i)] = low;
         remainder = high;
       }
-      output.bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] = remainder;
+      out_bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] = remainder;
     }
   }
-
-  return output;
 }
 
 void Crossover::reset() {
@@ -181,6 +250,7 @@ void Crossover::reset() {
 void Crossover::set_config(const CrossoverConfig& config) {
   validate_config(config, prepared_ ? sample_rate_ : 0.0);
   config_ = config;
+  coeffs_dirty_ = true;
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
@@ -232,8 +302,10 @@ std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope 
   if (mode == CrossoverMode::LinkwitzRiley) {
     const int half = order / 2;
     if (half <= 1) {
-      // LR2 is two cascaded first-order sections. The placeholder values keep the state shape
-      // aligned with the number of stages; coefficients are installed by the LR2 special case.
+      // LR2 is two cascaded first-order sections. These two entries only size the
+      // per-stage state vectors; their coefficient fields are unused because the
+      // LR2 special case in install_coefficients() writes the real first-order
+      // low/high-pass coefficients directly.
       return {{1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}};
     }
     const auto half_sections = butterworth_section_specs(half);
@@ -388,38 +460,33 @@ void Crossover::install_coefficients() {
   }
 }
 
-CrossoverOutput Crossover::split_fir(float* const* channels, int num_channels, int num_samples) {
+void Crossover::process_block_fir(float* const* channels, int num_channels, int num_samples,
+                                  std::vector<std::vector<std::vector<float>>>& out_bands) {
   rebuild_fir_state(num_channels);
 
-  CrossoverOutput output;
-  output.bands.assign(static_cast<size_t>(num_bands()),
-                      std::vector<std::vector<float>>(static_cast<size_t>(num_channels),
-                                                      std::vector<float>(num_samples, 0.0f)));
-
   const int splits = static_cast<int>(config_.cutoffs_hz.size());
-  std::vector<float> lowpasses(static_cast<size_t>(splits), 0.0f);
   for (int ch = 0; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
       const float sample = channels[ch][i];
-      for (int split_index = 0; split_index < splits; ++split_index) {
-        lowpasses[static_cast<size_t>(split_index)] = process_fir_lowpass(sample, split_index, ch);
-      }
+      // Accumulate cascaded low-pass outputs into the band buffers in place to
+      // avoid a per-block scratch allocation; band b temporarily holds its own
+      // low-pass output and is differenced against the previous band below.
       const float delayed = process_fir_delay(sample, ch);
       if (splits == 0) {
-        output.bands[0][static_cast<size_t>(ch)][static_cast<size_t>(i)] = delayed;
+        out_bands[0][static_cast<size_t>(ch)][static_cast<size_t>(i)] = delayed;
         continue;
       }
 
-      output.bands[0][static_cast<size_t>(ch)][static_cast<size_t>(i)] = lowpasses[0];
-      for (int band = 1; band < splits; ++band) {
-        output.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)][static_cast<size_t>(i)] =
-            lowpasses[static_cast<size_t>(band)] - lowpasses[static_cast<size_t>(band - 1)];
+      float prev_lowpass = 0.0f;
+      for (int band = 0; band < splits; ++band) {
+        const float lowpass_out = process_fir_lowpass(sample, band, ch);
+        out_bands[static_cast<size_t>(band)][static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+            band == 0 ? lowpass_out : lowpass_out - prev_lowpass;
+        prev_lowpass = lowpass_out;
       }
-      output.bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
-          delayed - lowpasses.back();
+      out_bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] = delayed - prev_lowpass;
     }
   }
-  return output;
 }
 
 void Crossover::rebuild_fir_state(int num_channels) {
@@ -460,7 +527,9 @@ void Crossover::rebuild_fir_kernels() {
       const int n = i - center;
       const double sinc =
           n == 0 ? 2.0 * normalized : std::sin(2.0 * kPiD * normalized * n) / (kPiD * n);
-      const double window = hann_value(i, config_.fir_kernel_size);
+      // Symmetric Hann (periodic=false): windowed-sinc FIR taps must use a
+      // symmetric window centered on the kernel for linear phase.
+      const double window = hann_value(i, config_.fir_kernel_size, false);
       kernel[static_cast<size_t>(i)] = static_cast<float>(sinc * window);
       sum += kernel[static_cast<size_t>(i)];
     }
@@ -526,7 +595,14 @@ void Crossover::rebuild_state(int num_channels) {
       }
     }
   }
-  install_coefficients();
+  // Reinstall coefficients only when freshly (re)allocated state has no
+  // coefficients yet, or when a config/sample-rate change marked them dirty.
+  // In steady state this is skipped so the per-block split path never recomputes
+  // filter coefficients.
+  if (!shape_matches || coeffs_dirty_) {
+    install_coefficients();
+    coeffs_dirty_ = false;
+  }
 }
 
 float Crossover::lowpass(float sample, int split_index, int channel) {
