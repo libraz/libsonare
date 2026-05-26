@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -220,9 +221,7 @@ void CutFilter::build_sections(std::array<Section, kMaxSections>& sections, EqBa
 
   const int pair_count = order / 2;
   for (int pair = pair_count - 1; pair >= 0; --pair) {
-    const double angle =
-        (static_cast<double>(2 * pair + 1) * kPiD) / (2.0 * static_cast<double>(order));
-    float stage_q = static_cast<float>(1.0 / (2.0 * std::sin(angle)));
+    float stage_q = rt::butterworth_stage_q(order, pair);
     if (pair == pair_count - 1 && std::abs(q - kButterworthQ) > 1.0e-6f) {
       stage_q = std::max(q, 1.0e-6f);
     }

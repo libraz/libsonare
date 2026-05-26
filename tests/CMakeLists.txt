@@ -79,6 +79,7 @@ add_executable(sonare_tests
   analysis/music_analyzer_test.cpp
   streaming/stream_analyzer_test.cpp
   rt/adaa2_test.cpp
+  rt/biquad_design_test.cpp
   rt/spsc_queue_test.cpp
   rt/partitioned_convolver_test.cpp
   rt/true_peak_filter_test.cpp

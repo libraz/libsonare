@@ -27,43 +27,18 @@ AirBand::Biquad make_highpass(double frequency_hz, double sample_rate, double q)
   return b;
 }
 
-// Frequency-only terms of a high-shelf design. These depend solely on the
-// corner frequency and sample rate, so they can be computed once per block (or
-// on config change) and reused while only the gain-dependent algebra is
-// evaluated per sample. This removes the per-sample trig/sqrt from the hot loop.
-struct ShelfDesign {
-  double c = 1.0;      // cos(w0)
-  double s = 0.0;      // sin(w0)
-  double alpha = 0.0;  // shelf slope term (S = 1)
-};
-
-ShelfDesign make_shelf_design(double frequency_hz, double sample_rate) {
-  const double w0 = 2.0 * kPiD * std::clamp(frequency_hz, 20.0, sample_rate * 0.49) / sample_rate;
-  ShelfDesign design;
-  design.c = std::cos(w0);
-  design.s = std::sin(w0);
-  design.alpha = design.s * std::sqrt(0.5);  // shelf slope S=1
-  return design;
-}
-
-// Fills in a biquad's high-shelf coefficients for a given gain using a
-// precomputed ShelfDesign. Cheap (no trig) so it is safe to call per sample.
-void apply_high_shelf(AirBand::Biquad& b, const ShelfDesign& design, float gain_db) {
-  const double a = std::sqrt(db_to_linear(gain_db));
-  const double c = design.c;
-  const double beta = 2.0 * std::sqrt(a) * design.alpha;
-  const double a0 = (a + 1.0) - (a - 1.0) * c + beta;
-  const double inv = 1.0 / a0;
-  b.b0 = static_cast<float>(a * ((a + 1.0) + (a - 1.0) * c + beta) * inv);
-  b.b1 = static_cast<float>(-2.0 * a * ((a - 1.0) + (a + 1.0) * c) * inv);
-  b.b2 = static_cast<float>(a * ((a + 1.0) + (a - 1.0) * c - beta) * inv);
-  b.a1 = static_cast<float>(2.0 * ((a - 1.0) - (a + 1.0) * c) * inv);
-  b.a2 = static_cast<float>(((a + 1.0) - (a - 1.0) * c - beta) * inv);
+void assign_biquad(AirBand::Biquad& b, const rt::BiquadCoeffsD& coeffs) {
+  b.b0 = static_cast<float>(coeffs.b0);
+  b.b1 = static_cast<float>(coeffs.b1);
+  b.b2 = static_cast<float>(coeffs.b2);
+  b.a1 = static_cast<float>(coeffs.a1);
+  b.a2 = static_cast<float>(coeffs.a2);
 }
 
 AirBand::Biquad make_high_shelf(double frequency_hz, double sample_rate, float gain_db) {
   AirBand::Biquad b;
-  apply_high_shelf(b, make_shelf_design(frequency_hz, sample_rate), gain_db);
+  const double frequency = std::clamp(frequency_hz, 20.0, sample_rate * 0.49);
+  assign_biquad(b, rt::rbj_high_shelf_d(frequency, sample_rate, gain_db, 1.0 / std::sqrt(2.0)));
   return b;
 }
 
@@ -90,7 +65,10 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
   // Frequency terms of the shelf depend only on config/sample rate, so compute
   // them once per block; only the gain-dependent coefficients are refreshed per
   // sample (the envelope-driven gain still tracks per sample, but without trig).
-  const ShelfDesign shelf_design = make_shelf_design(config_.shelf_frequency_hz, sample_rate_);
+  const double shelf_frequency =
+      std::clamp(config_.shelf_frequency_hz, 20.0f, static_cast<float>(sample_rate_ * 0.49));
+  const auto shelf_design =
+      rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, 1.0 / std::sqrt(2.0));
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
     float previous = previous_[static_cast<size_t>(ch)];
@@ -104,7 +82,7 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
       const float over_db = std::max(0.0f, linear_to_db(envelope) - config_.dynamic_threshold_db);
       const float dynamic_gain_db =
           std::min(config_.dynamic_range_db, over_db * 0.25f) * config_.amount;
-      apply_high_shelf(shelf, shelf_design, dynamic_gain_db);
+      assign_biquad(shelf, rt::rbj_high_shelf_from_design_d(shelf_design, dynamic_gain_db));
       const float shelved = shelf.process(channels[ch][i]);
       const float harmonic = std::tanh(high * 4.0f) * config_.amount;
       channels[ch][i] = std::clamp(shelved + harmonic, -1.5f, 1.5f);

@@ -9,6 +9,7 @@
 #include "core/window.h"
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -113,12 +114,6 @@ int cut_order(int slope_db_oct) {
   return slope_db_oct / 6;
 }
 
-float butterworth_stage_q(int order, int pair) {
-  const double angle = (static_cast<double>(2 * pair + 1) * sonare::constants::kPiD) /
-                       (2.0 * static_cast<double>(order));
-  return static_cast<float>(1.0 / (2.0 * std::sin(angle)));
-}
-
 float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double sample_rate) {
   if (!is_cut_band(band.type) || band.slope_db_oct == 12) {
     const float omega =
@@ -146,7 +141,7 @@ float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double samp
   }
   const int pair_count = order / 2;
   for (int pair = pair_count - 1; pair >= 0; --pair) {
-    float stage_q = butterworth_stage_q(order, pair);
+    float stage_q = rt::butterworth_stage_q(order, pair);
     if (pair == pair_count - 1 && std::abs(band.q - sonare::constants::kButterworthQ) > 1.0e-6f) {
       stage_q = std::max(band.q, 1.0e-6f);
     }
