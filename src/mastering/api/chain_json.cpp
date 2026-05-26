@@ -85,6 +85,7 @@ std::vector<Param> flatten_chain_config(const MasteringChainConfig& cfg) {
   add_param(params, "dynamics.deesser.attackMs", cfg.dynamics.deesser.config.attack_ms);
   add_param(params, "dynamics.deesser.releaseMs", cfg.dynamics.deesser.config.release_ms);
   add_param(params, "dynamics.deesser.rangeDb", cfg.dynamics.deesser.config.range_db);
+  add_param(params, "dynamics.deesser.bandpassQ", cfg.dynamics.deesser.config.bandpass_q);
 
   add_param(params, "dynamics.transientShaper.enabled",
             cfg.dynamics.transient_shaper.enabled ? 1.0 : 0.0);

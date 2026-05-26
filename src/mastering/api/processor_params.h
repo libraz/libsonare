@@ -313,6 +313,7 @@ inline dynamics::DeEsserConfig deesser_config(const ParamMap& params) {
   config.attack_ms = f(params, "attackMs", config.attack_ms);
   config.release_ms = f(params, "releaseMs", config.release_ms);
   config.range_db = f(params, "rangeDb", config.range_db);
+  config.bandpass_q = f(params, "bandpassQ", config.bandpass_q);
   return config;
 }
 

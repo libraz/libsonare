@@ -23,6 +23,9 @@ void UpwardCompressor::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
+  if (followers_.size() < kPreparedChannels) {
+    followers_.resize(kPreparedChannels);
+  }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }
@@ -133,7 +136,7 @@ float UpwardCompressor::gain_db(float input_db, const UpwardCompressorConfig& co
 
 void UpwardCompressor::ensure_followers(int num_channels) {
   const auto target_size = static_cast<size_t>(num_channels);
-  if (followers_.size() == target_size) {
+  if (followers_.size() >= target_size) {
     return;
   }
 

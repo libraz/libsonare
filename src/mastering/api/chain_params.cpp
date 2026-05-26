@@ -228,6 +228,9 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   } else if (key == "dynamics.deesser.rangeDb") {
     cfg.dynamics.deesser.config.range_db = vf;
     mark_field(flags.deesser);
+  } else if (key == "dynamics.deesser.bandpassQ") {
+    cfg.dynamics.deesser.config.bandpass_q = vf;
+    mark_field(flags.deesser);
 
     // ---- dynamics.transientShaper ----
   } else if (key == "dynamics.transientShaper.enabled") {

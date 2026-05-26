@@ -30,6 +30,15 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   update_filter_coeff();
+  if (bandpass_.size() < kPreparedChannels) {
+    bandpass_.resize(kPreparedChannels, filter_coeffs_);
+  }
+  if (bandpass2_.size() < kPreparedChannels) {
+    bandpass2_.resize(kPreparedChannels, filter_coeffs_);
+  }
+  if (followers_.size() < kPreparedChannels) {
+    followers_.resize(kPreparedChannels);
+  }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }
@@ -131,6 +140,12 @@ bool DeEsser::set_parameter(unsigned int param_id, float value) {
     case 5:
       config_.range_db = std::max(0.0f, value);
       return true;
+    case 6:
+      config_.bandpass_q = std::max(1.0e-3f, value);
+      if (prepared_) {
+        update_filter_coeff();
+      }
+      return true;
     default:
       return false;
   }
@@ -138,7 +153,7 @@ bool DeEsser::set_parameter(unsigned int param_id, float value) {
 
 void DeEsser::validate_config(const DeEsserConfig& config) {
   if (!(config.frequency_hz > 0.0f) || !(config.ratio >= 1.0f) || config.attack_ms < 0.0f ||
-      config.release_ms < 0.0f || config.range_db < 0.0f) {
+      config.release_ms < 0.0f || config.range_db < 0.0f || !(config.bandpass_q > 0.0f)) {
     throw std::invalid_argument("invalid de-esser configuration");
   }
 }
@@ -155,8 +170,8 @@ float DeEsser::gain_reduction_db(float input_db, const DeEsserConfig& config) {
 
 void DeEsser::ensure_state(int num_channels) {
   const auto target_size = static_cast<size_t>(num_channels);
-  if (followers_.size() == target_size && bandpass_.size() == target_size &&
-      bandpass2_.size() == target_size) {
+  if (followers_.size() >= target_size && bandpass_.size() >= target_size &&
+      bandpass2_.size() >= target_size) {
     return;
   }
 
@@ -180,7 +195,7 @@ void DeEsser::ensure_state(int num_channels) {
 void DeEsser::update_filter_coeff() {
   const float nyquist = static_cast<float>(sample_rate_ * 0.5);
   const float cutoff = std::clamp(config_.frequency_hz, 10.0f, nyquist * 0.98f);
-  const float q = 1.5f;
+  const float q = std::max(1.0e-3f, config_.bandpass_q);
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
   const auto coeffs = rt::rbj_bandpass(w0, q);
   filter_coeffs_.b0 = coeffs.b0;

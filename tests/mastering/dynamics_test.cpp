@@ -333,6 +333,33 @@ TEST_CASE("UpwardCompressor preserves existing channel state when channel count 
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
+TEST_CASE("UpwardCompressor keeps inactive stereo channel state across mono blocks",
+          "[mastering][dynamics]") {
+  UpwardCompressor reference({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  UpwardCompressor under_test({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  reference.prepare(48000.0, 1024);
+  under_test.prepare(48000.0, 1024);
+
+  std::vector<float> warm_l(4096, 0.02f);
+  std::vector<float> warm_r(4096, 0.02f);
+  auto test_warm_l = warm_l;
+  auto test_warm_r = warm_r;
+  process_stereo(reference, warm_l, warm_r);
+  process_stereo(under_test, test_warm_l, test_warm_r);
+
+  std::vector<float> mono(512, 0.02f);
+  process(under_test, mono);
+
+  std::vector<float> ref_l(512, 0.02f);
+  std::vector<float> ref_r(512, 0.02f);
+  std::vector<float> test_l = ref_l;
+  std::vector<float> test_r = ref_r;
+  process_stereo(reference, ref_l, ref_r);
+  process_stereo(under_test, test_l, test_r);
+
+  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
+}
+
 TEST_CASE("UpwardExpander raises signal above threshold and leaves quiet signal alone",
           "[mastering][dynamics]") {
   UpwardExpander upward({-24.0f, 1.5f, 0.0f, 20.0f, 12.0f});
@@ -380,6 +407,33 @@ TEST_CASE("UpwardExpander preserves existing channel state when channel count gr
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
+TEST_CASE("UpwardExpander keeps inactive stereo channel state across mono blocks",
+          "[mastering][dynamics]") {
+  UpwardExpander reference({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  UpwardExpander under_test({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  reference.prepare(48000.0, 1024);
+  under_test.prepare(48000.0, 1024);
+
+  std::vector<float> warm_l(4096, 0.5f);
+  std::vector<float> warm_r(4096, 0.5f);
+  auto test_warm_l = warm_l;
+  auto test_warm_r = warm_r;
+  process_stereo(reference, warm_l, warm_r);
+  process_stereo(under_test, test_warm_l, test_warm_r);
+
+  std::vector<float> mono(512, 0.5f);
+  process(under_test, mono);
+
+  std::vector<float> ref_l(512, 0.5f);
+  std::vector<float> ref_r(512, 0.5f);
+  std::vector<float> test_l = ref_l;
+  std::vector<float> test_r = ref_r;
+  process_stereo(reference, ref_l, ref_r);
+  process_stereo(under_test, test_l, test_r);
+
+  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
+}
+
 TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[mastering][dynamics]") {
   DeEsser deesser({5000.0f, -28.0f, 6.0f, 0.0f, 20.0f, 18.0f});
   deesser.prepare(48000.0, 1024);
@@ -397,6 +451,15 @@ TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[masterin
   REQUIRE(rms_tail(high, 4096) / high_before < 0.65f);
   REQUIRE(rms_tail(low, 4096) / low_before > 0.75f);
   REQUIRE(high_reduction_db < -1.0f);
+}
+
+TEST_CASE("DeEsser exposes configurable bandpass Q", "[mastering][dynamics]") {
+  DeEsser deesser;
+  deesser.prepare(48000.0, 1024);
+  REQUIRE(deesser.set_parameter(6, 2.5f));
+  REQUIRE_THAT(deesser.config().bandpass_q, WithinAbs(2.5f, 1.0e-6f));
+  REQUIRE_FALSE(deesser.set_parameter(7, 1.0f));
+  REQUIRE_THROWS(DeEsser({6000.0f, -24.0f, 4.0f, 1.0f, 60.0f, 12.0f, 0.0f}));
 }
 
 TEST_CASE("DeEsser preserves existing channel filter state when channel count grows",
@@ -418,6 +481,33 @@ TEST_CASE("DeEsser preserves existing channel filter state when channel count gr
   process_stereo(stereo_path, actual_left, actual_right);
 
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
+}
+
+TEST_CASE("DeEsser keeps inactive stereo channel state across mono blocks",
+          "[mastering][dynamics]") {
+  DeEsser reference({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  DeEsser under_test({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  reference.prepare(48000.0, 1024);
+  under_test.prepare(48000.0, 1024);
+
+  auto warm_l = sine(8000.0f, 48000, 4096, 0.5f);
+  auto warm_r = sine(8000.0f, 48000, 4096, 0.5f);
+  auto test_warm_l = warm_l;
+  auto test_warm_r = warm_r;
+  process_stereo(reference, warm_l, warm_r);
+  process_stereo(under_test, test_warm_l, test_warm_r);
+
+  auto mono = sine(8000.0f, 48000, 512, 0.5f);
+  process(under_test, mono);
+
+  auto ref_l = sine(8000.0f, 48000, 512, 0.5f);
+  auto ref_r = ref_l;
+  auto test_l = ref_l;
+  auto test_r = ref_r;
+  process_stereo(reference, ref_l, ref_r);
+  process_stereo(under_test, test_l, test_r);
+
+  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
 }
 
 TEST_CASE("DeEsser validates configuration", "[mastering][dynamics]") {

@@ -18,6 +18,7 @@ struct DeEsserConfig {
   float attack_ms = 1.0f;
   float release_ms = 60.0f;
   float range_db = 12.0f;
+  float bandpass_q = 1.5f;
 };
 
 class DeEsser : public common::ProcessorBase {
@@ -39,6 +40,7 @@ class DeEsser : public common::ProcessorBase {
   //   3 = attack_ms (clamped to >= 0)
   //   4 = release_ms (clamped to >= 0)
   //   5 = range_db (clamped to >= 0)
+  //   6 = bandpass_q (clamped to > 0)
   bool set_parameter(unsigned int param_id, float value) override;
 
  private:
@@ -49,6 +51,7 @@ class DeEsser : public common::ProcessorBase {
 
   using Biquad = common::Biquad;
 
+  static constexpr size_t kPreparedChannels = 2;
   DeEsserConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;

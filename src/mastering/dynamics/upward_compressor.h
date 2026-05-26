@@ -44,6 +44,7 @@ class UpwardCompressor : public common::ProcessorBase {
   static float gain_db(float input_db, const UpwardCompressorConfig& config);
   void ensure_followers(int num_channels);
 
+  static constexpr size_t kPreparedChannels = 2;
   UpwardCompressorConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;

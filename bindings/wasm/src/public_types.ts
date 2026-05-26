@@ -564,6 +564,7 @@ export interface MasteringChainConfig {
       attackMs?: number;
       releaseMs?: number;
       rangeDb?: number;
+      bandpassQ?: number;
     };
     transientShaper?: {
       attackGainDb?: number;

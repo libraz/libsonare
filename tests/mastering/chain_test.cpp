@@ -296,14 +296,16 @@ TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chai
 TEST_CASE("parse_chain_config_params handles new dynamics keys", "[mastering][chain]") {
   Param params[] = {
       {"dynamics.deesser.thresholdDb", -30.0},
+      {"dynamics.deesser.bandpassQ", 2.25},
       {"dynamics.transientShaper.attackGainDb", 4.0},
       {"dynamics.multibandComp.lowCutoffHz", 200.0},
       {"dynamics.multibandComp.highCutoffHz", 5000.0},
       {"dynamics.multibandComp.midThresholdDb", -22.0},
   };
-  auto config = parse_chain_config_params(params, 5);
+  auto config = parse_chain_config_params(params, 6);
   REQUIRE(config.dynamics.deesser.enabled);
   REQUIRE_THAT(config.dynamics.deesser.config.threshold_db, WithinAbs(-30.0f, 1e-6f));
+  REQUIRE_THAT(config.dynamics.deesser.config.bandpass_q, WithinAbs(2.25f, 1e-6f));
   REQUIRE(config.dynamics.transient_shaper.enabled);
   REQUIRE_THAT(config.dynamics.transient_shaper.config.attack_gain_db, WithinAbs(4.0f, 1e-6f));
   REQUIRE(config.dynamics.multiband_comp.enabled);
