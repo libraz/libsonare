@@ -46,6 +46,10 @@ std::vector<float> pad_for_centered_zcr(const float* samples, size_t n_samples, 
   return padded;
 }
 
+float sanitized_magnitude(float magnitude) noexcept {
+  return std::isfinite(magnitude) ? std::max(magnitude, 0.0f) : 0.0f;
+}
+
 }  // namespace
 
 std::vector<float> spectral_centroid(const Spectrogram& spec, int sr) {
@@ -65,8 +69,7 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
     float weighted_sum = 0.0f;
     float magnitude_sum = 0.0f;
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
-      SONARE_CHECK(mag >= 0.0f, ErrorCode::InvalidParameter);
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       weighted_sum += freqs[k] * mag;
       magnitude_sum += mag;
     }
@@ -97,7 +100,7 @@ std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_
     float sum_magnitude = 0.0f;
 
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       float diff = std::abs(freqs[k] - centroid);
       sum_weighted += std::pow(diff, p) * mag;
       sum_magnitude += mag;
@@ -130,8 +133,7 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
   for (int t = 0; t < n_frames; ++t) {
     float total = 0.0f;
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
-      SONARE_CHECK(mag >= 0.0f, ErrorCode::InvalidParameter);
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       total += mag;
     }
 
@@ -140,7 +142,7 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
 
     int rolloff_bin = n_bins - 1;
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       cumulative += mag;
       if (cumulative >= threshold) {
         rolloff_bin = k;

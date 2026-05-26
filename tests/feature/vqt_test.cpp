@@ -462,3 +462,25 @@ TEST_CASE("vqt energy concentration for pure tone", "[vqt][reference]") {
     }
   }
 }
+
+TEST_CASE("ivqt respects requested output length", "[vqt][inverse]") {
+  Audio audio = generate_sine(440.0f, 0.25f, 22050);
+
+  VqtConfig config;
+  config.fmin = 65.4f;
+  config.n_bins = 24;
+  config.gamma = 24.0f;
+
+  VqtResult result = vqt(audio, config);
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+  Audio reconstructed = ivqt(result, 4096);
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
+  REQUIRE(reconstructed.size() == 4096);
+  REQUIRE(reconstructed.sample_rate() == audio.sample_rate());
+}

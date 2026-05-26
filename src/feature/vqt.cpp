@@ -266,6 +266,11 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
   const float* data = padded_signal.data();
   float norm_factor = 1.0f / static_cast<float>(fft_length);
+  std::vector<float> sqrt_lengths(n_bins, 1.0f);
+  const auto& lengths = kernel->lengths();
+  for (int k = 0; k < n_bins; ++k) {
+    if (lengths[k] > 0) sqrt_lengths[k] = std::sqrt(static_cast<float>(lengths[k]));
+  }
 
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
@@ -295,7 +300,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
     // Copy to output
     for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] = result(k);
+      output[k * n_frames + t] = result(k) * sqrt_lengths[k];
     }
 
     // Report progress
@@ -345,8 +350,14 @@ Audio ivqt(const VqtResult& vqt_result, int length) {
   // High-quality reconstruction path: Griffin-Lim on the VQT magnitude. The
   // legacy icqt pseudo-inverse remains directly callable for callers that
   // depend on the previous (lower-quality) behavior.
-  (void)length;  // Griffin-Lim derives output length from the frame count.
-  return griffinlim_vqt(vqt_result, vqt_result.sample_rate());
+  Audio reconstructed = griffinlim_vqt(vqt_result, vqt_result.sample_rate());
+  if (length > 0 && reconstructed.size() != static_cast<size_t>(length)) {
+    std::vector<float> resized(static_cast<size_t>(length), 0.0f);
+    const size_t copy_count = std::min(resized.size(), reconstructed.size());
+    std::copy_n(reconstructed.data(), copy_count, resized.data());
+    reconstructed = Audio::from_vector(std::move(resized), reconstructed.sample_rate());
+  }
+  return reconstructed;
 }
 
 }  // namespace sonare

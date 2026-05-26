@@ -430,8 +430,11 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     }
   }
 
+  // OLA coverage counter is integer-like; this floor only skips uncovered
+  // padded tails and avoids division by exact zero.
+  constexpr float kOverlapWeightFloor = 1.0e-6f;
   for (size_t i = 0; i < output_padded.size(); ++i) {
-    if (weight[i] > 1e-6f) output_padded[i] /= weight[i];
+    if (weight[i] > kOverlapWeightFloor) output_padded[i] /= weight[i];
   }
 
   const int crop_start = n_fft / 2;

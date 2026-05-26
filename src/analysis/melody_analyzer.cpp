@@ -57,12 +57,13 @@ void MelodyAnalyzer::compute_contour_features() {
     return;
   }
 
-  // Mean frequency
-  float sum = 0.0f;
+  // Mean pitch is perceptual/logarithmic, so average in log-frequency space
+  // and convert back to Hz.
+  float sum_log = 0.0f;
   for (float f : voiced_frequencies) {
-    sum += f;
+    sum_log += std::log(f);
   }
-  contour_.mean_frequency = sum / voiced_frequencies.size();
+  contour_.mean_frequency = std::exp(sum_log / voiced_frequencies.size());
 
   // Pitch range (in octaves)
   float min_freq = *std::min_element(voiced_frequencies.begin(), voiced_frequencies.end());

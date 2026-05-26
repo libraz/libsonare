@@ -119,6 +119,13 @@ std::vector<float> frame_rms(const std::vector<double>& band, int win_length, in
   return rms;
 }
 
+int frame_count_for_iirt(size_t n_samples, int win_length, int hop_length, bool center) {
+  const int n = static_cast<int>(n_samples);
+  const int pad = center ? win_length : 0;
+  const int total = n + pad;
+  return (total >= win_length) ? 1 + (total - win_length) / hop_length : 1;
+}
+
 }  // namespace
 
 std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& config) {
@@ -146,9 +153,9 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
                  tuning_factor;
   }
 
-  // Determine number of frames from the first available band.
+  const int n_frames_global =
+      frame_count_for_iirt(n_samples, config.win_length, config.hop_length, config.center);
   std::vector<float> out;
-  int n_frames_global = 0;
   std::vector<std::vector<float>> rows;
   rows.reserve(config.n_filters);
   for (int i = 0; i < config.n_filters; ++i) {
@@ -163,12 +170,11 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
         std::all_of(sos.begin(), sos.end(), [](const BiquadCoeffs& c) { return is_stable(c); });
     if (!stable) {
       // Out of band or numerically unstable design — leave the band unused (zeros).
-      row.assign(n_frames_global > 0 ? n_frames_global : 1, 0.0f);
+      row.assign(n_frames_global, 0.0f);
     } else {
       std::vector<double> band = apply_cascade(y, n_samples, sos);
       row = frame_rms(band, config.win_length, config.hop_length, config.center);
     }
-    if (n_frames_global == 0) n_frames_global = static_cast<int>(row.size());
     if (static_cast<int>(row.size()) != n_frames_global) {
       // Resize zero-filled rows to match (only happens for early skipped bands).
       row.resize(n_frames_global, 0.0f);

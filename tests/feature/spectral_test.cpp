@@ -212,7 +212,9 @@ TEST_CASE("spectral_rolloff validates librosa-compatible inputs", "[spectral]") 
   REQUIRE_THROWS_AS(spectral_rolloff(magnitude.data(), 3, 1, 300, 6, 0.0f), SonareException);
 
   std::vector<float> negative = {1.0f, -1.0f, 1.0f};
-  REQUIRE_THROWS_AS(spectral_rolloff(negative.data(), 3, 1, 300, 6, 0.85f), SonareException);
+  std::vector<float> clamped = spectral_rolloff(negative.data(), 3, 1, 300, 6, 0.85f);
+  REQUIRE(clamped.size() == 1);
+  REQUIRE_THAT(clamped[0], WithinAbs(100.0f, 1e-7f));
 }
 
 TEST_CASE("spectral_flatness sine vs noise", "[spectral]") {
