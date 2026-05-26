@@ -186,13 +186,14 @@ std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float
   return out;
 }
 
-std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, float fmin) {
+std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, float fmin,
+                                float tuning) {
   if (n_input <= 0 || bins_per_octave <= 0 || n_chroma <= 0) {
     throw std::invalid_argument("cq_to_chroma: invalid parameters");
   }
   int pitch_class_offset = 0;
   if (fmin > 0.0f) {
-    pitch_class_offset = static_cast<int>(std::lround(hz_to_midi(fmin))) % n_chroma;
+    pitch_class_offset = static_cast<int>(std::lround(hz_to_midi(fmin) + tuning)) % n_chroma;
     if (pitch_class_offset < 0) pitch_class_offset += n_chroma;
   }
   std::vector<float> out(static_cast<size_t>(n_chroma) * n_input, 0.0f);
@@ -202,12 +203,12 @@ std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, 
     if (chroma_bin < 0) chroma_bin += n_chroma;
     out[chroma_bin * n_input + i] = 1.0f;
   }
-  // Normalize each chroma row by its sum so rows still average correctly.
-  for (int c = 0; c < n_chroma; ++c) {
-    float row_sum = 0.0f;
-    for (int i = 0; i < n_input; ++i) row_sum += out[c * n_input + i];
-    if (row_sum > 0.0f) {
-      for (int i = 0; i < n_input; ++i) out[c * n_input + i] /= row_sum;
+  // Normalize each CQT bin column so total bin energy is preserved when folded.
+  for (int i = 0; i < n_input; ++i) {
+    float column_sum = 0.0f;
+    for (int c = 0; c < n_chroma; ++c) column_sum += out[c * n_input + i];
+    if (column_sum > 0.0f) {
+      for (int c = 0; c < n_chroma; ++c) out[c * n_input + i] /= column_sum;
     }
   }
   return out;

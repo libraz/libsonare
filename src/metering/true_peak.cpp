@@ -14,9 +14,9 @@ namespace sonare::metering {
 namespace {
 
 const ::sonare::rt::PolyphaseFir& filter_for(int oversample_factor) {
-  static const auto kFilter4x = ::sonare::rt::design_polyphase_lowpass(4, 48);
-  static const auto kFilter8x = ::sonare::rt::design_polyphase_lowpass(8, 96);
-  static const auto kFilter2x = ::sonare::rt::design_polyphase_lowpass(2, 24);
+  static const auto kFilter4x = ::sonare::rt::design_polyphase_lowpass(4, 48, 9.5, true);
+  static const auto kFilter8x = ::sonare::rt::design_polyphase_lowpass(8, 96, 9.5, true);
+  static const auto kFilter2x = ::sonare::rt::design_polyphase_lowpass(2, 24, 7.85726, true);
   if (oversample_factor == 8) return kFilter8x;
   if (oversample_factor == 2) return kFilter2x;
   return kFilter4x;

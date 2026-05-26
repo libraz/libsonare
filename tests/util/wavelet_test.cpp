@@ -61,12 +61,22 @@ TEST_CASE("semitone_filterbank rows match shared RBJ bandpass design", "[util][w
 TEST_CASE("cq_to_chroma maps each input bin to a chroma row", "[util][wavelet]") {
   auto M = cq_to_chroma(24, 12, 12, 0.0f);
   REQUIRE(M.size() == 12 * 24);
-  // Each chroma row sums to 1 (after normalisation).
-  for (int c = 0; c < 12; ++c) {
+  // Each CQT input column sums to 1 after folding, preserving per-bin energy.
+  for (int j = 0; j < 24; ++j) {
     float s = 0.0f;
-    for (int j = 0; j < 24; ++j) s += M[c * 24 + j];
+    for (int c = 0; c < 12; ++c) s += M[c * 24 + j];
     REQUIRE_THAT(s, WithinAbs(1.0f, 1e-6f));
   }
+}
+
+TEST_CASE("cq_to_chroma applies fmin and tuning pitch-class offset", "[util][wavelet]") {
+  auto tuned = cq_to_chroma(12, 12, 12, 440.0f, 1.0f);
+  auto untuned = cq_to_chroma(12, 12, 12, 440.0f, 0.0f);
+
+  // A4 is pitch class 9; adding +1 semitone tuning moves the first bin to A#.
+  REQUIRE_THAT(untuned[9 * 12], WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(tuned[10 * 12], WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(tuned[9 * 12], WithinAbs(0.0f, 1e-6f));
 }
 
 TEST_CASE("diagonal_filter has its peak on the chosen diagonal", "[util][wavelet]") {

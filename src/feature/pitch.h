@@ -17,7 +17,7 @@ struct PitchConfig {
   float fmax = 2093.0f;     ///< Maximum frequency in Hz (C7)
   float threshold = 0.3f;   ///< YIN threshold for voiced/unvoiced
   bool fill_na = false;     ///< Fill unvoiced frames with 0 (otherwise NaN)
-  bool center = false;      ///< Reflect-pad by frame_length/2 before framing
+  bool center = true;       ///< Reflect-pad by frame_length/2 before framing
 };
 
 /// @brief Pitch detection result.

@@ -62,3 +62,19 @@ TEST_CASE("Matched one-pole low-pass alpha helper matches legacy exponential for
   REQUIRE(sonare::rt::one_pole_lowpass_alpha_matched(-1.0f, sample_rate) == 0.0f);
   REQUIRE(sonare::rt::one_pole_lowpass_alpha_matched(1000.0f, -1.0) == 1.0f);
 }
+
+TEST_CASE("K-weighting uses BS.1770 DeMan design away from 48 kHz", "[rt][biquad]") {
+  const auto at_48k = sonare::rt::k_weighting_coefficients(48000.0);
+  require_close(
+      at_48k.pre,
+      {1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585},
+      1.0e-12);
+  require_close(at_48k.rlb, {1.0, -2.0, 1.0, -1.99004745483398, 0.99007225036621}, 1.0e-12);
+
+  const auto at_22050 = sonare::rt::k_weighting_coefficients(22050.0);
+  require_close(at_22050.pre,
+                {1.479825350977812, -2.170728612856829, 0.860842484726486, -1.338305336066134,
+                 0.508244558913602},
+                1.0e-12);
+  require_close(at_22050.rlb, {1.0, -2.0, 1.0, -1.978397602590054, 0.978514419503187}, 1.0e-12);
+}

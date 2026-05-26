@@ -86,7 +86,7 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
 
   std::vector<float> chroma_features =
       apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_chroma);
-  chroma_features = normalize_columns(std::move(chroma_features), n_chroma, n_frames, 0);
+  chroma_features = normalize_columns(std::move(chroma_features), n_chroma, n_frames, 2);
 
   return Chroma(std::move(chroma_features), n_chroma, n_frames, sr, spec.hop_length());
 }

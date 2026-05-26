@@ -138,6 +138,30 @@ TEST_CASE("STFT/iSTFT roundtrip", "[spectrum]") {
   }
 }
 
+TEST_CASE("STFT/iSTFT roundtrip preserves gain with symmetric synthesis window", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 8192;
+  std::vector<float> original(samples);
+  for (int i = 0; i < samples; ++i) {
+    original[i] =
+        0.4f * std::sin(kTwoPi * 440.0f * i / sr) + 0.2f * std::sin(kTwoPi * 1330.0f * i / sr);
+  }
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig config;
+  config.n_fft = 1024;
+  config.win_length = 768;
+  config.hop_length = 256;
+  config.center = true;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  Audio reconstructed = spec.to_audio(samples);
+
+  REQUIRE(reconstructed.size() == original.size());
+  const float snr = compute_snr(original.data(), reconstructed.data(), original.size());
+  REQUIRE(snr > 60.0f);
+}
+
 TEST_CASE("STFT/iSTFT with different window sizes", "[spectrum]") {
   constexpr int sr = 22050;
   std::vector<float> original = generate_sine(sr / 2, 880.0f, sr);
@@ -330,6 +354,27 @@ TEST_CASE("Griffin-Lim basic reconstruction", "[spectrum]") {
   float rms_ratio = recon_rms / orig_rms;
   REQUIRE(rms_ratio > 0.3f);
   REQUIRE(rms_ratio < 3.0f);
+}
+
+TEST_CASE("Griffin-Lim preserves centered STFT extent", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 2048;
+  constexpr int n_fft = 512;
+  constexpr int hop_length = 128;
+  Audio audio = Audio::from_vector(generate_sine(samples, 440.0f, sr), sr);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.center = true;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 1;
+  Audio reconstructed = griffin_lim(spec.magnitude(), spec.n_bins(), spec.n_frames(), n_fft,
+                                    hop_length, sr, gl_config);
+
+  REQUIRE(reconstructed.size() == static_cast<size_t>(samples));
 }
 
 TEST_CASE("Spectrogram from_complex", "[spectrum]") {

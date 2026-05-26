@@ -41,7 +41,7 @@ std::vector<float> semitone_filterbank(int n_octaves = 7, int bins_per_octave = 
 /// @brief CQT-to-chroma projection matrix.
 /// @return Row-major `[n_chroma x n_input]`.
 std::vector<float> cq_to_chroma(int n_input, int bins_per_octave = 12, int n_chroma = 12,
-                                float fmin = 0.0f);
+                                float fmin = 0.0f, float tuning = 0.0f);
 
 /// @brief 2D diagonal smoothing filter.
 /// @param n Kernel size (`n x n`).

@@ -40,6 +40,7 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
     float fmax = entry["fmax"].as_float();
     int frame_length = entry["frame_length"].as_int();
     int hop_length = entry["hop_length"].as_int();
+    bool center = entry.contains("center") ? entry["center"].as_bool() : true;
     const auto& ref_f0 = entry["f0"].as_array();
 
     if (signal_name == "440Hz_tone") {
@@ -58,6 +59,7 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
         config.hop_length = hop_length;
         config.fmin = fmin;
         config.fmax = fmax;
+        config.center = center;
 
         PitchResult result = yin_track(audio, config);
 
@@ -102,6 +104,7 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
         config.hop_length = hop_length;
         config.fmin = fmin;
         config.fmax = fmax;
+        config.center = center;
 
         PitchResult result = yin_track(audio, config);
 
@@ -145,6 +148,7 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
     float fmax = entry["fmax"].as_float();
     int frame_length = entry["frame_length"].as_int();
     int hop_length = entry["hop_length"].as_int();
+    bool center = entry.contains("center") ? entry["center"].as_bool() : true;
     const auto& ref_f0 = entry["f0"].as_array();
     const auto& ref_voiced = entry["voiced_flag"].as_array();
     const double cents_tolerance = entry["acceptance"]["f0_cents_tolerance"].as_number();
@@ -178,6 +182,7 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
     config.fmin = fmin;
     config.fmax = fmax;
     config.fill_na = true;
+    config.center = center;
 
     PitchResult result = pyin(audio, config);
     int compare_frames = std::min(result.n_frames(), static_cast<int>(ref_f0.size()));

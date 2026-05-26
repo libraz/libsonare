@@ -425,6 +425,29 @@ RawBiquadCoeffsD rbj_bandpass_raw_d(double frequency, double sample_rate, double
   return {alpha, 0.0, -alpha, a0, -2.0 * cos_omega, 1.0 - alpha};
 }
 
+namespace {
+
+BiquadCoeffsD deman_high_shelf_d(double frequency, double sample_rate, double gain_db, double q) {
+  const double k = std::tan(kPiD * frequency / sample_rate);
+  const double vh = std::pow(10.0, gain_db / 20.0);
+  const double vb = std::pow(vh, 0.499666774155);
+  const double a0 = 1.0 + k / q + k * k;
+  return {
+      (vh + vb * k / q + k * k) / a0, 2.0 * (k * k - vh) / a0,    (vh - vb * k / q + k * k) / a0,
+      2.0 * (k * k - 1.0) / a0,       (1.0 - k / q + k * k) / a0,
+  };
+}
+
+BiquadCoeffsD deman_highpass_d(double frequency, double sample_rate, double q) {
+  const double k = std::tan(kPiD * frequency / sample_rate);
+  const double a0 = 1.0 + k / q + k * k;
+  return {
+      1.0, -2.0, 1.0, 2.0 * (k * k - 1.0) / a0, (1.0 - k / q + k * k) / a0,
+  };
+}
+
+}  // namespace
+
 KWeightingCoeffs k_weighting_coefficients(double sample_rate) {
   // ITU-R BS.1770 reference coefficients are specified at 48 kHz; return them
   // verbatim to stay bit-exact with the standard, and derive other rates.
@@ -436,8 +459,8 @@ KWeightingCoeffs k_weighting_coefficients(double sample_rate) {
     };
   }
   return {
-      rbj_high_shelf_d(1681.974450955533, sample_rate, 3.999843853973347, 0.7071752369554196),
-      rbj_highpass_d(38.13547087613982, sample_rate, 0.5003270373238773),
+      deman_high_shelf_d(1681.974450955533, sample_rate, 3.999843853973347, 0.7071752369554196),
+      deman_highpass_d(38.13547087613982, sample_rate, 0.5003270373238773),
   };
 }
 

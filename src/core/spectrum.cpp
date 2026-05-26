@@ -225,13 +225,21 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     return Audio();
   }
 
-  // Get cached synthesis window matching the analysis window length
-  const std::vector<float>& win_short = get_window_cached(window_type, win_length_, true);
+  // STFT analysis uses a periodic window (fftbins=True). iSTFT uses a symmetric
+  // synthesis window and normalizes by analysis*synthesis overlap to preserve
+  // reconstruction gain when the two window shapes differ.
+  const std::vector<float>& analysis_win_short = get_window_cached(window_type, win_length_, true);
+  const std::vector<float>& synthesis_win_short =
+      get_window_cached(window_type, win_length_, false);
 
   // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
-  std::vector<float> window(n_fft_, 0.0f);
+  std::vector<float> analysis_window(n_fft_, 0.0f);
+  std::vector<float> synthesis_window(n_fft_, 0.0f);
   int win_offset = (n_fft_ - win_length_) / 2;
-  std::copy(win_short.begin(), win_short.end(), window.begin() + win_offset);
+  std::copy(analysis_win_short.begin(), analysis_win_short.end(),
+            analysis_window.begin() + win_offset);
+  std::copy(synthesis_win_short.begin(), synthesis_win_short.end(),
+            synthesis_window.begin() + win_offset);
 
   // Calculate full reconstruction length (before trimming)
   int full_length = (n_frames_ - 1) * hop_length_ + n_fft_;
@@ -262,8 +270,8 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     for (int i = 0; i < n_fft_; ++i) {
       int idx = start + i;
       if (idx >= 0 && idx < full_length) {
-        output[idx] += frame[i] * window[i];
-        window_sum[idx] += window[i] * window[i];
+        output[idx] += frame[i] * synthesis_window[i];
+        window_sum[idx] += analysis_window[i] * synthesis_window[i];
       }
     }
   }

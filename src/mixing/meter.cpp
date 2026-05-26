@@ -13,18 +13,6 @@ namespace sonare::mixing {
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
-// K-weighting biquad design shared with metering/lufs.cpp via rt::biquad_design.
-MeterProcessor::Biquad MeterProcessor::high_shelf(double frequency, double sample_rate,
-                                                  double gain_db, double q) {
-  const rt::BiquadCoeffsD c = rt::rbj_high_shelf_d(frequency, sample_rate, gain_db, q);
-  return {c.b0, c.b1, c.b2, c.a1, c.a2};
-}
-
-MeterProcessor::Biquad MeterProcessor::highpass(double frequency, double sample_rate, double q) {
-  const rt::BiquadCoeffsD c = rt::rbj_highpass_d(frequency, sample_rate, q);
-  return {c.b0, c.b1, c.b2, c.a1, c.a2};
-}
-
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
   const size_t c = static_cast<size_t>(channel);
   // Pre-filter (high shelf), Direct Form II transposed.

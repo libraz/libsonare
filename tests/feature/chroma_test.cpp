@@ -198,6 +198,32 @@ TEST_CASE("Chroma features matrix view", "[chroma]") {
   }
 }
 
+TEST_CASE("Chroma compute uses L2-normalized frames by default", "[chroma]") {
+  Audio audio = create_chord_audio({261.63f, 329.63f, 392.0f});
+
+  ChromaConfig config;
+  config.n_chroma = 12;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+
+  Chroma chroma = Chroma::compute(audio, config);
+
+  for (int t = 0; t < chroma.n_frames(); ++t) {
+    float sum_sq = 0.0f;
+    float max_val = 0.0f;
+    for (int c = 0; c < chroma.n_chroma(); ++c) {
+      const float value = chroma.at(c, t);
+      sum_sq += value * value;
+      max_val = std::max(max_val, std::abs(value));
+    }
+    const float norm = std::sqrt(sum_sq);
+    REQUIRE((norm < 1e-6f || std::abs(norm - 1.0f) < 0.01f));
+    if (norm > 1e-6f) {
+      REQUIRE(max_val <= 1.0f);
+    }
+  }
+}
+
 TEST_CASE("Chroma normalize default produces max norm", "[chroma]") {
   Audio audio = create_sine_audio(440.0f);
 

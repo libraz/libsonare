@@ -70,8 +70,6 @@ class MeterProcessor : public rt::ProcessorBase {
     double z2 = 0.0;
   };
 
-  static Biquad high_shelf(double frequency, double sample_rate, double gain_db, double q);
-  static Biquad highpass(double frequency, double sample_rate, double q);
   double filter_sample(int channel, double x) noexcept;
   float energy_to_lufs(double energy) const noexcept;
   void publish(const MeterSnapshot& next) noexcept;

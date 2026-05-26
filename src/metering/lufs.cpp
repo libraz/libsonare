@@ -182,6 +182,12 @@ float last_or_silence(const std::vector<float>& values) {
   return values.empty() ? -std::numeric_limits<float>::infinity() : values.back();
 }
 
+size_t percentile_index(size_t count, double percentile) {
+  if (count == 0) return 0;
+  const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(count - 1);
+  return static_cast<size_t>(std::floor(position));
+}
+
 float loudness_range_from_short_term(const std::vector<float>& values) {
   std::vector<float> finite;
   finite.reserve(values.size());
@@ -193,9 +199,16 @@ float loudness_range_from_short_term(const std::vector<float>& values) {
 
   if (finite.size() < 2) return 0.0f;
   std::sort(finite.begin(), finite.end());
-  const size_t low_index = static_cast<size_t>(std::floor(0.10f * (finite.size() - 1)));
-  const size_t high_index = static_cast<size_t>(std::floor(0.95f * (finite.size() - 1)));
+  const size_t low_index = percentile_index(finite.size(), 0.10);
+  const size_t high_index = percentile_index(finite.size(), 0.95);
   return finite[high_index] - finite[low_index];
+}
+
+float short_term_overlap_for(int sample_rate, float duration_sec) {
+  if (sample_rate <= 0 || duration_sec <= 0.0f) return 0.0f;
+  const float block = duration_sec * static_cast<float>(sample_rate);
+  const float hop = std::max(1.0f, std::round(0.1f * static_cast<float>(sample_rate)));
+  return std::clamp(1.0f - hop / block, 0.0f, 0.95f);
 }
 
 void validate_config(const LufsConfig& config) {
@@ -226,9 +239,9 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
   const std::vector<float> momentary = energies_to_lufs(
       block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
                                        config.momentary_duration_sec, config.block_overlap));
-  const std::vector<float> short_term = energies_to_lufs(
-      block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
-                                       config.short_term_duration_sec, config.block_overlap));
+  const std::vector<float> short_term = energies_to_lufs(block_energies_weighted_channels(
+      weighted_channels, frames, channels, sample_rate, config.short_term_duration_sec,
+      short_term_overlap_for(sample_rate, config.short_term_duration_sec)));
 
   LufsResult result;
   result.integrated_lufs = gated_integrated_lufs(integrated_blocks, config);
@@ -287,8 +300,8 @@ float ebur128_loudness_range(const Audio& audio) {
   if (gated.size() < 2) return 0.0f;
 
   std::sort(gated.begin(), gated.end());
-  const size_t low_index = static_cast<size_t>(std::round(0.10 * (gated.size() - 1)));
-  const size_t high_index = static_cast<size_t>(std::round(0.95 * (gated.size() - 1)));
+  const size_t low_index = percentile_index(gated.size(), 0.10);
+  const size_t high_index = percentile_index(gated.size(), 0.95);
   return gated[high_index] - gated[low_index];
 }
 
@@ -304,8 +317,9 @@ std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config)
   validate_config(config);
 
   const std::vector<float> weighted = k_weighted(audio);
-  return energies_to_lufs(block_energies(weighted, audio.sample_rate(),
-                                         config.short_term_duration_sec, config.block_overlap));
+  return energies_to_lufs(
+      block_energies(weighted, audio.sample_rate(), config.short_term_duration_sec,
+                     short_term_overlap_for(audio.sample_rate(), config.short_term_duration_sec)));
 }
 
 }  // namespace sonare::metering
