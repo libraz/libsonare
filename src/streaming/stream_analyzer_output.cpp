@@ -131,6 +131,7 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
 
 void StreamAnalyzer::reset(size_t base_sample_offset) {
   cumulative_samples_ = base_sample_offset;
+  cumulative_samples_exact_ = static_cast<double>(base_sample_offset);
   frame_count_ = 0;
   emitted_frame_count_ = 0;
 
@@ -146,10 +147,8 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   onset_accumulator_.clear();
   chroma_sum_.fill(0.0f);
   chroma_frame_count_ = 0;
-  accumulated_chroma_.clear();
   last_key_update_time_ = 0.0f;
   last_bpm_update_time_ = 0.0f;
-  last_chord_analysis_time_ = 0.0f;
   current_estimate_ = ProgressiveEstimate();
 
   prev_chord_root_ = -1;
@@ -162,8 +161,6 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   bar_duration_ = 0.0f;
   current_bar_index_ = -1;
   bar_start_time_ = 0.0f;
-  bar_chroma_sum_.fill(0.0f);
-  bar_chroma_count_ = 0;
   bar_chord_votes_.fill(0);
   bar_vote_count_ = 0;
 
@@ -192,10 +189,7 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
   }
 }
 
-AnalyzerStats StreamAnalyzer::stats() {
-  compute_voted_pattern(4);
-  detect_progression_pattern();
-
+AnalyzerStats StreamAnalyzer::stats() const {
   AnalyzerStats stats;
   stats.total_frames = frame_count_;
   stats.total_samples = cumulative_samples_;

@@ -85,9 +85,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
 
   if (config_.compute_chroma) {
     chroma_buffer_.resize(12);
-    chroma_raw_.fill(0.0f);
     chroma_sum_.fill(0.0f);
-    bar_chroma_sum_.fill(0.0f);
     bar_chord_votes_.fill(0);
     /// Initialize chord templates for chord detection
     chord_templates_ = generate_triad_templates();
@@ -109,6 +107,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples) {
 void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t sample_offset) {
   /// Sync cumulative samples with external offset
   cumulative_samples_ = sample_offset;
+  cumulative_samples_exact_ = static_cast<double>(sample_offset);
   process_internal(samples, n_samples);
 }
 
@@ -164,7 +163,9 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     overlap_read_pos_ += static_cast<size_t>(hop_length);
 
     /// Update cumulative samples (in original sample rate)
-    cumulative_samples_ += static_cast<size_t>(hop_length / resample_ratio_);
+    cumulative_samples_exact_ +=
+        static_cast<double>(hop_length) / static_cast<double>(resample_ratio_);
+    cumulative_samples_ = static_cast<size_t>(std::llround(cumulative_samples_exact_));
     ++frame_count_;
 
     /// Update progressive estimate if needed
@@ -218,21 +219,6 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
     }
     ++chroma_frame_count_;
 
-    /// Accumulate chroma frame for batch-style chord analysis as a bounded
-    /// sliding window of the most recent kMaxChromaHistoryFrames frames. Without
-    /// a cap this vector grows without bound on long sessions; the cap keeps
-    /// memory bounded and prevents the frame-count int cast from overflowing.
-    for (int c = 0; c < 12; ++c) {
-      accumulated_chroma_.push_back(chroma_buffer_[c]);
-    }
-    constexpr size_t kStride = 12;
-    const size_t max_samples = kMaxChromaHistoryFrames * kStride;
-    if (accumulated_chroma_.size() > max_samples) {
-      const size_t excess = accumulated_chroma_.size() - max_samples;
-      accumulated_chroma_.erase(accumulated_chroma_.begin(),
-                                accumulated_chroma_.begin() + static_cast<std::ptrdiff_t>(excess));
-    }
-
     /// Detect chord for this frame using smoothed chroma
     if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {
       /// Add current chroma to history
@@ -246,8 +232,9 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
       }
 
       /// Store to full chroma history for retroactive bar detection
-      if (full_chroma_history_.size() < kMaxChromaHistoryFrames) {
-        full_chroma_history_.push_back(current_chroma);
+      full_chroma_history_.push_back(current_chroma);
+      if (full_chroma_history_.size() > kMaxChromaHistoryFrames) {
+        full_chroma_history_.erase(full_chroma_history_.begin());
       }
 
       /// Compute median-filtered chroma (more robust to noise than averaging)
@@ -341,7 +328,6 @@ void StreamAnalyzer::compute_chroma() {
       sum += filter_row[k] * power_[k];
     }
     chroma_buffer_[c] = sum;
-    chroma_raw_[c] = sum;  // Store raw (unnormalized) for accumulation
   }
 
   /// Normalize chroma using L2 norm (more robust than max)
@@ -472,7 +458,9 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         current_estimate_.chord_confidence = new_confidence;
       }
 
-      /// Track chord progression (only when confidence is high enough)
+      /// Track chord progression incrementally from the same smoothed chord
+      /// stream used for per-frame output. This avoids recomputing the whole
+      /// progression in a getter or periodically discarding this state.
       if (new_confidence >= kChordConfidenceThreshold) {
         float frame_duration =
             static_cast<float>(config_.hop_length) / static_cast<float>(internal_sample_rate_);
@@ -540,55 +528,6 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
     }
   }
 
-  /// Update chord progression using batch-style analysis (same as ChordAnalyzer)
-  if (config_.compute_chroma && chroma_frame_count_ > 0) {
-    float time_since_chord_analysis = current_time - last_chord_analysis_time_;
-    constexpr float kChordAnalysisInterval = 2.0f;  // Update every 2 seconds
-    constexpr int kMinFramesForAnalysis = 50;       // ~1 second of audio
-
-    if (time_since_chord_analysis >= kChordAnalysisInterval &&
-        chroma_frame_count_ >= kMinFramesForAnalysis) {
-      /// Transpose accumulated chroma from [frame][chroma] to [chroma][frame].
-      /// Use the bounded window's actual frame count (not the all-time
-      /// chroma_frame_count_, which may exceed the retained window) so indexing
-      /// stays in range and the int cast cannot overflow.
-      int n_frames = static_cast<int>(accumulated_chroma_.size() / 12);
-      std::vector<float> transposed_chroma(static_cast<size_t>(12 * n_frames));
-      for (int f = 0; f < n_frames; ++f) {
-        for (int c = 0; c < 12; ++c) {
-          transposed_chroma[c * n_frames + f] = accumulated_chroma_[f * 12 + c];
-        }
-      }
-
-      /// Create Chroma object from accumulated data (use internal sample rate)
-      Chroma chroma_obj(std::move(transposed_chroma), 12, n_frames, internal_sample_rate_,
-                        config_.hop_length);
-
-      /// Run ChordAnalyzer with same settings as batch analysis
-      ChordConfig chord_config;
-      chord_config.smoothing_window = 2.0f;  // Same as batch
-      chord_config.min_duration = 0.3f;
-      chord_config.use_triads_only = true;
-      chord_config.use_beat_sync = false;  // No beat sync in streaming
-
-      ChordAnalyzer chord_analyzer(chroma_obj, chord_config);
-
-      /// Update chord progression from ChordAnalyzer results
-      current_estimate_.chord_progression.clear();
-      for (const auto& chord : chord_analyzer.chords()) {
-        ChordChange change;
-        change.root = static_cast<int>(chord.root);
-        change.quality = static_cast<int>(chord.quality);
-        change.start_time = chord.start;
-        change.confidence = chord.confidence;
-        current_estimate_.chord_progression.push_back(change);
-      }
-
-      last_chord_analysis_time_ = current_time;
-      current_estimate_.updated = true;
-    }
-  }
-
   /// Update bar-synchronized chord tracking
   if (config_.compute_chroma) {
     update_bar_chord_tracking(current_time);
@@ -611,8 +550,6 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       compute_retroactive_bar_chords();
 
       /// Reset for live bar tracking (state already set by retroactive computation)
-      bar_chroma_sum_.fill(0.0f);
-      bar_chroma_count_ = 0;
       bar_chord_votes_.fill(0);
       bar_vote_count_ = 0;
 
@@ -652,8 +589,6 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       }
     }
   }
-  ++bar_chroma_count_;
-
   /// Check if we've crossed a bar boundary
   if (current_time >= bar_start_time_ + bar_duration_) {
     /// Find chord with most votes
@@ -690,8 +625,6 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     /// Move to next bar
     ++current_bar_index_;
     bar_start_time_ = current_time;
-    bar_chroma_sum_.fill(0.0f);
-    bar_chroma_count_ = 0;
     bar_chord_votes_.fill(0);
     bar_vote_count_ = 0;
 

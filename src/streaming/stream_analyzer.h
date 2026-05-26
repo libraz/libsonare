@@ -157,7 +157,7 @@ class StreamAnalyzer {
   void set_tuning_ref_hz(float ref_hz);
 
   /// @brief Returns current statistics and progressive estimate.
-  AnalyzerStats stats();
+  AnalyzerStats stats() const;
 
   /// @brief Returns configuration.
   const StreamConfig& config() const { return config_; }
@@ -185,6 +185,7 @@ class StreamAnalyzer {
 
   // Cumulative state
   size_t cumulative_samples_ = 0;
+  double cumulative_samples_exact_ = 0.0;
   int frame_count_ = 0;
   int emitted_frame_count_ = 0;  // For emit_every_n_frames
 
@@ -227,7 +228,6 @@ class StreamAnalyzer {
   std::vector<float> mel_buffer_;              // [n_mels]
   std::vector<float> mel_log_;                 // [n_mels]
   std::vector<float> chroma_buffer_;           // [12] - L2 normalized
-  std::array<float, 12> chroma_raw_;           // [12] - raw (unnormalized) for accumulation
 
   // Progressive estimation accumulators
   std::vector<float> onset_accumulator_;
@@ -235,12 +235,7 @@ class StreamAnalyzer {
   int chroma_frame_count_ = 0;
   float last_key_update_time_ = 0.0f;
   float last_bpm_update_time_ = 0.0f;
-  float last_chord_analysis_time_ = 0.0f;
   ProgressiveEstimate current_estimate_;
-
-  // Accumulated chroma frames for batch-style chord analysis
-  // Stored as [12 * n_frames] (row-major: chroma bins × frames)
-  std::vector<float> accumulated_chroma_;
 
   // Chord progression tracking
   int prev_chord_root_ = -1;
@@ -259,9 +254,6 @@ class StreamAnalyzer {
   float bar_duration_ = 0.0f;                             ///< Duration of one bar in seconds
   int current_bar_index_ = -1;                            ///< Current bar index (0-based)
   float bar_start_time_ = 0.0f;                           ///< Start time of current bar
-  std::array<float, 12> bar_chroma_sum_;                  ///< Accumulated chroma within current bar
-  int bar_chroma_count_ = 0;  ///< Number of frames accumulated in current bar
-
   // Chord voting within bar (alternative to chroma averaging)
   std::array<int, 48> bar_chord_votes_;  ///< Vote counts per chord (12 roots × 4 qualities)
   int bar_vote_count_ = 0;               ///< Total votes in current bar
