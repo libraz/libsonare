@@ -30,8 +30,8 @@ void Gate::prepare(double sample_rate, int max_block_size) {
     hpf_a1_ = hpf.a1;
   }
   prepared_ = true;
-  hpf_x1_.assign(2, 0.0f);
-  hpf_y1_.assign(2, 0.0f);
+  hpf_x1_.assign(kPreparedChannels, 0.0f);
+  hpf_y1_.assign(kPreparedChannels, 0.0f);
   reset();
 }
 
@@ -43,9 +43,9 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr) throw std::invalid_argument("channels must not be null");
-  if (hpf_x1_.size() != static_cast<size_t>(num_channels)) {
-    hpf_x1_.assign(static_cast<size_t>(num_channels), 0.0f);
-    hpf_y1_.assign(static_cast<size_t>(num_channels), 0.0f);
+  if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
+      static_cast<size_t>(num_channels) > hpf_y1_.size()) {
+    throw std::invalid_argument("num_channels exceeds prepared Gate state");
   }
   const float attack = time_to_coefficient(sample_rate_, config_.attack_ms);
   const float release = time_to_coefficient(sample_rate_, config_.release_ms);

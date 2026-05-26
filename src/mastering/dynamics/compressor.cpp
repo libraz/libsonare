@@ -51,8 +51,8 @@ void Compressor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   update_coefficients();
-  hpf_x1_.assign(2, 0.0f);
-  hpf_y1_.assign(2, 0.0f);
+  hpf_x1_.assign(kPreparedChannels, 0.0f);
+  hpf_y1_.assign(kPreparedChannels, 0.0f);
   reset();
 }
 
@@ -78,9 +78,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
   const float makeup_db = compute_makeup_db(config_);
 
-  if (hpf_x1_.size() != static_cast<size_t>(num_channels)) {
-    hpf_x1_.assign(static_cast<size_t>(num_channels), 0.0f);
-    hpf_y1_.assign(static_cast<size_t>(num_channels), 0.0f);
+  if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
+      static_cast<size_t>(num_channels) > hpf_y1_.size()) {
+    throw std::invalid_argument("num_channels exceeds prepared Compressor state");
   }
 
   const float inv_channels = 1.0f / static_cast<float>(num_channels);

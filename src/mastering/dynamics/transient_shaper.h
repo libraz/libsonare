@@ -3,6 +3,7 @@
 /// @file transient_shaper.h
 /// @brief Envelope-difference transient shaper for attack and sustain control.
 
+#include <cstddef>
 #include <vector>
 
 #include "mastering/common/envelope_follower.h"
@@ -25,6 +26,8 @@ struct TransientShaperConfig {
 
 class TransientShaper : public common::ProcessorBase {
  public:
+  static constexpr size_t kPreparedChannels = 64;
+
   explicit TransientShaper(TransientShaperConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
@@ -54,6 +57,7 @@ class TransientShaper : public common::ProcessorBase {
 
   TransientShaperConfig config_{};
   double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
   bool prepared_ = false;
   // Gain-smoother coefficient, cached because it depends only on sample rate and
   // gain_smoothing_ms; recomputed on prepare()/set_config()/set_parameter(8).

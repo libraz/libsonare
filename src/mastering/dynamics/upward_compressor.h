@@ -3,6 +3,7 @@
 /// @file upward_compressor.h
 /// @brief Upward compressor that raises quieter material below a threshold.
 
+#include <cstddef>
 #include <vector>
 
 #include "mastering/common/envelope_follower.h"
@@ -44,7 +45,7 @@ class UpwardCompressor : public common::ProcessorBase {
   static float gain_db(float input_db, const UpwardCompressorConfig& config);
   void ensure_followers(int num_channels);
 
-  static constexpr size_t kPreparedChannels = 2;
+  static constexpr size_t kPreparedChannels = 64;
   UpwardCompressorConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;

@@ -9,6 +9,11 @@
 #include "util/dsp_primitives.h"
 
 namespace sonare::mastering::dynamics {
+namespace {
+
+constexpr float kEnvelopeFloor = 1.0e-6f;
+
+}  // namespace
 
 TransientShaper::TransientShaper(TransientShaperConfig config) : config_(config) {
   validate_config(config_);
@@ -23,8 +28,17 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   }
 
   sample_rate_ = sample_rate;
+  max_block_size_ = max_block_size;
   prepared_ = true;
+  const size_t channel_count = kPreparedChannels;
   gain_smoothing_coeff_ = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
+  fast_followers_.assign(channel_count, {});
+  slow_followers_.assign(channel_count, {});
+  gain_state_db_.assign(channel_count, 0.0f);
+  const size_t lookahead_samples =
+      static_cast<size_t>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
+  lookahead_.assign(channel_count, std::vector<float>(lookahead_samples, 0.0f));
+  lookahead_index_.assign(channel_count, 0);
   for (auto& follower : fast_followers_) {
     follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
   }
@@ -62,7 +76,7 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
       const float fast_env = fast.process(channels[ch][i]);
       const float slow_env = slow.process(channels[ch][i]);
       const float diff = fast_env - slow_env;
-      const float denom = std::max(std::max(fast_env, slow_env), 0.000001f);
+      const float denom = std::max(std::max(fast_env, slow_env), kEnvelopeFloor);
       const float amount = std::clamp(std::abs(diff) / denom * config_.sensitivity, 0.0f, 1.0f);
       const float target_db = diff >= 0.0f ? config_.attack_gain_db : config_.sustain_gain_db;
       const float gain_db =
@@ -103,14 +117,7 @@ void TransientShaper::set_config(const TransientShaperConfig& config) {
   validate_config(config);
   config_ = config;
   if (prepared_) {
-    gain_smoothing_coeff_ = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
-    for (auto& follower : fast_followers_) {
-      follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
-    }
-    for (auto& follower : slow_followers_) {
-      follower.prepare(sample_rate_, config_.slow_attack_ms, config_.slow_release_ms);
-    }
-    reset();
+    prepare(sample_rate_, max_block_size_);
   }
 }
 
@@ -184,22 +191,12 @@ void TransientShaper::validate_config(const TransientShaperConfig& config) {
 }
 
 void TransientShaper::ensure_followers(int num_channels) {
-  if (fast_followers_.size() == static_cast<size_t>(num_channels)) {
-    return;
-  }
-
-  fast_followers_.assign(static_cast<size_t>(num_channels), {});
-  slow_followers_.assign(static_cast<size_t>(num_channels), {});
-  gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
-  const size_t lookahead_samples =
-      static_cast<size_t>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
-  lookahead_.assign(static_cast<size_t>(num_channels), std::vector<float>(lookahead_samples, 0.0f));
-  lookahead_index_.assign(static_cast<size_t>(num_channels), 0);
-  for (auto& follower : fast_followers_) {
-    follower.prepare(sample_rate_, config_.fast_attack_ms, config_.fast_release_ms);
-  }
-  for (auto& follower : slow_followers_) {
-    follower.prepare(sample_rate_, config_.slow_attack_ms, config_.slow_release_ms);
+  if (static_cast<size_t>(num_channels) > fast_followers_.size() ||
+      static_cast<size_t>(num_channels) > slow_followers_.size() ||
+      static_cast<size_t>(num_channels) > gain_state_db_.size() ||
+      static_cast<size_t>(num_channels) > lookahead_.size() ||
+      static_cast<size_t>(num_channels) > lookahead_index_.size()) {
+    throw std::invalid_argument("num_channels exceeds prepared TransientShaper state");
   }
 }
 

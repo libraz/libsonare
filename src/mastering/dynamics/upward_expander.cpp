@@ -140,11 +140,7 @@ void UpwardExpander::ensure_followers(int num_channels) {
     return;
   }
 
-  const size_t old_size = followers_.size();
-  followers_.resize(target_size);
-  for (size_t i = old_size; i < target_size; ++i) {
-    followers_[i].prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  throw std::invalid_argument("num_channels exceeds prepared UpwardExpander state");
 }
 
 }  // namespace sonare::mastering::dynamics

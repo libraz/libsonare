@@ -19,6 +19,12 @@
 #include "engine/monitor_runtime.h"
 #include "engine/realtime_engine.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/expander.h"
+#include "mastering/dynamics/gate.h"
+#include "mastering/dynamics/transient_shaper.h"
+#include "mastering/dynamics/upward_compressor.h"
+#include "mastering/dynamics/upward_expander.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/minimum_phase.h"
@@ -755,5 +761,147 @@ TEST_CASE("MinimumPhaseEq process performs no heap allocation after prepare",
 
   AllocationGuard guard;
   eq.process(stereo, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("Gate channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::Gate gate({-50.0f, 2.0f, 80.0f, -80.0f, 0.0f, -50.0f, 120.0f});
+  gate.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(0.02f);
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  gate.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  gate.process(stereo, 2, kBlock);
+  gate.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("TransientShaper channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::TransientShaper shaper;
+  shaper.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = i == 0 ? 1.0f : 0.0f;
+    right[static_cast<size_t>(i)] = i == 8 ? 0.5f : 0.0f;
+  }
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  shaper.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  shaper.process(stereo, 2, kBlock);
+  shaper.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("DeEsser channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::DeEsser deesser;
+  deesser.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(0.02f);
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  deesser.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  deesser.process(stereo, 2, kBlock);
+  deesser.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("Compressor channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::Compressor compressor;
+  compressor.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(0.02f);
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  compressor.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  compressor.process(stereo, 2, kBlock);
+  compressor.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("Expander channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::Expander expander;
+  expander.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(0.02f);
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  expander.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  expander.process(stereo, 2, kBlock);
+  expander.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("UpwardCompressor channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::UpwardCompressor compressor;
+  compressor.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(0.02f);
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  compressor.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  compressor.process(stereo, 2, kBlock);
+  compressor.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("UpwardExpander channel-count changes perform no heap allocation after prepare",
+          "[mastering][dynamics][rt]") {
+  constexpr int kBlock = 128;
+  sonare::mastering::dynamics::UpwardExpander expander;
+  expander.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(0.02f);
+  float* mono[] = {left.data()};
+  float* stereo[] = {left.data(), right.data()};
+
+  expander.process(mono, 1, kBlock);
+  AllocationGuard guard;
+  expander.process(stereo, 2, kBlock);
+  expander.process(mono, 1, kBlock);
   REQUIRE(guard.count() == 0);
 }

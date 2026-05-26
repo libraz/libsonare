@@ -21,6 +21,9 @@ void Expander::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
+  if (followers_.size() < kPreparedChannels) {
+    followers_.resize(kPreparedChannels);
+  }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }
@@ -128,14 +131,11 @@ float Expander::gain_reduction_db(float input_db, const ExpanderConfig& config) 
 }
 
 void Expander::ensure_followers(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
+  if (followers_.size() >= static_cast<size_t>(num_channels)) {
     return;
   }
 
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  throw std::invalid_argument("num_channels exceeds prepared Expander state");
 }
 
 }  // namespace sonare::mastering::dynamics

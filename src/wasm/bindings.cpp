@@ -776,6 +776,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     dc.attack_ms = floatProperty(deesser, "attackMs", dc.attack_ms);
     dc.release_ms = floatProperty(deesser, "releaseMs", dc.release_ms);
     dc.range_db = floatProperty(deesser, "rangeDb", dc.range_db);
+    dc.bandpass_q = floatProperty(deesser, "bandpassQ", dc.bandpass_q);
   }
   if (hasProperty(dynamics, "transientShaper")) {
     val ts = objectProperty(dynamics, "transientShaper");

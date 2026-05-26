@@ -3,6 +3,7 @@
 /// @file deesser.h
 /// @brief Split-band de-esser for attenuating sibilant high-frequency energy.
 
+#include <cstddef>
 #include <vector>
 
 #include "mastering/common/biquad.h"
@@ -51,7 +52,7 @@ class DeEsser : public common::ProcessorBase {
 
   using Biquad = common::Biquad;
 
-  static constexpr size_t kPreparedChannels = 2;
+  static constexpr size_t kPreparedChannels = 64;
   DeEsserConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
