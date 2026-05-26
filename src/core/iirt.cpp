@@ -15,6 +15,7 @@ struct BiquadCoeffs {
 };
 
 /// @brief Designs a constant-skirt-gain biquad bandpass (RBJ cookbook).
+/// @return Coefficients normalized so a0 == 1.
 BiquadCoeffs design_bandpass(double f0, double Q, double sr) {
   const double w0 = constants::kTwoPiD * f0 / sr;
   const double cos_w = std::cos(w0);
@@ -31,18 +32,58 @@ BiquadCoeffs design_bandpass(double f0, double Q, double sr) {
   return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
 }
 
-/// @brief Applies a cascaded biquad bandpass to @p y. Returns filtered samples.
-std::vector<double> apply_bandpass(const float* y, size_t n, const BiquadCoeffs& c) {
-  std::vector<double> out(n, 0.0);
+/// @brief Per-section runtime state (Direct Form I delay elements).
+struct BiquadState {
   double x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
+};
+
+/// @brief Reports whether a normalized biquad (a0 == 1) is stable, i.e. its poles lie
+///        strictly inside the unit circle (Schur–Cohn condition for a 2nd-order section).
+bool is_stable(const BiquadCoeffs& c) {
+  return std::abs(c.a2) < 1.0 && std::abs(c.a1) < 1.0 + c.a2;
+}
+
+/// @brief Designs an order-@p order bandpass as a cascade of @p order/2 IDENTICAL RBJ
+///        bandpass biquads centered on @p f0, each with the raw band quality factor
+///        @p band_q (no per-section Q scaling).
+/// @details Each section is `design_bandpass(f0, band_q, sr)`; cascading @p order/2 of
+///          them yields a steeper, stable skirt while keeping the peak fixed at @p f0.
+///          At @p order == 2 this reduces exactly to a single RBJ bandpass with the
+///          requested Q, matching the historical default behaviour bit-for-bit.
+/// @note This is not yet a true elliptic/Butterworth-bandpass match to `librosa.iirt`
+///       (whose SOS chain has distinct per-section coefficients); a full match is
+///       future work.
+std::vector<BiquadCoeffs> design_butterworth_bandpass(double f0, double band_q, double sr,
+                                                      int order) {
+  const int n_sections = order / 2;
+  std::vector<BiquadCoeffs> sos;
+  sos.reserve(static_cast<size_t>(n_sections));
+  const BiquadCoeffs section = design_bandpass(f0, band_q, sr);
+  for (int k = 0; k < n_sections; ++k) {
+    sos.push_back(section);
+  }
+  return sos;
+}
+
+/// @brief Applies a cascade of biquad bandpass sections to @p y. Each section keeps its
+///        own state so the chain is a true higher-order filter, not a repeated 2nd order.
+std::vector<double> apply_cascade(const float* y, size_t n, const std::vector<BiquadCoeffs>& sos) {
+  std::vector<double> out(n);
+  std::vector<BiquadState> st(sos.size());
   for (size_t i = 0; i < n; ++i) {
-    double x0 = static_cast<double>(y[i]);
-    double y0 = c.b0 * x0 + c.b1 * x1 + c.b2 * x2 - c.a1 * y1 - c.a2 * y2;
-    out[i] = y0;
-    x2 = x1;
-    x1 = x0;
-    y2 = y1;
-    y1 = y0;
+    double v = static_cast<double>(y[i]);
+    for (size_t s = 0; s < sos.size(); ++s) {
+      const BiquadCoeffs& c = sos[s];
+      BiquadState& z = st[s];
+      const double x0 = v;
+      const double y0 = c.b0 * x0 + c.b1 * z.x1 + c.b2 * z.x2 - c.a1 * z.y1 - c.a2 * z.y2;
+      z.x2 = z.x1;
+      z.x1 = x0;
+      z.y2 = z.y1;
+      z.y1 = y0;
+      v = y0;
+    }
+    out[i] = v;
   }
   return out;
 }
@@ -87,6 +128,9 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
   }
   if (config.n_filters <= 0) throw std::invalid_argument("iirt: n_filters must be positive");
   if (config.Q <= 0.0f) throw std::invalid_argument("iirt: Q must be positive");
+  if (config.filter_order < 2 || config.filter_order % 2 != 0) {
+    throw std::invalid_argument("iirt: filter_order must be even and >= 2");
+  }
   if (n_samples == 0 || config.n_filters == 0) return {};
 
   const double tuning_factor = std::pow(2.0, static_cast<double>(config.tuning) / 12.0);
@@ -110,12 +154,18 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
   for (int i = 0; i < config.n_filters; ++i) {
     double fc = centers[i];
     std::vector<float> row;
-    if (fc >= nyquist || fc <= 0.0) {
-      // Out of band — zeros (band stays unused).
+    std::vector<BiquadCoeffs> sos =
+        (fc < nyquist && fc > 0.0) ? design_butterworth_bandpass(fc, static_cast<double>(config.Q),
+                                                                 sr, config.filter_order)
+                                   : std::vector<BiquadCoeffs>{};
+    const bool stable =
+        !sos.empty() &&
+        std::all_of(sos.begin(), sos.end(), [](const BiquadCoeffs& c) { return is_stable(c); });
+    if (!stable) {
+      // Out of band or numerically unstable design — leave the band unused (zeros).
       row.assign(n_frames_global > 0 ? n_frames_global : 1, 0.0f);
     } else {
-      BiquadCoeffs c = design_bandpass(fc, config.Q, sr);
-      std::vector<double> band = apply_bandpass(y, n_samples, c);
+      std::vector<double> band = apply_cascade(y, n_samples, sos);
       row = frame_rms(band, config.win_length, config.hop_length, config.center);
     }
     if (n_frames_global == 0) n_frames_global = static_cast<int>(row.size());
@@ -134,7 +184,6 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
       out[static_cast<size_t>(i) * n_frames_global + t] = row[t];
     }
   }
-  (void)config.filter_order;  // 2nd-order RBJ section per band is implemented.
   return out;
 }
 

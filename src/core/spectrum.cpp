@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "core/fft.h"
+#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -13,8 +14,6 @@
 namespace sonare {
 
 namespace {
-
-using constants::kTwoPiD;
 
 /// @brief Pads signal with zeros for centered STFT.
 /// @details Uses constant zero padding.
@@ -25,43 +24,6 @@ std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
   std::copy(data, data + size, padded.begin() + pad_length);
 
   return padded;
-}
-
-std::vector<float> create_fft_window(WindowType type, int length) {
-  if (length <= 1) {
-    return std::vector<float>(length, 1.0f);
-  }
-
-  std::vector<float> window(length, 1.0f);
-  switch (type) {
-    case WindowType::Hann:
-      for (int i = 0; i < length; ++i) {
-        double phase = kTwoPiD * static_cast<double>(i) / static_cast<double>(length);
-        window[i] = static_cast<float>(0.5 * (1.0 - std::cos(phase)));
-      }
-      break;
-    case WindowType::Hamming:
-      for (int i = 0; i < length; ++i) {
-        double phase = kTwoPiD * static_cast<double>(i) / static_cast<double>(length);
-        window[i] = static_cast<float>(0.54 - 0.46 * std::cos(phase));
-      }
-      break;
-    case WindowType::Blackman: {
-      constexpr double a0 = 0.42;
-      constexpr double a1 = 0.5;
-      constexpr double a2 = 0.08;
-      for (int i = 0; i < length; ++i) {
-        double t = static_cast<double>(i) / static_cast<double>(length);
-        window[i] =
-            static_cast<float>(a0 - a1 * std::cos(kTwoPiD * t) + a2 * std::cos(2.0 * kTwoPiD * t));
-      }
-      break;
-    }
-    case WindowType::Rectangular:
-      break;
-  }
-
-  return window;
 }
 
 }  // namespace
@@ -101,8 +63,8 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
-  // Get cached window
-  std::vector<float> window = create_fft_window(config.window, win_length);
+  // Get cached window (periodic for STFT, matching librosa/scipy fftbins=True).
+  const std::vector<float>& window = get_window_cached(config.window, win_length, true);
 
   /// Pad window to n_fft if necessary
   std::vector<float> padded_window(n_fft, 0.0f);
@@ -248,7 +210,7 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   }
 
   // Get cached synthesis window matching the analysis window length
-  std::vector<float> win_short = create_fft_window(window_type, win_length_);
+  const std::vector<float>& win_short = get_window_cached(window_type, win_length_, true);
 
   // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
   std::vector<float> window(n_fft_, 0.0f);
@@ -482,7 +444,7 @@ void build_reassignment_windows(const StftConfig& config, std::vector<float>& pa
                                 double& half_n) {
   const int n_fft = config.n_fft;
   const int win_length = config.actual_win_length();
-  const std::vector<float> window = create_fft_window(config.window, win_length);
+  const std::vector<float>& window = get_window_cached(config.window, win_length, true);
   const int win_offset = (n_fft - win_length) / 2;
   padded_window.assign(n_fft, 0.0f);
   t_window.assign(n_fft, 0.0f);
@@ -556,8 +518,8 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
       const std::complex<float> r_time = Stw[idx] / S;
       out.times[idx] = center_time + r_time.real() * sample_to_sec;
       const std::complex<float> r_freq = Sdw[idx] / S;
-      const float df_hz =
-          -r_freq.imag() * static_cast<float>(sr) / static_cast<float>(constants::kTwoPi);
+      const float df_hz = static_cast<float>(-static_cast<double>(r_freq.imag()) *
+                                             static_cast<double>(sr) / constants::kTwoPiD);
       out.frequencies[idx] = center_freq + df_hz;
     }
   }
@@ -604,8 +566,8 @@ std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& co
         continue;
       }
       const std::complex<float> r_freq = Sdw[idx] / S;
-      const float df_hz =
-          -r_freq.imag() * static_cast<float>(sr) / static_cast<float>(constants::kTwoPi);
+      const float df_hz = static_cast<float>(-static_cast<double>(r_freq.imag()) *
+                                             static_cast<double>(sr) / constants::kTwoPiD);
       freqs[idx] = center_freq + df_hz;
     }
   }
