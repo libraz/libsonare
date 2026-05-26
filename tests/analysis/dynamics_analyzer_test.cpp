@@ -3,6 +3,7 @@
 
 #include "analysis/dynamics_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -114,6 +115,28 @@ TEST_CASE("DynamicsAnalyzer dynamic range", "[dynamics_analyzer]") {
 
   // Dynamic audio should have larger dynamic range
   REQUIRE(dyn_analyzer.dynamic_range_db() > const_analyzer.dynamic_range_db());
+}
+
+TEST_CASE("DynamicsAnalyzer interpolates short percentile sets", "[dynamics_analyzer]") {
+  constexpr int sr = 1000;
+  constexpr int window = 100;
+  std::vector<float> samples;
+  for (float amp : {0.1f, 0.2f, 0.3f, 0.4f, 0.5f}) {
+    samples.insert(samples.end(), window, amp);
+  }
+
+  DynamicsConfig config;
+  config.window_sec = 0.1f;
+  config.hop_length = window;
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+  DynamicsAnalyzer analyzer(audio, config);
+
+  const auto& curve = analyzer.loudness_curve().rms_db;
+  REQUIRE(curve.size() == 5);
+  const float min_to_max =
+      *std::max_element(curve.begin(), curve.end()) - *std::min_element(curve.begin(), curve.end());
+  REQUIRE(analyzer.dynamic_range_db() > 0.0f);
+  REQUIRE(analyzer.dynamic_range_db() < min_to_max);
 }
 
 TEST_CASE("DynamicsAnalyzer is_compressed", "[dynamics_analyzer]") {

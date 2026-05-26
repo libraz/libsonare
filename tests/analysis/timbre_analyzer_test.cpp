@@ -209,6 +209,22 @@ TEST_CASE("TimbreAnalyzer config options", "[timbre_analyzer]") {
   REQUIRE(timbre.brightness <= 1.0f);
 }
 
+TEST_CASE("TimbreAnalyzer tolerates missing MFCC frames from precomputed features",
+          "[timbre_analyzer]") {
+  Audio audio = create_sine(440.0f);
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  MelSpectrogram empty_mel;
+
+  TimbreAnalyzer analyzer(spec, empty_mel);
+
+  REQUIRE(analyzer.brightness() >= 0.0f);
+  REQUIRE(analyzer.complexity() == 0.0f);
+  REQUIRE_FALSE(analyzer.timbre_over_time().empty());
+}
+
 TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
   // Pure sine has low complexity
   Audio sine = create_sine(440.0f);

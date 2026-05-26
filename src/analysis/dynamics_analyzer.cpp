@@ -16,6 +16,15 @@ namespace {
 /// @details Uncompressed program material typically exhibits a crest factor well above
 ///          ~8 dB; aggressive limiting/compression collapses peaks toward the RMS level.
 constexpr float kCompressedCrestFactorDb = 8.0f;
+
+float percentile_sorted(const std::vector<float>& sorted, float percentile) {
+  if (sorted.empty()) return 0.0f;
+  const float position = std::clamp(percentile, 0.0f, 1.0f) * static_cast<float>(sorted.size() - 1);
+  const size_t lo = static_cast<size_t>(position);
+  const size_t hi = std::min(lo + 1, sorted.size() - 1);
+  const float frac = position - static_cast<float>(lo);
+  return sorted[lo] * (1.0f - frac) + sorted[hi] * frac;
+}
 }  // namespace
 
 DynamicsAnalyzer::DynamicsAnalyzer(const Audio& audio, const DynamicsConfig& config)
@@ -88,12 +97,9 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     std::vector<float> sorted_rms = rms_values;
     std::sort(sorted_rms.begin(), sorted_rms.end());
 
-    // Dynamic range: difference between 95th and 10th percentile
-    size_t p10_idx = sorted_rms.size() / 10;
-    size_t p95_idx = sorted_rms.size() * 95 / 100;
-
-    float p10 = sorted_rms[p10_idx];
-    float p95 = sorted_rms[p95_idx];
+    // Dynamic range: difference between interpolated 95th and 10th percentiles.
+    const float p10 = percentile_sorted(sorted_rms, 0.10f);
+    const float p95 = percentile_sorted(sorted_rms, 0.95f);
 
     dynamics_.dynamic_range_db = p95 - p10;
   } else {

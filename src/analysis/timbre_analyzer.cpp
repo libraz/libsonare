@@ -70,13 +70,22 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   spectral_flux_ = sonare::spectral_flux(spec);
 
   // Compute MFCC for complexity analysis
-  auto mfcc = mel_spec.mfcc(config_.n_mfcc);
+  const int n_mfcc = std::max(0, config_.n_mfcc);
 
   // Compute MFCC variance for complexity
-  mfcc_variance_.resize(config_.n_mfcc, 0.0f);
-  int mfcc_frames = mel_spec.n_frames();
+  mfcc_variance_.resize(static_cast<size_t>(n_mfcc), 0.0f);
+  const int mfcc_frames = mel_spec.n_frames();
+  if (n_mfcc <= 0 || mfcc_frames <= 0 || mel_spec.n_mels() < n_mfcc) {
+    analyze();
+    return;
+  }
+  auto mfcc = mel_spec.mfcc(n_mfcc);
+  if (mfcc.size() < static_cast<size_t>(n_mfcc * mfcc_frames)) {
+    analyze();
+    return;
+  }
 
-  for (int c = 0; c < config_.n_mfcc; ++c) {
+  for (int c = 0; c < n_mfcc; ++c) {
     float mean = 0.0f;
     for (int f = 0; f < mfcc_frames; ++f) {
       mean += mfcc[c * mfcc_frames + f];
