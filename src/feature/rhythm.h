@@ -24,7 +24,7 @@ struct TempogramConfig {
 /// @brief Onset autocorrelation tempogram.
 /// @details Local autocorrelation of the onset envelope. Mirrors
 ///          librosa.feature.tempogram (mode='cosine' is not implemented; this
-///          returns the unbiased autocorrelation matrix as librosa default).
+///          returns the biased autocorrelation matrix used by librosa default).
 /// @param onset_envelope Pre-computed onset strength envelope (frames per
 ///        hop). Length must be > 0.
 /// @param sr Sample rate (required to scale tempo axis when consumed by
