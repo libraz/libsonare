@@ -7,6 +7,7 @@
 namespace sonare::mastering::common {
 namespace {
 
+// PSD floor keeps recursive estimators positive and log/division safe.
 constexpr float kFloor = 1.0e-12f;
 constexpr float kMcraSignalThreshold = 3.0f;
 constexpr float kImcraSignalThreshold = 4.6f;

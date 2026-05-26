@@ -30,6 +30,8 @@ void Gate::prepare(double sample_rate, int max_block_size) {
     hpf_a1_ = hpf.a1;
   }
   prepared_ = true;
+  hpf_x1_.assign(2, 0.0f);
+  hpf_y1_.assign(2, 0.0f);
   reset();
 }
 

@@ -147,6 +147,12 @@ float gain_mmse_stsa(double ksi, double gamma_post) {
   const double nu = ksi * gamma_post / (1.0 + ksi);
   if (nu < 1e-12) return 0.0f;
   const double half_nu = 0.5 * nu;
+  if (half_nu > 30.0) {
+    const double envelope = (1.0 + 4.0 * half_nu) / std::sqrt(2.0 * kPiD * half_nu);
+    const double prefactor = std::sqrt(kPiD) * 0.5 * std::sqrt(nu) / gamma_post;
+    const double gain = prefactor * envelope;
+    return static_cast<float>(std::isfinite(gain) ? gain : 1.0);
+  }
   // Series for I0 and I1 (accurate for small arguments, which is the common case).
   double i0 = 1.0;
   double i1 = 0.0;
@@ -163,7 +169,8 @@ float gain_mmse_stsa(double ksi, double gamma_post) {
   }
   const double envelope = std::exp(-half_nu) * ((1.0 + nu) * i0 + nu * i1);
   const double prefactor = std::sqrt(kPiD) * 0.5 * std::sqrt(nu) / gamma_post;
-  return static_cast<float>(prefactor * envelope);
+  const double gain = prefactor * envelope;
+  return static_cast<float>(std::isfinite(gain) ? gain : 1.0);
 }
 
 double speech_presence_probability(double ksi, double gamma_post) {

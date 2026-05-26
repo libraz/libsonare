@@ -488,6 +488,22 @@ TEST_CASE("VocalRider validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(VocalRider({-18.0f, 6.0f, 6.0f, -1.0f, 500.0f, 0.0f}));
 }
 
+TEST_CASE("VocalRider unlinked detection allocates per-channel gain state",
+          "[mastering][dynamics]") {
+  VocalRiderConfig config;
+  config.linked_detection = false;
+  VocalRider rider(config);
+  rider.prepare(48000.0, 128);
+
+  std::vector<float> left(128, 0.2f);
+  std::vector<float> right(128, 0.05f);
+  float* channels[] = {left.data(), right.data()};
+
+  REQUIRE_NOTHROW(rider.process(channels, 2, 128));
+  REQUIRE(std::isfinite(left.front()));
+  REQUIRE(std::isfinite(right.front()));
+}
+
 TEST_CASE("SidechainRouter ducks from an external detector", "[mastering][dynamics]") {
   SidechainRouter router({-30.0f, 4.0f, 0.0f, 20.0f, 18.0f});
   router.prepare(48000.0, 1024);
@@ -514,6 +530,8 @@ TEST_CASE("SidechainRouter validates configuration and sidechain buffers",
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, -1.0f}));
   REQUIRE_THROWS(
       SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 90.0f, false, false, -1.0f}));
+  REQUIRE_NOTHROW(
+      SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 0.0f, false, false, 0.0f}));
 
   SidechainRouter router;
   REQUIRE_THROWS(router.set_sidechain(nullptr, 1, 128));

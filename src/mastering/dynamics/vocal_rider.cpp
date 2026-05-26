@@ -170,10 +170,14 @@ float VocalRider::coeff(double sample_rate, float ms) {
 
 void VocalRider::ensure_followers(int num_channels) {
   if (followers_.size() == static_cast<size_t>(num_channels)) {
+    if (unlinked_gain_state_db_.size() != static_cast<size_t>(num_channels)) {
+      unlinked_gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
+    }
     return;
   }
 
   followers_.assign(static_cast<size_t>(num_channels), {});
+  unlinked_gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }

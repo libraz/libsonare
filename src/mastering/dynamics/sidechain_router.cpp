@@ -204,7 +204,8 @@ bool SidechainRouter::set_parameter(unsigned int param_id, float value) {
 
 void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
   if (!(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
-      config.range_db < 0.0f || config.sidechain_hpf_hz <= 0.0f || config.lookahead_ms < 0.0f) {
+      config.range_db < 0.0f || config.lookahead_ms < 0.0f ||
+      (config.sidechain_hpf_enabled && config.sidechain_hpf_hz <= 0.0f)) {
     throw std::invalid_argument("invalid sidechain router configuration");
   }
 }

@@ -51,6 +51,8 @@ void Compressor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   update_coefficients();
+  hpf_x1_.assign(2, 0.0f);
+  hpf_y1_.assign(2, 0.0f);
   reset();
 }
 
