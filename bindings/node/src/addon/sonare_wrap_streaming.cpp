@@ -580,9 +580,6 @@ Napi::Value StreamingEqualizerWrap::ProcessMono(const Napi::CallbackInfo& info) 
     std::memcpy(out_arr.Data(), typed.Data(), length * sizeof(float));
     float* channels[] = {out_arr.Data()};
     eq_->process(channels, 1, static_cast<int>(length));
-    sidechain_left_.Reset();
-    sidechain_right_.Reset();
-    sidechain_channels_ = {};
   }
   return out_arr;
   SONARE_NODE_CATCH(env)
@@ -615,9 +612,6 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
     std::memcpy(right_out.Data(), right.Data(), length * sizeof(float));
     float* channels[] = {left_out.Data(), right_out.Data()};
     eq_->process(channels, 2, static_cast<int>(length));
-    sidechain_left_.Reset();
-    sidechain_right_.Reset();
-    sidechain_channels_ = {};
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", left_out);
