@@ -228,7 +228,7 @@ std::vector<float> suppress_stationary_noise_spectral(const float* samples, size
   }
 
   for (size_t i = 0; i < size; ++i) {
-    if (norm[i] > 1e-8f) {
+    if (norm[i] > constants::kSpectrumEpsilon) {
       output[i] /= norm[i];
     } else {
       output[i] = samples[i];

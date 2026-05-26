@@ -158,7 +158,7 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
   MelConfig mel_config;
   mel_config.n_fft = config.n_fft;
   mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = 128;
+  mel_config.n_mels = constants::kDefaultNMels;
 
   OnsetConfig onset_config;
   onset_config.lag = 1;

@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "feature/spectral.h"
+#include "util/constants.h"
 
 namespace sonare {
 
@@ -44,7 +45,7 @@ std::vector<float> remix(const float* y, std::size_t n,
 
   std::vector<int> zeros;
   if (align_zeros) {
-    zeros = zero_crossings(y, n, 1e-10f, false, true, true);
+    zeros = zero_crossings(y, n, constants::kEpsilon, false, true, true);
     // Force end-of-signal onto zeros (mirrors librosa).
     zeros.push_back(static_cast<int>(n));
   }

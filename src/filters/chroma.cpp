@@ -9,10 +9,6 @@
 
 namespace sonare {
 
-namespace {
-constexpr float kC1Hz = 32.70319566257483f;  // C1 frequency in Hz
-}
-
 int hz_to_pitch_class(float hz, float tuning) {
   if (hz <= 0.0f) {
     return -1;
@@ -46,7 +42,7 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
   int n_chroma = config.n_chroma;
 
   // Minimum frequency (default to C1)
-  float fmin = config.fmin > 0.0f ? config.fmin : kC1Hz;
+  float fmin = config.fmin > 0.0f ? config.fmin : constants::kC1Hz;
 
   // Create filterbank [n_chroma x n_bins]
   std::vector<float> filterbank(n_chroma * n_bins, 0.0f);

@@ -27,7 +27,7 @@ float cosine_similarity(const float* a, const float* b, size_t size) {
   }
 
   float denom = std::sqrt(norm_a) * std::sqrt(norm_b);
-  if (denom < 1e-10f) return 0.0f;
+  if (denom < constants::kEpsilon) return 0.0f;
   return dot / denom;
 }
 
@@ -50,7 +50,7 @@ float pearson_correlation(const float* a, const float* b, size_t size) {
   }
 
   float denom = std::sqrt(den_a * den_b);
-  if (denom < 1e-10f) return 0.0f;
+  if (denom < constants::kEpsilon) return 0.0f;
   return num / denom;
 }
 
@@ -121,7 +121,7 @@ void compute_autocorrelation(const float* input, int n, int max_lag, float* outp
     var += diff * diff;
   }
 
-  if (var < 1e-10f) {
+  if (var < constants::kEpsilon) {
     return;
   }
 

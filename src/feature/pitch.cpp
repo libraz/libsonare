@@ -189,7 +189,7 @@ std::vector<float> yin_cmndf(const std::vector<float>& diff) {
   float running_sum = 0.0f;
   for (size_t tau = 1; tau < diff.size(); ++tau) {
     running_sum += diff[tau];
-    if (running_sum > 1e-10f) {
+    if (running_sum > constants::kEpsilon) {
       cmndf[tau] = diff[tau] * tau / running_sum;
     } else {
       cmndf[tau] = 1.0f;
@@ -631,7 +631,7 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
       // Quadratic max value at vertex.
       float denom = a - 2.0f * b + c;
       float peak_mag = b;
-      if (std::abs(denom) > 1e-10f) {
+      if (std::abs(denom) > constants::kEpsilon) {
         peak_mag = b - 0.25f * (a - c) * shift;
       }
       out.magnitudes[k * n_frames + t] = peak_mag;

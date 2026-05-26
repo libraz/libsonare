@@ -312,7 +312,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
 const MelSpectrogram& MusicAnalyzer::mel_spectrogram() {
   if (!mel_spectrogram_) {
     MelFilterConfig mel_filter_config;
-    mel_filter_config.n_mels = 128;
+    mel_filter_config.n_mels = constants::kDefaultNMels;
     mel_spectrogram_ = std::make_unique<MelSpectrogram>(
         MelSpectrogram::from_spectrogram(spectrogram(), analysis_sr_, mel_filter_config));
   }
