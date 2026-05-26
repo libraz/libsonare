@@ -134,7 +134,6 @@ add_executable(sonare_tests
   librosa/sequence_test.cpp
   librosa/decompose_test.cpp
   librosa/reassigned_test.cpp
-  cli/cli_test.cpp
 )
 
 target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt sonare_automation sonare_engine Catch2::Catch2WithMain)
@@ -226,6 +225,13 @@ if(BUILD_VOICE_CHANGER)
     SONARE_WITH_PITCH_EDITOR=1
     SONARE_WITH_VOICE_CHANGER=1
   )
+endif()
+
+# The CLI tests shell out to the built `sonare` binary, which only exists when
+# the CLI is built. Register them only then so they do not fail with exit 127
+# under -DBUILD_CLI=OFF (e.g. CI's native build matrix).
+if(BUILD_CLI AND NOT BUILD_WASM)
+  target_sources(sonare_tests PRIVATE cli/cli_test.cpp)
 endif()
 
 include(CTest)

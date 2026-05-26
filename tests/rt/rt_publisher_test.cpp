@@ -1,5 +1,7 @@
 #include "rt/rt_publisher.h"
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -126,17 +128,30 @@ TEST_CASE("RtPublisher concurrent publish/acquire is torn-read and leak free", "
 }
 
 TEST_CASE("RtSnapshot concurrent readers always see a valid pointer", "[rt][publisher]") {
-  constexpr int kIterations = 100000;
+  using Holder = sonare::rt::RtSnapshot<CountedSnapshot>;
+  constexpr uint64_t kIterations = 20000;
+  // RtSnapshot keeps only kRetain past generations alive (its documented
+  // contract: a reader must finish using a loaded pointer before kRetain further
+  // publishes occur). Flow-control the producer so it never runs more than
+  // kRetain/2 generations ahead of the slowest reader's last-observed value.
+  // This bounds the in-flight window regardless of thread scheduling (so the
+  // test is robust even when readers are starved under a parallel test run),
+  // while still exercising the concurrent lock-free load path.
+  constexpr uint64_t kLead = Holder::kRetain / 2;
+
   CountedSnapshot::live.store(0);
   CountedSnapshot::destroyed.store(0);
 
-  sonare::rt::RtSnapshot<CountedSnapshot> snapshot_holder;
+  Holder snapshot_holder;
   snapshot_holder.publish(make_snapshot(1));
 
   std::atomic<bool> producer_done{false};
   std::atomic<bool> bad_read{false};
+  std::array<std::atomic<uint64_t>, 2> reader_progress{};
+  reader_progress[0].store(1, std::memory_order_relaxed);
+  reader_progress[1].store(1, std::memory_order_relaxed);
 
-  auto reader = [&] {
+  auto reader = [&](int id) {
     while (!producer_done.load(std::memory_order_acquire)) {
       const CountedSnapshot* snapshot = snapshot_holder.load();
       // The control thread keeps kRetain generations alive, so a loaded pointer
@@ -145,15 +160,26 @@ TEST_CASE("RtSnapshot concurrent readers always see a valid pointer", "[rt][publ
         bad_read.store(true, std::memory_order_relaxed);
         return;
       }
+      // Report the generation just observed so the producer can avoid lapping
+      // the retention window ahead of this reader.
+      reader_progress[static_cast<size_t>(id)].store(snapshot->value, std::memory_order_relaxed);
     }
   };
 
-  std::thread reader_a(reader);
-  std::thread reader_b(reader);
+  std::thread reader_a(reader, 0);
+  std::thread reader_b(reader, 1);
 
   std::thread producer([&] {
-    for (int i = 2; i <= kIterations; ++i) {
-      snapshot_holder.publish(make_snapshot(static_cast<uint64_t>(i)));
+    for (uint64_t i = 2; i <= kIterations; ++i) {
+      // Wait until the slowest reader is within kLead generations before
+      // publishing, so the slot a reader may currently hold is never reclaimed.
+      while (!bad_read.load(std::memory_order_relaxed)) {
+        const uint64_t slowest = std::min(reader_progress[0].load(std::memory_order_relaxed),
+                                          reader_progress[1].load(std::memory_order_relaxed));
+        if (i - slowest < kLead) break;
+        std::this_thread::yield();
+      }
+      snapshot_holder.publish(make_snapshot(i));
     }
     producer_done.store(true, std::memory_order_release);
   });
@@ -165,5 +191,5 @@ TEST_CASE("RtSnapshot concurrent readers always see a valid pointer", "[rt][publ
   REQUIRE_FALSE(bad_read.load(std::memory_order_relaxed));
   // The current snapshot is always valid after publishing completes.
   REQUIRE(snapshot_holder.load() != nullptr);
-  REQUIRE(snapshot_holder.load()->value == static_cast<uint64_t>(kIterations));
+  REQUIRE(snapshot_holder.load()->value == kIterations);
 }
