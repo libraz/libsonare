@@ -74,6 +74,16 @@ size_t consume_events(Lane& lane, int64_t block_start, int num_samples,
 }
 
 template <size_t Capacity>
+void sort_events_by_offset(std::array<AutomationBlockEvent, Capacity>& events, size_t count) {
+  std::sort(events.begin(), events.begin() + static_cast<std::ptrdiff_t>(count),
+            [](const AutomationBlockEvent& lhs, const AutomationBlockEvent& rhs) {
+              if (lhs.offset != rhs.offset) return lhs.offset < rhs.offset;
+              return static_cast<int>(lhs.event.target.kind) <
+                     static_cast<int>(rhs.event.target.kind);
+            });
+}
+
+template <size_t Capacity>
 int next_event_offset(const std::array<AutomationBlockEvent, Capacity>& events, size_t count,
                       size_t index, int fallback) {
   return index < count ? events[index].offset : fallback;
@@ -138,6 +148,9 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
+  for (auto& lane : send_automation_) {
+    if (lane) lane->discard_before(block_start);
+  }
   if (num_channels > kMaxStackChannels) {
     process_unsegmented(channels, num_channels, num_samples);
     return;
@@ -152,8 +165,16 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   const size_t pan_count = consume_events(pan_automation_, block_start, num_samples, pan_events);
   const size_t width_count =
       consume_events(width_automation_, block_start, num_samples, width_events);
-  const size_t insert_count =
-      consume_events(insert_automation_, block_start, num_samples, insert_events);
+  size_t insert_count = 0;
+  for (auto& lane : insert_automation_) {
+    if (!lane.lane) continue;
+    lane.lane->consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
+      if (insert_count < insert_events.size()) {
+        insert_events[insert_count++] = event;
+      }
+    });
+  }
+  sort_events_by_offset(insert_events, insert_count);
 
   if (fader_count == 0 && pan_count == 0 && width_count == 0 && insert_count == 0) {
     process_unsegmented(channels, num_channels, num_samples);
@@ -396,6 +417,15 @@ void ChannelStrip::reset() {
   for (auto& send : sends_) {
     send->reset();
   }
+  fader_automation_.clear();
+  pan_automation_.clear();
+  width_automation_.clear();
+  for (auto& lane : insert_automation_) {
+    if (lane.lane) lane.lane->clear();
+  }
+  for (auto& lane : send_automation_) {
+    if (lane) lane->clear();
+  }
   goniometer_.reset();
   zero_taps(pre_tap_, kPreparedChannels, max_block_size_);
   zero_taps(post_tap_, kPreparedChannels, max_block_size_);
@@ -487,7 +517,13 @@ bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigne
   event.target.kind = AutomationTargetKind::InsertParameter;
   event.target.insert_index = insert_index;
   event.target.param_id = param_id;
-  return insert_automation_.push(event);
+  for (auto& lane : insert_automation_) {
+    if (lane.target == event.target && lane.lane) {
+      return lane.lane->push(event);
+    }
+  }
+  insert_automation_.push_back({event.target, std::make_unique<AutomationLane>()});
+  return insert_automation_.back().lane->push(event);
 }
 
 void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept {

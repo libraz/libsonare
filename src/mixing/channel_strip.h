@@ -183,12 +183,17 @@ class ChannelStrip : public rt::ProcessorBase {
   std::vector<std::unique_ptr<rt::ProcessorBase>> pre_inserts_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> post_inserts_;
   std::vector<InsertSidechain> insert_sidechains_;
+  struct InsertAutomationLane {
+    AutomationTarget target{};
+    std::unique_ptr<AutomationLane> lane;
+  };
+
   std::vector<std::unique_ptr<SendProcessor>> sends_;
   std::vector<std::unique_ptr<AutomationLane>> send_automation_;
+  std::vector<InsertAutomationLane> insert_automation_;
   AutomationLane fader_automation_;
   AutomationLane pan_automation_;
   AutomationLane width_automation_;
-  AutomationLane insert_automation_;
 
   std::atomic<float> polarity_left_{1.0f};
   std::atomic<float> polarity_right_{1.0f};

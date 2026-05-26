@@ -32,6 +32,27 @@ bool AutomationLane::push(const AutomationEvent& event) noexcept {
   return true;
 }
 
+size_t AutomationLane::discard_before(int64_t sample_pos) noexcept {
+  size_t discarded = 0;
+  for (;;) {
+    const size_t tail = tail_.load(std::memory_order_relaxed);
+    const size_t head = head_.load(std::memory_order_acquire);
+    if (tail == head) {
+      return discarded;
+    }
+
+    const AutomationEvent& event = buffer_[tail];
+    if (event.sample_pos >= sample_pos) {
+      return discarded;
+    }
+
+    active_event_ = event;
+    has_active_event_ = true;
+    tail_.store(increment(tail), std::memory_order_release);
+    ++discarded;
+  }
+}
+
 void AutomationLane::clear() noexcept {
   tail_.store(head_.load(std::memory_order_acquire), std::memory_order_release);
   has_last_pushed_sample_ = false;

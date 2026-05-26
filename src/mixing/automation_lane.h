@@ -15,6 +15,8 @@ namespace sonare::mixing {
 enum class AutomationCurveType {
   Linear,
   Exponential,
+  Hold,
+  SCurve,
 };
 
 enum class AutomationTargetKind {
@@ -54,11 +56,23 @@ inline float interpolate_automation_value(const AutomationEvent& a, const Automa
   const double span = static_cast<double>(b.sample_pos - a.sample_pos);
   if (span <= 0.0) return b.value;
   const double t = std::clamp((sample_pos - static_cast<double>(a.sample_pos)) / span, 0.0, 1.0);
-  if (a.curve == AutomationCurveType::Exponential && a.value > 0.0f && b.value > 0.0f) {
-    return static_cast<float>(
-        std::exp(std::log(a.value) + (std::log(b.value) - std::log(a.value)) * t));
+  switch (a.curve) {
+    case AutomationCurveType::Hold:
+      return a.value;
+    case AutomationCurveType::Exponential:
+      if (a.value > 0.0f && b.value > 0.0f) {
+        return static_cast<float>(
+            std::exp(std::log(a.value) + (std::log(b.value) - std::log(a.value)) * t));
+      }
+      return static_cast<float>(a.value + (b.value - a.value) * t);
+    case AutomationCurveType::SCurve: {
+      const double shaped = t * t * (3.0 - 2.0 * t);
+      return static_cast<float>(a.value + (b.value - a.value) * shaped);
+    }
+    case AutomationCurveType::Linear:
+    default:
+      return static_cast<float>(a.value + (b.value - a.value) * t);
   }
-  return static_cast<float>(a.value + (b.value - a.value) * t);
 }
 
 class AutomationLane {
@@ -68,6 +82,7 @@ class AutomationLane {
   size_t capacity() const noexcept { return capacity_; }
   bool empty() const noexcept;
   bool push(const AutomationEvent& event) noexcept;
+  size_t discard_before(int64_t sample_pos) noexcept;
   void clear() noexcept;
 
   template <typename Callback>
@@ -81,7 +96,7 @@ class AutomationLane {
 
     auto emit_curve_events = [&](const AutomationEvent& start, const AutomationEvent& end,
                                  int64_t emit_start, int64_t emit_end) {
-      if (!(start.target == end.target) || start.curve != AutomationCurveType::Exponential ||
+      if (!(start.target == end.target) || start.curve == AutomationCurveType::Hold ||
           end.sample_pos <= start.sample_pos) {
         return;
       }
@@ -139,7 +154,8 @@ class AutomationLane {
       has_active_event_ = true;
 
       const size_t peek_tail = next_tail;
-      if (peek_tail != head) {
+      const size_t latest_head = head_.load(std::memory_order_acquire);
+      if (peek_tail != latest_head) {
         const AutomationEvent& next_event = buffer_[peek_tail];
         emit_curve_events(event, next_event, event.sample_pos + 1, block_end - 1);
       }

@@ -22,6 +22,28 @@
 
 namespace {
 
+bool parse_automation_curve(int curve, sonare::mixing::AutomationCurveType* out) noexcept {
+  if (!out) {
+    return false;
+  }
+  switch (curve) {
+    case 0:
+      *out = sonare::mixing::AutomationCurveType::Linear;
+      return true;
+    case 1:
+      *out = sonare::mixing::AutomationCurveType::Exponential;
+      return true;
+    case 2:
+      *out = sonare::mixing::AutomationCurveType::Hold;
+      return true;
+    case 3:
+      *out = sonare::mixing::AutomationCurveType::SCurve;
+      return true;
+    default:
+      return false;
+  }
+}
+
 sonare::mixing::PanMode to_pan_mode(int mode) {
   switch (mode) {
     case SONARE_PAN_MODE_BALANCE:
@@ -964,15 +986,8 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::mixing::AutomationCurveType curve_enum;
-  switch (curve) {
-    case 0:
-      curve_enum = sonare::mixing::AutomationCurveType::Linear;
-      break;
-    case 1:
-      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
-      break;
-    default:
-      return SONARE_ERROR_INVALID_PARAMETER;
+  if (!parse_automation_curve(curve, &curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   // ChannelStrip::schedule_insert_automation silently drops out-of-range indices
   // at apply time (it only returns false when its event lane is full), so bound
@@ -995,15 +1010,8 @@ SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t s
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::mixing::AutomationCurveType curve_enum;
-  switch (curve) {
-    case 0:
-      curve_enum = sonare::mixing::AutomationCurveType::Linear;
-      break;
-    case 1:
-      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
-      break;
-    default:
-      return SONARE_ERROR_INVALID_PARAMETER;
+  if (!parse_automation_curve(curve, &curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!strip->strip.schedule_fader_automation(sample_pos, fader_db, curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -1017,15 +1025,8 @@ SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sam
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::mixing::AutomationCurveType curve_enum;
-  switch (curve) {
-    case 0:
-      curve_enum = sonare::mixing::AutomationCurveType::Linear;
-      break;
-    case 1:
-      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
-      break;
-    default:
-      return SONARE_ERROR_INVALID_PARAMETER;
+  if (!parse_automation_curve(curve, &curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!strip->strip.schedule_pan_automation(sample_pos, pan, curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -1039,15 +1040,8 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::mixing::AutomationCurveType curve_enum;
-  switch (curve) {
-    case 0:
-      curve_enum = sonare::mixing::AutomationCurveType::Linear;
-      break;
-    case 1:
-      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
-      break;
-    default:
-      return SONARE_ERROR_INVALID_PARAMETER;
+  if (!parse_automation_curve(curve, &curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!strip->strip.schedule_width_automation(sample_pos, width, curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -1061,15 +1055,8 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::mixing::AutomationCurveType curve_enum;
-  switch (curve) {
-    case 0:
-      curve_enum = sonare::mixing::AutomationCurveType::Linear;
-      break;
-    case 1:
-      curve_enum = sonare::mixing::AutomationCurveType::Exponential;
-      break;
-    default:
-      return SONARE_ERROR_INVALID_PARAMETER;
+  if (!parse_automation_curve(curve, &curve_enum)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!strip->strip.schedule_send_automation(send_index, sample_pos, db, curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;

@@ -126,15 +126,19 @@ TEST_CASE("C-API insert-automation handles bad arguments", "[mixing][automation]
   REQUIRE(sonare_strip_schedule_insert_automation(strip, /*insert_index=*/5, 0, 0, -24.0f, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Unknown curve value.
-  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, /*curve=*/2) ==
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, /*curve=*/99) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Outlandish parameter ids are rejected before they can become silent no-ops.
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 1000000u, 0, -24.0f, /*curve=*/0) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  // Valid linear and exponential curves both succeed.
+  // Valid linear, exponential, hold, and s-curve curves all succeed.
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, /*curve=*/0) ==
           SONARE_OK);
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 128, -24.0f, /*curve=*/1) ==
+          SONARE_OK);
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 256, -24.0f, /*curve=*/2) ==
+          SONARE_OK);
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 384, -24.0f, /*curve=*/3) ==
           SONARE_OK);
 
   sonare_mixer_destroy(mixer);

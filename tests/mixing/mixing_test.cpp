@@ -477,21 +477,23 @@ TEST_CASE("AutomationLane consumes only the requested block and drops stale even
   }
 
   std::vector<sonare::mixing::AutomationBlockEvent> first_block;
-  REQUIRE(lane.consume_block(8, 4, [&](const auto& event) { first_block.push_back(event); }) == 1);
-  REQUIRE(first_block.size() == 1);
+  REQUIRE(lane.consume_block(8, 4, [&](const auto& event) { first_block.push_back(event); }) == 4);
+  REQUIRE(first_block.size() == 4);
   REQUIRE(first_block[0].offset == 0);
   REQUIRE_THAT(first_block[0].event.value, WithinAbs(8.0f, 0.0001f));
+  REQUIRE(first_block[3].offset == 3);
+  REQUIRE_THAT(first_block[3].event.value, WithinAbs(11.0f, 0.0001f));
 
   std::vector<sonare::mixing::AutomationBlockEvent> second_block;
   REQUIRE(lane.consume_block(12, 4, [&](const auto& event) { second_block.push_back(event); }) ==
-          0);
-  REQUIRE(second_block.empty());
+          4);
+  REQUIRE(second_block.size() == 4);
   REQUIRE_FALSE(lane.empty());
 
   REQUIRE(lane.consume_block(16, 1, [&](const auto& event) { second_block.push_back(event); }) ==
           1);
-  REQUIRE(second_block.size() == 1);
-  REQUIRE(second_block[0].offset == 0);
+  REQUIRE(second_block.size() == 5);
+  REQUIRE(second_block.back().offset == 0);
 
   lane.clear();
   REQUIRE(lane.empty());
@@ -527,6 +529,77 @@ TEST_CASE("AutomationLane emits exponential curve events between positive breakp
   REQUIRE(consumed[3].offset == 5);
   REQUIRE(consumed[4].offset == 6);
   REQUIRE_THAT(consumed[2].event.value, WithinAbs(2.0f, 0.0001f));
+}
+
+TEST_CASE("AutomationLane supports linear hold and s-curve interpolation", "[mixing]") {
+  using sonare::mixing::AutomationBlockEvent;
+  using sonare::mixing::AutomationCurveType;
+  using sonare::mixing::AutomationEvent;
+  using sonare::mixing::AutomationLane;
+  using sonare::mixing::AutomationTargetKind;
+
+  auto collect_curve = [](AutomationCurveType curve) {
+    AutomationLane lane(8);
+    AutomationEvent first;
+    first.sample_pos = 0;
+    first.value = 0.0f;
+    first.curve = curve;
+    first.target = {AutomationTargetKind::Fader, 1, 0, 0};
+    AutomationEvent second = first;
+    second.sample_pos = 4;
+    second.value = 1.0f;
+    REQUIRE(lane.push(first));
+    REQUIRE(lane.push(second));
+    std::vector<AutomationBlockEvent> consumed;
+    lane.consume_block(0, 5, [&](const auto& event) { consumed.push_back(event); });
+    return consumed;
+  };
+
+  const auto linear = collect_curve(AutomationCurveType::Linear);
+  REQUIRE(linear.size() == 5);
+  REQUIRE_THAT(linear[2].event.value, WithinAbs(0.5f, 0.0001f));
+
+  const auto hold = collect_curve(AutomationCurveType::Hold);
+  REQUIRE(hold.size() == 2);
+  REQUIRE_THAT(hold[0].event.value, WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(hold[1].event.value, WithinAbs(1.0f, 0.0001f));
+
+  const auto s_curve = collect_curve(AutomationCurveType::SCurve);
+  REQUIRE(s_curve.size() == 5);
+  REQUIRE_THAT(s_curve[1].event.value, WithinAbs(0.15625f, 0.0001f));
+  REQUIRE_THAT(s_curve[2].event.value, WithinAbs(0.5f, 0.0001f));
+  REQUIRE_THAT(s_curve[3].event.value, WithinAbs(0.84375f, 0.0001f));
+}
+
+TEST_CASE("AutomationLane sees a producer push before peeking the next curve event", "[mixing]") {
+  sonare::mixing::AutomationLane lane(4);
+  sonare::mixing::AutomationEvent first;
+  first.sample_pos = 0;
+  first.value = 1.0f;
+  first.curve = sonare::mixing::AutomationCurveType::Exponential;
+  first.target = {sonare::mixing::AutomationTargetKind::Fader, 1, 0, 0};
+  sonare::mixing::AutomationEvent second = first;
+  second.sample_pos = 8;
+  second.value = 16.0f;
+
+  REQUIRE(lane.push(first));
+
+  bool pushed_second = false;
+  std::vector<sonare::mixing::AutomationBlockEvent> consumed;
+  const size_t count = lane.consume_block(0, 8, [&](const auto& event) {
+    consumed.push_back(event);
+    if (!pushed_second && event.event.sample_pos == 0) {
+      pushed_second = true;
+      REQUIRE(lane.push(second));
+    }
+  });
+
+  REQUIRE(pushed_second);
+  REQUIRE(count == 8);
+  REQUIRE(consumed.size() == 8);
+  REQUIRE(consumed.front().offset == 0);
+  REQUIRE(consumed.back().offset == 7);
+  REQUIRE_THAT(consumed[4].event.value, WithinAbs(4.0f, 0.0001f));
 }
 
 TEST_CASE("AutomationLane continues exponential curves across blocks", "[mixing]") {
@@ -968,6 +1041,23 @@ TEST_CASE("ChannelStrip applies fader automation at block sample offsets", "[mix
   REQUIRE(strip.meter_snapshot().seq == 1);
 }
 
+TEST_CASE("ChannelStrip reset clears pending automation lanes", "[mixing]") {
+  std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 4);
+  REQUIRE(strip.schedule_fader_automation(100, -6.0206f));
+  strip.reset();
+  strip.process_at(channels, 2, 4, 100);
+
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
+  }
+}
+
 TEST_CASE("ChannelStrip applies pan and width automation in sample order", "[mixing]") {
   std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
   std::array<float, 6> right{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -1011,6 +1101,26 @@ TEST_CASE("ChannelStrip drives insert parameter automation at sample offsets", "
     REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
     REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
   }
+}
+
+TEST_CASE("ChannelStrip keeps independent insert automation lanes sample-ordered", "[mixing]") {
+  std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(2.0f));
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(3.0f));
+  strip.prepare(48000.0, 4);
+
+  REQUIRE(strip.schedule_insert_automation(1, 0, 101, 5.0f));
+  REQUIRE(strip.schedule_insert_automation(0, 0, 102, 4.0f));
+  strip.process_at(channels, 2, 4, 100);
+
+  REQUIRE_THAT(left[0], WithinAbs(6.0f, 0.0001f));
+  REQUIRE_THAT(left[1], WithinAbs(10.0f, 0.0001f));
+  REQUIRE_THAT(left[2], WithinAbs(20.0f, 0.0001f));
+  REQUIRE_THAT(left[3], WithinAbs(20.0f, 0.0001f));
 }
 
 TEST_CASE("ChannelStrip insert automation boosts a parametric EQ band", "[mixing][eq]") {
@@ -1791,4 +1901,22 @@ TEST_CASE("ChannelStrip applies send automation during mix_send_at", "[mixing]")
     REQUIRE_THAT(send_l[static_cast<size_t>(i)], WithinAbs(0.5f, 0.0001f));
     REQUIRE_THAT(send_r[static_cast<size_t>(i)], WithinAbs(0.5f, 0.0001f));
   }
+}
+
+TEST_CASE("ChannelStrip discards stale send automation even when send is not mixed", "[mixing]") {
+  std::array<float, 1> left{1.0f};
+  std::array<float, 1> right{1.0f};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 1);
+  const size_t send = strip.add_send({0.0f, sonare::mixing::SendTiming::PostFader, 0.0f});
+
+  for (int i = 0; i < 1024; ++i) {
+    REQUIRE(strip.schedule_send_automation(send, i, -6.0f));
+  }
+  REQUIRE_FALSE(strip.schedule_send_automation(send, 1024, -6.0f));
+
+  strip.process_at(channels, 2, 1, 2048);
+  REQUIRE(strip.schedule_send_automation(send, 2048, -3.0f));
 }
