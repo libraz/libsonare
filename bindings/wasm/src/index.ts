@@ -64,8 +64,8 @@ import type {
   StereoAnalysis,
   StftPowerResult,
   StftResult,
-  StreamingPlatform,
   StreamingEqualizerConfig,
+  StreamingPlatform,
   TempogramMode,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
@@ -160,8 +160,8 @@ export type {
   SoloProcessor,
   StereoAnalysis,
   StftResult,
-  StreamingPlatform,
   StreamingEqualizerConfig,
+  StreamingPlatform,
   Timbre,
   TimeSignature,
 } from './public_types';
@@ -356,7 +356,6 @@ export class RealtimeEngine {
     if (!module) {
       throw new Error('Module not initialized. Call init() first.');
     }
-    const wasmModule = module;
     const capabilities = engineCapabilities();
     if (!capabilities.abiCompatible) {
       throw new Error(
@@ -3475,14 +3474,18 @@ export class StreamAnalyzer {
       try {
         this.analyzer = new wasmModule.StreamAnalyzer(...args);
       } catch (error) {
-        if (!isArityError(error)) throw error;
+        if (!isArityError(error)) {
+          throw error;
+        }
         this.analyzer = createLegacy();
       }
     } else {
       try {
         this.analyzer = createLegacy();
       } catch (error) {
-        if (!isArityError(error)) throw error;
+        if (!isArityError(error)) {
+          throw error;
+        }
         this.analyzer = new wasmModule.StreamAnalyzer(...args);
       }
     }

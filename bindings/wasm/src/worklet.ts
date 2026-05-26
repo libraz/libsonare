@@ -2,8 +2,8 @@ import type {
   EngineAutomationPoint,
   EngineClip,
   EngineMarker,
-  EngineMetronomeConfig,
   EngineMeterTelemetry,
+  EngineMetronomeConfig,
   EngineParameterInfo,
   EngineTelemetry,
   MixerRealtimeBuffer,
@@ -278,12 +278,6 @@ interface SharedSpectrumRingWriter {
   capacity: number;
   bands: number;
   recordFloats: number;
-}
-
-interface SharedEngineRing {
-  header: Int32Array;
-  view: DataView;
-  capacity: number;
 }
 
 interface WorkletPort {
@@ -630,8 +624,12 @@ function recordOffset(index: number, capacity: number, recordBytes: number): num
 }
 
 function toBigInt64(value: number | bigint | undefined, fallback: bigint): bigint {
-  if (typeof value === 'bigint') return value;
-  if (typeof value === 'number') return BigInt(Math.trunc(value));
+  if (typeof value === 'bigint') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return BigInt(Math.trunc(value));
+  }
   return fallback;
 }
 
