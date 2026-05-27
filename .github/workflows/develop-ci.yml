@@ -1,0 +1,74 @@
+name: Develop CI
+
+# Fast feedback for day-to-day work on develop: formatting, linting, and a
+# single-platform (Linux/Debug) build + test. The heavy, thorough validation
+# (multi-OS native, ASan/UBSan, coverage, WASM) runs as the pre-release gate in
+# ci.yml on pull requests to main and pushes to main.
+on:
+  push:
+    branches: [develop]
+    tags-ignore: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'NOTICE'
+  pull_request:
+    branches: [develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'NOTICE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' |
+            xargs -0 clang-format --dry-run --Werror
+
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/wasm
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: bindings/wasm/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn lint
+
+  build-and-test:
+    name: Native C++ (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel
