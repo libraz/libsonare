@@ -64,8 +64,13 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 警告設定 (サードパーティに波及させないためターゲット単位で適用)
+# MSVC /W4 suppressions, applied so MSVC matches the warning bar the primary
+# GCC/Clang build enforces (-Wall -Wextra, which intentionally does NOT include
+# -Wconversion): /wd4244 /wd4267 /wd4305 silence double->float / size_t->int /
+# literal narrowing, which this audio library performs deliberately and which
+# GCC/Clang do not flag; /wd4324 is the intentional alignas() padding warning.
 set(SONARE_WARNING_FLAGS
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4324 /external:W0>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4244 /wd4267 /wd4305 /wd4324 /external:W0>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
 )
 
