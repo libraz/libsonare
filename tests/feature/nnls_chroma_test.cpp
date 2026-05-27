@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 
 namespace {
@@ -16,7 +18,7 @@ Audio sine(float freq, float duration, int sr = 22050) {
   std::vector<float> samples(static_cast<size_t>(duration * sr), 0.0f);
   for (size_t i = 0; i < samples.size(); ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = std::sin(2.0f * static_cast<float>(M_PI) * freq * t);
+    samples[i] = std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
   }
   return Audio::from_vector(std::move(samples), sr);
 }

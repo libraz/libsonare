@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -20,7 +22,7 @@ Audio generate_sine(float freq, float duration, int sr = 22050) {
   std::vector<float> samples(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sr;
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
   return Audio::from_vector(std::move(samples), sr);
 }
@@ -32,7 +34,7 @@ Audio generate_chord(const std::vector<float>& freqs, float duration, int sr = 2
   for (float freq : freqs) {
     for (int i = 0; i < n_samples; ++i) {
       float t = static_cast<float>(i) / sr;
-      samples[i] += std::sin(2.0f * M_PI * freq * t) / freqs.size();
+      samples[i] += std::sin(2.0f * sonare::constants::kPiD * freq * t) / freqs.size();
     }
   }
   return Audio::from_vector(std::move(samples), sr);
@@ -311,11 +313,13 @@ TEST_CASE("CQT phase correctness", "[cqt]") {
   // Verify that the phase progresses across frames. librosa's CQT (and our
   // matching implementation) uses a positive-phasor kernel exp(+jω n), which
   // means the bin phase advances by +ω·hop/sr per frame for a pure tone.
-  float expected_phase_diff = 2.0f * M_PI * freq * config.hop_length / sr;
+  float expected_phase_diff = 2.0f * sonare::constants::kPiD * freq * config.hop_length / sr;
 
   // Normalize expected_phase_diff to [-pi, pi]
-  while (expected_phase_diff > M_PI) expected_phase_diff -= 2.0f * M_PI;
-  while (expected_phase_diff < -M_PI) expected_phase_diff += 2.0f * M_PI;
+  while (expected_phase_diff > sonare::constants::kPiD)
+    expected_phase_diff -= 2.0f * sonare::constants::kPiD;
+  while (expected_phase_diff < -sonare::constants::kPiD)
+    expected_phase_diff += 2.0f * sonare::constants::kPiD;
 
   // Check phase progression in steady-state frames (skip edges where windowing effects dominate)
   int start_frame = result.n_frames() / 4;
@@ -335,8 +339,8 @@ TEST_CASE("CQT phase correctness", "[cqt]") {
     float phase_diff = phase1 - phase0;
 
     // Normalize to [-pi, pi]
-    while (phase_diff > M_PI) phase_diff -= 2.0f * M_PI;
-    while (phase_diff < -M_PI) phase_diff += 2.0f * M_PI;
+    while (phase_diff > sonare::constants::kPiD) phase_diff -= 2.0f * sonare::constants::kPiD;
+    while (phase_diff < -sonare::constants::kPiD) phase_diff += 2.0f * sonare::constants::kPiD;
 
     // Phase difference should match expected (with tolerance for windowing effects)
     if (std::abs(phase_diff - expected_phase_diff) < 0.5f) {

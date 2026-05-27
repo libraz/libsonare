@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -51,7 +53,8 @@ Audio create_decay_with_stationary_noise(float rt60_sec, int sample_rate = 48000
     state = state * 1664525u + 1013904223u;
     const float white = static_cast<float>((state >> 8) & 0xffffu) / 32768.0f - 1.0f;
     const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
-    const float hum = 0.020f * std::sin(2.0f * static_cast<float>(M_PI) * 180.0f * t);
+    const float hum =
+        0.020f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 180.0f * t);
     samples[static_cast<size_t>(i)] = std::exp(-decay * t) + hum + white * 0.012f;
   }
   return Audio::from_vector(std::move(samples), sample_rate);
@@ -83,7 +86,8 @@ Audio create_upper_band_free_decay(float rt60_sec, int sample_rate = 48000) {
     const float envelope = std::exp(-decay * t);
     for (float frequency : frequencies) {
       samples[static_cast<size_t>(i)] +=
-          envelope * std::sin(2.0f * static_cast<float>(M_PI) * frequency * t) / 3.0f;
+          envelope * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * frequency * t) /
+          3.0f;
     }
   }
   return Audio::from_vector(std::move(samples), sample_rate);

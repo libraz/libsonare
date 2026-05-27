@@ -8,6 +8,7 @@
 
 #include "core/audio.h"
 #include "feature/mel_spectrogram.h"
+#include "util/constants.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -23,7 +24,7 @@ std::vector<float> create_tone(int sr, float duration, float freq = 440.0f) {
 
   for (size_t i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sr;
-    y[i] = std::sin(2.0f * M_PI * freq * t);
+    y[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return y;

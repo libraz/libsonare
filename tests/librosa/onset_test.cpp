@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "core/audio.h"
+#include "util/constants.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -30,7 +31,7 @@ std::vector<float> create_impulse_train(int sr, float duration) {
     int idx = static_cast<int>(t * sr);
     for (int i = 0; i < window_size && idx + i < static_cast<int>(y.size()); ++i) {
       // Hann window: 0.5 * (1 - cos(2*pi*i/(N-1)))
-      float hann = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (window_size - 1)));
+      float hann = 0.5f * (1.0f - std::cos(2.0f * sonare::constants::kPiD * i / (window_size - 1)));
       y[idx + i] = hann;
     }
   }

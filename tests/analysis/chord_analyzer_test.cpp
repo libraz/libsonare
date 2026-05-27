@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -24,9 +26,9 @@ Audio create_chord(const std::vector<float>& midi_notes, int sr = 22050, float d
     for (int i = 0; i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
       // Add harmonics for richer sound
-      samples[i] += 0.5f * std::sin(2.0f * M_PI * freq * t);
-      samples[i] += 0.25f * std::sin(2.0f * M_PI * freq * 2.0f * t);
-      samples[i] += 0.125f * std::sin(2.0f * M_PI * freq * 3.0f * t);
+      samples[i] += 0.5f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
+      samples[i] += 0.25f * std::sin(2.0f * sonare::constants::kPiD * freq * 2.0f * t);
+      samples[i] += 0.125f * std::sin(2.0f * sonare::constants::kPiD * freq * 3.0f * t);
     }
   }
 

@@ -73,7 +73,8 @@ std::vector<float> generate_chord(const std::vector<float>& freqs, int sample_ra
   float gain = 0.8f / static_cast<float>(freqs.size());
   for (size_t i = 0; i < n_samples; ++i) {
     for (float freq : freqs) {
-      samples[i] += gain * std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+      samples[i] += gain * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i /
+                                    sample_rate);
     }
   }
   return samples;
@@ -86,9 +87,10 @@ std::vector<float> generate_harmonic_chord(const std::vector<float>& freqs, int 
   for (size_t i = 0; i < n_samples; ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
     for (float freq : freqs) {
-      samples[i] += 0.5f * std::sin(2.0f * static_cast<float>(M_PI) * freq * t);
-      samples[i] += 0.25f * std::sin(4.0f * static_cast<float>(M_PI) * freq * t);
-      samples[i] += 0.125f * std::sin(6.0f * static_cast<float>(M_PI) * freq * t);
+      samples[i] += 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+      samples[i] += 0.25f * std::sin(4.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+      samples[i] +=
+          0.125f * std::sin(6.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
     }
   }
   float peak = 0.0f;

@@ -536,8 +536,8 @@ TEST_CASE("Routed mixer applies scene bus inserts", "[mixing][routing]") {
 }
 
 TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixing][routing]") {
-  constexpr int kSr = 48000;
-  constexpr int kBlock = 512;
+  static constexpr int kSr = 48000;
+  static constexpr int kBlock = 512;
 
   auto render = [&](bool with_key) {
     sonare::mixing::api::Scene scene;
@@ -594,8 +594,8 @@ TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixin
 }
 
 TEST_CASE("Routed mixer delivers scene sidechain keys to bus inserts", "[mixing][routing]") {
-  constexpr int kSr = 48000;
-  constexpr int kBlock = 512;
+  static constexpr int kSr = 48000;
+  static constexpr int kBlock = 512;
 
   auto render = [&](bool with_key) {
     sonare::mixing::api::Scene scene;

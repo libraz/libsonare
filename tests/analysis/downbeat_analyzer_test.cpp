@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "analysis/chord_analyzer.h"
+#include "util/constants.h"
 
 using namespace sonare;
 
@@ -47,7 +48,8 @@ Audio make_low_frequency_pulse_audio(const std::vector<Beat>& beats, int sample_
       const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
       const float envelope = 1.0f - static_cast<float>(i) / static_cast<float>(length);
       samples[static_cast<size_t>(center + i)] +=
-          0.8f * envelope * std::sin(2.0f * static_cast<float>(M_PI) * 80.0f * t);
+          0.8f * envelope *
+          std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 80.0f * t);
     }
   }
   return Audio::from_vector(std::move(samples), sample_rate);

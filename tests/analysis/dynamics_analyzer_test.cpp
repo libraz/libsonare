@@ -9,6 +9,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -22,7 +24,7 @@ Audio create_constant_sine(float amplitude, int sr = 22050, float duration = 1.0
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = amplitude * std::sin(2.0f * M_PI * 440.0f * t);
+    samples[i] = amplitude * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -36,8 +38,8 @@ Audio create_dynamic_audio(int sr = 22050, float duration = 2.0f) {
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // Amplitude varies from 0.1 to 0.9
-    float amplitude = 0.5f + 0.4f * std::sin(2.0f * M_PI * 0.5f * t);
-    samples[i] = amplitude * std::sin(2.0f * M_PI * 440.0f * t);
+    float amplitude = 0.5f + 0.4f * std::sin(2.0f * sonare::constants::kPiD * 0.5f * t);
+    samples[i] = amplitude * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -52,7 +54,7 @@ Audio create_compressed_audio(int sr = 22050, float duration = 1.0f) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // Square wave has high peak-to-RMS ratio before compression
     // Using clipped sine as "compressed" signal
-    float val = std::sin(2.0f * M_PI * 440.0f * t);
+    float val = std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
     samples[i] = std::tanh(val * 3.0f) * 0.9f;  // Soft clipping
   }
 

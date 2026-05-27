@@ -17,6 +17,7 @@
 
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::ContainsSubstring;
@@ -35,7 +36,8 @@ void create_test_wav(const std::string& path, float duration = 3.0f, float frequ
 
   for (size_t i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sample_rate;
-    samples[i] = 0.5f * std::sin(2.0f * static_cast<float>(M_PI) * frequency * t);
+    samples[i] =
+        0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * frequency * t);
   }
 
   save_wav(path, samples, sample_rate);

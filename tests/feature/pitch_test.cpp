@@ -9,6 +9,8 @@
 #include <random>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -21,7 +23,7 @@ Audio generate_sine(float freq, float duration, int sr = 22050) {
   std::vector<float> samples(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sr;
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
   return Audio::from_vector(std::move(samples), sr);
 }
@@ -47,7 +49,7 @@ Audio generate_sweep(float freq_start, float freq_end, float duration, int sr = 
     float t = static_cast<float>(i) / n_samples;
     float freq = freq_start + (freq_end - freq_start) * t;
     samples[i] = std::sin(phase);
-    phase += 2.0f * M_PI * freq / sr;
+    phase += 2.0f * sonare::constants::kPiD * freq / sr;
   }
   return Audio::from_vector(std::move(samples), sr);
 }
@@ -75,7 +77,7 @@ TEST_CASE("yin_difference basic", "[pitch]") {
   float freq = 440.0f;
   int sr = 22050;
   for (size_t i = 0; i < frame.size(); ++i) {
-    frame[i] = std::sin(2.0f * M_PI * freq * i / sr);
+    frame[i] = std::sin(2.0f * sonare::constants::kPiD * freq * i / sr);
   }
 
   int expected_period = sr / static_cast<int>(freq);  // ~50

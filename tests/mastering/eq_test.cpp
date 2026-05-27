@@ -733,7 +733,7 @@ TEST_CASE("EqualizerProcessor validates and clears external sidechain buffers", 
 }
 
 TEST_CASE("EqualizerProcessor dynamic auto-threshold is input-gain relative", "[mastering][eq]") {
-  constexpr int sample_rate = 48000;
+  static constexpr int sample_rate = 48000;
 
   auto run = [](float amplitude) {
     EqualizerProcessor eq({1});

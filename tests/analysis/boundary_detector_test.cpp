@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -20,7 +22,7 @@ Audio create_sine(float freq, int sr = 22050, float duration = 1.0f) {
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.5f * std::sin(2.0f * M_PI * freq * t);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -35,16 +37,16 @@ Audio create_two_sections(int sr = 22050, float section_duration = 2.0f) {
   // Section 1: Low frequency tone with harmonics
   for (int i = 0; i < section_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.5f * std::sin(2.0f * M_PI * 220.0f * t);
-    samples[i] += 0.25f * std::sin(2.0f * M_PI * 440.0f * t);
-    samples[i] += 0.125f * std::sin(2.0f * M_PI * 660.0f * t);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 220.0f * t);
+    samples[i] += 0.25f * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
+    samples[i] += 0.125f * std::sin(2.0f * sonare::constants::kPiD * 660.0f * t);
   }
 
   // Section 2: Higher frequency tone with different timbre
   for (int i = section_samples; i < total_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.5f * std::sin(2.0f * M_PI * 880.0f * t);
-    samples[i] += 0.3f * std::sin(2.0f * M_PI * 1760.0f * t);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 880.0f * t);
+    samples[i] += 0.3f * std::sin(2.0f * sonare::constants::kPiD * 1760.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -64,8 +66,8 @@ Audio create_multi_sections(int sr = 22050, float section_duration = 1.5f) {
 
     for (int i = 0; i < section_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
-      samples[start + i] = 0.5f * std::sin(2.0f * M_PI * freq * t);
-      samples[start + i] += 0.25f * std::sin(2.0f * M_PI * freq * 2.0f * t);
+      samples[start + i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
+      samples[start + i] += 0.25f * std::sin(2.0f * sonare::constants::kPiD * freq * 2.0f * t);
     }
   }
 

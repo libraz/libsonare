@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -29,7 +31,7 @@ Audio create_c_major_scale(int sr = 22050, float duration = 2.0f) {
     int start = static_cast<int>(n) * note_samples;
     for (int i = 0; i < note_samples && start + i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
-      samples[start + i] = 0.5f * std::sin(2.0f * M_PI * freqs[n] * t);
+      samples[start + i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freqs[n] * t);
     }
   }
 
@@ -52,7 +54,7 @@ Audio create_a_minor_scale(int sr = 22050, float duration = 2.0f) {
     int start = static_cast<int>(n) * note_samples;
     for (int i = 0; i < note_samples && start + i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
-      samples[start + i] = 0.5f * std::sin(2.0f * M_PI * freqs[n] * t);
+      samples[start + i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freqs[n] * t);
     }
   }
 
@@ -73,7 +75,7 @@ Audio create_low_bass_with_c_major(int sr = 22050, float duration = 2.0f) {
     for (int i = 0; i < n_samples; ++i) {
       const float t = static_cast<float>(i) / static_cast<float>(sr);
       samples[static_cast<size_t>(i)] +=
-          amplitude * std::sin(2.0f * static_cast<float>(M_PI) * freq * t);
+          amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
     }
   }
 

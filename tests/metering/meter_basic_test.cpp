@@ -15,6 +15,7 @@
 #include "metering/spectrum.h"
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -26,7 +27,8 @@ Audio make_sine(float amplitude, int sample_rate = 22050, float duration_sec = 0
   std::vector<float> samples(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
-    samples[i] = amplitude * std::sin(2.0f * static_cast<float>(M_PI) * 440.0f * t);
+    samples[i] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
   }
   return Audio::from_vector(std::move(samples), sample_rate);
 }
@@ -181,8 +183,9 @@ TEST_CASE("phase scope detects anti-phase stereo", "[meter]") {
   REQUIRE_THAT(result.points[0].mid, WithinAbs(0.0f, 0.001f));
   REQUIRE_THAT(result.points[0].side, WithinAbs(std::sqrt(2.0f), 0.001f));
   REQUIRE_THAT(std::abs(result.points[0].angle_rad),
-               WithinAbs(static_cast<float>(M_PI) / 2.0f, 0.001f));
-  REQUIRE_THAT(result.average_abs_angle_rad, WithinAbs(static_cast<float>(M_PI) / 2.0f, 0.001f));
+               WithinAbs(static_cast<float>(sonare::constants::kPiD) / 2.0f, 0.001f));
+  REQUIRE_THAT(result.average_abs_angle_rad,
+               WithinAbs(static_cast<float>(sonare::constants::kPiD) / 2.0f, 0.001f));
 }
 
 TEST_CASE("LUFS returns silence for silent audio", "[meter]") {
@@ -213,11 +216,11 @@ TEST_CASE("LUFS relative gate ignores much quieter tail", "[meter]") {
   std::vector<float> samples(48000 * 2, 0.0f);
   for (size_t i = 0; i < 48000; ++i) {
     const float t = static_cast<float>(i) / 48000.0f;
-    samples[i] = std::sin(2.0f * static_cast<float>(M_PI) * 1000.0f * t);
+    samples[i] = std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
   }
   for (size_t i = 48000; i < samples.size(); ++i) {
     const float t = static_cast<float>(i - 48000) / 48000.0f;
-    samples[i] = 0.01f * std::sin(2.0f * static_cast<float>(M_PI) * 1000.0f * t);
+    samples[i] = 0.01f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
   }
   const Audio mixed = Audio::from_buffer(samples.data(), samples.size(), 48000);
   const Audio loud_only = Audio::from_buffer(samples.data(), 48000, 48000);
@@ -253,7 +256,7 @@ TEST_CASE("LUFS interleaved overlapped short-term path stays finite", "[meter]")
     const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
     const float amplitude = i < n_samples / 2 ? 0.8f : 0.1f;
     samples[static_cast<size_t>(i)] =
-        amplitude * std::sin(2.0f * static_cast<float>(M_PI) * 1000.0f * t);
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
   }
 
   metering::LufsConfig config;  // default block_overlap = 0.75
@@ -286,7 +289,8 @@ TEST_CASE("dynamic range increases with level changes", "[meter]") {
   for (size_t i = 0; i < samples.size(); ++i) {
     const float t = static_cast<float>(i) / 48000.0f;
     const float amplitude = i < samples.size() / 2 ? 0.1f : 0.8f;
-    samples[i] = amplitude * std::sin(2.0f * static_cast<float>(M_PI) * 440.0f * t);
+    samples[i] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
   }
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
 

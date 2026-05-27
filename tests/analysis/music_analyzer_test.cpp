@@ -9,6 +9,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -35,7 +37,7 @@ Audio create_test_audio(int sr = 22050, float duration = 5.0f) {
   // Add some harmonic content
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sr;
-    samples[i] += 0.3f * std::sin(2.0f * M_PI * 440.0f * t);
+    samples[i] += 0.3f * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);

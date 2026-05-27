@@ -9,6 +9,8 @@
 #include <limits>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -21,7 +23,7 @@ Audio generate_sine(float freq, float duration, int sr = 22050) {
   std::vector<float> samples(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sr;
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
   return Audio::from_vector(std::move(samples), sr);
 }
@@ -199,6 +201,9 @@ TEST_CASE("vqt with progress callback", "[vqt]") {
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
 #endif
 
 TEST_CASE("ivqt reconstruction", "[vqt]") {
@@ -217,6 +222,8 @@ TEST_CASE("ivqt reconstruction", "[vqt]") {
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 TEST_CASE("VQT phase correctness", "[vqt]") {
@@ -248,11 +255,13 @@ TEST_CASE("VQT phase correctness", "[vqt]") {
 
   // For a pure tone, the phase difference between consecutive frames should be
   // approximately -2*pi*freq*hop_length/sr (modulo 2*pi).
-  float expected_phase_diff = -2.0f * M_PI * freq * config.hop_length / sr;
+  float expected_phase_diff = -2.0f * sonare::constants::kPiD * freq * config.hop_length / sr;
 
   // Normalize expected_phase_diff to [-pi, pi]
-  while (expected_phase_diff > M_PI) expected_phase_diff -= 2.0f * M_PI;
-  while (expected_phase_diff < -M_PI) expected_phase_diff += 2.0f * M_PI;
+  while (expected_phase_diff > sonare::constants::kPiD)
+    expected_phase_diff -= 2.0f * sonare::constants::kPiD;
+  while (expected_phase_diff < -sonare::constants::kPiD)
+    expected_phase_diff += 2.0f * sonare::constants::kPiD;
 
   // Check phase progression in steady-state frames
   int start_frame = result.n_frames() / 4;
@@ -272,8 +281,8 @@ TEST_CASE("VQT phase correctness", "[vqt]") {
     float phase_diff = phase1 - phase0;
 
     // Normalize to [-pi, pi]
-    while (phase_diff > M_PI) phase_diff -= 2.0f * M_PI;
-    while (phase_diff < -M_PI) phase_diff += 2.0f * M_PI;
+    while (phase_diff > sonare::constants::kPiD) phase_diff -= 2.0f * sonare::constants::kPiD;
+    while (phase_diff < -sonare::constants::kPiD) phase_diff += 2.0f * sonare::constants::kPiD;
 
     // Phase difference should match expected (with tolerance for windowing effects)
     if (std::abs(phase_diff - expected_phase_diff) < 0.5f) {
@@ -475,10 +484,15 @@ TEST_CASE("ivqt respects requested output length", "[vqt][inverse]") {
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
 #endif
   Audio reconstructed = ivqt(result, 4096);
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
   REQUIRE(reconstructed.size() == 4096);

@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
@@ -18,7 +20,8 @@ std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
   size_t n_samples = static_cast<size_t>(sample_rate * duration);
   std::vector<float> samples(n_samples);
   for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] = std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+    samples[i] =
+        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i / sample_rate);
   }
   return samples;
 }
@@ -36,7 +39,7 @@ std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
     // Short click (10ms)
     size_t click_length = static_cast<size_t>(sample_rate * 0.01f);
     for (size_t i = 0; i < click_length && start + i < n_samples; ++i) {
-      samples[start + i] = std::sin(static_cast<float>(M_PI) * i / click_length);
+      samples[start + i] = std::sin(static_cast<float>(sonare::constants::kPiD) * i / click_length);
     }
   }
   return samples;

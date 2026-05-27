@@ -246,7 +246,7 @@ TEST_CASE("RealtimeEngine applies automation at sub-block boundaries", "[engine]
 
 TEST_CASE("RealtimeEngine re-prepare at a new sample rate stays consistent",
           "[engine][realtime][reinit]") {
-  constexpr int kFrames = 128;
+  static constexpr int kFrames = 128;
   sonare::engine::RealtimeEngine engine;
 
   // Stable clip backing storage that outlives both prepare cycles.

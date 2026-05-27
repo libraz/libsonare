@@ -1128,7 +1128,7 @@ TEST_CASE("ChannelStrip insert automation boosts a parametric EQ band", "[mixing
   // gain lives at param id 1 (block-of-3 layout). Automating it from 0 dB to
   // +12 dB must lift the band's output energy, which a no-op set_parameter could
   // not do.
-  constexpr int kN = 4096;
+  static constexpr int kN = 4096;
   auto make_sine = [] {
     std::vector<float> out(kN);
     for (int i = 0; i < kN; ++i) {
@@ -1198,7 +1198,7 @@ TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
 }
 
 TEST_CASE("ChannelStrip reuses mastering EQ as a pre-fader insert", "[mixing]") {
-  constexpr int kN = 512;
+  static constexpr int kN = 512;
   auto make_input = [] {
     std::vector<float> out(kN);
     for (int i = 0; i < kN; ++i) {
@@ -1693,7 +1693,7 @@ TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixin
 }
 
 TEST_CASE("ChannelStrip EQ alters signal and position matters", "[mixing]") {
-  constexpr int kN = 256;
+  static constexpr int kN = 256;
   auto make_input = [](std::vector<float>& l, std::vector<float>& r) {
     for (int i = 0; i < kN; ++i) {
       const float s =
@@ -1782,7 +1782,7 @@ TEST_CASE("ChannelStrip EQ alters signal and position matters", "[mixing]") {
 }
 
 TEST_CASE("ChannelStrip aux sends tap the correct stage", "[mixing]") {
-  constexpr int kN = 128;
+  static constexpr int kN = 128;
   auto make_input = [](std::vector<float>& l, std::vector<float>& r) {
     for (int i = 0; i < kN; ++i) {
       const float s =

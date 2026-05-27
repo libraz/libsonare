@@ -12,6 +12,7 @@
 #include "core/audio.h"
 #include "feature/onset.h"
 #include "feature/rhythm.h"
+#include "util/constants.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -178,9 +179,9 @@ TEST_CASE("cyclic_tempogram folds octave-equivalent tempi", "[tempogram][unit]")
   std::vector<float> env120(512);
   for (int i = 0; i < 512; ++i) {
     env60[static_cast<size_t>(i)] =
-        0.5f + 0.5f * std::sin(2.0f * static_cast<float>(M_PI) * i / 512.0f);
+        0.5f + 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * i / 512.0f);
     env120[static_cast<size_t>(i)] =
-        0.5f + 0.5f * std::sin(4.0f * static_cast<float>(M_PI) * i / 512.0f);
+        0.5f + 0.5f * std::sin(4.0f * static_cast<float>(sonare::constants::kPiD) * i / 512.0f);
   }
 
   auto c60 = cyclic_tempogram(env60, sr, cfg, 60.0f, 60);

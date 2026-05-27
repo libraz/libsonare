@@ -9,6 +9,7 @@
 #include <complex>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -24,7 +25,7 @@ Audio create_sine_audio(float freq, int sr = 22050, float duration = 0.5f) {
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -376,7 +377,7 @@ TEST_CASE("rms_energy silence vs loud", "[spectral]") {
   std::vector<float> loud(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    loud[i] = std::sin(2.0f * M_PI * 440.0f * t);
+    loud[i] = std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   Audio silent_audio = Audio::from_vector(std::move(silent), sr);

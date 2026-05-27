@@ -5,6 +5,9 @@
 #include <memory>
 #include <new>
 #include <vector>
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
 
 #include "automation/automation_engine.h"
 #include "engine/capture.h"
@@ -57,10 +60,31 @@ void* allocate_aligned_bytes(std::size_t size, std::size_t alignment) {
   note_allocation();
   void* ptr = nullptr;
   const std::size_t actual_size = size == 0 ? 1 : size;
-  if (posix_memalign(&ptr, alignment, actual_size) == 0 && ptr != nullptr) {
+#if defined(_WIN32)
+  ptr = _aligned_malloc(actual_size, alignment);
+  if (ptr != nullptr) {
     return ptr;
   }
+#else
+  if (posix_memalign(&ptr, alignment, actual_size) != 0) {
+    ptr = nullptr;
+  }
+  if (ptr != nullptr) {
+    return ptr;
+  }
+#endif
   throw std::bad_alloc();
+}
+
+// Aligned allocations must be released with the matching deallocator: on Windows
+// _aligned_malloc memory requires _aligned_free, whereas posix_memalign memory is
+// freed with std::free.
+void aligned_free(void* ptr) noexcept {
+#if defined(_WIN32)
+  _aligned_free(ptr);
+#else
+  std::free(ptr);
+#endif
 }
 
 class AllocationGuard {
@@ -136,10 +160,10 @@ void operator delete(void* ptr) noexcept { std::free(ptr); }
 void operator delete[](void* ptr) noexcept { std::free(ptr); }
 void operator delete(void* ptr, std::size_t) noexcept { std::free(ptr); }
 void operator delete[](void* ptr, std::size_t) noexcept { std::free(ptr); }
-void operator delete(void* ptr, std::align_val_t) noexcept { std::free(ptr); }
-void operator delete[](void* ptr, std::align_val_t) noexcept { std::free(ptr); }
-void operator delete(void* ptr, std::size_t, std::align_val_t) noexcept { std::free(ptr); }
-void operator delete[](void* ptr, std::size_t, std::align_val_t) noexcept { std::free(ptr); }
+void operator delete(void* ptr, std::align_val_t) noexcept { aligned_free(ptr); }
+void operator delete[](void* ptr, std::align_val_t) noexcept { aligned_free(ptr); }
+void operator delete(void* ptr, std::size_t, std::align_val_t) noexcept { aligned_free(ptr); }
+void operator delete[](void* ptr, std::size_t, std::align_val_t) noexcept { aligned_free(ptr); }
 void operator delete(void* ptr, const std::nothrow_t&) noexcept { std::free(ptr); }
 void operator delete[](void* ptr, const std::nothrow_t&) noexcept { std::free(ptr); }
 

@@ -8,6 +8,7 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -19,11 +20,12 @@ std::vector<float> create_preset_fixture(int sample_rate, float seconds) {
   std::vector<float> samples(static_cast<std::size_t>(count));
   for (int index = 0; index < count; ++index) {
     const float t = static_cast<float>(index) / static_cast<float>(sample_rate);
-    const float env = 0.55f + 0.35f * std::sin(2.0f * static_cast<float>(M_PI) * 1.7f * t);
+    const float env =
+        0.55f + 0.35f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1.7f * t);
     samples[static_cast<std::size_t>(index)] =
-        env * (0.18f * std::sin(2.0f * static_cast<float>(M_PI) * 110.0f * t) +
-               0.10f * std::sin(2.0f * static_cast<float>(M_PI) * 440.0f * t) +
-               0.04f * std::sin(2.0f * static_cast<float>(M_PI) * 1760.0f * t));
+        env * (0.18f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 110.0f * t) +
+               0.10f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t) +
+               0.04f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1760.0f * t));
   }
   return samples;
 }
