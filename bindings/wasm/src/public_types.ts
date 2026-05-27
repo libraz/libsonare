@@ -845,6 +845,16 @@ export interface StreamingEqualizerConfig {
   maxBlockSize?: number;
 }
 
+/** Configuration for {@link StreamingRetune}. */
+export interface StreamingRetuneConfig {
+  /** Pitch shift in semitones, clamped by the native processor to +/-24. */
+  semitones?: number;
+  /** Wet/dry mix, clamped by the native processor to 0..1. */
+  mix?: number;
+  /** Grain size in samples. Use 0/omit to derive it from the sample rate. */
+  grainSize?: number;
+}
+
 /** Options for {@link StreamingEqualizer.match}. */
 export interface EqMatchOptions {
   sampleRate?: number;

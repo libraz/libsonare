@@ -30,16 +30,20 @@
 #include "core/convert.h"
 #include "core/db_convert.h"
 #include "core/pcen.h"
+#include "core/resample.h"
+#include "core/synthesis.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "effects/hpss.h"
+#include "effects/normalize.h"
 #include "effects/pitch_shift.h"
 #include "effects/preemphasis.h"
 #include "effects/silence.h"
 #include "effects/time_stretch.h"
 #include "feature/chroma.h"
 #include "feature/cqt.h"
+#include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/nnls_chroma.h"
 #include "feature/onset.h"
@@ -47,7 +51,15 @@
 #include "feature/rhythm.h"
 #include "feature/spectral.h"
 #include "feature/tonnetz.h"
+#include "feature/vqt.h"
+#include "filters/iir.h"
+#include "metering/basic.h"
+#include "metering/clipping.h"
+#include "metering/dynamic_range.h"
 #include "metering/lufs.h"
+#include "metering/phase_scope.h"
+#include "metering/stereo.h"
+#include "metering/true_peak.h"
 #ifdef SONARE_WITH_MIXING
 #include "mixing/api/presets.h"
 #include "mixing/channel_strip.h"
@@ -2227,6 +2239,113 @@ int cmd_cqt(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_vqt(const CliArgs& args, const Audio& audio) {
+  VqtConfig config;
+  config.hop_length = args.hop_length;
+  config.fmin = args.fmin > 0.0f ? args.fmin : 32.7f;
+  config.n_bins = args.get_int("n-bins", 84);
+  config.bins_per_octave = args.get_int("bins-per-octave", 12);
+  config.gamma = args.get_float("gamma", 0.0f);
+  config.filter_scale = args.get_float("filter-scale", 1.0f);
+
+  VqtResult result = vqt(audio, config);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("n_bins", result.n_bins())
+        .kv("n_frames", result.n_frames())
+        .kv("duration", result.duration())
+        .kv("fmin", config.fmin)
+        .kv("bins_per_octave", config.bins_per_octave)
+        .kv("gamma", config.gamma)
+        .end_object()
+        .print();
+  } else {
+    float fmax = config.fmin * std::pow(2.0f, static_cast<float>(config.n_bins) /
+                                                  static_cast<float>(config.bins_per_octave));
+    int octaves = config.n_bins / config.bins_per_octave;
+    std::cout << "Variable-Q Transform:\n";
+    printf("  Shape:           %d bins x %d frames\n", result.n_bins(), result.n_frames());
+    printf("  Frequency Range: %.1f - %.1f Hz (%d octaves)\n", config.fmin, fmax, octaves);
+    printf("  Gamma:           %.2f\n", config.gamma);
+    printf("  Duration:        %.2fs\n", result.duration());
+  }
+  return 0;
+}
+
+int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: mel-to-audio requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  MelConfig config;
+  config.n_mels = args.n_mels;
+  config.n_fft = args.n_fft;
+  config.hop_length = args.hop_length;
+  config.fmin = args.fmin;
+  config.fmax = args.fmax > 0 ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
+
+  const int n_iter = args.get_int("n-iter", 32);
+  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  Audio out = mel_to_audio(mel.power_data(), mel.n_mels(), mel.n_frames(), config, n_iter,
+                           audio.sample_rate());
+  save_wav(args.output_file, out.data(), out.size(), audio.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("n_mels", mel.n_mels())
+        .kv("n_frames", mel.n_frames())
+        .kv("n_iter", n_iter)
+        .kv("duration", out.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: mfcc-to-audio requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  MelConfig config;
+  config.n_mels = args.n_mels;
+  config.n_fft = args.n_fft;
+  config.hop_length = args.hop_length;
+  config.fmin = args.fmin;
+  config.fmax = args.fmax > 0 ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
+
+  const int n_mfcc = args.get_int("n-mfcc", 13);
+  const int n_iter = args.get_int("n-iter", 32);
+  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  std::vector<float> mfcc = mel.mfcc(n_mfcc);
+  Audio out =
+      mfcc_to_audio(mfcc.data(), n_mfcc, mel.n_frames(), config, n_iter, audio.sample_rate());
+  save_wav(args.output_file, out.data(), out.size(), audio.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("n_mfcc", n_mfcc)
+        .kv("n_frames", mel.n_frames())
+        .kv("n_iter", n_iter)
+        .kv("duration", out.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
 int cmd_acoustic(const CliArgs& args, const Audio& audio) {
   AcousticConfig config;
   config.n_octave_bands = args.get_int("n-bands", config.n_octave_bands);
@@ -2449,6 +2568,473 @@ int cmd_lufs(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+int cmd_meter(const CliArgs& args, const Audio& audio) {
+  const float clip_threshold = args.get_float("clip-threshold", 0.999f);
+  const int oversample = args.get_int("oversample", 4);
+
+  const float peak = metering::peak_db(audio);
+  const float rms = metering::rms_db(audio);
+  const float crest = metering::crest_factor_db(audio);
+  const float clip_ratio = metering::clipping_ratio(audio, clip_threshold);
+  const float silence = metering::silence_ratio(audio);
+  const float dc = metering::dc_offset(audio);
+  const float tp = metering::true_peak_db(audio, oversample);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("peak_db", peak)
+        .kv("rms_db", rms)
+        .kv("crest_factor_db", crest)
+        .kv("true_peak_db", tp)
+        .kv("clipping_ratio", clip_ratio)
+        .kv("silence_ratio", silence)
+        .kv("dc_offset", dc)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::yellow << "> Meters:" << color::reset << "\n";
+    printf("    Peak:           %.2f dB\n", peak);
+    printf("    RMS:            %.2f dB\n", rms);
+    printf("    Crest Factor:   %.2f dB\n", crest);
+    printf("    True Peak:      %.2f dBTP\n", tp);
+    printf("    Clipping Ratio: %.6f\n", clip_ratio);
+    printf("    Silence Ratio:  %.6f\n", silence);
+    printf("    DC Offset:      %.6f\n", dc);
+    std::cout << "\n";
+  }
+  return 0;
+}
+
+int cmd_clipping(const CliArgs& args, const Audio& audio) {
+  const float threshold = args.get_float("threshold", 0.999f);
+  const size_t min_region = static_cast<size_t>(args.get_int("min-region", 1));
+
+  metering::ClippingResult result = metering::detect_clipping(audio, threshold, min_region);
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object()
+        .kv("clipped_samples", result.clipped_samples)
+        .kv("clipping_ratio", result.clipping_ratio)
+        .kv("max_clipped_peak", result.max_clipped_peak)
+        .key("regions")
+        .begin_array();
+    for (const auto& region : result.regions) {
+      json.begin_object()
+          .kv("start_sample", region.start_sample)
+          .kv("end_sample", region.end_sample)
+          .kv("length", region.length)
+          .kv("peak", region.peak)
+          .end_object();
+    }
+    json.end_array().end_object().print();
+  } else {
+    std::cout << "Clipping Detection:\n";
+    printf("  Clipped Samples: %zu\n", result.clipped_samples);
+    printf("  Clipping Ratio:  %.6f\n", result.clipping_ratio);
+    printf("  Max Peak:        %.4f\n", result.max_clipped_peak);
+    printf("  Regions:         %zu\n", result.regions.size());
+    const size_t shown = std::min<size_t>(result.regions.size(), 20);
+    for (size_t i = 0; i < shown; ++i) {
+      const auto& region = result.regions[i];
+      printf("    [%zu] %zu - %zu (len %zu, peak %.4f)\n", i, region.start_sample,
+             region.end_sample, region.length, region.peak);
+    }
+    if (result.regions.size() > shown) {
+      printf("    ... (%zu more regions)\n", result.regions.size() - shown);
+    }
+  }
+  return 0;
+}
+
+int cmd_dynamic_range(const CliArgs& args, const Audio& audio) {
+  metering::DynamicRangeConfig config;
+  config.window_sec = args.get_float("window-sec", config.window_sec);
+  config.hop_sec = args.get_float("hop-sec", config.hop_sec);
+  config.low_percentile = args.get_float("low-percentile", config.low_percentile);
+  config.high_percentile = args.get_float("high-percentile", config.high_percentile);
+
+  metering::DynamicRangeResult result = metering::dynamic_range(audio, config);
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("dynamic_range_db", result.dynamic_range_db)
+        .kv("low_percentile_db", result.low_percentile_db)
+        .kv("high_percentile_db", result.high_percentile_db)
+        .key("window_rms_db")
+        .float_array(result.window_rms_db)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Dynamic Range:\n";
+    printf("  Dynamic Range:   %.2f dB\n", result.dynamic_range_db);
+    printf("  Low Percentile:  %.2f dB\n", result.low_percentile_db);
+    printf("  High Percentile: %.2f dB\n", result.high_percentile_db);
+  }
+  return 0;
+}
+
+int cmd_stereo(const CliArgs& args, const Audio& audio) {
+  const Audio right = load_reference_audio(args, audio.sample_rate(), audio.size());
+  const float corr = metering::correlation(audio.data(), right.data(), audio.size());
+  const float width = metering::stereo_width(audio.data(), right.data(), audio.size());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("correlation", corr)
+        .kv("stereo_width", width)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Stereo Image:\n";
+    printf("  Correlation:  %.4f\n", corr);
+    printf("  Stereo Width: %.4f\n", width);
+  }
+  return 0;
+}
+
+int cmd_phase(const CliArgs& args, const Audio& audio) {
+  const Audio right = load_reference_audio(args, audio.sample_rate(), audio.size());
+  metering::PhaseScopeResult result =
+      metering::phase_scope(audio.data(), right.data(), audio.size());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("correlation", result.correlation)
+        .kv("average_abs_angle_rad", result.average_abs_angle_rad)
+        .kv("max_radius", result.max_radius)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "Phase Scope:\n";
+    printf("  Correlation:        %.4f\n", result.correlation);
+    printf("  Avg Abs Angle:      %.4f rad\n", result.average_abs_angle_rad);
+    printf("  Max Radius:         %.4f\n", result.max_radius);
+  }
+  return 0;
+}
+
+// ============================================================================
+// Processing & Synthesis Commands
+// ============================================================================
+
+int cmd_normalize(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: normalize requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  const std::string mode = args.get_string("mode", "peak");
+  Audio result;
+  float target_db = 0.0f;
+  if (mode == "rms") {
+    target_db = args.get_float("target-db", -20.0f);
+    result = normalize_rms(audio, target_db);
+  } else if (mode == "peak") {
+    target_db = args.get_float("target-db", 0.0f);
+    result = normalize(audio, target_db);
+  } else {
+    std::cerr << color::red << "Error: --mode must be 'peak' or 'rms'" << color::reset << "\n";
+    return 1;
+  }
+
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("mode", mode)
+        .kv("target_db", target_db)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_gain(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: gain requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  if (!args.has("gain-db")) {
+    std::cerr << color::red << "Error: --gain-db required" << color::reset << "\n";
+    return 1;
+  }
+  const float gain_db = args.get_float("gain-db", 0.0f);
+  Audio result = apply_gain(audio, gain_db);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("gain_db", gain_db)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_fade(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: fade requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  if (!args.has("fade-in") && !args.has("fade-out")) {
+    std::cerr << color::red << "Error: --fade-in and/or --fade-out required" << color::reset
+              << "\n";
+    return 1;
+  }
+  const float fade_in_sec = args.get_float("fade-in", 0.0f);
+  const float fade_out_sec = args.get_float("fade-out", 0.0f);
+
+  Audio result = audio;
+  if (args.has("fade-in")) result = fade_in(result, fade_in_sec);
+  if (args.has("fade-out")) result = fade_out(result, fade_out_sec);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("fade_in", fade_in_sec)
+        .kv("fade_out", fade_out_sec)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_filter(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: filter requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  const std::string type = args.get_string("type", "");
+  const bool is_hp = (type == "hp" || type == "highpass");
+  const bool is_lp = (type == "lp" || type == "lowpass");
+  const bool is_bp = (type == "bp" || type == "bandpass");
+  const bool is_notch = (type == "notch");
+  if (!is_hp && !is_lp && !is_bp && !is_notch) {
+    std::cerr << color::red << "Error: --type must be hp|lp|bp|notch" << color::reset << "\n";
+    return 1;
+  }
+
+  const int sr = audio.sample_rate();
+  const int order = args.get_int("order", 2);
+  const bool zero_phase = args.has("zero-phase");
+  std::vector<float> result;
+
+  float cutoff = 0.0f;
+  float center = 0.0f;
+  float bandwidth = 0.0f;
+
+  if (is_hp || is_lp) {
+    if (!args.has("cutoff")) {
+      std::cerr << color::red << "Error: --cutoff required" << color::reset << "\n";
+      return 1;
+    }
+    cutoff = args.get_float("cutoff", 0.0f);
+    if (order != 2 && order != 4) {
+      std::cerr << color::red << "Error: --order must be 2 or 4" << color::reset << "\n";
+      return 1;
+    }
+    if (order == 4) {
+      CascadedBiquad cascade =
+          is_hp ? highpass_coeffs_4th(cutoff, sr) : lowpass_coeffs_4th(cutoff, sr);
+      result = apply_cascade_filtfilt(audio.data(), audio.size(), cascade);
+    } else {
+      BiquadCoeffs coeffs = is_hp ? highpass_coeffs(cutoff, sr) : lowpass_coeffs(cutoff, sr);
+      result = zero_phase ? apply_biquad_filtfilt(audio.data(), audio.size(), coeffs)
+                          : apply_biquad(audio.data(), audio.size(), coeffs);
+    }
+  } else {
+    if (!args.has("center") || !args.has("bandwidth")) {
+      std::cerr << color::red << "Error: --center and --bandwidth required" << color::reset << "\n";
+      return 1;
+    }
+    if (order != 2) {
+      std::cerr << color::red << "Error: --order 4 is only allowed for hp/lp" << color::reset
+                << "\n";
+      return 1;
+    }
+    center = args.get_float("center", 0.0f);
+    bandwidth = args.get_float("bandwidth", 0.0f);
+    BiquadCoeffs coeffs =
+        is_bp ? bandpass_coeffs(center, bandwidth, sr) : notch_coeffs(center, bandwidth, sr);
+    result = zero_phase ? apply_biquad_filtfilt(audio.data(), audio.size(), coeffs)
+                        : apply_biquad(audio.data(), audio.size(), coeffs);
+  }
+
+  save_wav(args.output_file, result.data(), result.size(), sr);
+
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().kv("output", args.output_file).kv("type", type);
+    if (is_hp || is_lp) {
+      json.kv("cutoff", cutoff);
+    } else {
+      json.kv("center", center).kv("bandwidth", bandwidth);
+    }
+    json.kv("duration", static_cast<float>(result.size()) / static_cast<float>(sr))
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_resample(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: resample requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  if (!args.has("target-sr")) {
+    std::cerr << color::red << "Error: --target-sr required" << color::reset << "\n";
+    return 1;
+  }
+  const int source_sr = audio.sample_rate();
+  const int target_sr = args.get_int("target-sr", source_sr);
+  Audio result = resample(audio, target_sr);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("source_sr", source_sr)
+        .kv("target_sr", target_sr)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_tone(const CliArgs& args, const Audio&) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: tone requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  if (!args.has("frequency")) {
+    std::cerr << color::red << "Error: --frequency required" << color::reset << "\n";
+    return 1;
+  }
+  const float frequency = args.get_float("frequency", 0.0f);
+  const int sr = args.get_int("sr", 22050);
+  const float duration = args.get_float("duration", 1.0f);
+  const float phase = args.get_float("phase", 0.0f);
+  const float amplitude = args.get_float("amplitude", 1.0f);
+
+  Audio result = tone(frequency, sr, duration, phase, amplitude);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("frequency", frequency)
+        .kv("sr", sr)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_chirp(const CliArgs& args, const Audio&) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: chirp requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  const float fmin = args.fmin;
+  const float fmax = args.fmax;
+  const bool linear = !args.has("exponential");
+  if (fmax <= 0.0f) {
+    std::cerr << color::red << "Error: --fmax must be > 0" << color::reset << "\n";
+    return 1;
+  }
+  if (!linear && fmin <= 0.0f) {
+    std::cerr << color::red << "Error: --fmin must be > 0 for an exponential sweep" << color::reset
+              << "\n";
+    return 1;
+  }
+  const int sr = args.get_int("sr", 22050);
+  const float duration = args.get_float("duration", 1.0f);
+
+  Audio result = chirp(fmin, fmax, sr, duration, linear);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("fmin", fmin)
+        .kv("fmax", fmax)
+        .kv("sr", sr)
+        .kv("duration", result.duration())
+        .kv("linear", linear)
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_clicks(const CliArgs& args, const Audio&) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: clicks requires output file (-o)" << color::reset << "\n";
+    return 1;
+  }
+  if (!args.has("times")) {
+    std::cerr << color::red << "Error: --times required" << color::reset << "\n";
+    return 1;
+  }
+  const std::vector<float> times = parse_float_list(args.get_string("times"));
+  const int sr = args.get_int("sr", 22050);
+  const int length = args.get_int("length", 0);
+  const float frequency = args.get_float("frequency", 1000.0f);
+  const float click_duration = args.get_float("click-duration", 0.1f);
+
+  Audio result = clicks(times, sr, length, frequency, click_duration);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("n_clicks", times.size())
+        .kv("sr", sr)
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
 // ============================================================================
 // Command Registry
 // ============================================================================
@@ -2478,6 +3064,11 @@ const std::vector<CommandInfo>& get_commands() {
       {"boundaries", "Detect structural boundaries", cmd_boundaries, true},
       {"acoustic", "Analyze room acoustics (RT60/EDT/clarity)", cmd_acoustic, true},
       {"lufs", "Measure loudness (LUFS / loudness range)", cmd_lufs, true},
+      {"meter", "Measure basic level meters (peak/RMS/crest/true-peak)", cmd_meter, true},
+      {"clipping", "Detect clipped sample regions", cmd_clipping, true},
+      {"dynamic-range", "Measure dynamic range (percentile RMS)", cmd_dynamic_range, true},
+      {"stereo", "Measure stereo correlation/width (needs --reference)", cmd_stereo, true},
+      {"phase", "Measure phase scope summary (needs --reference)", cmd_phase, true},
       // Processing
       {"pitch-shift", "Shift pitch by semitones", cmd_pitch_shift, true},
       {"time-stretch", "Time stretch audio", cmd_time_stretch, true},
@@ -2489,6 +3080,14 @@ const std::vector<CommandInfo>& get_commands() {
       {"deemphasis", "Apply de-emphasis filtering", cmd_deemphasis, true},
       {"trim-silence", "Trim leading/trailing silence", cmd_trim_silence, true},
       {"split-silence", "List non-silent intervals", cmd_split_silence, true},
+      {"normalize", "Normalize audio (peak or rms)", cmd_normalize, true},
+      {"gain", "Apply gain in dB", cmd_gain, true},
+      {"fade", "Apply fade in/out", cmd_fade, true},
+      {"filter", "Apply biquad filter (hp/lp/bp/notch)", cmd_filter, true},
+      {"resample", "Resample audio to a target sample rate", cmd_resample, true},
+      {"tone", "Generate a pure tone", cmd_tone, false},
+      {"chirp", "Generate a frequency sweep", cmd_chirp, false},
+      {"clicks", "Generate a click track", cmd_clicks, false},
 #ifdef SONARE_WITH_MASTERING
       {"mastering", "Apply mastering loudness/true-peak processing", cmd_mastering, true},
       {"eq", "Apply the unified mastering equalizer", cmd_eq, true},
@@ -2526,6 +3125,9 @@ const std::vector<CommandInfo>& get_commands() {
       {"plp", "Compute predominant local pulse", cmd_plp, true},
       {"nnls-chroma", "Compute NNLS chromagram", cmd_nnls_chroma, true},
       {"cqt", "Compute Constant-Q Transform", cmd_cqt, true},
+      {"vqt", "Compute Variable-Q Transform", cmd_vqt, true},
+      {"mel-to-audio", "Reconstruct audio from a mel spectrogram", cmd_mel_to_audio, true},
+      {"mfcc-to-audio", "Reconstruct audio from MFCC", cmd_mfcc_to_audio, true},
       // Utility
       {"frames-to-samples", "Convert frame index to sample index", cmd_frames_to_samples, false},
       {"samples-to-frames", "Convert sample index to frame index", cmd_samples_to_frames, false},

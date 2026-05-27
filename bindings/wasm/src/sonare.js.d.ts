@@ -1081,6 +1081,9 @@ interface SonareModule {
   // Streaming - StreamingEqualizer
   createEqualizer: (config: Record<string, unknown>) => WasmStreamingEqualizer;
 
+  // Streaming - StreamingRetune
+  createStreamingRetune: (config: Record<string, unknown>) => WasmStreamingRetune;
+
   // Mixing - scene-based Mixer
   createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
   mixerPresetJson: (presetName: string) => string;
@@ -1130,6 +1133,16 @@ interface WasmStreamingEqualizer {
   ) => { left: Float32Array; right: Float32Array };
   spectrum: () => WasmEqSpectrumSnapshot;
   match: (source: Float32Array, reference: Float32Array, options: Record<string, unknown>) => void;
+  delete: () => void;
+}
+
+interface WasmStreamingRetune {
+  prepare: (sampleRate: number, maxBlockSize: number) => void;
+  reset: () => void;
+  setConfig: (config: Record<string, unknown>) => void;
+  config: () => { semitones: number; mix: number; grainSize: number };
+  grainSize: () => number;
+  processMono: (samples: Float32Array) => Float32Array;
   delete: () => void;
 }
 

@@ -49,6 +49,7 @@ import {
   RealtimeEngine,
   StreamingEqualizer,
   StreamingMasteringChain,
+  StreamingRetune,
   samplesToFrames,
   splitSilence,
   tempogram,
@@ -903,6 +904,30 @@ describe('Sonare WASM Module', () => {
         expect(eq.latencySamples()).toBeGreaterThanOrEqual(0);
       } finally {
         eq.delete();
+      }
+    });
+
+    it('should stream mono blocks through StreamingRetune', () => {
+      const retune = new StreamingRetune({ semitones: 12, mix: 1, grainSize: 512 });
+      try {
+        retune.prepare(48000, 128);
+        expect(retune.config().semitones).toBe(12);
+        expect(retune.grainSize()).toBe(512);
+
+        const block = new Float32Array(128);
+        for (let i = 0; i < block.length; i += 1) {
+          block[i] = Math.sin((2 * Math.PI * 220 * i) / 48000) * 0.5;
+        }
+
+        const out = retune.processMono(block);
+        expect(out).toBeInstanceOf(Float32Array);
+        expect(out.length).toBe(block.length);
+        expect(Array.from(out).every(Number.isFinite)).toBe(true);
+
+        retune.setConfig({ semitones: -5, mix: 0.5, grainSize: 512 });
+        expect(retune.config().mix).toBeCloseTo(0.5, 6);
+      } finally {
+        retune.delete();
       }
     });
   });
