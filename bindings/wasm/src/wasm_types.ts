@@ -426,6 +426,16 @@ export interface WasmStreamingEqualizer {
   delete: () => void;
 }
 
+export interface WasmStreamingRetune {
+  prepare: (sampleRate: number, maxBlockSize: number) => void;
+  reset: () => void;
+  setConfig: (config: Record<string, unknown>) => void;
+  config: () => { semitones: number; mix: number; grainSize: number };
+  grainSize: () => number;
+  processMono: (samples: Float32Array) => Float32Array;
+  delete: () => void;
+}
+
 export interface WasmEngineClip {
   id?: number;
   channels: Float32Array[];
@@ -1243,6 +1253,7 @@ export interface SonareModule {
 
   createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
   createEqualizer: (config: Record<string, unknown>) => WasmStreamingEqualizer;
+  createStreamingRetune: (config: Record<string, unknown>) => WasmStreamingRetune;
   createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
   mixerPresetJson: (presetName: string) => string;
 }

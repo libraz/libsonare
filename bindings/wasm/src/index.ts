@@ -66,6 +66,7 @@ import type {
   StftResult,
   StreamingEqualizerConfig,
   StreamingPlatform,
+  StreamingRetuneConfig,
   TempogramMode,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
@@ -162,6 +163,7 @@ export type {
   StftResult,
   StreamingEqualizerConfig,
   StreamingPlatform,
+  StreamingRetuneConfig,
   Timbre,
   TimeSignature,
 } from './public_types';
@@ -1680,6 +1682,69 @@ export class StreamingEqualizer {
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.eq.delete();
+  }
+}
+
+// ============================================================================
+// StreamingRetune Class
+// ============================================================================
+
+/**
+ * Block-by-block mono voice retune / pitch shifter.
+ *
+ * State is maintained across {@link processMono} calls. Call {@link prepare}
+ * before processing, and call {@link delete} (or use `try/finally`) to release
+ * the underlying WASM object.
+ */
+export class StreamingRetune {
+  private retune: import('./wasm_types').WasmStreamingRetune;
+
+  constructor(config: StreamingRetuneConfig = {}) {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    this.retune = module.createStreamingRetune(config as Record<string, unknown>);
+  }
+
+  /**
+   * Allocate and initialize native state for the given sample rate and maximum
+   * process block size.
+   */
+  prepare(sampleRate: number, maxBlockSize: number): void {
+    this.retune.prepare(sampleRate, maxBlockSize);
+  }
+
+  /** Reset delay, grain, and overlap-add state without changing config. */
+  reset(): void {
+    this.retune.reset();
+  }
+
+  /**
+   * Update retune settings. Changing `grainSize` takes effect after the next
+   * {@link prepare} call.
+   */
+  setConfig(config: StreamingRetuneConfig): void {
+    this.retune.setConfig(config as Record<string, unknown>);
+  }
+
+  /** Current native config. */
+  config(): Required<StreamingRetuneConfig> {
+    return this.retune.config();
+  }
+
+  /** Resolved grain size in samples after {@link prepare}. */
+  grainSize(): number {
+    return this.retune.grainSize();
+  }
+
+  /** Process one mono block, returning the shifted samples (same length). */
+  processMono(samples: Float32Array): Float32Array {
+    return this.retune.processMono(samples);
+  }
+
+  /** Release the underlying WASM object. Safe to call only once. */
+  delete(): void {
+    this.retune.delete();
   }
 }
 
