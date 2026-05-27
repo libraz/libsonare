@@ -12,6 +12,13 @@ import { engineCapabilities, Mixer, RealtimeEngine } from './index';
 import type { AutomationCurve } from './public_types';
 import type { SonareRtModule } from './sonare-rt';
 
+// With code-splitting disabled, the worklet bundle carries its own copy of the
+// module singleton (a real AudioWorkletGlobalScope cannot resolve sibling
+// chunks, so the bundle must be self-contained). Re-export the lifecycle so that
+// realm can initialize its own wasm instance, independent of the main-thread
+// `index` module.
+export { init, isInitialized } from './index';
+
 export interface SonareWorkletProcessorOptions {
   sceneJson: string;
   sampleRate?: number;

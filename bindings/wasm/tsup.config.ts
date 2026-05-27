@@ -8,4 +8,5 @@ export default defineConfig({
   clean: false,
   target: 'es2020',
   external: ['./sonare.js'],
+  splitting: false,
 });

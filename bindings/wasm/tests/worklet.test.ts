@@ -5,6 +5,7 @@ import {
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
   createSonareSpectrumRingBuffer,
+  init as initWorklet,
   popSonareEngineCommandRingBuffer,
   pushSonareEngineCommandRingBuffer,
   readSonareEngineTelemetryRingBuffer,
@@ -33,7 +34,10 @@ import {
 
 describe('SonareWorkletProcessor', () => {
   beforeAll(async () => {
+    // index.js and worklet.js are separate self-contained bundles (code-splitting
+    // is disabled), so each owns its module singleton and must be initialized.
     await init();
+    await initWorklet();
   });
 
   it('matches the offline mixer for one 128-sample render quantum', () => {
