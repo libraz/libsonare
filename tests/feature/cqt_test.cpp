@@ -259,6 +259,9 @@ TEST_CASE("cqt with progress callback", "[cqt]") {
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
 #endif
 
 TEST_CASE("icqt reconstruction", "[cqt]") {
@@ -291,6 +294,8 @@ TEST_CASE("icqt reconstruction", "[cqt]") {
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 TEST_CASE("CQT phase correctness", "[cqt]") {

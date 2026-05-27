@@ -156,6 +156,9 @@ TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
 #endif
 
 TEST_CASE("iCQT reference compatibility", "[cqt][icqt][reference]") {
@@ -214,4 +217,6 @@ TEST_CASE("iCQT reference compatibility", "[cqt][icqt][reference]") {
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
