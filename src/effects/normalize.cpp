@@ -4,16 +4,16 @@
 #include <cmath>
 #include <vector>
 
-#include "analysis/meter/basic.h"
+#include "metering/basic.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare {
 
-float peak_db(const Audio& audio) { return analysis::meter::peak_db(audio); }
+float peak_db(const Audio& audio) { return metering::peak_db(audio); }
 
-float rms_db(const Audio& audio) { return analysis::meter::rms_db(audio); }
+float rms_db(const Audio& audio) { return metering::rms_db(audio); }
 
 Audio apply_gain(const Audio& audio, float gain_db) {
   if (audio.empty()) return audio;

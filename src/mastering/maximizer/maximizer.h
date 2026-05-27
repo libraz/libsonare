@@ -23,7 +23,14 @@ class Maximizer : public common::ProcessorBase {
   void reset() override;
   void set_config(const MaximizerConfig& config);
   const MaximizerConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return limiter_.last_gain_reduction_db(); }
+  float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
+
+  // Parameters:
+  //   0 = input_gain_db (applied per block, no coefficients)
+  //   1 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
+  //   2 = release_ms (clamped to >= 0; in-place via inner limiter)
+  bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:
   static void validate_config(const MaximizerConfig& config);

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "core/convert.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/vector_normalize.h"
@@ -12,39 +13,15 @@ namespace sonare {
 
 namespace {
 
-std::vector<float> normalize_columns(std::vector<float> features, int n_chroma, int n_frames,
-                                     int norm) {
-  for (int t = 0; t < n_frames; ++t) {
-    float norm_val = 0.0f;
-
-    if (norm == 0) {
-      for (int c = 0; c < n_chroma; ++c) {
-        norm_val = std::max(norm_val, std::abs(features[c * n_frames + t]));
-      }
-    } else if (norm == 1) {
-      for (int c = 0; c < n_chroma; ++c) {
-        norm_val += std::abs(features[c * n_frames + t]);
-      }
-    } else {
-      for (int c = 0; c < n_chroma; ++c) {
-        float val = features[c * n_frames + t];
-        norm_val += val * val;
-      }
-      norm_val = std::sqrt(norm_val);
-    }
-
-    if (norm_val > 1e-10f) {
-      for (int c = 0; c < n_chroma; ++c) {
-        features[c * n_frames + t] /= norm_val;
-      }
-    } else {
-      for (int c = 0; c < n_chroma; ++c) {
-        features[c * n_frames + t] = 0.0f;
-      }
-    }
+std::vector<float> normalize_chroma_columns(std::vector<float> features, int n_chroma, int n_frames,
+                                            int norm) {
+  NormType norm_type = NormType::L2;
+  if (norm == 0) {
+    norm_type = NormType::Inf;
+  } else if (norm == 1) {
+    norm_type = NormType::L1;
   }
-
-  return features;
+  return normalize_matrix(features.data(), n_chroma, n_frames, /*axis=*/0, norm_type);
 }
 
 }  // namespace
@@ -85,7 +62,7 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
 
   std::vector<float> chroma_features =
       apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_chroma);
-  chroma_features = normalize_columns(std::move(chroma_features), n_chroma, n_frames, 0);
+  chroma_features = normalize_chroma_columns(std::move(chroma_features), n_chroma, n_frames, 2);
 
   return Chroma(std::move(chroma_features), n_chroma, n_frames, sr, spec.hop_length());
 }
@@ -119,47 +96,36 @@ std::array<float, 12> Chroma::mean_energy() const {
   return result;
 }
 
-std::vector<float> Chroma::normalize(int norm) const {
-  std::vector<float> result(features_.size());
+std::array<float, 12> Chroma::weighted_mean_energy(const std::vector<float>& frame_weights) const {
+  std::array<float, 12> result = {};
 
-  for (int t = 0; t < n_frames_; ++t) {
-    float norm_val = 0.0f;
+  if (n_frames_ == 0 || n_chroma_ != 12 || frame_weights.empty()) {
+    return mean_energy();
+  }
 
-    // Compute norm
-    if (norm == 0) {
-      // Max norm (infinity norm)
-      for (int c = 0; c < n_chroma_; ++c) {
-        float val = std::abs(features_[c * n_frames_ + t]);
-        if (val > norm_val) norm_val = val;
-      }
-    } else if (norm == 1) {
-      // L1 norm
-      for (int c = 0; c < n_chroma_; ++c) {
-        norm_val += std::abs(features_[c * n_frames_ + t]);
-      }
-    } else {
-      // L2 norm (default)
-      for (int c = 0; c < n_chroma_; ++c) {
-        float val = features_[c * n_frames_ + t];
-        norm_val += val * val;
-      }
-      norm_val = std::sqrt(norm_val);
-    }
-
-    // Normalize
-    if (norm_val > 1e-10f) {
-      for (int c = 0; c < n_chroma_; ++c) {
-        result[c * n_frames_ + t] = features_[c * n_frames_ + t] / norm_val;
-      }
-    } else {
-      // Zero out if norm is too small
-      for (int c = 0; c < n_chroma_; ++c) {
-        result[c * n_frames_ + t] = 0.0f;
-      }
+  const int n = std::min(n_frames_, static_cast<int>(frame_weights.size()));
+  float total_weight = 0.0f;
+  for (int t = 0; t < n; ++t) {
+    const float weight = std::max(0.0f, frame_weights[t]);
+    total_weight += weight;
+    for (int c = 0; c < 12; ++c) {
+      result[c] += features_[c * n_frames_ + t] * weight;
     }
   }
 
+  if (total_weight <= constants::kEpsilon) {
+    return mean_energy();
+  }
+
+  for (float& value : result) {
+    value /= total_weight;
+  }
+
   return result;
+}
+
+std::vector<float> Chroma::normalize(int norm) const {
+  return normalize_chroma_columns(features_, n_chroma_, n_frames_, norm);
 }
 
 std::vector<int> Chroma::dominant_pitch_class() const {
@@ -192,14 +158,30 @@ float Chroma::at(int chroma, int frame) const {
 namespace {
 
 /// @brief Wraps CQT magnitude bins onto @p n_chroma pitch classes.
+/// @details CQT bin 0 corresponds to @p fmin, whose pitch class is generally not C.
+///          The fold `(b % bins_per_octave) * n_chroma / bins_per_octave` assigns the
+///          lowest bin of each octave to class 0, so we add the pitch-class offset of
+///          @p fmin (with @p tuning, in fractional semitones) and take a positive modulo
+///          to align chroma class 0 with C, matching librosa.feature.chroma_cqt.
 std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames,
-                                      int bins_per_octave, int n_chroma) {
+                                      int bins_per_octave, int n_chroma, float fmin, float tuning) {
   std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
+  // Pitch class of fmin relative to C. hz_to_midi yields MIDI numbers where C is a
+  // multiple of 12 (pitch class 0), so (round(midi) mod 12) is the C-relative class.
+  // Account for tuning (fractional semitones) before rounding.
+  int pitch_class_offset = 0;
+  if (fmin > 0.0f && n_chroma > 0) {
+    const float midi = hz_to_midi(fmin) + tuning;
+    int pc = static_cast<int>(std::lround(midi)) % n_chroma;
+    if (pc < 0) pc += n_chroma;
+    pitch_class_offset = pc;
+  }
   // librosa.feature.chroma_cqt expects bins_per_octave to be a multiple of n_chroma.
   // Each chroma bin gets the mean of all CQT bins falling onto that pitch class.
   std::vector<int> counts(n_chroma, 0);
   for (int b = 0; b < n_bins; ++b) {
     int idx = ((b % bins_per_octave) * n_chroma) / bins_per_octave;
+    idx = (idx + pitch_class_offset) % n_chroma;
     if (idx < 0) idx += n_chroma;
     counts[idx] += 1;
     for (int t = 0; t < n_frames; ++t) {
@@ -265,7 +247,8 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   int n_frames = result.n_frames();
 
   std::vector<float> chroma =
-      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma);
+      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
+                         config.cqt.fmin, config.tuning);
 
   if (config.threshold > 0.0f) {
     for (int t = 0; t < n_frames; ++t) {
@@ -284,6 +267,34 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
     chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);
   }
 
+  return Chroma(std::move(chroma), config.n_chroma, n_frames, audio.sample_rate(),
+                config.cqt.hop_length);
+}
+
+Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
+
+  // Run a CQT over the bass frequency range (fmin / bins_per_octave / n_bins all
+  // come from config.cqt, so the number of octaves covered is honored by n_bins),
+  // then fold the magnitude bins onto chroma classes.
+  CqtResult result = cqt(audio, config.cqt);
+  if (result.empty()) {
+    return Chroma();
+  }
+
+  const std::vector<float>& mag = result.magnitude();
+  int n_bins = result.n_bins();
+  int n_frames = result.n_frames();
+
+  std::vector<float> chroma =
+      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
+                         config.cqt.fmin, config.tuning);
+
+  if (config.normalize_frames && n_frames > 0) {
+    chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);
+  }
   return Chroma(std::move(chroma), config.n_chroma, n_frames, audio.sample_rate(),
                 config.cqt.hop_length);
 }

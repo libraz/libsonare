@@ -14,6 +14,9 @@ from .analyzer import (
     analyze_dynamics as _analyze_dynamics,
 )
 from .analyzer import (
+    analyze_impulse_response as _analyze_impulse_response,
+)
+from .analyzer import (
     analyze_rhythm as _analyze_rhythm,
 )
 from .analyzer import (
@@ -23,13 +26,22 @@ from .analyzer import (
     chroma as _chroma,
 )
 from .analyzer import (
+    detect_acoustic as _detect_acoustic,
+)
+from .analyzer import (
     detect_chords as _detect_chords,
+)
+from .analyzer import (
+    detect_key_candidates as _detect_key_candidates,
 )
 from .analyzer import (
     harmonic as _harmonic,
 )
 from .analyzer import (
     hpss as _hpss,
+)
+from .analyzer import (
+    lufs as _lufs,
 )
 from .analyzer import (
     master_audio as _master_audio,
@@ -50,10 +62,25 @@ from .analyzer import (
     mfcc as _mfcc,
 )
 from .analyzer import (
+    momentary_lufs as _momentary_lufs,
+)
+from .analyzer import (
+    nnls_chroma as _nnls_chroma,
+)
+from .analyzer import (
     normalize as _normalize,
 )
 from .analyzer import (
+    note_stretch as _note_stretch,
+)
+from .analyzer import (
+    onset_envelope as _onset_envelope,
+)
+from .analyzer import (
     percussive as _percussive,
+)
+from .analyzer import (
+    pitch_correct_to_midi as _pitch_correct_to_midi,
 )
 from .analyzer import (
     pitch_pyin as _pitch_pyin,
@@ -69,6 +96,9 @@ from .analyzer import (
 )
 from .analyzer import (
     rms_energy as _rms_energy,
+)
+from .analyzer import (
+    short_term_lufs as _short_term_lufs,
 )
 from .analyzer import (
     spectral_bandwidth as _spectral_bandwidth,
@@ -95,9 +125,13 @@ from .analyzer import (
     trim as _trim,
 )
 from .analyzer import (
+    voice_change as _voice_change,
+)
+from .analyzer import (
     zero_crossing_rate as _zero_crossing_rate,
 )
 from .types import (
+    AcousticResult,
     AnalysisResult,
     BpmAnalysisResult,
     ChordAnalysisResult,
@@ -105,10 +139,15 @@ from .types import (
     DynamicsResult,
     HpssResult,
     Key,
+    KeyCandidate,
+    KeyProfile,
+    LufsResult,
     MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
     MfccResult,
+    Mode,
+    PitchClass,
     PitchResult,
     RhythmResult,
     StftResult,
@@ -261,18 +300,56 @@ class Audio:
         _check(rc)
         return float(out_bpm.value)
 
-    def detect_key(self) -> Key:
+    def detect_key(
+        self,
+        n_fft: int = 4096,
+        hop_length: int = 512,
+        use_hpss: bool = False,
+        loudness_weighted: bool = False,
+        high_pass_hz: float = 0.0,
+        modes: Sequence[Mode | str] | str | None = None,
+        profile: KeyProfile | str | None = None,
+        genre_hint: str | None = None,
+    ) -> Key:
         """Detect musical key."""
-        from ._ffi import SonareKey
-        from .types import Mode, PitchClass
+        from .analyzer import detect_key
 
-        out_key = SonareKey()
-        rc = self._lib.sonare_audio_detect_key(self._handle, ctypes.byref(out_key))
-        _check(rc)
-        return Key(
-            root=PitchClass(out_key.root),
-            mode=Mode(out_key.mode),
-            confidence=float(out_key.confidence),
+        return detect_key(
+            self.data,
+            self.sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            use_hpss=use_hpss,
+            loudness_weighted=loudness_weighted,
+            high_pass_hz=high_pass_hz,
+            modes=modes,
+            profile=profile,
+            genre_hint=genre_hint,
+        )
+
+    def detect_key_candidates(
+        self,
+        n_fft: int = 4096,
+        hop_length: int = 512,
+        use_hpss: bool = False,
+        loudness_weighted: bool = False,
+        high_pass_hz: float = 0.0,
+        modes: Sequence[Mode | str] | str | None = None,
+        profile: KeyProfile | str | None = None,
+        genre_hint: str | None = None,
+    ) -> list[KeyCandidate]:
+        """Return ranked musical key candidates."""
+        return _detect_key_candidates(
+            self.data,
+            self.sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            use_hpss=use_hpss,
+            loudness_weighted=loudness_weighted,
+            high_pass_hz=high_pass_hz,
+            modes=modes,
+            profile=profile,
+            genre_hint=genre_hint,
         )
 
     def detect_beats(self) -> list[float]:
@@ -280,6 +357,20 @@ class Audio:
         out_times = ctypes.POINTER(ctypes.c_float)()
         out_count = ctypes.c_size_t()
         rc = self._lib.sonare_audio_detect_beats(
+            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+        )
+        _check(rc)
+        try:
+            return [float(out_times[i]) for i in range(out_count.value)]
+        finally:
+            if out_times and out_count.value > 0:
+                self._lib.sonare_free_floats(out_times)
+
+    def detect_downbeats(self) -> list[float]:
+        """Detect downbeat times in seconds."""
+        out_times = ctypes.POINTER(ctypes.c_float)()
+        out_count = ctypes.c_size_t()
+        rc = self._lib.sonare_audio_detect_downbeats(
             self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
         )
         _check(rc)
@@ -352,6 +443,27 @@ class Audio:
             max_candidates,
         )
 
+    def analyze_impulse_response(self, n_octave_bands: int = 6) -> AcousticResult:
+        """Analyze RT60, EDT, and clarity metrics treating this audio as an impulse response."""
+        return _analyze_impulse_response(self.data, self.sample_rate, n_octave_bands)
+
+    def detect_acoustic(
+        self,
+        n_octave_bands: int = 6,
+        n_third_octave_subbands: int = 24,
+        min_decay_db: float = 30.0,
+        noise_floor_margin_db: float = 10.0,
+    ) -> AcousticResult:
+        """Estimate blind RT60/EDT acoustic parameters from this audio."""
+        return _detect_acoustic(
+            self.data,
+            self.sample_rate,
+            n_octave_bands,
+            n_third_octave_subbands,
+            min_decay_db,
+            noise_floor_margin_db,
+        )
+
     def analyze_rhythm(
         self,
         bpm_min: float = 60.0,
@@ -414,6 +526,13 @@ class Audio:
         n_fft: int = 2048,
         hop_length: int = 512,
         use_beat_sync: bool = True,
+        use_hmm: bool = False,
+        hmm_beam_width: int = 24,
+        use_key_context: bool = False,
+        key_root: PitchClass = PitchClass.C,
+        key_mode: Mode = Mode.MAJOR,
+        detect_inversions: bool = False,
+        chroma_method: str = "stft",
     ) -> ChordAnalysisResult:
         """Detect chord segments."""
         return _detect_chords(
@@ -426,6 +545,13 @@ class Audio:
             n_fft,
             hop_length,
             use_beat_sync,
+            use_hmm,
+            hmm_beam_width,
+            use_key_context,
+            key_root,
+            key_mode,
+            detect_inversions,
+            chroma_method,
         )
 
     # --- Effects ---
@@ -453,6 +579,26 @@ class Audio:
     def pitch_shift(self, semitones: float = 0.0) -> list[float]:
         """Shift the pitch of audio."""
         return _pitch_shift(self.data, self.sample_rate, semitones)
+
+    def pitch_correct_to_midi(
+        self, current_midi: float = 69.0, target_midi: float = 69.0
+    ) -> list[float]:
+        """Pitch-correct audio from a current MIDI note to a target MIDI note."""
+        return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
+
+    def note_stretch(
+        self, onset_sample: int = 0, offset_sample: int = 0, stretch_ratio: float = 1.0
+    ) -> list[float]:
+        """Time-stretch a single note region without changing pitch."""
+        return _note_stretch(
+            self.data, self.sample_rate, onset_sample, offset_sample, stretch_ratio
+        )
+
+    def voice_change(
+        self, pitch_semitones: float = 0.0, formant_factor: float = 1.0
+    ) -> list[float]:
+        """Apply a voice-change effect with independent pitch and formant control."""
+        return _voice_change(self.data, self.sample_rate, pitch_semitones, formant_factor)
 
     def normalize(self, target_db: float = -3.0) -> list[float]:
         """Normalize audio to a target dB level."""
@@ -550,6 +696,35 @@ class Audio:
     def chroma(self, n_fft: int = 2048, hop_length: int = 512) -> ChromaResult:
         """Compute chroma features."""
         return _chroma(self.data, self.sample_rate, n_fft, hop_length)
+
+    def nnls_chroma(self) -> tuple[int, list[float]]:
+        """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
+        return _nnls_chroma(self.data, self.sample_rate)
+
+    # --- Features - Onset ---
+
+    def onset_envelope(
+        self,
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+    ) -> list[float]:
+        """Compute the onset strength envelope (one value per frame)."""
+        return _onset_envelope(self.data, self.sample_rate, n_fft, hop_length, n_mels)
+
+    # --- Loudness (LUFS) ---
+
+    def lufs(self) -> LufsResult:
+        """Compute integrated/momentary/short-term LUFS and loudness range."""
+        return _lufs(self.data, self.sample_rate)
+
+    def momentary_lufs(self) -> list[float]:
+        """Compute the per-block momentary LUFS time series."""
+        return _momentary_lufs(self.data, self.sample_rate)
+
+    def short_term_lufs(self) -> list[float]:
+        """Compute the per-block short-term LUFS time series."""
+        return _short_term_lufs(self.data, self.sample_rate)
 
     # --- Features - Spectral ---
 

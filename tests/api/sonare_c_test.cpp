@@ -3,12 +3,17 @@
 
 #include "sonare_c.h"
 
+#include <algorithm>
+#include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "util/constants.h"
 
 namespace {
 
@@ -17,12 +22,21 @@ std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
   size_t n_samples = static_cast<size_t>(sample_rate * duration);
   std::vector<float> samples(n_samples);
   for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] = std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+    samples[i] =
+        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i / sample_rate);
   }
   return samples;
 }
 
 #ifdef SONARE_WITH_MASTERING
+float max_abs(const float* samples, size_t length) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < length; ++i) {
+    peak = std::max(peak, std::abs(samples[i]));
+  }
+  return peak;
+}
+
 std::vector<std::string> split_lines(const char* text) {
   std::vector<std::string> lines;
   std::stringstream stream(text ? text : "");
@@ -46,7 +60,7 @@ std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
     size_t start = static_cast<size_t>(beat * samples_per_beat);
     size_t click_length = static_cast<size_t>(sample_rate * 0.01f);
     for (size_t i = 0; i < click_length && start + i < n_samples; ++i) {
-      samples[start + i] = std::sin(static_cast<float>(M_PI) * i / click_length);
+      samples[start + i] = std::sin(static_cast<float>(sonare::constants::kPiD) * i / click_length);
     }
   }
   return samples;
@@ -59,7 +73,33 @@ std::vector<float> generate_chord(const std::vector<float>& freqs, int sample_ra
   float gain = 0.8f / static_cast<float>(freqs.size());
   for (size_t i = 0; i < n_samples; ++i) {
     for (float freq : freqs) {
-      samples[i] += gain * std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+      samples[i] += gain * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i /
+                                    sample_rate);
+    }
+  }
+  return samples;
+}
+
+std::vector<float> generate_harmonic_chord(const std::vector<float>& freqs, int sample_rate,
+                                           float duration) {
+  size_t n_samples = static_cast<size_t>(sample_rate * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    for (float freq : freqs) {
+      samples[i] += 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+      samples[i] += 0.25f * std::sin(4.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+      samples[i] +=
+          0.125f * std::sin(6.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+    }
+  }
+  float peak = 0.0f;
+  for (float sample : samples) {
+    peak = std::max(peak, std::abs(sample));
+  }
+  if (peak > 0.0f) {
+    for (float& sample : samples) {
+      sample /= peak;
     }
   }
   return samples;
@@ -148,6 +188,213 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
     SonareError err = sonare_detect_key(nullptr, 100, 22050, &key);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("detects key with explicit analysis options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_options(samples.data(), samples.size(), 22050, 4096,
+                                                     512, 0, 0, 80.0f, &key);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(key.root >= SONARE_PITCH_C);
+    REQUIRE(key.root <= SONARE_PITCH_B);
+    REQUIRE(key.confidence >= 0.0f);
+    REQUIRE(key.confidence <= 1.0f);
+  }
+
+  SECTION("returns error for invalid explicit key options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_options(samples.data(), samples.size(), 22050, 0, 512,
+                                                     0, 0, 0.0f, &key);
+
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("returns sorted key candidates with correlations") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    SonareError err = sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512,
+                                                   0, 0, 0.0f, &candidates, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(candidates != nullptr);
+    REQUIRE(count == 24);
+    for (size_t i = 1; i < count; ++i) {
+      REQUIRE(candidates[i - 1].correlation >= candidates[i].correlation);
+    }
+    REQUIRE(candidates[0].key.root >= SONARE_PITCH_C);
+    REQUIRE(candidates[0].key.root <= SONARE_PITCH_B);
+    REQUIRE(candidates[0].key.confidence >= 0.0f);
+    REQUIRE(candidates[0].key.confidence <= 1.0f);
+    sonare_free_key_candidates(candidates);
+  }
+
+  SECTION("returns modal key candidates when modes are explicit") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR, SONARE_MODE_DORIAN,
+                                SONARE_MODE_LYDIAN};
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    SonareError err =
+        sonare_detect_key_candidates_with_modes(samples.data(), samples.size(), 22050, 4096, 512, 0,
+                                                0, 0.0f, modes, 4, &candidates, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(candidates != nullptr);
+    REQUIRE(count == 48);
+    bool saw_dorian = false;
+    bool saw_lydian = false;
+    for (size_t i = 0; i < count; ++i) {
+      saw_dorian = saw_dorian || candidates[i].key.mode == SONARE_MODE_DORIAN;
+      saw_lydian = saw_lydian || candidates[i].key.mode == SONARE_MODE_LYDIAN;
+    }
+    REQUIRE(saw_dorian);
+    REQUIRE(saw_lydian);
+    sonare_free_key_candidates(candidates);
+  }
+
+  SECTION("detects key with explicit modal options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR, SONARE_MODE_DORIAN};
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_options_and_modes(
+        samples.data(), samples.size(), 22050, 4096, 512, 0, 0, 0.0f, modes, 3, &key);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(key.root >= SONARE_PITCH_C);
+    REQUIRE(key.root <= SONARE_PITCH_B);
+    REQUIRE(key.mode >= SONARE_MODE_MAJOR);
+    REQUIRE(key.mode <= SONARE_MODE_LOCRIAN);
+  }
+
+  SECTION("detects key with explicit profile and genre options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode modes[] = {SONARE_MODE_MAJOR, SONARE_MODE_MINOR};
+    SonareKey key = {};
+
+    SonareError err = sonare_detect_key_with_extended_options(
+        samples.data(), samples.size(), 22050, 4096, 512, 1, 1, 80.0f, modes, 2,
+        SONARE_KEY_PROFILE_FARALDO_EDMA, "edm", &key);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(key.root >= SONARE_PITCH_C);
+    REQUIRE(key.root <= SONARE_PITCH_B);
+    REQUIRE((key.mode == SONARE_MODE_MAJOR || key.mode == SONARE_MODE_MINOR));
+  }
+
+  SECTION("returns candidates with explicit profile and genre options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    SonareError err = sonare_detect_key_candidates_with_extended_options(
+        samples.data(), samples.size(), 22050, 4096, 512, 0, 0, 0.0f, nullptr, 0,
+        SONARE_KEY_PROFILE_TEMPERLEY, "pop", &candidates, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(candidates != nullptr);
+    REQUIRE(count == 24);
+    sonare_free_key_candidates(candidates);
+  }
+
+  SECTION("returns error for null key candidate outputs") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
+                                         0.0f, nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
+                                         0.0f, &candidates,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("returns error for invalid modal options") {
+    auto samples = generate_sine(440.0f, 22050, 2.0f);
+    const SonareMode bad_modes[] = {static_cast<SonareMode>(99)};
+    SonareKey key = {};
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_detect_key_with_options_and_modes(samples.data(), samples.size(), 22050, 4096,
+                                                     512, 0, 0, 0.0f, bad_modes, 1,
+                                                     &key) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_candidates_with_modes(samples.data(), samples.size(), 22050, 4096,
+                                                    512, 0, 0, 0.0f, bad_modes, 1, &candidates,
+                                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_key_with_extended_options(samples.data(), samples.size(), 22050, 4096,
+                                                    512, 0, 0, 0.0f, nullptr, 0,
+                                                    static_cast<SonareKeyProfileType>(99), nullptr,
+                                                    &key) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized frames", "[c_api]") {
+  SonareStreamConfig config = {};
+  REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+  config.sample_rate = 22050;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_mels = 32;
+  config.window = SONARE_WINDOW_HAMMING;
+  config.output_format = SONARE_STREAM_OUTPUT_UINT8;
+
+  SECTION("rejects impossible overlap") {
+    SonareStreamConfig bad = config;
+    bad.hop_length = bad.n_fft + 1;
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(analyzer == nullptr);
+  }
+
+  SECTION("rejects invalid intervals and mel range") {
+    SonareStreamConfig bad = config;
+    bad.key_update_interval_sec = 0.0f;
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+
+    bad = config;
+    bad.fmin = 1000.0f;
+    bad.fmax = 500.0f;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("reads U8 and I16 frames") {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+    REQUIRE(analyzer != nullptr);
+
+    auto samples = generate_sine(440.0f, config.sample_rate, 0.25f);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+
+    SonareStreamFramesU8 u8 = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, 4, &u8) == SONARE_OK);
+    REQUIRE(u8.n_frames > 0);
+    REQUIRE(u8.n_frames <= 4);
+    REQUIRE(u8.n_mels == config.n_mels);
+    REQUIRE(u8.timestamps != nullptr);
+    REQUIRE(u8.mel != nullptr);
+    REQUIRE(u8.chroma != nullptr);
+    sonare_free_stream_frames_u8(&u8);
+
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    SonareStreamFramesI16 i16 = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, 4, &i16) == SONARE_OK);
+    REQUIRE(i16.n_frames > 0);
+    REQUIRE(i16.n_mels == config.n_mels);
+    REQUIRE(i16.mel != nullptr);
+    REQUIRE(i16.chroma != nullptr);
+    sonare_free_stream_frames_i16(&i16);
+
+    sonare_stream_analyzer_destroy(analyzer);
+  }
 }
 
 TEST_CASE("sonare_detect_beats", "[c_api]") {
@@ -168,6 +415,59 @@ TEST_CASE("sonare_detect_beats", "[c_api]") {
       }
       sonare_free_floats(times);
     }
+  }
+}
+
+TEST_CASE("sonare_detect_downbeats", "[c_api]") {
+  SECTION("detects downbeats from samples") {
+    auto samples = generate_clicks(120.0f, 22050, 8.0f);
+    float* times = nullptr;
+    size_t count = 0;
+
+    SonareError err =
+        sonare_detect_downbeats(samples.data(), samples.size(), 22050, &times, &count);
+
+    REQUIRE(err == SONARE_OK);
+    if (count > 0) {
+      REQUIRE(times != nullptr);
+      for (size_t i = 1; i < count; ++i) {
+        REQUIRE(times[i] > times[i - 1]);
+      }
+      sonare_free_floats(times);
+    }
+  }
+
+  SECTION("audio wrapper detects downbeats") {
+    auto samples = generate_clicks(120.0f, 22050, 8.0f);
+    SonareAudio* audio = nullptr;
+    REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio) == SONARE_OK);
+
+    float* times = nullptr;
+    size_t count = 0;
+    SonareError err = sonare_audio_detect_downbeats(audio, &times, &count);
+
+    REQUIRE(err == SONARE_OK);
+    if (count > 0) {
+      REQUIRE(times != nullptr);
+      sonare_free_floats(times);
+    }
+
+    sonare_audio_free(audio);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
+    float* times = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_detect_downbeats(nullptr, samples.size(), 22050, &times, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_downbeats(samples.data(), samples.size(), 22050, nullptr, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_downbeats(samples.data(), samples.size(), 22050, &times, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_audio_detect_downbeats(nullptr, &times, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -278,6 +578,89 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
+  const int sample_rate = 48000;
+  const float expected_rt60 = 1.0f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t);
+  }
+
+  SonareAcousticResult result = {};
+  SonareError err =
+      sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6, &result);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(std::isfinite(result.rt60));
+  REQUIRE(std::isfinite(result.edt));
+  REQUIRE(result.rt60 > 0.95f);
+  REQUIRE(result.rt60 < 1.05f);
+  REQUIRE(result.band_count == 6);
+  REQUIRE(result.rt60_bands != nullptr);
+  REQUIRE(result.edt_bands != nullptr);
+  REQUIRE(result.c50_bands != nullptr);
+  REQUIRE(result.c80_bands != nullptr);
+
+  sonare_free_acoustic_result(&result);
+  REQUIRE(result.rt60_bands == nullptr);
+  REQUIRE(result.band_count == 0);
+}
+
+TEST_CASE("sonare_detect_acoustic", "[c_api][acoustic]") {
+  const int sample_rate = 48000;
+  const float expected_rt60 = 0.7f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t);
+  }
+
+  SonareAcousticResult result = {};
+  SonareError err = sonare_detect_acoustic(samples.data(), samples.size(), sample_rate, 6, 24,
+                                           30.0f, 10.0f, &result);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(result.is_blind == 1);
+  REQUIRE(std::isfinite(result.rt60));
+  REQUIRE(result.rt60 > 0.55f);
+  REQUIRE(result.rt60 < 0.85f);
+  REQUIRE(result.band_count == 6);
+  REQUIRE(result.rt60_bands != nullptr);
+  // Blind mode does not compute clarity bands; they are exposed as null so that
+  // "not computed" is distinguishable from "computed-but-invalid".
+  REQUIRE(result.c50_bands == nullptr);
+  REQUIRE(result.c80_bands == nullptr);
+
+  sonare_free_acoustic_result(&result);
+}
+
+TEST_CASE("sonare_detect_acoustic blind mode exposes null clarity bands", "[c_api][acoustic]") {
+  const int sample_rate = 48000;
+  const float expected_rt60 = 0.7f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t);
+  }
+
+  SonareAcousticResult result = {};
+  SonareError err = sonare_detect_acoustic(samples.data(), samples.size(), sample_rate, 6, 24,
+                                           30.0f, 10.0f, &result);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(result.is_blind == 1);
+  REQUIRE(result.band_count > 0);
+  REQUIRE(result.rt60_bands != nullptr);
+  REQUIRE(result.c50_bands == nullptr);
+  REQUIRE(result.c80_bands == nullptr);
+
+  sonare_free_acoustic_result(&result);
+}
+
 TEST_CASE("sonare_analyze_timbre", "[c_api]") {
   SECTION("returns timbre scalars and spectral curves") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
@@ -367,7 +750,7 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
     REQUIRE(result.chords[0].root >= SONARE_PITCH_C);
     REQUIRE(result.chords[0].root <= SONARE_PITCH_B);
     REQUIRE(result.chords[0].quality >= SONARE_CHORD_MAJOR);
-    REQUIRE(result.chords[0].quality <= SONARE_CHORD_UNKNOWN);
+    REQUIRE(result.chords[0].quality <= SONARE_CHORD_SUS2_ADD4);
     REQUIRE(result.chords[0].end >= result.chords[0].start);
     REQUIRE(result.chords[0].confidence >= 0.0f);
 
@@ -396,9 +779,41 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
                                  512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
+  SECTION("extended options enable HMM and inversion detection without changing legacy ABI") {
+    auto samples = generate_harmonic_chord({82.41f, 261.63f, 329.63f, 392.00f}, 22050, 1.0f);
+    SonareChordAnalysisResult result = {};
+    SonareChordDetectionOptions options{};
+    options.min_duration = 0.0f;
+    options.smoothing_window = 2.0f;
+    options.threshold = 0.5f;
+    options.use_triads_only = 1;
+    options.n_fft = 2048;
+    options.hop_length = 512;
+    options.use_beat_sync = 0;
+    options.use_hmm = 1;
+    options.hmm_beam_width = 8;
+    options.use_key_context = 1;
+    options.key_root = SONARE_PITCH_C;
+    options.key_mode = SONARE_MODE_MAJOR;
+    options.detect_inversions = 1;
+    options.chroma_method = 1;
+
+    SonareError err =
+        sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.chord_count > 0);
+    REQUIRE(result.chords != nullptr);
+    REQUIRE(result.chords[0].root == SONARE_PITCH_C);
+    REQUIRE(result.chords[0].bass == SONARE_PITCH_E);
+
+    sonare_free_chord_analysis_result(&result);
+  }
+
   SECTION("free is safe on partially initialized struct") {
     SonareChordAnalysisResult result = {};
-    result.chords = new SonareChord[1]{{SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f}};
+    result.chords =
+        new SonareChord[1]{{SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f, SONARE_PITCH_C}};
     result.chord_count = 1;
 
     sonare_free_chord_analysis_result(&result);
@@ -410,6 +825,98 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
 
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
+  SECTION("streaming EQ handle processes JSON bands and exposes spectrum") {
+    SonareEq* eq = sonare_eq_create(48000.0, 512);
+    REQUIRE(eq != nullptr);
+    REQUIRE(sonare_eq_set_band(eq, 0,
+                               "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
+                               "\"q\":1,\"enabled\":true,\"coeffMode\":\"Vicanek\","
+                               "\"proportionalQ\":true}") == SONARE_OK);
+    REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"enabled\":truish}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\" \"enabled\":true}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"type\":\"Notch\"}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":7,\"enabled\":true}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"coeffMode\":\"unknown\"}") ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_set_band(eq, 0,
+                               "{\"note\":\"\\\"type\\\":\\\"Unknown\\\"\","
+                               "\"type\":\"Peak\",\"frequency_hz\":1000,\"gain_db\":9,"
+                               "\"q\":1,\"enabled\":true,\"coeff_mode\":\"vicanek\","
+                               "\"proportional_q\":true}") == SONARE_OK);
+    REQUIRE(sonare_eq_latency_samples(eq) == 0);
+    sonare_eq_set_auto_gain(eq, 1);
+    REQUIRE(sonare_eq_set_gain_scale(eq, 0.5f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_gain_scale(eq, -0.1f) != SONARE_OK);
+    REQUIRE(sonare_eq_set_output_gain_db(eq, 3.0f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_output_pan(eq, 0.25f) == SONARE_OK);
+    REQUIRE(sonare_eq_set_output_pan(eq, 1.5f) != SONARE_OK);
+
+    std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
+    std::vector<float> right = left;
+    for (auto& sample : left) sample *= 0.2f;
+    for (auto& sample : right) sample *= 0.2f;
+    float* channels[] = {left.data(), right.data()};
+
+    REQUIRE(sonare_eq_process(eq, channels, 2, static_cast<int>(left.size())) == SONARE_OK);
+    REQUIRE(sonare_eq_last_auto_gain_db(eq) < 0.0f);
+
+    SonareEqSnapshot snapshot{};
+    REQUIRE(sonare_eq_spectrum(eq, &snapshot) == SONARE_OK);
+    REQUIRE(snapshot.seq == 1);
+    REQUIRE(snapshot.pre_count == SONARE_EQ_SPECTRUM_STREAM_CAPACITY);
+    REQUIRE(snapshot.post_count == SONARE_EQ_SPECTRUM_STREAM_CAPACITY);
+    REQUIRE(snapshot.band_gain_db[0] > 4.0f);
+    REQUIRE(snapshot.band_gain_db[0] < 5.0f);
+    REQUIRE(snapshot.last_auto_gain_db < 0.0f);
+
+    REQUIRE(sonare_eq_set_phase_mode(eq, SONARE_EQ_PHASE_LINEAR) == SONARE_OK);
+    REQUIRE(sonare_eq_latency_samples(eq) > 0);
+    REQUIRE(sonare_eq_set_phase_mode(eq, 99) == SONARE_ERROR_INVALID_PARAMETER);
+
+    sonare_eq_clear(eq);
+    REQUIRE(sonare_eq_latency_samples(eq) == 0);
+    sonare_eq_destroy(eq);
+  }
+
+  SECTION("streaming EQ match configures live bands from source and reference") {
+    auto source = generate_sine(1000.0f, 48000, 1.0f);
+    auto reference = source;
+    SonareEq* eq = sonare_eq_create(48000.0, static_cast<int>(source.size()));
+    REQUIRE(eq != nullptr);
+
+    for (auto& sample : source) sample *= 0.12f;
+    for (auto& sample : reference) sample *= 0.45f;
+
+    REQUIRE(sonare_eq_match(eq, source.data(), reference.data(), source.size(), 48000, 4) ==
+            SONARE_OK);
+
+    std::vector<float> left = source;
+    std::vector<float> right = source;
+    float* channels[] = {left.data(), right.data()};
+    REQUIRE(sonare_eq_process(eq, channels, 2, static_cast<int>(left.size())) == SONARE_OK);
+
+    SonareEqSnapshot snapshot{};
+    REQUIRE(sonare_eq_spectrum(eq, &snapshot) == SONARE_OK);
+    bool has_positive_band = false;
+    for (size_t i = 0; i < SONARE_EQ_MAX_BANDS; ++i) {
+      has_positive_band = has_positive_band || snapshot.band_gain_db[i] > 0.5f;
+    }
+    REQUIRE(has_positive_band);
+
+    REQUIRE(sonare_eq_match(eq, source.data(), reference.data(), source.size(), 48000, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_eq_match(eq, source.data(), reference.data(), source.size(), 48000,
+                            SONARE_EQ_MAX_BANDS + 1) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_eq_destroy(eq);
+  }
+
   SECTION("returns processed samples and loudness metadata") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
     for (auto& sample : samples) {
@@ -481,7 +988,70 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     const char* names = sonare_mastering_processor_names();
     REQUIRE(names != nullptr);
     REQUIRE(std::strstr(names, "dynamics.compressor") != nullptr);
+    REQUIRE(std::strstr(names, "eq.equalizer") != nullptr);
     REQUIRE(std::strstr(names, "stereo.imager") != nullptr);
+
+    SonareMasteringParam eq_params[] = {{"band0.enabled", 1.0}, {"band0.frequencyHz", 440.0},
+                                        {"band0.gainDb", 6.0},  {"band0.q", 1.0},
+                                        {"autoGain", 1.0},      {"gainScale", 0.5},
+                                        {"outputGainDb", 1.0},  {"outputPan", 0.0}};
+    SonareMasteringResult eq_result{};
+    REQUIRE(sonare_mastering_apply_processor("eq.equalizer", samples.data(), samples.size(), 22050,
+                                             eq_params, 8, &eq_result) == SONARE_OK);
+    REQUIRE(eq_result.samples != nullptr);
+    REQUIRE(eq_result.length == samples.size());
+    sonare_free_mastering_result(&eq_result);
+
+    auto high_tone = generate_sine(8000.0f, 22050, 0.5f);
+    SonareMasteringParam type_only_eq_params[] = {{"band0.type", 3.0}, {"band0.coeffMode", 1.0}};
+    SonareMasteringResult type_only_eq{};
+    REQUIRE(sonare_mastering_apply_processor("eq.equalizer", high_tone.data(), high_tone.size(),
+                                             22050, type_only_eq_params, 2,
+                                             &type_only_eq) == SONARE_OK);
+    REQUIRE(type_only_eq.samples != nullptr);
+    REQUIRE(max_abs(type_only_eq.samples, type_only_eq.length) <
+            max_abs(high_tone.data(), high_tone.size()) * 0.6f);
+    sonare_free_mastering_result(&type_only_eq);
+
+    SonareMasteringParam left_eq_params[] = {{"band0.enabled", 1.0},
+                                             {"band0.frequencyHz", 440.0},
+                                             {"band0.gainDb", 12.0},
+                                             {"band0.q", 1.0},
+                                             {"band0.placement", 1.0}};
+    SonareMasteringStereoResult left_eq{};
+    REQUIRE(sonare_mastering_apply_processor_stereo("eq.equalizer", samples.data(), samples.data(),
+                                                    samples.size(), 22050, left_eq_params, 5,
+                                                    &left_eq) == SONARE_OK);
+    REQUIRE(left_eq.left != nullptr);
+    REQUIRE(left_eq.right != nullptr);
+    REQUIRE(left_eq.length == samples.size());
+    REQUIRE(max_abs(left_eq.left, left_eq.length) > max_abs(left_eq.right, left_eq.length) * 1.5f);
+    sonare_free_mastering_stereo_result(&left_eq);
+
+    SonareMasteringParam linear_eq_params[] = {{"phaseMode", 3.0},     {"resolution", 1.0},
+                                               {"band0.enabled", 1.0}, {"band0.frequencyHz", 440.0},
+                                               {"band0.gainDb", 3.0},  {"band0.q", 1.0}};
+    SonareMasteringStereoResult linear_eq{};
+    REQUIRE(sonare_mastering_apply_processor_stereo("eq.equalizer", samples.data(), samples.data(),
+                                                    samples.size(), 22050, linear_eq_params, 6,
+                                                    &linear_eq) == SONARE_OK);
+    REQUIRE(linear_eq.latency_samples == 512);
+    sonare_free_mastering_stereo_result(&linear_eq);
+  }
+
+  SECTION("named processor validation includes processor and parameter name") {
+    auto samples = generate_sine(440.0f, 22050, 0.5f);
+    SonareMasteringParam params[] = {{"width", 3.5}};
+    SonareMasteringStereoResult stereo{};
+
+    REQUIRE(sonare_mastering_apply_processor_stereo("stereo.imager", samples.data(), samples.data(),
+                                                    samples.size(), 22050, params, 1,
+                                                    &stereo) == SONARE_ERROR_INVALID_PARAMETER);
+    const char* msg = sonare_last_error_message();
+    REQUIRE(msg != nullptr);
+    REQUIRE(std::string(msg).find("stereo.imager.width must be in [0, 2], got 3.5") !=
+            std::string::npos);
+    sonare_free_mastering_stereo_result(&stereo);
   }
 
   SECTION("applies pair processors and analyses") {
@@ -523,6 +1093,65 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
             nullptr);
   }
 
+  SECTION("streaming preview is reachable through the C API") {
+    auto samples = generate_sine(1000.0f, 48000, 1.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    SonareStreamingPlatform platforms[] = {{"Unit Test", 0.0f, -6.0f}};
+
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_streaming_preview(samples.data(), samples.size(), 48000, platforms, 1,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"platforms\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"name\":\"Unit Test\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"normalizationGainDb\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"ceilingRisk\":true") != nullptr);
+    sonare_free_string(json);
+
+    json = nullptr;
+    REQUIRE(sonare_mastering_streaming_preview(samples.data(), samples.size(), 48000, nullptr, 0,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"Spotify\"") != nullptr);
+    sonare_free_string(json);
+  }
+
+  SECTION("assistant suggestion is reachable through the C API") {
+    auto samples = generate_sine(220.0f, 48000, 3.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    SonareMasteringParam params[] = {{"targetLufs", -13.0}, {"ceilingDb", -0.8}};
+
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, params, 2,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"chainConfig\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"explanation\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"genreCandidates\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-13") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.ceilingDb\":-0.8") != nullptr);
+    sonare_free_string(json);
+  }
+
+  SECTION("assistant audio profile is reachable through the C API") {
+    auto samples = generate_sine(330.0f, 48000, 2.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    SonareMasteringParam params[] = {{"nFft", 1024.0}, {"hopLength", 256.0}};
+
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_audio_profile(samples.data(), samples.size(), 48000, params, 2,
+                                           &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"durationSec\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"integratedLufs\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"spectral\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"centroidHz\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"dynamics\"") != nullptr);
+    REQUIRE(std::strstr(json, "\"genreCandidates\"") != nullptr);
+    sonare_free_string(json);
+  }
+
   SECTION("all listed processors execute through the shared stereo entrypoint") {
     auto left = generate_sine(440.0f, 44100, 0.25f);
     auto right = generate_sine(660.0f, 44100, 0.25f);
@@ -539,7 +1168,12 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                                       &result) == SONARE_OK);
       REQUIRE(result.left != nullptr);
       REQUIRE(result.right != nullptr);
-      REQUIRE(result.length == left.size());
+      if (name == "repair.trimSilence") {
+        REQUIRE(result.length <= left.size());
+        REQUIRE(result.length > 0);
+      } else {
+        REQUIRE(result.length == left.size());
+      }
       REQUIRE(std::isfinite(result.output_lufs));
       sonare_free_mastering_stereo_result(&result);
     }
@@ -593,6 +1227,279 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 }
 #endif
 
+TEST_CASE("sonare_onset_strength", "[c_api]") {
+  SECTION("returns a finite onset envelope") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    float* env = nullptr;
+    size_t count = 0;
+
+    SonareError err =
+        sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env, &count);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(count > 0);
+    REQUIRE(env != nullptr);
+    for (size_t i = 0; i < count; ++i) {
+      REQUIRE(std::isfinite(env[i]));
+    }
+    sonare_free_floats(env);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_clicks(120.0f, 22050, 1.0f);
+    float* env = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_onset_strength(nullptr, samples.size(), 22050, 2048, 512, 128, &env, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, nullptr,
+                                  &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_fourier_tempogram", "[c_api]") {
+  SECTION("returns an [n_bins x n_frames] magnitude matrix") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    float* env = nullptr;
+    size_t env_count = 0;
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                                  &env_count) == SONARE_OK);
+
+    const int win_length = 384;
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+    SonareError err = sonare_fourier_tempogram(env, env_count, 22050, 512, win_length, 1, 1, &data,
+                                               &out_length, &n_frames);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(data != nullptr);
+    REQUIRE(n_frames == static_cast<int>(env_count));
+    const size_t n_bins = static_cast<size_t>(win_length) / 2 + 1;
+    REQUIRE(out_length == n_bins * static_cast<size_t>(n_frames));
+    for (size_t i = 0; i < out_length; ++i) {
+      REQUIRE(std::isfinite(data[i]));
+    }
+
+    sonare_free_floats(data);
+    sonare_free_floats(env);
+  }
+
+  SECTION("rejects invalid parameters") {
+    std::vector<float> env(256, 0.1f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+
+    REQUIRE(sonare_fourier_tempogram(nullptr, env.size(), 22050, 512, 384, 1, 1, &data, &out_length,
+                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_fourier_tempogram(env.data(), env.size(), 22050, 512, 384, 1, 1, &data,
+                                     &out_length, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_tempogram_with_mode", "[c_api]") {
+  const std::vector<float> env{0.2f, 1.0f, 0.4f, 0.0f, 0.8f, 0.1f, 0.5f, 0.3f,
+                               0.6f, 0.0f, 0.9f, 0.2f, 0.4f, 0.7f, 0.1f, 0.5f};
+  float* data = nullptr;
+  size_t out_length = 0;
+  int n_frames = 0;
+  SonareError err =
+      sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, SONARE_TEMPOGRAM_COSINE,
+                                 &data, &out_length, &n_frames);
+
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(data != nullptr);
+  REQUIRE(n_frames == static_cast<int>(env.size()));
+  REQUIRE(out_length == env.size() * 8);
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(data[i]));
+    REQUIRE(data[i] >= -1.0f - 1.0e-6f);
+    REQUIRE(data[i] <= 1.0f + 1.0e-6f);
+  }
+  sonare_free_floats(data);
+
+  REQUIRE(sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, 99, &data, &out_length,
+                                     &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_tempogram_ratio", "[c_api]") {
+  SECTION("returns one finite value per factor") {
+    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    float* env = nullptr;
+    size_t env_count = 0;
+    REQUIRE(sonare_onset_strength(samples.data(), samples.size(), 22050, 2048, 512, 128, &env,
+                                  &env_count) == SONARE_OK);
+
+    const int win_length = 384;
+    float* tg = nullptr;
+    size_t tg_length = 0;
+    int tg_frames = 0;
+    REQUIRE(sonare_tempogram(env, env_count, 22050, 512, win_length, 1, 1, &tg, &tg_length,
+                             &tg_frames) == SONARE_OK);
+
+    SECTION("default factors") {
+      float* ratio = nullptr;
+      size_t ratio_count = 0;
+      SonareError err = sonare_tempogram_ratio(tg, tg_length, win_length, 22050, 512, nullptr, 0,
+                                               &ratio, &ratio_count);
+      REQUIRE(err == SONARE_OK);
+      REQUIRE(ratio != nullptr);
+      REQUIRE(ratio_count == 5);  // {0.5, 1, 2, 3, 4}
+      for (size_t i = 0; i < ratio_count; ++i) {
+        REQUIRE(std::isfinite(ratio[i]));
+      }
+      sonare_free_floats(ratio);
+    }
+
+    SECTION("explicit factors") {
+      const float factors[] = {1.0f, 2.0f, 3.0f};
+      float* ratio = nullptr;
+      size_t ratio_count = 0;
+      SonareError err = sonare_tempogram_ratio(tg, tg_length, win_length, 22050, 512, factors, 3,
+                                               &ratio, &ratio_count);
+      REQUIRE(err == SONARE_OK);
+      REQUIRE(ratio_count == 3);
+      for (size_t i = 0; i < ratio_count; ++i) {
+        REQUIRE(std::isfinite(ratio[i]));
+      }
+      sonare_free_floats(ratio);
+    }
+
+    sonare_free_floats(tg);
+    sonare_free_floats(env);
+  }
+
+  SECTION("rejects invalid parameters") {
+    std::vector<float> tg(384 * 4, 0.1f);
+    const float factors[] = {1.0f};
+    float* ratio = nullptr;
+    size_t ratio_count = 0;
+
+    REQUIRE(sonare_tempogram_ratio(nullptr, tg.size(), 384, 22050, 512, factors, 1, &ratio,
+                                   &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), 384, 22050, 512, nullptr, 2, &ratio,
+                                   &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_nnls_chroma", "[c_api]") {
+  SECTION("returns a 12 x n_frames chroma matrix") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+
+    SonareError err =
+        sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length, &n_frames);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(data != nullptr);
+    REQUIRE(n_frames > 0);
+    REQUIRE(out_length == 12u * static_cast<size_t>(n_frames));
+    for (size_t i = 0; i < out_length; ++i) {
+      REQUIRE(std::isfinite(data[i]));
+      REQUIRE(data[i] >= 0.0f);  // NNLS output is non-negative
+    }
+    sonare_free_floats(data);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+
+    REQUIRE(sonare_nnls_chroma(nullptr, samples.size(), 22050, &data, &out_length, &n_frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, nullptr, &out_length,
+                               &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, nullptr, &n_frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length,
+                               nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_lufs", "[c_api]") {
+  SECTION("returns finite loudness measures") {
+    auto samples = generate_sine(440.0f, 48000, 3.0f);
+    SonareLufsResult result = {};
+
+    SonareError err = sonare_lufs(samples.data(), samples.size(), 48000, &result);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(std::isfinite(result.integrated_lufs));
+    REQUIRE(std::isfinite(result.momentary_lufs));
+    REQUIRE(std::isfinite(result.short_term_lufs));
+    REQUIRE(std::isfinite(result.loudness_range));
+    REQUIRE(result.loudness_range >= 0.0f);
+  }
+
+  SECTION("louder signal measures higher integrated LUFS") {
+    auto loud = generate_sine(440.0f, 48000, 3.0f);
+    auto quiet = loud;
+    for (auto& sample : quiet) sample *= 0.1f;
+
+    SonareLufsResult loud_result = {};
+    SonareLufsResult quiet_result = {};
+    REQUIRE(sonare_lufs(loud.data(), loud.size(), 48000, &loud_result) == SONARE_OK);
+    REQUIRE(sonare_lufs(quiet.data(), quiet.size(), 48000, &quiet_result) == SONARE_OK);
+
+    REQUIRE(loud_result.integrated_lufs > quiet_result.integrated_lufs);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    SonareLufsResult result = {};
+
+    REQUIRE(sonare_lufs(nullptr, samples.size(), 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_lufs(samples.data(), samples.size(), 48000, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_momentary_lufs and sonare_short_term_lufs", "[c_api]") {
+  SECTION("return finite time series") {
+    auto samples = generate_sine(440.0f, 48000, 3.0f);
+
+    float* momentary = nullptr;
+    size_t momentary_count = 0;
+    REQUIRE(sonare_momentary_lufs(samples.data(), samples.size(), 48000, &momentary,
+                                  &momentary_count) == SONARE_OK);
+    REQUIRE(momentary != nullptr);
+    REQUIRE(momentary_count > 0);
+    for (size_t i = 0; i < momentary_count; ++i) {
+      REQUIRE(std::isfinite(momentary[i]));
+    }
+    sonare_free_floats(momentary);
+
+    float* short_term = nullptr;
+    size_t short_term_count = 0;
+    REQUIRE(sonare_short_term_lufs(samples.data(), samples.size(), 48000, &short_term,
+                                   &short_term_count) == SONARE_OK);
+    REQUIRE(short_term != nullptr);
+    REQUIRE(short_term_count > 0);
+    for (size_t i = 0; i < short_term_count; ++i) {
+      REQUIRE(std::isfinite(short_term[i]));
+    }
+    sonare_free_floats(short_term);
+  }
+
+  SECTION("reject invalid parameters") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    float* out = nullptr;
+    size_t count = 0;
+
+    REQUIRE(sonare_momentary_lufs(nullptr, samples.size(), 48000, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_short_term_lufs(nullptr, samples.size(), 48000, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {
     REQUIRE(std::strcmp(sonare_error_message(SONARE_OK), "OK") == 0);
@@ -612,7 +1519,321 @@ TEST_CASE("sonare_version", "[c_api]") {
     REQUIRE(ver != nullptr);
     REQUIRE(std::strlen(ver) > 0);
   }
+
+  SECTION("returns engine ABI version") { REQUIRE(sonare_engine_abi_version() > 0); }
 }
+
+#ifdef SONARE_WITH_VOICE_CHANGER
+TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
+  auto samples = generate_sine(440.0f, 22050, 0.25f);
+  float* out = nullptr;
+  size_t out_length = 0;
+
+  REQUIRE(sonare_pitch_correct_to_midi(samples.data(), samples.size(), 22050, 69.0f, 70.0f, &out,
+                                       &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_note_stretch(samples.data(), samples.size(), 22050, 100, 1000, 1.25f, &out,
+                              &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length > samples.size());
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 5.0f, 1.1f, &out,
+                              &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  sonare_free_floats(out);
+}
+
+TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 60.0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_time_signature(engine, 3, 4) == SONARE_OK);
+  SonareEngineMarker markers[2]{};
+  markers[0].id = 11;
+  markers[0].ppq = 1.0;
+  std::strncpy(markers[0].name, "intro", sizeof(markers[0].name) - 1);
+  markers[1].id = 12;
+  markers[1].ppq = 2.0;
+  std::strncpy(markers[1].name, "out", sizeof(markers[1].name) - 1);
+  REQUIRE(sonare_engine_set_markers(engine, markers, 2) == SONARE_OK);
+  size_t marker_count = 0;
+  REQUIRE(sonare_engine_marker_count(engine, &marker_count) == SONARE_OK);
+  REQUIRE(marker_count == 2);
+  SonareEngineMarker marker_out{};
+  REQUIRE(sonare_engine_marker_by_index(engine, 0, &marker_out) == SONARE_OK);
+  REQUIRE(marker_out.id == 11);
+  REQUIRE(std::strcmp(marker_out.name, "intro") == 0);
+  REQUIRE(sonare_engine_marker(engine, 12, &marker_out) == SONARE_OK);
+  REQUIRE(marker_out.ppq == Catch::Approx(2.0));
+  REQUIRE(sonare_engine_set_loop_from_markers(engine, 11, 12) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_marker(engine, 11, -1) == SONARE_OK);
+  SonareEngineMetronomeConfig metronome{};
+  metronome.enabled = 1;
+  metronome.beat_gain = 0.25f;
+  metronome.accent_gain = 0.75f;
+  metronome.click_samples = 16;
+  REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_OK);
+  SonareEngineMetronomeConfig metronome_out{};
+  REQUIRE(sonare_engine_metronome(engine, &metronome_out) == SONARE_OK);
+  REQUIRE(metronome_out.enabled == 1);
+  REQUIRE(metronome_out.click_samples == 16);
+  int64_t count_in_end = 0;
+  REQUIRE(sonare_engine_count_in_end_sample(engine, 0, 2, &count_in_end) == SONARE_OK);
+  REQUIRE(count_in_end == 288000);
+  metronome.enabled = 0;
+  REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 7;
+  std::strncpy(parameter.name, "gain", sizeof(parameter.name) - 1);
+  std::strncpy(parameter.unit, "dB", sizeof(parameter.unit) - 1);
+  parameter.min_value = -60.0f;
+  parameter.max_value = 12.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 1;
+  parameter.default_curve = 1;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+  size_t parameter_count = 0;
+  REQUIRE(sonare_engine_parameter_count(engine, &parameter_count) == SONARE_OK);
+  REQUIRE(parameter_count == 1);
+  SonareParameterInfo parameter_out{};
+  REQUIRE(sonare_engine_parameter_info_by_index(engine, 0, &parameter_out) == SONARE_OK);
+  REQUIRE(parameter_out.id == 7);
+  REQUIRE(std::strcmp(parameter_out.name, "gain") == 0);
+
+  const SonareAutomationPoint points[] = {{0.0, 0.0f, 1}, {1.0, 6.0205999f, 1}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, 7, points, 2) == SONARE_OK);
+  size_t lane_count = 0;
+  REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
+  REQUIRE(lane_count == 1);
+
+  SonareEngineGraphNode graph_nodes[3]{};
+  std::strncpy(graph_nodes[0].id, "in", sizeof(graph_nodes[0].id) - 1);
+  graph_nodes[0].type = 0;
+  graph_nodes[0].num_ports = 2;
+  std::strncpy(graph_nodes[1].id, "gain", sizeof(graph_nodes[1].id) - 1);
+  graph_nodes[1].type = 1;
+  graph_nodes[1].gain_db = 0.0f;
+  graph_nodes[1].num_ports = 2;
+  std::strncpy(graph_nodes[2].id, "out", sizeof(graph_nodes[2].id) - 1);
+  graph_nodes[2].type = 0;
+  graph_nodes[2].num_ports = 2;
+  SonareEngineGraphConnection graph_connections[4]{};
+  std::strncpy(graph_connections[0].source_node, "in",
+               sizeof(graph_connections[0].source_node) - 1);
+  std::strncpy(graph_connections[0].dest_node, "gain", sizeof(graph_connections[0].dest_node) - 1);
+  graph_connections[0].source_port = 0;
+  graph_connections[0].dest_port = 0;
+  graph_connections[0].mix = 1;
+  std::strncpy(graph_connections[1].source_node, "in",
+               sizeof(graph_connections[1].source_node) - 1);
+  std::strncpy(graph_connections[1].dest_node, "gain", sizeof(graph_connections[1].dest_node) - 1);
+  graph_connections[1].source_port = 1;
+  graph_connections[1].dest_port = 1;
+  graph_connections[1].mix = 1;
+  std::strncpy(graph_connections[2].source_node, "gain",
+               sizeof(graph_connections[2].source_node) - 1);
+  std::strncpy(graph_connections[2].dest_node, "out", sizeof(graph_connections[2].dest_node) - 1);
+  graph_connections[2].source_port = 0;
+  graph_connections[2].dest_port = 0;
+  graph_connections[2].mix = 1;
+  std::strncpy(graph_connections[3].source_node, "gain",
+               sizeof(graph_connections[3].source_node) - 1);
+  std::strncpy(graph_connections[3].dest_node, "out", sizeof(graph_connections[3].dest_node) - 1);
+  graph_connections[3].source_port = 1;
+  graph_connections[3].dest_port = 1;
+  graph_connections[3].mix = 1;
+  SonareEngineGraphSpec graph_spec{};
+  graph_spec.nodes = graph_nodes;
+  graph_spec.node_count = 3;
+  graph_spec.connections = graph_connections;
+  graph_spec.connection_count = 4;
+  SonareEngineGraphParameterBinding graph_bindings[1]{};
+  graph_bindings[0].param_id = 7;
+  std::strncpy(graph_bindings[0].node_id, "gain", sizeof(graph_bindings[0].node_id) - 1);
+  graph_spec.parameter_bindings = graph_bindings;
+  graph_spec.parameter_binding_count = 1;
+  std::strncpy(graph_spec.input_node, "in", sizeof(graph_spec.input_node) - 1);
+  std::strncpy(graph_spec.output_node, "out", sizeof(graph_spec.output_node) - 1);
+  graph_spec.num_channels = 2;
+  REQUIRE(sonare_engine_set_graph(engine, &graph_spec) == SONARE_OK);
+  size_t graph_node_count = 0;
+  size_t graph_connection_count = 0;
+  REQUIRE(sonare_engine_graph_node_count(engine, &graph_node_count) == SONARE_OK);
+  REQUIRE(sonare_engine_graph_connection_count(engine, &graph_connection_count) == SONARE_OK);
+  REQUIRE(graph_node_count == 3);
+  REQUIRE(graph_connection_count == 4);
+
+  std::array<float, 128> clip_left{};
+  std::array<float, 128> clip_right{};
+  clip_left.fill(0.125f);
+  clip_right.fill(-0.125f);
+  const float* clip_channels[] = {clip_left.data(), clip_right.data()};
+  SonareEngineClip clip{};
+  clip.id = 101;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = 128;
+  clip.start_ppq = 1.0;
+  clip.length_samples = 128;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  size_t clip_count = 0;
+  REQUIRE(sonare_engine_clip_count(engine, &clip_count) == SONARE_OK);
+  REQUIRE(clip_count == 1);
+
+  std::array<float, 128> capture_left{};
+  std::array<float, 128> capture_right{};
+  float* capture_channels[] = {capture_left.data(), capture_right.data()};
+  SonareEngineCaptureBuffer capture_buffer{};
+  capture_buffer.channels = capture_channels;
+  capture_buffer.num_channels = 2;
+  capture_buffer.capacity_frames = 128;
+  REQUIRE(sonare_engine_set_capture_buffer(engine, &capture_buffer) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 48000, 48128, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+
+  SonareEngineCaptureStatus capture_status{};
+  REQUIRE(sonare_engine_capture_status(engine, &capture_status) == SONARE_OK);
+  REQUIRE(capture_status.captured_frames == 128);
+  REQUIRE(capture_status.overflow_count == 0);
+  REQUIRE(capture_status.armed == 1);
+  REQUIRE(capture_left[0] == Catch::Approx(0.75f).margin(0.0001f));
+  REQUIRE(capture_right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+  REQUIRE(sonare_engine_reset_capture(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine, &capture_status) == SONARE_OK);
+  REQUIRE(capture_status.captured_frames == 0);
+
+  std::array<SonareEngineTelemetry, 4> telemetry{};
+  size_t written = 0;
+  REQUIRE(sonare_engine_drain_telemetry(engine, telemetry.data(), telemetry.size(), &written) ==
+          SONARE_OK);
+  REQUIRE(written > 0);
+  REQUIRE(telemetry[written - 1].render_frame == 0);
+  REQUIRE(telemetry[written - 1].timeline_sample == 48000 + 128);
+
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
+  SonareEngineBounceOptions bounce_options{};
+  bounce_options.total_frames = 128;
+  bounce_options.block_size = 128;
+  bounce_options.num_channels = 2;
+  bounce_options.source_sample_rate = 48000;
+  bounce_options.target_sample_rate = 24000;
+  bounce_options.normalize_lufs = 0;
+  bounce_options.dither = 0;
+  SonareEngineBounceResult bounce{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &bounce_options, &bounce) == SONARE_OK);
+  REQUIRE(bounce.interleaved != nullptr);
+  REQUIRE(bounce.frames == 64);
+  REQUIRE(bounce.num_channels == 2);
+  REQUIRE(bounce.sample_rate == 24000);
+  REQUIRE(bounce.sample_count == 128);
+  REQUIRE((std::isfinite(bounce.integrated_lufs) || std::isinf(bounce.integrated_lufs)));
+  sonare_free_floats(bounce.interleaved);
+  sonare_engine_destroy(engine);
+}
+#endif
+
+TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
+
+  std::array<float, 16> left{};
+  std::array<float, 16> right{};
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* channels[] = {left.data(), right.data()};
+
+  std::array<float, 16> monitor_left{};
+  std::array<float, 16> monitor_right{};
+  monitor_left.fill(99.0f);
+  monitor_right.fill(99.0f);
+  float* monitor_channels[] = {monitor_left.data(), monitor_right.data()};
+
+  REQUIRE(sonare_engine_process_with_monitor(engine, channels, monitor_channels, 2, 16) ==
+          SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
+  REQUIRE(monitor_left[0] == Catch::Approx(0.0f).margin(0.0001f));
+  REQUIRE(monitor_right[0] == Catch::Approx(0.0f).margin(0.0001f));
+
+  sonare_engine_destroy(engine);
+}
+
+#ifdef SONARE_WITH_VOICE_CHANGER
+TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64) == SONARE_OK);
+
+  std::array<float, 128> clip_left{};
+  std::array<float, 128> clip_right{};
+  clip_left.fill(0.125f);
+  clip_right.fill(-0.25f);
+  const float* clip_channels[] = {clip_left.data(), clip_right.data()};
+  SonareEngineClip clip{};
+  clip.id = 7;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = 128;
+  clip.start_ppq = 0.0;
+  clip.length_samples = 128;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  SonareEngineFreezeOptions freeze_options{};
+  freeze_options.total_frames = 128;
+  freeze_options.block_size = 128;
+  freeze_options.num_channels = 2;
+  freeze_options.clip_id = 77;
+  freeze_options.start_ppq = 0.0;
+  freeze_options.gain = 1.0f;
+  SonareEngineFreezeResult freeze{};
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze_options, &freeze) == SONARE_OK);
+  REQUIRE(freeze.clip_id == 77);
+  REQUIRE(freeze.frames == 128);
+  REQUIRE(freeze.num_channels == 2);
+  size_t clip_count = 0;
+  REQUIRE(sonare_engine_clip_count(engine, &clip_count) == SONARE_OK);
+  REQUIRE(clip_count == 1);
+
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.125f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
+  REQUIRE(left[127] == Catch::Approx(0.125f).margin(0.0001f));
+  REQUIRE(right[127] == Catch::Approx(-0.25f).margin(0.0001f));
+
+  sonare_engine_destroy(engine);
+}
+#endif
 
 TEST_CASE("sonare_last_error_message", "[c_api]") {
   SECTION("never returns null pointer") {

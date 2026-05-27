@@ -63,4 +63,20 @@ if(BUILD_MASTERING)
   target_include_directories(sonare_mastering_stereo_bench PRIVATE
     ${CMAKE_SOURCE_DIR}/src
   )
+
+  add_executable(sonare_eq_bench eq_bench.cpp)
+  target_link_libraries(sonare_eq_bench PRIVATE sonare_mastering)
+  target_compile_options(sonare_eq_bench PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_eq_bench PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+  )
+endif()
+
+if(BUILD_MIXING)
+  add_executable(sonare_mixing_bench mixing_bench.cpp)
+  target_link_libraries(sonare_mixing_bench PRIVATE sonare_mixing)
+  target_compile_options(sonare_mixing_bench PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_mixing_bench PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+  )
 endif()

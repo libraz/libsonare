@@ -52,21 +52,32 @@ struct CachedCqtKernel {
 /// @brief Maximum number of cached CQT kernels
 constexpr size_t kMaxCqtCacheSize = 8;
 
-/// @brief Global CQT kernel cache with LRU eviction
-std::mutex g_kernel_cache_mutex;
-std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> g_kernel_cache;
-std::list<CqtKernelCacheKey> g_kernel_cache_lru;
+/// @brief CQT kernel cache state with LRU eviction.
+/// @details Wrapped in a function-local static (Meyers singleton) so its
+/// construction and destruction order are well-defined; the mutex still guards
+/// concurrent access.
+struct CqtKernelCache {
+  std::mutex mutex;
+  std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> map;
+  std::list<CqtKernelCacheKey> lru;
+};
+
+CqtKernelCache& cqt_kernel_cache() {
+  static CqtKernelCache cache;
+  return cache;
+}
 
 /// @brief Get or create cached CQT kernel with Eigen matrix
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   CqtKernelCacheKey key{sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave};
 
-  std::lock_guard<std::mutex> lock(g_kernel_cache_mutex);
-  auto it = g_kernel_cache.find(key);
-  if (it != g_kernel_cache.end()) {
+  CqtKernelCache& cache = cqt_kernel_cache();
+  std::lock_guard<std::mutex> lock(cache.mutex);
+  auto it = cache.map.find(key);
+  if (it != cache.map.end()) {
     // Move to front of LRU list (most recently used)
-    g_kernel_cache_lru.remove(key);
-    g_kernel_cache_lru.push_front(key);
+    cache.lru.remove(key);
+    cache.lru.push_front(key);
     return it->second;
   }
 
@@ -86,15 +97,15 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   }
 
   // Evict oldest entry if cache is full
-  while (g_kernel_cache.size() >= kMaxCqtCacheSize && !g_kernel_cache_lru.empty()) {
-    auto oldest_key = g_kernel_cache_lru.back();
-    g_kernel_cache_lru.pop_back();
-    g_kernel_cache.erase(oldest_key);
+  while (cache.map.size() >= kMaxCqtCacheSize && !cache.lru.empty()) {
+    auto oldest_key = cache.lru.back();
+    cache.lru.pop_back();
+    cache.map.erase(oldest_key);
   }
 
   CachedCqtKernel cached{kernel, eigen_matrix};
-  g_kernel_cache[key] = cached;
-  g_kernel_cache_lru.push_front(key);
+  cache.map[key] = cached;
+  cache.lru.push_front(key);
   return cached;
 }
 
@@ -353,54 +364,86 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     return Audio();
   }
 
-  int n_bins = cqt_result.n_bins();
-  int n_frames = cqt_result.n_frames();
-  int hop_length = cqt_result.hop_length();
-  int sr = cqt_result.sample_rate();
-
-  // Estimate output length
-  int output_length = length > 0 ? length : (n_frames - 1) * hop_length + hop_length;
-
-  std::vector<float> output(output_length, 0.0f);
-  std::vector<float> weight(output_length, 0.0f);
-
+  const int n_bins = cqt_result.n_bins();
+  const int n_frames = cqt_result.n_frames();
+  const int hop_length = cqt_result.hop_length();
+  const int sr = cqt_result.sample_rate();
   const auto& frequencies = cqt_result.frequencies();
+  if (frequencies.empty()) {
+    return Audio();
+  }
 
-  // Simple overlap-add reconstruction
-  // This is a simplified pseudo-inverse, not exact
-  for (int t = 0; t < n_frames; ++t) {
-    int center = t * hop_length;
+  int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
+  if (frequencies.size() >= 2 && frequencies[0] > 0.0f && frequencies[1] > frequencies[0]) {
+    const float ratio = frequencies[1] / frequencies[0];
+    const float estimated_bpo = 1.0f / std::log2(ratio);
+    bins_per_octave = std::max(1, static_cast<int>(std::lround(estimated_bpo)));
+  }
 
-    for (int k = 0; k < n_bins; ++k) {
-      std::complex<float> coef = cqt_result.at(k, t);
-      float freq = frequencies[k];
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = frequencies.front();
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
 
-      // Estimate filter length for this bin
-      float Q = 1.0f / (std::pow(2.0f, 1.0f / constants::kSemitonesPerOctave) - 1.0f);
-      int filter_length = static_cast<int>(Q * sr / freq);
-      filter_length = std::min(filter_length, output_length);
+  auto cached = get_cached_kernel(sr, config);
+  const auto& kernel = *cached.kernel;
+  const auto& basis = kernel.kernel();
+  const auto& lengths = kernel.raw_lengths();
+  const int n_fft = kernel.fft_length();
+  const int n_freq = n_fft / 2 + 1;
 
-      // Create windowed sinusoid
-      for (int n = 0; n < filter_length; ++n) {
-        int idx = center + n - filter_length / 2;
-        if (idx >= 0 && idx < output_length) {
-          float phase = kTwoPi * freq * n / sr;
-          float win = 0.5f * (1.0f - std::cos(kTwoPi * n / filter_length));
-
-          // Real part of complex multiplication
-          float val = std::real(coef) * std::cos(phase) - std::imag(coef) * std::sin(phase);
-          output[idx] += val * win;
-          weight[idx] += win;
-        }
-      }
+  std::vector<float> freq_power(n_bins, 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    double power = 0.0;
+    for (int b = 0; b < n_freq; ++b) {
+      power += std::norm(basis[static_cast<size_t>(k) * n_fft + b]);
+    }
+    if (power > 0.0 && lengths[k] > 0.0f) {
+      freq_power[k] = static_cast<float>((static_cast<double>(n_fft) / lengths[k]) / power);
     }
   }
 
-  // Normalize by weight
-  for (int i = 0; i < output_length; ++i) {
-    if (weight[i] > 1e-6f) {
-      output[i] /= weight[i];
+  std::vector<float> output_padded(static_cast<size_t>(n_fft + (n_frames - 1) * hop_length), 0.0f);
+  std::vector<float> weight(output_padded.size(), 0.0f);
+  std::vector<std::complex<float>> spectrum(n_freq);
+  std::vector<float> frame(n_fft, 0.0f);
+  FFT fft(n_fft);
+
+  for (int t = 0; t < n_frames; ++t) {
+    std::fill(spectrum.begin(), spectrum.end(), std::complex<float>(0.0f, 0.0f));
+    for (int b = 0; b < n_freq; ++b) {
+      std::complex<float> acc(0.0f, 0.0f);
+      for (int k = 0; k < n_bins; ++k) {
+        const float scale = std::sqrt(std::max(lengths[k], 0.0f)) * freq_power[k];
+        acc += std::conj(basis[static_cast<size_t>(k) * n_fft + b]) * scale * cqt_result.at(k, t);
+      }
+      spectrum[b] = acc;
     }
+    fft.inverse(spectrum.data(), frame.data());
+
+    const int start = t * hop_length;
+    for (int n = 0; n < n_fft; ++n) {
+      const size_t idx = static_cast<size_t>(start + n);
+      output_padded[idx] += frame[n];
+      weight[idx] += 1.0f;
+    }
+  }
+
+  // OLA coverage counter is integer-like; this floor only skips uncovered
+  // padded tails and avoids division by exact zero.
+  constexpr float kOverlapWeightFloor = 1.0e-6f;
+  for (size_t i = 0; i < output_padded.size(); ++i) {
+    if (weight[i] > kOverlapWeightFloor) output_padded[i] /= weight[i];
+  }
+
+  const int crop_start = n_fft / 2;
+  int output_length =
+      length > 0 ? length : std::max(0, static_cast<int>(output_padded.size()) - 2 * crop_start);
+  std::vector<float> output(static_cast<size_t>(output_length), 0.0f);
+  for (int i = 0; i < output_length; ++i) {
+    const int src = crop_start + i;
+    if (src >= 0 && src < static_cast<int>(output_padded.size())) output[i] = output_padded[src];
   }
 
   return Audio::from_vector(std::move(output), sr);
@@ -608,7 +651,7 @@ std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
     for (int c = 0; c < n_chroma; ++c) {
       max_val = std::max(max_val, chroma[c * n_frames + t]);
     }
-    if (max_val > 1e-6f) {
+    if (max_val > constants::kEpsilon) {
       for (int c = 0; c < n_chroma; ++c) {
         chroma[c * n_frames + t] /= max_val;
       }

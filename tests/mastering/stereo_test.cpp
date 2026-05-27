@@ -1,4 +1,4 @@
-#include "analysis/meter/stereo.h"
+#include "metering/stereo.h"
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>

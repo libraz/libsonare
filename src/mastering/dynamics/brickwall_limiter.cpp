@@ -5,6 +5,7 @@
 #include <limits>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 
 namespace sonare::mastering::dynamics {
@@ -40,6 +41,7 @@ void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
 }
 
 void BrickwallLimiter::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("BrickwallLimiter must be prepared before processing");
   }
@@ -104,6 +106,23 @@ void BrickwallLimiter::set_release_ms(float release_ms) {
   }
   config_.release_ms = release_ms;
   limiter_.set_release_ms(release_ms);
+}
+
+bool BrickwallLimiter::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.ceiling_db = value;
+      // The inner limiter uses ceiling_db as its threshold; forward it so the
+      // soft limiting stage tracks the new ceiling without resetting state.
+      limiter_.set_parameter(0, value);
+      return true;
+    case 1:
+      config_.release_ms = std::max(0.0f, value);
+      limiter_.set_release_ms(config_.release_ms);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {

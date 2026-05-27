@@ -1,22 +1,71 @@
 import { createRequire } from 'node:module';
 import type {
+  AcousticResult,
+  AnalysisProgressCallback,
   AnalysisResult,
+  AutomationCurve,
   BpmAnalysisResult,
   ChordAnalysisResult,
+  ChordChromaMethod,
   ChromaResult,
+  CqtResult,
   DynamicsResult,
+  EngineAutomationPoint,
+  EngineBounceOptions,
+  EngineBounceResult,
+  EngineCaptureStatus,
+  EngineClip,
+  EngineFreezeOptions,
+  EngineFreezeResult,
+  EngineGraphSpec,
+  EngineMarker,
+  EngineMeterTelemetry,
+  EngineMetronomeConfig,
+  EngineParameterInfo,
+  EngineTelemetry,
+  EngineTransportState,
+  EqBandInput,
+  EqSpectrumSnapshot,
+  GoniometerPoint,
   HpssResult,
+  InverseMelResult,
+  InverseStftResult,
   Key,
+  KeyCandidate,
+  KeyDetectionOptions,
+  LufsResult,
   MasteringChainResult,
   MasteringChainStereoResult,
+  MasteringPreset,
   MasteringResult,
   MasteringStereoResult,
+  MelodyResult,
   MelSpectrogramResult,
+  MeterTap,
   MfccResult,
+  MixerProcessResult,
+  MixMeterSnapshot,
+  MixOptions,
+  MixResult,
+  PairAnalysis,
+  PairProcessor,
+  PanLaw,
   PitchResult,
   RhythmResult,
+  Section,
+  SendTiming,
+  SoloProcessor,
+  StereoAnalysis,
   StftDbResult,
   StftResult,
+  StreamAnalyzerConfig,
+  StreamAnalyzerStats,
+  StreamFramesI16,
+  StreamFramesSoa,
+  StreamFramesU8,
+  StreamingPlatform,
+  StripRef,
+  TempogramMode,
   TimbreResult,
 } from './types.js';
 
@@ -71,12 +120,20 @@ export class Audio {
     return this.native.detectBpm();
   }
 
-  detectKey(): Key {
-    return this.native.detectKey();
+  detectKey(options: KeyDetectionOptions = {}): Key {
+    return addon.detectKey(this.getData(), this.getSampleRate(), options);
+  }
+
+  detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
+    return addon.detectKeyCandidates(this.getData(), this.getSampleRate(), options);
   }
 
   detectBeats(): Float32Array {
     return this.native.detectBeats();
+  }
+
+  detectDownbeats(): Float32Array {
+    return this.native.detectDownbeats();
   }
 
   detectOnsets(): Float32Array {
@@ -104,6 +161,26 @@ export class Audio {
       nFft,
       hopLength,
       maxCandidates,
+    );
+  }
+
+  analyzeImpulseResponse(nOctaveBands = 6): AcousticResult {
+    return addon.analyzeImpulseResponse(this.getData(), this.getSampleRate(), nOctaveBands);
+  }
+
+  detectAcoustic(
+    nOctaveBands = 6,
+    nThirdOctaveSubbands = 24,
+    minDecayDb = 30.0,
+    noiseFloorMarginDb = 10.0,
+  ): AcousticResult {
+    return addon.detectAcoustic(
+      this.getData(),
+      this.getSampleRate(),
+      nOctaveBands,
+      nThirdOctaveSubbands,
+      minDecayDb,
+      noiseFloorMarginDb,
     );
   }
 
@@ -161,6 +238,13 @@ export class Audio {
     nFft = 2048,
     hopLength = 512,
     useBeatSync = true,
+    useHmm = false,
+    hmmBeamWidth = 24,
+    useKeyContext = false,
+    keyRoot = 0,
+    keyMode = 0,
+    detectInversions = false,
+    chromaMethod: ChordChromaMethod = 'stft',
   ): ChordAnalysisResult {
     return addon.detectChords(
       this.getData(),
@@ -172,6 +256,13 @@ export class Audio {
       nFft,
       hopLength,
       useBeatSync,
+      useHmm,
+      hmmBeamWidth,
+      useKeyContext,
+      keyRoot,
+      keyMode,
+      detectInversions,
+      chordChromaMethodValue(chromaMethod),
     );
   }
 
@@ -197,6 +288,24 @@ export class Audio {
     return addon.pitchShift(this.getData(), this.getSampleRate(), semitones);
   }
 
+  pitchCorrectToMidi(currentMidi: number, targetMidi: number): Float32Array {
+    return addon.pitchCorrectToMidi(this.getData(), this.getSampleRate(), currentMidi, targetMidi);
+  }
+
+  noteStretch(onsetSample: number, offsetSample: number, stretchRatio: number): Float32Array {
+    return addon.noteStretch(
+      this.getData(),
+      this.getSampleRate(),
+      onsetSample,
+      offsetSample,
+      stretchRatio,
+    );
+  }
+
+  voiceChange(pitchSemitones: number, formantFactor = 1.0): Float32Array {
+    return addon.voiceChange(this.getData(), this.getSampleRate(), pitchSemitones, formantFactor);
+  }
+
   normalize(targetDb = 0.0): Float32Array {
     return addon.normalize(this.getData(), this.getSampleRate(), targetDb);
   }
@@ -212,7 +321,7 @@ export class Audio {
   }
 
   masteringProcess(
-    processorName: string,
+    processorName: SoloProcessor,
     params: Record<string, number | boolean> = {},
   ): MasteringResult {
     return addon.masteringProcess(processorName, this.getData(), this.getSampleRate(), params);
@@ -234,7 +343,7 @@ export class Audio {
   }
 
   masterAudio(
-    preset = 'pop',
+    preset: MasteringPreset = 'pop',
     overrides: Record<string, number | boolean> = {},
     onProgress?: (progress: number, stage: string) => void,
   ): MasteringChainResult {
@@ -345,6 +454,254 @@ export class Audio {
   resample(targetSr: number): Float32Array {
     return addon.resample(this.getData(), this.getSampleRate(), targetSr);
   }
+
+  onsetEnvelope(nFft = 2048, hopLength = 512, nMels = 128): Float32Array {
+    return addon.onsetEnvelope(this.getData(), this.getSampleRate(), nFft, hopLength, nMels);
+  }
+
+  nnlsChroma(): { nChroma: number; nFrames: number; data: Float32Array } {
+    return addon.nnlsChroma(this.getData(), this.getSampleRate());
+  }
+
+  lufs(): LufsResult {
+    return addon.lufs(this.getData(), this.getSampleRate());
+  }
+
+  momentaryLufs(): Float32Array {
+    return addon.momentaryLufs(this.getData(), this.getSampleRate());
+  }
+
+  shortTermLufs(): Float32Array {
+    return addon.shortTermLufs(this.getData(), this.getSampleRate());
+  }
+}
+
+export class RealtimeEngine {
+  private native: InstanceType<typeof addon.RealtimeEngine>;
+
+  constructor(
+    sampleRate = 48000,
+    maxBlockSize = 128,
+    commandCapacity = 1024,
+    telemetryCapacity = 1024,
+  ) {
+    this.native = new addon.RealtimeEngine(
+      sampleRate,
+      maxBlockSize,
+      commandCapacity,
+      telemetryCapacity,
+    );
+  }
+
+  prepare(
+    sampleRate: number,
+    maxBlockSize: number,
+    commandCapacity = 1024,
+    telemetryCapacity = 1024,
+  ): void {
+    this.native.prepare(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity);
+  }
+
+  play(renderFrame = -1): void {
+    this.native.play(renderFrame);
+  }
+
+  stop(renderFrame = -1): void {
+    this.native.stop(renderFrame);
+  }
+
+  seekSample(timelineSample: number, renderFrame = -1): void {
+    this.native.seekSample(timelineSample, renderFrame);
+  }
+
+  seekPpq(ppq: number, renderFrame = -1): void {
+    this.native.seekPpq(ppq, renderFrame);
+  }
+
+  setTempo(bpm: number): void {
+    this.native.setTempo(bpm);
+  }
+
+  setTimeSignature(numerator: number, denominator: number): void {
+    this.native.setTimeSignature(numerator, denominator);
+  }
+
+  setLoop(startPpq: number, endPpq: number, enabled = true): void {
+    this.native.setLoop(startPpq, endPpq, enabled);
+  }
+
+  addParameter(info: EngineParameterInfo): void {
+    this.native.addParameter(info);
+  }
+
+  parameterCount(): number {
+    return this.native.parameterCount();
+  }
+
+  parameterInfoByIndex(index: number): EngineParameterInfo {
+    return this.native.parameterInfoByIndex(index);
+  }
+
+  parameterInfo(id: number): EngineParameterInfo {
+    return this.native.parameterInfo(id);
+  }
+
+  setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
+    this.native.setAutomationLane(paramId, points);
+  }
+
+  automationLaneCount(): number {
+    return this.native.automationLaneCount();
+  }
+
+  setMarkers(markers: EngineMarker[]): void {
+    this.native.setMarkers(markers);
+  }
+
+  markerCount(): number {
+    return this.native.markerCount();
+  }
+
+  markerByIndex(index: number): EngineMarker {
+    return this.native.markerByIndex(index);
+  }
+
+  marker(id: number): EngineMarker {
+    return this.native.marker(id);
+  }
+
+  seekMarker(markerId: number, renderFrame = -1): void {
+    this.native.seekMarker(markerId, renderFrame);
+  }
+
+  setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
+    this.native.setLoopFromMarkers(startMarkerId, endMarkerId);
+  }
+
+  setMetronome(config: EngineMetronomeConfig): void {
+    this.native.setMetronome(config);
+  }
+
+  metronome(): Required<EngineMetronomeConfig> {
+    return this.native.metronome();
+  }
+
+  countInEndSample(startSample: number, bars: number): number {
+    return this.native.countInEndSample(startSample, bars);
+  }
+
+  setClips(clips: EngineClip[]): void {
+    this.native.setClips(clips);
+  }
+
+  clipCount(): number {
+    return this.native.clipCount();
+  }
+
+  setCaptureBuffer(channels: Float32Array[]): void {
+    this.native.setCaptureBuffer(channels);
+  }
+
+  armCapture(armed = true): void {
+    this.native.armCapture(armed);
+  }
+
+  setCapturePunch(startSample: number, endSample: number, enabled = true): void {
+    this.native.setCapturePunch(startSample, endSample, enabled);
+  }
+
+  resetCapture(): void {
+    this.native.resetCapture();
+  }
+
+  captureStatus(): EngineCaptureStatus {
+    return this.native.captureStatus();
+  }
+
+  /**
+   * Read the recorded samples out of the capture buffer.
+   *
+   * Returns one `Float32Array` per capture channel, each sliced to the number
+   * of frames recorded so far (see {@link captureStatus}). Call after capture
+   * to retrieve the audio written into the buffers passed to
+   * {@link setCaptureBuffer}.
+   */
+  capturedAudio(): Float32Array[] {
+    return this.native.capturedAudio();
+  }
+
+  setGraph(spec: EngineGraphSpec): void {
+    this.native.setGraph(spec);
+  }
+
+  graphNodeCount(): number {
+    return this.native.graphNodeCount();
+  }
+
+  graphConnectionCount(): number {
+    return this.native.graphConnectionCount();
+  }
+
+  process(channels: Float32Array[]): Float32Array[] {
+    return this.native.process(channels);
+  }
+
+  processWithMonitor(channels: Float32Array[]): {
+    output: Float32Array[];
+    monitor: Float32Array[];
+  } {
+    return this.native.processWithMonitor(channels);
+  }
+
+  renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {
+    return this.native.renderOffline(channels, blockSize);
+  }
+
+  bounceOffline(options: EngineBounceOptions): EngineBounceResult {
+    return this.native.bounceOffline(options);
+  }
+
+  freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
+    return this.native.freezeOffline(options);
+  }
+
+  drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
+    return this.native.drainTelemetry(maxRecords);
+  }
+
+  /** Drain pending meter telemetry records published by the engine's meter tap. */
+  drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
+    return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  /**
+   * Push a live parameter value to the engine (immediate jump).
+   *
+   * @param paramId - Target parameter id
+   * @param value - New value
+   * @param renderFrame - Render-frame time to apply, or `-1` for immediate
+   */
+  setParameter(paramId: number, value: number, renderFrame = -1): void {
+    this.native.setParameter(paramId, value, renderFrame);
+  }
+
+  /** Push a live parameter value to the engine using a smoothed ramp. */
+  setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
+    this.native.setParameterSmoothed(paramId, value, renderFrame);
+  }
+
+  /** Read the current engine transport state (playing/position/ppq/tempo). */
+  getTransportState(): EngineTransportState {
+    return this.native.getTransportState();
+  }
+
+  destroy(): void {
+    this.native.destroy();
+  }
+}
+
+export function engineAbiVersion(): number {
+  return addon.engineAbiVersion();
 }
 
 // ============================================================================
@@ -357,12 +714,28 @@ export function detectBpm(samples: Float32Array, sampleRate = 22050): number {
   return addon.detectBpm(samples, sampleRate);
 }
 
-export function detectKey(samples: Float32Array, sampleRate = 22050): Key {
-  return addon.detectKey(samples, sampleRate);
+export function detectKey(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: KeyDetectionOptions = {},
+): Key {
+  return addon.detectKey(samples, sampleRate, options);
+}
+
+export function detectKeyCandidates(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: KeyDetectionOptions = {},
+): KeyCandidate[] {
+  return addon.detectKeyCandidates(samples, sampleRate, options);
 }
 
 export function detectBeats(samples: Float32Array, sampleRate = 22050): Float32Array {
   return addon.detectBeats(samples, sampleRate);
+}
+
+export function detectDownbeats(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.detectDownbeats(samples, sampleRate);
 }
 
 export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32Array {
@@ -371,6 +744,45 @@ export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32
 
 export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResult {
   return addon.analyze(samples, sampleRate);
+}
+
+/**
+ * Run the full music analysis, reporting per-stage progress.
+ *
+ * The progress callback is invoked synchronously during analysis with a
+ * normalized progress value in `[0, 1]` and the current stage name. The result
+ * shape matches {@link analyze}.
+ */
+export function analyzeWithProgress(
+  samples: Float32Array,
+  sampleRate: number,
+  onProgress: AnalysisProgressCallback,
+): AnalysisResult {
+  return addon.analyzeWithProgress(samples, sampleRate, onProgress);
+}
+
+/** Detect song-structure sections (intro/verse/chorus/...). */
+export function analyzeSections(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  minSectionSec = 8.0,
+): Section[] {
+  return addon.analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec);
+}
+
+/** Extract the melody contour from monophonic audio via YIN. */
+export function analyzeMelody(
+  samples: Float32Array,
+  sampleRate = 22050,
+  fmin = 65.0,
+  fmax = 2093.0,
+  frameLength = 2048,
+  hopLength = 512,
+  threshold = 0.1,
+): MelodyResult {
+  return addon.analyzeMelody(samples, sampleRate, fmin, fmax, frameLength, hopLength, threshold);
 }
 
 export function analyzeBpm(
@@ -417,6 +829,32 @@ export function analyzeDynamics(
   return addon.analyzeDynamics(samples, sampleRate, windowSec, hopLength, compressionThreshold);
 }
 
+export function analyzeImpulseResponse(
+  samples: Float32Array,
+  sampleRate = 48000,
+  nOctaveBands = 6,
+): AcousticResult {
+  return addon.analyzeImpulseResponse(samples, sampleRate, nOctaveBands);
+}
+
+export function detectAcoustic(
+  samples: Float32Array,
+  sampleRate = 48000,
+  nOctaveBands = 6,
+  nThirdOctaveSubbands = 24,
+  minDecayDb = 30.0,
+  noiseFloorMarginDb = 10.0,
+): AcousticResult {
+  return addon.detectAcoustic(
+    samples,
+    sampleRate,
+    nOctaveBands,
+    nThirdOctaveSubbands,
+    minDecayDb,
+    noiseFloorMarginDb,
+  );
+}
+
 export function analyzeTimbre(
   samples: Float32Array,
   sampleRate = 22050,
@@ -439,6 +877,13 @@ export function detectChords(
   nFft = 2048,
   hopLength = 512,
   useBeatSync = true,
+  useHmm = false,
+  hmmBeamWidth = 24,
+  useKeyContext = false,
+  keyRoot = 0,
+  keyMode = 0,
+  detectInversions = false,
+  chromaMethod: ChordChromaMethod = 'stft',
 ): ChordAnalysisResult {
   return addon.detectChords(
     samples,
@@ -450,7 +895,24 @@ export function detectChords(
     nFft,
     hopLength,
     useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
+    keyRoot,
+    keyMode,
+    detectInversions,
+    chordChromaMethodValue(chromaMethod),
   );
+}
+
+function chordChromaMethodValue(method: ChordChromaMethod): number {
+  if (method === 'stft') {
+    return 0;
+  }
+  if (method === 'nnls') {
+    return 1;
+  }
+  throw new Error(`Invalid chord chroma method: ${method}`);
 }
 
 export function version(): string {
@@ -499,6 +961,34 @@ export function pitchShift(
   return addon.pitchShift(samples, sampleRate, semitones);
 }
 
+export function pitchCorrectToMidi(
+  samples: Float32Array,
+  sampleRate = 22050,
+  currentMidi: number,
+  targetMidi: number,
+): Float32Array {
+  return addon.pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
+}
+
+export function noteStretch(
+  samples: Float32Array,
+  sampleRate = 22050,
+  onsetSample: number,
+  offsetSample: number,
+  stretchRatio: number,
+): Float32Array {
+  return addon.noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
+}
+
+export function voiceChange(
+  samples: Float32Array,
+  sampleRate = 22050,
+  pitchSemitones: number,
+  formantFactor = 1.0,
+): Float32Array {
+  return addon.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
+}
+
 export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 0.0): Float32Array {
   return addon.normalize(samples, sampleRate, targetDb);
 }
@@ -514,7 +1004,7 @@ export function mastering(
 }
 
 export function masteringProcess(
-  processorName: string,
+  processorName: SoloProcessor,
   samples: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
@@ -523,7 +1013,7 @@ export function masteringProcess(
 }
 
 export function masteringProcessStereo(
-  processorName: string,
+  processorName: SoloProcessor,
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
@@ -618,14 +1108,231 @@ export class StreamingMasteringChain {
   }
 }
 
-export function masteringPresetNames(): string[] {
+/**
+ * Stateful real-time / streaming music analyzer.
+ *
+ * Feed mono blocks with {@link process}; drain analysis frames with
+ * {@link readFramesSoa} (or quantized variants) and query the running musical
+ * estimate (BPM/key/chord/pattern) with {@link stats}.
+ *
+ * @example
+ * ```typescript
+ * const analyzer = new StreamAnalyzer({ sampleRate: 44100 });
+ * analyzer.process(block);
+ * const frames = analyzer.readFramesSoa(analyzer.availableFrames());
+ * const { estimate } = analyzer.stats();
+ * ```
+ */
+export class StreamAnalyzer {
+  private native: InstanceType<typeof addon.StreamAnalyzer>;
+
+  constructor(config: StreamAnalyzerConfig = {}) {
+    this.native = new addon.StreamAnalyzer(config);
+  }
+
+  /** Feed a mono block of samples. */
+  process(samples: Float32Array): void {
+    this.native.process(samples);
+  }
+
+  /** Feed a mono block anchored at an absolute sample offset. */
+  processWithOffset(samples: Float32Array, sampleOffset: number): void {
+    this.native.processWithOffset(samples, sampleOffset);
+  }
+
+  /** Number of analysis frames ready to read. */
+  availableFrames(): number {
+    return this.native.availableFrames();
+  }
+
+  /** Drain up to `maxFrames` frames as float32 structure-of-arrays. */
+  readFramesSoa(maxFrames: number): StreamFramesSoa {
+    return this.native.readFramesSoa(maxFrames);
+  }
+
+  /** Drain up to `maxFrames` frames as uint8-quantized arrays. */
+  readFramesU8(maxFrames: number): StreamFramesU8 {
+    return this.native.readFramesU8(maxFrames);
+  }
+
+  /** Drain up to `maxFrames` frames as int16-quantized arrays. */
+  readFramesI16(maxFrames: number): StreamFramesI16 {
+    return this.native.readFramesI16(maxFrames);
+  }
+
+  /** Reset analyzer state; optionally re-anchor to a base sample offset. */
+  reset(baseOffset = 0): void {
+    this.native.reset(baseOffset);
+  }
+
+  /** Current progressive musical estimate and totals. */
+  stats(): StreamAnalyzerStats {
+    return this.native.stats();
+  }
+
+  /** Total frames processed so far. */
+  frameCount(): number {
+    return this.native.frameCount();
+  }
+
+  /** Current analysis time in seconds. */
+  currentTime(): number {
+    return this.native.currentTime();
+  }
+
+  /** Configured sample rate in Hz. */
+  sampleRate(): number {
+    return this.native.sampleRate();
+  }
+
+  /** Hint the expected total duration (seconds) to tune progressive estimates. */
+  setExpectedDuration(seconds: number): void {
+    this.native.setExpectedDuration(seconds);
+  }
+
+  /** Set a normalization gain applied to incoming samples. */
+  setNormalizationGain(gain: number): void {
+    this.native.setNormalizationGain(gain);
+  }
+
+  /** Set the tuning reference frequency (Hz) for key/chroma analysis. */
+  setTuningRefHz(hz: number): void {
+    this.native.setTuningRefHz(hz);
+  }
+}
+
+const EQ_PHASE_MODES: Record<string, number> = {
+  zero: 1,
+  'zero-latency': 1,
+  zero_latency: 1,
+  natural: 2,
+  'natural-phase': 2,
+  natural_phase: 2,
+  linear: 3,
+  'linear-phase': 3,
+  linear_phase: 3,
+};
+
+/**
+ * Block-by-block unified equalizer (zero-latency / natural / linear phase).
+ *
+ * Wraps the native `EqualizerProcessor`; state persists across
+ * {@link processMono}/{@link processStereo} calls.
+ *
+ * @example
+ * ```typescript
+ * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+ * eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+ * const { left, right } = eq.processStereo(blockLeft, blockRight);
+ * ```
+ */
+export class StreamingEqualizer {
+  private native: InstanceType<typeof addon.StreamingEqualizer>;
+
+  constructor(config: { sampleRate?: number; maxBlockSize?: number } = {}) {
+    this.native = new addon.StreamingEqualizer(config);
+  }
+
+  /** Configure one EQ band (0-based index). */
+  setBand(index: number, band: EqBandInput): void {
+    this.native.setBand(index, band);
+  }
+
+  /** Disable all bands. */
+  clear(): void {
+    this.native.clear();
+  }
+
+  /** Set the global phase mode: ``'zero'`` | ``'natural'`` | ``'linear'`` or 1/2/3. */
+  setPhaseMode(mode: 'zero' | 'natural' | 'linear' | number): void {
+    const value = typeof mode === 'number' ? mode : EQ_PHASE_MODES[mode.toLowerCase()];
+    if (value === undefined) {
+      throw new Error(`unknown EQ phase mode: ${mode}`);
+    }
+    this.native.setPhaseMode(value);
+  }
+
+  /** Enable or disable output auto-gain compensation. */
+  setAutoGain(enabled: boolean): void {
+    this.native.setAutoGain(enabled);
+  }
+
+  /** Set all-band EQ gain scale as a 0.0..2.0 multiplier. */
+  setGainScale(scale: number): void {
+    this.native.setGainScale(scale);
+  }
+
+  /** Set post-EQ output gain in dB. */
+  setOutputGainDb(gainDb: number): void {
+    this.native.setOutputGainDb(gainDb);
+  }
+
+  /** Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan. */
+  setOutputPan(pan: number): void {
+    this.native.setOutputPan(pan);
+  }
+
+  /** Set a mono external key for dynamic bands with `externalSidechain` enabled. */
+  setSidechainMono(samples: Float32Array): void {
+    this.native.setSidechainMono(samples);
+  }
+
+  /** Set a stereo external key for dynamic bands with `externalSidechain` enabled. */
+  setSidechainStereo(left: Float32Array, right: Float32Array): void {
+    this.native.setSidechainStereo(left, right);
+  }
+
+  /** Clear any pending external key before the next process call. */
+  clearSidechain(): void {
+    this.native.clearSidechain();
+  }
+
+  /** Last applied auto-gain in dB (0 when disabled). */
+  lastAutoGainDb(): number {
+    return this.native.lastAutoGainDb();
+  }
+
+  /** Reported processing latency in samples. */
+  latencySamples(): number {
+    return this.native.latencySamples();
+  }
+
+  /** Process one mono block; returns the processed samples (same length). */
+  processMono(samples: Float32Array): Float32Array {
+    return this.native.processMono(samples);
+  }
+
+  /** Process one stereo block; returns the processed channels. */
+  processStereo(
+    left: Float32Array,
+    right: Float32Array,
+  ): { left: Float32Array; right: Float32Array } {
+    return this.native.processStereo(left, right);
+  }
+
+  /** Latest realtime-safe spectrum snapshot. */
+  spectrum(): EqSpectrumSnapshot {
+    return this.native.spectrum();
+  }
+
+  /** Configure bands to match a reference spectrum (offline analysis). */
+  match(
+    source: Float32Array,
+    reference: Float32Array,
+    options: { sampleRate?: number; maxBands?: number } = {},
+  ): void {
+    this.native.match(source, reference, options);
+  }
+}
+
+export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
 }
 
 export function masterAudio(
   samples: Float32Array,
   sampleRate = 22050,
-  preset = 'pop',
+  preset: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
@@ -639,7 +1346,7 @@ export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  preset = 'pop',
+  preset: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
@@ -656,24 +1363,24 @@ export function masterAudioStereo(
   return addon.masterAudioStereo(preset, left, right, sampleRate, overrides);
 }
 
-export function masteringProcessorNames(): string[] {
+export function masteringProcessorNames(): SoloProcessor[] {
   return addon.masteringProcessorNames();
 }
 
-export function masteringPairProcessorNames(): string[] {
+export function masteringPairProcessorNames(): PairProcessor[] {
   return addon.masteringPairProcessorNames();
 }
 
-export function masteringPairAnalysisNames(): string[] {
+export function masteringPairAnalysisNames(): PairAnalysis[] {
   return addon.masteringPairAnalysisNames();
 }
 
-export function masteringStereoAnalysisNames(): string[] {
+export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   return addon.masteringStereoAnalysisNames();
 }
 
 export function masteringPairProcess(
-  processorName: string,
+  processorName: PairProcessor,
   source: Float32Array,
   reference: Float32Array,
   sampleRate = 22050,
@@ -683,7 +1390,7 @@ export function masteringPairProcess(
 }
 
 export function masteringPairAnalyze(
-  analysisName: string,
+  analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
   sampleRate = 22050,
@@ -693,13 +1400,37 @@ export function masteringPairAnalyze(
 }
 
 export function masteringStereoAnalyze(
-  analysisName: string,
+  analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): string {
   return addon.masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
+}
+
+export function masteringAssistantSuggest(
+  samples: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): string {
+  return addon.masteringAssistantSuggest(samples, sampleRate, params);
+}
+
+export function masteringAudioProfile(
+  samples: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): string {
+  return addon.masteringAudioProfile(samples, sampleRate, params);
+}
+
+export function masteringStreamingPreview(
+  samples: Float32Array,
+  sampleRate = 22050,
+  platforms: StreamingPlatform[] = [],
+): string {
+  return addon.masteringStreamingPreview(samples, sampleRate, platforms);
 }
 
 export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -60.0): Float32Array {
@@ -754,6 +1485,97 @@ export function chroma(
   hopLength = 512,
 ): ChromaResult {
   return addon.chroma(samples, sampleRate, nFft, hopLength);
+}
+
+/** Compute the Constant-Q Transform magnitude. */
+export function cqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  return addon.cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/** Compute the Variable-Q Transform magnitude (`gamma` controls Q). */
+export function vqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  nBins = 84,
+  binsPerOctave = 12,
+  gamma = 0.0,
+): CqtResult {
+  return addon.vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
+}
+
+/** Reconstruct a linear STFT magnitude from a mel spectrogram. */
+export function melToStft(
+  mel: Float32Array,
+  nMels: number,
+  nFrames: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  fmin = 0,
+  fmax = 0,
+): InverseStftResult {
+  return addon.melToStft(mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax);
+}
+
+/** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
+export function melToAudio(
+  mel: Float32Array,
+  nMels: number,
+  nFrames: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nIter = 32,
+  fmin = 0,
+  fmax = 0,
+): Float32Array {
+  return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, nIter, fmin, fmax);
+}
+
+/** Reconstruct a mel spectrogram from MFCCs (`nMels` mel bands, dB scale). */
+export function mfccToMel(
+  mfcc: Float32Array,
+  nMfcc: number,
+  nFrames: number,
+  nMels = 128,
+): InverseMelResult {
+  return addon.mfccToMel(mfcc, nMfcc, nFrames, nMels);
+}
+
+/** Reconstruct audio from MFCCs via Griffin-Lim. */
+export function mfccToAudio(
+  mfcc: Float32Array,
+  nMfcc: number,
+  nFrames: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nIter = 32,
+  fmin = 0,
+  fmax = 0,
+): Float32Array {
+  return addon.mfccToAudio(
+    mfcc,
+    nMfcc,
+    nFrames,
+    sampleRate,
+    nFft,
+    hopLength,
+    nMels,
+    nIter,
+    fmin,
+    fmax,
+  );
 }
 
 export function spectralCentroid(
@@ -988,8 +1810,20 @@ export function tempogram(
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
+  mode: TempogramMode = 'autocorrelation',
 ): { nFrames: number; winLength: number; data: Float32Array } {
-  return addon.tempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+  return addon.tempogram(onsetEnvelope, sampleRate, hopLength, winLength, mode);
+}
+
+export function cyclicTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate: number,
+  hopLength = 512,
+  winLength = 384,
+  bpmMin = 60.0,
+  nBins = 60,
+): { nFrames: number; nBins: number; data: Float32Array } {
+  return addon.cyclicTempogram(onsetEnvelope, sampleRate, hopLength, winLength, bpmMin, nBins);
 }
 
 export function plp(
@@ -1003,30 +1837,462 @@ export function plp(
   return addon.plp(onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength);
 }
 
+export function onsetEnvelope(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+): Float32Array {
+  return addon.onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
+}
+
+export function fourierTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  winLength = 384,
+): { nBins: number; nFrames: number; data: Float32Array } {
+  return addon.fourierTempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+}
+
+export function tempogramRatio(
+  tempogramData: Float32Array,
+  winLength = 384,
+  sampleRate = 22050,
+  hopLength = 512,
+): Float32Array {
+  return addon.tempogramRatio(tempogramData, winLength, sampleRate, hopLength);
+}
+
+export function nnlsChroma(
+  samples: Float32Array,
+  sampleRate = 22050,
+): { nChroma: number; nFrames: number; data: Float32Array } {
+  return addon.nnlsChroma(samples, sampleRate);
+}
+
+export function lufs(samples: Float32Array, sampleRate = 22050): LufsResult {
+  return addon.lufs(samples, sampleRate);
+}
+
+export function momentaryLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.momentaryLufs(samples, sampleRate);
+}
+
+export function shortTermLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.shortTermLufs(samples, sampleRate);
+}
+
 export function resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array {
   return addon.resample(samples, srcSr, targetSr);
 }
 
+export function mixingScenePresetNames(): string[] {
+  return addon.mixingScenePresetNames();
+}
+
+export function mixingScenePresetJson(preset: string): string {
+  return addon.mixingScenePresetJson(preset);
+}
+
+const PAN_LAW_VALUES: Record<PanLaw, number> = {
+  const3dB: 0,
+  'const4.5dB': 1,
+  const6dB: 2,
+  linear0dB: 3,
+};
+
+const METER_TAP_VALUES: Record<MeterTap, number> = {
+  preFader: 0,
+  postFader: 1,
+};
+
+const SEND_TIMING_VALUES: Record<SendTiming, number> = {
+  preFader: 0,
+  postFader: 1,
+};
+
+function automationCurveValue(curve: AutomationCurve): number {
+  if (curve === 'linear') {
+    return 0;
+  }
+  if (curve === 'exponential') {
+    return 1;
+  }
+  if (curve === 'hold') {
+    return 2;
+  }
+  if (curve === 's-curve') {
+    return 3;
+  }
+  throw new Error(`Invalid automation curve: ${curve}`);
+}
+
+function panLawValue(panLaw: PanLaw | number): number {
+  if (typeof panLaw === 'number') {
+    return panLaw;
+  }
+  const value = PAN_LAW_VALUES[panLaw];
+  if (value === undefined) {
+    throw new Error(`Invalid pan law: ${panLaw}`);
+  }
+  return value;
+}
+
+function meterTapValue(tap: MeterTap | number): number {
+  if (typeof tap === 'number') {
+    return tap;
+  }
+  const value = METER_TAP_VALUES[tap];
+  if (value === undefined) {
+    throw new Error(`Invalid meter tap: ${tap}`);
+  }
+  return value;
+}
+
+function sendTimingValue(timing: SendTiming | number): number {
+  if (typeof timing === 'number') {
+    return timing;
+  }
+  const value = SEND_TIMING_VALUES[timing];
+  if (value === undefined) {
+    throw new Error(`Invalid send timing: ${timing}`);
+  }
+  return value;
+}
+
+/**
+ * Scene-based persistent stereo mixer. Built from a scene JSON string, it routes
+ * per-strip stereo blocks through a compiled routing graph (sends, buses,
+ * inserts) into a stereo master. Strips are addressed by 0-based index or by
+ * their string id; the underlying strip handles are never exposed.
+ */
+export class Mixer {
+  private native: InstanceType<typeof addon.Mixer>;
+
+  private constructor(native: InstanceType<typeof addon.Mixer>) {
+    this.native = native;
+  }
+
+  /** Build a mixer from a scene JSON string (see {@link mixingScenePresetJson}). */
+  static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
+    return new Mixer(new addon.Mixer(json, sampleRate, blockSize));
+  }
+
+  /** Rebuild and compile the routing graph from the current scene topology. */
+  compile(): void {
+    this.native.compile();
+  }
+
+  /** Number of strips in the mixer. */
+  stripCount(): number {
+    return this.native.stripCount();
+  }
+
+  /**
+   * Mix one block of per-strip stereo audio into the stereo master.
+   *
+   * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
+   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`
+   */
+  processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
+    if (leftChannels.length !== rightChannels.length) {
+      throw new Error('leftChannels and rightChannels must have the same length.');
+    }
+    return this.native.processStereo(leftChannels, rightChannels);
+  }
+
+  /**
+   * Schedule a sample-accurate insert-parameter automation event.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param insertIndex - Index into the strip's combined [pre... post...] inserts
+   * @param paramId - Processor-specific parameter id
+   * @param samplePos - Absolute sample position from the start of processing
+   * @param value - Target parameter value
+   * @param curve - Interpolation curve toward the value (default `'linear'`)
+   */
+  scheduleInsertAutomation(
+    stripIndex: number,
+    insertIndex: number,
+    paramId: number,
+    samplePos: number,
+    value: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleInsertAutomation(
+      stripIndex,
+      insertIndex,
+      paramId,
+      samplePos,
+      value,
+      automationCurveValue(curve),
+    );
+  }
+
+  /** Resolve a strip id to its 0-based index, or `null` if not found. */
+  stripById(id: string): number | null {
+    return this.native.stripById(id);
+  }
+
+  /**
+   * Add a bus to the mixer topology.
+   *
+   * @param id - Unique bus id
+   * @param role - Bus role (`'master'` | `'aux'` | `'submix'`); defaults to `'aux'`
+   *
+   * Marks the routing graph dirty; call {@link compile} (or process) to rebuild.
+   */
+  addBus(id: string, role?: 'master' | 'aux' | 'submix' | string): void {
+    this.native.addBus(id, role);
+  }
+
+  /** Remove a bus by id. */
+  removeBus(id: string): void {
+    this.native.removeBus(id);
+  }
+
+  /** Number of buses in the mixer topology. */
+  busCount(): number {
+    return this.native.busCount();
+  }
+
+  /**
+   * Add a VCA group with the given id and gain offset.
+   *
+   * @param id - Unique group id
+   * @param gainDb - Group gain offset in dB
+   * @param members - Strip ids that belong to the group
+   */
+  addVcaGroup(id: string, gainDb: number, members: string[] = []): void {
+    this.native.addVcaGroup(id, gainDb, members);
+  }
+
+  /** Remove a VCA group by id. */
+  removeVcaGroup(id: string): void {
+    this.native.removeVcaGroup(id);
+  }
+
+  /** Number of VCA groups in the mixer topology. */
+  vcaGroupCount(): number {
+    return this.native.vcaGroupCount();
+  }
+
+  /** Set a strip's solo state. Takes effect on the next process (no recompile). */
+  setSoloed(strip: StripRef, soloed: boolean): void {
+    this.native.setSoloed(strip, soloed);
+  }
+
+  /** Mark a strip solo-safe so it is never implied-muted by another strip's solo. */
+  setSoloSafe(strip: StripRef, soloSafe: boolean): void {
+    this.native.setSoloSafe(strip, soloSafe);
+  }
+
+  /** Invert the polarity of a strip's left and/or right channel. */
+  setPolarityInvert(strip: StripRef, invertLeft: boolean, invertRight: boolean): void {
+    this.native.setPolarityInvert(strip, invertLeft, invertRight);
+  }
+
+  /** Set a strip's pan law (`'const3dB'` | `'const4.5dB'` | `'const6dB'` | `'linear0dB'`). */
+  setPanLaw(strip: StripRef, panLaw: PanLaw | number): void {
+    this.native.setPanLaw(strip, panLawValue(panLaw));
+  }
+
+  /** Set a per-strip channel delay in samples (recompiled at the next {@link compile}). */
+  setChannelDelaySamples(strip: StripRef, delaySamples: number): void {
+    this.native.setChannelDelaySamples(strip, delaySamples);
+  }
+
+  /** Set a strip's live VCA gain offset in dB (not persisted to the scene JSON). */
+  setVcaOffsetDb(strip: StripRef, offsetDb: number): void {
+    this.native.setVcaOffsetDb(strip, offsetDb);
+  }
+
+  /** Set a strip's independent left/right pan positions (dual-pan mode). */
+  setDualPan(strip: StripRef, leftPan: number, rightPan: number): void {
+    this.native.setDualPan(strip, leftPan, rightPan);
+  }
+
+  /**
+   * Add a post-construction send from a strip to a destination bus.
+   *
+   * @returns The 0-based index of the new send (use with {@link setSendDb} /
+   *   {@link scheduleSendAutomation}).
+   */
+  addSend(
+    strip: StripRef,
+    sendId: string,
+    destinationBusId: string,
+    sendDb = 0.0,
+    timing: SendTiming | number = 'postFader',
+  ): number {
+    return this.native.addSend(strip, sendId, destinationBusId, sendDb, sendTimingValue(timing));
+  }
+
+  /** Set the send level (dB) of a strip's send addressed by add-order index. */
+  setSendDb(strip: StripRef, sendIndex: number, sendDb: number): void {
+    this.native.setSendDb(strip, sendIndex, sendDb);
+  }
+
+  /** Read a strip's current (post-fader) meter snapshot. */
+  stripMeter(strip: StripRef): MixMeterSnapshot {
+    return this.native.stripMeter(strip);
+  }
+
+  /** Read a strip's meter snapshot at the given tap point (`'preFader'` | `'postFader'`). */
+  meterTap(strip: StripRef, tap: MeterTap | number = 'postFader'): MixMeterSnapshot {
+    return this.native.meterTap(strip, meterTapValue(tap));
+  }
+
+  /** Read up to `maxPoints` of the latest goniometer samples for a strip. */
+  readGoniometerLatest(strip: StripRef, maxPoints: number): GoniometerPoint[] {
+    return this.native.readGoniometerLatest(strip, maxPoints);
+  }
+
+  /** Schedule sample-accurate fader (dB) automation on a strip. */
+  scheduleFaderAutomation(
+    strip: StripRef,
+    samplePos: number,
+    faderDb: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleFaderAutomation(strip, samplePos, faderDb, automationCurveValue(curve));
+  }
+
+  /** Schedule sample-accurate pan automation on a strip. */
+  schedulePanAutomation(
+    strip: StripRef,
+    samplePos: number,
+    pan: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.schedulePanAutomation(strip, samplePos, pan, automationCurveValue(curve));
+  }
+
+  /** Schedule sample-accurate width automation on a strip. */
+  scheduleWidthAutomation(
+    strip: StripRef,
+    samplePos: number,
+    width: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleWidthAutomation(strip, samplePos, width, automationCurveValue(curve));
+  }
+
+  /** Schedule sample-accurate send-level (dB) automation on a strip's send. */
+  scheduleSendAutomation(
+    strip: StripRef,
+    sendIndex: number,
+    samplePos: number,
+    db: number,
+    curve: AutomationCurve = 'linear',
+  ): void {
+    this.native.scheduleSendAutomation(
+      strip,
+      sendIndex,
+      samplePos,
+      db,
+      automationCurveValue(curve),
+    );
+  }
+
+  /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
+  toSceneJson(): string {
+    return this.native.toSceneJson();
+  }
+
+  /** Release the underlying native mixer. Safe to call only once. */
+  destroy(): void {
+    this.native.destroy();
+  }
+
+  /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
+  delete(): void {
+    this.destroy();
+  }
+}
+
+export function mixStereo(
+  leftChannels: Float32Array[],
+  rightChannels: Float32Array[],
+  sampleRate = 48000,
+  options: MixOptions = {},
+): MixResult {
+  return addon.mixStereo(leftChannels, rightChannels, sampleRate, options);
+}
+
 export type {
+  AcousticResult,
+  AnalysisProgressCallback,
   AnalysisResult,
+  AutomationCurve,
   BpmAnalysisResult,
   BpmCandidate,
   Chord,
   ChordAnalysisResult,
+  ChordChromaMethod,
   ChromaResult,
+  CqtResult,
   DynamicsResult,
+  EngineAutomationPoint,
+  EngineAutomationPointCurve,
+  EngineCaptureStatus,
+  EngineClip,
+  EngineGraphConnection,
+  EngineGraphMix,
+  EngineGraphNode,
+  EngineGraphNodeType,
+  EngineGraphParameterBinding,
+  EngineGraphSpec,
+  EngineMarker,
+  EngineMeterTelemetry,
+  EngineMetronomeConfig,
+  EngineParameterInfo,
+  EngineTelemetry,
+  EngineTelemetryError,
+  EngineTelemetryType,
+  EngineTransportState,
+  EqBandInput,
+  EqSpectrumSnapshot,
+  GoniometerPoint,
   HpssResult,
+  InverseMelResult,
+  InverseStftResult,
   Key,
+  KeyCandidate,
+  KeyDetectionOptions,
+  KeyMode,
+  LufsResult,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringResult,
   MasteringStereoResult,
+  MelodyPoint,
+  MelodyResult,
   MelSpectrogramResult,
+  MeterTap,
   MfccResult,
+  MixerProcessResult,
+  MixMeterSnapshot,
+  MixOptions,
+  MixResult,
+  PanLaw,
+  PanMode,
   PitchResult,
   RhythmResult,
+  Section,
+  SectionTypeOrdinal,
+  SendTiming,
   StftDbResult,
   StftResult,
+  StreamAnalyzerConfig,
+  StreamAnalyzerStats,
+  StreamFramesI16,
+  StreamFramesSoa,
+  StreamFramesU8,
+  StreamingPlatform,
+  StripRef,
   TimbreResult,
   TimeSignature,
 } from './types.js';

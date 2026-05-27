@@ -6,7 +6,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <random>
 #include <vector>
+
+#include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -20,7 +23,7 @@ Audio generate_sine(float freq, float duration, int sr = 22050) {
   std::vector<float> samples(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sr;
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
   return Audio::from_vector(std::move(samples), sr);
 }
@@ -46,9 +49,23 @@ Audio generate_sweep(float freq_start, float freq_end, float duration, int sr = 
     float t = static_cast<float>(i) / n_samples;
     float freq = freq_start + (freq_end - freq_start) * t;
     samples[i] = std::sin(phase);
-    phase += 2.0f * M_PI * freq / sr;
+    phase += 2.0f * sonare::constants::kPiD * freq / sr;
   }
   return Audio::from_vector(std::move(samples), sr);
+}
+
+std::vector<float> naive_yin_difference(const std::vector<float>& frame, int max_lag) {
+  std::vector<float> diff(static_cast<size_t>(max_lag), 0.0f);
+  const int window = static_cast<int>(frame.size()) / 2;
+  for (int tau = 0; tau < max_lag; ++tau) {
+    float sum = 0.0f;
+    for (int j = 0; j < window; ++j) {
+      const float delta = frame[static_cast<size_t>(j)] - frame[static_cast<size_t>(j + tau)];
+      sum += delta * delta;
+    }
+    diff[static_cast<size_t>(tau)] = sum;
+  }
+  return diff;
 }
 
 }  // namespace
@@ -60,7 +77,7 @@ TEST_CASE("yin_difference basic", "[pitch]") {
   float freq = 440.0f;
   int sr = 22050;
   for (size_t i = 0; i < frame.size(); ++i) {
-    frame[i] = std::sin(2.0f * M_PI * freq * i / sr);
+    frame[i] = std::sin(2.0f * sonare::constants::kPiD * freq * i / sr);
   }
 
   int expected_period = sr / static_cast<int>(freq);  // ~50
@@ -73,6 +90,24 @@ TEST_CASE("yin_difference basic", "[pitch]") {
   // Check that the minimum is in the expected range
   float min_val = diff[expected_period];
   REQUIRE(min_val < diff[expected_period / 2]);
+}
+
+TEST_CASE("yin_difference matches naive constant-window definition", "[pitch]") {
+  std::mt19937 rng(1337);
+  std::uniform_real_distribution<float> dist(-0.5f, 0.5f);
+  std::vector<float> frame(2048);
+  for (auto& sample : frame) {
+    sample = dist(rng);
+  }
+
+  const auto expected = naive_yin_difference(frame, 512);
+  const auto actual = yin_difference(frame.data(), static_cast<int>(frame.size()), 512);
+
+  REQUIRE(actual.size() == expected.size());
+  for (size_t index = 0; index < actual.size(); ++index) {
+    INFO("lag: " << index);
+    REQUIRE_THAT(actual[index], WithinAbs(expected[index], 1.0e-3f));
+  }
 }
 
 TEST_CASE("yin_cmndf normalization", "[pitch]") {

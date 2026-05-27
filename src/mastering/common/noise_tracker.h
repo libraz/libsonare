@@ -11,7 +11,7 @@ class NoiseTracker {
  public:
   enum class Mode { Static, Mcra, Imcra };
 
-  NoiseTracker(int n_bins, int sample_rate, Mode mode = Mode::Imcra);
+  NoiseTracker(int n_bins, int sample_rate, Mode mode = Mode::Imcra, int hop_length = 512);
 
   void update(const float* power_spectrum);
   const float* noise_psd() const noexcept { return noise_psd_.data(); }
@@ -27,6 +27,7 @@ class NoiseTracker {
 
   int n_bins_ = 0;
   int sample_rate_ = 48000;
+  int hop_length_ = 512;
   Mode mode_ = Mode::Imcra;
   int frame_index_ = 0;
   int min_window_frames_ = 75;

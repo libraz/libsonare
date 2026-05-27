@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -20,7 +22,7 @@ Audio create_steady_audio(float freq = 440.0f, int sr = 22050, float duration = 
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -39,7 +41,7 @@ Audio create_transient_audio(int sr = 22050, float duration = 1.0f, int n_bursts
     for (int i = 0; i < burst_length && start + i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
       float envelope = 1.0f - static_cast<float>(i) / burst_length;  // Decay
-      samples[start + i] = envelope * std::sin(2.0f * M_PI * 1000.0f * t);
+      samples[start + i] = envelope * std::sin(2.0f * sonare::constants::kPiD * 1000.0f * t);
     }
   }
 

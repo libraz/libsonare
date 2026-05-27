@@ -1,8 +1,10 @@
 #include "mastering/saturation/waveshaper.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -23,6 +25,7 @@ void Waveshaper::prepare(double sample_rate, int max_block_size) {
 }
 
 void Waveshaper::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("Waveshaper must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
@@ -47,6 +50,22 @@ void Waveshaper::set_config(const WaveshaperConfig& config) {
                            config_.bias != config.bias;
   config_ = config;
   if (reset_state) reset();
+}
+
+bool Waveshaper::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.drive_db = value;
+      return true;
+    case 1:
+      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 2:
+      config_.output_gain_db = value;
+      return true;
+    default:
+      return false;
+  }
 }
 
 float Waveshaper::db_to_linear(float db) { return ::sonare::db_to_linear(db); }

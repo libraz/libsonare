@@ -58,7 +58,8 @@ void reconstruct_region_lpc(std::vector<float>& samples, size_t start, size_t en
         predicted -= static_cast<double>(model.ar[k]) * samples[j - k];
       }
       const float fallback = interpolate_fallback(samples, start, end, j);
-      samples[j] = 0.65f * static_cast<float>(predicted) + 0.35f * fallback;
+      samples[j] =
+          config.lpc_blend * static_cast<float>(predicted) + (1.0f - config.lpc_blend) * fallback;
     }
   }
 }

@@ -43,6 +43,23 @@ void ApiStyleEq::set_band(Band band, float frequency_hz, float gain_db) {
   rebuild_band(band);
 }
 
+bool ApiStyleEq::set_parameter(unsigned int param_id, float value) {
+  const unsigned int band_index = param_id / 2u;
+  if (band_index >= bands_.size()) {
+    return false;
+  }
+  const Band band = static_cast<Band>(band_index);
+  const size_t i = index(band);
+  if ((param_id % 2u) == 0u) {
+    bands_[i].frequency_hz = snapped_frequency(band, value);
+  } else {
+    bands_[i].gain_db = snapped_gain(value);
+    bands_[i].enabled = bands_[i].gain_db != 0.0f;
+  }
+  rebuild_band(band);
+  return true;
+}
+
 void ApiStyleEq::clear_band(Band band) {
   const size_t i = index(band);
   bands_[i].gain_db = 0.0f;

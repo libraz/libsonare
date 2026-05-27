@@ -9,21 +9,23 @@
 #include <cstddef>
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 /// @brief Convert a power spectrogram (magnitude squared) to dB.
 /// @param S Power values (>= 0 expected)
 /// @param n Length of S
 /// @param ref Reference value. If <= 0, the maximum of |S| is used.
-/// @param amin Floor value to avoid log(0) (default 1e-10)
+/// @param amin Floor value to avoid log(0) (default constants::kEpsilon)
 /// @param top_db Threshold below max(dB) to clamp (default 80.0).
 ///        Pass a negative value to disable clamping.
 /// @return dB values, 10 * log10(max(S, amin)) - 10 * log10(max(ref, amin)).
 /// @throw std::invalid_argument if amin <= 0, or n > 0 with null S.
-std::vector<float> power_to_db(const float* S, std::size_t n, float ref = 1.0f, float amin = 1e-10f,
-                               float top_db = 80.0f);
-std::vector<float> power_to_db(const std::vector<float>& S, float ref = 1.0f, float amin = 1e-10f,
-                               float top_db = 80.0f);
+std::vector<float> power_to_db(const float* S, std::size_t n, float ref = 1.0f,
+                               float amin = constants::kEpsilon, float top_db = 80.0f);
+std::vector<float> power_to_db(const std::vector<float>& S, float ref = 1.0f,
+                               float amin = constants::kEpsilon, float top_db = 80.0f);
 
 /// @brief Convert amplitude (magnitude) values to dB.
 /// @details Internally squares the input and forwards to power_to_db with

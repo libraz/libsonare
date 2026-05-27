@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "core/convert.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare {
@@ -173,39 +175,40 @@ std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float
       out[i * 6 + 3] = 1.0f;
       continue;
     }
-    // RBJ constant-skirt-gain bandpass with Q = 25 (matches our iirt default).
-    const double Q = 25.0;
-    const double w0 = constants::kTwoPiD * fc / sr;
-    const double cos_w = std::cos(w0);
-    const double sin_w = std::sin(w0);
-    const double alpha = sin_w / (2.0 * Q);
-    out[i * 6 + 0] = static_cast<float>(alpha);
-    out[i * 6 + 1] = 0.0f;
-    out[i * 6 + 2] = static_cast<float>(-alpha);
-    out[i * 6 + 3] = static_cast<float>(1.0 + alpha);
-    out[i * 6 + 4] = static_cast<float>(-2.0 * cos_w);
-    out[i * 6 + 5] = static_cast<float>(1.0 - alpha);
+    const auto coeffs = rt::rbj_bandpass_raw_d(fc, static_cast<double>(sr), 25.0);
+    out[i * 6 + 0] = static_cast<float>(coeffs.b0);
+    out[i * 6 + 1] = static_cast<float>(coeffs.b1);
+    out[i * 6 + 2] = static_cast<float>(coeffs.b2);
+    out[i * 6 + 3] = static_cast<float>(coeffs.a0);
+    out[i * 6 + 4] = static_cast<float>(coeffs.a1);
+    out[i * 6 + 5] = static_cast<float>(coeffs.a2);
   }
   return out;
 }
 
-std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, float fmin) {
+std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, float fmin,
+                                float tuning) {
   if (n_input <= 0 || bins_per_octave <= 0 || n_chroma <= 0) {
     throw std::invalid_argument("cq_to_chroma: invalid parameters");
   }
-  (void)fmin;  // Not required for the index-based mapping (matches librosa default tuning=0).
+  int pitch_class_offset = 0;
+  if (fmin > 0.0f) {
+    pitch_class_offset = static_cast<int>(std::lround(hz_to_midi(fmin) + tuning)) % n_chroma;
+    if (pitch_class_offset < 0) pitch_class_offset += n_chroma;
+  }
   std::vector<float> out(static_cast<size_t>(n_chroma) * n_input, 0.0f);
   for (int i = 0; i < n_input; ++i) {
     int chroma_bin = ((i % bins_per_octave) * n_chroma) / bins_per_octave;
+    chroma_bin = (chroma_bin + pitch_class_offset) % n_chroma;
     if (chroma_bin < 0) chroma_bin += n_chroma;
     out[chroma_bin * n_input + i] = 1.0f;
   }
-  // Normalize each chroma row by its sum so rows still average correctly.
-  for (int c = 0; c < n_chroma; ++c) {
-    float row_sum = 0.0f;
-    for (int i = 0; i < n_input; ++i) row_sum += out[c * n_input + i];
-    if (row_sum > 0.0f) {
-      for (int i = 0; i < n_input; ++i) out[c * n_input + i] /= row_sum;
+  // Normalize each CQT bin column so total bin energy is preserved when folded.
+  for (int i = 0; i < n_input; ++i) {
+    float column_sum = 0.0f;
+    for (int c = 0; c < n_chroma; ++c) column_sum += out[c * n_input + i];
+    if (column_sum > 0.0f) {
+      for (int c = 0; c < n_chroma; ++c) out[c * n_input + i] /= column_sum;
     }
   }
   return out;

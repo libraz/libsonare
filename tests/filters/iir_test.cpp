@@ -8,6 +8,9 @@
 #include <cmath>
 #include <vector>
 
+#include "rt/biquad_design.h"
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -23,6 +26,15 @@ std::vector<float> generate_sine(int samples, float freq, int sr) {
   }
   return result;
 }
+
+void require_coeffs_close(const BiquadCoeffs& actual, const rt::BiquadCoeffs& expected,
+                          float tolerance = 1.0e-6f) {
+  REQUIRE_THAT(actual.b0, WithinAbs(expected.b0, tolerance));
+  REQUIRE_THAT(actual.b1, WithinAbs(expected.b1, tolerance));
+  REQUIRE_THAT(actual.b2, WithinAbs(expected.b2, tolerance));
+  REQUIRE_THAT(actual.a1, WithinAbs(expected.a1, tolerance));
+  REQUIRE_THAT(actual.a2, WithinAbs(expected.a2, tolerance));
+}
 }  // namespace
 
 TEST_CASE("lowpass_coeffs valid range", "[iir]") {
@@ -34,6 +46,25 @@ TEST_CASE("lowpass_coeffs valid range", "[iir]") {
   REQUIRE(std::isfinite(coeffs.b2));
   REQUIRE(std::isfinite(coeffs.a1));
   REQUIRE(std::isfinite(coeffs.a2));
+}
+
+TEST_CASE("IIR coefficient helpers match shared RBJ biquad designs", "[iir]") {
+  constexpr int sr = 48000;
+  constexpr float cutoff = 1200.0f;
+  constexpr float center = 2400.0f;
+  constexpr float bandwidth = 600.0f;
+  constexpr float q = center / bandwidth;
+
+  require_coeffs_close(
+      lowpass_coeffs(cutoff, sr),
+      rt::rbj_lowpass(kTwoPi * cutoff / static_cast<float>(sr), sonare::constants::kButterworthQ));
+  require_coeffs_close(
+      highpass_coeffs(cutoff, sr),
+      rt::rbj_highpass(kTwoPi * cutoff / static_cast<float>(sr), sonare::constants::kButterworthQ));
+  require_coeffs_close(bandpass_coeffs(center, bandwidth, sr),
+                       rt::rbj_bandpass(kTwoPi * center / static_cast<float>(sr), q));
+  require_coeffs_close(notch_coeffs(center, bandwidth, sr),
+                       rt::rbj_notch(kTwoPi * center / static_cast<float>(sr), q));
 }
 
 TEST_CASE("highpass_coeffs valid range", "[iir]") {

@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -40,7 +42,7 @@ Audio create_steady_tone(float freq = 440.0f, int sr = 22050, float duration = 1
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.5f * std::sin(2.0f * M_PI * freq * t);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);

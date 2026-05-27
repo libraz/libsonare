@@ -360,6 +360,59 @@ def generate_cqt_reference():
     }
 
 
+def generate_icqt_reference():
+    """Inverse CQT reference for the deterministic one-octave path."""
+    sr = 22050
+    n_samples = 8192
+    t = np.arange(n_samples, dtype=np.float64) / sr
+    y = (0.7 * np.sin(2.0 * np.pi * 440.0 * t) +
+         0.3 * np.sin(2.0 * np.pi * 660.0 * t)).astype(np.float32)
+
+    fmin = librosa.note_to_hz("C4")
+    n_bins = 12
+    bins_per_octave = 12
+    hop_length = 256
+
+    C = librosa.cqt(
+        y,
+        sr=sr,
+        fmin=fmin,
+        n_bins=n_bins,
+        bins_per_octave=bins_per_octave,
+        hop_length=hop_length,
+        scale=True,
+    )
+    y_hat = librosa.icqt(
+        C,
+        sr=sr,
+        fmin=fmin,
+        bins_per_octave=bins_per_octave,
+        hop_length=hop_length,
+        scale=True,
+        length=n_samples,
+        res_type="soxr_hq",
+    )
+    freqs = librosa.cqt_frequencies(
+        n_bins=n_bins, fmin=fmin, bins_per_octave=bins_per_octave
+    )
+
+    return {
+        "signal": "440_660Hz_tone",
+        "sr": sr,
+        "length": n_samples,
+        "fmin": float(fmin),
+        "n_bins": n_bins,
+        "bins_per_octave": bins_per_octave,
+        "hop_length": hop_length,
+        "shape": list(C.shape),
+        "frequencies": freqs.tolist(),
+        "cqt_real": np.real(C).flatten().tolist(),
+        "cqt_imag": np.imag(C).flatten().tolist(),
+        "reconstruction": y_hat.tolist(),
+        "rms": float(np.sqrt(np.mean(np.square(y_hat)))),
+    }
+
+
 def generate_yin_reference():
     """YIN pitch detection reference."""
     sr = 22050
@@ -394,6 +447,52 @@ def generate_yin_reference():
         "shape": list(f0_chirp.shape),
         "f0": f0_chirp.tolist(),
     })
+
+    return refs
+
+
+def generate_pyin_reference():
+    """pYIN pitch detection reference."""
+    sr = 22050
+    duration = 1.0
+    params = {
+        "fmin": 65,
+        "fmax": 2093,
+        "frame_length": 2048,
+        "hop_length": 512,
+        "center": False,
+        "n_thresholds": 100,
+        "beta_parameters": [2, 18],
+        "boltzmann_parameter": 2,
+        "resolution": 0.1,
+        "max_transition_rate": 35.92,
+        "switch_prob": 0.01,
+        "no_trough_prob": 0.01,
+        "fill_na": None,
+    }
+
+    refs = []
+    t = np.arange(int(sr * duration), dtype=np.float64) / sr
+    chirp = np.sin(2 * np.pi * (200.0 * t + 0.5 * (800.0 - 200.0) * t * t / duration))
+    signals = [
+        ("440Hz_tone", librosa.tone(440.0, sr=sr, duration=duration)),
+        ("chirp_200_800Hz", chirp),
+    ]
+    for name, y in signals:
+        f0, voiced_flag, voiced_prob = librosa.pyin(y, sr=sr, **params)
+        refs.append({
+            "signal": name,
+            "sr": sr,
+            **params,
+            "shape": list(f0.shape),
+            "f0": f0.tolist(),
+            "voiced_flag": voiced_flag.astype(bool).tolist(),
+            "voiced_prob": voiced_prob.tolist(),
+            "acceptance": {
+                "f0_cents_tolerance": 10.0,
+                "max_voiced_flag_mismatch_ratio": 0.01,
+            },
+        })
 
     return refs
 
@@ -1470,7 +1569,9 @@ def main():
         "spectral_features": generate_spectral_features_reference(),
         "chroma": generate_chroma_reference(),
         "cqt": generate_cqt_reference(),
+        "icqt": generate_icqt_reference(),
         "yin": generate_yin_reference(),
+        "pyin": generate_pyin_reference(),
         "hpss": generate_hpss_reference(),
         "beat": generate_beat_reference(),
         "db_conversion": generate_db_conversion_reference(),

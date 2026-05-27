@@ -7,7 +7,13 @@
 [![License](https://img.shields.io/github/license/libraz/libsonare)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-Fast, dependency-free audio analysis library for browser and Node.js via WebAssembly.
+A dependency-free audio DSP toolkit for browser and Node.js via WebAssembly —
+librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.
+The same C++ processors run client-side in the browser: 77 named mastering DSP
+processors implemented against published references (ITU-R BS.1770-4 true-peak
+limiting, Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
+saturation), with analysis defaults matching librosa — Apache-2.0, no Python,
+no model weights.
 
 > **Audio input:** This package expects already-decoded `Float32Array` mono
 > samples (it does not bundle a file decoder). Use the Web Audio API in the
@@ -34,10 +40,37 @@ const key = detectKey(samples, sampleRate);
 const result = analyze(samples, sampleRate);
 console.log(`BPM: ${result.bpm}, Key: ${result.key.name}`);
 
+// Advanced key options are opt-in; defaults preserve existing behavior.
+const keyWithOptions = detectKey(samples, sampleRate, {
+  useHpss: true,
+  loudnessWeighted: true,
+  highPassHz: 80,
+  nFft: 4096,
+  hopLength: 512,
+});
+
 // Audio class API
 const audio = Audio.fromBuffer(samples, sampleRate);
 console.log(`BPM: ${audio.detectBpm()}`);
 console.log(`Key: ${audio.detectKey().name}`);
+const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
+```
+
+### Room acoustics
+
+Use `detectAcoustic` for blind RT60/EDT estimation from ordinary audio.
+Use `analyzeImpulseResponse` when you have a measured impulse response and need
+clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `NaN` for clarity
+metrics because they are not reliable without an impulse response.
+
+```typescript
+import { init, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare';
+
+await init();
+
+const blind = detectAcoustic(samples, sampleRate, 6, 24, 30.0, 10.0);
+const room = analyzeImpulseResponse(irSamples, sampleRate);
+console.log(blind.rt60, room.c50);
 ```
 
 ### Decoding files in the browser
@@ -169,13 +202,142 @@ import { init, masterAudio, masteringPresetNames } from '@libraz/libsonare';
 
 await init();
 
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 
 const result = masterAudio(samples, sampleRate, 'aiMusic', {
   // optional flat overrides applied on top of the preset (dot notation)
   'loudness.targetLufs': -13,
 });
 console.log(result.outputLufs, result.appliedGainDb);
+```
+
+### Mixing
+
+```typescript
+import { init, Mixer, mixStereo, mixingScenePresetJson } from '@libraz/libsonare';
+
+await init();
+
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+const offline = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  inputTrimDb: [3, 0],
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+
+const mixer = Mixer.fromSceneJson(sceneJson, sampleRate, 512);
+const block = mixer.processStereo([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR]);
+console.log(offline.meters[0].maxTruePeakDb, block.left.length);
+
+const outL = new Float32Array(512);
+const outR = new Float32Array(512);
+mixer.processStereoInto([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR], outL, outR);
+
+const realtime = mixer.createRealtimeBuffer();
+realtime.leftInputs[0].set(vocalBlockL);
+realtime.rightInputs[0].set(vocalBlockR);
+realtime.leftInputs[1].set(returnBlockL);
+realtime.rightInputs[1].set(returnBlockR);
+realtime.process();
+console.log(realtime.outLeft[0], realtime.outRight[0]);
+mixer.delete();
+```
+
+### AudioWorklet bridge
+
+The package exposes an optional worklet entry that uses the same `sonare.wasm`
+as the offline API. The bridge processes fixed 128-sample render quanta and
+treats each AudioWorklet input as one stereo mixer strip.
+
+```typescript
+// worklet.ts, loaded with audioContext.audioWorklet.addModule(...)
+import { init, mixingScenePresetJson } from '@libraz/libsonare';
+import { registerSonareWorkletProcessor } from '@libraz/libsonare/worklet';
+
+await init();
+registerSonareWorkletProcessor();
+```
+
+```typescript
+// main thread
+import { mixingScenePresetJson } from '@libraz/libsonare';
+
+await audioContext.audioWorklet.addModule('/worklet.js');
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+const node = new AudioWorkletNode(audioContext, 'sonare-worklet-processor', {
+  numberOfInputs: 2,
+  numberOfOutputs: 1,
+  outputChannelCount: [2],
+  processorOptions: {
+    sceneJson,
+    sampleRate: audioContext.sampleRate,
+    blockSize: 128,
+    spectrumIntervalFrames: 2048,
+    spectrumBands: 16,
+  },
+});
+
+node.port.postMessage({
+  type: 'scheduleInsertAutomation',
+  stripIndex: 0,
+  insertIndex: 0,
+  paramId: 0,
+  samplePos: 0,
+  value: 0,
+  curve: 'linear',
+});
+
+node.port.onmessage = (event) => {
+  if (event.data?.type === 'meter') {
+    console.log(event.data.peakDbL, event.data.rmsDbL, event.data.correlation);
+  } else if (event.data?.type === 'spectrum') {
+    console.log(event.data.frame, event.data.bands);
+  }
+};
+```
+
+For cross-origin-isolated pages, meters and spectrum snapshots can use optional
+SharedArrayBuffer rings instead of per-message `postMessage`:
+
+```typescript
+import {
+  createSonareMeterRingBuffer,
+  createSonareSpectrumRingBuffer,
+  readSonareMeterRingBuffer,
+  readSonareSpectrumRingBuffer,
+} from '@libraz/libsonare/worklet';
+
+const meterRing = createSonareMeterRingBuffer(128);
+const spectrumRing = createSonareSpectrumRingBuffer(64, 16);
+const node = new AudioWorkletNode(audioContext, 'sonare-worklet-processor', {
+  numberOfInputs: 2,
+  numberOfOutputs: 1,
+  outputChannelCount: [2],
+  processorOptions: {
+    sceneJson,
+    sampleRate: audioContext.sampleRate,
+    blockSize: 128,
+    meterSharedBuffer: meterRing.sharedBuffer,
+    spectrumIntervalFrames: 2048,
+    spectrumSharedBuffer: spectrumRing.sharedBuffer,
+  },
+});
+
+let nextMeterRead = 0;
+let nextSpectrumRead = 0;
+function readMeters() {
+  const result = readSonareMeterRingBuffer(meterRing, nextMeterRead);
+  nextMeterRead = result.nextReadIndex;
+  for (const meter of result.meters) {
+    console.log(meter.frame, meter.peakDbL, meter.rmsDbL);
+  }
+  const spectra = readSonareSpectrumRingBuffer(spectrumRing, nextSpectrumRead);
+  nextSpectrumRead = spectra.nextReadIndex;
+  for (const spectrum of spectra.spectra) {
+    console.log(spectrum.frame, spectrum.bands);
+  }
+}
 ```
 
 ### Progress callback

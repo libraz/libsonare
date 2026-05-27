@@ -5,6 +5,7 @@
 
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -17,7 +18,7 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
   MelConfig mel_config;
   mel_config.n_fft = config.n_fft;
   mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = 128;
+  mel_config.n_mels = constants::kDefaultNMels;
 
   // Use the OnsetConfig from feature/onset.h
   OnsetConfig feature_onset_cfg;

@@ -6,62 +6,30 @@
 #include <stdexcept>
 
 #include "core/fft.h"
+#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/reflect_padding.h"
 
 namespace sonare {
 
 namespace {
 
-using constants::kTwoPiD;
-
-/// @brief Pads signal with zeros for centered STFT.
-/// @details Uses constant zero padding.
-std::vector<float> pad_center(const float* data, size_t size, int pad_length) {
+std::vector<float> pad_center(const float* data, size_t size, int pad_length, PadMode pad_mode) {
   std::vector<float> padded(size + 2 * pad_length, 0.0f);
-
-  // Copy original data to center
-  std::copy(data, data + size, padded.begin() + pad_length);
-
+  if (data == nullptr || size == 0) {
+    return padded;
+  }
+  if (pad_mode == PadMode::Constant) {
+    std::copy(data, data + size, padded.begin() + pad_length);
+    return padded;
+  }
+  for (size_t i = 0; i < padded.size(); ++i) {
+    const int64_t src = static_cast<int64_t>(i) - pad_length;
+    padded[i] = data[reflect_index(src, size)];
+  }
   return padded;
-}
-
-std::vector<float> create_fft_window(WindowType type, int length) {
-  if (length <= 1) {
-    return std::vector<float>(length, 1.0f);
-  }
-
-  std::vector<float> window(length, 1.0f);
-  switch (type) {
-    case WindowType::Hann:
-      for (int i = 0; i < length; ++i) {
-        double phase = kTwoPiD * static_cast<double>(i) / static_cast<double>(length);
-        window[i] = static_cast<float>(0.5 * (1.0 - std::cos(phase)));
-      }
-      break;
-    case WindowType::Hamming:
-      for (int i = 0; i < length; ++i) {
-        double phase = kTwoPiD * static_cast<double>(i) / static_cast<double>(length);
-        window[i] = static_cast<float>(0.54 - 0.46 * std::cos(phase));
-      }
-      break;
-    case WindowType::Blackman: {
-      constexpr double a0 = 0.42;
-      constexpr double a1 = 0.5;
-      constexpr double a2 = 0.08;
-      for (int i = 0; i < length; ++i) {
-        double t = static_cast<double>(i) / static_cast<double>(length);
-        window[i] =
-            static_cast<float>(a0 - a1 * std::cos(kTwoPiD * t) + a2 * std::cos(2.0 * kTwoPiD * t));
-      }
-      break;
-    }
-    case WindowType::Rectangular:
-      break;
-  }
-
-  return window;
 }
 
 }  // namespace
@@ -101,8 +69,8 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
-  // Get cached window
-  std::vector<float> window = create_fft_window(config.window, win_length);
+  // Get cached window (periodic for STFT, matching librosa/scipy fftbins=True).
+  const std::vector<float>& window = get_window_cached(config.window, win_length, true);
 
   /// Pad window to n_fft if necessary
   std::vector<float> padded_window(n_fft, 0.0f);
@@ -116,7 +84,7 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   std::vector<float> padded_signal;
   if (config.center) {
     int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length);
+    padded_signal = pad_center(signal, signal_length, pad_length, config.pad_mode);
     signal = padded_signal.data();
     signal_length = padded_signal.size();
   }
@@ -247,13 +215,21 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     return Audio();
   }
 
-  // Get cached synthesis window matching the analysis window length
-  std::vector<float> win_short = create_fft_window(window_type, win_length_);
+  // STFT analysis uses a periodic window (fftbins=True). iSTFT uses a symmetric
+  // synthesis window and normalizes by analysis*synthesis overlap to preserve
+  // reconstruction gain when the two window shapes differ.
+  const std::vector<float>& analysis_win_short = get_window_cached(window_type, win_length_, true);
+  const std::vector<float>& synthesis_win_short =
+      get_window_cached(window_type, win_length_, false);
 
   // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
-  std::vector<float> window(n_fft_, 0.0f);
+  std::vector<float> analysis_window(n_fft_, 0.0f);
+  std::vector<float> synthesis_window(n_fft_, 0.0f);
   int win_offset = (n_fft_ - win_length_) / 2;
-  std::copy(win_short.begin(), win_short.end(), window.begin() + win_offset);
+  std::copy(analysis_win_short.begin(), analysis_win_short.end(),
+            analysis_window.begin() + win_offset);
+  std::copy(synthesis_win_short.begin(), synthesis_win_short.end(),
+            synthesis_window.begin() + win_offset);
 
   // Calculate full reconstruction length (before trimming)
   int full_length = (n_frames_ - 1) * hop_length_ + n_fft_;
@@ -284,8 +260,8 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     for (int i = 0; i < n_fft_; ++i) {
       int idx = start + i;
       if (idx >= 0 && idx < full_length) {
-        output[idx] += frame[i] * window[i];
-        window_sum[idx] += window[i] * window[i];
+        output[idx] += frame[i] * synthesis_window[i];
+        window_sum[idx] += analysis_window[i] * synthesis_window[i];
       }
     }
   }
@@ -343,6 +319,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 
   // Previous angles for momentum
   std::vector<float> prev_angles(n_bins * n_frames, 0.0f);
+  const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   // Create spectrogram wrapper for iSTFT
   StftConfig stft_config;
@@ -354,8 +331,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   for (int iter = 0; iter < config.n_iter; ++iter) {
     // Create spectrogram and do iSTFT
     Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
-                                                 hop_length, sample_rate);
-    Audio reconstructed = spec.to_audio();
+                                                 hop_length, sample_rate, true);
+    Audio reconstructed = spec.to_audio(target_length);
 
     // Forward STFT of reconstructed signal
     Spectrogram new_spec = Spectrogram::compute(reconstructed, stft_config);
@@ -384,9 +361,9 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   }
 
   // Final reconstruction
-  Spectrogram final_spec =
-      Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate);
-  return final_spec.to_audio();
+  Spectrogram final_spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
+                                                     hop_length, sample_rate, true);
+  return final_spec.to_audio(target_length);
 }
 
 Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft,
@@ -432,11 +409,11 @@ namespace {
 std::vector<std::complex<float>> stft_with_window(const float* signal, size_t signal_length,
                                                   const std::vector<float>& padded_window,
                                                   int n_fft, int hop_length, bool center,
-                                                  int* out_n_frames) {
+                                                  PadMode pad_mode, int* out_n_frames) {
   std::vector<float> padded_signal;
   if (center) {
     int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length);
+    padded_signal = pad_center(signal, signal_length, pad_length, pad_mode);
     signal = padded_signal.data();
     signal_length = padded_signal.size();
   }
@@ -482,7 +459,7 @@ void build_reassignment_windows(const StftConfig& config, std::vector<float>& pa
                                 double& half_n) {
   const int n_fft = config.n_fft;
   const int win_length = config.actual_win_length();
-  const std::vector<float> window = create_fft_window(config.window, win_length);
+  const std::vector<float>& window = get_window_cached(config.window, win_length, true);
   const int win_offset = (n_fft - win_length) / 2;
   padded_window.assign(n_fft, 0.0f);
   t_window.assign(n_fft, 0.0f);
@@ -520,14 +497,16 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
-                                                         hop_length, config.center, &n_frames);
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames);
   int n_frames_t = 0;
-  std::vector<std::complex<float>> Stw =
-      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center, &n_frames_t);
+  std::vector<std::complex<float>> Stw = stft_with_window(
+      signal, signal_len, t_window, n_fft, hop_length, config.center, config.pad_mode, &n_frames_t);
   int n_frames_d = 0;
-  std::vector<std::complex<float>> Sdw = stft_with_window(signal, signal_len, dw_window, n_fft,
-                                                          hop_length, config.center, &n_frames_d);
+  std::vector<std::complex<float>> Sdw =
+      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames_d);
   SONARE_CHECK(n_frames == n_frames_t && n_frames == n_frames_d, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;
@@ -556,8 +535,8 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
       const std::complex<float> r_time = Stw[idx] / S;
       out.times[idx] = center_time + r_time.real() * sample_to_sec;
       const std::complex<float> r_freq = Sdw[idx] / S;
-      const float df_hz =
-          -r_freq.imag() * static_cast<float>(sr) / static_cast<float>(constants::kTwoPi);
+      const float df_hz = static_cast<float>(-static_cast<double>(r_freq.imag()) *
+                                             static_cast<double>(sr) / constants::kTwoPiD);
       out.frequencies[idx] = center_freq + df_hz;
     }
   }
@@ -582,11 +561,13 @@ std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& co
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
-                                                         hop_length, config.center, &n_frames);
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames);
   int n_frames_d = 0;
-  std::vector<std::complex<float>> Sdw = stft_with_window(signal, signal_len, dw_window, n_fft,
-                                                          hop_length, config.center, &n_frames_d);
+  std::vector<std::complex<float>> Sdw =
+      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames_d);
   SONARE_CHECK(n_frames == n_frames_d, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;
@@ -604,8 +585,8 @@ std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& co
         continue;
       }
       const std::complex<float> r_freq = Sdw[idx] / S;
-      const float df_hz =
-          -r_freq.imag() * static_cast<float>(sr) / static_cast<float>(constants::kTwoPi);
+      const float df_hz = static_cast<float>(-static_cast<double>(r_freq.imag()) *
+                                             static_cast<double>(sr) / constants::kTwoPiD);
       freqs[idx] = center_freq + df_hz;
     }
   }
@@ -630,11 +611,12 @@ std::vector<float> reassign_times(const Audio& audio, const StftConfig& config, 
   const size_t signal_len = audio.size();
 
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw = stft_with_window(signal, signal_len, padded_window, n_fft,
-                                                         hop_length, config.center, &n_frames);
+  std::vector<std::complex<float>> Sw =
+      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames);
   int n_frames_t = 0;
-  std::vector<std::complex<float>> Stw =
-      stft_with_window(signal, signal_len, t_window, n_fft, hop_length, config.center, &n_frames_t);
+  std::vector<std::complex<float>> Stw = stft_with_window(
+      signal, signal_len, t_window, n_fft, hop_length, config.center, config.pad_mode, &n_frames_t);
   SONARE_CHECK(n_frames == n_frames_t, ErrorCode::InvalidParameter);
 
   const int n_bins = n_fft / 2 + 1;

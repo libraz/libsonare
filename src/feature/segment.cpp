@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 namespace {
@@ -407,34 +409,76 @@ std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
 std::vector<float> path_enhance(const float* rec, int n, int win, int max_ratio, int min_ratio,
                                 int n_filters) {
   if (rec == nullptr || n <= 0 || win <= 0) return {};
-  (void)max_ratio;
-  (void)min_ratio;
-  (void)n_filters;
-  // Gaussian smoothing along the main diagonal.
-  std::vector<float> out(static_cast<size_t>(n) * n, 0.0f);
-  int half = win / 2;
-  // Pre-compute a 1D Gaussian kernel.
+  const int half = win / 2;
+
+  // 1D smoothing window applied along each diagonal direction. librosa's
+  // path_enhance uses a normalized Hann window along the diagonal, so we use the
+  // same periodic-Hann formula (sym=False) as smooth_rows_hann and normalize by
+  // its sum.
   std::vector<float> kernel(win);
-  float sigma = std::max(1.0f, static_cast<float>(win) / 6.0f);
-  float ksum = 0.0f;
-  for (int i = 0; i < win; ++i) {
-    float d = static_cast<float>(i - half);
-    kernel[i] = std::exp(-0.5f * d * d / (sigma * sigma));
-    ksum += kernel[i];
+  {
+    float ksum = 0.0f;
+    for (int q = 0; q < win; ++q) {
+      kernel[q] = 0.5f - 0.5f * std::cos(constants::kTwoPi * static_cast<float>(q) /
+                                         static_cast<float>(win));
+      ksum += kernel[q];
+    }
+    if (ksum > 0.0f)
+      for (float& k : kernel) k /= ksum;
   }
-  if (ksum > 0.0f)
-    for (float& k : kernel) k /= ksum;
-  for (int i = 0; i < n; ++i) {
-    for (int j = 0; j < n; ++j) {
-      float acc = 0.0f;
-      for (int q = 0; q < win; ++q) {
-        int ii = i + q - half;
-        int jj = j + q - half;
-        if (ii >= 0 && ii < n && jj >= 0 && jj < n) {
-          acc += kernel[q] * rec[ii * n + jj];
+
+  // Tempo ratios (diagonal slopes), geometrically spaced in [min_ratio, max_ratio].
+  // librosa defaults min_ratio to 1/max_ratio when unset (min_ratio <= 0 here).
+  const int n_f = std::max(1, n_filters);
+  std::vector<float> ratios;
+  ratios.reserve(n_f);
+  if (n_f == 1) {
+    // Single filter: pure main diagonal (matches the original implementation).
+    ratios.push_back(1.0f);
+  } else {
+    float lo = static_cast<float>(min_ratio);
+    float hi = static_cast<float>(max_ratio);
+    if (hi <= 0.0f) hi = 2.0f;
+    if (lo <= 0.0f) lo = 1.0f / hi;
+    if (lo > hi) std::swap(lo, hi);
+    const float log_lo = std::log(lo);
+    const float log_hi = std::log(hi);
+    for (int k = 0; k < n_f; ++k) {
+      const float t = static_cast<float>(k) / static_cast<float>(n_f - 1);
+      ratios.push_back(std::exp(log_lo + t * (log_hi - log_lo)));
+    }
+  }
+
+  // For each ratio, smooth along a sheared diagonal (slope = ratio) and take the
+  // elementwise maximum across all filtered versions (multi-angle enhancement).
+  // The reduction direction follows the longer axis so r == 1 reduces exactly to
+  // the original main-diagonal smoothing.
+  std::vector<float> out(static_cast<size_t>(n) * n, 0.0f);
+  for (size_t f = 0; f < ratios.size(); ++f) {
+    const float r = ratios[f];
+    for (int i = 0; i < n; ++i) {
+      for (int j = 0; j < n; ++j) {
+        float acc = 0.0f;
+        for (int q = 0; q < win; ++q) {
+          const float s = static_cast<float>(q - half);
+          int di;
+          int dj;
+          if (r >= 1.0f) {
+            di = q - half;
+            dj = static_cast<int>(std::lround(s * r));
+          } else {
+            di = static_cast<int>(std::lround(s / r));
+            dj = q - half;
+          }
+          const int ii = i + di;
+          const int jj = j + dj;
+          if (ii >= 0 && ii < n && jj >= 0 && jj < n) {
+            acc += kernel[q] * rec[ii * n + jj];
+          }
         }
+        const size_t idx = static_cast<size_t>(i) * n + j;
+        out[idx] = (f == 0) ? acc : std::max(out[idx], acc);
       }
-      out[i * n + j] = acc;
     }
   }
   return out;

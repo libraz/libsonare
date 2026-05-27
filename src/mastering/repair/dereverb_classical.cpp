@@ -7,9 +7,12 @@
 #include <vector>
 
 #include "core/spectrum.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::repair {
 namespace {
+
+constexpr double kRegularization = static_cast<double>(sonare::constants::kSpectrumEpsilon);
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
@@ -148,7 +151,7 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
         }
         for (int i = 0; i < taps; ++i) {
           covariance[static_cast<size_t>(i)][static_cast<size_t>(i)] +=
-              std::complex<double>{1.0e-8, 0.0};
+              std::complex<double>{kRegularization, 0.0};
         }
         auto predictors = solve_linear_system(std::move(covariance), std::move(cross));
         double predictor_norm = 0.0;

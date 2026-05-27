@@ -48,6 +48,7 @@ struct AnalysisResult {
   Timbre timbre;                  ///< Overall timbre
   Dynamics dynamics;              ///< Dynamics information
   RhythmFeatures rhythm;          ///< Rhythm features
+  MelodyContour melody;           ///< Melody contour (pitch trajectory + characteristics)
   std::string form;               ///< Song form (e.g., "IABABCO")
 };
 
@@ -63,7 +64,11 @@ struct MusicAnalyzerConfig {
   float chroma_highpass_hz = 80.0f;  ///< High-pass filter cutoff for chroma (0 = disabled)
   bool use_bass_weighted =
       true;  ///< Use bass-weighted chroma combination (bpm-detector compatible)
-  int chroma_hop_multiplier = 4;  ///< Hop length multiplier for chroma (larger = faster)
+  int chroma_hop_multiplier = 4;         ///< Hop length multiplier for chroma (larger = faster)
+  bool use_chord_hmm = false;            ///< Enable Viterbi HMM chord smoothing in unified analysis
+  bool use_chord_key_context = false;    ///< Bias chord HMM transitions using the detected key
+  int chord_hmm_beam_width = 24;         ///< Candidate beam width for chord HMM smoothing
+  bool detect_chord_inversions = false;  ///< Estimate slash-chord bass notes in unified analysis
 };
 
 /// @brief Unified music analysis facade.

@@ -4,9 +4,15 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-Fast audio analysis library for Python.
+A dependency-free audio DSP toolkit for Python — librosa-compatible analysis
+plus broadcast-grade mastering, mixing, and editing.
 
-Built on a C++ core with zero Python dependencies.
+Built on a C++ core with zero Python dependencies. Analysis defaults match
+librosa (validated against generated librosa reference values in CI), and
+mastering ships 77 named DSP processors implemented against published
+references (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers,
+Vicanek matched-Z biquads, ADAA-antialiased saturation) — Apache-2.0, no model
+weights.
 
 ## Installation
 
@@ -31,8 +37,39 @@ audio = libsonare.Audio.from_file("song.mp3")  # or "song.wav"
 print(f"BPM: {audio.detect_bpm():.1f}")
 print(f"Key: {audio.detect_key().root.name} {audio.detect_key().mode.name}")
 
+# Advanced key options are opt-in; defaults preserve existing behavior.
+key_with_options = audio.detect_key(
+    use_hpss=True,
+    loudness_weighted=True,
+    high_pass_hz=80.0,
+)
+
 result = audio.analyze()  # BPM + key + time signature + beats
 print(f"BPM: {result.bpm:.1f}  Key: {result.key.root.name} {result.key.mode.name}")
+```
+
+### Room acoustics
+
+Use `detect_acoustic` for blind RT60/EDT estimation from ordinary audio.
+Use `analyze_impulse_response` when you have a measured impulse response and
+need clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `nan` for
+clarity metrics because they are not reliable without an impulse response.
+
+```python
+import libsonare
+
+audio = libsonare.Audio.from_file("recording.wav")
+blind = audio.detect_acoustic(
+    n_octave_bands=6,
+    n_third_octave_subbands=24,
+    min_decay_db=30.0,
+    noise_floor_margin_db=10.0,
+)
+print(blind.rt60, blind.edt, blind.is_blind)
+
+ir = libsonare.Audio.from_file("room_ir.wav")
+params = ir.analyze_impulse_response()
+print(params.rt60, params.c50, params.c80, params.d50)
 ```
 
 ### Load from a numpy array / in-memory samples
@@ -147,7 +184,7 @@ same flat dot-notation keys as `mastering_chain`.
 import libsonare
 
 libsonare.mastering_preset_names()
-# -> ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+# -> ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 
 result = libsonare.master_audio(
     samples,
@@ -162,6 +199,34 @@ result = libsonare.master_audio(
 # Audio shortcut
 audio = libsonare.Audio.from_file("song.wav")
 pop_mastered = audio.master_audio("pop")
+```
+
+### Mixing
+
+```python
+import libsonare
+
+libsonare.mixing_scene_preset_names()
+# -> ['vocalReverbSend', ...]
+scene_json = libsonare.mixing_scene_preset_json("vocalReverbSend")
+
+offline = libsonare.mix_stereo(
+    [(vocal_l, vocal_r), (music_l, music_r)],
+    sample_rate=sr,
+    input_trim_db=[3.0, 0.0],
+    fader_db=[-3.0, -12.0],
+    pan=[0.0, -0.2],
+    width=[1.0, 0.9],
+)
+
+mixer = libsonare.Mixer.from_scene_json(scene_json, sample_rate=sr, block_size=512)
+try:
+    block_l, block_r = mixer.process_stereo(
+        [vocal_block_l, return_block_l],
+        [vocal_block_r, return_block_r],
+    )
+finally:
+    mixer.close()
 ```
 
 ### Streaming mastering chain
@@ -244,6 +309,15 @@ Both APIs return the same results. Use whichever is more convenient:
 # Functional (good for ad-hoc numpy work)
 bpm = libsonare.detect_bpm(samples, sample_rate=22050)        # -> float
 key = libsonare.detect_key(samples, sample_rate=22050)        # -> Key(root, mode, confidence)
+key_hpss = libsonare.detect_key(
+    samples,
+    sample_rate=22050,
+    n_fft=4096,
+    hop_length=512,
+    use_hpss=True,
+    loudness_weighted=True,
+    high_pass_hz=80.0,
+)
 result = libsonare.analyze(samples, sample_rate=22050)        # -> AnalysisResult
 
 # Audio class (recommended for files, multiple operations on the same audio)

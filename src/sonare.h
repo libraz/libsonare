@@ -6,9 +6,9 @@
 
 // Version information
 #define SONARE_VERSION_MAJOR 1
-#define SONARE_VERSION_MINOR 0
-#define SONARE_VERSION_PATCH 4
-#define SONARE_VERSION_STRING "1.0.4"
+#define SONARE_VERSION_MINOR 2
+#define SONARE_VERSION_PATCH 0
+#define SONARE_VERSION_STRING "1.2.0"
 
 // Utility
 #include "util/exception.h"
@@ -33,10 +33,13 @@
 // Features
 #include "feature/chroma.h"
 #include "feature/cqt.h"
+#include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/nnls_chroma.h"
 #include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "feature/tonnetz.h"
 #include "feature/vqt.h"
 
 // Effects
@@ -47,29 +50,33 @@
 #include "effects/time_stretch.h"
 
 // Analysis
+#include "analysis/acoustic_analyzer.h"
 #include "analysis/beat_analyzer.h"
 #include "analysis/boundary_detector.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/chord_analyzer.h"
+#include "analysis/chord_hmm.h"
 #include "analysis/chord_templates.h"
+#include "analysis/downbeat_analyzer.h"
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/key_profiles.h"
 #include "analysis/melody_analyzer.h"
-#include "analysis/meter/basic.h"
-#include "analysis/meter/clipping.h"
-#include "analysis/meter/dynamic_range.h"
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/phase_scope.h"
-#include "analysis/meter/spectrogram.h"
-#include "analysis/meter/spectrum.h"
-#include "analysis/meter/stereo.h"
-#include "analysis/meter/true_peak.h"
+#include "analysis/meter_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
+#include "metering/basic.h"
+#include "metering/clipping.h"
+#include "metering/dynamic_range.h"
+#include "metering/lufs.h"
+#include "metering/phase_scope.h"
+#include "metering/spectrogram.h"
+#include "metering/spectrum.h"
+#include "metering/stereo.h"
+#include "metering/true_peak.h"
 
 // Quick API
 #include "quick.h"

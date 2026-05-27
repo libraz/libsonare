@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -40,11 +43,15 @@ void Tape::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   update_filters(sample_rate_);
+  if (config_.oversample_factor > 1) {
+    oversampler_.set_factor(config_.oversample_factor);
+  }
   prepared_ = true;
   reset();
 }
 
 void Tape::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("Tape must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -53,9 +60,33 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+  }
+
+  if (config_.oversample_factor <= 1) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      auto& state = states_[static_cast<size_t>(ch)];
+      for (int i = 0; i < num_samples; ++i) {
+        float y = process_sample(state, channels[ch][i]);
+        y += head_bump_[static_cast<size_t>(ch)].process(y);
+        auto& gap = gap_state_[static_cast<size_t>(ch)];
+        gap += gap_loss_coeff_ * (y - gap);
+        channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
+      }
+    }
+    return;
+  }
+
+  // Oversample only the stateful J-A core to reduce aliasing at high drive.
+  // head_bump and gap_loss stay at base rate.
+  for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
+    std::vector<float> os = oversampler_.upsample(channels[ch], static_cast<size_t>(num_samples));
+    for (auto& sample : os) {
+      sample = process_sample(state, sample);
+    }
+    std::vector<float> ja = oversampler_.downsample(os);
     for (int i = 0; i < num_samples; ++i) {
-      float y = process_sample(state, channels[ch][i]);
+      float y = ja[static_cast<size_t>(i)];
       y += head_bump_[static_cast<size_t>(ch)].process(y);
       auto& gap = gap_state_[static_cast<size_t>(ch)];
       gap += gap_loss_coeff_ * (y - gap);
@@ -76,7 +107,45 @@ void Tape::set_config(const TapeConfig& config) {
   validate_config(config);
   config_ = config;
   hysteresis_.set_config(make_ja_config(config_));
+  if (config_.oversample_factor > 1) {
+    oversampler_.set_factor(config_.oversample_factor);
+  }
   if (prepared_) update_filters(sample_rate_);
+}
+
+bool Tape::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.drive_db = value;
+      return true;
+    case 1:
+      config_.saturation = std::clamp(value, 0.0f, 1.0f);
+      hysteresis_.set_config(make_ja_config(config_));
+      return true;
+    case 2:
+      config_.hysteresis = std::clamp(value, 0.0f, 1.0f);
+      hysteresis_.set_config(make_ja_config(config_));
+      return true;
+    case 3:
+      config_.output_gain_db = value;
+      return true;
+    case 4:
+      config_.speed_ips = std::max(value, std::numeric_limits<float>::min());
+      if (prepared_) update_filters(sample_rate_);
+      return true;
+    case 5:
+      config_.head_bump_db = std::max(0.0f, value);
+      if (prepared_) update_filters(sample_rate_);
+      return true;
+    case 6:
+      config_.bias = value;
+      return true;
+    case 7:
+      config_.gap_loss = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Tape::validate_config(const TapeConfig& config) {
@@ -84,6 +153,10 @@ void Tape::validate_config(const TapeConfig& config) {
       config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||
       config.gap_loss < 0.0f || config.gap_loss > 1.0f) {
     throw std::invalid_argument("invalid tape configuration");
+  }
+  if (config.oversample_factor != 1 && config.oversample_factor != 2 &&
+      config.oversample_factor != 4) {
+    throw std::invalid_argument("tape oversample_factor must be 1, 2, or 4");
   }
 }
 
@@ -117,14 +190,12 @@ void Tape::update_filters(double sample_rate) {
   const float gain = db_to_linear(config_.head_bump_db) - 1.0f;
   const float q = 1.0f;
   const float w0 = static_cast<float>(kTwoPiD * frequency / sample_rate);
-  const float alpha = std::sin(w0) / (2.0f * q);
-  const float cosw = std::cos(w0);
-  const float a0 = 1.0f + alpha;
-  head_bump_coeffs_.b0 = alpha * gain / a0;
-  head_bump_coeffs_.b1 = 0.0f;
-  head_bump_coeffs_.b2 = -alpha * gain / a0;
-  head_bump_coeffs_.a1 = -2.0f * cosw / a0;
-  head_bump_coeffs_.a2 = (1.0f - alpha) / a0;
+  const auto coeffs = rt::rbj_bandpass(w0, q);
+  head_bump_coeffs_.b0 = coeffs.b0 * gain;
+  head_bump_coeffs_.b1 = coeffs.b1 * gain;
+  head_bump_coeffs_.b2 = coeffs.b2 * gain;
+  head_bump_coeffs_.a1 = coeffs.a1;
+  head_bump_coeffs_.a2 = coeffs.a2;
   for (auto& filter : head_bump_) {
     const float z1 = filter.z1;
     const float z2 = filter.z2;

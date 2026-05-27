@@ -37,11 +37,14 @@ struct KeyCandidate {
 
 /// @brief Configuration for key analysis.
 struct KeyConfig {
-  int n_fft = 4096;           ///< FFT size for chroma
-  int hop_length = 512;       ///< Hop length for chroma
-  bool use_hpss = false;      ///< Use HPSS to extract harmonic component
-  float high_pass_hz = 0.0f;  ///< High-pass filter cutoff (0 = disabled)
+  int n_fft = 4096;                ///< FFT size for chroma
+  int hop_length = 512;            ///< Hop length for chroma
+  bool use_hpss = false;           ///< Use HPSS to extract harmonic component
+  bool loudness_weighted = false;  ///< Weight chroma frames by RMS loudness
+  float high_pass_hz = 0.0f;       ///< High-pass filter cutoff (0 = disabled)
   KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;
+  std::string genre_hint = "auto";  ///< "auto" | "edm" | "pop" | "classical" | "jazz"
+  std::vector<Mode> modes = {Mode::Major, Mode::Minor};  ///< Candidate modes; default compatible
 };
 
 /// @brief Key analyzer using chroma correlation.

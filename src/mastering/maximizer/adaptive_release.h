@@ -8,8 +8,8 @@ namespace sonare::mastering::maximizer {
 ///
 /// release_ms is recomputed each block from the short-term crest factor of the
 /// input (peak / RMS). High crest (transient material) -> short release, low crest
-/// (sustained material) -> long release. This is the patent-safe alternative to
-/// iZotope IRC.
+/// (sustained material) -> long release. This avoids product-specific limiter
+/// behavior while keeping the mapping deterministic.
 struct AdaptiveReleaseConfig {
   float ceiling_db = -1.0f;
   float lookahead_ms = 1.0f;
@@ -31,7 +31,20 @@ class AdaptiveRelease : public common::ProcessorBase {
   const AdaptiveReleaseConfig& config() const { return config_; }
   float current_release_ms() const { return current_release_ms_; }
   float current_crest_factor() const { return current_crest_factor_; }
-  float last_gain_reduction_db() const { return limiter_.last_gain_reduction_db(); }
+  float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
+
+  // Automatable parameters (RT-safe, no allocation). All but ceiling are read
+  // directly each block by the adaptive-release mapping, so writing config_ is
+  // sufficient (no coefficient recompute):
+  //   0 = ceiling_db (clamped <= 0; forwarded in-place to the inner limiter)
+  //   1 = min_release_ms (clamped to >= 0)
+  //   2 = max_release_ms (clamped to >= min_release_ms)
+  //   3 = crest_window_ms (clamped to a small positive minimum)
+  //   4 = crest_low (clamped to a small positive minimum)
+  //   5 = crest_high (clamped to > crest_low)
+  //   6 = release_smoothing_ms (clamped to >= 0)
+  // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const AdaptiveReleaseConfig& config);

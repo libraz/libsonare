@@ -7,6 +7,7 @@
 #include "analysis/chord_analyzer.h"
 #include "analysis/chord_templates.h"
 #include "analysis/key_profiles.h"
+#include "analysis/progression_patterns.h"
 #include "core/fft.h"
 #include "core/resample.h"
 #include "core/window.h"
@@ -85,9 +86,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
 
   if (config_.compute_chroma) {
     chroma_buffer_.resize(12);
-    chroma_raw_.fill(0.0f);
     chroma_sum_.fill(0.0f);
-    bar_chroma_sum_.fill(0.0f);
     bar_chord_votes_.fill(0);
     /// Initialize chord templates for chord detection
     chord_templates_ = generate_triad_templates();
@@ -109,6 +108,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples) {
 void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t sample_offset) {
   /// Sync cumulative samples with external offset
   cumulative_samples_ = sample_offset;
+  cumulative_samples_exact_ = static_cast<double>(sample_offset);
   process_internal(samples, n_samples);
 }
 
@@ -143,12 +143,15 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   int n_fft = config_.n_fft;
   int hop_length = config_.hop_length;
 
-  while (overlap_buffer_.size() >= static_cast<size_t>(n_fft)) {
+  /// Process frames using a read offset into overlap_buffer_ instead of erasing
+  /// hop_length samples per frame (which is an O(N) memmove every hop).
+  while (overlap_buffer_.size() - overlap_read_pos_ >= static_cast<size_t>(n_fft)) {
     /// Calculate sample offset for this frame (in original sample rate)
     size_t frame_sample_offset = cumulative_samples_;
 
     /// Process single frame
-    StreamFrame frame = process_single_frame(overlap_buffer_.data(), frame_sample_offset);
+    StreamFrame frame =
+        process_single_frame(overlap_buffer_.data() + overlap_read_pos_, frame_sample_offset);
 
     /// Check emit_every_n_frames
     ++emitted_frame_count_;
@@ -157,16 +160,26 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
       output_buffer_.push_back(std::move(frame));
     }
 
-    /// Slide buffer by hop_length
-    overlap_buffer_.erase(overlap_buffer_.begin(), overlap_buffer_.begin() + hop_length);
+    /// Slide read position by hop_length (deferred compaction below)
+    overlap_read_pos_ += static_cast<size_t>(hop_length);
 
     /// Update cumulative samples (in original sample rate)
-    cumulative_samples_ += static_cast<size_t>(hop_length / resample_ratio_);
+    cumulative_samples_exact_ +=
+        static_cast<double>(hop_length) / static_cast<double>(resample_ratio_);
+    cumulative_samples_ = static_cast<size_t>(std::llround(cumulative_samples_exact_));
     ++frame_count_;
 
     /// Update progressive estimate if needed
     float current_time_sec = static_cast<float>(cumulative_samples_) / config_.sample_rate;
     update_progressive_estimate(current_time_sec);
+  }
+
+  /// Compact the consumed prefix once per chunk (single memmove) so the buffer
+  /// does not grow unbounded while keeping the unprocessed tail for overlap.
+  if (overlap_read_pos_ > 0) {
+    overlap_buffer_.erase(overlap_buffer_.begin(),
+                          overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
+    overlap_read_pos_ = 0;
   }
 }
 
@@ -207,12 +220,6 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
     }
     ++chroma_frame_count_;
 
-    /// Accumulate chroma frame for batch-style chord analysis
-    /// Store in column-major order: [chroma_bin][frame] for Chroma class compatibility
-    for (int c = 0; c < 12; ++c) {
-      accumulated_chroma_.push_back(chroma_buffer_[c]);
-    }
-
     /// Detect chord for this frame using smoothed chroma
     if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {
       /// Add current chroma to history
@@ -226,8 +233,9 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
       }
 
       /// Store to full chroma history for retroactive bar detection
-      if (full_chroma_history_.size() < kMaxChromaHistoryFrames) {
-        full_chroma_history_.push_back(current_chroma);
+      full_chroma_history_.push_back(current_chroma);
+      if (full_chroma_history_.size() > kMaxChromaHistoryFrames) {
+        full_chroma_history_.erase(full_chroma_history_.begin());
       }
 
       /// Compute median-filtered chroma (more robust to noise than averaging)
@@ -321,7 +329,6 @@ void StreamAnalyzer::compute_chroma() {
       sum += filter_row[k] * power_[k];
     }
     chroma_buffer_[c] = sum;
-    chroma_raw_[c] = sum;  // Store raw (unnormalized) for accumulation
   }
 
   /// Normalize chroma using L2 norm (more robust than max)
@@ -393,39 +400,13 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         }
       }
 
-      /// Find best matching key using profile correlation
-      int best_key = 0;
-      bool best_minor = false;
-      float best_corr = -2.0f;
-
-      for (int root = 0; root < 12; ++root) {
-        PitchClass pc = static_cast<PitchClass>(root);
-
-        /// Check major key
-        auto major_profile = normalize_profile(get_major_profile(pc));
-        float major_corr = profile_correlation(mean_chroma, major_profile);
-        if (major_corr > best_corr) {
-          best_corr = major_corr;
-          best_key = root;
-          best_minor = false;
-        }
-
-        /// Check minor key
-        auto minor_profile = normalize_profile(get_minor_profile(pc));
-        float minor_corr = profile_correlation(mean_chroma, minor_profile);
-        if (minor_corr > best_corr) {
-          best_corr = minor_corr;
-          best_key = root;
-          best_minor = true;
-        }
-      }
-
-      current_estimate_.key = best_key;
-      current_estimate_.key_minor = best_minor;
+      const MajorMinorKeyMatch key_match = find_best_major_minor_key(mean_chroma);
+      current_estimate_.key = key_match.root;
+      current_estimate_.key_minor = key_match.minor;
 
       /// Confidence based on correlation strength and time
       float time_factor = std::min(1.0f, current_time / 30.0f);
-      float corr_factor = (best_corr + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
+      float corr_factor = (key_match.correlation + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
       current_estimate_.key_confidence = corr_factor * time_factor;
 
       last_key_update_time_ = current_time;
@@ -452,7 +433,9 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         current_estimate_.chord_confidence = new_confidence;
       }
 
-      /// Track chord progression (only when confidence is high enough)
+      /// Track chord progression incrementally from the same smoothed chord
+      /// stream used for per-frame output. This avoids recomputing the whole
+      /// progression in a getter or periodically discarding this state.
       if (new_confidence >= kChordConfidenceThreshold) {
         float frame_duration =
             static_cast<float>(config_.hop_length) / static_cast<float>(internal_sample_rate_);
@@ -520,52 +503,6 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
     }
   }
 
-  /// Update chord progression using batch-style analysis (same as ChordAnalyzer)
-  if (config_.compute_chroma && chroma_frame_count_ > 0) {
-    float time_since_chord_analysis = current_time - last_chord_analysis_time_;
-    constexpr float kChordAnalysisInterval = 2.0f;  // Update every 2 seconds
-    constexpr int kMinFramesForAnalysis = 50;       // ~1 second of audio
-
-    if (time_since_chord_analysis >= kChordAnalysisInterval &&
-        chroma_frame_count_ >= kMinFramesForAnalysis) {
-      /// Transpose accumulated chroma from [frame][chroma] to [chroma][frame]
-      int n_frames = chroma_frame_count_;
-      std::vector<float> transposed_chroma(12 * n_frames);
-      for (int f = 0; f < n_frames; ++f) {
-        for (int c = 0; c < 12; ++c) {
-          transposed_chroma[c * n_frames + f] = accumulated_chroma_[f * 12 + c];
-        }
-      }
-
-      /// Create Chroma object from accumulated data (use internal sample rate)
-      Chroma chroma_obj(std::move(transposed_chroma), 12, n_frames, internal_sample_rate_,
-                        config_.hop_length);
-
-      /// Run ChordAnalyzer with same settings as batch analysis
-      ChordConfig chord_config;
-      chord_config.smoothing_window = 2.0f;  // Same as batch
-      chord_config.min_duration = 0.3f;
-      chord_config.use_triads_only = true;
-      chord_config.use_beat_sync = false;  // No beat sync in streaming
-
-      ChordAnalyzer chord_analyzer(chroma_obj, chord_config);
-
-      /// Update chord progression from ChordAnalyzer results
-      current_estimate_.chord_progression.clear();
-      for (const auto& chord : chord_analyzer.chords()) {
-        ChordChange change;
-        change.root = static_cast<int>(chord.root);
-        change.quality = static_cast<int>(chord.quality);
-        change.start_time = chord.start;
-        change.confidence = chord.confidence;
-        current_estimate_.chord_progression.push_back(change);
-      }
-
-      last_chord_analysis_time_ = current_time;
-      current_estimate_.updated = true;
-    }
-  }
-
   /// Update bar-synchronized chord tracking
   if (config_.compute_chroma) {
     update_bar_chord_tracking(current_time);
@@ -588,8 +525,6 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       compute_retroactive_bar_chords();
 
       /// Reset for live bar tracking (state already set by retroactive computation)
-      bar_chroma_sum_.fill(0.0f);
-      bar_chroma_count_ = 0;
       bar_chord_votes_.fill(0);
       bar_vote_count_ = 0;
 
@@ -629,8 +564,6 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       }
     }
   }
-  ++bar_chroma_count_;
-
   /// Check if we've crossed a bar boundary
   if (current_time >= bar_start_time_ + bar_duration_) {
     /// Find chord with most votes
@@ -667,8 +600,6 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     /// Move to next bar
     ++current_bar_index_;
     bar_start_time_ = current_time;
-    bar_chroma_sum_.fill(0.0f);
-    bar_chroma_count_ = 0;
     bar_chord_votes_.fill(0);
     bar_vote_count_ = 0;
 
@@ -802,35 +733,9 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     }
 
     /// Find chord with highest weighted vote (confidence-weighted)
-    /// Apply diatonic chord bonus based on detected key
+    /// Apply diatonic chord bonus based on detected key.
     int detected_key = current_estimate_.key;
-    bool key_minor = current_estimate_.key_minor;
-
-    /// Diatonic chords in major key: I, ii, iii, IV, V, vi, vii°
-    /// Semitones from root: 0(M), 2(m), 4(m), 5(M), 7(M), 9(m), 11(dim)
-    /// In minor key: i, ii°, III, iv, v/V, VI, VII
-    std::array<std::pair<int, int>, 7> diatonic_chords;
-    if (!key_minor) {
-      diatonic_chords = {{
-          {0, 0},   // I (Major)
-          {2, 1},   // ii (minor)
-          {4, 1},   // iii (minor)
-          {5, 0},   // IV (Major)
-          {7, 0},   // V (Major)
-          {9, 1},   // vi (minor)
-          {11, 2},  // vii° (diminished)
-      }};
-    } else {
-      diatonic_chords = {{
-          {0, 1},   // i (minor)
-          {2, 2},   // ii° (diminished)
-          {3, 0},   // III (Major)
-          {5, 1},   // iv (minor)
-          {7, 0},   // V (Major) - often used
-          {8, 0},   // VI (Major)
-          {10, 0},  // VII (Major)
-      }};
-    }
+    const auto diatonic_chords = diatonic_triads(current_estimate_.key_minor);
 
     int best_idx = 0;
     float best_score = 0.0f;
@@ -898,7 +803,7 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
 
   bool can_lock = (static_cast<int>(bars.size()) >= min_bars_for_lock);
 
-  const auto& patterns = get_known_patterns();
+  const auto& patterns = known_progression_patterns();
   int detected_key = current_estimate_.key;
   int pattern_length = static_cast<int>(voted.size());
 
@@ -966,52 +871,6 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   }
 }
 
-const std::vector<StreamAnalyzer::ProgressionPattern>& StreamAnalyzer::get_known_patterns() {
-  // degree: 0=I, 1=bII, 2=II, 3=bIII, 4=III, 5=IV, 6=bV, 7=V, 8=bVI, 9=VI, 10=bVII, 11=VII
-  // quality: 0=Major, 1=Minor
-  static const std::vector<ProgressionPattern> patterns = {
-      // Royal Road (王道進行): I - V - VIm - IV
-      {"royalRoad", {{0, 0}, {7, 0}, {9, 1}, {5, 0}}},
-
-      // Komuro (小室進行): VIm - IV - V - I
-      {"komuro", {{9, 1}, {5, 0}, {7, 0}, {0, 0}}},
-
-      // Canon (カノン進行): I - V - VIm - IIIm - IV - I - IV - V
-      {"canon", {{0, 0}, {7, 0}, {9, 1}, {4, 1}, {5, 0}, {0, 0}, {5, 0}, {7, 0}}},
-
-      // Just the Two of Us: IVM7 - IIIm7 - VIm
-      {"justTheTwoOfUs", {{5, 0}, {4, 1}, {9, 1}}},
-
-      // I - IV - V - I (Basic)
-      {"basic145", {{0, 0}, {5, 0}, {7, 0}, {0, 0}}},
-
-      // Blues (12-bar): I - I - I - I - IV - IV - I - I - V - IV - I - V
-      {"blues12",
-       {{0, 0},
-        {0, 0},
-        {0, 0},
-        {0, 0},
-        {5, 0},
-        {5, 0},
-        {0, 0},
-        {0, 0},
-        {7, 0},
-        {5, 0},
-        {0, 0},
-        {7, 0}}},
-
-      // Axis (VIm - IV - I - V)
-      {"axis", {{9, 1}, {5, 0}, {0, 0}, {7, 0}}},
-
-      // I - VIm - IV - V (50s)
-      {"fifties", {{0, 0}, {9, 1}, {5, 0}, {7, 0}}},
-
-      // I - V - VIm - IIIm (Sensitive)
-      {"sensitive", {{0, 0}, {7, 0}, {9, 1}, {4, 1}}},
-  };
-  return patterns;
-}
-
 void StreamAnalyzer::detect_progression_pattern() {
   // Skip if pattern is already locked
   if (pattern_locked_) {
@@ -1023,7 +882,7 @@ void StreamAnalyzer::detect_progression_pattern() {
     return;
   }
 
-  const auto& patterns = get_known_patterns();
+  const auto& patterns = known_progression_patterns();
   int detected_key = current_estimate_.key;
 
   std::string best_pattern_name;
@@ -1050,41 +909,8 @@ void StreamAnalyzer::detect_progression_pattern() {
       const auto& bar = bars[bar_idx];
       float bar_conf = bar.confidence;
 
-      /// Calculate similarity score (0.0 to 1.0)
-      float similarity = 0.0f;
-
-      if (bar.root == expected_root && bar.quality == expected_quality) {
-        /// Exact match
-        similarity = 1.0f;
-      } else if (bar.root == expected_root) {
-        /// Same root, different quality (e.g., C vs Cm)
-        similarity = 0.6f;
-      } else {
-        /// Check for related chords
-        int root_diff = std::abs(bar.root - expected_root);
-        if (root_diff > 6) root_diff = 12 - root_diff;  /// Wrap around
-
-        if (root_diff == 0) {
-          similarity = 0.6f;  /// Same root
-        } else if (root_diff == 7 || root_diff == 5) {
-          /// Fifth or fourth relationship (e.g., C and G, or C and F)
-          similarity = 0.3f;
-        } else if (root_diff == 3 || root_diff == 4) {
-          /// Third relationship (relative major/minor)
-          similarity = 0.25f;
-        } else if (root_diff == 2) {
-          /// Second (close neighbor)
-          similarity = 0.15f;
-        } else if (root_diff == 1) {
-          /// Semitone (very close, might be tuning issue)
-          similarity = 0.2f;
-        }
-
-        /// Bonus if quality matches despite root mismatch
-        if (bar.quality == expected_quality) {
-          similarity += 0.1f;
-        }
-      }
+      const float similarity =
+          chord_similarity_score(bar.root, bar.quality, expected_root, expected_quality);
 
       /// Weight by detection confidence
       total_score += similarity * bar_conf;

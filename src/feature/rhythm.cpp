@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "core/fft.h"
+#include "core/window.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/constants.h"
@@ -15,38 +16,6 @@
 namespace sonare {
 
 namespace {
-
-/// @brief Build an analysis window matching librosa.filters.get_window for the
-///        supported WindowType values used by TempogramConfig.
-std::vector<float> make_window(WindowType type, int length) {
-  if (length <= 1) return std::vector<float>(length, 1.0f);
-  std::vector<float> w(length);
-  const double tp = constants::kTwoPiD;
-  switch (type) {
-    case WindowType::Hann:
-      for (int i = 0; i < length; ++i) {
-        // librosa uses a periodic Hann: 0.5 * (1 - cos(2*pi*i / N))
-        w[i] = static_cast<float>(0.5 * (1.0 - std::cos(tp * i / length)));
-      }
-      break;
-    case WindowType::Hamming:
-      for (int i = 0; i < length; ++i) {
-        w[i] = static_cast<float>(0.54 - 0.46 * std::cos(tp * i / length));
-      }
-      break;
-    case WindowType::Blackman:
-      for (int i = 0; i < length; ++i) {
-        const double t = static_cast<double>(i) / static_cast<double>(length);
-        w[i] = static_cast<float>(0.42 - 0.5 * std::cos(tp * t) + 0.08 * std::cos(2.0 * tp * t));
-      }
-      break;
-    case WindowType::Rectangular:
-    default:
-      std::fill(w.begin(), w.end(), 1.0f);
-      break;
-  }
-  return w;
-}
 
 /// @brief Center-pad the onset envelope by win_length/2 with reflect-equivalent
 ///        zero edges (librosa uses reflect padding; we use constant zeros which
@@ -74,7 +43,7 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*
   const int half = win / 2;
   const auto padded = pad_envelope(onset_envelope, half, config.center);
   const int n_frames = static_cast<int>(onset_envelope.size());
-  const auto window = make_window(config.window, win);
+  const auto window = create_window(config.window, win);
 
   std::vector<float> tg(static_cast<std::size_t>(win) * static_cast<std::size_t>(n_frames), 0.0f);
 
@@ -88,14 +57,27 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*
       const double v = (idx >= 0 && idx < static_cast<int>(padded.size())) ? padded[idx] : 0.0;
       frame[i] = v * window[i];
     }
-    // Compute biased autocorrelation up to lag = win - 1.
+    // Compute similarity up to lag = win - 1.
     std::fill(ac.begin(), ac.end(), 0.0);
     for (int lag = 0; lag < win; ++lag) {
       double s = 0.0;
+      double lhs_sq = 0.0;
+      double rhs_sq = 0.0;
       for (int i = 0; i + lag < win; ++i) {
-        s += frame[i] * frame[i + lag];
+        const double lhs = frame[i];
+        const double rhs = frame[i + lag];
+        s += lhs * rhs;
+        if (config.mode == TempogramMode::kCosine) {
+          lhs_sq += lhs * lhs;
+          rhs_sq += rhs * rhs;
+        }
       }
-      ac[lag] = s;
+      if (config.mode == TempogramMode::kCosine) {
+        const double denom = std::sqrt(lhs_sq * rhs_sq);
+        ac[lag] = denom > static_cast<double>(constants::kEpsilon) ? s / denom : 0.0;
+      } else {
+        ac[lag] = s;
+      }
     }
     // Optional L2 normalize per column.
     if (config.norm) {
@@ -139,7 +121,7 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
   const int half = win / 2;
   const auto padded = pad_envelope(onset_envelope, half, config.center);
   const int n_frames = static_cast<int>(onset_envelope.size());
-  const auto window = make_window(config.window, win);
+  const auto window = create_window(config.window, win);
 
   // Use kissfft via core/fft.h.
   FFT fft(win);
@@ -170,6 +152,52 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
   onset_cfg.center = config.center;
   const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
   return fourier_tempogram(env, audio.sample_rate(), config);
+}
+
+std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
+                                    const TempogramConfig& config, float bpm_min, int n_bins) {
+  if (sr <= 0 || config.hop_length <= 0) {
+    throw std::invalid_argument("cyclic_tempogram: sr and hop_length must be > 0");
+  }
+  if (bpm_min <= 0.0f || n_bins <= 0) {
+    throw std::invalid_argument("cyclic_tempogram: bpm_min and n_bins must be > 0");
+  }
+  if (onset_envelope.empty()) return {};
+
+  const std::vector<float> ft = fourier_tempogram(onset_envelope, sr, config);
+  const int n_frames = static_cast<int>(onset_envelope.size());
+  const int fourier_bins = config.win_length / 2 + 1;
+  std::vector<float> cyclic(static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
+                            0.0f);
+
+  const double octave_width = std::log(2.0);
+  for (int bin = 1; bin < fourier_bins; ++bin) {
+    const double bpm = static_cast<double>(bin) / static_cast<double>(config.win_length) * 60.0 *
+                       static_cast<double>(sr) / static_cast<double>(config.hop_length);
+    if (bpm <= 0.0) continue;
+    double phase = std::fmod(std::log(bpm / static_cast<double>(bpm_min)) / octave_width, 1.0);
+    if (phase < 0.0) phase += 1.0;
+    const int cyclic_bin = std::clamp(
+        static_cast<int>(std::round(phase * static_cast<double>(n_bins))) % n_bins, 0, n_bins - 1);
+    for (int frame = 0; frame < n_frames; ++frame) {
+      cyclic[static_cast<std::size_t>(cyclic_bin) * static_cast<std::size_t>(n_frames) +
+             static_cast<std::size_t>(frame)] +=
+          ft[static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
+             static_cast<std::size_t>(frame)];
+    }
+  }
+
+  return cyclic;
+}
+
+std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& config,
+                                    float bpm_min, int n_bins) {
+  MelConfig mel_cfg;
+  mel_cfg.hop_length = config.hop_length;
+  OnsetConfig onset_cfg;
+  onset_cfg.center = config.center;
+  const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
+  return cyclic_tempogram(env, audio.sample_rate(), config, bpm_min, n_bins);
 }
 
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {

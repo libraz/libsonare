@@ -3,8 +3,11 @@
 /// @file compressor.h
 /// @brief Feed-forward compressor with soft knee and makeup gain.
 
+#include <vector>
+
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -39,7 +42,15 @@ class Compressor : public common::ProcessorBase {
 
   void set_config(const CompressorConfig& config);
   const CompressorConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return last_gain_reduction_db_; }
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = threshold_db
+  //   1 = ratio (clamped to >= 1)
+  //   2 = attack_ms (clamped to >= 0)
+  //   3 = release_ms (clamped to >= 0)
+  //   4 = makeup_gain_db
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const CompressorConfig& config);
@@ -54,9 +65,12 @@ class Compressor : public common::ProcessorBase {
   float rms_state_ = 0.0f;
   float rms_coeff_ = 0.0f;
   float log_rms_coeff_ = 0.0f;
-  float hpf_coeff_ = 0.0f;
-  float hpf_x1_ = 0.0f;
-  float hpf_y1_ = 0.0f;
+  float hpf_b0_ = 1.0f;
+  float hpf_a1_ = 0.0f;
+  // Per-channel sidechain HPF state, sized to the channel count on first
+  // process() so stereo channels do not share (and corrupt) filter memory.
+  std::vector<float> hpf_x1_;
+  std::vector<float> hpf_y1_;
   float pdr_state_db_ = 0.0f;
   float pdr_coeff_ = 0.0f;
   // Log-domain attack/release smoothing on the gain-reduction signal (in dB).

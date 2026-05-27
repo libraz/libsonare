@@ -1,18 +1,38 @@
+#include <cctype>
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/suggester.h"
+#include "mastering/eq/equalizer.h"
+#include "mastering/match/match_eq.h"
+#include "mastering/match/reference_spectrum.h"
 #include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/streaming_preview.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
+#include "util/json_escape.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
+
+// Keep the C API band count in sync with the C++ processor and the spectrum
+// engine's fixed-size band_gain_db array (std::array<float, 24>).
+static_assert(SONARE_EQ_MAX_BANDS == sonare::mastering::eq::EqualizerProcessor::kMaxBands,
+              "SONARE_EQ_MAX_BANDS must match EqualizerProcessor::kMaxBands");
+
+struct SonareEq {
+  sonare::mastering::eq::EqualizerProcessor processor;
+  double sample_rate = 48000.0;
+  int max_block_size = 0;
+};
 
 namespace {
 
@@ -37,6 +57,44 @@ std::vector<sonare::mastering::api::Param> to_params(const SonareMasteringParam*
     }
   }
   return out;
+}
+
+sonare::mastering::assistant::AssistantConfig to_assistant_config(
+    const SonareMasteringParam* params, size_t count) {
+  sonare::mastering::assistant::AssistantConfig config;
+  for (size_t index = 0; index < count; ++index) {
+    if (!params[index].key) continue;
+    const std::string key = params[index].key;
+    if (key == "targetLufs" || key == "target_lufs") {
+      config.target_lufs = static_cast<float>(params[index].value);
+    } else if (key == "ceilingDb" || key == "ceiling_db") {
+      config.ceiling_db = static_cast<float>(params[index].value);
+    } else if (key == "enableRepair" || key == "enable_repair") {
+      config.enable_repair = params[index].value != 0.0;
+    } else if (key == "preferStreamingSafe" || key == "prefer_streaming_safe") {
+      config.prefer_streaming_safe = params[index].value != 0.0;
+    } else if (key == "speechMonoAmount" || key == "speech_mono_amount") {
+      config.speech_mono_amount = static_cast<float>(params[index].value);
+    }
+  }
+  return config;
+}
+
+sonare::mastering::assistant::AudioProfileConfig to_audio_profile_config(
+    const SonareMasteringParam* params, size_t count) {
+  sonare::mastering::assistant::AudioProfileConfig config;
+  for (size_t index = 0; index < count; ++index) {
+    if (!params[index].key) continue;
+    const std::string key = params[index].key;
+    if (key == "nFft" || key == "n_fft") {
+      config.n_fft = static_cast<int>(params[index].value);
+    } else if (key == "hopLength" || key == "hop_length") {
+      config.hop_length = static_cast<int>(params[index].value);
+    } else if (key == "truePeakOversample" || key == "true_peak_oversample") {
+      config.true_peak_oversample = static_cast<int>(params[index].value);
+    }
+  }
+  return config;
 }
 
 void set_mastering_result(const sonare::mastering::api::MonoResult& result,
@@ -68,7 +126,482 @@ const char* join_names(const std::vector<std::string>& values, std::string& stor
   return storage.c_str();
 }
 
+[[noreturn]] void invalid_eq_json(const std::string& message) {
+  throw SonareException(ErrorCode::InvalidParameter, "sonare_eq_set_band: " + message);
+}
+
+struct JsonValue {
+  enum class Type { Number, Bool, String };
+  Type type = Type::Number;
+  double number = 0.0;
+  bool boolean = false;
+  std::string string;
+};
+
+class EqBandJsonParser {
+ public:
+  explicit EqBandJsonParser(const std::string& text) : text_(text) {}
+
+  std::unordered_map<std::string, JsonValue> parse() {
+    std::unordered_map<std::string, JsonValue> out;
+    skip_ws();
+    expect('{');
+    if (!consume('}')) {
+      while (true) {
+        std::string key = parse_string();
+        expect(':');
+        JsonValue value = parse_value();
+        if (!out.emplace(std::move(key), std::move(value)).second) {
+          invalid_eq_json("duplicate JSON field");
+        }
+        if (consume('}')) break;
+        expect(',');
+      }
+    }
+    skip_ws();
+    if (pos_ != text_.size()) {
+      invalid_eq_json("trailing data after JSON object");
+    }
+    return out;
+  }
+
+ private:
+  void skip_ws() {
+    while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_]))) {
+      ++pos_;
+    }
+  }
+
+  bool consume(char c) {
+    skip_ws();
+    if (pos_ < text_.size() && text_[pos_] == c) {
+      ++pos_;
+      return true;
+    }
+    return false;
+  }
+
+  void expect(char c) {
+    skip_ws();
+    if (pos_ >= text_.size() || text_[pos_] != c) {
+      invalid_eq_json(std::string("expected JSON character: ") + c);
+    }
+    ++pos_;
+  }
+
+  bool peek(const char* literal) const {
+    const std::string value(literal);
+    return text_.compare(pos_, value.size(), value) == 0;
+  }
+
+  JsonValue parse_value() {
+    skip_ws();
+    if (pos_ >= text_.size()) invalid_eq_json("expected JSON value");
+    if (text_[pos_] == '"') {
+      JsonValue value;
+      value.type = JsonValue::Type::String;
+      value.string = parse_string();
+      return value;
+    }
+    if (peek("true")) {
+      pos_ += 4;
+      JsonValue value;
+      value.type = JsonValue::Type::Bool;
+      value.boolean = true;
+      return value;
+    }
+    if (peek("false")) {
+      pos_ += 5;
+      JsonValue value;
+      value.type = JsonValue::Type::Bool;
+      value.boolean = false;
+      return value;
+    }
+    JsonValue value;
+    value.type = JsonValue::Type::Number;
+    value.number = parse_number();
+    return value;
+  }
+
+  std::string parse_string() {
+    skip_ws();
+    if (pos_ >= text_.size() || text_[pos_] != '"') {
+      invalid_eq_json("expected JSON string");
+    }
+    ++pos_;
+    std::string out;
+    while (pos_ < text_.size()) {
+      const char c = text_[pos_++];
+      if (c == '"') return out;
+      if (c == '\\') {
+        if (pos_ >= text_.size()) invalid_eq_json("unterminated JSON escape");
+        const char escaped = text_[pos_++];
+        switch (escaped) {
+          case '"':
+          case '\\':
+          case '/':
+            out.push_back(escaped);
+            break;
+          case 'n':
+            out.push_back('\n');
+            break;
+          case 't':
+            out.push_back('\t');
+            break;
+          default:
+            invalid_eq_json("unsupported JSON string escape");
+        }
+        continue;
+      }
+      out.push_back(c);
+    }
+    invalid_eq_json("unterminated JSON string");
+  }
+
+  double parse_number() {
+    skip_ws();
+    const size_t start = pos_;
+    if (pos_ < text_.size() && text_[pos_] == '-') ++pos_;
+    const size_t int_start = pos_;
+    while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
+    if (pos_ == int_start) invalid_eq_json("expected JSON number");
+    if (pos_ < text_.size() && text_[pos_] == '.') {
+      ++pos_;
+      const size_t frac_start = pos_;
+      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
+      if (pos_ == frac_start) invalid_eq_json("invalid JSON number");
+    }
+    if (pos_ < text_.size() && (text_[pos_] == 'e' || text_[pos_] == 'E')) {
+      ++pos_;
+      if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-')) ++pos_;
+      const size_t exp_start = pos_;
+      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
+      if (pos_ == exp_start) invalid_eq_json("invalid JSON number");
+    }
+    try {
+      return std::stod(text_.substr(start, pos_ - start));
+    } catch (const std::exception&) {
+      invalid_eq_json("invalid JSON number");
+    }
+  }
+
+  const std::string& text_;
+  size_t pos_ = 0;
+};
+
+using JsonObject = std::unordered_map<std::string, JsonValue>;
+
+const JsonValue* find_json_value(const JsonObject& object, const char* key) {
+  const auto it = object.find(key);
+  return it == object.end() ? nullptr : &it->second;
+}
+
+double json_number(const JsonObject& object, const char* key, double fallback) {
+  const JsonValue* value = find_json_value(object, key);
+  if (!value) return fallback;
+  if (value->type != JsonValue::Type::Number) {
+    invalid_eq_json(std::string("expected numeric JSON field: ") + key);
+  }
+  return value->number;
+}
+
+double json_number_any(const JsonObject& object, const char* first_key, const char* second_key,
+                       double fallback) {
+  const JsonValue* value = find_json_value(object, first_key);
+  if (value && value->type != JsonValue::Type::Number) {
+    invalid_eq_json(std::string("expected numeric JSON field: ") + first_key);
+  }
+  if (value) return value->number;
+  return json_number(object, second_key, fallback);
+}
+
+bool json_bool(const JsonObject& object, const char* key, bool fallback) {
+  const JsonValue* value = find_json_value(object, key);
+  if (!value) return fallback;
+  if (value->type == JsonValue::Type::Bool) return value->boolean;
+  if (value->type == JsonValue::Type::Number) return value->number != 0.0;
+  invalid_eq_json(std::string("expected boolean JSON field: ") + key);
+}
+
+bool json_bool_any(const JsonObject& object, const char* first_key, const char* second_key,
+                   bool fallback) {
+  const JsonValue* value = find_json_value(object, first_key);
+  if (value) return json_bool(object, first_key, fallback);
+  return json_bool(object, second_key, fallback);
+}
+
+std::string json_string(const JsonObject& object, const char* key, const std::string& fallback) {
+  const JsonValue* value = find_json_value(object, key);
+  if (!value) return fallback;
+  if (value->type != JsonValue::Type::String) {
+    invalid_eq_json(std::string("expected string JSON field: ") + key);
+  }
+  return value->string;
+}
+
+std::string json_string_any(const JsonObject& object, const char* first_key, const char* second_key,
+                            const std::string& fallback) {
+  const JsonValue* value = find_json_value(object, first_key);
+  if (value) return json_string(object, first_key, fallback);
+  return json_string(object, second_key, fallback);
+}
+
+sonare::mastering::eq::EqBandType parse_band_type(const std::string& value) {
+  using sonare::mastering::eq::EqBandType;
+  if (value == "Peak" || value == "peak" || value == "Bell" || value == "bell") {
+    return EqBandType::Peak;
+  }
+  if (value == "LowShelf" || value == "lowShelf") return EqBandType::LowShelf;
+  if (value == "HighShelf" || value == "highShelf") return EqBandType::HighShelf;
+  if (value == "LowPass" || value == "lowPass" || value == "HighCut" || value == "highCut") {
+    return EqBandType::LowPass;
+  }
+  if (value == "HighPass" || value == "highPass" || value == "LowCut" || value == "lowCut") {
+    return EqBandType::HighPass;
+  }
+  if (value == "BandPass" || value == "bandPass") return EqBandType::BandPass;
+  if (value == "Notch" || value == "notch") return EqBandType::Notch;
+  if (value == "TiltShelf" || value == "tiltShelf") return EqBandType::TiltShelf;
+  if (value == "FlatTilt" || value == "flatTilt") return EqBandType::FlatTilt;
+  invalid_eq_json("unknown EQ band type: " + value);
+}
+
+sonare::mastering::eq::BiquadCoeffMode parse_coeff_mode(const std::string& value) {
+  using sonare::mastering::eq::BiquadCoeffMode;
+  if (value == "Rbj" || value == "RBJ" || value == "rbj") return BiquadCoeffMode::Rbj;
+  if (value == "Vicanek" || value == "vicanek") return BiquadCoeffMode::Vicanek;
+  invalid_eq_json("unknown EQ coefficient mode: " + value);
+}
+
+sonare::mastering::eq::StereoPlacement parse_placement(const std::string& value) {
+  using sonare::mastering::eq::StereoPlacement;
+  if (value == "Stereo" || value == "stereo") return StereoPlacement::Stereo;
+  if (value == "Left" || value == "left") return StereoPlacement::Left;
+  if (value == "Right" || value == "right") return StereoPlacement::Right;
+  if (value == "Mid" || value == "mid") return StereoPlacement::Mid;
+  if (value == "Side" || value == "side") return StereoPlacement::Side;
+  invalid_eq_json("unknown EQ placement: " + value);
+}
+
+sonare::mastering::eq::PhaseMode parse_phase(int mode) {
+  using sonare::mastering::eq::PhaseMode;
+  switch (mode) {
+    case 1:
+      return PhaseMode::ZeroLatency;
+    case 2:
+      return PhaseMode::NaturalPhase;
+    case 3:
+      return PhaseMode::LinearPhase;
+    default:
+      throw SonareException(ErrorCode::InvalidParameter, "unknown EQ phase mode");
+  }
+}
+
+sonare::mastering::eq::PhaseMode parse_band_phase(const std::string& value) {
+  using sonare::mastering::eq::PhaseMode;
+  if (value == "Inherit" || value == "inherit") return PhaseMode::Inherit;
+  if (value == "ZeroLatency" || value == "zeroLatency") return PhaseMode::ZeroLatency;
+  if (value == "NaturalPhase" || value == "naturalPhase") return PhaseMode::NaturalPhase;
+  if (value == "LinearPhase" || value == "linearPhase") return PhaseMode::LinearPhase;
+  invalid_eq_json("unknown EQ band phase mode: " + value);
+}
+
+sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
+  if (!band_json) invalid_eq_json("band_json must not be null");
+  const JsonObject json = EqBandJsonParser(std::string(band_json)).parse();
+  sonare::mastering::eq::EqBand band;
+  band.type = parse_band_type(json_string(json, "type", "Peak"));
+  band.coeff_mode = parse_coeff_mode(json_string_any(json, "coeffMode", "coeff_mode", "Rbj"));
+  band.frequency_hz =
+      static_cast<float>(json_number_any(json, "frequencyHz", "frequency_hz", band.frequency_hz));
+  band.gain_db = static_cast<float>(json_number_any(json, "gainDb", "gain_db", band.gain_db));
+  band.q = static_cast<float>(json_number(json, "q", band.q));
+  band.enabled = json_bool(json, "enabled", band.enabled);
+  band.slope_db_oct = static_cast<int>(
+      std::round(json_number_any(json, "slopeDbOct", "slope_db_oct", band.slope_db_oct)));
+  band.placement = parse_placement(json_string(json, "placement", "Stereo"));
+  band.phase = parse_band_phase(json_string(json, "phase", "Inherit"));
+  band.soloed = json_bool(json, "soloed", false);
+  band.bypassed = json_bool(json, "bypassed", false);
+  band.proportional_q = json_bool_any(json, "proportionalQ", "proportional_q", false);
+  band.proportional_q_strength = static_cast<float>(json_number_any(
+      json, "proportionalQStrength", "proportional_q_strength", band.proportional_q_strength));
+
+  band.dyn.enabled = json_bool_any(json, "dynamic", "dynEnabled", false);
+  band.dyn.enabled = json_bool(json, "dyn_enabled", band.dyn.enabled);
+  band.dyn.threshold_db = static_cast<float>(
+      json_number_any(json, "thresholdDb", "threshold_db", band.dyn.threshold_db));
+  band.dyn.auto_threshold =
+      json_bool_any(json, "autoThreshold", "auto_threshold", band.dyn.auto_threshold);
+  band.dyn.ratio = static_cast<float>(json_number(json, "ratio", band.dyn.ratio));
+  band.dyn.range_db =
+      static_cast<float>(json_number_any(json, "rangeDb", "range_db", band.dyn.range_db));
+  band.dyn.attack_ms =
+      static_cast<float>(json_number_any(json, "attackMs", "attack_ms", band.dyn.attack_ms));
+  band.dyn.release_ms =
+      static_cast<float>(json_number_any(json, "releaseMs", "release_ms", band.dyn.release_ms));
+  band.dyn.lookahead_ms = static_cast<float>(
+      json_number_any(json, "lookaheadMs", "lookahead_ms", band.dyn.lookahead_ms));
+  band.dyn.sidechain_freq_hz = static_cast<float>(
+      json_number_any(json, "sidechainFreqHz", "sidechain_freq_hz", band.dyn.sidechain_freq_hz));
+  band.dyn.sidechain_q =
+      static_cast<float>(json_number_any(json, "sidechainQ", "sidechain_q", band.dyn.sidechain_q));
+  band.dyn.external_sidechain =
+      json_bool_any(json, "externalSidechain", "external_sidechain", band.dyn.external_sidechain);
+  return band;
+}
+
 }  // namespace
+
+SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
+  if (!(sample_rate > 0.0) || max_block_size < 0) {
+    return nullptr;
+  }
+  try {
+    auto* handle = new SonareEq;
+    handle->sample_rate = sample_rate;
+    handle->max_block_size = max_block_size;
+    handle->processor.prepare(sample_rate, max_block_size);
+    return handle;
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+void sonare_eq_destroy(SonareEq* eq) { delete eq; }
+
+SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
+  if (!eq || !band_json || index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  eq->processor.set_band(static_cast<size_t>(index), parse_eq_band_json(band_json));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_eq_clear(SonareEq* eq) {
+  if (eq) {
+    eq->processor.clear();
+  }
+}
+
+SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_phase_mode(parse_phase(mode));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
+                            size_t length, int sample_rate, int max_bands) {
+  if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SonareError err = validate_audio_params(source, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(reference, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  sonare::mastering::match::MatchEqConfig config;
+  config.max_bands = static_cast<size_t>(max_bands);
+  const Audio source_audio = Audio::from_buffer(source, length, sample_rate);
+  const Audio reference_audio = Audio::from_buffer(reference, length, sample_rate);
+  sonare::mastering::match::configure_equalizer_from_match(
+      eq->processor, sonare::mastering::match::reference_spectrum(source_audio),
+      sonare::mastering::match::reference_spectrum(reference_audio), config);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_eq_set_auto_gain(SonareEq* eq, int enabled) {
+  if (eq) {
+    eq->processor.set_auto_gain_enabled(enabled != 0);
+  }
+}
+
+float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
+  return eq ? eq->processor.last_auto_gain_db() : 0.0f;
+}
+
+SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_gain_scale(scale);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_output_gain_db(gain_db);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_output_pan(pan);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+int sonare_eq_latency_samples(const SonareEq* eq) {
+  return eq ? eq->processor.latency_samples() : 0;
+}
+
+SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
+                                    int num_samples) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_sidechain(channels, num_channels, num_samples);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_eq_clear_sidechain(SonareEq* eq) {
+  if (eq) {
+    eq->processor.clear_sidechain();
+  }
+}
+
+SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
+                              int num_samples) {
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.process(channels, num_channels, num_samples);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
+  if (!eq || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  const auto snapshot = eq->processor.spectrum_snapshot();
+  *out = {};
+  out->pre_count = snapshot.pre_count;
+  out->post_count = snapshot.post_count;
+  out->last_auto_gain_db = eq->processor.last_auto_gain_db();
+  out->seq = snapshot.seq;
+  for (size_t i = 0; i < SONARE_EQ_SPECTRUM_STREAM_CAPACITY; ++i) {
+    out->pre_left[i] = snapshot.pre[i].left;
+    out->pre_right[i] = snapshot.pre[i].right;
+    out->post_left[i] = snapshot.post[i].left;
+    out->post_right[i] = snapshot.post[i].right;
+  }
+  for (size_t i = 0; i < SONARE_EQ_MAX_BANDS; ++i) {
+    out->band_gain_db[i] = snapshot.band_gain_db[i];
+  }
+  for (size_t i = 0; i < SONARE_EQ_SPECTRUM_PROFILE_BANDS; ++i) {
+    out->profile_db[i] = snapshot.profile_db[i];
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
@@ -256,6 +789,70 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
   auto json = sonare::mastering::api::analyze_named_stereo(
       analysis_name, left, right, length, sample_rate, to_params(params, param_count));
   *json_out = copy_string(json);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
+                                               const SonareStreamingPlatform* platforms,
+                                               size_t platform_count, char** json_out) {
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
+  cpp_platforms.reserve(platform_count);
+  for (size_t index = 0; index < platform_count; ++index) {
+    if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
+    cpp_platforms.push_back(
+        {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
+  }
+
+  const Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  const auto results = platform_count == 0
+                           ? sonare::mastering::maximizer::streaming_preview(audio)
+                           : sonare::mastering::maximizer::streaming_preview(audio, cpp_platforms);
+
+  *json_out = copy_string(sonare::mastering::maximizer::streaming_preview_to_json(results));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
+                                               const SonareMasteringParam* params,
+                                               size_t param_count, char** json_out) {
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = to_assistant_config(params, param_count);
+  const auto result =
+      sonare::mastering::assistant::suggest_chain(samples, length, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::assistant::assistant_result_to_json(result));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
+                                           const SonareMasteringParam* params, size_t param_count,
+                                           char** json_out) {
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = to_audio_profile_config(params, param_count);
+  const auto profile =
+      sonare::mastering::assistant::analyze_audio_profile(samples, length, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::assistant::audio_profile_to_json(profile));
   return SONARE_OK;
   SONARE_C_CATCH
 }

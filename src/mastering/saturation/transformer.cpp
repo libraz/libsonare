@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 
 namespace sonare::mastering::saturation {
@@ -21,6 +22,7 @@ void Transformer::prepare(double sample_rate, int max_block_size) {
 }
 
 void Transformer::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("Transformer must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -46,6 +48,23 @@ void Transformer::set_config(const TransformerConfig& config) {
   validate_config(config);
   transformer_config_ = config;
   hysteresis_.set_config(make_ja_config(config));
+}
+
+bool Transformer::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      transformer_config_.drive_db = value;
+      return true;
+    case 1:
+      transformer_config_.asymmetry = std::clamp(value, -1.0f, 1.0f);
+      hysteresis_.set_config(make_ja_config(transformer_config_));
+      return true;
+    case 2:
+      transformer_config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Transformer::validate_config(const TransformerConfig& config) {

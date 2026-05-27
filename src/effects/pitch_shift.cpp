@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "core/resample.h"
+#include "effects/native_spectral_stretch.h"
 #include "effects/time_stretch.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -19,24 +20,27 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(ratio > 0.0f, ErrorCode::InvalidParameter);
 
-  /// @details Pitch shifting = time stretch + resample.
-  /// To raise pitch by ratio R:
-  /// 1. Time stretch by factor R (makes it R times shorter)
-  /// 2. Resample to restore original duration
+  if (config.backend == StretchBackend::NativeSpectral) {
+    return native_spectral_pitch_shift_ratio(audio, ratio);
+  }
+
+  /// @details Pitch shifting = time stretch + resample (librosa-compatible:
+  /// pitch changes, duration is preserved). To raise pitch by ratio R:
+  /// 1. Time-stretch by 1/R so the result is R times LONGER (same pitch).
+  /// 2. Resample as if it were sampled at sr*R back to sr: this plays it R
+  ///    times faster, raising pitch by R and restoring the original length.
 
   /// Time stretch configuration
   TimeStretchConfig ts_config;
   ts_config.n_fft = config.n_fft;
   ts_config.hop_length = config.hop_length;
+  ts_config.backend = StretchBackend::PhaseVocoder;
 
-  /// Step 1: Time stretch (rate = ratio means shorter duration)
-  Audio stretched = time_stretch(audio, ratio, ts_config);
+  /// Step 1: Time stretch longer by 1/ratio (preserves pitch).
+  Audio stretched = time_stretch(audio, 1.0f / ratio, ts_config);
 
-  /// Step 2: Resample back to original length in a single step.
-  /// After time stretch by ratio, we have ~1/ratio of original samples.
-  /// To restore original duration, we treat stretched audio as if it has
-  /// an effective sample rate of (original_sr * ratio), then resample to original_sr.
-  /// This achieves the same result as two resamples but in one pass.
+  /// Step 2: Resample the stretched signal (treated as if sampled at sr*ratio)
+  /// back to the original sample rate. Length: (N*ratio) * sr/(sr*ratio) = N.
   int original_sr = audio.sample_rate();
   int effective_sr = static_cast<int>(std::round(static_cast<float>(original_sr) * ratio));
 

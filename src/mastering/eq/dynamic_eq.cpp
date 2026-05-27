@@ -5,6 +5,8 @@
 #include <limits>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -22,6 +24,7 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void DynamicEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("DynamicEq must be prepared before processing");
   }
@@ -129,6 +132,64 @@ void DynamicEq::clear_sidechain() {
   sidechain_num_samples_ = 0;
 }
 
+bool DynamicEq::set_parameter(unsigned int param_id, float value) {
+  const size_t band_index = param_id / kParamsPerBand;
+  if (band_index >= kMaxBands) {
+    return false;
+  }
+  DynamicEqBand& band = bands_[band_index];
+  switch (param_id % kParamsPerBand) {
+    case 0:
+      // Clamp to the open interval (0 Hz, Nyquist) so coefficient design never
+      // throws on the audio thread.
+      band.frequency_hz =
+          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      break;
+    case 1:
+      band.static_gain_db = value;
+      break;
+    case 2:
+      band.q = std::max(value, 1.0e-6f);
+      break;
+    case 3:
+      band.threshold_db = value;
+      break;
+    case 4:
+      band.ratio = std::max(1.0f, value);
+      break;
+    case 5:
+      band.range_db = value;
+      break;
+    case 6:
+      band.sidechain_q = std::max(value, 1.0e-6f);
+      break;
+    case 7:
+      // -1 (or any non-positive value) is the sentinel meaning "follow the band
+      // frequency"; positive values set an explicit sidechain frequency.
+      band.sidechain_freq_hz = value > 0.0f ? value : -1.0f;
+      break;
+    case 8:
+      band.attack_ms = std::max(0.0f, value);
+      break;
+    case 9:
+      band.release_ms = std::max(0.0f, value);
+      break;
+    case 10:
+      band.lookahead_ms = std::max(0.0f, value);
+      break;
+    default:
+      return false;
+  }
+  // Recompute the affected band's gain and biquad coefficients in place. rebuild
+  // with num_samples == 0 applies the change immediately (no extra smoothing)
+  // and routes through ParametricEq::set_band, which preserves filter state.
+  // Disabled bands clear their EQ slot and stay silent until enabled.
+  if (prepared_) {
+    rebuild();
+  }
+  return true;
+}
+
 void DynamicEq::validate_index(size_t index) {
   if (index >= kMaxBands) {
     throw std::out_of_range("dynamic EQ band index out of range");
@@ -192,17 +253,15 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
       band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz : band.frequency_hz;
   const double frequency =
       std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate * 0.5 - 1.0);
-  const double omega = kTwoPiD * frequency / sample_rate;
-  const double sin_w0 = std::sin(omega);
-  const double cos_w0 = std::cos(omega);
-  const double alpha = sin_w0 / (2.0 * std::max(static_cast<double>(band.sidechain_q), 1.0e-6));
-  const double a0 = 1.0 + alpha;
+  const auto coeffs =
+      rt::rbj_bandpass(static_cast<float>(kTwoPiD * frequency / sample_rate),
+                       static_cast<float>(std::max(static_cast<double>(band.sidechain_q), 1.0e-6)));
   Biquad prototype;
-  prototype.b0 = alpha / a0;
-  prototype.b1 = 0.0;
-  prototype.b2 = -alpha / a0;
-  prototype.a1 = -2.0 * cos_w0 / a0;
-  prototype.a2 = (1.0 - alpha) / a0;
+  prototype.b0 = coeffs.b0;
+  prototype.b1 = coeffs.b1;
+  prototype.b2 = coeffs.b2;
+  prototype.a1 = coeffs.a1;
+  prototype.a2 = coeffs.a2;
 
   const double attack =
       band.attack_ms <= 0.0f

@@ -16,6 +16,8 @@ constexpr std::array<float, GraphicEq::kNumBands> kCenterFrequencies = {
 
 constexpr float kBaseQ = 3.2f;
 constexpr float kMaxQ = 7.5f;
+// Gain magnitude (dB) at which the Q curve reaches kMaxQ.
+constexpr float kMaxGainForQ = 12.0f;
 
 }  // namespace
 
@@ -38,7 +40,18 @@ void GraphicEq::reset() {
 void GraphicEq::set_gain_db(size_t index, float gain_db) {
   validate_index(index);
   gains_db_[index] = gain_db;
-  rebuild_bands();
+  // Recompute only the affected band so existing filter state is preserved.
+  rebuild_band(index);
+}
+
+bool GraphicEq::set_parameter(unsigned int param_id, float value) {
+  if (param_id >= kNumBands) {
+    return false;
+  }
+  const size_t index = param_id;
+  gains_db_[index] = value;
+  rebuild_band(index);
+  return true;
 }
 
 void GraphicEq::set_gain_for_frequency(float frequency_hz, float gain_db) {
@@ -78,25 +91,26 @@ size_t GraphicEq::nearest_band(float frequency_hz) const {
 }
 
 float GraphicEq::band_q_for_gain_db(float gain_db) {
-  const float amount = std::min(std::abs(gain_db), 12.0f) / 12.0f;
+  const float amount = std::min(std::abs(gain_db), kMaxGainForQ) / kMaxGainForQ;
   return kBaseQ + (kMaxQ - kBaseQ) * amount;
 }
 
 void GraphicEq::rebuild_bands() {
   low_eq_.clear();
   high_eq_.clear();
-
-  for (size_t i = 0; i < ParametricEq::kMaxBands; ++i) {
-    const bool enabled = gains_db_[i] != 0.0f;
-    low_eq_.set_band(i, {EqBandType::Peak, kCenterFrequencies[i], gains_db_[i],
-                         band_q_for_gain_db(gains_db_[i]), enabled});
+  for (size_t i = 0; i < kNumBands; ++i) {
+    rebuild_band(i);
   }
+}
 
-  for (size_t i = ParametricEq::kMaxBands; i < kCenterFrequencies.size(); ++i) {
-    const size_t high_index = i - ParametricEq::kMaxBands;
-    const bool enabled = gains_db_[i] != 0.0f;
-    high_eq_.set_band(high_index, {EqBandType::Peak, kCenterFrequencies[i], gains_db_[i],
-                                   band_q_for_gain_db(gains_db_[i]), enabled});
+void GraphicEq::rebuild_band(size_t index) {
+  const bool enabled = gains_db_[index] != 0.0f;
+  const EqBand band{EqBandType::Peak, kCenterFrequencies[index], gains_db_[index],
+                    band_q_for_gain_db(gains_db_[index]), enabled};
+  if (index < ParametricEq::kMaxBands) {
+    low_eq_.set_band(index, band);
+  } else {
+    high_eq_.set_band(index - ParametricEq::kMaxBands, band);
   }
 }
 

@@ -21,6 +21,15 @@ class SonareKey(ctypes.Structure):
     ]
 
 
+class SonareKeyCandidate(ctypes.Structure):
+    """Maps to SonareKeyCandidate in sonare_c.h."""
+
+    _fields_ = [
+        ("key", SonareKey),
+        ("correlation", ctypes.c_float),
+    ]
+
+
 class SonareTimeSignature(ctypes.Structure):
     """Maps to SonareTimeSignature in sonare_c.h."""
 
@@ -41,6 +50,290 @@ class SonareAnalysisResult(ctypes.Structure):
         ("time_signature", SonareTimeSignature),
         ("beat_times", ctypes.POINTER(ctypes.c_float)),
         ("beat_count", ctypes.c_size_t),
+    ]
+
+
+class SonareEngineTelemetry(ctypes.Structure):
+    """Maps to SonareEngineTelemetry in sonare_c.h."""
+
+    _fields_ = [
+        ("type", ctypes.c_int32),
+        ("error", ctypes.c_int32),
+        ("render_frame", ctypes.c_int64),
+        ("timeline_sample", ctypes.c_int64),
+        ("audible_timeline_sample", ctypes.c_int64),
+        ("graph_latency_samples_q8", ctypes.c_int32),
+        ("value", ctypes.c_uint32),
+    ]
+
+
+class SonareMeterTelemetryRecord(ctypes.Structure):
+    """Maps to SonareMeterTelemetryRecord in sonare_c.h."""
+
+    _fields_ = [
+        ("target_id", ctypes.c_uint32),
+        ("render_frame", ctypes.c_int64),
+        ("seq", ctypes.c_uint64),
+        ("peak_db_l", ctypes.c_float),
+        ("peak_db_r", ctypes.c_float),
+        ("rms_db_l", ctypes.c_float),
+        ("rms_db_r", ctypes.c_float),
+        ("true_peak_db_l", ctypes.c_float),
+        ("true_peak_db_r", ctypes.c_float),
+        ("max_true_peak_db", ctypes.c_float),
+        ("correlation", ctypes.c_float),
+        ("mono_compat_width", ctypes.c_float),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+        ("gain_reduction_db", ctypes.c_float),
+        ("dropped_records", ctypes.c_uint32),
+    ]
+
+
+class SonareTransportState(ctypes.Structure):
+    """Maps to SonareTransportState in sonare_c.h."""
+
+    _fields_ = [
+        ("playing", ctypes.c_int),
+        ("looping", ctypes.c_int),
+        ("render_frame", ctypes.c_int64),
+        ("sample_position", ctypes.c_int64),
+        ("ppq_position", ctypes.c_double),
+        ("bpm", ctypes.c_double),
+        ("loop_start_ppq", ctypes.c_double),
+        ("loop_end_ppq", ctypes.c_double),
+        ("sample_rate", ctypes.c_double),
+    ]
+
+
+class SonareParameterInfo(ctypes.Structure):
+    """Maps to SonareParameterInfo in sonare_c.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("name", ctypes.c_char * 64),
+        ("unit", ctypes.c_char * 16),
+        ("min_value", ctypes.c_float),
+        ("max_value", ctypes.c_float),
+        ("default_value", ctypes.c_float),
+        ("rt_safe", ctypes.c_int),
+        ("default_curve", ctypes.c_int),
+    ]
+
+
+class SonareAutomationPoint(ctypes.Structure):
+    """Maps to SonareAutomationPoint in sonare_c.h."""
+
+    _fields_ = [
+        ("ppq", ctypes.c_double),
+        ("value", ctypes.c_float),
+        ("curve_to_next", ctypes.c_int),
+    ]
+
+
+class SonareEngineMarker(ctypes.Structure):
+    """Maps to SonareEngineMarker in sonare_c.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("ppq", ctypes.c_double),
+        ("name", ctypes.c_char * 64),
+    ]
+
+
+class SonareEngineMetronomeConfig(ctypes.Structure):
+    """Maps to SonareEngineMetronomeConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("enabled", ctypes.c_int),
+        ("beat_gain", ctypes.c_float),
+        ("accent_gain", ctypes.c_float),
+        ("click_samples", ctypes.c_int),
+    ]
+
+
+class SonareEngineClip(ctypes.Structure):
+    """Maps to SonareEngineClip in sonare_c.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        ("num_channels", ctypes.c_int),
+        ("num_samples", ctypes.c_int64),
+        ("start_ppq", ctypes.c_double),
+        ("clip_offset_samples", ctypes.c_int64),
+        ("length_samples", ctypes.c_int64),
+        ("loop", ctypes.c_int),
+        ("gain", ctypes.c_float),
+        ("fade_in_samples", ctypes.c_int64),
+        ("fade_out_samples", ctypes.c_int64),
+    ]
+
+
+class SonareEngineCaptureBuffer(ctypes.Structure):
+    """Maps to SonareEngineCaptureBuffer in sonare_c.h."""
+
+    _fields_ = [
+        ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        ("num_channels", ctypes.c_int),
+        ("capacity_frames", ctypes.c_int64),
+    ]
+
+
+class SonareEngineCaptureStatus(ctypes.Structure):
+    """Maps to SonareEngineCaptureStatus in sonare_c.h."""
+
+    _fields_ = [
+        ("captured_frames", ctypes.c_int64),
+        ("overflow_count", ctypes.c_uint32),
+        ("armed", ctypes.c_int),
+        ("punch_enabled", ctypes.c_int),
+    ]
+
+
+class SonareEngineBounceOptions(ctypes.Structure):
+    """Maps to SonareEngineBounceOptions in sonare_c.h."""
+
+    _fields_ = [
+        ("total_frames", ctypes.c_int64),
+        ("block_size", ctypes.c_int),
+        ("num_channels", ctypes.c_int),
+        ("target_sample_rate", ctypes.c_int),
+        ("source_sample_rate", ctypes.c_int),
+        ("normalize_lufs", ctypes.c_int),
+        ("target_lufs", ctypes.c_float),
+        ("dither", ctypes.c_int),
+        ("dither_bits", ctypes.c_int),
+        ("dither_seed", ctypes.c_uint32),
+    ]
+
+
+class SonareEngineBounceResult(ctypes.Structure):
+    """Maps to SonareEngineBounceResult in sonare_c.h."""
+
+    _fields_ = [
+        ("interleaved", ctypes.POINTER(ctypes.c_float)),
+        ("sample_count", ctypes.c_size_t),
+        ("frames", ctypes.c_int64),
+        ("num_channels", ctypes.c_int),
+        ("sample_rate", ctypes.c_int),
+        ("integrated_lufs", ctypes.c_float),
+    ]
+
+
+class SonareEngineFreezeOptions(ctypes.Structure):
+    """Maps to SonareEngineFreezeOptions in sonare_c.h."""
+
+    _fields_ = [
+        ("total_frames", ctypes.c_int64),
+        ("block_size", ctypes.c_int),
+        ("num_channels", ctypes.c_int),
+        ("clip_id", ctypes.c_uint32),
+        ("start_ppq", ctypes.c_double),
+        ("gain", ctypes.c_float),
+    ]
+
+
+class SonareEngineFreezeResult(ctypes.Structure):
+    """Maps to SonareEngineFreezeResult in sonare_c.h."""
+
+    _fields_ = [
+        ("clip_id", ctypes.c_uint32),
+        ("frames", ctypes.c_int64),
+        ("num_channels", ctypes.c_int),
+    ]
+
+
+class SonareEngineGraphNode(ctypes.Structure):
+    """Maps to SonareEngineGraphNode in sonare_c.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_char * 64),
+        ("type", ctypes.c_int),
+        ("gain_db", ctypes.c_float),
+        ("num_ports", ctypes.c_int),
+    ]
+
+
+class SonareEngineGraphConnection(ctypes.Structure):
+    """Maps to SonareEngineGraphConnection in sonare_c.h."""
+
+    _fields_ = [
+        ("source_node", ctypes.c_char * 64),
+        ("source_port", ctypes.c_int),
+        ("dest_node", ctypes.c_char * 64),
+        ("dest_port", ctypes.c_int),
+        ("mix", ctypes.c_int),
+    ]
+
+
+class SonareEngineGraphParameterBinding(ctypes.Structure):
+    """Maps to SonareEngineGraphParameterBinding in sonare_c.h."""
+
+    _fields_ = [
+        ("param_id", ctypes.c_uint32),
+        ("node_id", ctypes.c_char * 64),
+    ]
+
+
+class SonareEngineGraphSpec(ctypes.Structure):
+    """Maps to SonareEngineGraphSpec in sonare_c.h."""
+
+    _fields_ = [
+        ("nodes", ctypes.POINTER(SonareEngineGraphNode)),
+        ("node_count", ctypes.c_size_t),
+        ("connections", ctypes.POINTER(SonareEngineGraphConnection)),
+        ("connection_count", ctypes.c_size_t),
+        ("parameter_bindings", ctypes.POINTER(SonareEngineGraphParameterBinding)),
+        ("parameter_binding_count", ctypes.c_size_t),
+        ("input_node", ctypes.c_char * 64),
+        ("output_node", ctypes.c_char * 64),
+        ("num_channels", ctypes.c_int),
+    ]
+
+
+class SonareLufsResult(ctypes.Structure):
+    """Maps to SonareLufsResult in sonare_c.h."""
+
+    _fields_ = [
+        ("integrated_lufs", ctypes.c_float),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("loudness_range", ctypes.c_float),
+    ]
+
+
+class SonareMixMeterSnapshot(ctypes.Structure):
+    """Maps to SonareMixMeterSnapshot in sonare_c.h."""
+
+    _fields_ = [
+        ("peak_db_l", ctypes.c_float),
+        ("peak_db_r", ctypes.c_float),
+        ("rms_db_l", ctypes.c_float),
+        ("rms_db_r", ctypes.c_float),
+        ("correlation", ctypes.c_float),
+        ("mono_compat_width", ctypes.c_float),
+        ("mono_compat_peak", ctypes.c_float),
+        ("mono_compat_side_rms", ctypes.c_float),
+        ("likely_mono_compatible", ctypes.c_int),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+        ("gain_reduction_db", ctypes.c_float),
+        ("true_peak_db_l", ctypes.c_float),
+        ("true_peak_db_r", ctypes.c_float),
+        ("max_true_peak_db", ctypes.c_float),
+        ("seq", ctypes.c_uint64),
+    ]
+
+
+class SonareMixGoniometerPoint(ctypes.Structure):
+    """Maps to SonareMixGoniometerPoint in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.c_float),
+        ("right", ctypes.c_float),
     ]
 
 
@@ -65,6 +358,25 @@ class SonareBpmAnalysisResult(ctypes.Structure):
         ("autocorrelation_count", ctypes.c_size_t),
         ("tempogram", ctypes.POINTER(ctypes.c_float)),
         ("tempogram_count", ctypes.c_size_t),
+    ]
+
+
+class SonareAcousticResult(ctypes.Structure):
+    """Maps to SonareAcousticResult in sonare_c.h."""
+
+    _fields_ = [
+        ("rt60", ctypes.c_float),
+        ("edt", ctypes.c_float),
+        ("c50", ctypes.c_float),
+        ("c80", ctypes.c_float),
+        ("d50", ctypes.c_float),
+        ("rt60_bands", ctypes.POINTER(ctypes.c_float)),
+        ("edt_bands", ctypes.POINTER(ctypes.c_float)),
+        ("c50_bands", ctypes.POINTER(ctypes.c_float)),
+        ("c80_bands", ctypes.POINTER(ctypes.c_float)),
+        ("band_count", ctypes.c_size_t),
+        ("confidence", ctypes.c_float),
+        ("is_blind", ctypes.c_int),
     ]
 
 
@@ -126,6 +438,7 @@ class SonareChord(ctypes.Structure):
         ("start", ctypes.c_float),
         ("end", ctypes.c_float),
         ("confidence", ctypes.c_float),
+        ("bass", ctypes.c_int32),
     ]
 
 
@@ -135,6 +448,228 @@ class SonareChordAnalysisResult(ctypes.Structure):
     _fields_ = [
         ("chords", ctypes.POINTER(SonareChord)),
         ("chord_count", ctypes.c_size_t),
+    ]
+
+
+class SonareChordDetectionOptions(ctypes.Structure):
+    """Maps to SonareChordDetectionOptions in sonare_c.h."""
+
+    _fields_ = [
+        ("min_duration", ctypes.c_float),
+        ("smoothing_window", ctypes.c_float),
+        ("threshold", ctypes.c_float),
+        ("use_triads_only", ctypes.c_int),
+        ("n_fft", ctypes.c_int),
+        ("hop_length", ctypes.c_int),
+        ("use_beat_sync", ctypes.c_int),
+        ("use_hmm", ctypes.c_int),
+        ("hmm_beam_width", ctypes.c_int),
+        ("use_key_context", ctypes.c_int),
+        ("key_root", ctypes.c_int32),
+        ("key_mode", ctypes.c_int32),
+        ("detect_inversions", ctypes.c_int),
+        ("chroma_method", ctypes.c_int),
+    ]
+
+
+class SonareSection(ctypes.Structure):
+    """Maps to SonareSection in sonare_c.h."""
+
+    _fields_ = [
+        ("type", ctypes.c_int32),
+        ("start", ctypes.c_float),
+        ("end", ctypes.c_float),
+        ("energy_level", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareSectionResult(ctypes.Structure):
+    """Maps to SonareSectionResult in sonare_c.h."""
+
+    _fields_ = [
+        ("sections", ctypes.POINTER(SonareSection)),
+        ("section_count", ctypes.c_size_t),
+    ]
+
+
+class SonareMelodyPoint(ctypes.Structure):
+    """Maps to SonareMelodyPoint in sonare_c.h."""
+
+    _fields_ = [
+        ("time", ctypes.c_float),
+        ("frequency", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareMelodyResult(ctypes.Structure):
+    """Maps to SonareMelodyResult in sonare_c.h."""
+
+    _fields_ = [
+        ("points", ctypes.POINTER(SonareMelodyPoint)),
+        ("point_count", ctypes.c_size_t),
+        ("pitch_range_octaves", ctypes.c_float),
+        ("pitch_stability", ctypes.c_float),
+        ("mean_frequency", ctypes.c_float),
+        ("vibrato_rate", ctypes.c_float),
+    ]
+
+
+class SonareCqtResult(ctypes.Structure):
+    """Maps to SonareCqtResult in sonare_c.h."""
+
+    _fields_ = [
+        ("n_bins", ctypes.c_int32),
+        ("n_frames", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("sample_rate", ctypes.c_int32),
+        ("magnitude", ctypes.POINTER(ctypes.c_float)),
+        ("frequencies", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareInverseResult(ctypes.Structure):
+    """Maps to SonareInverseResult in sonare_c.h."""
+
+    _fields_ = [
+        ("rows", ctypes.c_int32),
+        ("n_frames", ctypes.c_int32),
+        ("data", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareStreamConfig(ctypes.Structure):
+    """Maps to SonareStreamConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("sample_rate", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("fmin", ctypes.c_float),
+        ("fmax", ctypes.c_float),
+        ("tuning_ref_hz", ctypes.c_float),
+        ("compute_magnitude", ctypes.c_int32),
+        ("compute_mel", ctypes.c_int32),
+        ("compute_chroma", ctypes.c_int32),
+        ("compute_onset", ctypes.c_int32),
+        ("compute_spectral", ctypes.c_int32),
+        ("emit_every_n_frames", ctypes.c_int32),
+        ("magnitude_downsample", ctypes.c_int32),
+        ("key_update_interval_sec", ctypes.c_float),
+        ("bpm_update_interval_sec", ctypes.c_float),
+        ("window", ctypes.c_int32),
+        ("output_format", ctypes.c_int32),
+    ]
+
+
+class SonareStreamChordChange(ctypes.Structure):
+    _fields_ = [
+        ("root", ctypes.c_int32),
+        ("quality", ctypes.c_int32),
+        ("start_time", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareStreamBarChord(ctypes.Structure):
+    _fields_ = [
+        ("bar_index", ctypes.c_int32),
+        ("root", ctypes.c_int32),
+        ("quality", ctypes.c_int32),
+        ("start_time", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+    ]
+
+
+class SonareStreamPatternScore(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char * 64),
+        ("score", ctypes.c_float),
+    ]
+
+
+class SonareStreamFrames(ctypes.Structure):
+    """Maps to SonareStreamFrames in sonare_c.h."""
+
+    _fields_ = [
+        ("n_frames", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("mel", ctypes.POINTER(ctypes.c_float)),
+        ("chroma", ctypes.POINTER(ctypes.c_float)),
+        ("onset_strength", ctypes.POINTER(ctypes.c_float)),
+        ("rms_energy", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_float)),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_float)),
+        ("chord_root", ctypes.POINTER(ctypes.c_int32)),
+        ("chord_quality", ctypes.POINTER(ctypes.c_int32)),
+        ("chord_confidence", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareStreamFramesU8(ctypes.Structure):
+    _fields_ = [
+        ("n_frames", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("mel", ctypes.POINTER(ctypes.c_uint8)),
+        ("chroma", ctypes.POINTER(ctypes.c_uint8)),
+        ("onset_strength", ctypes.POINTER(ctypes.c_uint8)),
+        ("rms_energy", ctypes.POINTER(ctypes.c_uint8)),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_uint8)),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_uint8)),
+    ]
+
+
+class SonareStreamFramesI16(ctypes.Structure):
+    _fields_ = [
+        ("n_frames", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("mel", ctypes.POINTER(ctypes.c_int16)),
+        ("chroma", ctypes.POINTER(ctypes.c_int16)),
+        ("onset_strength", ctypes.POINTER(ctypes.c_int16)),
+        ("rms_energy", ctypes.POINTER(ctypes.c_int16)),
+        ("spectral_centroid", ctypes.POINTER(ctypes.c_int16)),
+        ("spectral_flatness", ctypes.POINTER(ctypes.c_int16)),
+    ]
+
+
+class SonareStreamStats(ctypes.Structure):
+    """Maps to SonareStreamStats in sonare_c.h."""
+
+    _fields_ = [
+        ("total_frames", ctypes.c_int32),
+        ("total_samples", ctypes.c_size_t),
+        ("duration_seconds", ctypes.c_float),
+        ("bpm", ctypes.c_float),
+        ("bpm_confidence", ctypes.c_float),
+        ("bpm_candidate_count", ctypes.c_int32),
+        ("key", ctypes.c_int32),
+        ("key_minor", ctypes.c_int32),
+        ("key_confidence", ctypes.c_float),
+        ("chord_root", ctypes.c_int32),
+        ("chord_quality", ctypes.c_int32),
+        ("chord_confidence", ctypes.c_float),
+        ("chord_start_time", ctypes.c_float),
+        ("current_bar", ctypes.c_int32),
+        ("bar_duration", ctypes.c_float),
+        ("chord_progression_count", ctypes.c_size_t),
+        ("chord_progression", ctypes.POINTER(SonareStreamChordChange)),
+        ("bar_chord_progression_count", ctypes.c_size_t),
+        ("bar_chord_progression", ctypes.POINTER(SonareStreamBarChord)),
+        ("pattern_length", ctypes.c_int32),
+        ("voted_pattern_count", ctypes.c_size_t),
+        ("voted_pattern", ctypes.POINTER(SonareStreamBarChord)),
+        ("detected_pattern_name", ctypes.c_char * 64),
+        ("detected_pattern_score", ctypes.c_float),
+        ("all_pattern_scores_count", ctypes.c_size_t),
+        ("all_pattern_scores", ctypes.POINTER(SonareStreamPatternScore)),
+        ("accumulated_seconds", ctypes.c_float),
+        ("used_frames", ctypes.c_int32),
+        ("updated", ctypes.c_int32),
     ]
 
 
@@ -291,6 +826,38 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
     ]
 
 
+class SonareStreamingPlatform(ctypes.Structure):
+    """Maps to SonareStreamingPlatform in sonare_c.h."""
+
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("target_lufs", ctypes.c_float),
+        ("ceiling_db", ctypes.c_float),
+    ]
+
+
+SONARE_EQ_MAX_BANDS = 24
+SONARE_EQ_SPECTRUM_STREAM_CAPACITY = 256
+SONARE_EQ_SPECTRUM_PROFILE_BANDS = 16
+
+
+class SonareEqSnapshot(ctypes.Structure):
+    """Maps to SonareEqSnapshot in sonare_c.h."""
+
+    _fields_ = [
+        ("pre_left", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("pre_right", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("post_left", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("post_right", ctypes.c_float * SONARE_EQ_SPECTRUM_STREAM_CAPACITY),
+        ("pre_count", ctypes.c_size_t),
+        ("post_count", ctypes.c_size_t),
+        ("band_gain_db", ctypes.c_float * SONARE_EQ_MAX_BANDS),
+        ("profile_db", ctypes.c_float * SONARE_EQ_SPECTRUM_PROFILE_BANDS),
+        ("last_auto_gain_db", ctypes.c_float),
+        ("seq", ctypes.c_uint64),
+    ]
+
+
 # Progress callback: void(float progress, const char* stage, void* user_data).
 # Maps to SonareMasteringProgressCallback in sonare_c.h.
 SonareMasteringProgressCallback = ctypes.CFUNCTYPE(
@@ -309,6 +876,7 @@ SONARE_ERROR_INVALID_FORMAT = 2
 SONARE_ERROR_DECODE_FAILED = 3
 SONARE_ERROR_INVALID_PARAMETER = 4
 SONARE_ERROR_OUT_OF_MEMORY = 5
+SONARE_ERROR_NOT_SUPPORTED = 6
 SONARE_ERROR_UNKNOWN = 99
 
 
@@ -329,17 +897,18 @@ def _find_library() -> str:
         return env_path
 
     pkg_dir = Path(__file__).parent
-    for name in ("libsonare.dylib", "libsonare.so", "sonare.dll"):
-        candidate = pkg_dir / name
-        if candidate.exists():
-            return str(candidate)
-
-    # Dev build dir: src/libsonare/ -> bindings/python -> bindings -> project root
+    # In editable/source checkouts, prefer the freshly built shared library over
+    # any package-adjacent copy that may have been left by an older build.
     project_root = pkg_dir.parent.parent.parent.parent
     lib_name = "libsonare.dylib" if platform.system() == "Darwin" else "libsonare.so"
     build_path = project_root / "build" / "lib" / lib_name
     if build_path.exists():
         return str(build_path)
+
+    for name in ("libsonare.dylib", "libsonare.so", "sonare.dll"):
+        candidate = pkg_dir / name
+        if candidate.exists():
+            return str(candidate)
 
     path = ctypes.util.find_library("sonare")
     if path:
@@ -426,6 +995,13 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    lib.sonare_audio_detect_downbeats.restype = ctypes.c_int32
+    lib.sonare_audio_detect_downbeats.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     lib.sonare_audio_detect_onsets.restype = ctypes.c_int32
     lib.sonare_audio_detect_onsets.argtypes = [
         ctypes.c_void_p,
@@ -456,9 +1032,114 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareKey),
     ]
 
+    # sonare_detect_key_with_options
+    lib.sonare_detect_key_with_options.restype = ctypes.c_int32
+    lib.sonare_detect_key_with_options.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(SonareKey),
+    ]
+
+    lib.sonare_detect_key_with_options_and_modes.restype = ctypes.c_int32
+    lib.sonare_detect_key_with_options_and_modes.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareKey),
+    ]
+
+    lib.sonare_detect_key_with_extended_options.restype = ctypes.c_int32
+    lib.sonare_detect_key_with_extended_options.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.POINTER(SonareKey),
+    ]
+
+    lib.sonare_detect_key_candidates.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_detect_key_candidates_with_modes.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates_with_modes.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_detect_key_candidates_with_extended_options.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates_with_extended_options.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_free_key_candidates.restype = None
+    lib.sonare_free_key_candidates.argtypes = [ctypes.POINTER(SonareKeyCandidate)]
+
     # sonare_detect_beats
     lib.sonare_detect_beats.restype = ctypes.c_int32
     lib.sonare_detect_beats.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_detect_downbeats.restype = ctypes.c_int32
+    lib.sonare_detect_downbeats.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
@@ -499,6 +1180,27 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.POINTER(SonareBpmAnalysisResult),
+    ]
+
+    lib.sonare_analyze_impulse_response.restype = ctypes.c_int32
+    lib.sonare_analyze_impulse_response.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareAcousticResult),
+    ]
+
+    lib.sonare_detect_acoustic.restype = ctypes.c_int32
+    lib.sonare_detect_acoustic.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(SonareAcousticResult),
     ]
 
     lib.sonare_analyze_rhythm.restype = ctypes.c_int32
@@ -553,6 +1255,227 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareChordAnalysisResult),
     ]
 
+    lib.sonare_detect_chords_ex.restype = ctypes.c_int32
+    lib.sonare_detect_chords_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChordDetectionOptions),
+        ctypes.POINTER(SonareChordAnalysisResult),
+    ]
+
+    if hasattr(lib, "sonare_analyze_sections"):
+        lib.sonare_analyze_sections.restype = ctypes.c_int32
+        lib.sonare_analyze_sections.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareSectionResult),
+        ]
+        lib.sonare_free_section_result.restype = None
+        lib.sonare_free_section_result.argtypes = [ctypes.POINTER(SonareSectionResult)]
+
+    if hasattr(lib, "sonare_analyze_melody"):
+        lib.sonare_analyze_melody.restype = ctypes.c_int32
+        lib.sonare_analyze_melody.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareMelodyResult),
+        ]
+        lib.sonare_free_melody_result.restype = None
+        lib.sonare_free_melody_result.argtypes = [ctypes.POINTER(SonareMelodyResult)]
+
+    if hasattr(lib, "sonare_cqt"):
+        lib.sonare_cqt.restype = ctypes.c_int32
+        lib.sonare_cqt.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareCqtResult),
+        ]
+        lib.sonare_vqt.restype = ctypes.c_int32
+        lib.sonare_vqt.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareCqtResult),
+        ]
+        lib.sonare_free_cqt_result.restype = None
+        lib.sonare_free_cqt_result.argtypes = [ctypes.POINTER(SonareCqtResult)]
+
+    # --- Features - Inverse reconstruction ---
+
+    if hasattr(lib, "sonare_mel_to_stft"):
+        lib.sonare_mel_to_stft.restype = ctypes.c_int32
+        lib.sonare_mel_to_stft.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.POINTER(SonareInverseResult),
+        ]
+        lib.sonare_mel_to_audio.restype = ctypes.c_int32
+        lib.sonare_mel_to_audio.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_mfcc_to_mel.restype = ctypes.c_int32
+        lib.sonare_mfcc_to_mel.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareInverseResult),
+        ]
+        lib.sonare_mfcc_to_audio.restype = ctypes.c_int32
+        lib.sonare_mfcc_to_audio.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_free_inverse_result.restype = None
+        lib.sonare_free_inverse_result.argtypes = [ctypes.POINTER(SonareInverseResult)]
+
+    # --- Streaming - StreamAnalyzer ---
+
+    if hasattr(lib, "sonare_stream_analyzer_create"):
+        lib.sonare_stream_analyzer_config_default.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_config_default.argtypes = [
+            ctypes.POINTER(SonareStreamConfig),
+        ]
+        lib.sonare_stream_analyzer_create.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_create.argtypes = [
+            ctypes.POINTER(SonareStreamConfig),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_stream_analyzer_destroy.restype = None
+        lib.sonare_stream_analyzer_destroy.argtypes = [ctypes.c_void_p]
+        lib.sonare_stream_analyzer_process.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_process.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_stream_analyzer_process_with_offset.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_process_with_offset.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+        ]
+        lib.sonare_stream_analyzer_available_frames.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_available_frames.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_stream_analyzer_read_frames.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_read_frames.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareStreamFrames),
+        ]
+        if hasattr(lib, "sonare_stream_analyzer_read_frames_u8"):
+            lib.sonare_stream_analyzer_read_frames_u8.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_read_frames_u8.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamFramesU8),
+            ]
+        if hasattr(lib, "sonare_stream_analyzer_read_frames_i16"):
+            lib.sonare_stream_analyzer_read_frames_i16.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_read_frames_i16.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamFramesI16),
+            ]
+        lib.sonare_stream_analyzer_reset.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_reset.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        lib.sonare_stream_analyzer_stats.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_stats.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareStreamStats),
+        ]
+        if hasattr(lib, "sonare_free_stream_stats"):
+            lib.sonare_free_stream_stats.restype = None
+            lib.sonare_free_stream_stats.argtypes = [ctypes.POINTER(SonareStreamStats)]
+        lib.sonare_stream_analyzer_frame_count.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_frame_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.sonare_stream_analyzer_current_time.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_current_time.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+        ]
+        lib.sonare_stream_analyzer_sample_rate.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_sample_rate.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.sonare_stream_analyzer_set_expected_duration.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_expected_duration.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
+        lib.sonare_stream_analyzer_set_normalization_gain.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_normalization_gain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
+        lib.sonare_stream_analyzer_set_tuning_ref_hz.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_tuning_ref_hz.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
+        lib.sonare_free_stream_frames.restype = None
+        lib.sonare_free_stream_frames.argtypes = [ctypes.POINTER(SonareStreamFrames)]
+        if hasattr(lib, "sonare_free_stream_frames_u8"):
+            lib.sonare_free_stream_frames_u8.restype = None
+            lib.sonare_free_stream_frames_u8.argtypes = [ctypes.POINTER(SonareStreamFramesU8)]
+        if hasattr(lib, "sonare_free_stream_frames_i16"):
+            lib.sonare_free_stream_frames_i16.restype = None
+            lib.sonare_free_stream_frames_i16.argtypes = [ctypes.POINTER(SonareStreamFramesI16)]
+
     # --- Memory management ---
 
     # sonare_free_floats
@@ -565,6 +1488,9 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
 
     lib.sonare_free_bpm_analysis_result.restype = None
     lib.sonare_free_bpm_analysis_result.argtypes = [ctypes.POINTER(SonareBpmAnalysisResult)]
+
+    lib.sonare_free_acoustic_result.restype = None
+    lib.sonare_free_acoustic_result.argtypes = [ctypes.POINTER(SonareAcousticResult)]
 
     lib.sonare_free_rhythm_result.restype = None
     lib.sonare_free_rhythm_result.argtypes = [ctypes.POINTER(SonareRhythmResult)]
@@ -595,6 +1521,9 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     # sonare_version
     lib.sonare_version.restype = ctypes.c_char_p
     lib.sonare_version.argtypes = []
+
+    lib.sonare_engine_abi_version.restype = ctypes.c_uint32
+    lib.sonare_engine_abi_version.argtypes = []
 
     # sonare_has_ffmpeg_support: returns 1 if the shared library was compiled
     # with FFmpeg-backed decoding for M4A/AAC/FLAC/OGG, 0 otherwise.
@@ -655,6 +1584,281 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+
+    # sonare_pitch_correct_to_midi
+    lib.sonare_pitch_correct_to_midi.restype = ctypes.c_int32
+    lib.sonare_pitch_correct_to_midi.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_note_stretch
+    lib.sonare_note_stretch.restype = ctypes.c_int32
+    lib.sonare_note_stretch.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_voice_change
+    lib.sonare_voice_change.restype = ctypes.c_int32
+    lib.sonare_voice_change.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # Realtime engine / offline DAW engine
+    lib.sonare_engine_create.restype = ctypes.c_int32
+    lib.sonare_engine_create.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+    lib.sonare_engine_destroy.restype = None
+    lib.sonare_engine_destroy.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_prepare.restype = ctypes.c_int32
+    lib.sonare_engine_prepare.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_play.restype = ctypes.c_int32
+    lib.sonare_engine_play.argtypes = [ctypes.c_void_p, ctypes.c_int64]
+    lib.sonare_engine_stop.restype = ctypes.c_int32
+    lib.sonare_engine_stop.argtypes = [ctypes.c_void_p, ctypes.c_int64]
+    lib.sonare_engine_seek_sample.restype = ctypes.c_int32
+    lib.sonare_engine_seek_sample.argtypes = [ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64]
+    lib.sonare_engine_seek_ppq.restype = ctypes.c_int32
+    lib.sonare_engine_seek_ppq.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int64]
+    lib.sonare_engine_set_tempo.restype = ctypes.c_int32
+    lib.sonare_engine_set_tempo.argtypes = [ctypes.c_void_p, ctypes.c_double]
+    lib.sonare_engine_set_time_signature.restype = ctypes.c_int32
+    lib.sonare_engine_set_time_signature.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+    lib.sonare_engine_set_loop.restype = ctypes.c_int32
+    lib.sonare_engine_set_loop.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_add_parameter.restype = ctypes.c_int32
+    lib.sonare_engine_add_parameter.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareParameterInfo),
+    ]
+    lib.sonare_engine_parameter_count.restype = ctypes.c_int32
+    lib.sonare_engine_parameter_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_parameter_info_by_index.restype = ctypes.c_int32
+    lib.sonare_engine_parameter_info_by_index.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareParameterInfo),
+    ]
+    lib.sonare_engine_parameter_info.restype = ctypes.c_int32
+    lib.sonare_engine_parameter_info.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareParameterInfo),
+    ]
+    lib.sonare_engine_set_automation_lane.restype = ctypes.c_int32
+    lib.sonare_engine_set_automation_lane.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareAutomationPoint),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_automation_lane_count.restype = ctypes.c_int32
+    lib.sonare_engine_automation_lane_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_set_markers.restype = ctypes.c_int32
+    lib.sonare_engine_set_markers.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineMarker),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_marker_count.restype = ctypes.c_int32
+    lib.sonare_engine_marker_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_marker_by_index.restype = ctypes.c_int32
+    lib.sonare_engine_marker_by_index.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareEngineMarker),
+    ]
+    lib.sonare_engine_marker.restype = ctypes.c_int32
+    lib.sonare_engine_marker.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareEngineMarker),
+    ]
+    lib.sonare_engine_seek_marker.restype = ctypes.c_int32
+    lib.sonare_engine_seek_marker.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int64]
+    lib.sonare_engine_set_loop_from_markers.restype = ctypes.c_int32
+    lib.sonare_engine_set_loop_from_markers.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_set_metronome.restype = ctypes.c_int32
+    lib.sonare_engine_set_metronome.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineMetronomeConfig),
+    ]
+    lib.sonare_engine_metronome.restype = ctypes.c_int32
+    lib.sonare_engine_metronome.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineMetronomeConfig),
+    ]
+    lib.sonare_engine_count_in_end_sample.restype = ctypes.c_int32
+    lib.sonare_engine_count_in_end_sample.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int64),
+    ]
+    lib.sonare_engine_set_clips.restype = ctypes.c_int32
+    lib.sonare_engine_set_clips.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineClip),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_clip_count.restype = ctypes.c_int32
+    lib.sonare_engine_clip_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_set_capture_buffer.restype = ctypes.c_int32
+    lib.sonare_engine_set_capture_buffer.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineCaptureBuffer),
+    ]
+    lib.sonare_engine_arm_capture.restype = ctypes.c_int32
+    lib.sonare_engine_arm_capture.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_capture_punch.restype = ctypes.c_int32
+    lib.sonare_engine_set_capture_punch.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_reset_capture.restype = ctypes.c_int32
+    lib.sonare_engine_reset_capture.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_capture_status.restype = ctypes.c_int32
+    lib.sonare_engine_capture_status.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineCaptureStatus),
+    ]
+    lib.sonare_engine_set_graph.restype = ctypes.c_int32
+    lib.sonare_engine_set_graph.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineGraphSpec),
+    ]
+    lib.sonare_engine_graph_node_count.restype = ctypes.c_int32
+    lib.sonare_engine_graph_node_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_graph_connection_count.restype = ctypes.c_int32
+    lib.sonare_engine_graph_connection_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_process.restype = ctypes.c_int32
+    lib.sonare_engine_process.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_process_with_monitor.restype = ctypes.c_int32
+    lib.sonare_engine_process_with_monitor.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_render_offline.restype = ctypes.c_int32
+    lib.sonare_engine_render_offline.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int64,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_bounce_offline.restype = ctypes.c_int32
+    lib.sonare_engine_bounce_offline.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineBounceOptions),
+        ctypes.POINTER(SonareEngineBounceResult),
+    ]
+    lib.sonare_free_bounce_result.restype = None
+    lib.sonare_free_bounce_result.argtypes = [ctypes.POINTER(SonareEngineBounceResult)]
+    lib.sonare_engine_freeze_offline.restype = ctypes.c_int32
+    lib.sonare_engine_freeze_offline.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineFreezeOptions),
+        ctypes.POINTER(SonareEngineFreezeResult),
+    ]
+    lib.sonare_engine_drain_telemetry.restype = ctypes.c_int32
+    lib.sonare_engine_drain_telemetry.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineTelemetry),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    if hasattr(lib, "sonare_engine_drain_meter_telemetry"):
+        lib.sonare_engine_drain_meter_telemetry.restype = ctypes.c_int32
+        lib.sonare_engine_drain_meter_telemetry.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMeterTelemetryRecord),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_set_parameter"):
+        lib.sonare_engine_set_parameter.restype = ctypes.c_int32
+        lib.sonare_engine_set_parameter.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_int64,
+        ]
+        lib.sonare_engine_set_parameter_smoothed.restype = ctypes.c_int32
+        lib.sonare_engine_set_parameter_smoothed.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_get_transport_state"):
+        lib.sonare_engine_get_transport_state.restype = ctypes.c_int32
+        lib.sonare_engine_get_transport_state.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareTransportState),
+        ]
 
     # sonare_normalize
     lib.sonare_normalize.restype = ctypes.c_int32
@@ -1044,6 +2248,34 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
     ]
+    lib.sonare_tempogram_with_mode.restype = ctypes.c_int32
+    lib.sonare_tempogram_with_mode.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    lib.sonare_cyclic_tempogram.restype = ctypes.c_int32
+    lib.sonare_cyclic_tempogram.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
 
     lib.sonare_plp.restype = ctypes.c_int32
     lib.sonare_plp.argtypes = [
@@ -1053,6 +2285,88 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_float,
         ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_onset_strength
+    lib.sonare_onset_strength.restype = ctypes.c_int32
+    lib.sonare_onset_strength.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_fourier_tempogram
+    lib.sonare_fourier_tempogram.restype = ctypes.c_int32
+    lib.sonare_fourier_tempogram.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    # sonare_tempogram_ratio
+    lib.sonare_tempogram_ratio.restype = ctypes.c_int32
+    lib.sonare_tempogram_ratio.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_nnls_chroma
+    lib.sonare_nnls_chroma.restype = ctypes.c_int32
+    lib.sonare_nnls_chroma.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+
+    # sonare_lufs
+    lib.sonare_lufs.restype = ctypes.c_int32
+    lib.sonare_lufs.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareLufsResult),
+    ]
+
+    # sonare_momentary_lufs
+    lib.sonare_momentary_lufs.restype = ctypes.c_int32
+    lib.sonare_momentary_lufs.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    # sonare_short_term_lufs
+    lib.sonare_short_term_lufs.restype = ctypes.c_int32
+    lib.sonare_short_term_lufs.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.c_int,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
@@ -1143,6 +2457,36 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_void_p),
         ]
+        if hasattr(lib, "sonare_mastering_streaming_preview"):
+            lib.sonare_mastering_streaming_preview.restype = ctypes.c_int32
+            lib.sonare_mastering_streaming_preview.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareStreamingPlatform),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+        if hasattr(lib, "sonare_mastering_assistant_suggest"):
+            lib.sonare_mastering_assistant_suggest.restype = ctypes.c_int32
+            lib.sonare_mastering_assistant_suggest.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+        if hasattr(lib, "sonare_mastering_audio_profile"):
+            lib.sonare_mastering_audio_profile.restype = ctypes.c_int32
+            lib.sonare_mastering_audio_profile.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
         lib.sonare_free_mastering_stereo_result.restype = None
         lib.sonare_free_mastering_stereo_result.argtypes = [
             ctypes.POINTER(SonareMasteringStereoResult)
@@ -1209,6 +2553,59 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             lib.sonare_streaming_mastering_chain_latency_samples.argtypes = [ctypes.c_void_p]
             lib.sonare_streaming_mastering_chain_destroy.restype = None
             lib.sonare_streaming_mastering_chain_destroy.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_eq_create"):
+            lib.sonare_eq_create.restype = ctypes.c_void_p
+            lib.sonare_eq_create.argtypes = [ctypes.c_double, ctypes.c_int]
+            lib.sonare_eq_destroy.restype = None
+            lib.sonare_eq_destroy.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_band.restype = ctypes.c_int32
+            lib.sonare_eq_set_band.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p]
+            lib.sonare_eq_clear.restype = None
+            lib.sonare_eq_clear.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_phase_mode.restype = ctypes.c_int32
+            lib.sonare_eq_set_phase_mode.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_eq_match.restype = ctypes.c_int32
+            lib.sonare_eq_match.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_eq_set_auto_gain.restype = None
+            lib.sonare_eq_set_auto_gain.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_eq_last_auto_gain_db.restype = ctypes.c_float
+            lib.sonare_eq_last_auto_gain_db.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_gain_scale.restype = ctypes.c_int32
+            lib.sonare_eq_set_gain_scale.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            lib.sonare_eq_set_output_gain_db.restype = ctypes.c_int32
+            lib.sonare_eq_set_output_gain_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            lib.sonare_eq_set_output_pan.restype = ctypes.c_int32
+            lib.sonare_eq_set_output_pan.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            lib.sonare_eq_latency_samples.restype = ctypes.c_int
+            lib.sonare_eq_latency_samples.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_set_sidechain.restype = ctypes.c_int32
+            lib.sonare_eq_set_sidechain.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_eq_clear_sidechain.restype = None
+            lib.sonare_eq_clear_sidechain.argtypes = [ctypes.c_void_p]
+            lib.sonare_eq_process.restype = ctypes.c_int32
+            lib.sonare_eq_process.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_eq_spectrum.restype = ctypes.c_int32
+            lib.sonare_eq_spectrum.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareEqSnapshot),
+            ]
         if hasattr(lib, "sonare_mastering_preset_names"):
             lib.sonare_mastering_preset_names.restype = ctypes.c_char_p
             lib.sonare_mastering_preset_names.argtypes = []
@@ -1284,6 +2681,184 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.c_void_p,
                 ctypes.POINTER(SonareMasteringChainStereoResult),
             ]
+
+    if hasattr(lib, "sonare_mixer_create"):
+        lib.sonare_mixer_create.restype = ctypes.c_void_p
+        lib.sonare_mixer_create.argtypes = [ctypes.c_int, ctypes.c_int]
+        lib.sonare_mixer_add_strip.restype = ctypes.c_void_p
+        lib.sonare_mixer_add_strip.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        lib.sonare_strip_set_input_trim_db.restype = ctypes.c_int32
+        lib.sonare_strip_set_input_trim_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        lib.sonare_strip_set_fader_db.restype = ctypes.c_int32
+        lib.sonare_strip_set_fader_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        lib.sonare_strip_set_pan.restype = ctypes.c_int32
+        lib.sonare_strip_set_pan.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_int]
+        lib.sonare_strip_set_dual_pan.restype = ctypes.c_int32
+        lib.sonare_strip_set_dual_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+            ctypes.c_float,
+        ]
+        lib.sonare_strip_set_width.restype = ctypes.c_int32
+        lib.sonare_strip_set_width.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        lib.sonare_strip_set_muted.restype = ctypes.c_int32
+        lib.sonare_strip_set_muted.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        if hasattr(lib, "sonare_strip_set_soloed"):
+            lib.sonare_strip_set_soloed.restype = ctypes.c_int32
+            lib.sonare_strip_set_soloed.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_solo_safe.restype = ctypes.c_int32
+            lib.sonare_strip_set_solo_safe.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_polarity_invert.restype = ctypes.c_int32
+            lib.sonare_strip_set_polarity_invert.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.sonare_strip_set_pan_law.restype = ctypes.c_int32
+            lib.sonare_strip_set_pan_law.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_channel_delay_samples.restype = ctypes.c_int32
+            lib.sonare_strip_set_channel_delay_samples.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            lib.sonare_strip_set_vca_offset_db.restype = ctypes.c_int32
+            lib.sonare_strip_set_vca_offset_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        lib.sonare_strip_add_send.restype = ctypes.c_int32
+        lib.sonare_strip_add_send.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_strip_set_send_db.restype = ctypes.c_int32
+        lib.sonare_strip_set_send_db.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_float,
+        ]
+        lib.sonare_strip_meter.restype = ctypes.c_int32
+        lib.sonare_strip_meter.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMixMeterSnapshot),
+        ]
+        if hasattr(lib, "sonare_strip_meter_tap"):
+            lib.sonare_strip_meter_tap.restype = ctypes.c_int32
+            lib.sonare_strip_meter_tap.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMixMeterSnapshot),
+            ]
+        lib.sonare_strip_read_goniometer_latest.restype = ctypes.c_size_t
+        lib.sonare_strip_read_goniometer_latest.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMixGoniometerPoint),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_mixer_from_scene_json.restype = ctypes.c_void_p
+        lib.sonare_mixer_from_scene_json.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        lib.sonare_mixer_to_scene_json.restype = ctypes.c_int32
+        lib.sonare_mixer_to_scene_json.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        if hasattr(lib, "sonare_mixer_compile"):
+            lib.sonare_mixer_compile.restype = ctypes.c_int32
+            lib.sonare_mixer_compile.argtypes = [ctypes.c_void_p]
+        if hasattr(lib, "sonare_mixer_get_strip_count"):
+            lib.sonare_mixer_get_strip_count.restype = ctypes.c_int32
+            lib.sonare_mixer_get_strip_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+        if hasattr(lib, "sonare_mixer_add_bus"):
+            lib.sonare_mixer_add_bus.restype = ctypes.c_int32
+            lib.sonare_mixer_add_bus.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_char_p,
+                ctypes.c_char_p,
+            ]
+            lib.sonare_mixer_remove_bus.restype = ctypes.c_int32
+            lib.sonare_mixer_remove_bus.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            lib.sonare_mixer_bus_count.restype = ctypes.c_int32
+            lib.sonare_mixer_bus_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+            lib.sonare_mixer_add_vca_group.restype = ctypes.c_int32
+            lib.sonare_mixer_add_vca_group.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_char_p,
+                ctypes.c_float,
+                ctypes.POINTER(ctypes.c_char_p),
+                ctypes.c_size_t,
+            ]
+            lib.sonare_mixer_remove_vca_group.restype = ctypes.c_int32
+            lib.sonare_mixer_remove_vca_group.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            lib.sonare_mixer_vca_group_count.restype = ctypes.c_int32
+            lib.sonare_mixer_vca_group_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+        if hasattr(lib, "sonare_mixer_strip_count"):
+            lib.sonare_mixer_strip_count.restype = ctypes.c_size_t
+            lib.sonare_mixer_strip_count.argtypes = [ctypes.c_void_p]
+            lib.sonare_mixer_strip_at.restype = ctypes.c_void_p
+            lib.sonare_mixer_strip_at.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            lib.sonare_mixer_strip_by_id.restype = ctypes.c_void_p
+            lib.sonare_mixer_strip_by_id.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            lib.sonare_strip_schedule_insert_automation.restype = ctypes.c_int32
+            lib.sonare_strip_schedule_insert_automation.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint,
+                ctypes.c_uint,
+                ctypes.c_int64,
+                ctypes.c_float,
+                ctypes.c_int,
+            ]
+        if hasattr(lib, "sonare_strip_schedule_fader_automation"):
+            for _name in (
+                "sonare_strip_schedule_fader_automation",
+                "sonare_strip_schedule_pan_automation",
+                "sonare_strip_schedule_width_automation",
+            ):
+                _fn = getattr(lib, _name)
+                _fn.restype = ctypes.c_int32
+                _fn.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_int64,
+                    ctypes.c_float,
+                    ctypes.c_int,
+                ]
+            lib.sonare_strip_schedule_send_automation.restype = ctypes.c_int32
+            lib.sonare_strip_schedule_send_automation.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.c_int64,
+                ctypes.c_float,
+                ctypes.c_int,
+            ]
+        lib.sonare_mixer_process_stereo.restype = ctypes.c_int32
+        lib.sonare_mixer_process_stereo.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_mixing_scene_preset_names.restype = ctypes.c_char_p
+        lib.sonare_mixing_scene_preset_names.argtypes = []
+        lib.sonare_mixing_scene_preset_json.restype = ctypes.c_int32
+        lib.sonare_mixing_scene_preset_json.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_mixer_destroy.restype = None
+        lib.sonare_mixer_destroy.argtypes = [ctypes.c_void_p]
 
     # --- Free functions for result types ---
 

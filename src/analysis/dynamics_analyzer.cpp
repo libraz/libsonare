@@ -3,9 +3,29 @@
 #include <algorithm>
 #include <cmath>
 
+#include "metering/lufs.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
+
+using constants::kEpsilon;
+
+namespace {
+/// @brief Crest factor (dB) below which audio is considered heavily compressed.
+/// @details Uncompressed program material typically exhibits a crest factor well above
+///          ~8 dB; aggressive limiting/compression collapses peaks toward the RMS level.
+constexpr float kCompressedCrestFactorDb = 8.0f;
+
+float percentile_sorted(const std::vector<float>& sorted, float percentile) {
+  if (sorted.empty()) return 0.0f;
+  const float position = std::clamp(percentile, 0.0f, 1.0f) * static_cast<float>(sorted.size() - 1);
+  const size_t lo = static_cast<size_t>(position);
+  const size_t hi = std::min(lo + 1, sorted.size() - 1);
+  const float frac = position - static_cast<float>(lo);
+  return sorted[lo] * (1.0f - frac) + sorted[hi] * frac;
+}
+}  // namespace
 
 DynamicsAnalyzer::DynamicsAnalyzer(const Audio& audio, const DynamicsConfig& config)
     : config_(config) {
@@ -29,7 +49,7 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   float rms = static_cast<float>(std::sqrt(sum_sq / static_cast<double>(n_samples)));
 
   // Convert to dB
-  float eps = 1e-10f;
+  constexpr float eps = kEpsilon;
   dynamics_.peak_db = 20.0f * std::log10(std::max(peak, eps));
   dynamics_.rms_db = 20.0f * std::log10(std::max(rms, eps));
   dynamics_.crest_factor = dynamics_.peak_db - dynamics_.rms_db;
@@ -64,7 +84,8 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     float win_rms = static_cast<float>(std::sqrt(win_sum_sq / static_cast<double>(window_samples)));
     float win_rms_db = 20.0f * std::log10(std::max(win_rms, eps));
 
-    float time = static_cast<float>(pos + window_samples / 2) / static_cast<float>(sr);
+    const double center_sample = static_cast<double>(pos) + 0.5 * window_samples;
+    float time = static_cast<float>(center_sample / static_cast<double>(sr));
     loudness_curve_.times.push_back(time);
     loudness_curve_.rms_db.push_back(win_rms_db);
     rms_values.push_back(win_rms_db);
@@ -76,27 +97,23 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     std::vector<float> sorted_rms = rms_values;
     std::sort(sorted_rms.begin(), sorted_rms.end());
 
-    // Dynamic range: difference between 95th and 10th percentile
-    size_t p10_idx = sorted_rms.size() / 10;
-    size_t p95_idx = sorted_rms.size() * 95 / 100;
-
-    float p10 = sorted_rms[p10_idx];
-    float p95 = sorted_rms[p95_idx];
+    // Dynamic range: difference between interpolated 95th and 10th percentiles.
+    const float p10 = percentile_sorted(sorted_rms, 0.10f);
+    const float p95 = percentile_sorted(sorted_rms, 0.95f);
 
     dynamics_.dynamic_range_db = p95 - p10;
-
-    // Loudness range (simplified LRA): difference between 95th and 10th percentile
-    // of short-term loudness
-    dynamics_.loudness_range_db = dynamics_.dynamic_range_db;
   } else {
     dynamics_.dynamic_range_db = 0.0f;
-    dynamics_.loudness_range_db = 0.0f;
   }
+
+  // Loudness range (LRA): full EBU R128 / EBU Tech 3342 algorithm using K-weighted
+  // short-term loudness (3 s windows, 100 ms hops, absolute + relative gating).
+  dynamics_.loudness_range_db = metering::ebur128_loudness_range(audio);
 
   // Determine if compressed
   // Low dynamic range and low crest factor suggest compression
   dynamics_.is_compressed = (dynamics_.dynamic_range_db < config_.compression_threshold) ||
-                            (dynamics_.crest_factor < 8.0f);
+                            (dynamics_.crest_factor < kCompressedCrestFactorDb);
 }
 
 std::vector<int> DynamicsAnalyzer::loudness_histogram(int n_bins, float min_db,

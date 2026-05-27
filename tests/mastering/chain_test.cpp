@@ -74,6 +74,26 @@ TEST_CASE("MasteringChain processes stereo audio with stereo stage", "[mastering
   REQUIRE(result.right.size() == right.size());
 }
 
+TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {
+  std::vector<float> left = {0.1f, 0.2f, 0.3f, 0.4f};
+  std::vector<float> right = {0.9f, 0.8f, 0.7f, 0.6f};
+  std::vector<Param> params = {{"bitDepth", 2.0}};
+
+  const auto stereo = apply_named_processor_stereo("saturation.bitcrusher", left.data(),
+                                                   right.data(), left.size(), 48000, params);
+  const auto expected_left =
+      apply_named_processor("saturation.bitcrusher", left.data(), left.size(), 48000, params);
+  const auto expected_right =
+      apply_named_processor("saturation.bitcrusher", right.data(), right.size(), 48000, params);
+
+  REQUIRE(stereo.left.size() == expected_left.samples.size());
+  REQUIRE(stereo.right.size() == expected_right.samples.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE_THAT(stereo.left[i], WithinAbs(expected_left.samples[i], 1.0e-6f));
+    REQUIRE_THAT(stereo.right[i], WithinAbs(expected_right.samples[i], 1.0e-6f));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // StreamingMasteringChain
 // ---------------------------------------------------------------------------
@@ -175,8 +195,8 @@ TEST_CASE("MasteringChain applies new repair stages", "[mastering][chain]") {
   std::vector<float> samples(static_cast<size_t>(sample_rate), 0.0f);
   // Mild noise + a few "clicks".
   for (size_t i = 0; i < samples.size(); ++i) {
-    samples[i] =
-        0.01f * static_cast<float>(((i * 1103515245u + 12345u) & 0xFFFFu) - 32768) / 32768.0f;
+    const int noise = static_cast<int>((i * 1103515245u + 12345u) & 0xFFFFu) - 32768;
+    samples[i] = 0.01f * static_cast<float>(noise) / 32768.0f;
   }
   samples[1000] = 0.95f;
   samples[5000] = -0.95f;
@@ -255,12 +275,20 @@ TEST_CASE("StreamingMasteringChain supports new dynamics stages", "[mastering][c
 
 TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chain]") {
   Param params[] = {
-      {"repair.declick.threshold", 0.5},
+      {"repair.declick.threshold", 0.5},    {"repair.declip.clipThreshold", 0.9},
+      {"repair.decrackle.mode", 1.0},       {"repair.dehum.fundamentalHz", 60.0},
       {"repair.dereverb.attenuation", 0.7},
   };
-  auto config = parse_chain_config_params(params, 2);
+  auto config = parse_chain_config_params(params, 5);
   REQUIRE(config.repair.declick.enabled);
   REQUIRE_THAT(config.repair.declick.config.threshold, WithinAbs(0.5f, 1e-6f));
+  REQUIRE(config.repair.declip.enabled);
+  REQUIRE_THAT(config.repair.declip.config.clip_threshold, WithinAbs(0.9f, 1e-6f));
+  REQUIRE(config.repair.decrackle.enabled);
+  REQUIRE(config.repair.decrackle.config.mode ==
+          ::sonare::mastering::repair::DecrackleMode::WaveletShrinkage);
+  REQUIRE(config.repair.dehum.enabled);
+  REQUIRE_THAT(config.repair.dehum.config.fundamental_hz, WithinAbs(60.0f, 1e-6f));
   REQUIRE(config.repair.dereverb.enabled);
   REQUIRE_THAT(config.repair.dereverb.config.attenuation, WithinAbs(0.7f, 1e-6f));
 }
@@ -268,14 +296,16 @@ TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chai
 TEST_CASE("parse_chain_config_params handles new dynamics keys", "[mastering][chain]") {
   Param params[] = {
       {"dynamics.deesser.thresholdDb", -30.0},
+      {"dynamics.deesser.bandpassQ", 2.25},
       {"dynamics.transientShaper.attackGainDb", 4.0},
       {"dynamics.multibandComp.lowCutoffHz", 200.0},
       {"dynamics.multibandComp.highCutoffHz", 5000.0},
       {"dynamics.multibandComp.midThresholdDb", -22.0},
   };
-  auto config = parse_chain_config_params(params, 5);
+  auto config = parse_chain_config_params(params, 6);
   REQUIRE(config.dynamics.deesser.enabled);
   REQUIRE_THAT(config.dynamics.deesser.config.threshold_db, WithinAbs(-30.0f, 1e-6f));
+  REQUIRE_THAT(config.dynamics.deesser.config.bandpass_q, WithinAbs(2.25f, 1e-6f));
   REQUIRE(config.dynamics.transient_shaper.enabled);
   REQUIRE_THAT(config.dynamics.transient_shaper.config.attack_gain_db, WithinAbs(4.0f, 1e-6f));
   REQUIRE(config.dynamics.multiband_comp.enabled);

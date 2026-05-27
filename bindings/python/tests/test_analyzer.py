@@ -253,6 +253,12 @@ def test_compat_silence_and_rhythm_utilities() -> None:
     temp = libsonare.tempogram(onset, sample_rate=22050, hop_length=512, win_length=4)
     assert temp[0] == len(onset)
     assert len(temp[1]) == 4 * len(onset)
+    cosine = libsonare.tempogram(
+        onset, sample_rate=22050, hop_length=512, win_length=4, mode="cosine"
+    )
+    assert cosine[0] == len(onset)
+    assert len(cosine[1]) == 4 * len(onset)
+    assert all(-1.000001 <= value <= 1.000001 for value in cosine[1])
     assert len(libsonare.plp(onset, sample_rate=22050, hop_length=512, win_length=4)) == len(onset)
 
 
@@ -329,6 +335,7 @@ def test_named_mastering_processors() -> None:
 
     names = libsonare.mastering_processor_names()
     assert "dynamics.compressor" in names
+    assert "eq.equalizer" in names
     assert "stereo.imager" in names
 
     result = libsonare.mastering_process(
@@ -339,6 +346,21 @@ def test_named_mastering_processors() -> None:
     )
     assert len(result.samples) == len(samples)
     assert math.isfinite(result.output_lufs)
+
+    eq_result = libsonare.mastering_process(
+        "eq.equalizer",
+        samples,
+        sample_rate=sr,
+        params={
+            "band0.enabled": 1.0,
+            "band0.frequencyHz": 440.0,
+            "band0.gainDb": 6.0,
+            "band0.q": 1.0,
+            "autoGain": 1.0,
+        },
+    )
+    assert len(eq_result.samples) == len(samples)
+    assert math.isfinite(eq_result.output_lufs)
 
     stereo = libsonare.mastering_process_stereo(
         "stereo.imager",
@@ -388,6 +410,88 @@ def test_mastering_pair_and_stereo_analysis() -> None:
         sample_rate=sr,
     )
     assert '"correlation"' in stereo_json
+
+
+def test_mastering_streaming_preview_returns_shared_json() -> None:
+    """Streaming preview is exposed through the Python mastering API."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(sr)]
+
+    preview_json = libsonare.mastering_streaming_preview(
+        samples,
+        sample_rate=sr,
+        platforms=[{"name": "Unit Test", "targetLufs": 0.0, "ceilingDb": -6.0}],
+    )
+
+    assert '"platforms"' in preview_json
+    assert '"name":"Unit Test"' in preview_json
+    assert '"normalizationGainDb"' in preview_json
+    assert '"ceilingRisk":true' in preview_json
+
+
+def test_mastering_assistant_suggest_returns_shared_json() -> None:
+    """Mastering assistant suggestion is exposed through Python."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 220 * i / sr) for i in range(sr * 3)]
+
+    suggestion_json = libsonare.mastering_assistant_suggest(
+        samples,
+        sample_rate=sr,
+        params={"targetLufs": -13.0, "ceilingDb": -0.8},
+    )
+
+    assert '"chainConfig"' in suggestion_json
+    assert '"explanation"' in suggestion_json
+    assert '"genreCandidates"' in suggestion_json
+    assert '"loudness.targetLufs":-13' in suggestion_json
+    assert '"loudness.ceilingDb":-0.8' in suggestion_json
+
+
+def test_mastering_audio_profile_returns_shared_json() -> None:
+    """Mastering assistant audio profile is exposed through Python."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 330 * i / sr) for i in range(sr * 2)]
+
+    profile_json = libsonare.mastering_audio_profile(
+        samples,
+        sample_rate=sr,
+        params={"nFft": 1024, "hopLength": 256},
+    )
+
+    assert '"durationSec"' in profile_json
+    assert '"loudness"' in profile_json
+    assert '"integratedLufs"' in profile_json
+    assert '"spectral"' in profile_json
+    assert '"centroidHz"' in profile_json
+    assert '"dynamics"' in profile_json
+    assert '"genreCandidates"' in profile_json
+
+
+def test_mixing_presets_and_stereo_mix() -> None:
+    """Mixing scene presets and simple stereo mix are exposed."""
+    import libsonare
+
+    assert "vocalReverbSend" in libsonare.mixing_scene_preset_names()
+    assert '"vocal"' in libsonare.mixing_scene_preset_json("vocalReverbSend")
+
+    result = libsonare.mix_stereo(
+        [([1.0, 1.0], [0.0, 0.0])],
+        sample_rate=48000,
+        fader_db=[-6.0206],
+        input_trim_db=[6.0206],
+    )
+    assert result.left == pytest.approx([math.sqrt(0.5), math.sqrt(0.5)], abs=0.004)
+    assert result.right == pytest.approx([0.0, 0.0], abs=0.0002)
+    assert result.sample_rate == 48000
+    assert len(result.meters) == 1
+    assert math.isfinite(result.meters[0].peak_db_l)
+    assert isinstance(result.meters[0].likely_mono_compatible, bool)
 
 
 def test_audio_analyze() -> None:
@@ -1140,6 +1244,56 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     chain.reset()
 
 
+def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
+    """StreamingEqualizer exposes the native SonareEq handle to Python."""
+    from libsonare import StreamingEqualizer
+
+    sr = 48000
+    block = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(512)]
+
+    with StreamingEqualizer(sample_rate=sr, max_block_size=512) as eq:
+        eq.set_gain_scale(0.5)
+        eq.set_output_gain_db(3.0)
+        eq.set_output_pan(0.0)
+        eq.set_band(
+            0,
+            {
+                "type": "Peak",
+                "frequencyHz": 1000.0,
+                "gainDb": 6.0,
+                "q": 1.0,
+                "enabled": True,
+            },
+        )
+        out = eq.process_mono(block)
+        assert len(out) == len(block)
+        assert max(abs(sample) for sample in out) > max(abs(sample) for sample in block)
+
+        snapshot = eq.spectrum()
+        assert snapshot.seq == 1
+        assert len(snapshot.pre_left) == 256
+        assert len(snapshot.post_left) == 256
+        assert 2.5 < snapshot.band_gain_db[0] < 3.5
+
+        eq.set_phase_mode("linear")
+        assert eq.latency_samples > 0
+
+
+def test_streaming_equalizer_match_configures_bands() -> None:
+    """StreamingEqualizer.match forwards to the live EQ match C API."""
+    from libsonare import StreamingEqualizer
+
+    sr = 48000
+    source = [0.08 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(1024)]
+    reference = [0.35 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(1024)]
+
+    with StreamingEqualizer(sample_rate=sr, max_block_size=len(source)) as eq:
+        eq.match(source, reference, max_bands=4)
+        out = eq.process_mono(source)
+        assert len(out) == len(source)
+        assert any(gain > 0.5 for gain in eq.spectrum().band_gain_db)
+
+
 def test_streaming_mastering_chain_rejects_denoise() -> None:
     """StreamingMasteringChain refuses configurations enabling repair.denoise."""
     from libsonare import StreamingMasteringChain
@@ -1189,3 +1343,229 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     assert "dynamics.compressor" in stages
     # Final progress reaches 1.0.
     assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)
+
+
+# ============================================================================
+# Newly exposed analysis functions: onset envelope, Fourier tempogram,
+# tempogram ratio, NNLS chroma, and LUFS loudness metering.
+# ============================================================================
+
+
+def _all_finite(values: list[float]) -> bool:
+    return all(math.isfinite(v) for v in values)
+
+
+def test_onset_envelope() -> None:
+    """onset_envelope returns a finite per-frame envelope."""
+    from libsonare import onset_envelope
+
+    samples = _generate_sine(440, 22050, 2.0)
+    env = onset_envelope(samples, sample_rate=22050)
+    assert len(env) > 0
+    assert _all_finite(env)
+
+
+def test_fourier_tempogram() -> None:
+    """fourier_tempogram returns an [n_bins x n_frames] magnitude matrix."""
+    from libsonare import fourier_tempogram, onset_envelope
+
+    samples = _generate_sine(440, 22050, 2.0)
+    env = onset_envelope(samples, sample_rate=22050)
+    win_length = 384
+    n_frames, data = fourier_tempogram(env, sample_rate=22050, win_length=win_length)
+    assert n_frames == len(env)
+    n_bins = win_length // 2 + 1
+    assert len(data) == n_bins * n_frames
+    assert _all_finite(data)
+
+
+def test_tempogram_ratio() -> None:
+    """tempogram_ratio returns one finite value per factor."""
+    from libsonare import onset_envelope, tempogram, tempogram_ratio
+
+    samples = _generate_sine(440, 22050, 2.0)
+    env = onset_envelope(samples, sample_rate=22050)
+    win_length = 384
+    _, tg = tempogram(env, sample_rate=22050)
+
+    default_ratio = tempogram_ratio(tg, win_length=win_length, sample_rate=22050)
+    assert len(default_ratio) == 5  # {0.5, 1, 2, 3, 4}
+    assert _all_finite(default_ratio)
+
+    explicit = tempogram_ratio(
+        tg, win_length=win_length, sample_rate=22050, factors=[1.0, 2.0, 3.0]
+    )
+    assert len(explicit) == 3
+    assert _all_finite(explicit)
+
+
+def test_nnls_chroma() -> None:
+    """nnls_chroma returns a row-major 12 x n_frames matrix."""
+    from libsonare import nnls_chroma
+
+    samples = _generate_sine(440, 22050, 2.0)
+    n_frames, data = nnls_chroma(samples, sample_rate=22050)
+    assert n_frames > 0
+    assert len(data) == 12 * n_frames
+    assert _all_finite(data)
+    assert all(v >= 0.0 for v in data)  # NNLS output is non-negative
+
+
+def test_lufs() -> None:
+    """lufs returns finite loudness measures; louder signal reads higher."""
+    from libsonare import lufs
+
+    loud = _generate_sine(440, 48000, 3.0)
+    quiet = [s * 0.1 for s in loud]
+
+    loud_result = lufs(loud, sample_rate=48000)
+    quiet_result = lufs(quiet, sample_rate=48000)
+
+    for r in (loud_result, quiet_result):
+        assert math.isfinite(r.integrated_lufs)
+        assert math.isfinite(r.momentary_lufs)
+        assert math.isfinite(r.short_term_lufs)
+        assert math.isfinite(r.loudness_range)
+        assert r.loudness_range >= 0.0
+
+    assert loud_result.integrated_lufs > quiet_result.integrated_lufs
+
+
+def test_momentary_and_short_term_lufs() -> None:
+    """momentary_lufs and short_term_lufs return finite time series."""
+    from libsonare import momentary_lufs, short_term_lufs
+
+    samples = _generate_sine(440, 48000, 3.0)
+
+    momentary = momentary_lufs(samples, sample_rate=48000)
+    assert len(momentary) > 0
+    assert _all_finite(momentary)
+
+    short_term = short_term_lufs(samples, sample_rate=48000)
+    assert len(short_term) > 0
+    assert _all_finite(short_term)
+
+
+def test_audio_onset_envelope() -> None:
+    """Audio.onset_envelope returns a finite per-frame envelope."""
+    from libsonare import Audio
+
+    audio = Audio.from_buffer(_generate_sine(440, 22050, 2.0), sample_rate=22050)
+    env = audio.onset_envelope()
+    assert len(env) > 0
+    assert _all_finite(env)
+
+
+def test_audio_nnls_chroma() -> None:
+    """Audio.nnls_chroma returns a row-major 12 x n_frames matrix."""
+    from libsonare import Audio
+
+    audio = Audio.from_buffer(_generate_sine(440, 22050, 2.0), sample_rate=22050)
+    n_frames, data = audio.nnls_chroma()
+    assert n_frames > 0
+    assert len(data) == 12 * n_frames
+    assert _all_finite(data)
+
+
+def test_audio_lufs() -> None:
+    """Audio.lufs returns finite loudness measures."""
+    from libsonare import Audio
+
+    audio = Audio.from_buffer(_generate_sine(440, 48000, 3.0), sample_rate=48000)
+    result = audio.lufs()
+    assert math.isfinite(result.integrated_lufs)
+    assert math.isfinite(result.momentary_lufs)
+    assert math.isfinite(result.short_term_lufs)
+    assert math.isfinite(result.loudness_range)
+
+
+def test_audio_momentary_and_short_term_lufs() -> None:
+    """Audio.momentary_lufs and Audio.short_term_lufs return finite series."""
+    from libsonare import Audio
+
+    audio = Audio.from_buffer(_generate_sine(440, 48000, 3.0), sample_rate=48000)
+    momentary = audio.momentary_lufs()
+    short_term = audio.short_term_lufs()
+    assert len(momentary) > 0
+    assert len(short_term) > 0
+    assert _all_finite(momentary)
+    assert _all_finite(short_term)
+
+
+def _write_test_wav(path: str, samples: list[float], sample_rate: int) -> None:
+    """Write mono 16-bit PCM WAV using only the standard library."""
+    frames = bytearray()
+    for s in samples:
+        clamped = max(-1.0, min(1.0, s))
+        frames += struct.pack("<h", int(round(clamped * 32767.0)))
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        wav.writeframes(bytes(frames))
+
+
+def _run_cli(args: list[str]) -> subprocess.CompletedProcess:
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
+    return subprocess.run(
+        [sys.executable, "-m", "libsonare.cli", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+@pytest.mark.parametrize("command", ["lufs", "onset-envelope", "nnls-chroma", "tempogram"])
+def test_cli_new_commands_smoke(command: str) -> None:
+    """New CLI subcommands run end-to-end on a synthetic WAV and emit JSON."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone.wav")
+        _write_test_wav(wav_path, _generate_sine(440, 22050, 2.0), 22050)
+
+        result = _run_cli([command, wav_path, "--json"])
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip()
+
+
+def test_analyze_sections_returns_section_result() -> None:
+    from libsonare import Section, SectionResult, SectionType, analyze_sections
+
+    samples = _generate_sine(220, 22050, 6.0) + _generate_sine(440, 22050, 6.0)
+    result = analyze_sections(samples, sample_rate=22050, min_section_sec=2.0)
+    assert isinstance(result, SectionResult)
+    assert isinstance(result.sections, list)
+    for section in result.sections:
+        assert isinstance(section, Section)
+        assert isinstance(section.type, SectionType)
+        assert section.end >= section.start
+        assert isinstance(section.name, str)
+
+
+def test_analyze_melody_returns_melody_result() -> None:
+    from libsonare import MelodyPoint, MelodyResult, analyze_melody
+
+    samples = _generate_sine(220, 22050, 2.0)
+    result = analyze_melody(samples, sample_rate=22050)
+    assert isinstance(result, MelodyResult)
+    assert isinstance(result.points, list)
+    assert math.isfinite(result.mean_frequency)
+    for point in result.points[:8]:
+        assert isinstance(point, MelodyPoint)
+        assert math.isfinite(point.time)
+
+
+def test_cqt_and_vqt_return_cqt_result() -> None:
+    from libsonare import CqtResult, cqt, vqt
+
+    samples = _generate_sine(220, 22050, 1.0)
+    for result in (
+        cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
+        vqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12, gamma=10.0),
+    ):
+        assert isinstance(result, CqtResult)
+        assert result.n_bins == 24
+        assert result.n_frames > 0
+        assert len(result.magnitude) == result.n_bins * result.n_frames
+        assert len(result.frequencies) == result.n_bins

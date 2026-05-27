@@ -1,11 +1,13 @@
 #include "analysis/chord_analyzer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <sstream>
 
 #include "core/convert.h"
+#include "feature/nnls_chroma.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -42,6 +44,31 @@ std::string Chord::to_string() const {
     case ChordQuality::Unknown:
       name += "?";
       break;
+    case ChordQuality::Add9:
+      name += "add9";
+      break;
+    case ChordQuality::MinorAdd9:
+      name += "madd9";
+      break;
+    case ChordQuality::Dim7:
+      name += "dim7";
+      break;
+    case ChordQuality::HalfDim7:
+      name += "m7b5";
+      break;
+    case ChordQuality::Major9:
+      name += "maj9";
+      break;
+    case ChordQuality::Dominant9:
+      name += "9";
+      break;
+    case ChordQuality::Sus2Add4:
+      name += "sus2add4";
+      break;
+  }
+  if (bass != root) {
+    name += "/";
+    name += pitch_class_to_string(bass);
   }
   return name;
 }
@@ -49,12 +76,33 @@ std::string Chord::to_string() const {
 ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute chroma
-  ChromaConfig chroma_config;
-  chroma_config.n_fft = config.n_fft;
-  chroma_config.hop_length = config.hop_length;
+  if (config.chroma_method == ChromaMethod::NNLS) {
+    NnlsChromaConfig nnls_config;
+    // Chord recognition does not need the full seven-octave, 100-iteration
+    // analysis profile used by the standalone NNLS feature. A lighter front-end
+    // keeps the audio constructor practical for tests and interactive use while
+    // preserving the semitone salience needed by the template matcher.
+    nnls_config.cqt.bins_per_octave = 12;
+    nnls_config.cqt.n_bins = 84;
+    nnls_config.cqt.hop_length = config.hop_length;
+    nnls_config.midi_min = 24;
+    nnls_config.n_pitches = 60;
+    nnls_config.n_harmonics = 4;
+    nnls_config.max_iter = 25;
+    nnls_config.tolerance = 1.0e-3f;
+    chroma_ = nnls_chroma(audio, nnls_config);
+  } else {
+    ChromaConfig chroma_config;
+    chroma_config.n_fft = config.n_fft;
+    chroma_config.hop_length = config.hop_length;
+    chroma_ = Chroma::compute(audio, chroma_config);
+  }
 
-  chroma_ = Chroma::compute(audio, chroma_config);
+  if (config.detect_inversions) {
+    BassChromaConfig bass_config;
+    bass_config.cqt.hop_length = config.hop_length;
+    bass_chroma_ = bass_chroma(audio, bass_config);
+  }
 
   // Generate templates
   if (config.use_triads_only) {
@@ -103,6 +151,30 @@ bool is_triad(ChordQuality quality) {
          quality == ChordQuality::Diminished || quality == ChordQuality::Augmented;
 }
 
+float extension_threshold(ChordQuality quality) {
+  switch (quality) {
+    case ChordQuality::Add9:
+    case ChordQuality::MinorAdd9:
+    case ChordQuality::Major9:
+    case ChordQuality::Dominant9:
+    case ChordQuality::Sus2Add4:
+    case ChordQuality::Dim7:
+    case ChordQuality::HalfDim7:
+      return 0.05f;
+    default:
+      return chord_constants::kTetradThreshold;
+  }
+}
+
+bool chord_contains_pitch_class(ChordQuality quality, PitchClass root, PitchClass pitch) {
+  for (const auto& candidate : generate_all_chord_templates()) {
+    if (candidate.root == root && candidate.quality == quality) {
+      return candidate.pattern[static_cast<int>(pitch)] > 0.0f;
+    }
+  }
+  return pitch == root;
+}
+
 }  // namespace
 
 ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(
@@ -129,9 +201,10 @@ ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(
     }
   }
 
-  // Prefer triad unless tetrad has significantly higher correlation
+  // Prefer triad unless the richer template has enough additional evidence.
   ChordMatch result;
-  if (best_tetrad_corr > best_triad_corr + chord_constants::kTetradThreshold) {
+  if (best_tetrad_corr >
+      best_triad_corr + extension_threshold(templates_[best_tetrad_idx].quality)) {
     result.index = best_tetrad_idx;
     result.confidence = std::min(1.0f, std::max(0.0f, best_tetrad_corr));
   } else {
@@ -143,6 +216,97 @@ ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(
 
 int ChordAnalyzer::find_best_chord(const float* chroma) const {
   return find_best_chord_with_confidence(chroma).index;
+}
+
+ChordHmmObservation ChordAnalyzer::chord_observation(const float* chroma) const {
+  ChordHmmObservation observation;
+  observation.candidates.reserve(templates_.size());
+  for (size_t i = 0; i < templates_.size(); ++i) {
+    observation.candidates.emplace_back(static_cast<int>(i), templates_[i].correlate(chroma));
+  }
+  return observation;
+}
+
+ChordHmmConfig ChordAnalyzer::hmm_config() const {
+  ChordHmmConfig config;
+  config.beam_width = config_.hmm_beam_width;
+  config.use_key_context = config_.use_key_context;
+  config.key_root = config_.key_root;
+  config.key_mode = config_.key_mode;
+  return config;
+}
+
+PitchClass ChordAnalyzer::estimate_bass_pitch_class(int start_frame, int end_frame,
+                                                    const ChordTemplate& chord) const {
+  const bool has_bass_source = !bass_chroma_.empty();
+  const Chroma& source = has_bass_source ? bass_chroma_ : chroma_;
+  if (!config_.detect_inversions || source.empty()) {
+    return PitchClass::C;
+  }
+
+  start_frame = std::max(0, start_frame);
+  end_frame = std::min(source.n_frames(), end_frame);
+  if (start_frame >= end_frame || source.n_chroma() != 12) {
+    return PitchClass::C;
+  }
+
+  std::array<float, 12> energy = {};
+  for (int f = start_frame; f < end_frame; ++f) {
+    for (int c = 0; c < 12; ++c) {
+      energy[c] += source.at(c, f);
+    }
+  }
+
+  int best = static_cast<int>(chord.root);
+  int best_non_root = -1;
+  for (int c = 0; c < 12; ++c) {
+    if (chord.pattern[c] <= 0.0f) {
+      continue;
+    }
+    const float current =
+        has_bass_source ? energy[c] * (1.0f - 0.025f * static_cast<float>(c)) : energy[c];
+    const float previous =
+        has_bass_source ? energy[best] * (1.0f - 0.025f * static_cast<float>(best)) : energy[best];
+    if (current > previous) {
+      best = c;
+    }
+    if (c != static_cast<int>(chord.root)) {
+      const float non_root_previous =
+          best_non_root < 0
+              ? -1.0f
+              : (has_bass_source
+                     ? energy[best_non_root] * (1.0f - 0.025f * static_cast<float>(best_non_root))
+                     : energy[best_non_root]);
+      if (current > non_root_previous) {
+        best_non_root = c;
+      }
+    }
+  }
+  if (has_bass_source && best == static_cast<int>(chord.root) && best_non_root >= 0) {
+    const float root_score = energy[best] * (1.0f - 0.025f * static_cast<float>(best));
+    const float non_root_score =
+        energy[best_non_root] * (1.0f - 0.025f * static_cast<float>(best_non_root));
+    if (non_root_score >= root_score * 0.70f) {
+      best = best_non_root;
+    }
+  }
+  const int major_or_minor_third =
+      chord.quality == ChordQuality::Major || chord.quality == ChordQuality::Dominant7 ||
+              chord.quality == ChordQuality::Major7 || chord.quality == ChordQuality::Augmented ||
+              chord.quality == ChordQuality::Add9 || chord.quality == ChordQuality::Major9 ||
+              chord.quality == ChordQuality::Dominant9
+          ? (static_cast<int>(chord.root) + 4) % 12
+          : (static_cast<int>(chord.root) + 3) % 12;
+  if (has_bass_source && best != static_cast<int>(chord.root) &&
+      chord.pattern[major_or_minor_third] > 0.0f) {
+    const float third_score =
+        energy[major_or_minor_third] * (1.0f - 0.025f * static_cast<float>(major_or_minor_third));
+    const float best_score = energy[best] * (1.0f - 0.025f * static_cast<float>(best));
+    if (third_score >= best_score * 0.75f) {
+      best = major_or_minor_third;
+    }
+  }
+  return static_cast<PitchClass>(best);
 }
 
 void ChordAnalyzer::analyze_chords() {
@@ -161,6 +325,10 @@ void ChordAnalyzer::analyze_chords() {
   // Detect chord for each frame
   frame_chords_.resize(n_frames);
   std::vector<float> confidences(n_frames);
+  std::vector<ChordHmmObservation> observations;
+  if (config_.use_hmm) {
+    observations.reserve(n_frames);
+  }
 
   for (int f = 0; f < n_frames; ++f) {
     // Compute smoothed chroma
@@ -183,6 +351,24 @@ void ChordAnalyzer::analyze_chords() {
     ChordMatch match = find_best_chord_with_confidence(smoothed.data());
     frame_chords_[f] = match.index;
     confidences[f] = match.confidence;
+    if (config_.use_hmm) {
+      observations.push_back(chord_observation(smoothed.data()));
+    }
+  }
+
+  if (config_.use_hmm) {
+    auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config());
+    if (smoothed_sequence.size() == frame_chords_.size()) {
+      frame_chords_ = std::move(smoothed_sequence);
+      for (int f = 0; f < n_frames; ++f) {
+        std::array<float, 12> frame_chroma = {};
+        for (int c = 0; c < n_chroma; ++c) {
+          frame_chroma[c] = chroma_.at(c, f);
+        }
+        confidences[f] = std::min(
+            1.0f, std::max(0.0f, templates_[frame_chords_[f]].correlate(frame_chroma.data())));
+      }
+    }
   }
 
   // Convert frame-level to segment-level chords
@@ -207,6 +393,14 @@ void ChordAnalyzer::analyze_chords() {
       chord.start = static_cast<float>(segment_start) * hop_duration;
       chord.end = static_cast<float>(f) * hop_duration;
       chord.confidence = segment_confidence / static_cast<float>(confidence_count);
+      chord.bass = chord.root;
+      if (config_.detect_inversions) {
+        const PitchClass estimated_bass =
+            estimate_bass_pitch_class(segment_start, f, templates_[current_chord]);
+        if (chord_contains_pitch_class(chord.quality, chord.root, estimated_bass)) {
+          chord.bass = estimated_bass;
+        }
+      }
 
       chords_.push_back(chord);
 
@@ -237,8 +431,12 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
   // Detect chord at each beat position
   std::vector<int> beat_chords;
   std::vector<float> beat_confidences;
+  std::vector<ChordHmmObservation> observations;
   beat_chords.reserve(beat_times.size());
   beat_confidences.reserve(beat_times.size());
+  if (config_.use_hmm) {
+    observations.reserve(beat_times.size());
+  }
 
   for (float beat_time : beat_times) {
     // Find the frame closest to this beat
@@ -267,10 +465,20 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
     ChordMatch match = find_best_chord_with_confidence(beat_chroma.data());
     beat_chords.push_back(match.index);
     beat_confidences.push_back(match.confidence);
+    if (config_.use_hmm) {
+      observations.push_back(chord_observation(beat_chroma.data()));
+    }
   }
 
   // Convert beat-level chords to time segments
   if (beat_chords.empty()) return;
+
+  if (config_.use_hmm) {
+    auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config());
+    if (smoothed_sequence.size() == beat_chords.size()) {
+      beat_chords = std::move(smoothed_sequence);
+    }
+  }
 
   int current_chord = beat_chords[0];
   float segment_start = beat_times[0];
@@ -291,6 +499,17 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
       chord.start = segment_start;
       chord.end = segment_end;
       chord.confidence = segment_confidence / static_cast<float>(confidence_count);
+      const int start_frame = std::max(0, static_cast<int>(segment_start / hop_duration));
+      const int end_frame =
+          std::min(chroma_.n_frames(), static_cast<int>(segment_end / hop_duration) + 1);
+      chord.bass = chord.root;
+      if (config_.detect_inversions) {
+        const PitchClass estimated_bass =
+            estimate_bass_pitch_class(start_frame, end_frame, templates_[current_chord]);
+        if (chord_contains_pitch_class(chord.quality, chord.root, estimated_bass)) {
+          chord.bass = estimated_bass;
+        }
+      }
 
       chords_.push_back(chord);
 
@@ -315,6 +534,7 @@ void ChordAnalyzer::merge_short_segments() {
 
   std::vector<Chord> merged;
   merged.reserve(chords_.size());
+  float pending_start = -1.0f;
 
   for (size_t i = 0; i < chords_.size(); ++i) {
     const Chord& chord = chords_[i];
@@ -323,16 +543,23 @@ void ChordAnalyzer::merge_short_segments() {
       // Merge with previous chord
       merged.back().end = chord.end;
     } else if (chord.duration() < config_.min_duration && i + 1 < chords_.size()) {
-      // Very short first chord: merge with next
-      // Skip for now, will be handled by next iteration
+      // Very short first chord: merge its time range into the next retained segment.
+      if (pending_start < 0.0f) {
+        pending_start = chord.start;
+      }
       continue;
     } else if (!merged.empty() && merged.back().root == chord.root &&
-               merged.back().quality == chord.quality) {
+               merged.back().quality == chord.quality && merged.back().bass == chord.bass) {
       // Same chord as previous: extend
       merged.back().end = chord.end;
       merged.back().confidence = (merged.back().confidence + chord.confidence) / 2.0f;
     } else {
-      merged.push_back(chord);
+      Chord retained = chord;
+      if (pending_start >= 0.0f) {
+        retained.start = pending_start;
+        pending_start = -1.0f;
+      }
+      merged.push_back(retained);
     }
   }
 
@@ -424,7 +651,8 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
   // Adjust case based on chord quality
   bool is_minor_chord =
       (chord.quality == ChordQuality::Minor || chord.quality == ChordQuality::Minor7 ||
-       chord.quality == ChordQuality::Diminished);
+       chord.quality == ChordQuality::Diminished || chord.quality == ChordQuality::MinorAdd9 ||
+       chord.quality == ChordQuality::Dim7 || chord.quality == ChordQuality::HalfDim7);
 
   if (is_minor_chord) {
     // Convert to lowercase
@@ -440,6 +668,12 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     case ChordQuality::Diminished:
       numeral += "°";
       break;
+    case ChordQuality::Dim7:
+      numeral += "°7";
+      break;
+    case ChordQuality::HalfDim7:
+      numeral += "ø7";
+      break;
     case ChordQuality::Augmented:
       numeral += "+";
       break;
@@ -451,6 +685,19 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
       break;
     case ChordQuality::Minor7:
       numeral += "7";
+      break;
+    case ChordQuality::Add9:
+    case ChordQuality::MinorAdd9:
+      numeral += "add9";
+      break;
+    case ChordQuality::Major9:
+      numeral += "maj9";
+      break;
+    case ChordQuality::Dominant9:
+      numeral += "9";
+      break;
+    case ChordQuality::Sus2Add4:
+      numeral += "sus2add4";
       break;
     default:
       break;
@@ -484,6 +731,7 @@ Chord ChordAnalyzer::chord_at(float time) const {
   empty.start = 0.0f;
   empty.end = 0.0f;
   empty.confidence = 0.0f;
+  empty.bass = empty.root;
   return empty;
 }
 
@@ -495,6 +743,7 @@ Chord ChordAnalyzer::most_common_chord() const {
     empty.start = 0.0f;
     empty.end = 0.0f;
     empty.confidence = 0.0f;
+    empty.bass = empty.root;
     return empty;
   }
 

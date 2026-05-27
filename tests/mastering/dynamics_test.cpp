@@ -8,6 +8,7 @@
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
+#include "mastering/dynamics/ducking_processor.h"
 #include "mastering/dynamics/expander.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/limiter.h"
@@ -48,6 +49,15 @@ float peak_abs(const std::vector<float>& samples, size_t skip = 0) {
   float peak = 0.0f;
   for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
     peak = std::max(peak, std::abs(samples[i]));
+  }
+  return peak;
+}
+
+float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
+  const size_t count = std::min(lhs.size(), rhs.size());
+  float peak = 0.0f;
+  for (size_t i = 0; i < count; ++i) {
+    peak = std::max(peak, std::abs(lhs[i] - rhs[i]));
   }
   return peak;
 }
@@ -293,12 +303,61 @@ TEST_CASE("UpwardCompressor raises quiet signal below threshold", "[mastering][d
   REQUIRE(rms_tail(quiet, 4096) / quiet_before > 2.0f);
   REQUIRE(rms_tail(loud, 4096) / loud_before < 1.05f);
   REQUIRE(upward.last_gain_db() == 0.0f);
+  REQUIRE(upward.last_gain_reduction_db() == upward.last_gain_db());
 }
 
 TEST_CASE("UpwardCompressor validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(UpwardCompressor({-24.0f, 0.5f, 10.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardCompressor({-24.0f, 2.0f, -1.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardCompressor({-24.0f, 2.0f, 10.0f, 100.0f, -1.0f}));
+}
+
+TEST_CASE("UpwardCompressor preserves existing channel state when channel count grows",
+          "[mastering][dynamics]") {
+  UpwardCompressor mono_path({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  UpwardCompressor stereo_path({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  mono_path.prepare(48000.0, 1024);
+  stereo_path.prepare(48000.0, 1024);
+
+  std::vector<float> warmup(4096, 0.02f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  std::vector<float> expected_left(512, 0.02f);
+  std::vector<float> actual_left = expected_left;
+  std::vector<float> actual_right(512, 0.02f);
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
+}
+
+TEST_CASE("UpwardCompressor keeps inactive stereo channel state across mono blocks",
+          "[mastering][dynamics]") {
+  UpwardCompressor reference({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  UpwardCompressor under_test({-20.0f, 2.0f, 20.0f, 80.0f, 12.0f});
+  reference.prepare(48000.0, 1024);
+  under_test.prepare(48000.0, 1024);
+
+  std::vector<float> warm_l(4096, 0.02f);
+  std::vector<float> warm_r(4096, 0.02f);
+  auto test_warm_l = warm_l;
+  auto test_warm_r = warm_r;
+  process_stereo(reference, warm_l, warm_r);
+  process_stereo(under_test, test_warm_l, test_warm_r);
+
+  std::vector<float> mono(512, 0.02f);
+  process(under_test, mono);
+
+  std::vector<float> ref_l(512, 0.02f);
+  std::vector<float> ref_r(512, 0.02f);
+  std::vector<float> test_l = ref_l;
+  std::vector<float> test_r = ref_r;
+  process_stereo(reference, ref_l, ref_r);
+  process_stereo(under_test, test_l, test_r);
+
+  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
 }
 
 TEST_CASE("UpwardExpander raises signal above threshold and leaves quiet signal alone",
@@ -318,12 +377,61 @@ TEST_CASE("UpwardExpander raises signal above threshold and leaves quiet signal 
   REQUIRE(rms_tail(quiet, 4096) / quiet_before < 1.05f);
   REQUIRE(rms_tail(loud, 4096) / loud_before > 1.4f);
   REQUIRE(upward.last_gain_db() > 3.0f);
+  REQUIRE(upward.last_gain_reduction_db() == upward.last_gain_db());
 }
 
 TEST_CASE("UpwardExpander validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(UpwardExpander({-24.0f, 0.5f, 10.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, -1.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, 10.0f, 100.0f, -1.0f}));
+}
+
+TEST_CASE("UpwardExpander preserves existing channel state when channel count grows",
+          "[mastering][dynamics]") {
+  UpwardExpander mono_path({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  UpwardExpander stereo_path({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  mono_path.prepare(48000.0, 1024);
+  stereo_path.prepare(48000.0, 1024);
+
+  std::vector<float> warmup(4096, 0.5f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  std::vector<float> expected_left(512, 0.5f);
+  std::vector<float> actual_left = expected_left;
+  std::vector<float> actual_right(512, 0.5f);
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
+}
+
+TEST_CASE("UpwardExpander keeps inactive stereo channel state across mono blocks",
+          "[mastering][dynamics]") {
+  UpwardExpander reference({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  UpwardExpander under_test({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+  reference.prepare(48000.0, 1024);
+  under_test.prepare(48000.0, 1024);
+
+  std::vector<float> warm_l(4096, 0.5f);
+  std::vector<float> warm_r(4096, 0.5f);
+  auto test_warm_l = warm_l;
+  auto test_warm_r = warm_r;
+  process_stereo(reference, warm_l, warm_r);
+  process_stereo(under_test, test_warm_l, test_warm_r);
+
+  std::vector<float> mono(512, 0.5f);
+  process(under_test, mono);
+
+  std::vector<float> ref_l(512, 0.5f);
+  std::vector<float> ref_r(512, 0.5f);
+  std::vector<float> test_l = ref_l;
+  std::vector<float> test_r = ref_r;
+  process_stereo(reference, ref_l, ref_r);
+  process_stereo(under_test, test_l, test_r);
+
+  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
 }
 
 TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[mastering][dynamics]") {
@@ -343,6 +451,63 @@ TEST_CASE("DeEsser attenuates sibilant high band more than low band", "[masterin
   REQUIRE(rms_tail(high, 4096) / high_before < 0.65f);
   REQUIRE(rms_tail(low, 4096) / low_before > 0.75f);
   REQUIRE(high_reduction_db < -1.0f);
+}
+
+TEST_CASE("DeEsser exposes configurable bandpass Q", "[mastering][dynamics]") {
+  DeEsser deesser;
+  deesser.prepare(48000.0, 1024);
+  REQUIRE(deesser.set_parameter(6, 2.5f));
+  REQUIRE_THAT(deesser.config().bandpass_q, WithinAbs(2.5f, 1.0e-6f));
+  REQUIRE_FALSE(deesser.set_parameter(7, 1.0f));
+  REQUIRE_THROWS(DeEsser({6000.0f, -24.0f, 4.0f, 1.0f, 60.0f, 12.0f, 0.0f}));
+}
+
+TEST_CASE("DeEsser preserves existing channel filter state when channel count grows",
+          "[mastering][dynamics]") {
+  DeEsser mono_path({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  DeEsser stereo_path({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  mono_path.prepare(48000.0, 1024);
+  stereo_path.prepare(48000.0, 1024);
+
+  auto warmup = sine(8000.0f, 48000, 4096, 0.5f);
+  auto warmup_copy = warmup;
+  process(mono_path, warmup);
+  process(stereo_path, warmup_copy);
+
+  auto expected_left = sine(8000.0f, 48000, 512, 0.5f);
+  auto actual_left = expected_left;
+  auto actual_right = expected_left;
+  process(mono_path, expected_left);
+  process_stereo(stereo_path, actual_left, actual_right);
+
+  REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
+}
+
+TEST_CASE("DeEsser keeps inactive stereo channel state across mono blocks",
+          "[mastering][dynamics]") {
+  DeEsser reference({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  DeEsser under_test({5000.0f, -28.0f, 6.0f, 20.0f, 80.0f, 18.0f});
+  reference.prepare(48000.0, 1024);
+  under_test.prepare(48000.0, 1024);
+
+  auto warm_l = sine(8000.0f, 48000, 4096, 0.5f);
+  auto warm_r = sine(8000.0f, 48000, 4096, 0.5f);
+  auto test_warm_l = warm_l;
+  auto test_warm_r = warm_r;
+  process_stereo(reference, warm_l, warm_r);
+  process_stereo(under_test, test_warm_l, test_warm_r);
+
+  auto mono = sine(8000.0f, 48000, 512, 0.5f);
+  process(under_test, mono);
+
+  auto ref_l = sine(8000.0f, 48000, 512, 0.5f);
+  auto ref_r = ref_l;
+  auto test_l = ref_l;
+  auto test_r = ref_r;
+  process_stereo(reference, ref_l, ref_r);
+  process_stereo(under_test, test_l, test_r);
+
+  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
 }
 
 TEST_CASE("DeEsser validates configuration", "[mastering][dynamics]") {
@@ -487,6 +652,22 @@ TEST_CASE("VocalRider validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(VocalRider({-18.0f, 6.0f, 6.0f, -1.0f, 500.0f, 0.0f}));
 }
 
+TEST_CASE("VocalRider unlinked detection allocates per-channel gain state",
+          "[mastering][dynamics]") {
+  VocalRiderConfig config;
+  config.linked_detection = false;
+  VocalRider rider(config);
+  rider.prepare(48000.0, 128);
+
+  std::vector<float> left(128, 0.2f);
+  std::vector<float> right(128, 0.05f);
+  float* channels[] = {left.data(), right.data()};
+
+  REQUIRE_NOTHROW(rider.process(channels, 2, 128));
+  REQUIRE(std::isfinite(left.front()));
+  REQUIRE(std::isfinite(right.front()));
+}
+
 TEST_CASE("SidechainRouter ducks from an external detector", "[mastering][dynamics]") {
   SidechainRouter router({-30.0f, 4.0f, 0.0f, 20.0f, 18.0f});
   router.prepare(48000.0, 1024);
@@ -511,9 +692,46 @@ TEST_CASE("SidechainRouter validates configuration and sidechain buffers",
   REQUIRE_THROWS(SidechainRouter({-24.0f, 0.5f, 5.0f, 100.0f, 18.0f}));
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, -1.0f, 100.0f, 18.0f}));
   REQUIRE_THROWS(SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, -1.0f}));
+  REQUIRE_THROWS(
+      SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 90.0f, false, false, -1.0f}));
+  REQUIRE_NOTHROW(
+      SidechainRouter({-24.0f, 4.0f, 5.0f, 100.0f, 18.0f, false, 0.0f, false, false, 0.0f}));
 
   SidechainRouter router;
   REQUIRE_THROWS(router.set_sidechain(nullptr, 1, 128));
+}
+
+TEST_CASE("SidechainRouter lookahead delays main while using current key",
+          "[mastering][dynamics]") {
+  SidechainRouter router({-18.0f, 8.0f, 0.0f, 0.0f, 18.0f, false, 90.0f, false, false, 2.0f});
+  router.prepare(1000.0, 8);
+
+  std::vector<float> main{1.0f, 0.0f, 0.0f, 0.0f};
+  std::vector<float> key{1.0f, 0.0f, 0.0f, 0.0f};
+  const float* key_channels[] = {key.data()};
+  router.set_sidechain(key_channels, 1, static_cast<int>(key.size()));
+  process(router, main);
+
+  REQUIRE_THAT(main[0], WithinAbs(0.0f, 0.0001f));
+  REQUIRE_THAT(main[1], WithinAbs(0.0f, 0.0001f));
+  REQUIRE(main[2] < 0.2f);
+}
+
+TEST_CASE("DuckingProcessor wraps SidechainRouter with voiceover defaults",
+          "[mastering][dynamics]") {
+  DuckingProcessor ducking({-18.0f, 8.0f, 0.0f, 0.0f, 18.0f, 0.0f});
+  ducking.prepare(48000.0, 16);
+
+  std::vector<float> main(16, 1.0f);
+  std::vector<float> key(16, 1.0f);
+  const float* key_channels[] = {key.data()};
+  ducking.set_key_input(key_channels, 1, static_cast<int>(key.size()));
+  process(ducking, main);
+
+  const float expected_reduction_db = -15.75f;
+  const float expected_gain = std::pow(10.0f, expected_reduction_db / 20.0f);
+  REQUIRE_THAT(main[15], WithinAbs(expected_gain, 0.0001f));
+  REQUIRE_THAT(ducking.last_gain_reduction_db(), WithinAbs(expected_reduction_db, 0.0001f));
 }
 
 TEST_CASE("SidechainRouter treats empty sidechain as cleared", "[mastering][dynamics]") {
@@ -544,4 +762,36 @@ TEST_CASE("SidechainRouter supports HPF mono key and key listen", "[mastering][d
   process(listen, target);
 
   REQUIRE(rms_tail(target, 128) > 0.1f);
+}
+
+TEST_CASE("Compressor sidechain HPF attenuates lows in the detector", "[mastering][dynamics]") {
+  // With a 1 kHz sidechain HPF the detector should respond more to a 5 kHz tone
+  // than to a 100 Hz tone of equal amplitude, so the high tone gets more gain
+  // reduction (more negative dB).
+  CompressorConfig config{};
+  config.threshold_db = -30.0f;
+  config.ratio = 4.0f;
+  config.attack_ms = 5.0f;
+  config.release_ms = 50.0f;
+  config.detector = DetectorMode::Peak;
+  config.sidechain_hpf_enabled = true;
+  config.sidechain_hpf_hz = 1000.0f;
+
+  Compressor low_comp(config);
+  Compressor high_comp(config);
+  low_comp.prepare(48000.0, 4096);
+  high_comp.prepare(48000.0, 4096);
+
+  auto low = sine(100.0f, 48000, 24000, 0.5f);
+  auto high = sine(5000.0f, 48000, 24000, 0.5f);
+  process(low_comp, low);
+  process(high_comp, high);
+
+  const float low_gr = low_comp.last_gain_reduction_db();
+  const float high_gr = high_comp.last_gain_reduction_db();
+
+  // The high tone passes through the HPF nearly unattenuated and triggers more
+  // gain reduction; the low tone is attenuated in the detector, so less.
+  REQUIRE(high_gr < low_gr);
+  REQUIRE(low_gr > high_gr + 3.0f);
 }

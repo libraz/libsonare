@@ -25,6 +25,40 @@ class FFT;
 /// Timestamps represent "stream time" (input sample position), not necessarily
 /// AudioContext.currentTime. See documentation for synchronization guidance.
 ///
+/// @par Feature coverage vs. the batch MusicAnalyzer
+/// The streaming analyzer is causal and incremental: every feature it emits is
+/// computable from the samples seen so far, without revisiting the past or
+/// needing the full signal. This intentionally excludes some batch features.
+///
+/// Available (computed incrementally, per STFT frame or progressively):
+///  - Magnitude / mel / chroma spectra (StreamFrame::magnitude/mel/chroma).
+///  - Onset strength (StreamFrame::onset_strength).
+///  - Per-frame spectral features: spectral centroid, spectral flatness, and
+///    RMS energy (StreamFrame::spectral_centroid/spectral_flatness/rms_energy).
+///    These are the per-frame primitives behind the batch Timbre brightness /
+///    density measures; the aggregated Timbre summary is intentionally left to
+///    the offline analyzer (see "Not available" below).
+///  - Progressive BPM, key, and chord estimates (AnalyzerStats::estimate),
+///    including bar-synchronized chord progression and pattern locking.
+///
+/// Not available (require non-causal / global computation, by design):
+///  - Melody / pitch contour (YIN/pYIN): per-frame YIN is technically feasible
+///    but assumes a monophonic source and costs an extra autocorrelation over a
+///    full frame_length window per hop. It is omitted to keep the real-time path
+///    light and because polyphonic stream visualization rarely benefits from it.
+///    Callers needing a pitch track should run feature::yin_track offline.
+///  - Dynamics loudness range (EBU R128 LRA): LRA is defined over the *entire*
+///    program — it gates short-term loudness against a relative threshold derived
+///    from the global mean, then takes a 95th-10th percentile of the whole
+///    distribution. This cannot be finalized until the stream ends, so it is an
+///    offline measure (metering::ebur128_loudness_range). Per-frame RMS
+///    energy is exposed as the closest causal proxy.
+///  - Section / boundary structure: derived from a song-wide self-similarity
+///    matrix; inherently requires the full signal and is omitted from streaming.
+///  - Aggregated Timbre summary (timbre_analyzer): a whole-signal average of the
+///    spectral primitives that streaming already exposes per frame; compute it
+///    offline from the accumulated frames if a single summary is needed.
+///
 /// Usage:
 /// @code
 ///   StreamAnalyzer analyzer(config);
@@ -123,7 +157,7 @@ class StreamAnalyzer {
   void set_tuning_ref_hz(float ref_hz);
 
   /// @brief Returns current statistics and progressive estimate.
-  AnalyzerStats stats();
+  AnalyzerStats stats() const;
 
   /// @brief Returns configuration.
   const StreamConfig& config() const { return config_; }
@@ -151,11 +185,17 @@ class StreamAnalyzer {
 
   // Cumulative state
   size_t cumulative_samples_ = 0;
+  double cumulative_samples_exact_ = 0.0;
   int frame_count_ = 0;
   int emitted_frame_count_ = 0;  // For emit_every_n_frames
 
-  // Overlap buffer (stores last n_fft - hop_length samples)
+  // Overlap buffer (stores last n_fft - hop_length samples).
+  // overlap_read_pos_ is the index of the current frame start within
+  // overlap_buffer_; frames advance the read position by hop_length instead of
+  // erasing per hop (O(N) memmove). The consumed prefix is compacted once per
+  // process() chunk rather than once per frame.
   std::vector<float> overlap_buffer_;
+  size_t overlap_read_pos_ = 0;
 
   // Output ring buffer
   std::deque<StreamFrame> output_buffer_;
@@ -188,7 +228,6 @@ class StreamAnalyzer {
   std::vector<float> mel_buffer_;              // [n_mels]
   std::vector<float> mel_log_;                 // [n_mels]
   std::vector<float> chroma_buffer_;           // [12] - L2 normalized
-  std::array<float, 12> chroma_raw_;           // [12] - raw (unnormalized) for accumulation
 
   // Progressive estimation accumulators
   std::vector<float> onset_accumulator_;
@@ -196,12 +235,7 @@ class StreamAnalyzer {
   int chroma_frame_count_ = 0;
   float last_key_update_time_ = 0.0f;
   float last_bpm_update_time_ = 0.0f;
-  float last_chord_analysis_time_ = 0.0f;
   ProgressiveEstimate current_estimate_;
-
-  // Accumulated chroma frames for batch-style chord analysis
-  // Stored as [12 * n_frames] (row-major: chroma bins × frames)
-  std::vector<float> accumulated_chroma_;
 
   // Chord progression tracking
   int prev_chord_root_ = -1;
@@ -220,9 +254,6 @@ class StreamAnalyzer {
   float bar_duration_ = 0.0f;                             ///< Duration of one bar in seconds
   int current_bar_index_ = -1;                            ///< Current bar index (0-based)
   float bar_start_time_ = 0.0f;                           ///< Start time of current bar
-  std::array<float, 12> bar_chroma_sum_;                  ///< Accumulated chroma within current bar
-  int bar_chroma_count_ = 0;  ///< Number of frames accumulated in current bar
-
   // Chord voting within bar (alternative to chroma averaging)
   std::array<int, 48> bar_chord_votes_;  ///< Vote counts per chord (12 roots × 4 qualities)
   int bar_vote_count_ = 0;               ///< Total votes in current bar
@@ -234,14 +265,6 @@ class StreamAnalyzer {
   // Full chroma history for retroactive bar chord detection
   static constexpr size_t kMaxChromaHistoryFrames = 3000;   ///< ~35s at default settings
   std::vector<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
-
-  // Known chord progression patterns (degree, quality pairs)
-  // degree: 0=I, 2=II, 4=III, 5=IV, 7=V, 9=VI, 11=VII
-  struct ProgressionPattern {
-    std::string name;
-    std::vector<std::pair<int, int>> chords;  ///< (degree, quality) pairs
-  };
-  static const std::vector<ProgressionPattern>& get_known_patterns();
 
   // Internal methods
   void compute_retroactive_bar_chords();

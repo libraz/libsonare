@@ -63,6 +63,20 @@ SonareChordQuality to_c_chord_quality(ChordQuality quality) {
       return SONARE_CHORD_SUS4;
     case ChordQuality::Unknown:
       return SONARE_CHORD_UNKNOWN;
+    case ChordQuality::Add9:
+      return SONARE_CHORD_ADD9;
+    case ChordQuality::MinorAdd9:
+      return SONARE_CHORD_MINOR_ADD9;
+    case ChordQuality::Dim7:
+      return SONARE_CHORD_DIM7;
+    case ChordQuality::HalfDim7:
+      return SONARE_CHORD_HALF_DIM7;
+    case ChordQuality::Major9:
+      return SONARE_CHORD_MAJOR9;
+    case ChordQuality::Dominant9:
+      return SONARE_CHORD_DOMINANT9;
+    case ChordQuality::Sus2Add4:
+      return SONARE_CHORD_SUS2_ADD4;
   }
   return SONARE_CHORD_UNKNOWN;
 }

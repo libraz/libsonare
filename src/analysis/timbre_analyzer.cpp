@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
@@ -11,6 +10,21 @@
 #include "util/exception.h"
 
 namespace sonare {
+
+namespace {
+
+/// @brief Reference spectral centroid (Hz) mapped to maximum brightness (1.0).
+/// @details Centroids at or above this frequency are perceived as maximally bright;
+///          ~8 kHz approximates the upper edge of musically relevant brightness.
+constexpr float kBrightnessCentroidRefHz = 8000.0f;
+/// @brief Reference spectral flux mapped to maximum roughness (1.0).
+/// @details Frame-to-frame spectral flux at or above this value saturates roughness.
+constexpr float kRoughnessFluxRef = 100.0f;
+/// @brief Reference MFCC standard deviation mapped to maximum complexity (1.0).
+/// @details The RMS spread of MFCC variances at or above this value saturates complexity.
+constexpr float kComplexityMfccStdRef = 50.0f;
+
+}  // namespace
 
 TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
     : n_frames_(0), sr_(audio.sample_rate()), config_(config) {
@@ -56,13 +70,22 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   spectral_flux_ = sonare::spectral_flux(spec);
 
   // Compute MFCC for complexity analysis
-  auto mfcc = mel_spec.mfcc(config_.n_mfcc);
+  const int n_mfcc = std::max(0, config_.n_mfcc);
 
   // Compute MFCC variance for complexity
-  mfcc_variance_.resize(config_.n_mfcc, 0.0f);
-  int mfcc_frames = mel_spec.n_frames();
+  mfcc_variance_.resize(static_cast<size_t>(n_mfcc), 0.0f);
+  const int mfcc_frames = mel_spec.n_frames();
+  if (n_mfcc <= 0 || mfcc_frames <= 0 || mel_spec.n_mels() < n_mfcc) {
+    analyze();
+    return;
+  }
+  auto mfcc = mel_spec.mfcc(n_mfcc);
+  if (mfcc.size() < static_cast<size_t>(n_mfcc * mfcc_frames)) {
+    analyze();
+    return;
+  }
 
-  for (int c = 0; c < config_.n_mfcc; ++c) {
+  for (int c = 0; c < n_mfcc; ++c) {
     float mean = 0.0f;
     for (int f = 0; f < mfcc_frames; ++f) {
       mean += mfcc[c * mfcc_frames + f];
@@ -123,8 +146,8 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   }
   float avg_centroid = centroid_sum / count;
 
-  // Normalize centroid to [0, 1] (assuming max centroid ~ 8000 Hz)
-  t.brightness = std::min(1.0f, avg_centroid / 8000.0f);
+  // Normalize centroid to [0, 1] relative to the brightness reference frequency.
+  t.brightness = std::min(1.0f, avg_centroid / kBrightnessCentroidRefHz);
 
   // Warmth: inverse of brightness + low frequency energy emphasis
   // Low centroid = warmer sound
@@ -151,8 +174,8 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   }
   float avg_flux = flux_sum / count;
 
-  // Normalize flux (assuming typical range)
-  t.roughness = std::min(1.0f, avg_flux / 100.0f);
+  // Normalize flux to [0, 1] relative to the roughness reference.
+  t.roughness = std::min(1.0f, avg_flux / kRoughnessFluxRef);
 
   // Complexity: based on MFCC variance
   // Higher variance across MFCCs = more complex timbre
@@ -162,8 +185,8 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   }
   float avg_var = total_var / std::max(1, static_cast<int>(mfcc_variance_.size()));
 
-  // Normalize variance (assuming typical range)
-  t.complexity = std::min(1.0f, std::sqrt(avg_var) / 50.0f);
+  // Normalize variance to [0, 1] relative to the complexity reference.
+  t.complexity = std::min(1.0f, std::sqrt(avg_var) / kComplexityMfccStdRef);
 
   return t;
 }

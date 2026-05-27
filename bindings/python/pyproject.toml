@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "libsonare"
-version = "1.1.0"
+version = "1.2.0"
 description = "Fast audio analysis library with C++ and Python bindings"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -48,7 +48,13 @@ Issues = "https://github.com/libraz/libsonare/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/libsonare"]
-artifacts = ["src/libsonare/*.dylib", "src/libsonare/*.so", "src/libsonare/*.so.*"]
+artifacts = [
+    "src/libsonare/*.dylib",
+    "src/libsonare/*.so",
+    "src/libsonare/*.so.*",
+    "src/libsonare/*.pyi",
+    "src/libsonare/py.typed",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -68,12 +74,29 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+"*.pyi" = ["N802"]
+# Domain facade modules re-export the shared runtime via `from ._runtime import *`.
+# The aggregate `__all__` is resolved at runtime; ruff cannot see through the star
+# import, so F405 is unavoidable here. mypy (strict) still catches genuine undefined names.
+"**/_analysis.py" = ["F405"]
+"**/_conversions.py" = ["F405"]
+"**/_effects.py" = ["F405"]
+"**/_features.py" = ["F405"]
+"**/_mastering.py" = ["F405"]
+"**/_mixing.py" = ["F405"]
+# _runtime is the aggregation hub itself (`from ._ffi import *` / `from .types import *`),
+# so its own re-exported references are likewise opaque to ruff.
+"**/_runtime.py" = ["F405"]
+
 [tool.mypy]
 strict = true
 python_version = "3.11"
+mypy_path = "src"
 
 [tool.rye]
 dev-dependencies = [
+    "mypy>=1.13",
     "pytest>=9.0.2",
     "ruff>=0.8",
 ]

@@ -49,9 +49,124 @@ class Mode(IntEnum):
 
     MAJOR = 0
     MINOR = 1
+    DORIAN = 2
+    PHRYGIAN = 3
+    LYDIAN = 4
+    MIXOLYDIAN = 5
+    LOCRIAN = 6
 
     def __str__(self) -> str:
-        return "major" if self == Mode.MAJOR else "minor"
+        names = {
+            Mode.MAJOR: "major",
+            Mode.MINOR: "minor",
+            Mode.DORIAN: "dorian",
+            Mode.PHRYGIAN: "phrygian",
+            Mode.LYDIAN: "lydian",
+            Mode.MIXOLYDIAN: "mixolydian",
+            Mode.LOCRIAN: "locrian",
+        }
+        return names[self]
+
+
+class AutomationCurve(IntEnum):
+    """Interpolation curve for scheduled mixer automation events."""
+
+    LINEAR = 0
+    EXPONENTIAL = 1
+    HOLD = 2
+    S_CURVE = 3
+
+    def __str__(self) -> str:
+        names = {
+            AutomationCurve.LINEAR: "linear",
+            AutomationCurve.EXPONENTIAL: "exponential",
+            AutomationCurve.HOLD: "hold",
+            AutomationCurve.S_CURVE: "s-curve",
+        }
+        return names[self]
+
+
+class PanLaw(IntEnum):
+    """Pan law applied to a mixer strip's pan position."""
+
+    CONST_3DB = 0
+    CONST_4_5DB = 1
+    CONST_6DB = 2
+    LINEAR_0DB = 3
+
+
+class MeterTap(IntEnum):
+    """Tap point at which a strip meter snapshot is read."""
+
+    PRE_FADER = 0
+    POST_FADER = 1
+
+
+class SendTiming(IntEnum):
+    """Pre/post-fader timing of a mixer strip send."""
+
+    PRE_FADER = 0
+    POST_FADER = 1
+
+
+class SectionType(IntEnum):
+    """Song-structure section type (mirrors sonare::SectionType ordinals)."""
+
+    INTRO = 0
+    VERSE = 1
+    PRE_CHORUS = 2
+    CHORUS = 3
+    BRIDGE = 4
+    INSTRUMENTAL = 5
+    OUTRO = 6
+    UNKNOWN = 7
+
+
+class EngineTelemetryType(IntEnum):
+    """Realtime engine telemetry record type."""
+
+    PROCESS_BLOCK = 0
+    ERROR = 1
+
+
+class EngineTelemetryError(IntEnum):
+    """Recoverable realtime engine error codes."""
+
+    NONE = 0
+    COMMAND_QUEUE_OVERFLOW = 1
+    PENDING_COMMAND_OVERFLOW = 2
+    BOUNDARY_OVERFLOW = 3
+    TELEMETRY_OVERFLOW = 4
+    CAPTURE_OVERFLOW = 5
+    MAX_BLOCK_EXCEEDED = 6
+    UNKNOWN_TARGET = 7
+    NON_REALTIME_SAFE_PARAMETER = 8
+    NOT_PREPARED = 9
+    NON_QUEUEABLE_COMMAND = 10
+    AUTOMATION_BIND_TARGET_OVERFLOW = 11
+    STALE_AUTOMATION_LANES = 12
+    SMOOTHED_PARAMETER_CAPACITY = 13
+
+
+class AutomationPointCurve(IntEnum):
+    """Breakpoint curve type used by engine automation lanes."""
+
+    HOLD = 0
+    LINEAR = 1
+    EXPONENTIAL = 2
+    S_CURVE = 3
+
+
+class KeyProfile(IntEnum):
+    """Key-profile family used by profile-correlation key detection."""
+
+    KRUMHANSL_SCHMUCKLER = 0
+    TEMPERLEY = 1
+    SHAATH = 2
+    FARALDO_EDMT = 3
+    FARALDO_EDMA = 4
+    FARALDO_EDMM = 5
+    BELLMAN_BUDGE = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +183,11 @@ class Key:
 
     @property
     def short_name(self) -> str:
-        return f"{self.root}{'' if self.mode == Mode.MAJOR else 'm'}"
+        if self.mode == Mode.MAJOR:
+            return f"{self.root}"
+        if self.mode == Mode.MINOR:
+            return f"{self.root}m"
+        return f"{self.root} {self.mode}"
 
     @property
     def shortName(self) -> str:  # noqa: N802
@@ -76,6 +195,14 @@ class Key:
 
     def __str__(self) -> str:
         return self.name
+
+
+@dataclass(frozen=True, slots=True)
+class KeyCandidate:
+    """Key candidate with raw profile correlation."""
+
+    key: Key
+    correlation: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +269,111 @@ class BpmAnalysisResult:
     candidates: list[BpmCandidate]
     autocorrelation: list[float]
     tempogram: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class AcousticResult:
+    """Room acoustic parameters from an impulse response."""
+
+    rt60: float
+    edt: float
+    c50: float
+    c80: float
+    d50: float
+    rt60_bands: list[float]
+    edt_bands: list[float]
+    c50_bands: list[float]
+    c80_bands: list[float]
+    confidence: float
+    is_blind: bool
+
+    @property
+    def rt60Bands(self) -> list[float]:  # noqa: N802
+        return self.rt60_bands
+
+    @property
+    def edtBands(self) -> list[float]:  # noqa: N802
+        return self.edt_bands
+
+    @property
+    def c50Bands(self) -> list[float]:  # noqa: N802
+        return self.c50_bands
+
+    @property
+    def c80Bands(self) -> list[float]:  # noqa: N802
+        return self.c80_bands
+
+    @property
+    def isBlind(self) -> bool:  # noqa: N802
+        return self.is_blind
+
+
+@dataclass(frozen=True, slots=True)
+class LufsResult:
+    """ITU-R BS.1770 / EBU R128 loudness metrics (offline meter)."""
+
+    integrated_lufs: float
+    momentary_lufs: float
+    short_term_lufs: float
+    loudness_range: float
+
+    @property
+    def integratedLufs(self) -> float:  # noqa: N802
+        return self.integrated_lufs
+
+    @property
+    def momentaryLufs(self) -> float:  # noqa: N802
+        return self.momentary_lufs
+
+    @property
+    def shortTermLufs(self) -> float:  # noqa: N802
+        return self.short_term_lufs
+
+    @property
+    def loudnessRange(self) -> float:  # noqa: N802
+        return self.loudness_range
+
+
+@dataclass(frozen=True, slots=True)
+class EqSpectrumSnapshot:
+    """Realtime equalizer spectrum snapshot."""
+
+    pre_left: list[float]
+    pre_right: list[float]
+    post_left: list[float]
+    post_right: list[float]
+    band_gain_db: list[float]
+    profile_db: list[float]
+    last_auto_gain_db: float
+    seq: int
+
+    @property
+    def preLeft(self) -> list[float]:  # noqa: N802
+        return self.pre_left
+
+    @property
+    def preRight(self) -> list[float]:  # noqa: N802
+        return self.pre_right
+
+    @property
+    def postLeft(self) -> list[float]:  # noqa: N802
+        return self.post_left
+
+    @property
+    def postRight(self) -> list[float]:  # noqa: N802
+        return self.post_right
+
+    @property
+    def bandGainDb(self) -> list[float]:  # noqa: N802
+        return self.band_gain_db
+
+    @property
+    def profileDb(self) -> list[float]:  # noqa: N802
+        return self.profile_db
+
+    @property
+    def lastAutoGainDb(self) -> float:  # noqa: N802
+        return self.last_auto_gain_db
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +490,7 @@ class Chord:
     start: float
     end: float
     confidence: float
+    bass: PitchClass | None = None
 
     @property
     def duration(self) -> float:
@@ -276,8 +509,17 @@ class Chord:
             "sus2": "sus2",
             "sus4": "sus4",
             "unknown": "",
+            "add9": "add9",
+            "minorAdd9": "madd9",
+            "dim7": "dim7",
+            "halfDim7": "m7b5",
+            "major9": "maj9",
+            "dominant9": "9",
+            "sus2Add4": "sus2add4",
         }
-        return f"{self.root}{suffixes.get(self.quality, '')}"
+        bass = self.root if self.bass is None else self.bass
+        slash = "" if bass == self.root else f"/{bass}"
+        return f"{self.root}{suffixes.get(self.quality, '')}{slash}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,3 +645,488 @@ class MasteringChainStereoResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class MixMeterSnapshot:
+    """Realtime mixer meter snapshot for one strip."""
+
+    peak_db_l: float
+    peak_db_r: float
+    rms_db_l: float
+    rms_db_r: float
+    correlation: float
+    mono_compat_width: float
+    mono_compat_peak: float
+    mono_compat_side_rms: float
+    likely_mono_compatible: bool
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    true_peak_db_l: float
+    true_peak_db_r: float
+    max_true_peak_db: float
+    seq: int
+
+
+@dataclass(frozen=True, slots=True)
+class GoniometerPoint:
+    """A single left/right sample pair for goniometer (vectorscope) display."""
+
+    left: float
+    right: float
+
+
+@dataclass(frozen=True, slots=True)
+class MixResult:
+    """Result of rendering a small stereo mixer scene."""
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    meters: list[MixMeterSnapshot]
+
+
+@dataclass(frozen=True, slots=True)
+class EngineTelemetry:
+    """Realtime engine telemetry event."""
+
+    type: EngineTelemetryType
+    error: EngineTelemetryError
+    render_frame: int
+    timeline_sample: int
+    audible_timeline_sample: int
+    graph_latency_samples_q8: int
+    value: int
+
+    @property
+    def renderFrame(self) -> int:  # noqa: N802
+        return self.render_frame
+
+    @property
+    def timelineSample(self) -> int:  # noqa: N802
+        return self.timeline_sample
+
+    @property
+    def audibleTimelineSample(self) -> int:  # noqa: N802
+        return self.audible_timeline_sample
+
+    @property
+    def graphLatencySamplesQ8(self) -> int:  # noqa: N802
+        return self.graph_latency_samples_q8
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterInfo:
+    """DAW parameter metadata for automation/introspection UIs."""
+
+    id: int
+    name: str
+    unit: str
+    min_value: float
+    max_value: float
+    default_value: float
+    rt_safe: bool
+    default_curve: AutomationPointCurve
+
+
+@dataclass(frozen=True, slots=True)
+class AutomationPoint:
+    """PPQ automation breakpoint."""
+
+    ppq: float
+    value: float
+    curve_to_next: AutomationPointCurve = AutomationPointCurve.LINEAR
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMarker:
+    """Timeline marker used by the realtime engine transport."""
+
+    id: int
+    ppq: float
+    name: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMetronomeConfig:
+    """Realtime engine metronome click configuration."""
+
+    enabled: bool = False
+    beat_gain: float = 0.35
+    accent_gain: float = 0.7
+    click_samples: int = 96
+
+
+@dataclass(frozen=True, slots=True)
+class EngineClip:
+    """Owned audio clip schedule for realtime engine playback."""
+
+    id: int
+    channels: list[list[float]]
+    start_ppq: float
+    length_samples: int | None = None
+    clip_offset_samples: int = 0
+    loop: bool = False
+    gain: float = 1.0
+    fade_in_samples: int = 0
+    fade_out_samples: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineCaptureStatus:
+    """Capture progress for the realtime engine recording sink."""
+
+    captured_frames: int
+    overflow_count: int
+    armed: bool
+    punch_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class EngineBounceOptions:
+    """Offline export options for the realtime engine."""
+
+    total_frames: int
+    block_size: int = 128
+    num_channels: int = 2
+    target_sample_rate: int = 48000
+    source_sample_rate: int = 48000
+    normalize_lufs: bool = False
+    target_lufs: float = -14.0
+    dither: int = 0
+    dither_bits: int = 16
+    dither_seed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineBounceResult:
+    """Interleaved offline export result from the realtime engine."""
+
+    interleaved: list[float]
+    frames: int
+    num_channels: int
+    sample_rate: int
+    integrated_lufs: float
+
+
+@dataclass(frozen=True, slots=True)
+class EngineFreezeOptions:
+    """Offline freeze options for replacing current engine output with a clip."""
+
+    total_frames: int
+    block_size: int = 128
+    num_channels: int = 2
+    clip_id: int = 1
+    start_ppq: float = 0.0
+    gain: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineFreezeResult:
+    """Result of freezing current engine output into a scheduled clip."""
+
+    clip_id: int
+    frames: int
+    num_channels: int
+
+
+class EngineGraphNodeType(IntEnum):
+    """Builtin processor node type for realtime engine graphs."""
+
+    PASS_THROUGH = 0
+    GAIN = 1
+
+
+class EngineGraphMix(IntEnum):
+    """Connection mix mode for realtime engine graphs."""
+
+    REPLACE = 0
+    ADD = 1
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphNode:
+    """Prepared realtime engine graph node."""
+
+    id: str
+    type: EngineGraphNodeType = EngineGraphNodeType.PASS_THROUGH
+    gain_db: float = 0.0
+    num_ports: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphConnection:
+    """Prepared realtime engine graph connection."""
+
+    source_node: str
+    source_port: int
+    dest_node: str
+    dest_port: int
+    mix: EngineGraphMix = EngineGraphMix.ADD
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphParameterBinding:
+    """Map an engine automation parameter id to a graph node processor."""
+
+    param_id: int
+    node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class EngineGraphSpec:
+    """Prepared realtime engine graph specification."""
+
+    nodes: list[EngineGraphNode]
+    connections: list[EngineGraphConnection]
+    input_node: str
+    output_node: str
+    num_channels: int = 2
+    parameter_bindings: list[EngineGraphParameterBinding] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MeterTelemetryRecord:
+    """A meter snapshot drained from the realtime engine's meter tap."""
+
+    target_id: int
+    render_frame: int
+    seq: int
+    peak_db_l: float
+    peak_db_r: float
+    rms_db_l: float
+    rms_db_r: float
+    true_peak_db_l: float
+    true_peak_db_r: float
+    max_true_peak_db: float
+    correlation: float
+    mono_compat_width: float
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    dropped_records: int
+
+
+@dataclass(frozen=True, slots=True)
+class TransportState:
+    """Read-only snapshot of the realtime engine transport state."""
+
+    playing: bool
+    looping: bool
+    render_frame: int
+    sample_position: int
+    ppq_position: float
+    bpm: float
+    loop_start_ppq: float
+    loop_end_ppq: float
+    sample_rate: float
+
+
+@dataclass(frozen=True, slots=True)
+class Section:
+    """A detected song-structure section."""
+
+    type: SectionType
+    start: float
+    end: float
+    energy_level: float
+    confidence: float
+
+    @property
+    def name(self) -> str:
+        names = {
+            SectionType.INTRO: "Intro",
+            SectionType.VERSE: "Verse",
+            SectionType.PRE_CHORUS: "PreChorus",
+            SectionType.CHORUS: "Chorus",
+            SectionType.BRIDGE: "Bridge",
+            SectionType.INSTRUMENTAL: "Instrumental",
+            SectionType.OUTRO: "Outro",
+            SectionType.UNKNOWN: "Unknown",
+        }
+        return names[self.type]
+
+
+@dataclass(frozen=True, slots=True)
+class SectionResult:
+    """Song-structure analysis result."""
+
+    sections: list[Section]
+
+
+@dataclass(frozen=True, slots=True)
+class MelodyPoint:
+    """A single point on a melody contour."""
+
+    time: float
+    frequency: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class MelodyResult:
+    """Melody contour analysis result."""
+
+    points: list[MelodyPoint]
+    pitch_range_octaves: float
+    pitch_stability: float
+    mean_frequency: float
+    vibrato_rate: float
+
+
+@dataclass(frozen=True, slots=True)
+class CqtResult:
+    """Constant-Q / Variable-Q transform magnitude result."""
+
+    n_bins: int
+    n_frames: int
+    hop_length: int
+    sample_rate: int
+    magnitude: list[float]
+    frequencies: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class InverseResult:
+    """Inverse spectrogram reconstruction result.
+
+    ``data`` is a row-major ``[rows x n_frames]`` matrix (``rows`` are the
+    reconstructed frequency/Mel bins).
+    """
+
+    rows: int
+    n_frames: int
+    data: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamConfig:
+    """Construction config for :class:`StreamAnalyzer`.
+
+    Defaults mirror the C ``sonare_stream_analyzer_config_default`` values
+    (real-time 44100 Hz / n_fft 2048).
+    """
+
+    sample_rate: int = 44100
+    n_fft: int = 2048
+    hop_length: int = 512
+    n_mels: int = 128
+    fmin: float = 0.0
+    fmax: float = 0.0
+    tuning_ref_hz: float = 440.0
+    compute_magnitude: bool = True
+    compute_mel: bool = True
+    compute_chroma: bool = True
+    compute_onset: bool = True
+    compute_spectral: bool = True
+    emit_every_n_frames: int = 1
+    magnitude_downsample: int = 1
+    key_update_interval_sec: float = 5.0
+    bpm_update_interval_sec: float = 10.0
+    window: int = 0
+    output_format: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class StreamFrames:
+    """Structure-of-arrays batch of analyzed frames from :class:`StreamAnalyzer`.
+
+    Matrix fields are flattened row-major ``[n_frames x stride]`` lists
+    (``mel`` stride is ``n_mels``, ``chroma`` stride is 12).
+    """
+
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[float]
+    chroma: list[float]
+    onset_strength: list[float]
+    rms_energy: list[float]
+    spectral_centroid: list[float]
+    spectral_flatness: list[float]
+    chord_root: list[int]
+    chord_quality: list[int]
+    chord_confidence: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamFramesU8:
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[int]
+    chroma: list[int]
+    onset_strength: list[int]
+    rms_energy: list[int]
+    spectral_centroid: list[int]
+    spectral_flatness: list[int]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamFramesI16:
+    n_frames: int
+    n_mels: int
+    timestamps: list[float]
+    mel: list[int]
+    chroma: list[int]
+    onset_strength: list[int]
+    rms_energy: list[int]
+    spectral_centroid: list[int]
+    spectral_flatness: list[int]
+
+
+@dataclass(frozen=True, slots=True)
+class StreamChordChange:
+    root: int
+    quality: int
+    start_time: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class StreamBarChord:
+    bar_index: int
+    root: int
+    quality: int
+    start_time: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class StreamPatternScore:
+    name: str
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
+class StreamStats:
+    """Progressive estimate and counters snapshot from :class:`StreamAnalyzer`."""
+
+    total_frames: int
+    total_samples: int
+    duration_seconds: float
+    bpm: float
+    bpm_confidence: float
+    bpm_candidate_count: int
+    key: int
+    key_minor: bool
+    key_confidence: float
+    chord_root: int
+    chord_quality: int
+    chord_confidence: float
+    chord_start_time: float
+    current_bar: int
+    bar_duration: float
+    chord_progression: list[StreamChordChange]
+    bar_chord_progression: list[StreamBarChord]
+    voted_pattern: list[StreamBarChord]
+    pattern_length: int
+    detected_pattern_name: str
+    detected_pattern_score: float
+    all_pattern_scores: list[StreamPatternScore]
+    accumulated_seconds: float
+    used_frames: int
+    updated: bool

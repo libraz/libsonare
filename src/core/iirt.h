@@ -24,12 +24,15 @@ struct IirtConfig {
   int midi_start = 21;
   /// @brief Filter quality factor (Q). Higher Q means narrower passbands.
   float Q = 25.0f;
-  /// @brief Filter order (each section is a biquad bandpass).
+  /// @brief Butterworth filter order. Must be even and >= 2. The bandpass for each
+  /// band is realized as a cascade of @c filter_order/2 biquad sections whose
+  /// per-section quality factors follow the maximally-flat Butterworth distribution.
   int filter_order = 2;
 };
 
 /// @brief Multi-rate energy time–frequency representation.
-/// @details Applies a bank of biquad bandpass filters tuned to the equal-tempered
+/// @details Applies a bank of order-@ref IirtConfig::filter_order Butterworth bandpass
+/// filters (each a cascade of biquad sections) tuned to the equal-tempered
 /// 12-TET scale, then computes the RMS of each band's response inside frames
 /// of length @ref IirtConfig::win_length spaced @ref IirtConfig::hop_length
 /// apart. Mirrors `librosa.iirt`.

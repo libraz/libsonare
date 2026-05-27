@@ -2,35 +2,274 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
+#include <limits>
 
 #include "analysis/chord_analyzer.h"
+#include "effects/hpss.h"
+#include "feature/spectral.h"
+#include "filters/iir.h"
 #include "util/exception.h"
 
 namespace sonare {
+
+namespace {
+
+constexpr float kHighpassFallbackCurrentConfidenceMax = 0.75f;
+constexpr float kHighpassFallbackConfidenceMin = 0.50f;
+
+std::string lowercase_ascii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  return value;
+}
+
+std::vector<Mode> candidate_modes_for_config(const KeyConfig& config) {
+  return config.modes.empty() ? std::vector<Mode>{Mode::Major, Mode::Minor} : config.modes;
+}
+
+struct KeyProfileMatch {
+  KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;
+  float score = -std::numeric_limits<float>::infinity();
+};
+
+std::vector<KeyCandidate> build_key_candidates(const std::array<float, 12>& mean_chroma,
+                                               const std::vector<Mode>& candidate_modes,
+                                               KeyProfileType profile_type) {
+  std::vector<KeyCandidate> candidates;
+  candidates.reserve(12 * candidate_modes.size());
+
+  KeyProfileBoosts major_boosts;
+  major_boosts.tonic = key_constants::kMajorTonicBoost;
+  major_boosts.third = key_constants::kMajorThirdBoost;
+  major_boosts.fifth = key_constants::kMajorFifthBoost;
+  major_boosts.seventh = 1.0f;
+
+  KeyProfileBoosts minor_boosts;
+  minor_boosts.tonic = key_constants::kMinorTonicBoost;
+  minor_boosts.third = key_constants::kMinorThirdBoost;
+  minor_boosts.fifth = key_constants::kMinorFifthBoost;
+  minor_boosts.seventh = key_constants::kMinorSeventhBoost;
+
+  for (int root = 0; root < 12; ++root) {
+    PitchClass pc = static_cast<PitchClass>(root);
+
+    for (Mode mode : candidate_modes) {
+      const KeyProfileBoosts& boosts = (mode == Mode::Major) ? major_boosts : minor_boosts;
+      auto profile = get_boosted_mode_profile(pc, mode, boosts, profile_type);
+      profile = normalize_profile(profile);
+
+      KeyCandidate candidate;
+      candidate.key.root = pc;
+      candidate.key.mode = mode;
+      candidate.key.confidence = 0.0f;
+      candidate.correlation = profile_correlation(mean_chroma, profile);
+      candidates.push_back(candidate);
+    }
+  }
+
+  std::sort(candidates.begin(), candidates.end(), [](const KeyCandidate& a, const KeyCandidate& b) {
+    return a.correlation > b.correlation;
+  });
+  return candidates;
+}
+
+float profile_candidate_score(const std::vector<KeyCandidate>& candidates) {
+  if (candidates.empty()) {
+    return -std::numeric_limits<float>::infinity();
+  }
+
+  const float best_corr = candidates[0].correlation;
+  const float second_corr = candidates.size() > 1 ? candidates[1].correlation : 0.0f;
+  const float gap = best_corr - second_corr;
+  return best_corr + 0.35f * gap;
+}
+
+KeyProfileMatch select_auto_profile_type(const std::array<float, 12>& mean_chroma,
+                                         const KeyConfig& config,
+                                         const std::vector<Mode>& candidate_modes) {
+  const KeyProfileType profile_types[] = {KeyProfileType::KrumhanslSchmuckler,
+                                          KeyProfileType::Shaath,
+                                          KeyProfileType::FaraldoEDMT,
+                                          KeyProfileType::FaraldoEDMA,
+                                          KeyProfileType::FaraldoEDMM,
+                                          KeyProfileType::BellmanBudge,
+                                          KeyProfileType::Temperley};
+
+  KeyProfileMatch ks_match;
+  KeyProfileMatch best_match;
+  for (KeyProfileType profile_type : profile_types) {
+    const auto candidates = build_key_candidates(mean_chroma, candidate_modes, profile_type);
+    KeyProfileMatch match;
+    match.profile_type = profile_type;
+    match.score = profile_candidate_score(candidates);
+    if (profile_type == KeyProfileType::KrumhanslSchmuckler) {
+      ks_match = match;
+      best_match = match;
+      continue;
+    }
+    if (match.score > best_match.score) {
+      best_match = match;
+    }
+  }
+
+  // Keep the historical KS behavior unless another profile gives clearly
+  // stronger chroma evidence. This avoids turning uncertain MIR cases into
+  // de-facto golden labels while still enabling auto profile selection.
+  const float switch_margin = config.modes.size() > 2 ? 0.015f : 0.025f;
+  if (best_match.profile_type != KeyProfileType::KrumhanslSchmuckler &&
+      best_match.score >= ks_match.score + switch_margin) {
+    return best_match;
+  }
+  return ks_match;
+}
+
+KeyProfileType resolve_profile_type(const KeyConfig& config) {
+  if (config.profile_type != KeyProfileType::KrumhanslSchmuckler) {
+    return config.profile_type;
+  }
+
+  const std::string hint = lowercase_ascii(config.genre_hint);
+  if (hint == "edm" || hint == "electronic" || hint == "dance") {
+    return KeyProfileType::FaraldoEDMA;
+  }
+  if (hint == "pop") {
+    return KeyProfileType::Shaath;
+  }
+  if (hint == "classical") {
+    return KeyProfileType::BellmanBudge;
+  }
+  if (hint == "jazz") {
+    return KeyProfileType::Temperley;
+  }
+
+  return KeyProfileType::KrumhanslSchmuckler;
+}
+
+bool uses_auto_audio_candidates(const KeyConfig& config) {
+  return lowercase_ascii(config.genre_hint) == "auto" && !config.use_hpss &&
+         !config.loudness_weighted;
+}
+
+std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const KeyConfig& config,
+                                                    bool use_hpss, bool loudness_weighted) {
+  SONARE_CHECK(config.high_pass_hz >= 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.high_pass_hz < static_cast<float>(audio.sample_rate()) * 0.5f,
+               ErrorCode::InvalidParameter);
+
+  ChromaConfig chroma_config;
+  chroma_config.n_fft = config.n_fft;
+  chroma_config.hop_length = config.hop_length;
+
+  StftConfig stft_config = chroma_config.to_stft_config();
+  Audio filtered_audio = audio;
+  if (config.high_pass_hz > 0.0f) {
+    const auto cascade = highpass_coeffs_4th(config.high_pass_hz, audio.sample_rate());
+    filtered_audio = Audio::from_vector(apply_cascade_filtfilt(audio.data(), audio.size(), cascade),
+                                        audio.sample_rate());
+  }
+
+  Audio analysis_audio =
+      use_hpss ? harmonic(filtered_audio, HpssConfig(), stft_config) : filtered_audio;
+  Chroma chroma = Chroma::compute(analysis_audio, chroma_config);
+
+  if (loudness_weighted) {
+    return chroma.weighted_mean_energy(rms_energy(analysis_audio, config.n_fft, config.hop_length));
+  }
+  return chroma.mean_energy();
+}
+
+float candidate_selection_score(const KeyAnalyzer& analyzer) { return analyzer.confidence(); }
+
+bool should_use_harmonic_highpass_fallback(const KeyAnalyzer& current,
+                                           const KeyAnalyzer& fallback) {
+  if (current.key().root == fallback.key().root && current.key().mode == fallback.key().mode) {
+    return false;
+  }
+
+  return current.confidence() <= kHighpassFallbackCurrentConfidenceMax &&
+         fallback.confidence() >= kHighpassFallbackConfidenceMin;
+}
+
+}  // namespace
 
 std::string Key::to_string() const {
   return std::string(pitch_class_name(root)) + " " + mode_name(mode);
 }
 
 std::string Key::to_short_string() const {
-  return std::string(pitch_class_name(root)) + (mode == Mode::Minor ? "m" : "");
+  if (mode == Mode::Major) {
+    return std::string(pitch_class_name(root));
+  }
+  if (mode == Mode::Minor) {
+    return std::string(pitch_class_name(root)) + "m";
+  }
+  return std::string(pitch_class_name(root)) + " " + mode_name(mode);
 }
 
 KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute chroma
-  ChromaConfig chroma_config;
-  chroma_config.n_fft = config.n_fft;
-  chroma_config.hop_length = config.hop_length;
+  if (uses_auto_audio_candidates(config)) {
+    struct AudioCandidate {
+      bool use_hpss;
+      bool loudness_weighted;
+      float selection_bias;
+    };
+    const AudioCandidate audio_candidates[] = {
+        {false, false, 0.0f},
+        {true, false, 0.0f},
+        {false, true, 0.0f},
+        // Harmonic loudness-weighted chroma is less overconfident on dense mixes,
+        // so let it win close auto-profile decisions without forcing it globally.
+        {true, true, 0.17f},
+    };
 
-  Chroma chroma = Chroma::compute(audio, chroma_config);
+    bool has_best = false;
+    float best_score = -std::numeric_limits<float>::infinity();
+    KeyAnalyzer best_analyzer(std::array<float, 12>{}, config);
 
-  // Get mean chroma
-  auto mean_energy = chroma.mean_energy();
-  mean_chroma_ = mean_energy;
+    for (const auto& candidate : audio_candidates) {
+      KeyConfig candidate_config = config;
+      candidate_config.genre_hint = "auto";
+      candidate_config.use_hpss = candidate.use_hpss;
+      candidate_config.loudness_weighted = candidate.loudness_weighted;
 
+      auto candidate_mean = compute_mean_chroma_for_audio(audio, config, candidate.use_hpss,
+                                                          candidate.loudness_weighted);
+      KeyAnalyzer analyzer(candidate_mean, candidate_config);
+      const float score = candidate_selection_score(analyzer) + candidate.selection_bias;
+      if (!has_best || score > best_score) {
+        has_best = true;
+        best_score = score;
+        best_analyzer = analyzer;
+      }
+    }
+
+    if (best_analyzer.confidence() <= kHighpassFallbackCurrentConfidenceMax) {
+      KeyConfig fallback_config = config;
+      fallback_config.genre_hint = "";
+      fallback_config.use_hpss = true;
+      fallback_config.loudness_weighted = false;
+      fallback_config.high_pass_hz =
+          fallback_config.high_pass_hz > 0.0f ? fallback_config.high_pass_hz : 60.0f;
+      fallback_config.profile_type = KeyProfileType::KrumhanslSchmuckler;
+      const auto fallback_mean = compute_mean_chroma_for_audio(audio, fallback_config, true, false);
+      KeyAnalyzer fallback_analyzer(fallback_mean, fallback_config);
+      if (should_use_harmonic_highpass_fallback(best_analyzer, fallback_analyzer)) {
+        best_analyzer = fallback_analyzer;
+      }
+    }
+
+    mean_chroma_ = best_analyzer.mean_chroma_;
+    candidates_ = best_analyzer.candidates_;
+    key_ = best_analyzer.key_;
+    return;
+  }
+
+  mean_chroma_ =
+      compute_mean_chroma_for_audio(audio, config, config.use_hpss, config.loudness_weighted);
   analyze();
 }
 
@@ -50,54 +289,16 @@ KeyAnalyzer::KeyAnalyzer(const std::array<float, 12>& mean_chroma, const KeyConf
 
 void KeyAnalyzer::analyze() {
   candidates_.clear();
-  candidates_.reserve(24);
 
-  // Create default multiplicative boosts for enhanced key detection
-  KeyProfileBoosts major_boosts;
-  major_boosts.tonic = key_constants::kMajorTonicBoost;
-  major_boosts.third = key_constants::kMajorThirdBoost;
-  major_boosts.fifth = key_constants::kMajorFifthBoost;
-  major_boosts.seventh = 1.0f;  // No boost for major seventh
-
-  KeyProfileBoosts minor_boosts;
-  minor_boosts.tonic = key_constants::kMinorTonicBoost;
-  minor_boosts.third = key_constants::kMinorThirdBoost;
-  minor_boosts.fifth = key_constants::kMinorFifthBoost;
-  minor_boosts.seventh = key_constants::kMinorSeventhBoost;
-
-  // Compute correlation with all 24 keys using boosted profiles
-  for (int root = 0; root < 12; ++root) {
-    PitchClass pc = static_cast<PitchClass>(root);
-
-    // Major key with boosted profile
-    auto major_profile = get_boosted_major_profile(pc, major_boosts, config_.profile_type);
-    major_profile = normalize_profile(major_profile);
-    float major_corr = profile_correlation(mean_chroma_, major_profile);
-
-    KeyCandidate major_candidate;
-    major_candidate.key.root = pc;
-    major_candidate.key.mode = Mode::Major;
-    major_candidate.key.confidence = 0.0f;  // Set later
-    major_candidate.correlation = major_corr;
-    candidates_.push_back(major_candidate);
-
-    // Minor key with boosted profile
-    auto minor_profile = get_boosted_minor_profile(pc, minor_boosts, config_.profile_type);
-    minor_profile = normalize_profile(minor_profile);
-    float minor_corr = profile_correlation(mean_chroma_, minor_profile);
-
-    KeyCandidate minor_candidate;
-    minor_candidate.key.root = pc;
-    minor_candidate.key.mode = Mode::Minor;
-    minor_candidate.key.confidence = 0.0f;
-    minor_candidate.correlation = minor_corr;
-    candidates_.push_back(minor_candidate);
+  const std::vector<Mode> candidate_modes = candidate_modes_for_config(config_);
+  KeyProfileType profile_type = resolve_profile_type(config_);
+  if (config_.profile_type == KeyProfileType::KrumhanslSchmuckler &&
+      lowercase_ascii(config_.genre_hint) == "auto") {
+    profile_type = select_auto_profile_type(mean_chroma_, config_, candidate_modes).profile_type;
   }
 
-  // Sort by correlation (descending)
-  std::sort(
-      candidates_.begin(), candidates_.end(),
-      [](const KeyCandidate& a, const KeyCandidate& b) { return a.correlation > b.correlation; });
+  // Compute correlation with all requested key/mode candidates using boosted profiles.
+  candidates_ = build_key_candidates(mean_chroma_, candidate_modes, profile_type);
 
   // Compute confidence scores
   // Confidence based on how much the best correlation stands out

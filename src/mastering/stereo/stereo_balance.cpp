@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::stereo {
@@ -30,6 +31,7 @@ void StereoBalance::prepare(double sample_rate, int max_block_size) {
 }
 
 void StereoBalance::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("StereoBalance must be prepared before processing");
   }
@@ -65,6 +67,16 @@ void StereoBalance::reset() {}
 void StereoBalance::set_config(const StereoBalanceConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool StereoBalance::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.balance = std::clamp(value, -1.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void StereoBalance::validate_config(const StereoBalanceConfig& config) {

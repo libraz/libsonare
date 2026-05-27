@@ -23,6 +23,10 @@ class StereoBalance : public common::ProcessorBase {
   void set_config(const StereoBalanceConfig& config);
   const StereoBalanceConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = balance (clamped to [-1, 1])
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const StereoBalanceConfig& config);
   static void gains(const StereoBalanceConfig& config, float& left, float& right);

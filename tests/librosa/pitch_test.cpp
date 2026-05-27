@@ -17,6 +17,18 @@ using namespace sonare;
 using namespace sonare::test;
 using Catch::Matchers::WithinRel;
 
+namespace {
+
+double cents_error(double detected, double reference) {
+  if (detected <= 0.0 || reference <= 0.0 || !std::isfinite(detected) ||
+      !std::isfinite(reference)) {
+    return std::numeric_limits<double>::infinity();
+  }
+  return 1200.0 * std::abs(std::log2(detected / reference));
+}
+
+}  // namespace
+
 TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/yin.json");
   const auto& data = json["data"].as_array();
@@ -28,6 +40,7 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
     float fmax = entry["fmax"].as_float();
     int frame_length = entry["frame_length"].as_int();
     int hop_length = entry["hop_length"].as_int();
+    bool center = entry.contains("center") ? entry["center"].as_bool() : true;
     const auto& ref_f0 = entry["f0"].as_array();
 
     if (signal_name == "440Hz_tone") {
@@ -46,6 +59,7 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
         config.hop_length = hop_length;
         config.fmin = fmin;
         config.fmax = fmax;
+        config.center = center;
 
         PitchResult result = yin_track(audio, config);
 
@@ -90,6 +104,7 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
         config.hop_length = hop_length;
         config.fmin = fmin;
         config.fmax = fmax;
+        config.center = center;
 
         PitchResult result = yin_track(audio, config);
 
@@ -119,5 +134,81 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
         REQUIRE(corr > 0.9f);
       }
     }
+  }
+}
+
+TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/pyin.json");
+  const auto& data = json["data"].as_array();
+
+  for (const auto& entry : data) {
+    std::string signal_name = entry["signal"].as_string();
+    int sr = entry["sr"].as_int();
+    float fmin = entry["fmin"].as_float();
+    float fmax = entry["fmax"].as_float();
+    int frame_length = entry["frame_length"].as_int();
+    int hop_length = entry["hop_length"].as_int();
+    bool center = entry.contains("center") ? entry["center"].as_bool() : true;
+    const auto& ref_f0 = entry["f0"].as_array();
+    const auto& ref_voiced = entry["voiced_flag"].as_array();
+    const double cents_tolerance = entry["acceptance"]["f0_cents_tolerance"].as_number();
+    const double max_mismatch_ratio =
+        entry["acceptance"]["max_voiced_flag_mismatch_ratio"].as_number();
+
+    std::vector<float> samples(static_cast<size_t>(sr));
+    if (signal_name == "440Hz_tone") {
+      for (size_t i = 0; i < samples.size(); ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(sr);
+        samples[i] = std::sin(kTwoPi * 440.0f * t);
+      }
+    } else if (signal_name == "chirp_200_800Hz") {
+      float chirp_fmin = 200.0f;
+      float chirp_fmax = 800.0f;
+      float duration = 1.0f;
+      for (size_t i = 0; i < samples.size(); ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(sr);
+        float phase =
+            kTwoPi * (chirp_fmin * t + 0.5f * (chirp_fmax - chirp_fmin) * t * t / duration);
+        samples[i] = std::sin(phase);
+      }
+    } else {
+      FAIL("unknown pYIN reference signal: " << signal_name);
+    }
+
+    Audio audio = Audio::from_buffer(samples.data(), samples.size(), sr);
+    PitchConfig config;
+    config.frame_length = frame_length;
+    config.hop_length = hop_length;
+    config.fmin = fmin;
+    config.fmax = fmax;
+    config.fill_na = true;
+    config.center = center;
+
+    PitchResult result = pyin(audio, config);
+    int compare_frames = std::min(result.n_frames(), static_cast<int>(ref_f0.size()));
+    CAPTURE(signal_name, result.n_frames(), ref_f0.size());
+    REQUIRE(compare_frames > 0);
+
+    int voiced_compared = 0;
+    int f0_within_tolerance = 0;
+    int voiced_mismatches = 0;
+    for (int i = 0; i < compare_frames; ++i) {
+      const bool expected_voiced = ref_voiced[static_cast<size_t>(i)].as_bool();
+      if (result.voiced_flag[static_cast<size_t>(i)] != expected_voiced) {
+        ++voiced_mismatches;
+      }
+      if (expected_voiced && result.voiced_flag[static_cast<size_t>(i)]) {
+        ++voiced_compared;
+        const double error = cents_error(result.f0[static_cast<size_t>(i)],
+                                         ref_f0[static_cast<size_t>(i)].as_number());
+        if (error <= cents_tolerance) {
+          ++f0_within_tolerance;
+        }
+      }
+    }
+
+    REQUIRE(static_cast<double>(voiced_mismatches) / compare_frames <= max_mismatch_ratio);
+    REQUIRE(voiced_compared > 0);
+    REQUIRE(static_cast<double>(f0_within_tolerance) / voiced_compared >= 0.99);
   }
 }

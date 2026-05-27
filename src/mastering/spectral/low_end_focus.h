@@ -21,6 +21,16 @@ class LowEndFocus : public common::ProcessorBase {
   void reset() override;
   void set_config(const LowEndFocusConfig& config);
 
+  // Automatable parameters (RT-safe: updates config in place; all coefficients
+  // are derived from config every block in process(), so changes take effect on
+  // the next block without resetting filter state). Ids follow the
+  // LowEndFocusConfig declaration order:
+  //   0 = cutoff_hz (clamped to > 0)
+  //   1 = width (clamped to [0, 2])
+  //   2 = subharmonic_amount (clamped to [0, 1])
+  //   3 = transient_tightness (clamped to [0, 1])
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const LowEndFocusConfig& config);
   LowEndFocusConfig config_{};

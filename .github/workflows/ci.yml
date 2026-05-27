@@ -22,6 +22,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' |
+            xargs -0 clang-format --dry-run --Werror
+
   lint:
     runs-on: ubuntu-latest
     defaults:
@@ -40,6 +54,61 @@ jobs:
       - run: yarn lint
 
   build-and-test:
+    name: Native C++ (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel
+
+  sanitizer:
+    name: ASan/UBSan (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang build-essential libeigen3-dev
+      - name: Configure with sanitizers
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -B build-sanitize \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DBUILD_CLI=OFF \
+            -DSONARE_WITH_FFMPEG=OFF \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build
+        run: cmake --build build-sanitize --parallel
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build-sanitize --output-on-failure --parallel
+      # Windows is intentionally excluded: MSVC sanitizer coverage differs from
+      # Clang/GCC ASan+UBSan and would make this gate inconsistent across OSes.
+
+  coverage-wasm:
+    name: Coverage + WASM
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -101,6 +170,30 @@ jobs:
       - name: Run C++ tests
         run: ctest --test-dir build --output-on-failure --parallel
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit optional fixture manifests
+        run: |
+          python -m py_compile \
+            tests/fixtures/json_safe.py \
+            tests/fixtures/audit_manifests.py \
+            tests/fixtures/run_optional_fixture_report.py \
+            tests/fixtures/evaluate_optional_fixture_targets.py \
+            tests/fixtures/compare_optional_fixture_reports.py
+          python tests/fixtures/audit_manifests.py
+      - name: Type-check Python stubs
+        working-directory: bindings/python
+        run: |
+          python -m pip install -e . mypy
+          python -m mypy --strict ../../tests/typing/python_smoke.py
+
+      - name: Type-check Node preset literals
+        working-directory: bindings/node
+        run: |
+          yarn install --immutable
+          yarn tsc --noEmit --ignoreConfig --strict --module NodeNext --moduleResolution NodeNext --target ES2022 --types node ../../tests/typing/node_smoke.ts
+
       - name: Generate coverage report
         run: |
           mkdir -p build/coverage
@@ -125,3 +218,44 @@ jobs:
       - name: Test WASM binding
         working-directory: bindings/wasm
         run: yarn test
+      - name: Report WASM size
+        run: |
+          mkdir -p build/reports
+          baseline_args=()
+          if [ -n "${WASM_BASELINE:-}" ]; then
+            baseline_args=(--wasm-baseline "$WASM_BASELINE")
+          fi
+          python tests/fixtures/run_optional_fixture_report.py \
+            --suite music \
+            --sonare-tests build/bin/sonare_tests \
+            --include-wasm-size \
+            --wasm-current bindings/wasm/dist/sonare.wasm \
+            "${baseline_args[@]}" \
+            --output build/reports/wasm-size-report.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/reports/wasm-size-report.json").read_text())
+          observations = [
+              item
+              for run in report["runs"]
+              for item in run.get("observations", [])
+              if item.get("metric") == "wasm_size"
+          ]
+          if len(observations) != 1:
+              raise SystemExit("expected exactly one wasm_size observation")
+          print(json.dumps(observations[0], sort_keys=True))
+          PY
+          if [ -n "${WASM_BASELINE:-}" ]; then
+            python tests/fixtures/evaluate_optional_fixture_targets.py \
+              build/reports/wasm-size-report.json \
+              --metrics wasm_size \
+              --require-metrics \
+              --output build/reports/wasm-size-evaluation.json
+          fi
+      - name: Upload WASM size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-size-report
+          path: build/reports/wasm-size-*.json

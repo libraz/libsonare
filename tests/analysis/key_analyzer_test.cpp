@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -29,7 +31,7 @@ Audio create_c_major_scale(int sr = 22050, float duration = 2.0f) {
     int start = static_cast<int>(n) * note_samples;
     for (int i = 0; i < note_samples && start + i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
-      samples[start + i] = 0.5f * std::sin(2.0f * M_PI * freqs[n] * t);
+      samples[start + i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freqs[n] * t);
     }
   }
 
@@ -52,7 +54,28 @@ Audio create_a_minor_scale(int sr = 22050, float duration = 2.0f) {
     int start = static_cast<int>(n) * note_samples;
     for (int i = 0; i < note_samples && start + i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
-      samples[start + i] = 0.5f * std::sin(2.0f * M_PI * freqs[n] * t);
+      samples[start + i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freqs[n] * t);
+    }
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+Audio create_low_bass_with_c_major(int sr = 22050, float duration = 2.0f) {
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  const std::vector<std::pair<float, float>> tones = {
+      {55.0f, 1.0f},     // A1 rumble/bass component
+      {261.63f, 0.35f},  // C4
+      {329.63f, 0.35f},  // E4
+      {392.00f, 0.35f},  // G4
+  };
+
+  for (const auto& [freq, amplitude] : tones) {
+    for (int i = 0; i < n_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sr);
+      samples[static_cast<size_t>(i)] +=
+          amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
     }
   }
 
@@ -169,6 +192,63 @@ TEST_CASE("KeyAnalyzer A minor scale", "[key_analyzer]") {
   bool is_c_major = (key.root == PitchClass::C && key.mode == Mode::Major);
 
   REQUIRE((is_a_minor || is_c_major));
+}
+
+TEST_CASE("KeyAnalyzer supports opt-in HPSS and loudness weighted chroma", "[key_analyzer]") {
+  Audio audio = create_c_major_scale();
+
+  KeyConfig config;
+  config.n_fft = 2048;
+  config.use_hpss = true;
+  config.loudness_weighted = true;
+
+  KeyAnalyzer analyzer(audio, config);
+  Key key = analyzer.key();
+
+  REQUIRE(key.confidence >= 0.0f);
+  REQUIRE(!analyzer.all_candidates().empty());
+}
+
+TEST_CASE("KeyAnalyzer applies configured high-pass before chroma analysis", "[key_analyzer]") {
+  const Audio audio = create_low_bass_with_c_major();
+
+  KeyConfig raw_config;
+  raw_config.genre_hint = "";
+  raw_config.n_fft = 4096;
+  raw_config.hop_length = 512;
+  KeyAnalyzer raw_analyzer(audio, raw_config);
+
+  KeyConfig highpass_config = raw_config;
+  highpass_config.high_pass_hz = 120.0f;
+  KeyAnalyzer highpass_analyzer(audio, highpass_config);
+
+  const auto& raw = raw_analyzer.mean_chroma();
+  const auto& highpassed = highpass_analyzer.mean_chroma();
+  const int a = static_cast<int>(PitchClass::A);
+  const int c = static_cast<int>(PitchClass::C);
+
+  REQUIRE(highpassed[a] < raw[a]);
+  REQUIRE(highpassed[c] >= raw[c] * 0.5f);
+}
+
+TEST_CASE("KeyAnalyzer auto genre compares audio chroma variants", "[key_analyzer]") {
+  Audio audio = create_c_major_scale();
+
+  KeyConfig raw_config;
+  raw_config.genre_hint = "";
+  raw_config.use_hpss = false;
+  raw_config.loudness_weighted = false;
+
+  KeyConfig auto_config;
+  auto_config.genre_hint = "auto";
+  auto_config.use_hpss = false;
+  auto_config.loudness_weighted = false;
+
+  KeyAnalyzer raw_analyzer(audio, raw_config);
+  KeyAnalyzer auto_analyzer(audio, auto_config);
+
+  REQUIRE(!auto_analyzer.all_candidates().empty());
+  REQUIRE(auto_analyzer.confidence() >= raw_analyzer.confidence());
 }
 
 TEST_CASE("KeyAnalyzer candidates", "[key_analyzer]") {

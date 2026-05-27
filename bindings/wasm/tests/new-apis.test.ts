@@ -1,0 +1,543 @@
+/**
+ * Tests for the v1.2 feature additions exposed in WASM:
+ * onset envelope, Fourier tempogram, tempogram ratio, NNLS chroma,
+ * and EBU R128 LUFS metering.
+ */
+
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  Audio,
+  analyzeMelody,
+  analyzeSections,
+  cqt,
+  fourierTempogram,
+  init,
+  lufs,
+  Mixer,
+  melSpectrogram,
+  melToAudio,
+  melToStft,
+  mfcc,
+  mfccToAudio,
+  mixerScenePresetJson,
+  mixingScenePresetJson,
+  momentaryLufs,
+  nnlsChroma,
+  noteStretch,
+  onsetEnvelope,
+  pitchCorrectToMidi,
+  plp,
+  RealtimeEngine,
+  StreamingEqualizer,
+  shortTermLufs,
+  tempogram,
+  tempogramRatio,
+  voiceChange,
+  vqt,
+} from '../dist/index.js';
+
+const SR = 22050;
+
+function generateSine(freq: number, sr: number, duration: number, amp = 0.5): Float32Array {
+  const n = Math.floor(sr * duration);
+  const samples = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    samples[i] = amp * Math.sin((2 * Math.PI * freq * i) / sr);
+  }
+  return samples;
+}
+
+function allFinite(arr: Float32Array | number[]): boolean {
+  for (const x of arr) {
+    if (!Number.isFinite(x)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+describe('v1.2 feature additions (WASM)', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const signal = generateSine(220, SR, 3.0);
+
+  describe('onset envelope', () => {
+    it('returns a finite envelope', () => {
+      const env = onsetEnvelope(signal, SR);
+      expect(env.length).toBeGreaterThan(0);
+      expect(allFinite(env)).toBe(true);
+    });
+  });
+
+  describe('tempogram family', () => {
+    it('Fourier tempogram returns an [nBins x nFrames] matrix', () => {
+      const env = onsetEnvelope(signal, SR);
+      const ft = fourierTempogram(env, SR);
+      expect(ft.nBins).toBeGreaterThan(0);
+      expect(ft.nFrames).toBeGreaterThan(0);
+      expect(ft.data.length).toBe(ft.nBins * ft.nFrames);
+      expect(allFinite(ft.data)).toBe(true);
+    });
+
+    it('tempogram ratio returns one value per default factor', () => {
+      const env = onsetEnvelope(signal, SR);
+      const tg = tempogram(env, SR);
+      const ratios = tempogramRatio(tg.data, tg.winLength, SR);
+      expect(ratios.length).toBe(5);
+      expect(allFinite(ratios)).toBe(true);
+    });
+
+    it('plp returns a pulse curve aligned to the envelope', () => {
+      const env = onsetEnvelope(signal, SR);
+      const pulse = plp(env, SR);
+      expect(pulse.length).toBe(env.length);
+      expect(allFinite(pulse)).toBe(true);
+    });
+  });
+
+  describe('NNLS chroma', () => {
+    it('returns a 12 x nFrames matrix', () => {
+      const result = nnlsChroma(signal, SR);
+      expect(result.nChroma).toBe(12);
+      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.data.length).toBe(result.nChroma * result.nFrames);
+      expect(allFinite(result.data)).toBe(true);
+    });
+  });
+
+  describe('LUFS metering', () => {
+    it('returns finite integrated/momentary/short-term/range values', () => {
+      const result = lufs(signal, SR);
+      expect(Number.isFinite(result.integratedLufs)).toBe(true);
+      expect(Number.isFinite(result.momentaryLufs)).toBe(true);
+      expect(Number.isFinite(result.shortTermLufs)).toBe(true);
+      expect(Number.isFinite(result.loudnessRange)).toBe(true);
+    });
+
+    it('reports a louder signal as higher integrated LUFS', () => {
+      const quiet = lufs(generateSine(220, SR, 3.0, 0.1), SR);
+      const loud = lufs(generateSine(220, SR, 3.0, 0.8), SR);
+      expect(loud.integratedLufs).toBeGreaterThan(quiet.integratedLufs);
+    });
+
+    it('momentary/short-term series are non-empty and finite', () => {
+      expect(momentaryLufs(signal, SR).length).toBeGreaterThan(0);
+      expect(shortTermLufs(signal, SR).length).toBeGreaterThan(0);
+      expect(allFinite(momentaryLufs(signal, SR))).toBe(true);
+    });
+  });
+
+  describe('editing DSP (pitch correct / note stretch / voice change)', () => {
+    it('pitchCorrectToMidi returns a non-empty finite buffer', () => {
+      const out = pitchCorrectToMidi(signal, SR, 57, 60);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBeGreaterThan(0);
+      expect(allFinite(out)).toBe(true);
+    });
+
+    it('noteStretch returns a non-empty finite buffer', () => {
+      const out = noteStretch(signal, SR, 0, signal.length, 1.5);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBeGreaterThan(0);
+      expect(allFinite(out)).toBe(true);
+    });
+
+    it('voiceChange returns a non-empty finite buffer', () => {
+      const out = voiceChange(signal, SR, 2, 1.1);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBeGreaterThan(0);
+      expect(allFinite(out)).toBe(true);
+    });
+
+    it('exposes the editing methods on the Audio class', () => {
+      const audio = Audio.fromBuffer(signal, SR);
+      expect(audio.pitchCorrectToMidi(57, 60).length).toBeGreaterThan(0);
+      expect(audio.noteStretch(0, signal.length, 1.5).length).toBeGreaterThan(0);
+      expect(audio.voiceChange(2, 1.1).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Mixer (scene-based routing)', () => {
+    const BLOCK = 512;
+
+    function blockEnergy(r: { left: Float32Array; right: Float32Array }): number {
+      let sum = 0;
+      for (let i = 0; i < r.left.length; i++) {
+        sum += r.left[i] * r.left[i] + r.right[i] * r.right[i];
+      }
+      return sum;
+    }
+
+    it('routes a send through reverb and back to master', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      mixer.compile();
+
+      // Strip 0 = vocal, strip 1 = reverb return. Impulse into vocal, silence into return.
+      const vocalL = new Float32Array(BLOCK);
+      const vocalR = new Float32Array(BLOCK);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+      const silentL = new Float32Array(BLOCK);
+      const silentR = new Float32Array(BLOCK);
+
+      const energies: number[] = [];
+      for (let block = 0; block < 16; block++) {
+        const out = mixer.processStereo([vocalL, silentL], [vocalR, silentR]);
+        energies.push(blockEnergy(out));
+        vocalL[0] = 0.0;
+        vocalR[0] = 0.0;
+      }
+
+      // Block 0 carries the dry hit; later blocks carry the reverb tail.
+      expect(energies[0]).toBeGreaterThan(1e-6);
+      const tail = energies.slice(4).reduce((a, b) => a + b, 0);
+      expect(tail).toBeGreaterThan(1e-6);
+
+      mixer.delete();
+    });
+
+    it('schedules insert-parameter automation without throwing', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      mixer.compile();
+
+      expect(mixer.stripCount()).toBeGreaterThan(0);
+
+      // Strip 0 (vocal) has pre-fader inserts (insert 0 = eq.parametric).
+      // Schedule a linear ramp on param 0 over the first second of audio.
+      expect(() => mixer.scheduleInsertAutomation(0, 0, 0, 0, 0.0, 'linear')).not.toThrow();
+      expect(() =>
+        mixer.scheduleInsertAutomation(0, 0, 0, 48000, 1.0, 'exponential'),
+      ).not.toThrow();
+
+      // Out-of-range strip index must throw.
+      expect(() => mixer.scheduleInsertAutomation(999, 0, 0, 0, 0.0)).toThrow();
+
+      // Processing after scheduling still produces output.
+      const vocalL = new Float32Array(BLOCK);
+      const vocalR = new Float32Array(BLOCK);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+      const silentL = new Float32Array(BLOCK);
+      const silentR = new Float32Array(BLOCK);
+      const out = mixer.processStereo([vocalL, silentL], [vocalR, silentR]);
+      expect(blockEnergy(out)).toBeGreaterThan(0);
+
+      mixer.delete();
+    });
+
+    it('round-trips the scene topology to JSON', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      const scene = mixer.toSceneJson();
+      expect(scene).toContain('"vocal-verb"');
+      expect(scene).toContain('"vocal-verb-return"');
+      expect(scene).toContain('"destinationBusId":"vocal-verb"');
+
+      const restored = Mixer.fromSceneJson(scene, 48000, BLOCK);
+      restored.compile();
+      restored.delete();
+      mixer.delete();
+    });
+
+    it('processes 128-sample render quanta through the single WASM module', () => {
+      const quantum = 128;
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, quantum);
+      mixer.compile();
+
+      const vocalL = new Float32Array(quantum);
+      const vocalR = new Float32Array(quantum);
+      const returnL = new Float32Array(quantum);
+      const returnR = new Float32Array(quantum);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+
+      const out = mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
+      expect(out.left.length).toBe(quantum);
+      expect(out.right.length).toBe(quantum);
+      expect(blockEnergy(out)).toBeGreaterThan(0);
+
+      mixer.delete();
+    });
+
+    it('can render a block into caller-owned output arrays', () => {
+      const quantum = 128;
+      const scene = mixingScenePresetJson('vocalReverbSend');
+      const offline = Mixer.fromSceneJson(scene, 48000, quantum);
+      const inplace = Mixer.fromSceneJson(scene, 48000, quantum);
+      offline.compile();
+      inplace.compile();
+
+      const vocalL = new Float32Array(quantum);
+      const vocalR = new Float32Array(quantum);
+      const returnL = new Float32Array(quantum);
+      const returnR = new Float32Array(quantum);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+
+      const expected = offline.processStereo([vocalL, returnL], [vocalR, returnR]);
+      const outL = new Float32Array(quantum);
+      const outR = new Float32Array(quantum);
+      inplace.processStereoInto([vocalL, returnL], [vocalR, returnR], outL, outR);
+
+      expect(Array.from(outL)).toEqual(Array.from(expected.left));
+      expect(Array.from(outR)).toEqual(Array.from(expected.right));
+
+      offline.delete();
+      inplace.delete();
+    });
+
+    it('can render through reusable WASM-heap realtime buffers', () => {
+      const quantum = 128;
+      const scene = mixingScenePresetJson('vocalReverbSend');
+      const offline = Mixer.fromSceneJson(scene, 48000, quantum);
+      const realtime = Mixer.fromSceneJson(scene, 48000, quantum);
+      offline.compile();
+      realtime.compile();
+
+      const vocalL = new Float32Array(quantum);
+      const vocalR = new Float32Array(quantum);
+      const returnL = new Float32Array(quantum);
+      const returnR = new Float32Array(quantum);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+
+      const expected = offline.processStereo([vocalL, returnL], [vocalR, returnR]);
+      const buffer = realtime.createRealtimeBuffer();
+      buffer.leftInputs[0].set(vocalL);
+      buffer.rightInputs[0].set(vocalR);
+      buffer.leftInputs[1].set(returnL);
+      buffer.rightInputs[1].set(returnR);
+      buffer.process();
+
+      expect(Array.from(buffer.outLeft)).toEqual(Array.from(expected.left));
+      expect(Array.from(buffer.outRight)).toEqual(Array.from(expected.right));
+
+      offline.delete();
+      realtime.delete();
+    });
+
+    it('exposes live mixer controls and meter readers', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      const vocalIndex = mixer.stripById('vocal');
+      expect(vocalIndex).toBe(0);
+      // stripById returns number | null; an unknown id resolves to null.
+      expect(mixer.stripById('definitely-not-a-strip')).toBeNull();
+      const vocal = vocalIndex as number;
+
+      mixer.setSoloSafe(vocal, true);
+      mixer.setSoloed(vocal, false);
+      mixer.setPolarityInvert(vocal, false, true);
+      mixer.setPanLaw(vocal, 'linear0dB');
+      mixer.setChannelDelaySamples(vocal, 0);
+      mixer.setVcaOffsetDb(vocal, -1);
+      mixer.setDualPan(vocal, -0.2, 0.2);
+      const sendIndex = mixer.addSend(vocal, 'wasm-extra-send', 'vocal-verb', -24, 'postFader');
+      mixer.setSendDb(vocal, sendIndex, -18);
+      mixer.scheduleFaderAutomation(vocal, 0, -6, 'linear');
+      mixer.schedulePanAutomation(vocal, 0, 0, 'linear');
+      mixer.scheduleWidthAutomation(vocal, 0, 1, 'linear');
+      mixer.scheduleSendAutomation(vocal, sendIndex, 0, -12, 'linear');
+      mixer.compile();
+
+      const vocalL = new Float32Array(BLOCK);
+      const vocalR = new Float32Array(BLOCK);
+      const returnL = new Float32Array(BLOCK);
+      const returnR = new Float32Array(BLOCK);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+      const out = mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
+      expect(blockEnergy(out)).toBeGreaterThan(0);
+
+      expect(Number.isFinite(mixer.meterTap(vocal, 'preFader').peakDbL)).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter(vocal, 'postFader').rmsDbL)).toBe(true);
+      expect(mixer.readGoniometerLatest(vocal, 8).length).toBeGreaterThan(0);
+
+      mixer.delete();
+    });
+  });
+
+  describe('Audio class methods', () => {
+    it('exposes onsetEnvelope/nnlsChroma/lufs/momentaryLufs/shortTermLufs', () => {
+      const audio = Audio.fromBuffer(signal, SR);
+      expect(audio.onsetEnvelope().length).toBeGreaterThan(0);
+      expect(audio.nnlsChroma().nChroma).toBe(12);
+      expect(Number.isFinite(audio.lufs().integratedLufs)).toBe(true);
+      expect(audio.momentaryLufs().length).toBeGreaterThan(0);
+      expect(audio.shortTermLufs().length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('RealtimeEngine parameter/transport parity', () => {
+    it('honors tunable queue capacities and reads back transport state', () => {
+      const engine = new RealtimeEngine(48000, 128, 32, 32);
+      engine.setTempo(120);
+      engine.addParameter({
+        id: 5,
+        name: 'gain',
+        unit: 'dB',
+        minValue: -60,
+        maxValue: 12,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 1,
+      });
+
+      // Sample-accurate + smoothed parameter changes queue without throwing.
+      expect(() => engine.setParameter(5, 6)).not.toThrow();
+      expect(() => engine.setParameterSmoothed(5, -3, -1)).not.toThrow();
+
+      engine.play();
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+
+      const state = engine.getTransportState();
+      expect(state.playing).toBe(true);
+      expect(state.sampleRate).toBe(48000);
+      expect(state.bpm).toBe(120);
+      expect(state.samplePosition).toBe(128);
+      engine.destroy();
+    });
+
+    it('seeks markers at a scheduled render frame', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(60);
+      engine.setMarkers([{ id: 9, ppq: 4, name: 'verse' }]);
+      // Seek to marker 9 (4 quarter notes at 60bpm = 4s = 192000 samples),
+      // scheduled at the head of the block.
+      expect(() => engine.seekMarker(9, -1)).not.toThrow();
+      engine.play();
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+      const state = engine.getTransportState();
+      expect(state.samplePosition).toBe(192000 + 128);
+      engine.destroy();
+    });
+  });
+
+  describe('StreamingEqualizer sidechain parity', () => {
+    it('accepts mono/stereo sidechain and clears it', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 128 });
+      try {
+        const key = new Float32Array(128).fill(0.5);
+        expect(() => eq.setSidechainMono(key)).not.toThrow();
+        expect(() => eq.setSidechainStereo(key, key)).not.toThrow();
+        expect(() => eq.clearSidechain()).not.toThrow();
+        // Mismatched stereo lengths must throw before reaching WASM.
+        expect(() => eq.setSidechainStereo(key, new Float32Array(64))).toThrow();
+        // Processing still works after a sidechain round-trip.
+        const out = eq.processMono(new Float32Array(128).fill(0.25));
+        expect(out.length).toBe(128);
+      } finally {
+        eq.delete();
+      }
+    });
+  });
+
+  describe('Mixer imperative topology', () => {
+    it('adds/removes buses and VCA groups and reports counts', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 128);
+      try {
+        const busesBefore = mixer.busCount();
+        mixer.addBus('parallel-comp', 'aux');
+        expect(mixer.busCount()).toBe(busesBefore + 1);
+        mixer.removeBus('parallel-comp');
+        expect(mixer.busCount()).toBe(busesBefore);
+
+        const vcasBefore = mixer.vcaGroupCount();
+        mixer.addVcaGroup('all', -3, ['vocal']);
+        expect(mixer.vcaGroupCount()).toBe(vcasBefore + 1);
+        mixer.removeVcaGroup('all');
+        expect(mixer.vcaGroupCount()).toBe(vcasBefore);
+
+        mixer.compile();
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('mixerScenePresetJson aliases the canonical preset JSON', () => {
+      const json = mixerScenePresetJson('vocalReverbSend');
+      expect(json).toContain('"vocal-verb"');
+    });
+  });
+
+  describe('sections / melody / CQT / VQT parity', () => {
+    it('passes fmin/fmax through inverse Mel and MFCC paths', () => {
+      const tone = generateSine(440, SR, 0.5);
+      const nFft = 1024;
+      const hop = 256;
+      const nMels = 40;
+      const fmin = 80;
+      const fmax = 4000;
+
+      const mel = melSpectrogram(tone, SR, nFft, hop, nMels);
+      const stft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, hop, fmin, fmax);
+      expect(stft.nBins).toBe(nFft / 2 + 1);
+      expect(stft.nFrames).toBe(mel.nFrames);
+      expect(allFinite(stft.power)).toBe(true);
+
+      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, 2, fmin, fmax);
+      expect(audio.length).toBeGreaterThan(0);
+      expect(allFinite(audio)).toBe(true);
+
+      const coeffs = mfcc(tone, SR, nFft, hop, nMels, 13);
+      const mfccAudio = mfccToAudio(
+        coeffs.coefficients,
+        13,
+        coeffs.nFrames,
+        nMels,
+        SR,
+        nFft,
+        hop,
+        2,
+        fmin,
+        fmax,
+      );
+      expect(mfccAudio.length).toBeGreaterThan(0);
+      expect(allFinite(mfccAudio)).toBe(true);
+    });
+
+    it('computes CQT and VQT magnitude grids', () => {
+      const cqtResult = cqt(signal, SR, 512, 32.7, 24, 12);
+      expect(cqtResult.nBins).toBe(24);
+      expect(cqtResult.nFrames).toBeGreaterThan(0);
+      expect(cqtResult.frequencies.length).toBe(24);
+      expect(cqtResult.magnitude.length).toBe(cqtResult.nBins * cqtResult.nFrames);
+      expect(cqtResult.sampleRate).toBe(SR);
+      expect(allFinite(cqtResult.magnitude)).toBe(true);
+
+      const vqtResult = vqt(signal, SR, 512, 32.7, 24, 12, 10);
+      expect(vqtResult.nBins).toBe(24);
+      expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
+      expect(allFinite(vqtResult.magnitude)).toBe(true);
+    });
+
+    it('analyzes melody contour with summary stats', () => {
+      // 440 Hz tone is squarely within the default melody fmin/fmax range.
+      const tone = generateSine(440, SR, 1.0);
+      const melody = analyzeMelody(tone, SR);
+      expect(Array.isArray(melody.points)).toBe(true);
+      expect(melody.points.length).toBeGreaterThan(0);
+      expect(Number.isFinite(melody.meanFrequency)).toBe(true);
+      expect(Number.isFinite(melody.pitchRangeOctaves)).toBe(true);
+      expect(Number.isFinite(melody.pitchStability)).toBe(true);
+      expect(Number.isFinite(melody.vibratoRate)).toBe(true);
+      const first = melody.points[0];
+      expect(Number.isFinite(first.time)).toBe(true);
+      expect(Number.isFinite(first.frequency)).toBe(true);
+      expect(Number.isFinite(first.confidence)).toBe(true);
+    });
+
+    it('analyzes song-structure sections', () => {
+      const sections = analyzeSections(signal, SR);
+      expect(Array.isArray(sections)).toBe(true);
+      for (const section of sections) {
+        expect(typeof section.name).toBe('string');
+        expect(Number.isFinite(section.start)).toBe(true);
+        expect(Number.isFinite(section.end)).toBe(true);
+        expect(section.end).toBeGreaterThanOrEqual(section.start);
+        expect(Number.isFinite(section.energyLevel)).toBe(true);
+        expect(Number.isFinite(section.confidence)).toBe(true);
+      }
+    });
+  });
+});

@@ -20,6 +20,12 @@ class TiltEq : public common::ProcessorBase {
   float tilt_db() const { return tilt_db_; }
   float pivot_hz() const { return pivot_hz_; }
 
+  // Automatable parameters (RT-safe: recomputes the two shelf biquads in place
+  // via update_bands(), preserves filter state):
+  //   0 = tilt_db (positive boosts highs / cuts lows; signed)
+  //   1 = pivot_hz (clamped to (0 Hz, Nyquist))
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   void update_bands();
 

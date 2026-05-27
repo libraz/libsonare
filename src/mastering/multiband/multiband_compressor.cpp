@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::multiband {
 
 MultibandCompressor::MultibandCompressor(MultibandCompressorConfig config)
@@ -23,6 +25,9 @@ void MultibandCompressor::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
+  // Pre-size split scratch for stereo so the steady-state audio path is
+  // allocation-free; it is grown on demand only if a wider block arrives.
+  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
   for (auto& compressor : compressors_) {
     compressor.prepare(sample_rate_, max_block_size_);
   }
@@ -30,6 +35,7 @@ void MultibandCompressor::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandCompressor::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandCompressor must be prepared before processing");
   }
@@ -48,23 +54,20 @@ void MultibandCompressor::process(float* const* channels, int num_channels, int 
     }
   }
 
-  auto split = crossover_.split(channels, num_channels, num_samples);
-  for (int band = 0; band < split.num_bands(); ++band) {
-    std::vector<float*> band_channels(static_cast<size_t>(num_channels));
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_channels[static_cast<size_t>(ch)] =
-          split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)].data();
-    }
-    compressors_[static_cast<size_t>(band)].process(band_channels.data(), num_channels,
-                                                    num_samples);
+  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  crossover_.split_into(channels, num_channels, num_samples, scratch_);
+  const int num_bands = scratch_.num_bands();
+  for (int band = 0; band < num_bands; ++band) {
+    compressors_[static_cast<size_t>(band)].process(
+        scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         compressors_[static_cast<size_t>(band)].last_gain_reduction_db();
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {
     std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < split.num_bands(); ++band) {
-      const auto& band_samples = split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+    for (int band = 0; band < num_bands; ++band) {
+      const auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] += band_samples[static_cast<size_t>(i)];
       }
@@ -88,6 +91,21 @@ void MultibandCompressor::set_config(const MultibandCompressorConfig& config) {
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
+}
+
+bool MultibandCompressor::set_parameter(unsigned int param_id, float value) {
+  const unsigned int band = param_id / kBandStride;
+  if (band >= compressors_.size()) {
+    return false;
+  }
+  const unsigned int band_param = param_id % kBandStride;
+  // Keep config_ in sync so config() and subsequent set_config() observe the
+  // automated value; the sub-processor recomputes coefficients in place.
+  if (compressors_[band].set_parameter(band_param, value)) {
+    config_.bands[band] = compressors_[band].config();
+    return true;
+  }
+  return false;
 }
 
 void MultibandCompressor::validate_config(const MultibandCompressorConfig& config) {

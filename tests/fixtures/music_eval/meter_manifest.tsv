@@ -1,0 +1,4 @@
+# dataset	file	expected_numerator	expected_denominator	min_confidence
+# Optional extra columns after min_confidence: confidence	report_only	notes
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# are configured or when referenced audio is not present.

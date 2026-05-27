@@ -26,6 +26,19 @@ class SpectralShaper : public common::ProcessorBase {
   void set_config(const SpectralShaperConfig& config);
   float last_reduction_db() const { return last_reduction_db_; }
 
+  // Automatable parameters (RT-safe: updates config in place; per-block
+  // coefficients are derived in process(), and attack/release re-prepare the
+  // envelope followers without resetting their state). Ids follow the
+  // SpectralShaperConfig declaration order:
+  //   0 = threshold (clamped to >= 0)
+  //   1 = amount (clamped to [0, 1])
+  //   2 = frequency_hz (clamped to (0, high_frequency_hz))
+  //   3 = high_frequency_hz (clamped to > frequency_hz)
+  //   4 = attack_ms (clamped to >= 0; re-prepares envelope followers)
+  //   5 = release_ms (clamped to >= 0; re-prepares envelope followers)
+  //   6 = range_db (clamped to >= 0)
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const SpectralShaperConfig& config);
   SpectralShaperConfig config_{};

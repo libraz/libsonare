@@ -7,13 +7,13 @@
 #include <limits>
 #include <vector>
 
-#include "analysis/meter/lufs.h"
-#include "analysis/meter/true_peak.h"
 #include "mastering/maximizer/adaptive_release.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/soft_knee_max.h"
 #include "mastering/maximizer/streaming_preview.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "metering/lufs.h"
+#include "metering/true_peak.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -82,7 +82,7 @@ TEST_CASE("TruePeakLimiter catches sinc-estimated inter-sample overs", "[masteri
   process(limiter, signal);
 
   const Audio limited = Audio::from_buffer(signal.data(), signal.size(), 48000);
-  REQUIRE(analysis::meter::true_peak_db(limited, 8) <= -0.99f);
+  REQUIRE(metering::true_peak_db(limited, 8) <= -0.99f);
 }
 
 TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
@@ -97,15 +97,17 @@ TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
   REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
 }
 
-TEST_CASE("TruePeakLimiter reports lookahead plus true-peak filter latency",
-          "[mastering][maximizer]") {
+TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][maximizer]") {
   TruePeakLimiter limiter({-1.0f, 1.0f, 10.0f, 4});
   limiter.prepare(48000.0, 64);
 
-  REQUIRE(limiter.latency_samples() == 54);
+  // Signal-path latency equals lookahead_samples_ only (1ms @ 48kHz = 48).
+  // The centered upsampler/downsampler FIRs add zero group delay, so the
+  // true-peak filter latency is NOT part of the reported signal-path delay.
+  REQUIRE(limiter.latency_samples() == 48);
 
   limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
-  REQUIRE(limiter.latency_samples() == 54);
+  REQUIRE(limiter.latency_samples() == 48);
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
 
@@ -123,7 +125,7 @@ TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
   }
 
   const Audio limited = Audio::from_buffer(split_signal.data(), split_signal.size(), 48000);
-  REQUIRE(analysis::meter::true_peak_db(limited, 4) <= -5.9f);
+  REQUIRE(metering::true_peak_db(limited, 4) <= -5.9f);
   REQUIRE(split.last_gain_reduction_db() < -1.0f);
 }
 
@@ -140,7 +142,9 @@ TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximiz
 
 TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximizer]") {
   AdaptiveRelease limiter({-6.0f, 0.0f, 10.0f, 120.0f});
-  limiter.prepare(48000.0, 512);
+  // Prepare for the full 2048-sample blocks processed below; process() must
+  // never be handed more samples than the prepared maximum block size.
+  limiter.prepare(48000.0, 2048);
 
   // Sustained sine -> low crest factor -> release should approach max_release_ms.
   auto signal = sine(1000.0f, 48000, 2048, 1.0f);
@@ -186,7 +190,7 @@ TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceili
   REQUIRE(std::isfinite(result.input_lufs));
   REQUIRE(std::isfinite(result.output_lufs));
   REQUIRE(std::abs(result.output_lufs + 20.0f) < std::abs(result.input_lufs + 20.0f));
-  REQUIRE(analysis::meter::true_peak_db(result.audio, 4) <= -0.99f);
+  REQUIRE(metering::true_peak_db(result.audio, 4) <= -0.99f);
 }
 
 TEST_CASE("LoudnessOptimize caps gain when target would exceed ceiling", "[mastering][maximizer]") {
@@ -194,7 +198,7 @@ TEST_CASE("LoudnessOptimize caps gain when target would exceed ceiling", "[maste
   const auto result = loudness_optimize(input, {0.0f, -6.0f, 4});
 
   REQUIRE(result.applied_gain_db < 0.0f);
-  REQUIRE(analysis::meter::true_peak_db(result.audio, 4) <= -5.99f);
+  REQUIRE(metering::true_peak_db(result.audio, 4) <= -5.99f);
 }
 
 TEST_CASE("StreamingPreview reports platform normalization and ceiling risk",

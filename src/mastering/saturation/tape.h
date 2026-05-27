@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
+#include "mastering/common/oversampler.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -28,6 +29,11 @@ struct TapeConfig {
   float head_bump_db = 1.5f;
   float bias = 0.0f;
   float gap_loss = 0.2f;
+  /// J-A core oversampling: 1 (default, no oversampling), 2, or 4. >1 reduces
+  /// aliasing at high drive; intended for offline/whole-buffer rendering (the
+  /// offline oversampler is stateless, so values >1 may produce minor
+  /// block-edge artifacts in per-block streaming use).
+  int oversample_factor = 1;
 };
 
 class Tape : public common::ProcessorBase {
@@ -38,6 +44,20 @@ class Tape : public common::ProcessorBase {
   void reset() override;
   void set_config(const TapeConfig& config);
   const TapeConfig& config() const { return config_; }
+
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset):
+  //   0 = drive_db (read per sample)
+  //   1 = saturation (clamped to [0, 1]; updates J-A anhysteretic shape)
+  //   2 = hysteresis (clamped to [0, 1]; updates J-A coercivity)
+  //   3 = output_gain_db (read per sample)
+  //   4 = speed_ips (clamped to > 0; recomputes head-bump/gap filters in place)
+  //   5 = head_bump_db (clamped to >= 0; recomputes head-bump filter in place)
+  //   6 = bias (read per sample)
+  //   7 = gap_loss (clamped to [0, 1]; read per sample)
+  // J-A config updates only touch coefficients; the per-channel magnetization
+  // state in states_ and the biquad delay state are preserved. oversample_factor
+  // is a discrete mode and is not exposed.
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const TapeConfig& config);
@@ -67,6 +87,7 @@ class Tape : public common::ProcessorBase {
   std::vector<common::JilesAthertonState> states_;
   std::vector<Biquad> head_bump_;
   std::vector<float> gap_state_;
+  common::Oversampler oversampler_;
 };
 
 }  // namespace sonare::mastering::saturation

@@ -4,15 +4,12 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "util/constants.h"
+#include "mastering/common/biquad_design.h"
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
 namespace sonare::mastering::dynamics {
-
-namespace {
-using sonare::constants::kTwoPi;
-}  // namespace
 
 Gate::Gate(GateConfig config) : config_(config) { validate_config(config_); }
 
@@ -26,30 +23,32 @@ void Gate::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  const float cutoff = config_.key_hpf_hz;
-  if (cutoff > 0.0f) {
-    const float rc =
-        1.0f / (kTwoPi * std::clamp(cutoff, 1.0f, static_cast<float>(sample_rate_ * 0.49)));
-    const float dt = 1.0f / static_cast<float>(sample_rate_);
-    hpf_coeff_ = rc / (rc + dt);
+  if (config_.key_hpf_hz > 0.0f) {
+    const auto hpf =
+        common::onepole_highpass_coeffs(static_cast<double>(config_.key_hpf_hz), sample_rate_);
+    hpf_b0_ = hpf.b0;
+    hpf_a1_ = hpf.a1;
   }
   prepared_ = true;
+  hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
+  hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
   reset();
 }
 
 void Gate::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("Gate must be prepared before processing");
   }
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr) throw std::invalid_argument("channels must not be null");
-  if (hpf_x1_.size() != static_cast<size_t>(num_channels)) {
-    hpf_x1_.assign(static_cast<size_t>(num_channels), 0.0f);
-    hpf_y1_.assign(static_cast<size_t>(num_channels), 0.0f);
+  if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
+      static_cast<size_t>(num_channels) > hpf_y1_.size()) {
+    throw std::invalid_argument("num_channels exceeds prepared Gate state");
   }
-  const float attack = coeff(sample_rate_, config_.attack_ms);
-  const float release = coeff(sample_rate_, config_.release_ms);
+  const float attack = time_to_coefficient(sample_rate_, config_.attack_ms);
+  const float release = time_to_coefficient(sample_rate_, config_.release_ms);
   const int hold_samples =
       static_cast<int>(sample_rate_ * static_cast<double>(config_.hold_ms) * 0.001);
   last_gain_reduction_db_ = 0.0f;
@@ -60,7 +59,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
       float s = channels[ch][i];
       if (config_.key_hpf_hz > 0.0f) {
         const auto idx = static_cast<size_t>(ch);
-        const float y = hpf_coeff_ * (hpf_y1_[idx] + s - hpf_x1_[idx]);
+        const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
         hpf_x1_[idx] = s;
         hpf_y1_[idx] = y;
         s = y;
@@ -105,6 +104,27 @@ void Gate::set_config(const GateConfig& config) {
   }
 }
 
+bool Gate::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      // Keep the hysteresis invariant close_threshold_db <= threshold_db.
+      config_.close_threshold_db = std::min(config_.close_threshold_db, config_.threshold_db);
+      return true;
+    case 1:
+      config_.attack_ms = std::max(0.0f, value);
+      return true;
+    case 2:
+      config_.release_ms = std::max(0.0f, value);
+      return true;
+    case 3:
+      config_.range_db = std::min(0.0f, value);
+      return true;
+    default:
+      return false;
+  }
+}
+
 void Gate::validate_config(const GateConfig& config) {
   if (config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db > 0.0f ||
       config.hold_ms < 0.0f || config.key_hpf_hz < 0.0f ||
@@ -112,7 +132,5 @@ void Gate::validate_config(const GateConfig& config) {
     throw std::invalid_argument("invalid gate configuration");
   }
 }
-
-float Gate::coeff(double sample_rate, float ms) { return time_to_coefficient(sample_rate, ms); }
 
 }  // namespace sonare::mastering::dynamics

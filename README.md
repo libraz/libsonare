@@ -8,17 +8,38 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 
-**Audio analysis + commercial-grade mastering DSP for C++, Python, and browsers.**
-Apache-2.0, dependency-free, runs anywhere — including the browser via WebAssembly.
+**A dependency-free audio DSP toolkit for C++, Python, and the browser —
+librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.**
 
-- **Analysis** — BPM, key, chord, beat, section, timbre, dynamics, pitch
-  (librosa-compatible defaults; tens of times faster than librosa/Python).
-- **Mastering** — EQ, dynamics, multiband, stereo, saturation, repair, maximizer,
-  reference matching. 90+ DSP modules built around published standards
-  (ITU-R BS.1770-4 loudness/true-peak, Vicanek biquads, ADAA nonlinearities,
-  Lemire sliding max, polyphase FIR oversampling).
-- **One permissive license** — Apache-2.0 across the entire stack. No LGPL/GPL
-  surface, no proprietary algorithms, no SaaS dependencies.
+Apache-2.0, zero runtime dependencies, one codebase for native and WebAssembly.
+The same processors that run in C++ run in the browser via WASM — no Python,
+no GPL/AGPL, no model weights.
+
+- **Analysis (librosa-compatible)** — BPM, key, chord (Viterbi/HMM smoothing,
+  inversions, key-context), beat, downbeat, time signature, section, timbre,
+  dynamics, pitch (YIN / pYIN), tempogram / PLP, NNLS chroma, EBU R128 loudness
+  (LUFS), and room acoustics (blind RT60/EDT, or ISO-style RT60/EDT/C50/C80/D50
+  from a measured IR). Defaults match librosa and are validated against
+  generated librosa reference values in CI.
+- **Mastering (77 named DSP processors, 14 in the default chain)** — EQ,
+  dynamics, multiband, stereo, saturation, repair, maximizer, and reference
+  matching, implemented against published references: ITU-R BS.1770-4 loudness
+  and inter-sample true-peak limiting, Linkwitz-Riley crossovers with all-pass
+  phase compensation, Vicanek matched-Z biquads, ADAA-antialiased clippers, a
+  Dempwolf 12AX7 triode model for tube saturation, Lemire sliding max, and
+  polyphase FIR oversampling. Repair is classical DSP by design (spectral
+  subtraction / MMSE-STSA / LogMMSE), not DNN source separation or spectral
+  repair.
+- **Mixing & routing** — a real-time-safe channel-strip / bus model
+  (denormal-guarded, lock-free parameter changes, plugin-delay compensation)
+  with pan modes, width, sends, FX buses, goniometer / true-peak metering,
+  scene presets, and offline stereo rendering.
+- **Editing & creative FX** — time stretch / pitch shift, pitch correction,
+  note-region stretch, voice-change pitch + formant controls, four reverb
+  engines (convolution, Dattorro plate, FDN, velvet-noise),
+  chorus / flanger / phaser, stereo delay, and ducking.
+- **Everywhere, one license** — Apache-2.0 across the entire stack
+  (C++, C, Python, Node, WASM, and CLI).
 
 ## Installation
 
@@ -60,6 +81,66 @@ await init();
 const bpm = detectBpm(samples, sampleRate);
 const key = detectKey(samples, sampleRate);  // { name: "C major", confidence: 0.95 }
 const result = analyze(samples, sampleRate);
+
+// Advanced key options are opt-in; defaults preserve existing behavior.
+const keyWithOptions = detectKey(samples, sampleRate, {
+  useHpss: true,
+  loudnessWeighted: true,
+  highPassHz: 80,
+  nFft: 4096,
+  hopLength: 512,
+});
+```
+
+**Room acoustics**
+
+```typescript
+import { analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare';
+
+// Ordinary audio: blind RT60/EDT estimate. C50/C80/D50 are NaN in blind mode.
+const blind = detectAcoustic(samples, sampleRate);
+
+// Measured impulse response: ISO-style RT60/EDT plus clarity metrics.
+const room = analyzeImpulseResponse(irSamples, sampleRate);
+```
+
+**Rhythm & chords**
+
+```typescript
+import { analyze, detectDownbeats, detectChords } from '@libraz/libsonare';
+
+const downbeats = detectDownbeats(samples, sampleRate);  // bar-start times (s)
+const { timeSignature } = analyze(samples, sampleRate);  // { numerator: 4, denominator: 4 }
+
+// Chord detection extras are all opt-in (defaults preserve existing behavior).
+const chords = detectChords(samples, sampleRate, {
+  useHmm: true,            // Viterbi/HMM temporal smoothing
+  detectInversions: true,  // slash chords via detected bass note
+  useKeyContext: true,     // bias toward in-key chords
+  chromaMethod: 'nnls',    // NNLS chroma instead of plain STFT chroma
+});
+```
+
+**Tempogram, NNLS chroma & loudness**
+
+```typescript
+import {
+  onsetEnvelope, tempogram, fourierTempogram, tempogramRatio, plp,
+  nnlsChroma, lufs,
+} from '@libraz/libsonare';
+
+// Onset strength envelope feeds the tempo-domain features.
+const env = onsetEnvelope(samples, sampleRate);
+const tg = tempogram(env, sampleRate);          // { winLength, nFrames, data }
+const ft = fourierTempogram(env, sampleRate);   // { nBins, nFrames, data }
+const ratios = tempogramRatio(tg.data, tg.winLength, sampleRate);
+const pulse = plp(env, sampleRate);             // predominant local pulse
+
+const chroma = nnlsChroma(samples, sampleRate); // { nChroma: 12, nFrames, data }
+
+// EBU R128 loudness metering (separate from the mastering loudness target).
+const loud = lufs(samples, sampleRate);
+// { integratedLufs, momentaryLufs, shortTermLufs, loudnessRange }
 ```
 
 **Mastering**
@@ -117,13 +198,39 @@ dot-notation keys** (mirroring the Node and Python overrides API):
 ```typescript
 // Mastering presets (one-shot) and streaming variant
 import { masterAudio, masteringPresetNames, StreamingMasteringChain } from '@libraz/libsonare';
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 const out = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
 
 const chain = new StreamingMasteringChain({ eq: { tiltDb: 0.5 } });
 chain.prepare(48000, 512, 1);
 const block = chain.processMono(new Float32Array(512));
 chain.delete();
+```
+
+**Mixing**
+
+```typescript
+import { mixStereo, mixingScenePresetJson, mixingScenePresetNames } from '@libraz/libsonare';
+
+mixingScenePresetNames(); // ['vocalReverbSend', ...]
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+
+const mix = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+// { left, right, meters }
+```
+
+**DAW editing DSP**
+
+```typescript
+import { noteStretch, pitchCorrectToMidi, voiceChange } from '@libraz/libsonare';
+
+const corrected = pitchCorrectToMidi(samples, sampleRate, 69, 70);
+const stretchedNote = noteStretch(samples, sampleRate, 12000, 24000, 1.25);
+const changed = voiceChange(samples, sampleRate, 5, 1.1);
 ```
 
 ### Python
@@ -142,6 +249,39 @@ import libsonare
 
 audio = libsonare.Audio.from_file("song.mp3")
 print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
+
+# Advanced key options are opt-in; defaults preserve existing behavior.
+key_with_options = audio.detect_key(
+    use_hpss=True,
+    loudness_weighted=True,
+    high_pass_hz=80.0,
+)
+
+acoustic = audio.detect_acoustic()  # blind RT60/EDT; C50/C80/D50 are NaN
+ir_params = libsonare.analyze_impulse_response(ir_samples, sample_rate=sr)
+
+# Downbeats, time signature, and chord extras (all opt-in)
+downbeats = audio.detect_downbeats()              # bar-start times (s)
+time_signature = audio.analyze().time_signature   # e.g. 4/4
+chords = audio.detect_chords(
+    use_hmm=True,             # Viterbi/HMM temporal smoothing
+    detect_inversions=True,   # slash chords via detected bass note
+    use_key_context=True,     # bias toward in-key chords
+    chroma_method="nnls",     # NNLS chroma instead of plain STFT chroma
+)
+
+# Tempogram / NNLS chroma / EBU R128 loudness
+env = audio.onset_envelope()                     # onset strength envelope
+n_frames, tg = libsonare.tempogram(env, sample_rate=sr)
+n_frames_ft, ft = libsonare.fourier_tempogram(env, sample_rate=sr)
+ratios = libsonare.tempogram_ratio(tg)
+pulse = libsonare.plp(env, sample_rate=sr)
+
+nf, chroma = audio.nnls_chroma()                 # (n_frames, 12 x n_frames row-major)
+
+loud = audio.lufs()  # integrated_lufs / momentary_lufs / short_term_lufs / loudness_range
+mom = audio.momentary_lufs()                     # per-block time series
+short = audio.short_term_lufs()
 
 # Mastering chain — returns MasteringResult(samples, sample_rate,
 # input_lufs, output_lufs, applied_gain_db, latency_samples)
@@ -163,13 +303,24 @@ libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
 libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
 
 # Preset-based chain (one-shot) + streaming
-libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
 result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
                                  overrides={'loudness.targetLufs': -13})
 
 with libsonare.StreamingMasteringChain({'eq.tilt.tiltDb': 0.5}) as chain:
     chain.prepare(44100, 512, 1)
     out = chain.process_mono([0.0] * 512)
+
+# Mixing presets and offline stereo rendering
+libsonare.mixing_scene_preset_names()  # ['vocalReverbSend', ...]
+scene_json = libsonare.mixing_scene_preset_json("vocalReverbSend")
+mix = libsonare.mix_stereo(
+    [(vocal_l, vocal_r), (music_l, music_r)],
+    sample_rate=sr,
+    fader_db=[-3.0, -12.0],
+    pan=[0.0, -0.2],
+    width=[1.0, 0.9],
+)
 ```
 
 ### Python CLI
@@ -184,12 +335,32 @@ sonare analyze song.mp3
 
 sonare bpm song.mp3 --json
 
+# Extended analysis (parity with the C++ CLI)
+sonare acoustic room.wav --json          # blind RT60/EDT (add --ir for IR-based clarity metrics)
+sonare lufs song.wav --series            # EBU R128 integrated/momentary/short-term
+sonare rhythm song.wav --json
+sonare dynamics song.wav --json
+sonare timbre song.wav --json
+sonare tempogram song.wav --json
+sonare nnls-chroma song.wav --json
+
 # Mastering
 sonare mastering song.wav -o mastered.wav --target-lufs -14
 sonare mastering-processor song.wav --processor dynamics.compressor \
-    --params thresholdDb=-24,ratio=1.5
+    --params thresholdDb=-24,ratio=1.5 -o compressed.wav
 sonare mastering-pair-analyze source.wav --reference reference.wav \
     --analysis match.referenceLoudness
+sonare mastering-processors                 # list available processors
+
+# Mixing
+sonare mixing-presets
+sonare mixing-preset --preset vocalReverbSend
+sonare mix input.wav -o mix.wav --fader-db -3 --pan 0.1 --pan-mode stereo-pan --width 1.1
+
+# DAW editing DSP
+sonare pitch-correct vocal.wav --current-midi 69 --target-midi 70 -o corrected.wav
+sonare note-stretch vocal.wav --onset 12000 --offset 24000 --ratio 1.25 -o stretched.wav
+sonare voice-change vocal.wav --pitch-semitones 5 --formant-factor 1.1 -o changed.wav
 ```
 
 ### C++
@@ -208,44 +379,75 @@ std::cout << "BPM: " << result.bpm
 
 ### Analysis (librosa-compatible)
 
-| Music              | Spectral / Pitch     | Streaming           |
-|--------------------|----------------------|---------------------|
-| BPM / Tempo        | STFT / iSTFT         | Real-time analyzer  |
-| Key Detection      | Mel Spectrogram      | Incremental BPM     |
-| Beat Tracking      | MFCC                 | Incremental key     |
-| Chord Recognition  | Chroma               | Onset events        |
-| Section Detection  | CQT / VQT            |                     |
-| Timbre / Dynamics  | Spectral Features    |                     |
-| Pitch (YIN / pYIN) | Onset Detection      |                     |
+| Music                     | Spectral / Pitch     | Streaming           |
+|---------------------------|----------------------|---------------------|
+| BPM / Tempo               | STFT / iSTFT         | Real-time analyzer  |
+| Key Detection             | Mel Spectrogram      | Incremental BPM     |
+| Beat / Downbeat tracking  | MFCC                 | Incremental key     |
+| Time signature / meter    | Chroma / NNLS chroma | Onset events        |
+| Chord (HMM / inversions)  | CQT / VQT            |                     |
+| Section Detection         | Tempogram / PLP      |                     |
+| Timbre / Dynamics         | Spectral Features    |                     |
+| Pitch (YIN / pYIN)        | Onset Detection      |                     |
+| RT60 / EDT / C50          | Room acoustics       |                     |
+| Loudness (EBU R128 LUFS)  | Onset envelope       |                     |
 
-### Mastering (90+ DSP modules)
+### Mastering (70+ DSP processors)
 
-| Dynamics                  | EQ                        | Multiband / Stereo            |
-|---------------------------|---------------------------|-------------------------------|
-| Compressor                | Parametric / Graphic      | Multiband comp / EQ / limiter |
-| Limiter / Brickwall       | Linear / Minimum phase    | Stereo imager / M-S           |
-| Expander / Gate           | Dynamic EQ                | Haas / phase align            |
-| De-esser                  | Pultec / API style        | Mono maker / compat           |
-| Transient shaper          | Tilt / shelving           |                               |
+| Dynamics                  | EQ                        | Multiband / Stereo                  |
+|---------------------------|---------------------------|-------------------------------------|
+| Compressor                | Parametric / Graphic      | Multiband comp / EQ / limiter       |
+| Limiter / Brickwall       | Linear / Minimum phase    | Linkwitz-Riley crossover (phase-comp)|
+| Expander / Gate           | Dynamic EQ                | Stereo imager / M-S / Haas          |
+| De-esser                  | Passive / stepped EQ      | Phase align / mono maker / compat   |
+| Transient shaper          | Tilt / shelving           |                                     |
 
-| Saturation / Repair               | Maximizer / Match                       | Building blocks            |
-|-----------------------------------|-----------------------------------------|----------------------------|
-| Tape / Tube / Transformer         | True-peak limiter (ITU-R BS.1770-4)     | Polyphase FIR oversampler  |
-| Exciter / Bitcrusher              | Loudness optimizer (LUFS target)        | ADAA nonlinearities        |
-| Declick / Declip / Decrackle      | Adaptive release                        | Vicanek biquad design      |
-| Denoise / Dereverb / Dehum        | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+| Saturation / Repair                | Maximizer / Match                       | Building blocks            |
+|------------------------------------|-----------------------------------------|----------------------------|
+| Tube (Dempwolf 12AX7) / Tape       | True-peak limiter (ITU-R BS.1770-4)     | Polyphase FIR oversampler  |
+| Transformer / Exciter / Bitcrusher | Loudness optimizer (LUFS target)        | ADAA-antialiased shaping   |
+| Declick / Declip / Decrackle       | Adaptive release                        | Vicanek matched-Z biquads  |
+| Denoise / Dereverb / Dehum         | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+
+Repair is classical DSP by design. `denoise_classical` covers spectral
+subtraction, MMSE-STSA, and LogMMSE with explicit noise estimation; DNN
+restoration, source separation, and interactive spectral repair are out of scope.
+
+EQ phase modes preserve existing coefficient defaults: Zero Latency keeps RBJ
+biquads for compatibility, while Natural Phase resolves bands through Vicanek
+matched-Z IIR. High-frequency shelf designs fall back to RBJ when the Vicanek
+endpoint gain error exceeds the fixed tolerance.
 
 Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 `cmake -DBUILD_MASTERING=OFF` to ship analysis-only builds.
 
+### Mixing / routing
+
+| Channel strips                   | Routing / scene API            | Metering / QA                 |
+|----------------------------------|--------------------------------|-------------------------------|
+| Input trim / fader / polarity    | Sends and FX buses             | Peak / RMS / true peak        |
+| Balance / stereo / dual pan      | Bus inserts and graph PDC      | Correlation / mono width      |
+| Width and gain automation        | C / Node / Python / WASM / CLI | Golden hashes and RT tests    |
+| Insert hosting and sidechain keys| Persistent scene mixers        | No-allocation process checks  |
+
+Mixing is built by default (`BUILD_MIXING=ON`) and depends on the mastering
+processor interfaces for insert hosting. Disable with `cmake -DBUILD_MIXING=OFF`
+for analysis/mastering-only builds.
+
 ## Performance
 
-Dramatically faster than Python-based alternatives. Parallelized analysis with
-automatic CPU detection, optimized HPSS with multi-threaded median filter.
-Mastering processors use ITU-spec polyphase oversampling, antiderivative
-anti-aliasing (ADAA), and SIMD-friendly Eigen GEMM for hot paths.
+Analysis runs natively in C++ and uses multi-threading where it helps (HPSS
+median filtering, the full `analyze()` pipeline). On the benchmark fixture,
+iterative algorithms such as HPSS and pYIN, and the full pipeline, are
+meaningfully faster than the equivalent librosa calls; single FFT-bound
+features (STFT, Mel, MFCC) are roughly on par. WebAssembly is single-threaded,
+so the multi-threaded gains do not apply there.
 
-See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for detailed comparisons.
+Mastering DSP uses ITU-spec polyphase oversampling, antiderivative
+anti-aliasing (ADAA), and Eigen for SIMD-friendly linear algebra on hot paths.
+
+See [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) for the
+methodology and per-feature numbers.
 
 ## librosa Compatibility
 
@@ -278,11 +480,11 @@ the Web Audio API or another JS decoder.
 ## Build from Source
 
 ```bash
-# Native (auto-detects FFmpeg; mastering on by default)
+# Native (auto-detects FFmpeg; mastering and mixing on by default)
 make build && make test
 
 # Analysis-only (smaller binary)
-cmake -B build -DBUILD_MASTERING=OFF && cmake --build build
+cmake -B build -DBUILD_MASTERING=OFF -DBUILD_MIXING=OFF && cmake --build build
 
 # WebAssembly (mastering included)
 make wasm
@@ -298,6 +500,20 @@ make release
 - [Python API](https://libsonare.libraz.net/docs/python-api)
 - [C++ API](https://libsonare.libraz.net/docs/cpp-api)
 - [WebAssembly Guide](https://libsonare.libraz.net/docs/wasm)
+
+## Non-goals
+
+libsonare intentionally does **not** include:
+
+- **Plugin-grade creative instruments/effects** — use Tone.js, a plugin host, or your DAW
+- **Audio synthesis** (oscillators, samplers, MIDI playback) — out of scope
+- **Real-time I/O abstraction** (PortAudio/JACK wrappers) — callers handle I/O
+- **DAW workflow** (plugin host, automation, MIDI editing) — different product category
+- **Deep-learning models** (no bundled weights, no inference runtime) — keeps the
+  library dependency-free and Apache-2.0 pure
+
+These boundaries keep the library focused on **analysis + mastering + mixer DSP**
+and allow us to maintain the dependency-free property.
 
 ## License
 

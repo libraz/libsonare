@@ -4,20 +4,14 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
 namespace sonare::mastering::spectral {
 namespace {
-
-using sonare::constants::kPiD;
-
-float one_pole_alpha(float frequency_hz, double sample_rate) {
-  return std::clamp(
-      static_cast<float>(2.0 * kPiD * frequency_hz / (2.0 * kPiD * frequency_hz + sample_rate)),
-      0.0f, 1.0f);
-}
 
 float smoothing_coeff(double sample_rate, float time_ms) {
   if (time_ms <= 0.0f) return 1.0f;
@@ -43,6 +37,7 @@ void SpectralShaper::prepare(double sample_rate, int max_block_size) {
 }
 
 void SpectralShaper::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("SpectralShaper must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -60,8 +55,8 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
 
-  const float low_alpha = one_pole_alpha(config_.frequency_hz, sample_rate_);
-  const float high_alpha = one_pole_alpha(config_.high_frequency_hz, sample_rate_);
+  const float low_alpha = rt::one_pole_lowpass_alpha(config_.frequency_hz, sample_rate_);
+  const float high_alpha = rt::one_pole_lowpass_alpha(config_.high_frequency_hz, sample_rate_);
   const float attack_coeff = smoothing_coeff(sample_rate_, config_.attack_ms);
   const float release_coeff = smoothing_coeff(sample_rate_, config_.release_ms);
   float min_gain = 1.0f;
@@ -112,6 +107,48 @@ void SpectralShaper::set_config(const SpectralShaperConfig& config) {
     for (auto& envelope : envelopes_) {
       envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
     }
+  }
+}
+
+bool SpectralShaper::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold = std::max(0.0f, value);
+      return true;
+    case 1:
+      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 2:
+      // Keep the validate_config invariant high_frequency_hz > frequency_hz.
+      config_.frequency_hz =
+          std::clamp(value, 1.0e-3f, std::nextafter(config_.high_frequency_hz, 0.0f));
+      return true;
+    case 3:
+      config_.high_frequency_hz =
+          std::max(value, std::nextafter(config_.frequency_hz, config_.frequency_hz + 1.0f));
+      return true;
+    case 4:
+      config_.attack_ms = std::max(0.0f, value);
+      // Re-prepare the envelope followers in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& envelope : envelopes_) {
+          envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 5:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& envelope : envelopes_) {
+          envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 6:
+      config_.range_db = std::max(0.0f, value);
+      return true;
+    default:
+      return false;
   }
 }
 

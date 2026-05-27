@@ -60,14 +60,35 @@ ChordTemplate create_sus2_template(PitchClass root);
 /// @brief Creates a sus4 chord template for a given root.
 ChordTemplate create_sus4_template(PitchClass root);
 
+/// @brief Creates an add9 chord template for a given root.
+ChordTemplate create_add9_template(PitchClass root);
+
+/// @brief Creates a minor add9 chord template for a given root.
+ChordTemplate create_minor_add9_template(PitchClass root);
+
+/// @brief Creates a diminished 7th chord template for a given root.
+ChordTemplate create_dim7_template(PitchClass root);
+
+/// @brief Creates a half-diminished 7th / minor 7 flat 5 chord template for a given root.
+ChordTemplate create_half_dim7_template(PitchClass root);
+
+/// @brief Creates a major 9th chord template for a given root.
+ChordTemplate create_major9_template(PitchClass root);
+
+/// @brief Creates a dominant 9th chord template for a given root.
+ChordTemplate create_dominant9_template(PitchClass root);
+
+/// @brief Creates a sus2 add4 chord template for a given root.
+ChordTemplate create_sus2_add4_template(PitchClass root);
+
 /// @brief Transposes a chord template by a given number of semitones.
 /// @param tmpl Original template
 /// @param semitones Semitones to transpose (positive = up)
 /// @return Transposed template
 ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones);
 
-/// @brief Generates all basic chord templates (triads and 7th chords).
-/// @return Vector of all chord templates (12 roots × 9 qualities = 108 templates)
+/// @brief Generates all chord templates (triads, 7ths, suspended, and extensions).
+/// @return Vector of all chord templates (12 roots × 16 qualities = 192 templates)
 std::vector<ChordTemplate> generate_all_chord_templates();
 
 /// @brief Generates only triad templates (major, minor, diminished, augmented).

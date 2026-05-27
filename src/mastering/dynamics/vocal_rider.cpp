@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
@@ -28,6 +29,7 @@ void VocalRider::prepare(double sample_rate, int max_block_size) {
 }
 
 void VocalRider::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("VocalRider must be prepared before processing");
   }
@@ -46,7 +48,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
-  const float smoothing = coeff(sample_rate_, config_.gain_smoothing_ms);
+  const float smoothing = time_to_coefficient(sample_rate_, config_.gain_smoothing_ms);
   if (config_.linked_detection) {
     for (int i = 0; i < num_samples; ++i) {
       float linked_level = 0.0f;
@@ -71,7 +73,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
-      float gain_state = linked_gain_state_db_;
+      float& gain_state = unlinked_gain_state_db_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         const float level = follower.process(channels[ch][i]);
         const float level_db = linear_to_db(level);
@@ -96,6 +98,7 @@ void VocalRider::reset() {
     follower.reset();
   }
   linked_gain_state_db_ = 0.0f;
+  std::fill(unlinked_gain_state_db_.begin(), unlinked_gain_state_db_.end(), 0.0f);
   last_gain_db_ = 0.0f;
 }
 
@@ -110,6 +113,50 @@ void VocalRider::set_config(const VocalRiderConfig& config) {
   }
 }
 
+bool VocalRider::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.target_db = value;
+      return true;
+    case 1:
+      config_.max_boost_db = std::max(0.0f, value);
+      return true;
+    case 2:
+      config_.max_cut_db = std::max(0.0f, value);
+      return true;
+    case 3:
+      config_.attack_ms = std::max(0.0f, value);
+      // Recompute follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 4:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 5:
+      config_.output_gain_db = value;
+      return true;
+    case 6:
+      // The smoothing coefficient is derived per sample from this value, so a
+      // plain update is RT-safe and preserves the running gain state.
+      config_.gain_smoothing_ms = std::max(0.0f, value);
+      return true;
+    case 7:
+      config_.noise_floor_db = value;
+      return true;
+    default:
+      return false;
+  }
+}
+
 void VocalRider::validate_config(const VocalRiderConfig& config) {
   if (config.max_boost_db < 0.0f || config.max_cut_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {
@@ -117,16 +164,16 @@ void VocalRider::validate_config(const VocalRiderConfig& config) {
   }
 }
 
-float VocalRider::coeff(double sample_rate, float ms) {
-  return time_to_coefficient(sample_rate, ms);
-}
-
 void VocalRider::ensure_followers(int num_channels) {
   if (followers_.size() == static_cast<size_t>(num_channels)) {
+    if (unlinked_gain_state_db_.size() != static_cast<size_t>(num_channels)) {
+      unlinked_gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
+    }
     return;
   }
 
   followers_.assign(static_cast<size_t>(num_channels), {});
+  unlinked_gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }

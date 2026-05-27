@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 
@@ -29,6 +30,7 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
 }
 
 void Limiter::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("Limiter must be prepared before processing");
   }
@@ -97,6 +99,23 @@ void Limiter::set_release_ms(float release_ms) {
   config_.release_ms = release_ms;
   if (prepared_) {
     update_release_coeff();
+  }
+}
+
+bool Limiter::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      return true;
+    case 1:
+      config_.release_ms = std::max(0.0f, value);
+      // Recompute the release coefficient in place; preserves gain-smoother state.
+      if (prepared_) {
+        update_release_coeff();
+      }
+      return true;
+    default:
+      return false;
   }
 }
 

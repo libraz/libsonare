@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "mastering/common/biquad.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::spectral {
@@ -21,17 +22,17 @@ class AirBand : public common::ProcessorBase {
   void reset() override;
   void set_config(const AirBandConfig& config);
 
-  struct Biquad {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-    float process(float x);
-    void reset();
-  };
+  // Automatable parameters (RT-safe: updates config in place; the shelf gain is
+  // recomputed every sample in process(), so the change takes effect on the
+  // next block without resetting filter or envelope state). Ids follow the
+  // AirBandConfig declaration order:
+  //   0 = amount (clamped to [0, 1])
+  //   1 = shelf_frequency_hz (clamped to > 0; rebuilds the detector highpass)
+  //   2 = dynamic_threshold_db
+  //   3 = dynamic_range_db (clamped to >= 0)
+  bool set_parameter(unsigned int param_id, float value) override;
+
+  using Biquad = common::Biquad;
 
  private:
   static void validate_config(const AirBandConfig& config);

@@ -27,10 +27,22 @@ class MultibandLimiter : public common::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int latency_samples() const noexcept override;
 
   void set_config(const MultibandLimiterConfig& config);
   const MultibandLimiterConfig& config() const { return config_; }
   const std::vector<float>& last_gain_reductions_db() const { return last_gain_reductions_db_; }
+
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset).
+  // Per-band block layout with kBandStride params per band: band b occupies
+  // ids [b * kBandStride, b * kBandStride + kBandStride). Within each band the
+  // ids forward directly to dynamics::Limiter::set_parameter:
+  //   +0 = threshold_db
+  //   +1 = release_ms (clamped to >= 0; recomputes release coefficient)
+  // lookahead_ms and crossover cutoffs are not automatable: both resize buffers
+  // and would reset audio state.
+  static constexpr unsigned int kBandStride = 2;
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const MultibandLimiterConfig& config);
@@ -41,6 +53,7 @@ class MultibandLimiter : public common::ProcessorBase {
   int max_block_size_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
+  CrossoverScratch scratch_;
   std::vector<dynamics::Limiter> limiters_;
   std::vector<float> last_gain_reductions_db_;
 };

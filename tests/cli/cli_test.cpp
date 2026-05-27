@@ -17,6 +17,7 @@
 
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::ContainsSubstring;
@@ -35,7 +36,8 @@ void create_test_wav(const std::string& path, float duration = 3.0f, float frequ
 
   for (size_t i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / sample_rate;
-    samples[i] = 0.5f * std::sin(2.0f * static_cast<float>(M_PI) * frequency * t);
+    samples[i] =
+        0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * frequency * t);
   }
 
   save_wav(path, samples, sample_rate);
@@ -74,7 +76,7 @@ std::pair<int, std::string> exec_command(const std::string& cmd) {
 /// @brief Gets the path to the sonare CLI executable.
 std::string get_cli_path() {
   // Try common build paths
-  std::vector<std::string> paths = {"./build-mastering-api/bin/sonare", "./build/bin/sonare",
+  std::vector<std::string> paths = {"./build/bin/sonare", "./build-mastering-api/bin/sonare",
                                     "./bin/sonare", "../bin/sonare"};
 
   for (const auto& path : paths) {
@@ -193,6 +195,38 @@ TEST_CASE("CLI key command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"root\""));
     REQUIRE_THAT(output, ContainsSubstring("\"mode\""));
   }
+
+  SECTION("json candidates output") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --json --candidates 3 -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"candidates\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+
+  SECTION("json candidates output with key options") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV +
+                                       " --json --candidates 3 --use-hpss "
+                                       "--loudness-weighted --high-pass-hz 40 "
+                                       "--genre-hint edm --profile edma -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"candidates\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+
+  SECTION("json modal candidates output") {
+    auto [code, output] =
+        exec_command(CLI + " key " + TEST_WAV + " --json --candidates 14 --modes all -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"candidates\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": 2"));
+  }
+
+  SECTION("text candidates output") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --candidates 3 -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("Key candidates"));
+    REQUIRE_THAT(output, ContainsSubstring("corr"));
+  }
 }
 
 TEST_CASE("CLI beats command", "[cli]") {
@@ -206,6 +240,22 @@ TEST_CASE("CLI beats command", "[cli]") {
 
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " beats " + TEST_WAV + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("["));
+  }
+}
+
+TEST_CASE("CLI downbeats command", "[cli]") {
+  create_test_wav(TEST_WAV);
+
+  SECTION("text output") {
+    auto [code, output] = exec_command(CLI + " downbeats " + TEST_WAV + " -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("Downbeat times"));
+  }
+
+  SECTION("json output") {
+    auto [code, output] = exec_command(CLI + " downbeats " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("["));
   }
@@ -228,7 +278,7 @@ TEST_CASE("CLI onsets command", "[cli]") {
 }
 
 TEST_CASE("CLI chords command", "[cli]") {
-  create_test_wav(TEST_WAV);
+  create_test_wav(TEST_WAV, 0.5f);
 
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " chords " + TEST_WAV + " -q");
@@ -241,6 +291,21 @@ TEST_CASE("CLI chords command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
     REQUIRE_THAT(output, ContainsSubstring("\"progression\""));
+  }
+
+  SECTION("json output with advanced chord options") {
+    auto [code, output] = exec_command(CLI + " chords " + TEST_WAV +
+                                       " --json --nnls --use-hmm --detect-inversions --key-context "
+                                       "--key-root C --key-mode major --hmm-beam-width 12 -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"bass\""));
+  }
+
+  SECTION("boolean flag before positional input is not swallowed") {
+    auto [code, output] = exec_command(CLI + " chords --nnls " + TEST_WAV + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
   }
 }
 
@@ -444,7 +509,7 @@ TEST_CASE("CLI onset-env command", "[cli]") {
 }
 
 TEST_CASE("CLI cqt command", "[cli]") {
-  create_test_wav(TEST_WAV);
+  create_test_wav(TEST_WAV, 0.5f);
 
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " cqt " + TEST_WAV + " -q");
@@ -552,6 +617,41 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI DAW editing commands", "[cli]") {
+  create_test_wav(TEST_WAV, 0.5f);
+  std::remove(TEST_OUT.c_str());
+
+  SECTION("pitch-correct") {
+    auto [code, output] = exec_command(CLI + " pitch-correct --current-midi 69 --target-midi 70 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"target_midi\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+
+  SECTION("note-stretch") {
+    auto [code, output] =
+        exec_command(CLI + " note-stretch --onset 100 --offset 2000 --ratio 1.2 " + TEST_WAV +
+                     " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"ratio\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+
+  SECTION("voice-change") {
+    auto [code, output] = exec_command(CLI +
+                                       " voice-change --pitch-semitones 5 --formant-factor "
+                                       "1.1 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+}
+
 TEST_CASE("CLI hpss command", "[cli]") {
   create_test_wav(TEST_WAV);
   std::string out_base = unique_temp_path("_hpss");
@@ -618,10 +718,49 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(f.good());
   }
 
+  SECTION("runs preset mastering chain") {
+    std::string preset_out = unique_temp_path("_preset_mastered.wav");
+    std::remove(preset_out.c_str());
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " -o " + preset_out +
+                                       " --preset pop --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"preset\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"preset\": \"pop\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
+
+    std::ifstream f(preset_out);
+    REQUIRE(f.good());
+  }
+
+  SECTION("runs JSON config mastering chain") {
+    std::string config_path = unique_temp_path("_chain.json");
+    {
+      std::ofstream config(config_path);
+      config << "{\"version\":1,\"params\":{\"eq.tilt.enabled\":true,"
+                "\"eq.tilt.tiltDb\":0.25,\"loudness.enabled\":true,"
+                "\"loudness.targetLufs\":-18}}";
+    }
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --config " + config_path + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"config\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
+  }
+
+  SECTION("runs assistant mastering chain with explanations") {
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --assistant --explain --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"assistant\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"explanation\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
+  }
+
   SECTION("lists named processors") {
     auto [code, output] = exec_command(CLI + " mastering-processors --json");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("dynamics.compressor"));
+    REQUIRE_THAT(output, ContainsSubstring("eq.equalizer"));
     REQUIRE_THAT(output, ContainsSubstring("stereo.imager"));
 
     auto [pair_code, pair_output] = exec_command(CLI + " mastering-pair-processors --json");
@@ -648,6 +787,23 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
   }
 
+  SECTION("runs unified equalizer shortcut") {
+    auto [code, output] = exec_command(CLI + " eq " + TEST_WAV +
+                                       " --frequency-hz 440 --gain-db 3 --q 1 --coeff-mode 1"
+                                       " --phase-mode 3 --resolution 1 --auto-gain --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\": 512"));
+
+    auto [dynamic_code, dynamic_output] =
+        exec_command(CLI + " eq " + TEST_WAV +
+                     " --frequency-hz 440 --gain-db 3 --q 1 --dynamic"
+                     " --threshold-db -36 --ratio 2 --range-db -3 --json -q");
+    REQUIRE(dynamic_code == 0);
+    REQUIRE_THAT(dynamic_output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
+  }
+
   SECTION("runs pair processor and analysis") {
     auto [pair_code, pair_output] =
         exec_command(CLI + " mastering-pair-processor " + TEST_WAV + " --reference " + ref +
@@ -669,6 +825,37 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
                      " --analysis stereo.monoCompatCheck -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+}
+#endif
+
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("CLI mixing command", "[cli][mixing]") {
+  create_test_wav(TEST_WAV);
+
+  SECTION("lists and prints mixer presets") {
+    auto [list_code, list_output] = exec_command(CLI + " mixing-presets --json");
+    REQUIRE(list_code == 0);
+    REQUIRE_THAT(list_output, ContainsSubstring("vocalReverbSend"));
+
+    auto [preset_code, preset_output] =
+        exec_command(CLI + " mixing-preset --preset vocalReverbSend --json");
+    REQUIRE(preset_code == 0);
+    REQUIRE_THAT(preset_output, ContainsSubstring("\"strips\""));
+    REQUIRE_THAT(preset_output, ContainsSubstring("\"buses\""));
+  }
+
+  SECTION("processes mixer strip") {
+    const std::string out = unique_temp_path("_mixed.wav");
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " mix " + TEST_WAV + " -o " + out +
+                                       " --input-trim-db 1 --fader-db -3 --pan 0.25 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"meter\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+
+    std::ifstream f(out);
+    REQUIRE(f.good());
   }
 }
 #endif

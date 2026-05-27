@@ -24,6 +24,21 @@ class MidSideEq : public common::ProcessorBase {
   void clear_side_band(size_t index);
   void clear();
 
+  // Automatable parameters (RT-safe: recomputes the affected band's biquad
+  // coefficients in place, preserves filter state). The mid and side sections
+  // each use ParametricEq's block-of-3 layout; the side section is offset by
+  // `3 * kMaxBands` ids:
+  //   mid band b  -> ids 3*b               .. 3*b + 2   {freq, gain_db, Q}
+  //   side band b -> ids 3*kMaxBands + 3*b .. +2        {freq, gain_db, Q}
+  // (with kMaxBands = 24: mid = ids 0..71, side = ids 72..143).
+  bool set_parameter(unsigned int param_id, float value) override {
+    constexpr unsigned int kSideBase = 3u * static_cast<unsigned int>(kMaxBands);
+    if (param_id < kSideBase) {
+      return mid_eq_.set_parameter(param_id, value);
+    }
+    return side_eq_.set_parameter(param_id - kSideBase, value);
+  }
+
   const EqBand& mid_band(size_t index) const;
   const EqBand& side_band(size_t index) const;
 

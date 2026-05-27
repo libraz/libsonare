@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::multiband {
@@ -26,6 +27,9 @@ void MultibandDynamicEq::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
+  // Pre-size split scratch for stereo so the steady-state audio path is
+  // allocation-free; it is grown on demand only if a wider block arrives.
+  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
   for (size_t band = 0; band < processors_.size(); ++band) {
     processors_[band].prepare(sample_rate_, max_block_size_);
     configure_processor(band);
@@ -34,6 +38,7 @@ void MultibandDynamicEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandDynamicEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandDynamicEq must be prepared before processing");
   }
@@ -52,15 +57,13 @@ void MultibandDynamicEq::process(float* const* channels, int num_channels, int n
     }
   }
 
-  auto split = crossover_.split(channels, num_channels, num_samples);
-  for (int band = 0; band < split.num_bands(); ++band) {
-    std::vector<float*> band_channels(static_cast<size_t>(num_channels));
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_channels[static_cast<size_t>(ch)] =
-          split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)].data();
-    }
+  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  crossover_.split_into(channels, num_channels, num_samples, scratch_);
+  const int num_bands = scratch_.num_bands();
+  for (int band = 0; band < num_bands; ++band) {
     auto& processor = processors_[static_cast<size_t>(band)];
-    processor.process(band_channels.data(), num_channels, num_samples);
+    processor.process(scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels,
+                      num_samples);
     last_detector_db_[static_cast<size_t>(band)] = processor.last_detector_db();
     auto& gains = last_applied_gain_db_[static_cast<size_t>(band)];
     std::fill(gains.begin(), gains.end(), 0.0f);
@@ -71,8 +74,8 @@ void MultibandDynamicEq::process(float* const* channels, int num_channels, int n
 
   for (int ch = 0; ch < num_channels; ++ch) {
     std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < split.num_bands(); ++band) {
-      const auto& band_samples = split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+    for (int band = 0; band < num_bands; ++band) {
+      const auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] += band_samples[static_cast<size_t>(i)];
       }
@@ -99,6 +102,15 @@ void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
+}
+
+bool MultibandDynamicEq::set_parameter(unsigned int param_id, float value) {
+  const unsigned int crossover_band = param_id / kParamsPerCrossoverBand;
+  if (crossover_band >= processors_.size()) {
+    return false;
+  }
+  const unsigned int local_id = param_id % kParamsPerCrossoverBand;
+  return processors_[crossover_band].set_parameter(local_id, value);
 }
 
 void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config) {

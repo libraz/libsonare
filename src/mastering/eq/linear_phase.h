@@ -15,11 +15,21 @@
 namespace sonare::mastering::eq {
 
 struct LinearPhaseEqConfig {
+  enum class Resolution {
+    Custom = 0,
+    Low,
+    Medium,
+    High,
+    VeryHigh,
+    Maximum,
+  };
+
   int fft_size = 2048;
   int kernel_size = 513;
   bool use_partitioned_convolution = true;
   /// 0 means use the `max_block_size` passed to prepare().
   int partition_size = 0;
+  Resolution resolution = Resolution::Custom;
 };
 
 class LinearPhaseEq : public common::ProcessorBase {
@@ -31,10 +41,22 @@ class LinearPhaseEq : public common::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  void prepare_channels(int num_channels);
 
   void set_band(size_t index, const EqBand& band);
   void clear_band(size_t index);
   void clear();
+
+  // Automatable parameters. Bands use the same block-of-3 layout as ParametricEq
+  // (band b -> ids 3*b freq, 3*b+1 gain_db, 3*b+2 Q):
+  //   3*b + 0 = frequency_hz (clamped to (0 Hz, Nyquist))
+  //   3*b + 1 = gain_db
+  //   3*b + 2 = Q (clamped to > 0)
+  // NOTE: unlike the IIR EQs, this rebuilds the FIR kernel and clears filter
+  // history. It is not audio-thread safe; ChannelStrip insert automation rejects
+  // these params via parameter_is_realtime_safe().
+  bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
   const EqBand& band(size_t index) const;
   const std::vector<float>& kernel() const { return kernel_; }
@@ -45,6 +67,7 @@ class LinearPhaseEq : public common::ProcessorBase {
     std::vector<float> history;
     size_t write_index = 0;
     std::unique_ptr<common::PartitionedConvolver> convolver;
+    bool convolver_kernel_current = false;
   };
 
   void rebuild_kernel();

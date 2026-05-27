@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "mastering/common/biquad_design.h"
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -39,7 +40,18 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
   }
 }
 
+void ParametricEq::prepare_channels(int num_channels) {
+  if (num_channels < 0) {
+    throw std::invalid_argument("num_channels must be non-negative");
+  }
+  num_channels_ = num_channels;
+  for (auto& band_states : states_) {
+    band_states.resize(static_cast<size_t>(num_channels));
+  }
+}
+
 void ParametricEq::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared();
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
@@ -51,10 +63,12 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
     throw std::invalid_argument("channels must not be null");
   }
 
-  if (num_channels_ != num_channels) {
+  if (num_channels_ < num_channels) {
+    prepare_channels(num_channels);
+  } else if (num_channels_ != num_channels && num_channels_ == 0) {
     num_channels_ = num_channels;
     for (auto& band_states : states_) {
-      band_states.assign(static_cast<size_t>(num_channels), {});
+      band_states.resize(static_cast<size_t>(num_channels));
     }
   }
 
@@ -99,6 +113,33 @@ void ParametricEq::set_band(size_t index, const EqBand& band) {
   update_coefficients(index);
 }
 
+bool ParametricEq::set_parameter(unsigned int param_id, float value) {
+  const size_t band_index = param_id / 3u;
+  if (band_index >= kMaxBands) {
+    return false;
+  }
+  EqBand band = bands_[band_index];
+  switch (param_id % 3u) {
+    case 0:
+      // Clamp to the open interval (0 Hz, Nyquist) so coefficient design never
+      // throws on the audio thread.
+      band.frequency_hz =
+          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      break;
+    case 1:
+      band.gain_db = value;
+      break;
+    case 2:
+      band.q = std::max(value, 1.0e-6f);
+      break;
+    default:
+      return false;
+  }
+  // set_band recomputes only this band's coefficients without touching state.
+  set_band(band_index, band);
+  return true;
+}
+
 void ParametricEq::clear_band(size_t index) {
   validate_band_index(index);
   bands_[index] = {};
@@ -139,6 +180,14 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
   const auto from_common = [](const common::BiquadCoeffs& c) {
     return Coefficients{c.b0, c.b1, c.b2, c.a1, c.a2};
   };
+  if (band.slope_db_oct == 6) {
+    if (band.type == EqBandType::LowPass) {
+      return from_common(common::first_order_lowpass(w0f));
+    }
+    if (band.type == EqBandType::HighPass) {
+      return from_common(common::first_order_highpass(w0f));
+    }
+  }
 
   if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
     switch (band.type) {
@@ -156,6 +205,9 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
         return from_common(common::vicanek_low_shelf(w0f, band.gain_db));
       case EqBandType::HighShelf:
         return from_common(common::vicanek_high_shelf(w0f, band.gain_db));
+      case EqBandType::TiltShelf:
+      case EqBandType::FlatTilt:
+        throw std::invalid_argument("unsupported Vicanek EQ band type");
     }
   }
 
@@ -180,6 +232,10 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
 
     case EqBandType::HighShelf:
       return from_common(common::rbj_high_shelf(w0f, qf, band.gain_db));
+
+    case EqBandType::TiltShelf:
+    case EqBandType::FlatTilt:
+      throw std::invalid_argument("unsupported EQ band type");
   }
 
   return {};

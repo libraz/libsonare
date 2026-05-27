@@ -28,8 +28,14 @@ class Limiter : public common::ProcessorBase {
   void set_config(const LimiterConfig& config);
   void set_release_ms(float release_ms);
   const LimiterConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return last_gain_reduction_db_; }
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
   int latency_samples() const noexcept override { return lookahead_samples_; }
+
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = threshold_db
+  //   1 = release_ms (clamped to >= 0)
+  // lookahead_ms is omitted because changing it resizes the lookahead buffers.
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const LimiterConfig& config);

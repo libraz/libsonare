@@ -9,6 +9,7 @@
 #include <complex>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -24,7 +25,7 @@ Audio create_sine_audio(float freq, int sr = 22050, float duration = 0.5f) {
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -212,7 +213,9 @@ TEST_CASE("spectral_rolloff validates librosa-compatible inputs", "[spectral]") 
   REQUIRE_THROWS_AS(spectral_rolloff(magnitude.data(), 3, 1, 300, 6, 0.0f), SonareException);
 
   std::vector<float> negative = {1.0f, -1.0f, 1.0f};
-  REQUIRE_THROWS_AS(spectral_rolloff(negative.data(), 3, 1, 300, 6, 0.85f), SonareException);
+  std::vector<float> clamped = spectral_rolloff(negative.data(), 3, 1, 300, 6, 0.85f);
+  REQUIRE(clamped.size() == 1);
+  REQUIRE_THAT(clamped[0], WithinAbs(100.0f, 1e-7f));
 }
 
 TEST_CASE("spectral_flatness sine vs noise", "[spectral]") {
@@ -374,7 +377,7 @@ TEST_CASE("rms_energy silence vs loud", "[spectral]") {
   std::vector<float> loud(n_samples);
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    loud[i] = std::sin(2.0f * M_PI * 440.0f * t);
+    loud[i] = std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   Audio silent_audio = Audio::from_vector(std::move(silent), sr);

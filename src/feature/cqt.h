@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -19,7 +20,7 @@ using CqtProgressCallback = std::function<void(float progress)>;
 /// @brief CQT configuration.
 struct CqtConfig {
   int hop_length = 512;                  ///< Hop length in samples
-  float fmin = 32.7f;                    ///< Minimum frequency in Hz (C1 = 32.7 Hz)
+  float fmin = constants::kC1Hz;         ///< Minimum frequency in Hz (C1)
   int n_bins = 84;                       ///< Number of frequency bins (7 octaves * 12)
   int bins_per_octave = 12;              ///< Bins per octave (12 for semitones)
   float filter_scale = 1.0f;             ///< Filter length scale factor
@@ -72,9 +73,10 @@ class CqtResult {
 
   /// @brief Returns magnitude in decibels.
   /// @param ref Reference value (default 1.0)
-  /// @param amin Minimum amplitude to avoid log(0) (default 1e-10)
+  /// @param amin Minimum amplitude to avoid log(0) (default constants::kEpsilon)
   /// @param top_db Threshold below max dB to clamp (default 80.0, negative to disable)
-  std::vector<float> to_db(float ref = 1.0f, float amin = 1e-10f, float top_db = 80.0f) const;
+  std::vector<float> to_db(float ref = 1.0f, float amin = constants::kEpsilon,
+                           float top_db = 80.0f) const;
 
   /// @brief Returns center frequencies for each bin.
   const std::vector<float>& frequencies() const { return frequencies_; }

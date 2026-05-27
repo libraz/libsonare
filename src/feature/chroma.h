@@ -44,6 +44,7 @@ struct ChromaConfig {
 struct ChromaCqtConfig {
   CqtConfig cqt;
   int n_chroma = 12;
+  float tuning = 0.0f;     ///< Tuning deviation in fractional semitones/chroma bins.
   float threshold = 0.0f;  ///< Magnitudes below this fraction of the per-frame max are zeroed.
   bool normalize_frames = true;  ///< L-inf normalize per frame (matches librosa default norm=Inf).
 };
@@ -52,6 +53,20 @@ struct ChromaCqtConfig {
 struct ChromaCensConfig {
   ChromaCqtConfig base;
   int win_len_smooth = 41;  ///< Hann smoothing window length (0 disables smoothing).
+};
+
+/// @brief Configuration for low-frequency bass chroma extraction.
+struct BassChromaConfig {
+  CqtConfig cqt = [] {
+    CqtConfig config;
+    config.fmin = 41.203f;  // E1
+    config.n_bins = 108;    // E1-D#4 at three bins per semitone
+    config.bins_per_octave = 36;
+    return config;
+  }();
+  int n_chroma = 12;
+  float tuning = 0.0f;
+  bool normalize_frames = true;
 };
 
 class Chroma;  // forward declaration; full definition below.
@@ -66,6 +81,9 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config = ChromaCqtC
 /// @details Implements `librosa.feature.chroma_cens`. Builds chroma_cqt, then
 /// applies quantization steps and an optional Hann smoothing window across time.
 Chroma chroma_cens(const Audio& audio, const ChromaCensConfig& config = ChromaCensConfig());
+
+/// @brief Computes a low-frequency chromagram intended for bass/inversion estimation.
+Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config = BassChromaConfig());
 
 /// @brief Chromagram representation for harmonic analysis.
 /// @details Computes and caches chromagram from audio or STFT.
@@ -116,6 +134,11 @@ class Chroma {
   /// @brief Computes mean energy for each pitch class.
   /// @return Array of 12 mean energy values (C, C#, D, ..., B)
   std::array<float, 12> mean_energy() const;
+
+  /// @brief Computes frame-weighted mean energy for each pitch class.
+  /// @param frame_weights Non-negative weights indexed by chroma frame
+  /// @return Array of 12 weighted mean energy values
+  std::array<float, 12> weighted_mean_energy(const std::vector<float>& frame_weights) const;
 
   /// @brief Computes normalized chromagram per frame.
   /// @param norm Norm type: 0 for max (inf), 1 for L1, 2 for L2

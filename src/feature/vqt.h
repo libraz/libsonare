@@ -20,7 +20,7 @@ using VqtProgressCallback = std::function<void(float progress)>;
 /// @brief VQT configuration.
 struct VqtConfig {
   int hop_length = 512;                  ///< Hop length in samples
-  float fmin = 32.7f;                    ///< Minimum frequency in Hz (C1)
+  float fmin = constants::kC1Hz;         ///< Minimum frequency in Hz (C1)
   int n_bins = 84;                       ///< Number of frequency bins
   int bins_per_octave = 12;              ///< Bins per octave
   float gamma = 0.0f;                    ///< Bandwidth offset (0 = standard CQT)
@@ -80,15 +80,36 @@ class VqtKernel {
 VqtResult vqt(const Audio& audio, const VqtConfig& config = VqtConfig(),
               VqtProgressCallback progress_callback = nullptr);
 
+/// @brief Reconstructs audio from a VQT magnitude via Griffin-Lim.
+/// @param magnitude VQT magnitude [n_bins x n_frames] row-major.
+/// @param n_bins Number of VQT bins.
+/// @param n_frames Number of time frames.
+/// @param config VQT configuration that produced the magnitude.
+/// @param sr Sample rate of the original signal.
+/// @param n_iter Number of Griffin-Lim iterations.
+/// @return Reconstructed audio.
+/// @details VQT shares the CQT geometric frequency grid, so reconstruction smears
+///          the VQT magnitudes back onto an STFT magnitude grid (matching
+///          @ref griffinlim_cqt) and recovers phase with Griffin-Lim.
+Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
+                     int sr, int n_iter = 32);
+
+/// @brief Reconstructs audio from a VQT result via Griffin-Lim.
+/// @param vqt_result VQT coefficients (only the magnitude is used).
+/// @param sr Sample rate of the original signal.
+/// @param n_iter Number of Griffin-Lim iterations.
+/// @return Reconstructed audio.
+Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter = 32);
+
 /// @brief Computes pseudo-inverse VQT (reconstruction).
 /// @param vqt_result VQT coefficients
 /// @param length Target output length in samples (0 = auto)
 /// @return Reconstructed audio
-/// @warning This is a simplified reconstruction and may not produce high-quality
-///          results. Consider using Griffin-Lim with VQT magnitude for better quality.
+/// @warning This is the legacy pseudo-inverse reconstruction. Prefer
+///          @ref griffinlim_vqt for higher quality.
 /// @deprecated Prefer using phase vocoder or Griffin-Lim based methods for
 ///             high-quality audio reconstruction.
-[[deprecated("Use Griffin-Lim or phase vocoder for better reconstruction quality")]]
+[[deprecated("Use griffinlim_vqt or phase vocoder for better reconstruction quality")]]
 Audio ivqt(const VqtResult& vqt_result, int length = 0);
 
 /// @brief Computes VQT frequencies for given configuration.

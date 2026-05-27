@@ -1,0 +1,6 @@
+# dataset	file	mode	expected_rt60	tolerance_sec	n_octave_bands
+# Optional metric columns after n_octave_bands:
+# edt=<seconds>	edt_tol=<seconds>	c50=<dB>	c50_tol=<dB>	c80=<dB>	c80_tol=<dB>	d50=<ratio>	d50_tol=<ratio>
+# Other optional columns: confidence	report_only	notes
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# with present audio files are available.

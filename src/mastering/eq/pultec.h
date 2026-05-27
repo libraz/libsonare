@@ -1,12 +1,13 @@
 #pragma once
 
 /// @file pultec.h
-/// @brief Pultec EQP-1A inspired program equalizer.
+/// @brief Passive-style program equalizer.
 
 #include <vector>
 
 #include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -30,6 +31,20 @@ class PultecEq : public common::ProcessorBase {
   void set_output_drive(float drive);
   void clear();
 
+  // Automatable parameters (RT-safe: rebuild() recomputes the four EQ-band
+  // biquad coefficients in place without resetting filter state; output drive
+  // touches no biquad state). The component model enum is not automatable.
+  //   0 = low_frequency_hz (clamped to > 0)
+  //   1 = low_boost (clamped to [0, 10])
+  //   2 = low_attenuation (clamped to [0, 10])
+  //   3 = high_boost_frequency_hz (clamped to > 0)
+  //   4 = high_boost (clamped to [0, 10])
+  //   5 = high_bandwidth (clamped to [0, 1])
+  //   6 = high_attenuation_frequency_hz (clamped to > 0)
+  //   7 = high_attenuation (clamped to [0, 10])
+  //   8 = output_drive (clamped to [0, 10])
+  bool set_parameter(unsigned int param_id, float value) override;
+
   float low_frequency() const { return low_frequency_hz_; }
   float low_boost() const { return low_boost_; }
   float low_attenuation() const { return low_attenuation_; }
@@ -44,6 +59,7 @@ class PultecEq : public common::ProcessorBase {
   void rebuild();
   static float clamp_amount(float amount);
   static float validate_frequency(float frequency_hz);
+  void update_component_coefficients();
   void prepare_component_state(int num_channels);
   float process_component_sample(float input, int channel);
 
@@ -53,7 +69,8 @@ class PultecEq : public common::ProcessorBase {
     float high_charge = 0.0f;
   };
   std::vector<ComponentState> component_state_;
-  double sample_rate_ = 48000.0;
+  static constexpr double kDefaultSampleRate = 48000.0;
+  double sample_rate_ = kDefaultSampleRate;
   float low_frequency_hz_ = 60.0f;
   float low_boost_ = 0.0f;
   float low_attenuation_ = 0.0f;
@@ -64,6 +81,9 @@ class PultecEq : public common::ProcessorBase {
   float high_attenuation_ = 0.0f;
   PultecComponentModel component_model_ = PultecComponentModel::CurveOnly;
   float output_drive_ = 0.0f;
+  float low_component_alpha_ =
+      sonare::constants::kTwoPi * 60.0f / static_cast<float>(kDefaultSampleRate);
+  float high_component_alpha_ = 0.75f;
 };
 
 }  // namespace sonare::mastering::eq

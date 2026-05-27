@@ -19,7 +19,15 @@ class SoftKneeMax : public common::ProcessorBase {
   void reset() override;
   void set_config(const SoftKneeMaxConfig& config);
   const SoftKneeMaxConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return maximizer_.last_gain_reduction_db(); }
+  float last_gain_reduction_db() const override { return maximizer_.last_gain_reduction_db(); }
+
+  // Parameters:
+  //   0 = input_gain_db (applied per block, no coefficients)
+  //   1 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
+  //   2 = knee_db (clamped >= 0; applied per block, no coefficients)
+  //   3 = release_ms (clamped >= 0; in-place via inner maximizer)
+  bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:
   static void validate_config(const SoftKneeMaxConfig& config);

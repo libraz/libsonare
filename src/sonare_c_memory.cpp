@@ -1,3 +1,4 @@
+#include "rt/command.h"
 #include "sonare.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
@@ -9,6 +10,8 @@ void sonare_free_floats(float* ptr) { delete[] ptr; }
 void sonare_free_ints(int* ptr) { delete[] ptr; }
 
 void sonare_free_string(char* ptr) { delete[] ptr; }
+
+void sonare_free_key_candidates(SonareKeyCandidate* ptr) { delete[] ptr; }
 
 void sonare_free_result(SonareAnalysisResult* result) {
   if (result != nullptr) {
@@ -32,14 +35,19 @@ const char* sonare_error_message(SonareError error) {
       return "Invalid parameter";
     case SONARE_ERROR_OUT_OF_MEMORY:
       return "Out of memory";
-    default:
+    case SONARE_ERROR_NOT_SUPPORTED:
+      return "Not supported in this build";
+    case SONARE_ERROR_UNKNOWN:
       return "Unknown error";
   }
+  return "Unknown error";
 }
 
 const char* sonare_last_error_message(void) { return last_error_storage().c_str(); }
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
+
+uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }
 
 int sonare_has_ffmpeg_support(void) {
 #ifdef SONARE_WITH_FFMPEG
@@ -117,6 +125,20 @@ void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* r) {
   }
 }
 
+void sonare_free_acoustic_result(SonareAcousticResult* r) {
+  if (r) {
+    delete[] r->rt60_bands;
+    delete[] r->edt_bands;
+    delete[] r->c50_bands;
+    delete[] r->c80_bands;
+    r->rt60_bands = nullptr;
+    r->edt_bands = nullptr;
+    r->c50_bands = nullptr;
+    r->c80_bands = nullptr;
+    r->band_count = 0;
+  }
+}
+
 void sonare_free_rhythm_result(SonareRhythmResult* r) {
   if (r) {
     delete[] r->beat_intervals;
@@ -154,5 +176,37 @@ void sonare_free_chord_analysis_result(SonareChordAnalysisResult* r) {
     delete[] r->chords;
     r->chords = nullptr;
     r->chord_count = 0;
+  }
+}
+
+void sonare_free_bounce_result(SonareEngineBounceResult* result) {
+  if (!result) return;
+  delete[] result->interleaved;
+  result->interleaved = nullptr;
+  result->sample_count = 0;
+}
+
+void sonare_free_section_result(SonareSectionResult* result) {
+  if (result) {
+    delete[] result->sections;
+    result->sections = nullptr;
+    result->section_count = 0;
+  }
+}
+
+void sonare_free_melody_result(SonareMelodyResult* result) {
+  if (result) {
+    delete[] result->points;
+    result->points = nullptr;
+    result->point_count = 0;
+  }
+}
+
+void sonare_free_cqt_result(SonareCqtResult* result) {
+  if (result) {
+    delete[] result->magnitude;
+    delete[] result->frequencies;
+    result->magnitude = nullptr;
+    result->frequencies = nullptr;
   }
 }

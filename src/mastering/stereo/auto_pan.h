@@ -24,6 +24,12 @@ class AutoPan : public common::ProcessorBase {
   void set_config(const AutoPanConfig& config);
   const AutoPanConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = rate_hz (clamped to >= 0)
+  //   1 = depth (clamped to [0, 1])
+  //   2 = phase
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const AutoPanConfig& config);
 

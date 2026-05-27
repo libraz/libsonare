@@ -11,8 +11,8 @@
 /// - Computes onset strength envelope and autocorrelation
 /// - Builds BPM histogram from local maxima (0.5 BPM bins)
 /// - Groups candidates into harmonic clusters (half, double, triplet, etc.)
-/// - Uses smart selection: prefers musically common tempos (80-180 BPM)
-/// - Avoids octave errors by preferring higher BPM in harmonic relationships
+/// - Uses smart selection: prefers strongly supported musically common tempos (80-180 BPM)
+/// - Avoids octave errors with harmonic relationships and bounded octave correction
 
 #include <array>
 #include <map>
@@ -31,9 +31,6 @@ constexpr float kBinWidth = 0.5f;
 
 /// @brief Tolerance for harmonic ratio matching (5%).
 constexpr float kHarmonicTolerance = 0.05f;
-
-/// @brief Threshold for preferring higher BPM clusters (15% of total votes).
-constexpr float kThreshHigher = 0.15f;
 
 /// @brief Number of top histogram bins to consider for clustering.
 constexpr int kTopBins = 10;
@@ -89,12 +86,22 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
 HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins);
 
 /// @brief Selects best BPM from harmonic clusters using smart selection.
-/// @details Prefers higher BPM clusters if they have >= 15% of total votes,
-///          otherwise selects the most voted BPM in the largest cluster.
+/// @details Selects the strongest supported BPM in the largest harmonic cluster.
 /// @param clusters Harmonic clusters from harmonic_cluster()
 /// @param total_votes Total number of votes across all bins
 /// @return Pair of (best_bpm, confidence_percentage)
 std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes);
+
+/// @brief Applies 3-peak octave correction to tempo candidates.
+/// @details If a half/double-related pair exists among the strongest candidates,
+///          returns the middle octave in the configured range.
+/// @param candidates Tempo candidates sorted by confidence descending
+/// @param bpm_min Minimum allowed BPM
+/// @param bpm_max Maximum allowed BPM
+/// @param tolerance Relative octave-ratio tolerance
+/// @return Corrected BPM, or the strongest candidate if no octave relation is found
+float three_peak_octave_correction(const std::vector<BpmCandidate>& candidates, float bpm_min,
+                                   float bpm_max, float tolerance = 0.04f);
 
 /// @brief BPM analyzer using autocorrelation with harmonic clustering.
 class BpmAnalyzer {
@@ -127,8 +134,11 @@ class BpmAnalyzer {
   const std::vector<float>& autocorrelation() const { return autocorr_; }
 
   /// @brief Returns the tempogram (tempo vs time).
-  /// @return Tempogram values
+  /// @return Fourier tempogram values [n_bins x n_time_frames] when available
   const std::vector<float>& tempogram() const { return tempogram_; }
+
+  /// @brief Returns the local BPM curve extracted from the Fourier tempogram.
+  const std::vector<float>& local_bpm_curve() const { return local_bpm_curve_; }
 
  private:
   void analyze(const std::vector<float>& onset_strength, int sr, int hop_length);
@@ -137,6 +147,7 @@ class BpmAnalyzer {
   float confidence_;
   std::vector<float> autocorr_;
   std::vector<float> tempogram_;
+  std::vector<float> local_bpm_curve_;
   std::vector<BpmCandidate> candidates_;
   BpmConfig config_;
 };

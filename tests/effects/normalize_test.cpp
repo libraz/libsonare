@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -21,7 +23,7 @@ Audio create_audio_with_amplitude(float amplitude, int sr = 22050, float duratio
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = amplitude * std::sin(2.0f * M_PI * 440.0f * t);
+    samples[i] = amplitude * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -39,7 +41,7 @@ Audio create_audio_with_silence(int sr = 22050) {
   // 0.5s tone
   for (int i = 0; i < sr / 2; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples.push_back(0.5f * std::sin(2.0f * M_PI * 440.0f * t));
+    samples.push_back(0.5f * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t));
   }
 
   // 0.3s silence

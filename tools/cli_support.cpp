@@ -58,9 +58,7 @@ JsonBuilder& JsonBuilder::value(const std::string& v) {
   return *this;
 }
 
-JsonBuilder& JsonBuilder::value(const char* v) {
-  return value(std::string(v));
-}
+JsonBuilder& JsonBuilder::value(const char* v) { return value(std::string(v)); }
 
 JsonBuilder& JsonBuilder::value(int v) {
   append_separator();
@@ -97,33 +95,19 @@ JsonBuilder& JsonBuilder::value(bool v) {
   return *this;
 }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, const std::string& v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, const std::string& v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, const char* v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, const char* v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, int v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, int v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, size_t v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, size_t v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, float v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, float v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, double v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, double v) { return key(k).value(v); }
 
-JsonBuilder& JsonBuilder::kv(const std::string& k, bool v) {
-  return key(k).value(v);
-}
+JsonBuilder& JsonBuilder::kv(const std::string& k, bool v) { return key(k).value(v); }
 
 JsonBuilder& JsonBuilder::float_array(const std::vector<float>& arr) {
   begin_array();
@@ -132,13 +116,9 @@ JsonBuilder& JsonBuilder::float_array(const std::vector<float>& arr) {
   return *this;
 }
 
-std::string JsonBuilder::build() const {
-  return ss_.str();
-}
+std::string JsonBuilder::build() const { return ss_.str(); }
 
-void JsonBuilder::print() const {
-  std::cout << ss_.str() << "\n";
-}
+void JsonBuilder::print() const { std::cout << ss_.str() << "\n"; }
 
 void JsonBuilder::append_separator() {
   if (!needs_comma_.empty() && needs_comma_.back()) {
@@ -183,9 +163,7 @@ int CliArgs::get_int(const std::string& k, int def) const {
   return it != options.end() ? std::stoi(it->second) : def;
 }
 
-bool CliArgs::has(const std::string& k) const {
-  return options.count(k) > 0;
-}
+bool CliArgs::has(const std::string& k) const { return options.count(k) > 0; }
 
 std::string CliArgs::get_string(const std::string& k, const std::string& def) const {
   auto it = options.find(k);
@@ -218,8 +196,8 @@ CliArgs ArgParser::parse(int argc, char* argv[]) {
   return args;
 }
 
-bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, char* argv[],
-                                        int& i, int argc) {
+bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, char* argv[], int& i,
+                                        int argc) {
   static const std::map<std::string, std::function<void(CliArgs&, const std::string&)>>
       global_opts = {
           {"--n-fft", [](CliArgs& a, const std::string& v) { a.n_fft = std::stoi(v); }},
@@ -249,13 +227,18 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
 
 void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i,
                              int argc) {
-  static const std::vector<std::string> bool_flags = {
-      "harmonic-only", "percussive-only", "with-residual", "hard-mask",
-      "triads-only",   "no-hpss",         "with-seventh"};
+  static const std::vector<std::string> bool_flags = {"harmonic-only",     "percussive-only",
+                                                      "with-residual",     "hard-mask",
+                                                      "triads-only",       "no-hpss",
+                                                      "with-seventh",      "no-pad",
+                                                      "use-hpss",          "hpss",
+                                                      "loudness-weighted", "nnls",
+                                                      "use-hmm",           "detect-inversions",
+                                                      "key-context",       "auto-gain",
+                                                      "proportional-q"};
 
-  bool is_flag =
-      std::find(bool_flags.begin(), bool_flags.end(), key) != bool_flags.end() ||
-      key.find("-only") != std::string::npos;
+  bool is_flag = std::find(bool_flags.begin(), bool_flags.end(), key) != bool_flags.end() ||
+                 key.find("-only") != std::string::npos;
 
   if (is_flag) {
     args.options[key] = "true";
@@ -360,8 +343,8 @@ size_t available_memory_bytes() {
   mach_port_t host = mach_host_self();
   vm_statistics64_data_t stats;
   mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-  if (host_statistics64(host, HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&stats),
-                        &count) == KERN_SUCCESS) {
+  if (host_statistics64(host, HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&stats), &count) ==
+      KERN_SUCCESS) {
     return (stats.free_count + stats.inactive_count) * vm_page_size;
   }
 #elif __linux__
@@ -393,24 +376,17 @@ int parallel_workers() {
   return 1;
 }
 
-bool parallel_enabled() {
-  return logical_cores() >= 2;
-}
+bool parallel_enabled() { return logical_cores() >= 2; }
 
 }  // namespace system_info
 
 StageInfo get_stage_info(const char* stage) {
   static const std::map<std::string, StageInfo> stages = {
-      {"features", {1, 9, "Computing features"}},
-      {"bpm", {2, 9, "Detecting BPM"}},
-      {"key", {3, 9, "Detecting key"}},
-      {"beats", {4, 9, "Detecting beats"}},
-      {"chords", {5, 9, "Analyzing chords"}},
-      {"sections", {6, 9, "Analyzing sections"}},
-      {"timbre", {7, 9, "Analyzing timbre"}},
-      {"dynamics", {8, 9, "Analyzing dynamics"}},
-      {"rhythm", {9, 9, "Analyzing rhythm"}},
-      {"complete", {9, 9, "Complete"}},
+      {"features", {1, 9, "Computing features"}}, {"bpm", {2, 9, "Detecting BPM"}},
+      {"key", {3, 9, "Detecting key"}},           {"beats", {4, 9, "Detecting beats"}},
+      {"chords", {5, 9, "Analyzing chords"}},     {"sections", {6, 9, "Analyzing sections"}},
+      {"timbre", {7, 9, "Analyzing timbre"}},     {"dynamics", {8, 9, "Analyzing dynamics"}},
+      {"rhythm", {9, 9, "Analyzing rhythm"}},     {"complete", {9, 9, "Complete"}},
   };
   auto it = stages.find(stage);
   if (it != stages.end()) {
@@ -429,12 +405,11 @@ void progress_callback(float progress, const char* stage) {
   bar += std::string(bar_len - filled, '-');
 
   if (info.number > 0) {
-    fprintf(stderr, "\r%s[%s] %3d%% [%d/%d] %s...%s                ",
-            color::blue, bar.c_str(), pct, info.number, info.total,
-            info.description, color::reset);
+    fprintf(stderr, "\r%s[%s] %3d%% [%d/%d] %s...%s                ", color::blue, bar.c_str(), pct,
+            info.number, info.total, info.description, color::reset);
   } else {
-    fprintf(stderr, "\r%s[%s] %3d%% %s...%s          ",
-            color::blue, bar.c_str(), pct, stage, color::reset);
+    fprintf(stderr, "\r%s[%s] %3d%% %s...%s          ", color::blue, bar.c_str(), pct, stage,
+            color::reset);
   }
   fflush(stderr);
 }

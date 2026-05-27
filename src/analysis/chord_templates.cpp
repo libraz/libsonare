@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 namespace {
@@ -61,6 +63,20 @@ std::string chord_quality_to_string(ChordQuality quality) {
       return "sus2";
     case ChordQuality::Sus4:
       return "sus4";
+    case ChordQuality::Add9:
+      return "add9";
+    case ChordQuality::MinorAdd9:
+      return "madd9";
+    case ChordQuality::Dim7:
+      return "dim7";
+    case ChordQuality::HalfDim7:
+      return "m7b5";
+    case ChordQuality::Major9:
+      return "maj9";
+    case ChordQuality::Dominant9:
+      return "9";
+    case ChordQuality::Sus2Add4:
+      return "sus2add4";
     default:
       return "";
   }
@@ -86,7 +102,7 @@ float ChordTemplate::correlate(const float* chroma) const {
   }
 
   float denom = std::sqrt(chroma_norm_sq * pattern_norm_sq);
-  if (denom < 1e-10f) {
+  if (denom < constants::kEpsilon) {
     return 0.0f;
   }
 
@@ -102,7 +118,7 @@ float ChordTemplate::correlate(const float* chroma) const {
     }
   }
 
-  if (max_chroma < 1e-10f) {
+  if (max_chroma < constants::kEpsilon) {
     return cosine_sim;
   }
 
@@ -119,7 +135,9 @@ float ChordTemplate::correlate(const float* chroma) const {
   // The third is the most important note for chord quality discrimination
   float third_bonus = 0.0f;
   if (quality == ChordQuality::Major || quality == ChordQuality::Dominant7 ||
-      quality == ChordQuality::Major7 || quality == ChordQuality::Augmented) {
+      quality == ChordQuality::Major7 || quality == ChordQuality::Augmented ||
+      quality == ChordQuality::Add9 || quality == ChordQuality::Major9 ||
+      quality == ChordQuality::Dominant9) {
     // Major third at +4
     int third_idx = (root_idx + 4) % 12;
     float third_ratio = chroma[third_idx] / max_chroma;
@@ -132,7 +150,8 @@ float ChordTemplate::correlate(const float* chroma) const {
       third_bonus -= 0.05f;
     }
   } else if (quality == ChordQuality::Minor || quality == ChordQuality::Minor7 ||
-             quality == ChordQuality::Diminished) {
+             quality == ChordQuality::Diminished || quality == ChordQuality::MinorAdd9 ||
+             quality == ChordQuality::Dim7 || quality == ChordQuality::HalfDim7) {
     // Minor third at +3
     int third_idx = (root_idx + 3) % 12;
     float third_ratio = chroma[third_idx] / max_chroma;
@@ -166,7 +185,8 @@ float ChordTemplate::correlate(const float* chroma) const {
 
   // Penalize diminished/augmented chords slightly (they're less common)
   float quality_penalty = 0.0f;
-  if (quality == ChordQuality::Diminished || quality == ChordQuality::Augmented) {
+  if (quality == ChordQuality::Diminished || quality == ChordQuality::Augmented ||
+      quality == ChordQuality::Dim7 || quality == ChordQuality::HalfDim7) {
     quality_penalty = 0.05f;
   }
 
@@ -249,6 +269,62 @@ ChordTemplate create_sus4_template(PitchClass root) {
   return tmpl;
 }
 
+ChordTemplate create_add9_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::Add9;
+  tmpl.pattern = create_pattern(root, {0, 4, 7, 14});  // Root, major 3rd, 5th, 9th
+  return tmpl;
+}
+
+ChordTemplate create_minor_add9_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::MinorAdd9;
+  tmpl.pattern = create_pattern(root, {0, 3, 7, 14});  // Root, minor 3rd, 5th, 9th
+  return tmpl;
+}
+
+ChordTemplate create_dim7_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::Dim7;
+  tmpl.pattern = create_pattern(root, {0, 3, 6, 9});  // Root, minor 3rd, dim 5th, dim 7th
+  return tmpl;
+}
+
+ChordTemplate create_half_dim7_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::HalfDim7;
+  tmpl.pattern = create_pattern(root, {0, 3, 6, 10});  // Root, minor 3rd, dim 5th, minor 7th
+  return tmpl;
+}
+
+ChordTemplate create_major9_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::Major9;
+  tmpl.pattern = create_pattern(root, {0, 4, 7, 11, 14});  // Root, 3rd, 5th, maj 7th, 9th
+  return tmpl;
+}
+
+ChordTemplate create_dominant9_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::Dominant9;
+  tmpl.pattern = create_pattern(root, {0, 4, 7, 10, 14});  // Root, 3rd, 5th, min 7th, 9th
+  return tmpl;
+}
+
+ChordTemplate create_sus2_add4_template(PitchClass root) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = ChordQuality::Sus2Add4;
+  tmpl.pattern = create_pattern(root, {0, 2, 5, 7});  // Root, 2nd, 4th, 5th
+  return tmpl;
+}
+
 ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones) {
   ChordTemplate transposed;
   transposed.root = static_cast<PitchClass>((static_cast<int>(tmpl.root) + semitones + 12) % 12);
@@ -259,7 +335,7 @@ ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones) {
 
 std::vector<ChordTemplate> generate_all_chord_templates() {
   std::vector<ChordTemplate> templates;
-  templates.reserve(12 * 9);
+  templates.reserve(12 * 16);
 
   for (int root = 0; root < 12; ++root) {
     PitchClass pc = static_cast<PitchClass>(root);
@@ -273,6 +349,13 @@ std::vector<ChordTemplate> generate_all_chord_templates() {
     templates.push_back(create_minor7_template(pc));
     templates.push_back(create_sus2_template(pc));
     templates.push_back(create_sus4_template(pc));
+    templates.push_back(create_add9_template(pc));
+    templates.push_back(create_minor_add9_template(pc));
+    templates.push_back(create_dim7_template(pc));
+    templates.push_back(create_half_dim7_template(pc));
+    templates.push_back(create_major9_template(pc));
+    templates.push_back(create_dominant9_template(pc));
+    templates.push_back(create_sus2_add4_template(pc));
   }
 
   return templates;

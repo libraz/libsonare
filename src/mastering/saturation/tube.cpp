@@ -4,12 +4,11 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "util/constants.h"
+#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 #include "util/db.h"
 
 namespace sonare::mastering::saturation {
-
-using sonare::constants::kTwoPi;
 
 namespace {
 
@@ -76,6 +75,7 @@ void Tube::prepare(double sample_rate, int max_block_size) {
 }
 
 void Tube::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("Tube must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -117,11 +117,37 @@ float Tube::process_model(float sample, const TubeConfig& config) {
   const float plate_v = 250.0f;
   const float idle = plate_current_ma(grid_bias_v, plate_v);
   const float current_delta = plate_current_ma(grid_bias_v + grid_signal_v, plate_v) - idle;
-  return std::tanh(current_delta * 2.5f);
+  const float clipped = std::tanh(current_delta * 2.5f);
+  return config.harmonic_drive * clipped + (1.0f - config.harmonic_drive) * current_delta;
+}
+
+bool Tube::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      tube_config_.drive_db = value;
+      return true;
+    case 1:
+      tube_config_.bias = value;
+      return true;
+    case 2:
+      tube_config_.mix = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 3:
+      // validate_config requires bias_v to be finite; reject non-finite values.
+      if (!std::isfinite(value)) return false;
+      tube_config_.bias_v = value;
+      return true;
+    case 4:
+      tube_config_.harmonic_drive = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Tube::validate_config(const TubeConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.bias_v) ||
+      config.harmonic_drive < 0.0f || config.harmonic_drive > 1.0f ||
       config.oversample_factor < 1 ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8)) {
@@ -142,7 +168,7 @@ float Tube::apply_miller_filter(int channel, float sample) {
   const float drive = db_to_linear(tube_config_.drive_db);
   const float cutoff = std::clamp(22000.0f / (1.0f + 0.08f * drive), 2500.0f,
                                   static_cast<float>(sample_rate_ * 0.45));
-  const float coeff = 1.0f - std::exp(-kTwoPi * cutoff / static_cast<float>(sample_rate_));
+  const float coeff = rt::one_pole_lowpass_alpha_matched(cutoff, sample_rate_);
   auto& state = miller_state_[static_cast<size_t>(channel)];
   state += coeff * (sample - state);
   return state;

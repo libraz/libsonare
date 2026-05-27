@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -24,9 +26,9 @@ Audio create_chord(const std::vector<float>& midi_notes, int sr = 22050, float d
     for (int i = 0; i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
       // Add harmonics for richer sound
-      samples[i] += 0.5f * std::sin(2.0f * M_PI * freq * t);
-      samples[i] += 0.25f * std::sin(2.0f * M_PI * freq * 2.0f * t);
-      samples[i] += 0.125f * std::sin(2.0f * M_PI * freq * 3.0f * t);
+      samples[i] += 0.5f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
+      samples[i] += 0.25f * std::sin(2.0f * sonare::constants::kPiD * freq * 2.0f * t);
+      samples[i] += 0.125f * std::sin(2.0f * sonare::constants::kPiD * freq * 3.0f * t);
     }
   }
 
@@ -47,6 +49,11 @@ Audio create_chord(const std::vector<float>& midi_notes, int sr = 22050, float d
 /// @brief Creates C major chord (C-E-G).
 Audio create_c_major(int sr = 22050, float duration = 1.0f) {
   return create_chord({60.0f, 64.0f, 67.0f}, sr, duration);  // C4, E4, G4
+}
+
+/// @brief Creates C major over E bass.
+Audio create_c_major_over_e(int sr = 22050, float duration = 1.0f) {
+  return create_chord({40.0f, 60.0f, 64.0f, 67.0f}, sr, duration);  // E2, C4, E4, G4
 }
 
 /// @brief Creates A minor chord (A-C-E).
@@ -127,6 +134,45 @@ TEST_CASE("ChordAnalyzer C major detection", "[chord_analyzer]") {
   Chord most_common = analyzer.most_common_chord();
   REQUIRE(most_common.root == PitchClass::C);
   REQUIRE(most_common.quality == ChordQuality::Major);
+}
+
+TEST_CASE("ChordAnalyzer supports opt-in NNLS chroma front-end", "[chord_analyzer]") {
+  Audio audio = create_c_major(22050, 1.0f);
+
+  ChordConfig config;
+  config.use_triads_only = true;
+  config.chroma_method = ChromaMethod::NNLS;
+  config.use_beat_sync = false;
+  config.smoothing_window = 0.5f;
+
+  ChordAnalyzer analyzer(audio, config);
+
+  REQUIRE(analyzer.count() >= 1);
+  Chord most_common = analyzer.most_common_chord();
+  REQUIRE(most_common.quality == ChordQuality::Major);
+}
+
+TEST_CASE("ChordAnalyzer uses low-frequency bass chroma for inversion detection",
+          "[chord_analyzer]") {
+  Audio audio = create_c_major_over_e(22050, 1.0f);
+
+  ChordConfig config;
+  config.use_triads_only = true;
+  config.chroma_method = ChromaMethod::NNLS;
+  config.use_beat_sync = false;
+  config.detect_inversions = true;
+  config.smoothing_window = 0.5f;
+  config.min_duration = 0.0f;
+
+  ChordAnalyzer analyzer(audio, config);
+  REQUIRE(analyzer.count() >= 1);
+
+  const auto& chords = analyzer.chords();
+  REQUIRE(!chords.empty());
+  const Chord most_common = analyzer.most_common_chord();
+  REQUIRE(most_common.root == PitchClass::C);
+  REQUIRE(most_common.quality == ChordQuality::Major);
+  REQUIRE(most_common.bass == PitchClass::E);
 }
 
 TEST_CASE("ChordAnalyzer A minor detection", "[chord_analyzer]") {
@@ -281,6 +327,20 @@ TEST_CASE("ChordAnalyzer Chord::to_string", "[chord_analyzer]") {
 
   chord.quality = ChordQuality::Augmented;
   REQUIRE(chord.to_string() == "Caug");
+
+  chord.quality = ChordQuality::Add9;
+  REQUIRE(chord.to_string() == "Cadd9");
+
+  chord.quality = ChordQuality::HalfDim7;
+  REQUIRE(chord.to_string() == "Cm7b5");
+
+  chord.quality = ChordQuality::Dominant9;
+  REQUIRE(chord.to_string() == "C9");
+
+  chord.root = PitchClass::C;
+  chord.quality = ChordQuality::Major;
+  chord.bass = PitchClass::E;
+  REQUIRE(chord.to_string() == "C/E");
 }
 
 TEST_CASE("ChordAnalyzer frame chords", "[chord_analyzer]") {
@@ -306,8 +366,8 @@ TEST_CASE("ChordAnalyzer templates", "[chord_analyzer]") {
   config.use_triads_only = false;
   ChordAnalyzer analyzer1(audio, config);
 
-  // Full templates: 108 (12 roots × 9 qualities)
-  REQUIRE(analyzer1.templates().size() == 108);
+  // Full templates: 192 (12 roots × 16 qualities)
+  REQUIRE(analyzer1.templates().size() == 192);
 
   config.use_triads_only = true;
   ChordAnalyzer analyzer2(audio, config);

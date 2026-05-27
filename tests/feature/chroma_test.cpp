@@ -9,6 +9,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -22,7 +24,7 @@ Audio create_sine_audio(float freq, int sr = 22050, float duration = 0.5f) {
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = std::sin(2.0f * M_PI * freq * t);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -36,7 +38,7 @@ Audio create_chord_audio(const std::vector<float>& freqs, int sr = 22050, float 
   for (float freq : freqs) {
     for (int i = 0; i < n_samples; ++i) {
       float t = static_cast<float>(i) / static_cast<float>(sr);
-      samples[i] += std::sin(2.0f * M_PI * freq * t);
+      samples[i] += std::sin(2.0f * sonare::constants::kPiD * freq * t);
     }
   }
 
@@ -119,6 +121,20 @@ TEST_CASE("Chroma A440 detection", "[chroma]") {
   REQUIRE(max_idx == 9);
 }
 
+TEST_CASE("Chroma weighted_mean_energy emphasizes weighted frames", "[chroma]") {
+  std::vector<float> features(12 * 2, 0.0f);
+  features[0 * 2 + 0] = 1.0f;  // C in frame 0
+  features[7 * 2 + 1] = 1.0f;  // G in frame 1
+
+  Chroma chroma(std::move(features), 12, 2, 22050, 512);
+  auto unweighted = chroma.mean_energy();
+  auto weighted = chroma.weighted_mean_energy({0.1f, 1.0f});
+
+  REQUIRE_THAT(unweighted[0], WithinAbs(0.5f, 0.001f));
+  REQUIRE_THAT(unweighted[7], WithinAbs(0.5f, 0.001f));
+  REQUIRE(weighted[7] > weighted[0]);
+}
+
 TEST_CASE("Chroma C major chord detection", "[chroma]") {
   // C major chord: C4 (261.63), E4 (329.63), G4 (392.00)
   std::vector<float> freqs = {261.63f, 329.63f, 392.00f};
@@ -149,6 +165,21 @@ TEST_CASE("Chroma C major chord detection", "[chroma]") {
   REQUIRE(mean_energy[7] > threshold);  // G
 }
 
+TEST_CASE("bass_chroma emphasizes low-frequency pitch class", "[chroma]") {
+  Audio audio = create_sine_audio(65.41f, 22050, 1.0f);
+
+  BassChromaConfig config;
+  config.cqt.hop_length = 512;
+  Chroma chroma = bass_chroma(audio, config);
+
+  REQUIRE(!chroma.empty());
+  auto mean_energy = chroma.mean_energy();
+  int max_idx = static_cast<int>(std::max_element(mean_energy.begin(), mean_energy.end()) -
+                                 mean_energy.begin());
+
+  REQUIRE(max_idx == static_cast<int>(PitchClass::C));
+}
+
 TEST_CASE("Chroma features matrix view", "[chroma]") {
   Audio audio = create_sine_audio(440.0f);
 
@@ -165,6 +196,32 @@ TEST_CASE("Chroma features matrix view", "[chroma]") {
   for (size_t c = 0; c < features.rows(); ++c) {
     for (size_t t = 0; t < features.cols(); ++t) {
       REQUIRE(features.at(static_cast<int>(c), static_cast<int>(t)) >= 0.0f);
+    }
+  }
+}
+
+TEST_CASE("Chroma compute uses L2-normalized frames by default", "[chroma]") {
+  Audio audio = create_chord_audio({261.63f, 329.63f, 392.0f});
+
+  ChromaConfig config;
+  config.n_chroma = 12;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+
+  Chroma chroma = Chroma::compute(audio, config);
+
+  for (int t = 0; t < chroma.n_frames(); ++t) {
+    float sum_sq = 0.0f;
+    float max_val = 0.0f;
+    for (int c = 0; c < chroma.n_chroma(); ++c) {
+      const float value = chroma.at(c, t);
+      sum_sq += value * value;
+      max_val = std::max(max_val, std::abs(value));
+    }
+    const float norm = std::sqrt(sum_sq);
+    REQUIRE((norm < 1e-6f || std::abs(norm - 1.0f) < 0.01f));
+    if (norm > 1e-6f) {
+      REQUIRE(max_val <= 1.0f);
     }
   }
 }

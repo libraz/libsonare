@@ -9,6 +9,8 @@
 #include <cmath>
 #include <numeric>
 
+#include "analysis/key_analyzer.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -159,4 +161,79 @@ TEST_CASE("Temperley profiles differ from KS", "[key_profiles]") {
   }
 
   REQUIRE(different);
+}
+
+TEST_CASE("expanded key profile types expose usable major and minor profiles", "[key_profiles]") {
+  const KeyProfileType profile_types[] = {
+      KeyProfileType::KrumhanslSchmuckler, KeyProfileType::Temperley,   KeyProfileType::Shaath,
+      KeyProfileType::FaraldoEDMT,         KeyProfileType::FaraldoEDMA, KeyProfileType::FaraldoEDMM,
+      KeyProfileType::BellmanBudge};
+
+  for (KeyProfileType profile_type : profile_types) {
+    CAPTURE(static_cast<int>(profile_type));
+
+    auto major = get_major_profile(PitchClass::C, profile_type);
+    auto minor = get_minor_profile(PitchClass::C, profile_type);
+
+    REQUIRE(major.size() == 12);
+    REQUIRE(minor.size() == 12);
+
+    for (float value : major) {
+      REQUIRE(value >= 0.0f);
+    }
+    for (float value : minor) {
+      REQUIRE(value >= 0.0f);
+    }
+
+    auto major_normalized = normalize_profile(major);
+    auto minor_normalized = normalize_profile(minor);
+    float major_sum = std::accumulate(major_normalized.begin(), major_normalized.end(), 0.0f);
+    float minor_sum = std::accumulate(minor_normalized.begin(), minor_normalized.end(), 0.0f);
+    REQUIRE_THAT(major_sum, WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(minor_sum, WithinAbs(1.0f, 0.001f));
+  }
+}
+
+TEST_CASE("genre hints resolve without changing auto default behavior", "[key_profiles]") {
+  const std::array<float, 12> c_major_profile_chroma =
+      normalize_profile(get_boosted_major_profile(PitchClass::C));
+
+  KeyConfig auto_config;
+  auto_config.genre_hint = "auto";
+  KeyAnalyzer auto_analyzer(c_major_profile_chroma, auto_config);
+
+  KeyConfig explicit_config;
+  explicit_config.genre_hint = "";
+  explicit_config.profile_type = KeyProfileType::KrumhanslSchmuckler;
+  KeyAnalyzer explicit_analyzer(c_major_profile_chroma, explicit_config);
+
+  REQUIRE(auto_analyzer.key().root == explicit_analyzer.key().root);
+  REQUIRE(auto_analyzer.key().mode == explicit_analyzer.key().mode);
+
+  KeyConfig edm_config;
+  edm_config.genre_hint = "edm";
+  KeyAnalyzer edm_analyzer(normalize_profile(get_boosted_minor_profile(
+                               PitchClass::A, KeyProfileBoosts(), KeyProfileType::FaraldoEDMA)),
+                           edm_config);
+  REQUIRE(edm_analyzer.key().root == PitchClass::A);
+  REQUIRE(edm_analyzer.key().mode == Mode::Minor);
+}
+
+TEST_CASE("auto genre can select a stronger non-KS profile without golden labels",
+          "[key_profiles]") {
+  const std::array<float, 12> edm_chroma = normalize_profile(
+      get_boosted_minor_profile(PitchClass::A, KeyProfileBoosts(), KeyProfileType::FaraldoEDMA));
+
+  KeyConfig ks_config;
+  ks_config.genre_hint = "";
+  ks_config.profile_type = KeyProfileType::KrumhanslSchmuckler;
+  KeyAnalyzer ks_analyzer(edm_chroma, ks_config);
+
+  KeyConfig auto_config;
+  auto_config.genre_hint = "auto";
+  KeyAnalyzer auto_analyzer(edm_chroma, auto_config);
+
+  REQUIRE(auto_analyzer.key().root == PitchClass::A);
+  REQUIRE(auto_analyzer.key().mode == Mode::Minor);
+  REQUIRE(auto_analyzer.candidates(1)[0].correlation > ks_analyzer.candidates(1)[0].correlation);
 }

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -29,11 +30,18 @@ class Gate : public common::ProcessorBase {
 
   void set_config(const GateConfig& config);
   const GateConfig& config() const { return config_; }
-  float last_gain_reduction_db() const { return last_gain_reduction_db_; }
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+
+  // Automatable parameters (RT-safe; attack/release coeffs are recomputed per
+  // block inside process(), so they take effect on the next block):
+  //   0 = threshold_db (close_threshold_db kept <= threshold_db)
+  //   1 = attack_ms (clamped to >= 0)
+  //   2 = release_ms (clamped to >= 0)
+  //   3 = range_db (clamped to <= 0)
+  bool set_parameter(unsigned int param_id, float value) override;
 
  private:
   static void validate_config(const GateConfig& config);
-  static float coeff(double sample_rate, float ms);
 
   GateConfig config_{};
   bool prepared_ = false;
@@ -43,7 +51,8 @@ class Gate : public common::ProcessorBase {
   float last_gain_reduction_db_ = 0.0f;
   int hold_samples_remaining_ = 0;
   bool gate_open_ = false;
-  float hpf_coeff_ = 0.0f;
+  float hpf_b0_ = 1.0f;
+  float hpf_a1_ = 0.0f;
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;
 };

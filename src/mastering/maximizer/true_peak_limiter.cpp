@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "analysis/meter/true_peak.h"
+#include "mastering/common/scoped_no_denormals.h"
 #include "mastering/common/sliding_max.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -24,7 +24,7 @@ float sanitize_sample(float sample, float ceiling) {
 }  // namespace
 
 TruePeakLimiter::TruePeakLimiter(TruePeakLimiterConfig config)
-    : config_(config), true_peak_filter_(1, config.oversample_factor == 2 ? 2 : 4) {
+    : config_(config), true_peak_filter_(1, config.oversample_factor) {
   validate_config(config_);
 }
 
@@ -37,10 +37,27 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   update_time_constants();
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
   limiter_.prepare(sample_rate_, max_block_size_);
-  true_peak_filter_ = common::TruePeakFilter(0, config_.oversample_factor == 2 ? 2 : 4);
-  downsampler_.set_factor(config_.oversample_factor == 2 ? 2 : 4);
+  true_peak_filter_ = common::TruePeakFilter(0, config_.oversample_factor);
+  downsampler_.set_factor(config_.oversample_factor);
   oversampled_peak_window_.prepare(
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
+  const size_t max_oversampled_samples = static_cast<size_t>(std::max(0, max_block_size_)) *
+                                         static_cast<size_t>(true_peak_filter_.factor());
+  input_ptrs_.assign(2, nullptr);
+  oversampled_ptrs_.assign(2, nullptr);
+  oversampled_buffers_.assign(2, std::vector<float>(max_oversampled_samples, 0.0f));
+  limited_oversampled_buffers_.assign(2, std::vector<float>(max_oversampled_samples, 0.0f));
+  true_peak_scratch_.assign(2, {});
+  const size_t true_peak_history_size =
+      static_cast<size_t>(std::max(0, true_peak_filter_.latency_samples() * 2));
+  true_peak_history_.assign(2, std::vector<float>(true_peak_history_size, 0.0f));
+  for (auto& scratch : true_peak_scratch_) {
+    scratch.assign(true_peak_history_size + static_cast<size_t>(std::max(0, max_block_size_)),
+                   0.0f);
+  }
+  linked_abs_.assign(max_oversampled_samples, 0.0f);
+  input_rate_gain_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 1.0f);
+  downsampled_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
   prepared_ = true;
   reset();
 }
@@ -54,30 +71,10 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
 
-  if (config_.oversample_factor == 2 || config_.oversample_factor == 4) {
-    process_polyphase(channels, num_channels, num_samples);
-    return;
-  }
-
-  process_fallback(channels, num_channels, num_samples);
-}
-
-void TruePeakLimiter::process_fallback(float* const* channels, int num_channels, int num_samples) {
-  limiter_.process(channels, num_channels, num_samples);
-  const float ceiling = db_to_linear(config_.ceiling_db);
-  float peak = 0.0f;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    peak = std::max(peak, analysis::meter::true_peak(channels[ch], static_cast<size_t>(num_samples),
-                                                     config_.oversample_factor));
-  }
-  if (peak > ceiling && peak > 0.0f) {
-    const float gain = ceiling / peak;
-    for (int ch = 0; ch < num_channels; ++ch)
-      for (int i = 0; i < num_samples; ++i) channels[ch][i] *= gain;
-    last_gain_reduction_db_ = std::min(limiter_.last_gain_reduction_db(), linear_to_db(gain));
-  } else {
-    last_gain_reduction_db_ = limiter_.last_gain_reduction_db();
-  }
+  // All supported oversampling factors (2, 4, 8) use the sample-accurate
+  // polyphase brickwall path; validate_config rejects any other value.
+  common::ScopedNoDenormals no_denormals;
+  process_polyphase(channels, num_channels, num_samples);
 }
 
 void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels, int num_samples) {
@@ -89,23 +86,20 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
 
   const int factor = true_peak_filter_.factor();
   const size_t oversampled_samples = static_cast<size_t>(num_samples * factor);
-  input_ptrs_.assign(static_cast<size_t>(num_channels), nullptr);
-  oversampled_ptrs_.assign(static_cast<size_t>(num_channels), nullptr);
-  if (oversampled_buffers_.size() != static_cast<size_t>(num_channels)) {
-    oversampled_buffers_.resize(static_cast<size_t>(num_channels));
-    limited_oversampled_buffers_.resize(static_cast<size_t>(num_channels));
-  }
   for (int ch = 0; ch < num_channels; ++ch) {
     input_ptrs_[static_cast<size_t>(ch)] = channels[ch];
-    oversampled_buffers_[static_cast<size_t>(ch)].assign(oversampled_samples, 0.0f);
-    limited_oversampled_buffers_[static_cast<size_t>(ch)].assign(oversampled_samples, 0.0f);
+    std::fill_n(oversampled_buffers_[static_cast<size_t>(ch)].begin(),
+                static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
+    std::fill_n(limited_oversampled_buffers_[static_cast<size_t>(ch)].begin(),
+                static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
     oversampled_ptrs_[static_cast<size_t>(ch)] =
         oversampled_buffers_[static_cast<size_t>(ch)].data();
   }
   true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(),
-                                          num_channels, num_samples, true_peak_history_);
+                                          num_channels, num_samples, true_peak_history_,
+                                          true_peak_scratch_);
 
-  linked_abs_.assign(oversampled_samples, 0.0f);
+  std::fill_n(linked_abs_.begin(), static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
   for (int ch = 0; ch < num_channels; ++ch) {
     const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
     for (size_t i = 0; i < oversampled_samples; ++i) {
@@ -113,7 +107,6 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     }
   }
 
-  (void)factor;
   const float ceiling = db_to_linear(config_.ceiling_db);
   float min_gain = 1.0f;
   for (size_t os = 0; os < oversampled_samples; ++os) {
@@ -150,10 +143,11 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {
-    const auto downsampled =
-        downsampler_.downsample(limited_oversampled_buffers_[static_cast<size_t>(ch)]);
+    downsampler_.downsample_to(limited_oversampled_buffers_[static_cast<size_t>(ch)].data(),
+                               oversampled_samples, downsampled_.data(),
+                               static_cast<size_t>(num_samples));
     for (int i = 0; i < num_samples; ++i) {
-      channels[ch][i] = downsampled[static_cast<size_t>(i)];
+      channels[ch][i] = downsampled_[static_cast<size_t>(i)];
     }
   }
 
@@ -164,21 +158,18 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
                                                     int num_samples) {
   const int factor = true_peak_filter_.factor();
   const size_t oversampled_samples = static_cast<size_t>(num_samples * factor);
-  input_ptrs_.assign(static_cast<size_t>(num_channels), nullptr);
-  oversampled_ptrs_.assign(static_cast<size_t>(num_channels), nullptr);
-  if (oversampled_buffers_.size() != static_cast<size_t>(num_channels)) {
-    oversampled_buffers_.resize(static_cast<size_t>(num_channels));
-  }
   for (int ch = 0; ch < num_channels; ++ch) {
     input_ptrs_[static_cast<size_t>(ch)] = channels[ch];
-    oversampled_buffers_[static_cast<size_t>(ch)].assign(oversampled_samples, 0.0f);
+    std::fill_n(oversampled_buffers_[static_cast<size_t>(ch)].begin(),
+                static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
     oversampled_ptrs_[static_cast<size_t>(ch)] =
         oversampled_buffers_[static_cast<size_t>(ch)].data();
   }
   true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(),
-                                          num_channels, num_samples, true_peak_history_);
+                                          num_channels, num_samples, true_peak_history_,
+                                          true_peak_scratch_);
 
-  linked_abs_.assign(oversampled_samples, 0.0f);
+  std::fill_n(linked_abs_.begin(), static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
   for (int ch = 0; ch < num_channels; ++ch) {
     const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
     for (size_t i = 0; i < oversampled_samples; ++i) {
@@ -188,7 +179,7 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
 
   const float ceiling = db_to_linear(config_.ceiling_db);
   float min_gain = 1.0f;
-  input_rate_gain_.assign(static_cast<size_t>(num_samples), 1.0f);
+  std::fill_n(input_rate_gain_.begin(), num_samples, 1.0f);
   for (size_t os = 0; os < oversampled_samples; ++os) {
     oversampled_peak_window_.push(linked_abs_[os]);
 
@@ -239,7 +230,9 @@ void TruePeakLimiter::reset() {
   crest_peak_ = 0.0f;
   crest_rms_ = 0.0f;
   oversampled_peak_window_.reset();
-  true_peak_history_.clear();
+  for (auto& history : true_peak_history_) {
+    std::fill(history.begin(), history.end(), 0.0f);
+  }
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -258,6 +251,32 @@ void TruePeakLimiter::set_release_ms(float release_ms) {
   limiter_.set_release_ms(release_ms);
 }
 
+bool TruePeakLimiter::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.ceiling_db = std::min(0.0f, value);
+      // The polyphase path reads config_.ceiling_db directly each block (RT-safe).
+      // Forward to the inner brickwall limiter to keep its reported ceiling
+      // consistent; that forward re-prepares the inner limiter, which does not
+      // affect the polyphase gain envelopes used by the active processing path.
+      if (prepared_) {
+        limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+      }
+      return true;
+    case 1:
+      // In-place: recomputes time constants and forwards to inner limiter
+      // without clearing lookahead or gain-envelope state.
+      set_release_ms(std::max(0.0f, value));
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id != 0u;
+}
+
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
       (config.oversample_factor != 2 && config.oversample_factor != 4 &&
@@ -267,10 +286,12 @@ void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
 }
 
 int TruePeakLimiter::latency_samples() const noexcept {
-  return limiter_.latency_samples() +
-         (config_.oversample_factor == 2 || config_.oversample_factor == 4
-              ? true_peak_filter_.latency_samples()
-              : 0);
+  // Signal-path delay is lookahead_samples_ at base rate for every mode:
+  //  - polyphase: oversampled_lookahead_ holds lookahead_samples_*factor OS samples
+  //    (= lookahead_samples_ base-rate); the upsampler (centered FIR + history pre-fill)
+  //    and the centered batch downsampler add zero group delay.
+  //  - detect_only: the lookahead buffer / inner limiter delay by lookahead_samples_.
+  return limiter_.latency_samples();
 }
 
 void TruePeakLimiter::prepare_buffers(int num_channels) {
@@ -302,10 +323,19 @@ float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
   crest_peak_ =
       std::max(linked_peak, crest_coeff_ * crest_peak_ + (1.0f - crest_coeff_) * linked_peak);
   crest_rms_ = crest_coeff_ * crest_rms_ + (1.0f - crest_coeff_) * linked_peak * linked_peak;
-  const float rms = std::sqrt(std::max(crest_rms_, 1e-12f));
+  // Floor on the smoothed RMS to avoid division by zero on silence.
+  constexpr float kCrestRmsFloor = 1e-12f;
+  // Crest factor maps to a transient amount via (crest - offset) / range, where a
+  // steady tone (crest ~= 1..2) yields ~0 and sharp transients saturate toward 1.
+  constexpr float kCrestTransientOffset = 2.0f;
+  constexpr float kCrestTransientRange = 8.0f;
+  // Maximum fraction by which the release is shortened for full transients.
+  constexpr float kMaxReleaseShorten = 0.75f;
+  const float rms = std::sqrt(std::max(crest_rms_, kCrestRmsFloor));
   const float crest = crest_peak_ / rms;
-  const float transient = std::clamp((crest - 2.0f) / 8.0f, 0.0f, 1.0f);
-  const float release_scale = 1.0f - 0.75f * transient;
+  const float transient =
+      std::clamp((crest - kCrestTransientOffset) / kCrestTransientRange, 0.0f, 1.0f);
+  const float release_scale = 1.0f - kMaxReleaseShorten * transient;
   return time_to_coefficient(sample_rate_, config_.release_ms * release_scale);
 }
 

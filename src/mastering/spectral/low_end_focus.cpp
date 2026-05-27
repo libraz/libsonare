@@ -4,11 +4,10 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "util/constants.h"
+#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
 
 namespace sonare::mastering::spectral {
-
-using sonare::constants::kTwoPiD;
 
 LowEndFocus::LowEndFocus(LowEndFocusConfig config) : config_(config) { validate_config(config_); }
 
@@ -22,6 +21,7 @@ void LowEndFocus::prepare(double sample_rate, int max_block_size) {
 }
 
 void LowEndFocus::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("LowEndFocus must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
@@ -38,16 +38,9 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
     if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
   }
 
-  const float low_alpha =
-      std::clamp(static_cast<float>(kTwoPiD * config_.cutoff_hz /
-                                    (kTwoPiD * config_.cutoff_hz + sample_rate_)),
-                 0.0f, 1.0f);
-  const float sub_alpha =
-      std::clamp(static_cast<float>(kTwoPiD * (config_.cutoff_hz * 0.5f) /
-                                    (kTwoPiD * (config_.cutoff_hz * 0.5f) + sample_rate_)),
-                 0.0f, 1.0f);
-  const float transient_alpha =
-      std::clamp(static_cast<float>(kTwoPiD * 25.0 / (kTwoPiD * 25.0 + sample_rate_)), 0.0f, 1.0f);
+  const float low_alpha = rt::one_pole_lowpass_alpha(config_.cutoff_hz, sample_rate_);
+  const float sub_alpha = rt::one_pole_lowpass_alpha(config_.cutoff_hz * 0.5f, sample_rate_);
+  const float transient_alpha = rt::one_pole_lowpass_alpha(25.0f, sample_rate_);
   for (int i = 0; i < num_samples; ++i) {
     for (int ch = 0; ch < num_channels; ++ch) {
       const auto index = static_cast<size_t>(ch);
@@ -91,6 +84,25 @@ void LowEndFocus::reset() {
 void LowEndFocus::set_config(const LowEndFocusConfig& config) {
   validate_config(config);
   config_ = config;
+}
+
+bool LowEndFocus::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.cutoff_hz = std::max(value, 1.0e-3f);
+      return true;
+    case 1:
+      config_.width = std::clamp(value, 0.0f, 2.0f);
+      return true;
+    case 2:
+      config_.subharmonic_amount = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    case 3:
+      config_.transient_tightness = std::clamp(value, 0.0f, 1.0f);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void LowEndFocus::validate_config(const LowEndFocusConfig& config) {

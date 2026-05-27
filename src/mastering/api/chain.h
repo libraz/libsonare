@@ -16,6 +16,9 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/saturation/exciter.h"
@@ -36,6 +39,21 @@ struct DeclickStage {
   mastering::repair::DeclickConfig config{};
 };
 
+struct DeclipStage {
+  bool enabled = false;
+  mastering::repair::DeclipConfig config{};
+};
+
+struct DecrackleStage {
+  bool enabled = false;
+  mastering::repair::DecrackleConfig config{};
+};
+
+struct DehumStage {
+  bool enabled = false;
+  mastering::repair::DehumConfig config{};
+};
+
 struct DereverbStage {
   bool enabled = false;
   mastering::repair::DereverbClassicalConfig config{};
@@ -48,6 +66,9 @@ struct DenoiseStage {
 
 struct RepairChainConfig {
   DeclickStage declick{};
+  DeclipStage declip{};
+  DecrackleStage decrackle{};
+  DehumStage dehum{};
   DereverbStage dereverb{};
   DenoiseStage denoise{};
 };
@@ -164,13 +185,24 @@ struct MasteringChainConfig {
 // Chain results
 // ---------------------------------------------------------------------------
 
+/// @brief Gain reduction reported by a single dynamics/maximizer stage.
+/// `gain_reduction_db` is the most recent (typically last-block) gain reduction
+/// in dB (negative or zero); for multiband stages it is the most-reduced band.
+struct StageGainReduction {
+  std::string stage;  // e.g. "dynamics.compressor"
+  float gain_reduction_db = 0.0f;
+};
+
 struct MonoChainResult {
   std::vector<float> samples;
   int sample_rate = 0;
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
   float applied_gain_db = 0.0f;
+  float output_true_peak_dbtp = 0.0f;  // ITU-R BS.1770-4 true peak (4x oversampled)
+  float output_lra = 0.0f;             // EBU Tech 3342 Loudness Range (LU)
   std::vector<std::string> stages;
+  std::vector<StageGainReduction> stage_gain_reductions;
 };
 
 struct StereoChainResult {
@@ -180,7 +212,10 @@ struct StereoChainResult {
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
   float applied_gain_db = 0.0f;
+  float output_true_peak_dbtp = 0.0f;  // ITU-R BS.1770-4 true peak (4x oversampled)
+  float output_lra = 0.0f;             // EBU Tech 3342 Loudness Range (LU)
   std::vector<std::string> stages;
+  std::vector<StageGainReduction> stage_gain_reductions;
 };
 
 // ---------------------------------------------------------------------------
@@ -309,6 +344,15 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
 /// also set to 0. Unknown keys throw std::invalid_argument.
 void apply_chain_config_overrides(MasteringChainConfig& config, const Param* params,
                                   std::size_t count);
+
+/// @brief Serialize a chain configuration as canonical JSON.
+/// Schema: {"version":1,"params":{"dot.notation.key":number_or_bool,...}}.
+std::string chain_config_to_json(const MasteringChainConfig& config);
+
+/// @brief Parse a chain configuration serialized by chain_config_to_json.
+/// Throws std::invalid_argument for malformed JSON, unsupported versions, or
+/// unknown parameter keys.
+MasteringChainConfig chain_config_from_json(const std::string& json);
 
 /// @brief Convenience: parse params, build chain, run mono once.
 MonoChainResult run_chain_mono_params(const Param* params, std::size_t param_count,

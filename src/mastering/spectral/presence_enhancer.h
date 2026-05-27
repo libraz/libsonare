@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "mastering/common/biquad.h"
 #include "mastering/common/processor_base.h"
 
 namespace sonare::mastering::spectral {
@@ -21,17 +22,17 @@ class PresenceEnhancer : public common::ProcessorBase {
   void reset() override;
   void set_config(const PresenceEnhancerConfig& config);
 
-  struct Biquad {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-    float process(float x);
-    void reset();
-  };
+  // Automatable parameters (RT-safe: amount/drive are applied per-sample; the
+  // bandpass center/Q recompute the cached biquad coefficients in place,
+  // preserving filter state). Ids follow the PresenceEnhancerConfig declaration
+  // order:
+  //   0 = amount (clamped to [0, 1])
+  //   1 = drive (clamped to > 0)
+  //   2 = center_frequency_hz (clamped to > 0; recomputes bandpass coefficients)
+  //   3 = q (clamped to > 0; recomputes bandpass coefficients)
+  bool set_parameter(unsigned int param_id, float value) override;
+
+  using Biquad = common::Biquad;
 
  private:
   static void validate_config(const PresenceEnhancerConfig& config);

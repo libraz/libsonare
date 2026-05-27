@@ -4,7 +4,16 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::maximizer {
+namespace {
+
+// Smallest strictly-positive crest window / crest factor accepted by
+// validate_config; reused to clamp the matching automation parameters.
+constexpr float kMinPositiveCrest = 1.0e-4f;
+
+}  // namespace
 
 AdaptiveRelease::AdaptiveRelease(AdaptiveReleaseConfig config) : config_(config) {
   validate_config(config_);
@@ -25,6 +34,7 @@ void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
 }
 
 void AdaptiveRelease::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) throw std::logic_error("AdaptiveRelease must be prepared before processing");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
@@ -68,6 +78,40 @@ void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
   validate_config(config);
   config_ = config;
   if (prepared_) prepare(sample_rate_, max_block_size_);
+}
+
+bool AdaptiveRelease::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.ceiling_db = std::min(0.0f, value);
+      // Forward the ceiling to the inner true-peak limiter in place (param 0);
+      // does not disturb the crest-factor / release smoothing state held here.
+      if (prepared_) limiter_.set_parameter(0, config_.ceiling_db);
+      return true;
+    case 1:
+      // Read directly by the per-block release mapping; no recompute needed.
+      config_.min_release_ms = std::max(0.0f, value);
+      config_.max_release_ms = std::max(config_.max_release_ms, config_.min_release_ms);
+      return true;
+    case 2:
+      config_.max_release_ms = std::max(config_.min_release_ms, value);
+      return true;
+    case 3:
+      config_.crest_window_ms = std::max(kMinPositiveCrest, value);
+      return true;
+    case 4:
+      config_.crest_low = std::max(kMinPositiveCrest, value);
+      config_.crest_high = std::max(config_.crest_high, config_.crest_low + kMinPositiveCrest);
+      return true;
+    case 5:
+      config_.crest_high = std::max(config_.crest_low + kMinPositiveCrest, value);
+      return true;
+    case 6:
+      config_.release_smoothing_ms = std::max(0.0f, value);
+      return true;
+    default:
+      return false;
+  }
 }
 
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {

@@ -29,7 +29,26 @@ const char* PitchClassNameLocal(SonarePitchClass pc) {
   return names[idx];
 }
 
-const char* ModeNameLocal(SonareMode mode) { return mode == SONARE_MODE_MAJOR ? "major" : "minor"; }
+const char* ModeNameLocal(SonareMode mode) {
+  switch (mode) {
+    case SONARE_MODE_MAJOR:
+      return "major";
+    case SONARE_MODE_MINOR:
+      return "minor";
+    case SONARE_MODE_DORIAN:
+      return "dorian";
+    case SONARE_MODE_PHRYGIAN:
+      return "phrygian";
+    case SONARE_MODE_LYDIAN:
+      return "lydian";
+    case SONARE_MODE_MIXOLYDIAN:
+      return "mixolydian";
+    case SONARE_MODE_LOCRIAN:
+      return "locrian";
+    default:
+      return "unknown";
+  }
+}
 
 const char* ChordQualityName(SonareChordQuality quality) {
   switch (quality) {
@@ -53,6 +72,20 @@ const char* ChordQualityName(SonareChordQuality quality) {
       return "sus4";
     case SONARE_CHORD_UNKNOWN:
       return "unknown";
+    case SONARE_CHORD_ADD9:
+      return "add9";
+    case SONARE_CHORD_MINOR_ADD9:
+      return "minorAdd9";
+    case SONARE_CHORD_DIM7:
+      return "dim7";
+    case SONARE_CHORD_HALF_DIM7:
+      return "halfDim7";
+    case SONARE_CHORD_MAJOR9:
+      return "major9";
+    case SONARE_CHORD_DOMINANT9:
+      return "dominant9";
+    case SONARE_CHORD_SUS2_ADD4:
+      return "sus2Add4";
   }
   return "unknown";
 }
@@ -65,7 +98,11 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
   key.Set("mode", Napi::String::New(env, mode_name));
   key.Set("confidence", Napi::Number::New(env, static_cast<double>(confidence)));
   key.Set("name", Napi::String::New(env, root_name + " " + mode_name));
-  key.Set("shortName", Napi::String::New(env, root_name + (mode == SONARE_MODE_MAJOR ? "" : "m")));
+  const std::string short_name =
+      mode == SONARE_MODE_MAJOR
+          ? root_name
+          : (mode == SONARE_MODE_MINOR ? root_name + "m" : root_name + " " + mode_name);
+  key.Set("shortName", Napi::String::New(env, short_name));
   return key;
 }
 

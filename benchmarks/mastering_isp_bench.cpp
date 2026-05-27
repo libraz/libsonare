@@ -48,8 +48,7 @@ int main(int argc, char** argv) {
   const int iterations = argc > 1 ? std::max(1, std::atoi(argv[1])) : 20000;
   const int runs = argc > 2 ? std::max(1, std::atoi(argv[2])) : 7;
 
-  std::vector<std::vector<float>> input(kChannels,
-                                        std::vector<float>(kBlockSamples, 0.0f));
+  std::vector<std::vector<float>> input(kChannels, std::vector<float>(kBlockSamples, 0.0f));
   for (int ch = 0; ch < kChannels; ++ch) {
     for (int i = 0; i < kBlockSamples; ++i) {
       const float phase = static_cast<float>(i + ch * 11) / static_cast<float>(kBlockSamples);

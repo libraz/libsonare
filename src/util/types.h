@@ -76,6 +76,11 @@ enum class PitchClass : int {
 enum class Mode {
   Major,
   Minor,
+  Dorian,
+  Phrygian,
+  Lydian,
+  Mixolydian,
+  Locrian,
 };
 
 /// @brief Chord quality types.
@@ -90,6 +95,13 @@ enum class ChordQuality {
   Sus2,
   Sus4,
   Unknown,
+  Add9,
+  MinorAdd9,
+  Dim7,
+  HalfDim7,
+  Major9,
+  Dominant9,
+  Sus2Add4,
 };
 
 /// @brief Song section types.
@@ -122,8 +134,27 @@ inline const char* pitch_class_name(PitchClass pc) {
 
 /// @brief Returns the name of a mode.
 /// @param m Mode
-/// @return "major" or "minor"
-inline const char* mode_name(Mode m) { return m == Mode::Major ? "major" : "minor"; }
+/// @return Human-readable mode name.
+inline const char* mode_name(Mode m) {
+  switch (m) {
+    case Mode::Major:
+      return "major";
+    case Mode::Minor:
+      return "minor";
+    case Mode::Dorian:
+      return "dorian";
+    case Mode::Phrygian:
+      return "phrygian";
+    case Mode::Lydian:
+      return "lydian";
+    case Mode::Mixolydian:
+      return "mixolydian";
+    case Mode::Locrian:
+      return "locrian";
+    default:
+      return "unknown";
+  }
+}
 
 /// @brief Returns error message for an error code.
 /// @param code Error code

@@ -51,6 +51,7 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/filters/wavelet.cpp
   ${SONARE_ROOT}/src/feature/mel_spectrogram.cpp
   ${SONARE_ROOT}/src/feature/chroma.cpp
+  ${SONARE_ROOT}/src/feature/nnls_chroma.cpp
   ${SONARE_ROOT}/src/feature/spectral.cpp
   ${SONARE_ROOT}/src/feature/onset.cpp
   ${SONARE_ROOT}/src/feature/pitch.cpp
@@ -62,6 +63,7 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/feature/segment.cpp
   ${SONARE_ROOT}/src/effects/hpss.cpp
   ${SONARE_ROOT}/src/effects/phase_vocoder.cpp
+  ${SONARE_ROOT}/src/effects/native_spectral_stretch.cpp
   ${SONARE_ROOT}/src/effects/time_stretch.cpp
   ${SONARE_ROOT}/src/effects/pitch_shift.cpp
   ${SONARE_ROOT}/src/effects/normalize.cpp
@@ -75,23 +77,27 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/util/sequence.cpp
   ${SONARE_ROOT}/src/util/vector_normalize.cpp
   ${SONARE_ROOT}/src/mastering/maximizer/loudness_optimize.cpp
-  ${SONARE_ROOT}/src/analysis/meter/basic.cpp
-  ${SONARE_ROOT}/src/analysis/meter/clipping.cpp
-  ${SONARE_ROOT}/src/analysis/meter/dynamic_range.cpp
-  ${SONARE_ROOT}/src/analysis/meter/lufs.cpp
-  ${SONARE_ROOT}/src/analysis/meter/phase_scope.cpp
-  ${SONARE_ROOT}/src/analysis/meter/spectrum.cpp
-  ${SONARE_ROOT}/src/analysis/meter/spectrogram.cpp
-  ${SONARE_ROOT}/src/analysis/meter/stereo.cpp
-  ${SONARE_ROOT}/src/analysis/meter/true_peak.cpp
+  ${SONARE_ROOT}/src/metering/basic.cpp
+  ${SONARE_ROOT}/src/metering/clipping.cpp
+  ${SONARE_ROOT}/src/metering/dynamic_range.cpp
+  ${SONARE_ROOT}/src/metering/lufs.cpp
+  ${SONARE_ROOT}/src/metering/phase_scope.cpp
+  ${SONARE_ROOT}/src/metering/spectrum.cpp
+  ${SONARE_ROOT}/src/metering/spectrogram.cpp
+  ${SONARE_ROOT}/src/metering/stereo.cpp
+  ${SONARE_ROOT}/src/metering/true_peak.cpp
   ${SONARE_ROOT}/src/analysis/key_profiles.cpp
   ${SONARE_ROOT}/src/analysis/chord_templates.cpp
+  ${SONARE_ROOT}/src/analysis/acoustic_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/bpm_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/key_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/onset_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/dynamics_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/beat_analyzer.cpp
+  ${SONARE_ROOT}/src/analysis/meter_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/chord_analyzer.cpp
+  ${SONARE_ROOT}/src/analysis/chord_hmm.cpp
+  ${SONARE_ROOT}/src/analysis/downbeat_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/boundary_detector.cpp
   ${SONARE_ROOT}/src/analysis/rhythm_analyzer.cpp
   ${SONARE_ROOT}/src/analysis/timbre_analyzer.cpp
@@ -114,6 +120,55 @@ file(GLOB_RECURSE SONARE_MASTERING_SOURCES CONFIGURE_DEPENDS
   ${SONARE_ROOT}/src/mastering/*.cpp
 )
 list(APPEND SONARE_SOURCES ${SONARE_MASTERING_SOURCES})
+# Pitch editing and voice changing power the editing-oriented effects
+# (pitchCorrectToMidi, noteStretch, voiceChange).
+file(GLOB_RECURSE SONARE_PITCH_EDITOR_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/editing/pitch_editor/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_PITCH_EDITOR_SOURCES})
+file(GLOB_RECURSE SONARE_VOICE_CHANGER_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/editing/voice_changer/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_VOICE_CHANGER_SOURCES})
+file(GLOB_RECURSE SONARE_MIXING_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/mixing/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_MIXING_SOURCES})
+file(GLOB_RECURSE SONARE_RT_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/rt/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_RT_SOURCES})
+file(GLOB_RECURSE SONARE_TRANSPORT_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/transport/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_TRANSPORT_SOURCES})
+file(GLOB_RECURSE SONARE_AUTOMATION_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/automation/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_AUTOMATION_SOURCES})
+file(GLOB_RECURSE SONARE_ENGINE_SOURCES CONFIGURE_DEPENDS
+  ${SONARE_ROOT}/src/engine/*.cpp
+)
+list(APPEND SONARE_SOURCES ${SONARE_ENGINE_SOURCES})
+list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/sonare_c_daw.cpp)
+list(APPEND SONARE_SOURCES ${SONARE_ROOT}/src/sonare_c_mixing.cpp)
+# sonare_c_mixing.cpp routes the mixer through the routing graph.
+list(APPEND SONARE_SOURCES
+  ${SONARE_ROOT}/src/graph/graph.cpp
+  ${SONARE_ROOT}/src/graph/node.cpp
+)
+# The channel-strip insert factory (mastering/api/insert_factory.cpp, pulled in
+# via the mastering GLOB above) can instantiate effects.reverb.* inserts when
+# SONARE_HAVE_FX is defined. Compile the reverb sources it links against so the
+# addon resolves those symbols, matching the native sonare_fx target.
+list(APPEND SONARE_SOURCES
+  ${SONARE_ROOT}/src/effects/reverb/dattorro_reverb.cpp
+  ${SONARE_ROOT}/src/effects/reverb/fdn_reverb.cpp
+  ${SONARE_ROOT}/src/effects/reverb/velvet_reverb.cpp
+  ${SONARE_ROOT}/src/effects/reverb/convolution_reverb.cpp
+  # dc_blocker.cpp is a transitive dependency of the FDN/convolution reverbs.
+  ${SONARE_ROOT}/src/effects/common/dc_blocker.cpp
+)
 list(REMOVE_DUPLICATES SONARE_SOURCES)
 
 # KissFFT sources
@@ -125,10 +180,12 @@ set(KISSFFT_SOURCES
 # Addon sources
 set(ADDON_SOURCES
   src/addon/addon.cpp
+  src/addon/sonare_wrap_engine.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_analysis.cpp
   src/addon/sonare_wrap_effects.cpp
   src/addon/sonare_wrap_features.cpp
+  src/addon/sonare_wrap_mixer.cpp
   src/addon/sonare_wrap_streaming.cpp
   src/addon/sonare_wrap_utils.cpp
 )
@@ -221,6 +278,12 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   NAPI_DISABLE_CPP_EXCEPTIONS
   KISS_FFT_FIXED=0
+  SONARE_WITH_GRAPH=1
+  SONARE_WITH_PITCH_EDITOR=1
+  SONARE_WITH_VOICE_CHANGER=1
+  # Enable the effects.reverb.* branch of the channel-strip insert factory
+  # (mirrors src/CMakeLists.txt's sonare_mastering + sonare_fx wiring).
+  SONARE_HAVE_FX
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE

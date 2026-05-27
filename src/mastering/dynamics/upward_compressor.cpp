@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 
 namespace sonare::mastering::dynamics {
@@ -22,6 +23,9 @@ void UpwardCompressor::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
+  if (followers_.size() < kRealtimePreparedChannels) {
+    followers_.resize(kRealtimePreparedChannels);
+  }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }
@@ -29,6 +33,7 @@ void UpwardCompressor::prepare(double sample_rate, int max_block_size) {
 }
 
 void UpwardCompressor::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("UpwardCompressor must be prepared before processing");
   }
@@ -79,6 +84,39 @@ void UpwardCompressor::set_config(const UpwardCompressorConfig& config) {
   }
 }
 
+bool UpwardCompressor::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      config_.threshold_db = value;
+      return true;
+    case 1:
+      config_.ratio = std::max(1.0f, value);
+      return true;
+    case 2:
+      config_.attack_ms = std::max(0.0f, value);
+      // Recompute follower coefficients in place; preserves envelope state.
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 3:
+      config_.release_ms = std::max(0.0f, value);
+      if (prepared_) {
+        for (auto& follower : followers_) {
+          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+        }
+      }
+      return true;
+    case 4:
+      config_.range_db = std::max(0.0f, value);
+      return true;
+    default:
+      return false;
+  }
+}
+
 void UpwardCompressor::validate_config(const UpwardCompressorConfig& config) {
   if (!(config.ratio >= 1.0f) || config.range_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f) {
@@ -97,14 +135,12 @@ float UpwardCompressor::gain_db(float input_db, const UpwardCompressorConfig& co
 }
 
 void UpwardCompressor::ensure_followers(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
+  const auto target_size = static_cast<size_t>(num_channels);
+  if (followers_.size() >= target_size) {
     return;
   }
 
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  throw std::invalid_argument("num_channels exceeds prepared UpwardCompressor state");
 }
 
 }  // namespace sonare::mastering::dynamics

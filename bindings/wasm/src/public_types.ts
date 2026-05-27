@@ -24,9 +24,43 @@ export type PitchClass = (typeof PitchClass)[keyof typeof PitchClass];
 export const Mode = {
   Major: 0,
   Minor: 1,
+  Dorian: 2,
+  Phrygian: 3,
+  Lydian: 4,
+  Mixolydian: 5,
+  Locrian: 6,
 } as const;
 
 export type Mode = (typeof Mode)[keyof typeof Mode];
+
+export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
+
+export const KeyProfile = {
+  KrumhanslSchmuckler: 0,
+  Temperley: 1,
+  Shaath: 2,
+  FaraldoEDMT: 3,
+  FaraldoEDMA: 4,
+  FaraldoEDMM: 5,
+  BellmanBudge: 6,
+} as const;
+
+export type KeyProfile = (typeof KeyProfile)[keyof typeof KeyProfile];
+
+export type KeyProfileName =
+  | 'ks'
+  | 'krumhansl'
+  | 'temperley'
+  | 'shaath'
+  | 'keyfinder'
+  | 'faraldo-edmt'
+  | 'edmt'
+  | 'faraldo-edma'
+  | 'edma'
+  | 'faraldo-edmm'
+  | 'edmm'
+  | 'bellman-budge'
+  | 'bellman';
 
 /**
  * Chord quality
@@ -41,9 +75,133 @@ export const ChordQuality = {
   Minor7: 6,
   Sus2: 7,
   Sus4: 8,
+  Unknown: 9,
+  Add9: 10,
+  MinorAdd9: 11,
+  Dim7: 12,
+  HalfDim7: 13,
+  Major9: 14,
+  Dominant9: 15,
+  Sus2Add4: 16,
 } as const;
 
 export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
+
+export type MasteringPreset =
+  | 'pop'
+  | 'edm'
+  | 'acoustic'
+  | 'hipHop'
+  | 'aiMusic'
+  | 'speech'
+  | 'streaming'
+  | 'youtube'
+  | 'broadcast'
+  | 'podcast'
+  | 'audiobook'
+  | 'cinema'
+  | 'jpop'
+  | 'ambient'
+  | 'lofi'
+  | 'classical'
+  | 'drumAndBass'
+  | 'techno'
+  | 'metal'
+  | 'trap'
+  | 'rnb'
+  | 'jazz'
+  | 'kpop'
+  | 'trance'
+  | 'gameOst';
+
+export interface StreamingPlatform {
+  name: string;
+  targetLufs: number;
+  ceilingDb: number;
+}
+
+export type SoloProcessor =
+  | 'dynamics.brickwallLimiter'
+  | 'dynamics.compressor'
+  | 'dynamics.deesser'
+  | 'dynamics.expander'
+  | 'dynamics.gate'
+  | 'dynamics.limiter'
+  | 'dynamics.parallelComp'
+  | 'dynamics.sidechainRouter'
+  | 'dynamics.duckingProcessor'
+  | 'dynamics.transientShaper'
+  | 'dynamics.upwardCompressor'
+  | 'dynamics.upwardExpander'
+  | 'dynamics.vocalRider'
+  | 'eq.apiStyle'
+  | 'eq.bandPass'
+  | 'eq.cutFilter'
+  | 'eq.dynamic'
+  | 'eq.equalizer'
+  | 'eq.graphic'
+  | 'eq.linearPhase'
+  | 'eq.midSide'
+  | 'eq.minimumPhase'
+  | 'eq.parametric'
+  | 'eq.pultec'
+  | 'eq.shelving'
+  | 'eq.tilt'
+  | 'final.bitDepth'
+  | 'final.dither'
+  | 'final.outputChain'
+  | 'maximizer.adaptiveRelease'
+  | 'maximizer.loudnessOptimize'
+  | 'maximizer.maximizer'
+  | 'maximizer.softKneeMax'
+  | 'maximizer.truePeakLimiter'
+  | 'multiband.compressor'
+  | 'multiband.dynamicEq'
+  | 'multiband.expander'
+  | 'multiband.imager'
+  | 'multiband.limiter'
+  | 'multiband.saturation'
+  | 'repair.declick'
+  | 'repair.declip'
+  | 'repair.decrackle'
+  | 'repair.dehum'
+  | 'repair.denoiseClassical'
+  | 'repair.dereverbClassical'
+  | 'repair.trimSilence'
+  | 'saturation.bitcrusher'
+  | 'saturation.exciter'
+  | 'saturation.hardClipper'
+  | 'saturation.multibandExciter'
+  | 'saturation.softClipper'
+  | 'saturation.tape'
+  | 'saturation.transformer'
+  | 'saturation.tube'
+  | 'saturation.waveshaper'
+  | 'spectral.airBand'
+  | 'spectral.lowEndFocus'
+  | 'spectral.presenceEnhancer'
+  | 'spectral.spectralShaper'
+  | 'stereo.autoPan'
+  | 'stereo.haasEnhancer'
+  | 'stereo.imager'
+  | 'stereo.monoMaker'
+  | 'stereo.phaseAlign'
+  | 'stereo.stereoBalance';
+
+export type PairProcessor =
+  | 'match.applyMatchEq'
+  | 'match.alignReferenceToSource'
+  | 'match.abSwitch'
+  | 'match.abCrossfade';
+
+export type PairAnalysis =
+  | 'match.referenceLoudness'
+  | 'match.tonalBalance'
+  | 'match.tonalBalanceLogBands'
+  | 'match.matchEqCurve'
+  | 'match.estimateReferenceDelaySamples';
+
+export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckLogBands';
 
 /**
  * Section type
@@ -56,6 +214,7 @@ export const SectionType = {
   Bridge: 4,
   Instrumental: 5,
   Outro: 6,
+  Unknown: 7,
 } as const;
 
 export type SectionType = (typeof SectionType)[keyof typeof SectionType];
@@ -71,6 +230,44 @@ export interface Key {
   shortName: string;
 }
 
+export interface KeyDetectionOptions {
+  nFft?: number;
+  hopLength?: number;
+  useHpss?: boolean;
+  loudnessWeighted?: boolean;
+  highPassHz?: number;
+  modes?:
+    | Mode[]
+    | ('major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian')[]
+    | 'major-minor'
+    | 'all'
+    | 'modal';
+  profile?: KeyProfile | KeyProfileName;
+  genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
+}
+
+export interface KeyCandidate {
+  key: Key;
+  correlation: number;
+}
+
+export interface ChordDetectionOptions {
+  minDuration?: number;
+  smoothingWindow?: number;
+  threshold?: number;
+  useTriadsOnly?: boolean;
+  nFft?: number;
+  hopLength?: number;
+  useBeatSync?: boolean;
+  useHmm?: boolean;
+  hmmBeamWidth?: number;
+  useKeyContext?: boolean;
+  keyRoot?: PitchClass;
+  keyMode?: Mode;
+  detectInversions?: boolean;
+  chromaMethod?: 'stft' | 'nnls';
+}
+
 /**
  * Detected beat
  */
@@ -84,11 +281,16 @@ export interface Beat {
  */
 export interface Chord {
   root: PitchClass;
+  bass: PitchClass;
   quality: ChordQuality;
   start: number;
   end: number;
   confidence: number;
   name: string;
+}
+
+export interface ChordAnalysisResult {
+  chords: Chord[];
 }
 
 /**
@@ -101,6 +303,48 @@ export interface Section {
   energyLevel: number;
   confidence: number;
   name: string;
+}
+
+/**
+ * A single melody contour point (mirrors the C `SonareMelodyPoint`).
+ */
+export interface MelodyPoint {
+  /** Frame time in seconds. */
+  time: number;
+  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
+  frequency: number;
+  /** Voicing confidence in `[0, 1]`. */
+  confidence: number;
+}
+
+/**
+ * Melody analysis result (mirrors the C `SonareMelodyResult`).
+ */
+export interface MelodyResult {
+  points: MelodyPoint[];
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+}
+
+/**
+ * Constant-Q / Variable-Q transform magnitude result (mirrors the C
+ * `SonareCqtResult`).
+ */
+export interface CqtResult {
+  /** Number of frequency bins. */
+  nBins: number;
+  /** Number of time frames. */
+  nFrames: number;
+  /** Hop length in samples. */
+  hopLength: number;
+  /** Sample rate in Hz. */
+  sampleRate: number;
+  /** Row-major `[nBins x nFrames]` magnitude matrix. */
+  magnitude: Float32Array;
+  /** Center frequency (Hz) of each of the `nBins` bins. */
+  frequencies: Float32Array;
 }
 
 /**
@@ -161,6 +405,23 @@ export interface AnalysisResult {
 }
 
 /**
+ * Room acoustic parameters from an impulse response
+ */
+export interface AcousticResult {
+  rt60: number;
+  edt: number;
+  c50: number;
+  c80: number;
+  d50: number;
+  rt60Bands: Float32Array;
+  edtBands: Float32Array;
+  c50Bands: Float32Array;
+  c80Bands: Float32Array;
+  confidence: number;
+  isBlind: boolean;
+}
+
+/**
  * HPSS (Harmonic-Percussive Source Separation) result
  */
 export interface HpssResult {
@@ -182,6 +443,78 @@ export interface MasteringResult {
 }
 
 export type MasteringProcessorParams = Record<string, number | boolean>;
+
+export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
+
+export interface MixOptions {
+  inputTrimDb?: number | number[];
+  faderDb?: number | number[];
+  pan?: number | number[];
+  panMode?: PanMode | PanMode[];
+  width?: number | number[];
+  muted?: boolean | boolean[];
+}
+
+export interface MixMeterSnapshot {
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  correlation: number;
+  monoCompatWidth: number;
+  monoCompatPeak: number;
+  monoCompatSideRms: number;
+  likelyMonoCompatible: boolean;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
+  truePeakDbL: number;
+  truePeakDbR: number;
+  maxTruePeakDb: number;
+  seq: number;
+}
+
+export interface MixResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  meters: MixMeterSnapshot[];
+}
+
+/** Mixed stereo master returned by {@link Mixer.processStereo}. */
+export interface MixerProcessResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+}
+
+/**
+ * Interpolation curve for scheduled automation events
+ * (see {@link Mixer.scheduleInsertAutomation}).
+ */
+export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
+
+/**
+ * Pan law applied when computing left/right gains from a pan position
+ * (see {@link Mixer.setPanLaw}). Maps to the underlying integer code.
+ */
+export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
+
+/**
+ * Meter tap point for reading a strip's meter snapshot
+ * (see {@link Mixer.meterTap} and {@link Mixer.stripMeter}).
+ */
+export type MeterTap = 'preFader' | 'postFader';
+
+/** Pre/post-fader send timing (see {@link Mixer.addSend}). */
+export type SendTiming = 'preFader' | 'postFader';
+
+/** A single goniometer (left/right) sample returned by {@link Mixer.readGoniometerLatest}. */
+export interface GoniometerPoint {
+  left: number;
+  right: number;
+}
 
 export interface MasteringChainConfig {
   repair?: {
@@ -233,6 +566,7 @@ export interface MasteringChainConfig {
       attackMs?: number;
       releaseMs?: number;
       rangeDb?: number;
+      bandpassQ?: number;
     };
     transientShaper?: {
       attackGainDb?: number;
@@ -377,6 +711,24 @@ export interface MfccResult {
 }
 
 /**
+ * STFT power spectrogram result (from inverse Mel reconstruction)
+ */
+export interface StftPowerResult {
+  nBins: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
+/**
+ * Mel power spectrogram result (from inverse MFCC reconstruction)
+ */
+export interface MelPowerResult {
+  nMels: number;
+  nFrames: number;
+  power: Float32Array;
+}
+
+/**
  * Chroma features result
  */
 export interface ChromaResult {
@@ -398,4 +750,103 @@ export interface PitchResult {
   nFrames: number;
   medianF0: number;
   meanF0: number;
+}
+
+/**
+ * Loudness measurement result (EBU R128 / ITU-R BS.1770)
+ */
+export interface LufsResult {
+  integratedLufs: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  loudnessRange: number;
+}
+
+/**
+ * Realtime equalizer spectrum snapshot.
+ *
+ * Mirrors the C++ `EqualizerSpectrumSnapshot`: `preLeft`/`preRight` and
+ * `postLeft`/`postRight` are the pre- and post-EQ spectrum streams (trimmed to
+ * their valid count). `bandGainDb` holds per-band applied gain (24 entries),
+ * `profileDb` the smoothed magnitude profile (16 entries), `lastAutoGainDb`
+ * the latest auto-gain compensation, and `seq` increments each time a new
+ * snapshot is published.
+ */
+export interface EqSpectrumSnapshot {
+  preLeft: Float32Array;
+  preRight: Float32Array;
+  postLeft: Float32Array;
+  postRight: Float32Array;
+  bandGainDb: Float32Array;
+  profileDb: Float32Array;
+  lastAutoGainDb: number;
+  seq: number;
+}
+
+/**
+ * Equalizer band type (string union mirroring `sonare::mastering::eq::EqBandType`).
+ */
+export type EqBandType =
+  | 'Peak'
+  | 'LowShelf'
+  | 'HighShelf'
+  | 'LowPass'
+  | 'HighPass'
+  | 'BandPass'
+  | 'Notch'
+  | 'TiltShelf'
+  | 'FlatTilt';
+
+/** Biquad coefficient design mode. */
+export type EqCoeffMode = 'Rbj' | 'Vicanek';
+
+/** Stereo placement for an EQ band. */
+export type EqStereoPlacement = 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+
+/** Per-band phase behaviour. */
+export type EqBandPhase = 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
+
+/**
+ * Equalizer band configuration accepted by {@link StreamingEqualizer.setBand}.
+ *
+ * All fields are optional; omitted values fall back to the C++ band defaults
+ * (Peak, 1000 Hz, 0 dB gain, Butterworth Q, disabled).
+ */
+export interface EqBand {
+  type?: EqBandType;
+  frequencyHz?: number;
+  gainDb?: number;
+  q?: number;
+  enabled?: boolean;
+  coeffMode?: EqCoeffMode;
+  slopeDbOct?: number;
+  placement?: EqStereoPlacement;
+  phase?: EqBandPhase;
+  soloed?: boolean;
+  bypassed?: boolean;
+  proportionalQ?: boolean;
+  proportionalQStrength?: number;
+  dynamic?: boolean;
+  thresholdDb?: number;
+  autoThreshold?: boolean;
+  ratio?: number;
+  rangeDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  lookaheadMs?: number;
+  externalSidechain?: boolean;
+  sidechainFreqHz?: number;
+  sidechainQ?: number;
+}
+
+/** Construction options for {@link StreamingEqualizer}. */
+export interface StreamingEqualizerConfig {
+  sampleRate?: number;
+  maxBlockSize?: number;
+}
+
+/** Options for {@link StreamingEqualizer.match}. */
+export interface EqMatchOptions {
+  sampleRate?: number;
+  maxBands?: number;
 }

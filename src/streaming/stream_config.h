@@ -18,7 +18,16 @@ enum class OutputFormat {
 /// @brief Configuration for StreamAnalyzer.
 struct StreamConfig {
   // Basic parameters
-  int sample_rate = 44100;               ///< Sample rate in Hz
+  /// @brief Sample rate in Hz.
+  /// @details Defaults to 44100 Hz, *intentionally different* from the batch
+  ///          MusicAnalyzer default of 22050 Hz (constants::kDefaultSampleRate,
+  ///          chosen for librosa parity). Real-time audio reaches the analyzer
+  ///          straight from the playback/capture graph (AudioWorklet, device
+  ///          callbacks), which almost always runs at 44100/48000 Hz. Matching
+  ///          the native graph rate avoids an extra resample on the hot path and
+  ///          keeps timestamps aligned with the audio clock. The analyzer
+  ///          resamples internally only when the input exceeds 44100 Hz.
+  int sample_rate = 44100;
   int n_fft = 2048;                      ///< FFT size
   int hop_length = 512;                  ///< Hop length between frames
   WindowType window = WindowType::Hann;  ///< Window function type

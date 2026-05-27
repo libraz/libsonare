@@ -1,5 +1,6 @@
 #include "analysis/music_analyzer.h"
 
+#include "analysis/downbeat_analyzer.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
@@ -8,6 +9,7 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "filters/iir.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 #ifndef __EMSCRIPTEN__
@@ -21,7 +23,7 @@ MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& conf
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Downsample to 22050 Hz for spectral analysis if sample rate is higher
-  constexpr int kAnalysisSampleRate = 22050;
+  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
   if (audio_.sample_rate() > kAnalysisSampleRate) {
     analysis_audio_ = resample(audio_, kAnalysisSampleRate);
     analysis_sr_ = kAnalysisSampleRate;
@@ -90,6 +92,8 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     // Use cached onset strength to avoid recomputation
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
                                                     config_.hop_length, beat_config);
+    beat_analyzer_->refine_downbeats(
+        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_));
   }
   return *beat_analyzer_;
 }
@@ -101,10 +105,23 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
     chord_config.hop_length = config_.hop_length;
     chord_config.use_triads_only = config_.use_triads_only;
     chord_config.use_beat_sync = true;
+    chord_config.use_hmm = config_.use_chord_hmm;
+    chord_config.hmm_beam_width = config_.chord_hmm_beam_width;
+    chord_config.detect_inversions = config_.detect_chord_inversions;
+    if (config_.use_chord_key_context) {
+      const Key key = key_analyzer().key();
+      chord_config.use_key_context = true;
+      chord_config.key_root = key.root;
+      chord_config.key_mode = key.mode;
+    }
 
     // Use beat-synchronized chord detection with harmonic chroma for better accuracy
     auto beat_times = beat_analyzer().beat_times();
     chord_analyzer_ = std::make_unique<ChordAnalyzer>(harmonic_chroma(), beat_times, chord_config);
+    const auto chord_changes =
+        chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
+    beat_analyzer_->refine_downbeats(
+        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_), chord_changes);
   }
   return *chord_analyzer_;
 }
@@ -249,8 +266,8 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     // Step 3: Compute CQT-based chroma with larger hop for speed
     CqtConfig cqt_config;
     cqt_config.hop_length = chroma_hop;
-    cqt_config.fmin = 32.7f;  // C1
-    cqt_config.n_bins = 84;   // 7 octaves * 12 bins
+    cqt_config.fmin = constants::kC1Hz;
+    cqt_config.n_bins = 84;  // 7 octaves * 12 bins
     cqt_config.bins_per_octave = 12;
 
     CqtResult cqt_result = cqt(filtered_audio, cqt_config);
@@ -265,7 +282,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       // Use reduced CQT for bass (lower 4 octaves = 48 bins)
       CqtConfig bass_cqt_config;
       bass_cqt_config.hop_length = chroma_hop;
-      bass_cqt_config.fmin = 32.7f;
+      bass_cqt_config.fmin = constants::kC1Hz;
       bass_cqt_config.n_bins = 48;  // 4 octaves (bass-focused)
       bass_cqt_config.bins_per_octave = 12;
 
@@ -295,7 +312,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
 const MelSpectrogram& MusicAnalyzer::mel_spectrogram() {
   if (!mel_spectrogram_) {
     MelFilterConfig mel_filter_config;
-    mel_filter_config.n_mels = 128;
+    mel_filter_config.n_mels = constants::kDefaultNMels;
     mel_spectrogram_ = std::make_unique<MelSpectrogram>(
         MelSpectrogram::from_spectrogram(spectrogram(), analysis_sr_, mel_filter_config));
   }
@@ -376,9 +393,13 @@ AnalysisResult MusicAnalyzer::analyze() {
   report_progress(0.80f, "dynamics");
   result.dynamics = dynamics_analyzer().dynamics();
 
-  // Rhythm (90-100%)
+  // Rhythm (90-95%)
   report_progress(0.90f, "rhythm");
   result.rhythm = rhythm_analyzer().features();
+
+  // Melody / pitch contour (95-100%)
+  report_progress(0.95f, "melody");
+  result.melody = melody_analyzer().contour();
 
   // Complete
   report_progress(1.0f, "complete");

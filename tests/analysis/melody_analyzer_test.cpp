@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -21,7 +23,7 @@ Audio create_sine(float freq, int sr = 22050, float duration = 1.0f) {
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.8f * std::sin(2.0f * M_PI * freq * t);
+    samples[i] = 0.8f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -46,7 +48,7 @@ Audio create_melody(const std::vector<float>& freqs, float note_duration, int sr
       } else if (i > samples_per_note * 9 / 10) {
         env = static_cast<float>(samples_per_note - i) / (samples_per_note / 10);
       }
-      samples[start + i] = 0.8f * env * std::sin(2.0f * M_PI * freq * t);
+      samples[start + i] = 0.8f * env * std::sin(2.0f * sonare::constants::kPiD * freq * t);
     }
   }
 

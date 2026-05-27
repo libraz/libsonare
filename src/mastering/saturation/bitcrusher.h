@@ -26,6 +26,14 @@ class BitCrusher : public common::ProcessorBase {
   void set_config(const BitCrusherConfig& config);
   const BitCrusherConfig& config() const { return config_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset). Both are
+  // read per sample in process()/quantize() with no precomputed coefficients:
+  //   0 = bit_depth (rounded and clamped to [1, 24]; quantization resolution)
+  //   1 = mix (clamped to [0, 1])
+  // downsample_factor changes the hold cadence and dither_type is an enum, so
+  // neither is exposed here.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const BitCrusherConfig& config);
   float quantize(float sample, int bit_depth, int channel);

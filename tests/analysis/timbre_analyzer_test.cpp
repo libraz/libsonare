@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -20,7 +22,7 @@ Audio create_sine(float freq, int sr = 22050, float duration = 2.0f) {
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.5f * std::sin(2.0f * M_PI * freq * t);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -34,10 +36,10 @@ Audio create_bright_sound(int sr = 22050, float duration = 2.0f) {
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // High frequency harmonics
-    samples[i] = 0.3f * std::sin(2.0f * M_PI * 2000.0f * t);
-    samples[i] += 0.3f * std::sin(2.0f * M_PI * 4000.0f * t);
-    samples[i] += 0.2f * std::sin(2.0f * M_PI * 6000.0f * t);
-    samples[i] += 0.1f * std::sin(2.0f * M_PI * 8000.0f * t);
+    samples[i] = 0.3f * std::sin(2.0f * sonare::constants::kPiD * 2000.0f * t);
+    samples[i] += 0.3f * std::sin(2.0f * sonare::constants::kPiD * 4000.0f * t);
+    samples[i] += 0.2f * std::sin(2.0f * sonare::constants::kPiD * 6000.0f * t);
+    samples[i] += 0.1f * std::sin(2.0f * sonare::constants::kPiD * 8000.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -51,9 +53,9 @@ Audio create_warm_sound(int sr = 22050, float duration = 2.0f) {
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // Low frequency harmonics
-    samples[i] = 0.5f * std::sin(2.0f * M_PI * 100.0f * t);
-    samples[i] += 0.3f * std::sin(2.0f * M_PI * 200.0f * t);
-    samples[i] += 0.1f * std::sin(2.0f * M_PI * 400.0f * t);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 100.0f * t);
+    samples[i] += 0.3f * std::sin(2.0f * sonare::constants::kPiD * 200.0f * t);
+    samples[i] += 0.1f * std::sin(2.0f * sonare::constants::kPiD * 400.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -209,6 +211,22 @@ TEST_CASE("TimbreAnalyzer config options", "[timbre_analyzer]") {
   REQUIRE(timbre.brightness <= 1.0f);
 }
 
+TEST_CASE("TimbreAnalyzer tolerates missing MFCC frames from precomputed features",
+          "[timbre_analyzer]") {
+  Audio audio = create_sine(440.0f);
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  MelSpectrogram empty_mel;
+
+  TimbreAnalyzer analyzer(spec, empty_mel);
+
+  REQUIRE(analyzer.brightness() >= 0.0f);
+  REQUIRE(analyzer.complexity() == 0.0f);
+  REQUIRE_FALSE(analyzer.timbre_over_time().empty());
+}
+
 TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
   // Pure sine has low complexity
   Audio sine = create_sine(440.0f);
@@ -223,7 +241,7 @@ TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // Many harmonics with different amplitudes
     for (int h = 1; h <= 10; ++h) {
-      complex_samples[i] += (1.0f / h) * std::sin(2.0f * M_PI * 440.0f * h * t);
+      complex_samples[i] += (1.0f / h) * std::sin(2.0f * sonare::constants::kPiD * 440.0f * h * t);
     }
   }
   Audio complex_audio = Audio::from_vector(std::move(complex_samples), sr);

@@ -32,6 +32,20 @@ class MultibandCompressor : public common::ProcessorBase {
   const MultibandCompressorConfig& config() const { return config_; }
   const std::vector<float>& last_gain_reductions_db() const { return last_gain_reductions_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no audio-state reset).
+  // Per-band block layout with kBandStride params per band: band b occupies
+  // ids [b * kBandStride, b * kBandStride + kBandStride). Within each band the
+  // ids forward directly to dynamics::Compressor::set_parameter:
+  //   +0 = threshold_db
+  //   +1 = ratio (clamped to >= 1)
+  //   +2 = attack_ms (clamped to >= 0; recomputes smoother coefficients)
+  //   +3 = release_ms (clamped to >= 0; recomputes smoother coefficients)
+  //   +4 = makeup_gain_db
+  // Crossover cutoff frequencies are not automatable here: changing them
+  // requires rebuilding the crossover filters and would reset audio state.
+  static constexpr unsigned int kBandStride = 5;
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const MultibandCompressorConfig& config);
   void rebuild_processors();
@@ -41,6 +55,7 @@ class MultibandCompressor : public common::ProcessorBase {
   int max_block_size_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
+  CrossoverScratch scratch_;
   std::vector<dynamics::Compressor> compressors_;
   std::vector<float> last_gain_reductions_db_;
 };

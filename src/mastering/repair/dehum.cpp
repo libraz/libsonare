@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::repair {
@@ -26,14 +27,12 @@ struct Notch {
 
   void set_coefficients(float frequency_hz, float sample_rate, float q) {
     const float omega = kTwoPi * frequency_hz / sample_rate;
-    const float alpha = std::sin(omega) / (2.0f * q);
-    const float cosw = std::cos(omega);
-    const float a0 = 1.0f + alpha;
-    b0 = 1.0f / a0;
-    b1 = -2.0f * cosw / a0;
-    b2 = 1.0f / a0;
-    a1 = -2.0f * cosw / a0;
-    a2 = (1.0f - alpha) / a0;
+    const auto coeffs = rt::rbj_notch(omega, q);
+    b0 = coeffs.b0;
+    b1 = coeffs.b1;
+    b2 = coeffs.b2;
+    a1 = coeffs.a1;
+    a2 = coeffs.a2;
   }
 
   float process(float x) {

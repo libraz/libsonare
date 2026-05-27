@@ -3,10 +3,12 @@
 /// @file transient_shaper.h
 /// @brief Envelope-difference transient shaper for attack and sustain control.
 
+#include <cstddef>
 #include <vector>
 
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/processor_base.h"
+#include "mastering/dynamics/channel_limits.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -35,14 +37,30 @@ class TransientShaper : public common::ProcessorBase {
   const TransientShaperConfig& config() const { return config_; }
   float last_gain_db() const { return last_gain_db_; }
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = attack_gain_db
+  //   1 = sustain_gain_db
+  //   2 = fast_attack_ms (clamped to >= 0)
+  //   3 = fast_release_ms (clamped to >= 0)
+  //   4 = slow_attack_ms (clamped to >= 0)
+  //   5 = slow_release_ms (clamped to >= 0)
+  //   6 = sensitivity (clamped to >= 0)
+  //   7 = max_gain_db (clamped to >= 0)
+  //   8 = gain_smoothing_ms (clamped to >= 0)
+  // lookahead_ms is omitted because changing it resizes the lookahead buffers.
+  bool set_parameter(unsigned int param_id, float value) override;
+
  private:
   static void validate_config(const TransientShaperConfig& config);
-  static float coeff(double sample_rate, float ms);
   void ensure_followers(int num_channels);
 
   TransientShaperConfig config_{};
   double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
   bool prepared_ = false;
+  // Gain-smoother coefficient, cached because it depends only on sample rate and
+  // gain_smoothing_ms; recomputed on prepare()/set_config()/set_parameter(8).
+  float gain_smoothing_coeff_ = 0.0f;
   std::vector<common::EnvelopeFollower> fast_followers_;
   std::vector<common::EnvelopeFollower> slow_followers_;
   std::vector<float> gain_state_db_;

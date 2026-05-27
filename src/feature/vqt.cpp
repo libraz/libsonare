@@ -14,6 +14,8 @@
 
 namespace sonare {
 
+using sonare::constants::kTwoPi;
+
 namespace {
 
 /// @brief Cache key for VQT kernel
@@ -52,22 +54,33 @@ struct CachedVqtKernel {
 /// @brief Maximum number of cached VQT kernels
 constexpr size_t kMaxVqtCacheSize = 8;
 
-/// @brief Global VQT kernel cache with LRU eviction
-std::mutex g_vqt_cache_mutex;
-std::unordered_map<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> g_vqt_cache;
-std::list<VqtKernelCacheKey> g_vqt_cache_lru;
+/// @brief VQT kernel cache state with LRU eviction.
+/// @details Wrapped in a function-local static (Meyers singleton) so its
+/// construction and destruction order are well-defined; the mutex still guards
+/// concurrent access.
+struct VqtKernelCache {
+  std::mutex mutex;
+  std::unordered_map<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> map;
+  std::list<VqtKernelCacheKey> lru;
+};
+
+VqtKernelCache& vqt_kernel_cache() {
+  static VqtKernelCache cache;
+  return cache;
+}
 
 /// @brief Get or create cached VQT kernel with Eigen matrix
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   VqtKernelCacheKey key{
       sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave, config.gamma};
 
-  std::lock_guard<std::mutex> lock(g_vqt_cache_mutex);
-  auto it = g_vqt_cache.find(key);
-  if (it != g_vqt_cache.end()) {
+  VqtKernelCache& cache = vqt_kernel_cache();
+  std::lock_guard<std::mutex> lock(cache.mutex);
+  auto it = cache.map.find(key);
+  if (it != cache.map.end()) {
     // Move to front of LRU list (most recently used)
-    g_vqt_cache_lru.remove(key);
-    g_vqt_cache_lru.push_front(key);
+    cache.lru.remove(key);
+    cache.lru.push_front(key);
     return it->second;
   }
 
@@ -87,15 +100,15 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   }
 
   // Evict oldest entry if cache is full
-  while (g_vqt_cache.size() >= kMaxVqtCacheSize && !g_vqt_cache_lru.empty()) {
-    auto oldest_key = g_vqt_cache_lru.back();
-    g_vqt_cache_lru.pop_back();
-    g_vqt_cache.erase(oldest_key);
+  while (cache.map.size() >= kMaxVqtCacheSize && !cache.lru.empty()) {
+    auto oldest_key = cache.lru.back();
+    cache.lru.pop_back();
+    cache.map.erase(oldest_key);
   }
 
   CachedVqtKernel cached{std::shared_ptr<VqtKernel>(std::move(kernel)), eigen_matrix};
-  g_vqt_cache[key] = cached;
-  g_vqt_cache_lru.push_front(key);
+  cache.map[key] = cached;
+  cache.lru.push_front(key);
   return cached;
 }
 
@@ -253,6 +266,11 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
   const float* data = padded_signal.data();
   float norm_factor = 1.0f / static_cast<float>(fft_length);
+  std::vector<float> sqrt_lengths(n_bins, 1.0f);
+  const auto& lengths = kernel->lengths();
+  for (int k = 0; k < n_bins; ++k) {
+    if (lengths[k] > 0) sqrt_lengths[k] = std::sqrt(static_cast<float>(lengths[k]));
+  }
 
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
@@ -282,7 +300,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 
     // Copy to output
     for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] = result(k);
+      output[k * n_frames + t] = result(k) * sqrt_lengths[k];
     }
 
     // Report progress
@@ -295,17 +313,51 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
                    sr);
 }
 
+Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
+                     int sr, int n_iter) {
+  if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
+  // VQT shares the CQT geometric frequency grid (vqt_frequencies == cqt_frequencies),
+  // so the CQT Griffin-Lim projection applies directly to VQT magnitudes.
+  return griffinlim_cqt(magnitude, n_bins, n_frames, config.to_cqt_config(), sr, n_iter);
+}
+
+Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter) {
+  if (vqt_result.empty()) return Audio();
+
+  const int n_bins = vqt_result.n_bins();
+  const int n_frames = vqt_result.n_frames();
+  const std::vector<float>& freqs = vqt_result.frequencies();
+
+  // Recover the VQT configuration from the stored result. The frequency grid is
+  // geometric: f_k = fmin * 2^(k / bins_per_octave).
+  VqtConfig config;
+  config.hop_length = vqt_result.hop_length();
+  config.n_bins = n_bins;
+  if (!freqs.empty()) {
+    config.fmin = freqs.front();
+  }
+  if (freqs.size() >= 2 && freqs[0] > 0.0f && freqs[1] > freqs[0]) {
+    const float ratio = std::log2(freqs[1] / freqs[0]);
+    if (ratio > 0.0f) {
+      config.bins_per_octave = std::max(1, static_cast<int>(std::lround(1.0f / ratio)));
+    }
+  }
+
+  return griffinlim_vqt(vqt_result.magnitude().data(), n_bins, n_frames, config, sr, n_iter);
+}
+
 Audio ivqt(const VqtResult& vqt_result, int length) {
-  // VQT inverse is similar to CQT inverse
-  // Suppress deprecation warning for internal call to icqt
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-  return icqt(vqt_result, length);
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
+  // High-quality reconstruction path: Griffin-Lim on the VQT magnitude. The
+  // legacy icqt pseudo-inverse remains directly callable for callers that
+  // depend on the previous (lower-quality) behavior.
+  Audio reconstructed = griffinlim_vqt(vqt_result, vqt_result.sample_rate());
+  if (length > 0 && reconstructed.size() != static_cast<size_t>(length)) {
+    std::vector<float> resized(static_cast<size_t>(length), 0.0f);
+    const size_t copy_count = std::min(resized.size(), reconstructed.size());
+    std::copy_n(reconstructed.data(), copy_count, resized.data());
+    reconstructed = Audio::from_vector(std::move(resized), reconstructed.sample_rate());
+  }
+  return reconstructed;
 }
 
 }  // namespace sonare

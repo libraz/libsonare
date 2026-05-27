@@ -2,13 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
-#include <numeric>
 
 #include "core/convert.h"
+#include "core/fft.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/reflect_padding.h"
 
 namespace sonare {
 
@@ -19,19 +21,65 @@ namespace {
 /// @return Fractional offset from center sample
 float parabolic_interp(float ym1, float y0, float yp1) {
   float denom = ym1 - 2.0f * y0 + yp1;
-  if (std::abs(denom) < 1e-10f) {
+  if (std::abs(denom) < constants::kEpsilon) {
     return 0.0f;
   }
   return 0.5f * (ym1 - yp1) / denom;
 }
 
-/// @brief Beta distribution PDF for pYIN.
-float beta_pdf(float x, float alpha, float beta_param) {
-  if (x <= 0.0f || x >= 1.0f) {
-    return 0.0f;
+double beta_2_18_cdf(double x) {
+  x = std::clamp(x, 0.0, 1.0);
+  return 1.0 - std::pow(1.0 - x, 18.0) * (1.0 + 18.0 * x);
+}
+
+std::vector<float> librosa_yin_cmndf(const float* frame, int frame_length, int min_period,
+                                     int max_period) {
+  std::vector<double> acf(static_cast<size_t>(max_period) + 1, 0.0);
+  for (int tau = 0; tau <= max_period; ++tau) {
+    double sum = 0.0;
+    for (int index = 0; index + tau < frame_length; ++index) {
+      sum += static_cast<double>(frame[index]) * frame[index + tau];
+    }
+    acf[static_cast<size_t>(tau)] = sum;
   }
-  // Simplified beta PDF (unnormalized for relative comparison)
-  return std::pow(x, alpha - 1.0f) * std::pow(1.0f - x, beta_param - 1.0f);
+
+  std::vector<double> cumulative_square(static_cast<size_t>(frame_length), 0.0);
+  double square_sum = 0.0;
+  for (int index = 0; index < frame_length; ++index) {
+    square_sum += static_cast<double>(frame[index]) * frame[index];
+    cumulative_square[static_cast<size_t>(index)] = square_sum;
+  }
+
+  std::vector<double> difference(static_cast<size_t>(max_period) + 1, 0.0);
+  for (int tau = 1; tau <= max_period; ++tau) {
+    difference[static_cast<size_t>(tau)] = 2.0 * (acf[0] - acf[static_cast<size_t>(tau)]) -
+                                           cumulative_square[static_cast<size_t>(tau - 1)];
+  }
+
+  std::vector<double> cumulative_mean(static_cast<size_t>(max_period) + 1, 1.0);
+  double running = 0.0;
+  for (int tau = 1; tau <= max_period; ++tau) {
+    running += difference[static_cast<size_t>(tau)];
+    cumulative_mean[static_cast<size_t>(tau)] = running / tau;
+  }
+
+  std::vector<float> cmndf(static_cast<size_t>(max_period - min_period + 1), 1.0f);
+  for (int tau = min_period; tau <= max_period; ++tau) {
+    const double denominator = cumulative_mean[static_cast<size_t>(tau)];
+    cmndf[static_cast<size_t>(tau - min_period)] =
+        denominator > 1.0e-300
+            ? static_cast<float>(difference[static_cast<size_t>(tau)] / denominator)
+            : 1.0f;
+  }
+  return cmndf;
+}
+
+int next_power_of_two(int value) {
+  int power = 1;
+  while (power < value) {
+    power <<= 1;
+  }
+  return power;
 }
 
 }  // namespace
@@ -68,19 +116,64 @@ float PitchResult::mean_f0() const {
 
 std::vector<float> yin_difference(const float* frame, int frame_length, int max_lag) {
   std::vector<float> diff(max_lag, 0.0f);
+  if (frame_length <= 0 || max_lag <= 0) {
+    return diff;
+  }
 
   // d(tau) = sum_{j=0}^{W-1} (x[j] - x[j+tau])^2
   // Per the YIN paper, the summation window W is constant (frame_length / 2)
   // for all tau values, ensuring consistent normalization.
-  int window = frame_length / 2;
-  for (int tau = 0; tau < max_lag; ++tau) {
-    float sum = 0.0f;
-    for (int j = 0; j < window; ++j) {
-      float delta = frame[j] - frame[j + tau];
-      sum += delta * delta;
-    }
-    diff[tau] = sum;
+  const int window = frame_length / 2;
+  if (window <= 0) {
+    return diff;
   }
+
+  const int available_lags = std::min(max_lag, frame_length - window + 1);
+  if (available_lags <= 0) {
+    return diff;
+  }
+
+  const int comparison_length = std::min(frame_length, window + available_lags - 1);
+  const int n_fft = next_power_of_two(window + comparison_length - 1);
+  std::vector<float> reference(static_cast<size_t>(n_fft), 0.0f);
+  std::vector<float> comparison(static_cast<size_t>(n_fft), 0.0f);
+
+  // Cross-correlation r[tau] = sum_j x[j] * x[j + tau] via convolution of the
+  // reversed reference window and the comparison span.
+  double reference_energy = 0.0;
+  for (int j = 0; j < window; ++j) {
+    reference[static_cast<size_t>(window - 1 - j)] = frame[j];
+    reference_energy += static_cast<double>(frame[j]) * frame[j];
+  }
+  for (int j = 0; j < comparison_length; ++j) {
+    comparison[static_cast<size_t>(j)] = frame[j];
+  }
+
+  FFT fft(n_fft);
+  std::vector<std::complex<float>> ref_spectrum(static_cast<size_t>(fft.n_bins()));
+  std::vector<std::complex<float>> cmp_spectrum(static_cast<size_t>(fft.n_bins()));
+  fft.forward(reference.data(), ref_spectrum.data());
+  fft.forward(comparison.data(), cmp_spectrum.data());
+  for (size_t bin = 0; bin < ref_spectrum.size(); ++bin) {
+    ref_spectrum[bin] *= cmp_spectrum[bin];
+  }
+  std::vector<float> correlation(static_cast<size_t>(n_fft), 0.0f);
+  fft.inverse(ref_spectrum.data(), correlation.data());
+
+  std::vector<double> squared_prefix(static_cast<size_t>(comparison_length) + 1, 0.0);
+  for (int j = 0; j < comparison_length; ++j) {
+    squared_prefix[static_cast<size_t>(j + 1)] =
+        squared_prefix[static_cast<size_t>(j)] + static_cast<double>(frame[j]) * frame[j];
+  }
+
+  for (int tau = 0; tau < available_lags; ++tau) {
+    const double shifted_energy = squared_prefix[static_cast<size_t>(tau + window)] -
+                                  squared_prefix[static_cast<size_t>(tau)];
+    const double cross = correlation[static_cast<size_t>(window - 1 + tau)];
+    const double value = reference_energy + shifted_energy - 2.0 * cross;
+    diff[static_cast<size_t>(tau)] = value <= 0.0 ? 0.0f : static_cast<float>(value);
+  }
+  diff[0] = 0.0f;
 
   return diff;
 }
@@ -97,7 +190,7 @@ std::vector<float> yin_cmndf(const std::vector<float>& diff) {
   float running_sum = 0.0f;
   for (size_t tau = 1; tau < diff.size(); ++tau) {
     running_sum += diff[tau];
-    if (running_sum > 1e-10f) {
+    if (running_sum > constants::kEpsilon) {
       cmndf[tau] = diff[tau] * tau / running_sum;
     } else {
       cmndf[tau] = 1.0f;
@@ -204,8 +297,15 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
-  int n_samples = static_cast<int>(audio.size());
-  int n_frames = 1 + (n_samples - config.frame_length) / config.hop_length;
+  std::vector<float> padded;
+  const float* data = audio.data();
+  int signal_samples = static_cast<int>(audio.size());
+  if (config.center) {
+    padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
+    data = padded.data();
+    signal_samples = static_cast<int>(padded.size());
+  }
+  int n_frames = 1 + (signal_samples - config.frame_length) / config.hop_length;
 
   if (n_frames <= 0) {
     return PitchResult();
@@ -215,8 +315,6 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   result.f0.resize(n_frames);
   result.voiced_prob.resize(n_frames);
   result.voiced_flag.resize(n_frames);
-
-  const float* data = audio.data();
 
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
@@ -243,8 +341,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
-  int n_samples = static_cast<int>(audio.size());
-  int n_frames = 1 + (n_samples - config.frame_length) / config.hop_length;
+  std::vector<float> padded;
+  const float* data = audio.data();
+  int signal_samples = static_cast<int>(audio.size());
+  if (config.center) {
+    padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
+    data = padded.data();
+    signal_samples = static_cast<int>(padded.size());
+  }
+  int n_frames = 1 + (signal_samples - config.frame_length) / config.hop_length;
 
   if (n_frames <= 0) {
     return PitchResult();
@@ -253,183 +358,234 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   // Convert frequency to period
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / config.fmax));
   int max_period = static_cast<int>(std::ceil(static_cast<float>(sr) / config.fmin));
-  max_period = std::min(max_period, config.frame_length / 2);
+  max_period = std::min(max_period, config.frame_length - 1);
 
   if (min_period >= max_period) {
     return PitchResult();
   }
 
-  // Number of pitch candidates per frame
-  constexpr int kMaxCandidates = 20;
+  constexpr int kThresholds = 100;
+  constexpr double kBoltzmann = 2.0;
+  constexpr double kResolution = 0.1;
+  constexpr double kMaxTransitionRate = 35.92;
+  constexpr double kSwitchProb = 0.01;
+  constexpr double kNoTroughProb = 0.01;
+  constexpr double kLogFloor = 1.0e-300;
+  const int bins_per_semitone = static_cast<int>(std::ceil(1.0 / kResolution));
+  const int n_pitch_bins =
+      static_cast<int>(std::floor(static_cast<double>(constants::kSemitonesPerOctave) *
+                                  bins_per_semitone * std::log2(config.fmax / config.fmin))) +
+      1;
+  const int n_states = 2 * n_pitch_bins;
 
-  // Beta distribution parameters for pYIN
-  constexpr float kBetaAlpha = 1.0f;
-  constexpr float kBetaBeta = 18.0f;
+  std::vector<double> thresholds(kThresholds + 1);
+  for (int index = 0; index <= kThresholds; ++index) {
+    thresholds[static_cast<size_t>(index)] = static_cast<double>(index) / kThresholds;
+  }
+  std::vector<double> beta_probs(kThresholds);
+  for (int index = 0; index < kThresholds; ++index) {
+    beta_probs[static_cast<size_t>(index)] =
+        beta_2_18_cdf(thresholds[static_cast<size_t>(index + 1)]) -
+        beta_2_18_cdf(thresholds[static_cast<size_t>(index)]);
+  }
 
-  // Transition probability parameters
-  constexpr float kSelfTransition = 0.99f;
-  constexpr float kVoicedToUnvoiced = 0.01f;
-  constexpr float kUnvoicedToVoiced = 0.01f;
-
-  const float* data = audio.data();
-
-  // Step 1: Extract pitch candidates for each frame
-  struct Candidate {
-    float period;
-    float probability;
-  };
-
-  std::vector<std::vector<Candidate>> frame_candidates(n_frames);
+  std::vector<std::vector<double>> observation(n_frames, std::vector<double>(n_states, 0.0));
+  std::vector<double> voiced_prob(static_cast<size_t>(n_frames), 0.0);
 
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
 
-    // Compute CMNDF
-    std::vector<float> diff = yin_difference(data + start, config.frame_length, max_period + 1);
-    std::vector<float> cmndf = yin_cmndf(diff);
+    std::vector<float> cmndf =
+        librosa_yin_cmndf(data + start, config.frame_length, min_period, max_period);
 
-    // Find all local minima as pitch candidates
-    std::vector<Candidate> candidates;
+    std::vector<int> troughs;
+    for (int index = 0; index < static_cast<int>(cmndf.size()); ++index) {
+      const bool is_left_edge = index == 0 && index + 1 < static_cast<int>(cmndf.size()) &&
+                                cmndf[index] < cmndf[index + 1];
+      const bool is_local_min = index > 0 && index + 1 < static_cast<int>(cmndf.size()) &&
+                                cmndf[index] < cmndf[index - 1] && cmndf[index] <= cmndf[index + 1];
+      if (is_left_edge || is_local_min) {
+        troughs.push_back(index);
+      }
+    }
+    if (troughs.empty()) {
+      const double unvoiced = 1.0 / n_pitch_bins;
+      for (int bin = 0; bin < n_pitch_bins; ++bin) {
+        observation[static_cast<size_t>(i)][static_cast<size_t>(n_pitch_bins + bin)] = unvoiced;
+      }
+      continue;
+    }
 
-    for (int tau = min_period + 1; tau < max_period - 1; ++tau) {
-      // Local minimum check
-      if (cmndf[tau] < cmndf[tau - 1] && cmndf[tau] <= cmndf[tau + 1]) {
-        // Calculate probability using beta distribution
-        float prob = beta_pdf(cmndf[tau], kBetaAlpha, kBetaBeta);
-        if (prob > 1e-6f) {
-          // Parabolic interpolation
-          float offset = parabolic_interp(cmndf[tau - 1], cmndf[tau], cmndf[tau + 1]);
-          float period = static_cast<float>(tau) + offset;
-
-          candidates.push_back({period, prob});
+    std::vector<double> trough_probs(troughs.size(), 0.0);
+    for (int threshold_index = 0; threshold_index < kThresholds; ++threshold_index) {
+      const double threshold = thresholds[static_cast<size_t>(threshold_index + 1)];
+      int below_count = 0;
+      for (int index : troughs) {
+        below_count += cmndf[static_cast<size_t>(index)] < threshold ? 1 : 0;
+      }
+      if (below_count == 0) {
+        continue;
+      }
+      double norm = 0.0;
+      for (int position = 0; position < below_count; ++position) {
+        norm += std::exp(-kBoltzmann * position);
+      }
+      int below_position = 0;
+      for (size_t trough_index = 0; trough_index < troughs.size(); ++trough_index) {
+        const int index = troughs[trough_index];
+        if (cmndf[static_cast<size_t>(index)] < threshold) {
+          const double prior = std::exp(-kBoltzmann * below_position) / norm;
+          trough_probs[trough_index] += prior * beta_probs[static_cast<size_t>(threshold_index)];
+          ++below_position;
         }
       }
     }
 
-    // Add unvoiced candidate
-    candidates.push_back({0.0f, 0.01f});
-
-    // Sort by probability and keep top candidates
-    std::sort(candidates.begin(), candidates.end(),
-              [](const Candidate& a, const Candidate& b) { return a.probability > b.probability; });
-
-    if (candidates.size() > kMaxCandidates) {
-      candidates.resize(kMaxCandidates);
-    }
-
-    // Normalize probabilities
-    float sum = 0.0f;
-    for (const auto& c : candidates) {
-      sum += c.probability;
-    }
-    if (sum > 0.0f) {
-      for (auto& c : candidates) {
-        c.probability /= sum;
+    auto global_min_it = std::min_element(troughs.begin(), troughs.end(), [&](int lhs, int rhs) {
+      return cmndf[static_cast<size_t>(lhs)] < cmndf[static_cast<size_t>(rhs)];
+    });
+    const size_t global_min_index =
+        static_cast<size_t>(std::distance(troughs.begin(), global_min_it));
+    int thresholds_below_min = 0;
+    const double global_min_height = cmndf[static_cast<size_t>(*global_min_it)];
+    for (int threshold_index = 0; threshold_index < kThresholds; ++threshold_index) {
+      if (global_min_height >= thresholds[static_cast<size_t>(threshold_index + 1)]) {
+        ++thresholds_below_min;
       }
     }
+    double no_trough_mass = 0.0;
+    for (int threshold_index = 0; threshold_index < thresholds_below_min; ++threshold_index) {
+      no_trough_mass += beta_probs[static_cast<size_t>(threshold_index)];
+    }
+    trough_probs[global_min_index] += kNoTroughProb * no_trough_mass;
 
-    frame_candidates[i] = std::move(candidates);
+    for (size_t trough_index = 0; trough_index < troughs.size(); ++trough_index) {
+      const int index = troughs[trough_index];
+      if (trough_probs[trough_index] <= 0.0) {
+        continue;
+      }
+      float offset = 0.0f;
+      if (index > 0 && index + 1 < static_cast<int>(cmndf.size())) {
+        offset = parabolic_interp(cmndf[static_cast<size_t>(index - 1)],
+                                  cmndf[static_cast<size_t>(index)],
+                                  cmndf[static_cast<size_t>(index + 1)]);
+      }
+      const double period = static_cast<double>(min_period + index) + offset;
+      const double f0 = static_cast<double>(sr) / period;
+      int bin = static_cast<int>(std::llround(static_cast<double>(constants::kSemitonesPerOctave) *
+                                              bins_per_semitone * std::log2(f0 / config.fmin)));
+      bin = std::clamp(bin, 0, n_pitch_bins - 1);
+      observation[static_cast<size_t>(i)][static_cast<size_t>(bin)] += trough_probs[trough_index];
+    }
+
+    double voiced = 0.0;
+    for (int bin = 0; bin < n_pitch_bins; ++bin) {
+      voiced += observation[static_cast<size_t>(i)][static_cast<size_t>(bin)];
+    }
+    voiced = std::clamp(voiced, 0.0, 1.0);
+    voiced_prob[static_cast<size_t>(i)] = voiced;
+    const double unvoiced = (1.0 - voiced) / n_pitch_bins;
+    for (int bin = 0; bin < n_pitch_bins; ++bin) {
+      observation[static_cast<size_t>(i)][static_cast<size_t>(n_pitch_bins + bin)] = unvoiced;
+    }
   }
 
-  // Step 2: Viterbi decoding for optimal path
-  // State: candidate index for each frame
-  std::vector<std::vector<float>> viterbi_prob(n_frames);
-  std::vector<std::vector<int>> backtrack(n_frames);
-
-  // Initialize first frame
-  viterbi_prob[0].resize(frame_candidates[0].size());
-  backtrack[0].resize(frame_candidates[0].size(), -1);
-  for (size_t j = 0; j < frame_candidates[0].size(); ++j) {
-    viterbi_prob[0][j] = std::log(frame_candidates[0][j].probability + 1e-10f);
+  const int max_semitones_per_frame = static_cast<int>(
+      std::llround(kMaxTransitionRate * static_cast<double>(constants::kSemitonesPerOctave) *
+                   config.hop_length / sr));
+  const int transition_width = max_semitones_per_frame * bins_per_semitone + 1;
+  const int transition_half = transition_width / 2;
+  std::vector<std::vector<std::pair<int, double>>> pitch_transitions(
+      static_cast<size_t>(n_pitch_bins));
+  for (int prev_bin = 0; prev_bin < n_pitch_bins; ++prev_bin) {
+    double norm = 0.0;
+    const int begin = std::max(0, prev_bin - transition_half);
+    const int end = std::min(n_pitch_bins - 1, prev_bin + transition_half);
+    for (int curr_bin = begin; curr_bin <= end; ++curr_bin) {
+      norm += static_cast<double>(transition_half + 1 - std::abs(curr_bin - prev_bin));
+    }
+    for (int curr_bin = begin; curr_bin <= end; ++curr_bin) {
+      const double weight =
+          static_cast<double>(transition_half + 1 - std::abs(curr_bin - prev_bin));
+      pitch_transitions[static_cast<size_t>(prev_bin)].push_back({curr_bin, weight / norm});
+    }
   }
 
-  // Forward pass
+  std::vector<std::vector<double>> viterbi(
+      n_frames, std::vector<double>(n_states, -std::numeric_limits<double>::infinity()));
+  std::vector<std::vector<int>> backtrack(n_frames, std::vector<int>(n_states, -1));
+  const double log_init = -std::log(static_cast<double>(n_states));
+  for (int state = 0; state < n_states; ++state) {
+    viterbi[0][static_cast<size_t>(state)] =
+        log_init + std::log(std::max(observation[0][static_cast<size_t>(state)], kLogFloor));
+  }
+
   for (int i = 1; i < n_frames; ++i) {
-    size_t n_curr = frame_candidates[i].size();
-    size_t n_prev = frame_candidates[i - 1].size();
-
-    viterbi_prob[i].resize(n_curr);
-    backtrack[i].resize(n_curr);
-
-    for (size_t j = 0; j < n_curr; ++j) {
-      float best_prob = -std::numeric_limits<float>::infinity();
-      int best_prev = 0;
-
-      bool curr_voiced = (frame_candidates[i][j].period > 0.0f);
-
-      for (size_t k = 0; k < n_prev; ++k) {
-        bool prev_voiced = (frame_candidates[i - 1][k].period > 0.0f);
-
-        // Transition probability
-        float trans_prob;
-        if (prev_voiced && curr_voiced) {
-          // Voiced to voiced: penalize large pitch jumps
-          float prev_freq = static_cast<float>(sr) / frame_candidates[i - 1][k].period;
-          float curr_freq = static_cast<float>(sr) / frame_candidates[i][j].period;
-          float ratio = curr_freq / prev_freq;
-          float cents = constants::kCentsPerOctave * std::log2(ratio);
-          float jump_penalty = std::exp(-cents * cents / (2.0f * 50.0f * 50.0f));
-          trans_prob = kSelfTransition * jump_penalty;
-        } else if (!prev_voiced && !curr_voiced) {
-          trans_prob = kSelfTransition;
-        } else if (prev_voiced && !curr_voiced) {
-          trans_prob = kVoicedToUnvoiced;
-        } else {
-          trans_prob = kUnvoicedToVoiced;
-        }
-
-        float prob = viterbi_prob[i - 1][k] + std::log(trans_prob + 1e-10f);
-        if (prob > best_prob) {
-          best_prob = prob;
-          best_prev = static_cast<int>(k);
+    for (int prev_state = 0; prev_state < n_states; ++prev_state) {
+      const double previous = viterbi[static_cast<size_t>(i - 1)][static_cast<size_t>(prev_state)];
+      if (!std::isfinite(previous)) {
+        continue;
+      }
+      const bool prev_voiced = prev_state < n_pitch_bins;
+      const int prev_bin = prev_state % n_pitch_bins;
+      for (bool curr_voiced : {true, false}) {
+        const double switch_prob = prev_voiced == curr_voiced ? (1.0 - kSwitchProb) : kSwitchProb;
+        const int state_offset = curr_voiced ? 0 : n_pitch_bins;
+        for (const auto& [curr_bin, pitch_prob] :
+             pitch_transitions[static_cast<size_t>(prev_bin)]) {
+          const int curr_state = state_offset + curr_bin;
+          const double score = previous + std::log(switch_prob) + std::log(pitch_prob);
+          if (score > viterbi[static_cast<size_t>(i)][static_cast<size_t>(curr_state)]) {
+            viterbi[static_cast<size_t>(i)][static_cast<size_t>(curr_state)] = score;
+            backtrack[static_cast<size_t>(i)][static_cast<size_t>(curr_state)] = prev_state;
+          }
         }
       }
-
-      viterbi_prob[i][j] = best_prob + std::log(frame_candidates[i][j].probability + 1e-10f);
-      backtrack[i][j] = best_prev;
+    }
+    for (int state = 0; state < n_states; ++state) {
+      viterbi[static_cast<size_t>(i)][static_cast<size_t>(state)] += std::log(
+          std::max(observation[static_cast<size_t>(i)][static_cast<size_t>(state)], kLogFloor));
     }
   }
 
-  // Backtrack to find best path
   std::vector<int> best_path(n_frames);
-
-  // Find best final state
-  float best_final = -std::numeric_limits<float>::infinity();
-  int best_final_idx = 0;
-  for (size_t j = 0; j < viterbi_prob[n_frames - 1].size(); ++j) {
-    if (viterbi_prob[n_frames - 1][j] > best_final) {
-      best_final = viterbi_prob[n_frames - 1][j];
-      best_final_idx = static_cast<int>(j);
-    }
-  }
-  best_path[n_frames - 1] = best_final_idx;
-
-  // Backtrack
+  best_path[n_frames - 1] = static_cast<int>(
+      std::distance(viterbi[static_cast<size_t>(n_frames - 1)].begin(),
+                    std::max_element(viterbi[static_cast<size_t>(n_frames - 1)].begin(),
+                                     viterbi[static_cast<size_t>(n_frames - 1)].end())));
   for (int i = n_frames - 2; i >= 0; --i) {
-    best_path[i] = backtrack[i + 1][best_path[i + 1]];
+    const int next_state = best_path[static_cast<size_t>(i + 1)];
+    const int previous = backtrack[static_cast<size_t>(i + 1)][static_cast<size_t>(next_state)];
+    best_path[static_cast<size_t>(i)] = previous < 0 ? next_state : previous;
   }
 
-  // Step 3: Extract results
+  std::vector<float> freqs(static_cast<size_t>(n_pitch_bins));
+  for (int bin = 0; bin < n_pitch_bins; ++bin) {
+    freqs[static_cast<size_t>(bin)] =
+        config.fmin *
+        std::pow(2.0f, static_cast<float>(bin) / (constants::kSemitonesPerOctave *
+                                                  static_cast<float>(bins_per_semitone)));
+  }
+
   PitchResult result;
   result.f0.resize(n_frames);
   result.voiced_prob.resize(n_frames);
   result.voiced_flag.resize(n_frames);
-
   for (int i = 0; i < n_frames; ++i) {
-    int idx = best_path[i];
-    float period = frame_candidates[i][idx].period;
-    float prob = frame_candidates[i][idx].probability;
-
-    if (period > 0.0f) {
-      result.f0[i] = static_cast<float>(sr) / period;
-      result.voiced_flag[i] = true;
+    const int state = best_path[static_cast<size_t>(i)];
+    const int bin = state % n_pitch_bins;
+    const bool voiced = state < n_pitch_bins;
+    result.voiced_flag[static_cast<size_t>(i)] = voiced;
+    result.voiced_prob[static_cast<size_t>(i)] =
+        static_cast<float>(voiced_prob[static_cast<size_t>(i)]);
+    if (voiced) {
+      result.f0[static_cast<size_t>(i)] = freqs[static_cast<size_t>(bin)];
+    } else if (config.fill_na) {
+      result.f0[static_cast<size_t>(i)] = 0.0f;
     } else {
-      result.f0[i] = config.fill_na ? 0.0f : std::numeric_limits<float>::quiet_NaN();
-      result.voiced_flag[i] = false;
+      result.f0[static_cast<size_t>(i)] = std::numeric_limits<float>::quiet_NaN();
     }
-    result.voiced_prob[i] = prob;
   }
-
   return result;
 }
 
@@ -486,7 +642,7 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
       // Quadratic max value at vertex.
       float denom = a - 2.0f * b + c;
       float peak_mag = b;
-      if (std::abs(denom) > 1e-10f) {
+      if (std::abs(denom) > constants::kEpsilon) {
         peak_mag = b - 0.25f * (a - c) * shift;
       }
       out.magnitudes[k * n_frames + t] = peak_mag;

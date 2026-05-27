@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 #include "core/db_convert.h"
+#include "util/constants.h"
 
 namespace sonare {
 
@@ -120,7 +121,7 @@ std::vector<float> perceptual_weighting(const float* S, int n_bins, int n_frames
   }
 
   std::vector<float> weights = frequency_weighting(freqs, kind);
-  std::vector<float> S_db = power_to_db(S, total, 1.0f, 1e-10f, 80.0f);
+  std::vector<float> S_db = power_to_db(S, total, 1.0f, constants::kEpsilon, 80.0f);
 
   std::vector<float> out(total);
   for (int k = 0; k < n_bins; ++k) {

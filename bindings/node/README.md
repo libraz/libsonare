@@ -8,13 +8,18 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-Fast audio analysis and mastering DSP for Node.js, exposed as a native N-API
-addon built on the libsonare C++ core.
+A dependency-free audio DSP toolkit for Node.js — librosa-compatible analysis
+plus broadcast-grade mastering, mixing, and editing — exposed as a native N-API
+addon built on the libsonare C++ core. Mastering ships 77 named DSP processors
+implemented against published references (ITU-R BS.1770-4 true-peak limiting,
+Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
+saturation), all under Apache-2.0 with no model weights.
 
 Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
 audio files directly from disk or memory (WAV / MP3 out of the box, plus
-M4A / AAC / FLAC / OGG / Opus when built with FFmpeg). Both the analysis and
-mastering APIs are exposed, matching the C, Python, CLI, and WASM surfaces.
+M4A / AAC / FLAC / OGG / Opus when built with FFmpeg). The analysis, mastering,
+mixing, and editing APIs are exposed, matching the C, Python, CLI, and WASM
+surfaces.
 
 ## Installation
 
@@ -67,6 +72,35 @@ console.log(`BPM: ${result.bpm.toFixed(1)}  Key: ${result.key.name}`);
 const samples: Float32Array = audio.getData();
 const bpm = detectBpm(samples, audio.getSampleRate());
 const key = detectKey(samples, audio.getSampleRate());
+
+// Advanced key options are opt-in; defaults preserve existing behavior.
+const keyWithOptions = detectKey(samples, audio.getSampleRate(), {
+  useHpss: true,
+  loudnessWeighted: true,
+  highPassHz: 80,
+  nFft: 4096,
+  hopLength: 512,
+});
+const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
+```
+
+### Room acoustics
+
+Use `detectAcoustic` for blind RT60/EDT estimation from ordinary audio.
+Use `analyzeImpulseResponse` when you have a measured impulse response and need
+clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `NaN` for clarity
+metrics because they are not reliable without an impulse response.
+
+```typescript
+import { Audio, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare-native';
+
+const audio = Audio.fromFile('recording.wav');
+const blind = audio.detectAcoustic(6, 24, 30.0, 10.0);
+console.log(blind.rt60, blind.edt, blind.isBlind);
+
+const ir = Audio.fromFile('room_ir.wav');
+const params = analyzeImpulseResponse(ir.getData(), ir.getSampleRate());
+console.log(params.rt60, params.c50, params.c80, params.d50);
 ```
 
 ### Mastering
@@ -190,7 +224,7 @@ dot-notation keys as `masteringChain`.
 ```typescript
 import { masterAudio, masteringPresetNames } from '@libraz/libsonare-native';
 
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 
 const result = masterAudio(samples, sampleRate, 'aiMusic', {
   'loudness.targetLufs': -13,
@@ -200,6 +234,32 @@ const result = masterAudio(samples, sampleRate, 'aiMusic', {
 // Audio class shortcut
 const audio = Audio.fromFile('song.wav');
 const popMastered = audio.masterAudio('pop');
+```
+
+### Mixing
+
+```typescript
+import {
+  Mixer,
+  mixStereo,
+  mixingScenePresetJson,
+  mixingScenePresetNames,
+} from '@libraz/libsonare-native';
+
+mixingScenePresetNames(); // ['vocalReverbSend', ...]
+const sceneJson = mixingScenePresetJson('vocalReverbSend');
+
+const offline = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
+  inputTrimDb: [3, 0],
+  faderDb: [-3, -12],
+  pan: [0, -0.2],
+  width: [1, 0.9],
+});
+
+const mixer = Mixer.fromSceneJson(sceneJson, sampleRate, 512);
+const block = mixer.processStereo([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR]);
+console.log(offline.meters[0].maxTruePeakDb, block.left.length);
+mixer.destroy();
 ```
 
 ### Streaming mastering chain

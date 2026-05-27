@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/chord_hmm.h"
 #include "analysis/chord_templates.h"
 #include "core/audio.h"
 #include "feature/chroma.h"
@@ -19,8 +20,8 @@ namespace chord_constants {
 /// @brief Default smoothing window in seconds (2-second moving average).
 constexpr float kSmoothingWindowSec = 2.0f;
 
-/// @brief Threshold for preferring tetrad over triad (0.15 higher correlation required).
-constexpr float kTetradThreshold = 0.15f;
+/// @brief Threshold for preferring tetrad over triad (0.05 higher correlation required).
+constexpr float kTetradThreshold = 0.05f;
 
 /// @brief Minimum duration for chord segments in seconds.
 constexpr float kMinDurationSec = 0.3f;
@@ -29,13 +30,20 @@ constexpr float kMinDurationSec = 0.3f;
 constexpr float kCorrelationThreshold = 0.5f;
 }  // namespace chord_constants
 
+/// @brief Chroma front-end used for chord recognition.
+enum class ChromaMethod {
+  STFT,
+  NNLS,
+};
+
 /// @brief Detected chord with timing information.
 struct Chord {
-  PitchClass root;       ///< Root pitch class
-  ChordQuality quality;  ///< Chord quality
-  float start;           ///< Start time in seconds
-  float end;             ///< End time in seconds
-  float confidence;      ///< Detection confidence [0, 1]
+  PitchClass root;                  ///< Root pitch class
+  ChordQuality quality;             ///< Chord quality
+  float start;                      ///< Start time in seconds
+  float end;                        ///< End time in seconds
+  float confidence;                 ///< Detection confidence [0, 1]
+  PitchClass bass = PitchClass::C;  ///< Bass pitch class for inversion notation
 
   /// @brief Returns chord name as string (e.g., "Cmaj", "Am").
   std::string to_string() const;
@@ -53,7 +61,14 @@ struct ChordConfig {
   bool use_triads_only = false;                              ///< Use only triads (no 7th chords)
   int n_fft = 2048;                                          ///< FFT size for STFT
   int hop_length = 512;                                      ///< Hop length for STFT
-  bool use_beat_sync = true;  ///< Use beat-synchronized chord detection
+  ChromaMethod chroma_method = ChromaMethod::STFT;           ///< Chroma extraction method
+  bool use_beat_sync = true;     ///< Use beat-synchronized chord detection
+  bool use_hmm = false;          ///< Use Viterbi HMM smoothing over chord candidates
+  int hmm_beam_width = 24;       ///< Candidate beam width for HMM smoothing
+  bool use_key_context = false;  ///< Bias HMM transitions by key context
+  PitchClass key_root = PitchClass::C;
+  Mode key_mode = Mode::Major;
+  bool detect_inversions = false;  ///< Estimate bass pitch class and emit slash chords
 };
 
 /// @brief Chord analyzer for detecting chords from audio.
@@ -118,12 +133,17 @@ class ChordAnalyzer {
   void merge_short_segments();
   int find_best_chord(const float* chroma) const;
   ChordMatch find_best_chord_with_confidence(const float* chroma) const;
+  ChordHmmObservation chord_observation(const float* chroma) const;
+  ChordHmmConfig hmm_config() const;
+  PitchClass estimate_bass_pitch_class(int start_frame, int end_frame,
+                                       const ChordTemplate& chord) const;
   std::string chord_to_roman_numeral(const Chord& chord, PitchClass key_root, Mode mode) const;
 
   std::vector<Chord> chords_;
   std::vector<int> frame_chords_;
   std::vector<ChordTemplate> templates_;
   Chroma chroma_;
+  Chroma bass_chroma_;
   ChordConfig config_;
 };
 

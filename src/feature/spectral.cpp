@@ -46,6 +46,10 @@ std::vector<float> pad_for_centered_zcr(const float* samples, size_t n_samples, 
   return padded;
 }
 
+float sanitized_magnitude(float magnitude) noexcept {
+  return std::isfinite(magnitude) ? std::max(magnitude, 0.0f) : 0.0f;
+}
+
 }  // namespace
 
 std::vector<float> spectral_centroid(const Spectrogram& spec, int sr) {
@@ -65,8 +69,7 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
     float weighted_sum = 0.0f;
     float magnitude_sum = 0.0f;
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
-      SONARE_CHECK(mag >= 0.0f, ErrorCode::InvalidParameter);
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       weighted_sum += freqs[k] * mag;
       magnitude_sum += mag;
     }
@@ -97,7 +100,7 @@ std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_
     float sum_magnitude = 0.0f;
 
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       float diff = std::abs(freqs[k] - centroid);
       sum_weighted += std::pow(diff, p) * mag;
       sum_magnitude += mag;
@@ -130,8 +133,7 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
   for (int t = 0; t < n_frames; ++t) {
     float total = 0.0f;
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
-      SONARE_CHECK(mag >= 0.0f, ErrorCode::InvalidParameter);
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       total += mag;
     }
 
@@ -140,7 +142,7 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
 
     int rolloff_bin = n_bins - 1;
     for (int k = 0; k < n_bins; ++k) {
-      float mag = magnitude[k * n_frames + t];
+      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       cumulative += mag;
       if (cumulative >= threshold) {
         rolloff_bin = k;
@@ -161,7 +163,7 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
 
-  constexpr float kAmin = 1e-10f;
+  constexpr float kAmin = constants::kEpsilon;
 
   // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
@@ -258,8 +260,8 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   std::vector<float> contrast((n_bands + 1) * n_frames, 0.0f);
   std::vector<float> peak_db(peak.size());
   std::vector<float> valley_db(valley.size());
-  power_to_db(peak.data(), peak.size(), 1.0f, 1e-10f, 80.0f, peak_db.data());
-  power_to_db(valley.data(), valley.size(), 1.0f, 1e-10f, 80.0f, valley_db.data());
+  power_to_db(peak.data(), peak.size(), 1.0f, constants::kEpsilon, 80.0f, peak_db.data());
+  power_to_db(valley.data(), valley.size(), 1.0f, constants::kEpsilon, 80.0f, valley_db.data());
 
   for (size_t i = 0; i < contrast.size(); ++i) {
     contrast[i] = peak_db[i] - valley_db[i];

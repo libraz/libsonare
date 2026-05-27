@@ -5,10 +5,14 @@
 #include <cmath>
 
 #include "filters/dct.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare {
+
+using sonare::constants::kEpsilon;
+using sonare::constants::kPi;
 
 MelSpectrogram::MelSpectrogram() : n_mels_(0), n_frames_(0), sample_rate_(0), hop_length_(0) {}
 
@@ -79,8 +83,8 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling.
   // Clipping is done in dB scale: max(log_spec, log_spec.max() - top_db)
   std::vector<float> log_mel(power_.size());
-  const float amin = 1e-10f;
-  const float top_db = 80.0f;
+  const float amin = kEpsilon;
+  constexpr float top_db = constants::kDefaultTopDb;
 
   // First pass: convert to dB and find max
   float max_db = -1e30f;

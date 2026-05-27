@@ -1,0 +1,4 @@
+# dataset	file	annotation	min_wcsr
+# Optional extra columns after min_wcsr: bass_acc=0.70	extended_wcsr=0.75	max_change_rate=60	min_change_reduction=0.50	confidence	report_only	notes
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# with present audio and annotation files are available.

@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "core/audio.h"
-#include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
+#include "util/constants.h"
 
 namespace sonare {
 
@@ -20,9 +20,12 @@ namespace sonare {
 /// @param n_frames Number of time frames.
 /// @param mel_config Mel configuration that produced @p M (used to rebuild the
 ///        filterbank consistently).
+/// @param sr Sample rate of the audio that produced @p M (Hz). The Mel
+///        filterbank frequency mapping depends on it; passing the wrong value
+///        skews the reconstructed spectrum.
 /// @return STFT power spectrogram [(n_fft/2 + 1) x n_frames] row-major.
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
-                               const MelConfig& mel_config);
+                               const MelConfig& mel_config, int sr = constants::kDefaultSampleRate);
 
 /// @brief Reconstructs audio from a Mel spectrogram via Griffin-Lim.
 /// @param M Mel power spectrogram [n_mels x n_frames] row-major.
@@ -30,9 +33,11 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 /// @param n_frames Number of time frames.
 /// @param mel_config Mel configuration that produced @p M.
 /// @param n_iter Griffin-Lim iterations (default 32).
+/// @param sr Sample rate of the original audio (Hz). Used for both the Mel
+///        filterbank inversion and the Griffin-Lim STFT timing.
 /// @return Reconstructed audio.
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
-                   int n_iter = 32);
+                   int n_iter = 32, int sr = constants::kDefaultSampleRate);
 
 /// @brief Inverts MFCC coefficients back to a Mel spectrogram (in dB scale).
 /// @param mfcc MFCC matrix [n_mfcc x n_frames] row-major.
@@ -45,7 +50,9 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 /// @brief Reconstructs audio directly from MFCC.
 /// @details Calls @ref mfcc_to_mel, then @ref mel_to_audio with the provided
 /// MelConfig (which must match the configuration that produced the MFCC).
+/// @param sr Sample rate of the original audio (Hz), threaded through to
+///        @ref mel_to_audio.
 Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig& mel_config,
-                    int n_iter = 32);
+                    int n_iter = 32, int sr = constants::kDefaultSampleRate);
 
 }  // namespace sonare

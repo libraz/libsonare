@@ -3,10 +3,13 @@
 
 #include "analysis/dynamics_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <vector>
+
+#include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -21,7 +24,7 @@ Audio create_constant_sine(float amplitude, int sr = 22050, float duration = 1.0
 
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = amplitude * std::sin(2.0f * M_PI * 440.0f * t);
+    samples[i] = amplitude * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -35,8 +38,8 @@ Audio create_dynamic_audio(int sr = 22050, float duration = 2.0f) {
   for (int i = 0; i < n_samples; ++i) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // Amplitude varies from 0.1 to 0.9
-    float amplitude = 0.5f + 0.4f * std::sin(2.0f * M_PI * 0.5f * t);
-    samples[i] = amplitude * std::sin(2.0f * M_PI * 440.0f * t);
+    float amplitude = 0.5f + 0.4f * std::sin(2.0f * sonare::constants::kPiD * 0.5f * t);
+    samples[i] = amplitude * std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -51,7 +54,7 @@ Audio create_compressed_audio(int sr = 22050, float duration = 1.0f) {
     float t = static_cast<float>(i) / static_cast<float>(sr);
     // Square wave has high peak-to-RMS ratio before compression
     // Using clipped sine as "compressed" signal
-    float val = std::sin(2.0f * M_PI * 440.0f * t);
+    float val = std::sin(2.0f * sonare::constants::kPiD * 440.0f * t);
     samples[i] = std::tanh(val * 3.0f) * 0.9f;  // Soft clipping
   }
 
@@ -114,6 +117,28 @@ TEST_CASE("DynamicsAnalyzer dynamic range", "[dynamics_analyzer]") {
 
   // Dynamic audio should have larger dynamic range
   REQUIRE(dyn_analyzer.dynamic_range_db() > const_analyzer.dynamic_range_db());
+}
+
+TEST_CASE("DynamicsAnalyzer interpolates short percentile sets", "[dynamics_analyzer]") {
+  constexpr int sr = 1000;
+  constexpr int window = 100;
+  std::vector<float> samples;
+  for (float amp : {0.1f, 0.2f, 0.3f, 0.4f, 0.5f}) {
+    samples.insert(samples.end(), window, amp);
+  }
+
+  DynamicsConfig config;
+  config.window_sec = 0.1f;
+  config.hop_length = window;
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+  DynamicsAnalyzer analyzer(audio, config);
+
+  const auto& curve = analyzer.loudness_curve().rms_db;
+  REQUIRE(curve.size() == 5);
+  const float min_to_max =
+      *std::max_element(curve.begin(), curve.end()) - *std::min_element(curve.begin(), curve.end());
+  REQUIRE(analyzer.dynamic_range_db() > 0.0f);
+  REQUIRE(analyzer.dynamic_range_db() < min_to_max);
 }
 
 TEST_CASE("DynamicsAnalyzer is_compressed", "[dynamics_analyzer]") {

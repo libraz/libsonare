@@ -6,9 +6,12 @@
 #include <utility>
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare::streaming_detail {
 
-constexpr float kLogAmin = 1e-10f;
+// librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
+constexpr float kLogAmin = sonare::constants::kEpsilon;
 constexpr float kBpmMin = 60.0f;
 constexpr float kBpmMax = 200.0f;
 constexpr int kMinOnsetFrames = 100;
@@ -24,7 +27,8 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
                                         float bpm_min, float bpm_max);
 uint8_t quantize_to_u8(float value, float min_val, float max_val);
 int16_t quantize_to_i16(float value, float min_val, float max_val);
-float single_power_to_db(float power_val, float ref = 1.0f, float amin = 1e-10f);
+float single_power_to_db(float power_val, float ref = 1.0f,
+                         float amin = sonare::constants::kEpsilon);
 int count_shared_notes(int root1, int quality1, int root2, int quality2);
 bool are_chords_confusable(int root1, int quality1, int root2, int quality2);
 std::array<float, 12> compute_median_chroma(const std::deque<std::array<float, 12>>& history);

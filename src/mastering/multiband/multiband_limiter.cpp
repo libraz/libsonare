@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::multiband {
 
 MultibandLimiter::MultibandLimiter(MultibandLimiterConfig config)
@@ -23,6 +25,9 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
+  // Pre-size split scratch for stereo so the steady-state audio path is
+  // allocation-free; it is grown on demand only if a wider block arrives.
+  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
   for (auto& limiter : limiters_) {
     limiter.prepare(sample_rate_, max_block_size_);
   }
@@ -30,6 +35,7 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandLimiter::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("MultibandLimiter must be prepared before processing");
   }
@@ -48,22 +54,20 @@ void MultibandLimiter::process(float* const* channels, int num_channels, int num
     }
   }
 
-  auto split = crossover_.split(channels, num_channels, num_samples);
-  for (int band = 0; band < split.num_bands(); ++band) {
-    std::vector<float*> band_channels(static_cast<size_t>(num_channels));
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_channels[static_cast<size_t>(ch)] =
-          split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)].data();
-    }
-    limiters_[static_cast<size_t>(band)].process(band_channels.data(), num_channels, num_samples);
+  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  crossover_.split_into(channels, num_channels, num_samples, scratch_);
+  const int num_bands = scratch_.num_bands();
+  for (int band = 0; band < num_bands; ++band) {
+    limiters_[static_cast<size_t>(band)].process(
+        scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         limiters_[static_cast<size_t>(band)].last_gain_reduction_db();
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {
     std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < split.num_bands(); ++band) {
-      const auto& band_samples = split.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+    for (int band = 0; band < num_bands; ++band) {
+      const auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] += band_samples[static_cast<size_t>(i)];
       }
@@ -79,6 +83,16 @@ void MultibandLimiter::reset() {
   std::fill(last_gain_reductions_db_.begin(), last_gain_reductions_db_.end(), 0.0f);
 }
 
+int MultibandLimiter::latency_samples() const noexcept {
+  // All bands share the same lookahead configuration, so the per-band limiter
+  // latency is uniform; report band 0's latency. Guard against an empty band
+  // list (e.g. before prepare()).
+  if (limiters_.empty()) {
+    return 0;
+  }
+  return limiters_[0].latency_samples();
+}
+
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   validate_config(config);
   config_ = config;
@@ -87,6 +101,19 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   if (prepared_) {
     prepare(sample_rate_, max_block_size_);
   }
+}
+
+bool MultibandLimiter::set_parameter(unsigned int param_id, float value) {
+  const unsigned int band = param_id / kBandStride;
+  if (band >= limiters_.size()) {
+    return false;
+  }
+  const unsigned int band_param = param_id % kBandStride;
+  if (limiters_[band].set_parameter(band_param, value)) {
+    config_.bands[band] = limiters_[band].config();
+    return true;
+  }
+  return false;
 }
 
 void MultibandLimiter::validate_config(const MultibandLimiterConfig& config) {

@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
+#include "feature/pitch.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -12,9 +12,8 @@ MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
     : config_(config), sr_(audio.sample_rate()) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  analyze();
-
-  // Process audio frame by frame
+  // Detect pitch frame by frame using the librosa-grade FFT-based YIN in feature/pitch.
+  // Confidence is derived from the CMNDF minimum (1 - d'(tau*)) inside yin_with_confidence.
   const float* samples = audio.data();
   size_t n_samples = audio.size();
 
@@ -24,123 +23,19 @@ MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
   for (size_t start = 0; start + frame_size <= n_samples; start += hop) {
     float time = static_cast<float>(start) / sr_;
 
-    // Compute pitch using YIN
-    float frequency = yin_pitch(samples + start, frame_size, sr_);
+    float confidence = 0.0f;
+    float frequency = yin_with_confidence(samples + start, frame_size, sr_, config.fmin,
+                                          config.fmax, config.threshold, &confidence);
 
     PitchPoint point;
     point.time = time;
     point.frequency = frequency;
-
-    // Compute confidence from YIN threshold
-    if (frequency > 0.0f) {
-      point.confidence = 1.0f - config.threshold;
-    } else {
-      point.confidence = 0.0f;
-    }
+    point.confidence = (frequency > 0.0f) ? confidence : 0.0f;
 
     contour_.pitches.push_back(point);
   }
 
   compute_contour_features();
-}
-
-void MelodyAnalyzer::analyze() {
-  // Initialize contour
-  contour_.pitches.clear();
-  contour_.pitch_range_octaves = 0.0f;
-  contour_.pitch_stability = 0.0f;
-  contour_.mean_frequency = 0.0f;
-  contour_.vibrato_rate = 0.0f;
-}
-
-float MelodyAnalyzer::yin_pitch(const float* samples, int frame_size, int sr) const {
-  // YIN algorithm simplified implementation
-  // Based on: De Cheveigné, A., & Kawahara, H. (2002). YIN, a fundamental frequency estimator.
-
-  int half_size = frame_size / 2;
-  if (half_size < 2) {
-    return 0.0f;
-  }
-
-  int tau_min = static_cast<int>(static_cast<float>(sr) / config_.fmax);
-  int tau_max = static_cast<int>(static_cast<float>(sr) / config_.fmin);
-  tau_min = std::max(1, tau_min);
-  tau_max = std::min(tau_max, half_size);
-
-  if (tau_min >= tau_max || tau_max <= 1) {
-    return 0.0f;
-  }
-
-  // Compute difference function
-  std::vector<float> diff(half_size, 0.0f);
-
-  for (int tau = 0; tau < half_size; ++tau) {
-    float sum = 0.0f;
-    int limit = half_size;
-    for (int j = 0; j < limit; ++j) {
-      float delta = samples[j] - samples[j + tau];
-      sum += delta * delta;
-    }
-    diff[tau] = sum;
-  }
-
-  // Cumulative mean normalized difference function
-  std::vector<float> cmndf(half_size, 1.0f);
-  float running_sum = 0.0f;
-
-  for (int tau = 1; tau < half_size; ++tau) {
-    running_sum += diff[tau];
-    if (running_sum > 1e-10f) {
-      cmndf[tau] = diff[tau] * static_cast<float>(tau) / running_sum;
-    }
-  }
-
-  // Find threshold crossing
-  int tau = tau_min;
-  while (tau < tau_max - 1) {
-    if (cmndf[tau] < config_.threshold) {
-      // Find the local minimum
-      while (tau + 1 < tau_max && cmndf[tau + 1] < cmndf[tau]) {
-        ++tau;
-      }
-      break;
-    }
-    ++tau;
-  }
-
-  if (tau >= tau_max - 1) {
-    return 0.0f;  // No pitch found
-  }
-
-  // Parabolic interpolation for sub-sample accuracy
-  float refined_tau = parabolic_interpolation(cmndf.data(), half_size, tau);
-
-  if (refined_tau <= 0.0f) {
-    return 0.0f;
-  }
-
-  float frequency = static_cast<float>(sr) / refined_tau;
-
-  // Check if frequency is within range
-  if (frequency < config_.fmin || frequency > config_.fmax) {
-    return 0.0f;
-  }
-
-  return frequency;
-}
-
-float MelodyAnalyzer::parabolic_interpolation(const float* diff, int size, int tau) const {
-  if (tau <= 0 || tau >= size - 1) {
-    return static_cast<float>(tau);
-  }
-
-  float alpha = diff[tau - 1];
-  float beta = diff[tau];
-  float gamma = diff[tau + 1];
-
-  float peak = 0.5f * (alpha - gamma) / (alpha - 2.0f * beta + gamma);
-
-  return static_cast<float>(tau) + peak;
 }
 
 void MelodyAnalyzer::compute_contour_features() {
@@ -150,9 +45,11 @@ void MelodyAnalyzer::compute_contour_features() {
 
   // Filter out unvoiced frames
   std::vector<float> voiced_frequencies;
+  std::vector<float> voiced_times;
   for (const auto& p : contour_.pitches) {
     if (p.frequency > 0.0f) {
       voiced_frequencies.push_back(p.frequency);
+      voiced_times.push_back(p.time);
     }
   }
 
@@ -160,12 +57,13 @@ void MelodyAnalyzer::compute_contour_features() {
     return;
   }
 
-  // Mean frequency
-  float sum = 0.0f;
+  // Mean pitch is perceptual/logarithmic, so average in log-frequency space
+  // and convert back to Hz.
+  float sum_log = 0.0f;
   for (float f : voiced_frequencies) {
-    sum += f;
+    sum_log += std::log(f);
   }
-  contour_.mean_frequency = sum / voiced_frequencies.size();
+  contour_.mean_frequency = std::exp(sum_log / voiced_frequencies.size());
 
   // Pitch range (in octaves)
   float min_freq = *std::min_element(voiced_frequencies.begin(), voiced_frequencies.end());
@@ -211,8 +109,10 @@ void MelodyAnalyzer::compute_contour_features() {
       }
     }
 
-    // Convert to vibrato rate (Hz)
-    float duration = contour_.pitches.back().time - contour_.pitches.front().time;
+    // Convert to vibrato rate (Hz). The numerator counts zero crossings over the
+    // voiced subset, so the denominator must span the same voiced frames (not the
+    // full timeline including unvoiced gaps) to keep the ratio consistent.
+    float duration = voiced_times.back() - voiced_times.front();
     if (duration > 0.0f) {
       contour_.vibrato_rate = static_cast<float>(zero_crossings) / (2.0f * duration);
     }

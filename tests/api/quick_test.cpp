@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
+
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
@@ -18,7 +20,8 @@ std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
   size_t n_samples = static_cast<size_t>(sample_rate * duration);
   std::vector<float> samples(n_samples);
   for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] = std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sample_rate);
+    samples[i] =
+        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * i / sample_rate);
   }
   return samples;
 }
@@ -36,7 +39,7 @@ std::vector<float> generate_clicks(float bpm, int sample_rate, float duration) {
     // Short click (10ms)
     size_t click_length = static_cast<size_t>(sample_rate * 0.01f);
     for (size_t i = 0; i < click_length && start + i < n_samples; ++i) {
-      samples[start + i] = std::sin(static_cast<float>(M_PI) * i / click_length);
+      samples[start + i] = std::sin(static_cast<float>(sonare::constants::kPiD) * i / click_length);
     }
   }
   return samples;
@@ -88,6 +91,20 @@ TEST_CASE("quick::detect_key", "[quick][api]") {
   }
 }
 
+TEST_CASE("quick::detect_key_candidates", "[quick][api]") {
+  auto samples = generate_sine(440.0f, 22050, 2.0f);
+  auto candidates = sonare::quick::detect_key_candidates(samples.data(), samples.size(), 22050);
+
+  REQUIRE(candidates.size() == 24);
+  for (size_t i = 1; i < candidates.size(); ++i) {
+    REQUIRE(candidates[i - 1].correlation >= candidates[i].correlation);
+  }
+  REQUIRE(static_cast<int>(candidates.front().key.root) >= 0);
+  REQUIRE(static_cast<int>(candidates.front().key.root) <= 11);
+  REQUIRE(candidates.front().key.confidence >= 0.0f);
+  REQUIRE(candidates.front().key.confidence <= 1.0f);
+}
+
 TEST_CASE("quick::detect_onsets", "[quick][api]") {
   SECTION("detects onsets from clicks") {
     auto samples = generate_clicks(120.0f, 22050, 2.0f);
@@ -131,7 +148,7 @@ TEST_CASE("quick::detect_beats", "[quick][api]") {
 
 TEST_CASE("quick::analyze", "[quick][api]") {
   SECTION("returns complete analysis result") {
-    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
     auto result = sonare::quick::analyze(samples.data(), samples.size(), 22050);
 
     // BPM
@@ -155,7 +172,7 @@ TEST_CASE("quick::analyze", "[quick][api]") {
   }
 
   SECTION("form string is not empty") {
-    auto samples = generate_clicks(120.0f, 22050, 4.0f);
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
     auto result = sonare::quick::analyze(samples.data(), samples.size(), 22050);
 
     // Form should have at least one character

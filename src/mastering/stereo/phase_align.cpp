@@ -5,6 +5,8 @@
 #include <limits>
 #include <stdexcept>
 
+#include "mastering/common/scoped_no_denormals.h"
+
 namespace sonare::mastering::stereo {
 
 PhaseAlign::PhaseAlign(PhaseAlignConfig config) : config_(config) { validate_config(config_); }
@@ -21,6 +23,7 @@ void PhaseAlign::prepare(double sample_rate, int max_block_size) {
 }
 
 void PhaseAlign::process(float* const* channels, int num_channels, int num_samples) {
+  sonare::mastering::common::ScopedNoDenormals guard;
   if (!prepared_) {
     throw std::logic_error("PhaseAlign must be prepared before processing");
   }
@@ -58,6 +61,19 @@ void PhaseAlign::set_config(const PhaseAlignConfig& config) {
   config_ = config;
   if (prepared_) {
     rebuild_delay();
+  }
+}
+
+bool PhaseAlign::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      // Keep within [0, 1): the whole-sample delay (delay_samples_) is fixed, so
+      // the delay-line size is unchanged and process_delay() reads the new
+      // fraction directly without reallocating or clearing buffered samples.
+      config_.fractional_delay_samples = std::clamp(value, 0.0f, std::nextafter(1.0f, 0.0f));
+      return true;
+    default:
+      return false;
   }
 }
 
