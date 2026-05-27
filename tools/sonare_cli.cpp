@@ -2326,8 +2326,8 @@ int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
   const int n_iter = args.get_int("n-iter", 32);
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
   std::vector<float> mfcc = mel.mfcc(n_mfcc);
-  Audio out = mfcc_to_audio(mfcc.data(), n_mfcc, mel.n_frames(), config, n_iter,
-                            audio.sample_rate());
+  Audio out =
+      mfcc_to_audio(mfcc.data(), n_mfcc, mel.n_frames(), config, n_iter, audio.sample_rate());
   save_wav(args.output_file, out.data(), out.size(), audio.sample_rate());
 
   if (args.json_output) {
@@ -2793,7 +2793,8 @@ int cmd_fade(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   if (!args.has("fade-in") && !args.has("fade-out")) {
-    std::cerr << color::red << "Error: --fade-in and/or --fade-out required" << color::reset << "\n";
+    std::cerr << color::red << "Error: --fade-in and/or --fade-out required" << color::reset
+              << "\n";
     return 1;
   }
   const float fade_in_sec = args.get_float("fade-in", 0.0f);
