@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v1.2.1 (2026-05-27)
+
+### Bindings & API
+
+- Added a `StreamingRetune` WASM binding (prepare/reset/setConfig/config/
+  grainSize/processMono) backed by `editing/voice_changer/streaming_retune.h`,
+  with TypeScript types and Vitest coverage.
+
+### CLI
+
+- Added VQT, mel-to-audio/MFCC-to-audio (Griffin-Lim) reconstruction, meter,
+  clipping, dynamic-range, stereo, and phase analysis commands.
+- Added normalize, gain, fade, biquad filter, and resample processing commands.
+- Added tone, chirp, and clicks synthesis generators.
+
+### CI
+
+- Dropped `windows-latest` from the native build matrix; MSVC source-portability
+  fixes are retained so building from source on Windows still works.
+
 ## v1.2.0 (2026-05-26)
 
 ### Mixing engine
