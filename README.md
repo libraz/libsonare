@@ -7,6 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
+[![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 
 **A dependency-free audio DSP toolkit for C++, Python, and the browser —
 librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.**
@@ -14,6 +15,8 @@ librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.
 Apache-2.0, zero runtime dependencies, one codebase for native and WebAssembly.
 The same processors that run in C++ run in the browser via WASM — no Python,
 no GPL/AGPL, no model weights.
+
+📖 **[Documentation](https://libsonare.libraz.net)** &nbsp;·&nbsp; 🎧 **[Browser-local Demos](https://libsonare.libraz.net/demos)** &nbsp;·&nbsp; [Getting Started](https://libsonare.libraz.net/docs/getting-started)
 
 - **Analysis (librosa-compatible)** — BPM, key, chord (Viterbi/HMM smoothing,
   inversions, key-context), beat, downbeat, time signature, section, timbre,
@@ -495,11 +498,19 @@ make release
 
 ## Documentation
 
-- [Getting Started](https://libsonare.libraz.net/docs/getting-started)
-- [JavaScript API](https://libsonare.libraz.net/docs/js-api)
-- [Python API](https://libsonare.libraz.net/docs/python-api)
-- [C++ API](https://libsonare.libraz.net/docs/cpp-api)
-- [WebAssembly Guide](https://libsonare.libraz.net/docs/wasm)
+Full docs and browser-local demos: **[libsonare.libraz.net](https://libsonare.libraz.net)** ([demos](https://libsonare.libraz.net/demos)).
+
+**Learn first**
+- [Introduction](https://libsonare.libraz.net/docs/introduction) · [Getting Started](https://libsonare.libraz.net/docs/getting-started) · [Installation](https://libsonare.libraz.net/docs/installation) · [Examples](https://libsonare.libraz.net/docs/examples)
+
+**API by runtime**
+- [Browser / WASM](https://libsonare.libraz.net/docs/wasm) · [JavaScript](https://libsonare.libraz.net/docs/js-api) · [Python](https://libsonare.libraz.net/docs/python-api) · [Node.js Native](https://libsonare.libraz.net/docs/native-bindings) · [C++](https://libsonare.libraz.net/docs/cpp-api) · [CLI](https://libsonare.libraz.net/docs/cli)
+
+**Build by task**
+- [Mastering Processors](https://libsonare.libraz.net/docs/mastering-processors) · [Mixing Engine](https://libsonare.libraz.net/docs/mixing) · [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp) · [Realtime & Streaming](https://libsonare.libraz.net/docs/realtime-streaming) · [Room Acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
+
+**Understand the details**
+- [Architecture](https://libsonare.libraz.net/docs/architecture) · [librosa Compatibility](https://libsonare.libraz.net/docs/librosa-compatibility) · [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) · [Glossary](https://libsonare.libraz.net/docs/glossary)
 
 ## Non-goals
 
