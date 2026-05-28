@@ -375,6 +375,23 @@ float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate) {
   return std::clamp(1.0f - std::exp(exponent), 0.0f, 1.0f);
 }
 
+float one_pole_alpha_from_time_ms(float time_ms, double sample_rate) {
+  if (!(sample_rate > 0.0)) return 1.0f;
+  // 0.05 ms floor matches the legacy voice_changer::coeff_ms behavior so the
+  // result saturates safely instead of underflowing to a divide-by-zero. The
+  // coefficient is already > 0.999 by that point, so further clamping is
+  // imperceptible.
+  const float clamped = std::max(time_ms, 0.05f);
+  const float exponent = -1.0f / (0.001f * clamped * static_cast<float>(sample_rate));
+  return std::clamp(1.0f - std::exp(exponent), 0.0f, 1.0f);
+}
+
+float frequency_to_w0(float frequency_hz, double sample_rate) {
+  if (!(sample_rate > 0.0)) return 0.0f;
+  const float clamped = std::clamp(frequency_hz, 20.0f, static_cast<float>(sample_rate * 0.45));
+  return sonare::constants::kTwoPi * clamped / static_cast<float>(sample_rate);
+}
+
 BiquadCoeffsD rbj_high_shelf_d(double frequency, double sample_rate, double gain_db, double q) {
   return rbj_high_shelf_from_design_d(rbj_high_shelf_design_d(frequency, sample_rate, q), gain_db);
 }

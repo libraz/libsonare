@@ -20,6 +20,29 @@ struct BiquadCoeffs {
   float a2 = 0.0f;
 };
 
+/// @brief Transposed Direct Form II biquad runtime state.
+/// @details Shared by realtime processors that need a small per-stage filter
+///          (voice changer, formant warp, etc.) instead of re-declaring an
+///          identical state struct. Coefficients are owned externally so callers
+///          can update them between blocks (RT-safe scalar math only).
+struct BiquadState {
+  BiquadCoeffs c;
+  float z1 = 0.0f;
+  float z2 = 0.0f;
+
+  void set(BiquadCoeffs coeffs) noexcept { c = coeffs; }
+  void reset() noexcept {
+    z1 = 0.0f;
+    z2 = 0.0f;
+  }
+  float process(float x) noexcept {
+    const float y = c.b0 * x + z1;
+    z1 = c.b1 * x - c.a1 * y + z2;
+    z2 = c.b2 * x - c.a2 * y;
+    return y;
+  }
+};
+
 BiquadCoeffs vicanek_lowpass(float w0, float q);
 BiquadCoeffs vicanek_highpass(float w0, float q);
 BiquadCoeffs vicanek_bandpass(float w0, float q);
@@ -57,6 +80,24 @@ float one_pole_lowpass_alpha(float frequency_hz, double sample_rate);
 /// @brief Matched-z one-pole low-pass coefficient `1 - exp(-2*pi*fc/fs)`.
 /// @details Returns a clamped coefficient in `[0, 1]`.
 float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate);
+
+/// @brief Time-constant parameterization of @ref one_pole_lowpass_alpha_matched.
+/// @details Returns `1 - exp(-1 / (tau * sample_rate))` where
+///          `tau = max(0.05, time_ms) * 0.001`. The 0.05 ms floor guards
+///          against denormals and divide-by-zero; the coefficient saturates
+///          near 1.0 below that anyway, so the clamp is audibly harmless.
+///          Equivalent in shape to the frequency-domain version with
+///          `frequency_hz = 1 / (2*pi*tau)`, but expressed in milliseconds for
+///          envelope followers / gates / compressors / limiters whose A/R
+///          settings are naturally in time units.
+/// @return Coefficient in `[0, 1]`.
+float one_pole_alpha_from_time_ms(float time_ms, double sample_rate);
+
+/// @brief Normalized angular frequency `2*pi*frequency_hz/sample_rate`.
+/// @details The frequency is clamped to `[20 Hz, sample_rate*0.45]` so biquad
+///          designs stay safely inside the unit circle and away from Nyquist.
+///          The RBJ/Vicanek designers in this header all expect this `w0` form.
+float frequency_to_w0(float frequency_hz, double sample_rate);
 
 /// @brief Coefficients for a bilinear-transformed one-pole highpass.
 ///

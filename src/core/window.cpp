@@ -8,9 +8,11 @@
 #include <tuple>
 #include <utility>
 
-#include "util/math_utils.h"
+#include "util/constants.h"
 
 namespace sonare {
+
+using sonare::constants::kTwoPi;
 
 namespace {
 

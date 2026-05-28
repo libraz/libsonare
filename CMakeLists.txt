@@ -23,25 +23,32 @@ option(BUILD_MASTERING "Build the mastering library" ON)
 option(BUILD_MIXING "Build the mixing library" ON)
 option(BUILD_GRAPH "Build the routing graph library" ON)
 
-# The mixer embeds mastering processors as channel-strip EQ/inserts.
-if(BUILD_MIXING AND NOT BUILD_MASTERING)
-  message(STATUS "libsonare: BUILD_MIXING requires BUILD_MASTERING; enabling BUILD_MASTERING")
-  set(BUILD_MASTERING ON CACHE BOOL "Build the mastering library" FORCE)
-endif()
-
-# The C mixer (sonare_c_mixing.cpp) routes signal through the routing graph, so
-# mixing requires the graph library. Auto-enable it to keep existing configs
-# that only set BUILD_MIXING working.
-if(BUILD_MIXING AND NOT BUILD_GRAPH)
-  message(STATUS "libsonare: BUILD_MIXING requires BUILD_GRAPH; enabling BUILD_GRAPH")
-  set(BUILD_GRAPH ON CACHE BOOL "Build the routing graph library" FORCE)
-endif()
 option(BUILD_FX "Build creative realtime FX processors" ON)
 option(BUILD_PITCH_EDITOR "Build monophonic pitch editor primitives" ON)
 option(BUILD_VOICE_CHANGER "Build realtime voice changer primitives" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
 option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
        "Build optional external fixture tests that require local datasets" OFF)
+
+if(BUILD_MIXING AND NOT BUILD_MASTERING)
+  message(STATUS "libsonare: BUILD_MIXING requires BUILD_MASTERING; enabling BUILD_MASTERING")
+  set(BUILD_MASTERING ON CACHE BOOL "Build the mastering library" FORCE)
+endif()
+
+if(BUILD_MIXING AND NOT BUILD_GRAPH)
+  message(STATUS "libsonare: BUILD_MIXING requires BUILD_GRAPH; enabling BUILD_GRAPH")
+  set(BUILD_GRAPH ON CACHE BOOL "Build the routing graph library" FORCE)
+endif()
+
+if(NOT BUILD_PITCH_EDITOR)
+  message(STATUS "libsonare: C editing API requires BUILD_PITCH_EDITOR; enabling BUILD_PITCH_EDITOR")
+  set(BUILD_PITCH_EDITOR ON CACHE BOOL "Build monophonic pitch editor primitives" FORCE)
+endif()
+
+if(BUILD_VOICE_CHANGER AND NOT BUILD_MASTERING)
+  message(STATUS "libsonare: BUILD_VOICE_CHANGER requires BUILD_MASTERING; disabling BUILD_VOICE_CHANGER")
+  set(BUILD_VOICE_CHANGER OFF CACHE BOOL "Build realtime voice changer primitives" FORCE)
+endif()
 set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
     "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")
 set_property(CACHE SONARE_WITH_FFMPEG PROPERTY STRINGS ON OFF AUTO)

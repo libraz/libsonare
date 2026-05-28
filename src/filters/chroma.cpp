@@ -76,15 +76,27 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
     filterbank[chroma_high * n_bins + k] += frac;
   }
 
-  // Normalize each chroma bin
-  for (int c = 0; c < n_chroma; ++c) {
-    float sum = 0.0f;
-    for (int k = 0; k < n_bins; ++k) {
-      sum += filterbank[c * n_bins + k];
-    }
-    if (sum > 0.0f) {
-      for (int k = 0; k < n_bins; ++k) {
-        filterbank[c * n_bins + k] /= sum;
+  // Normalize each chroma row. librosa.filters.chroma defaults to L2 (norm=2);
+  // we expose L1 / None for callers that need the historical behavior.
+  if (config.norm != ChromaFilterNorm::None) {
+    for (int c = 0; c < n_chroma; ++c) {
+      float scale = 0.0f;
+      if (config.norm == ChromaFilterNorm::L1) {
+        for (int k = 0; k < n_bins; ++k) {
+          scale += filterbank[c * n_bins + k];
+        }
+      } else {  // L2
+        for (int k = 0; k < n_bins; ++k) {
+          const float v = filterbank[c * n_bins + k];
+          scale += v * v;
+        }
+        scale = std::sqrt(scale);
+      }
+      if (scale > 0.0f) {
+        const float inv = 1.0f / scale;
+        for (int k = 0; k < n_bins; ++k) {
+          filterbank[c * n_bins + k] *= inv;
+        }
       }
     }
   }

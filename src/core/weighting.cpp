@@ -13,6 +13,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 inline double log10_safe(double v) { return std::log10(v); }

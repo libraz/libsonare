@@ -14,6 +14,8 @@
 
 namespace sonare {
 
+using sonare::constants::kTwoPi;
+
 namespace {
 
 std::vector<float> pad_center(const float* data, size_t size, int pad_length, PadMode pad_mode) {

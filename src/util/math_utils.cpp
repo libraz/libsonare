@@ -13,6 +13,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 float cosine_similarity(const float* a, const float* b, size_t size) {
   if (size == 0) return 0.0f;
 

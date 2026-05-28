@@ -36,6 +36,7 @@ inline constexpr double kLog10Of2D = 0.30102999566398119521;
 // ============================================================
 inline constexpr float kEpsilon = 1e-10f;         ///< Generic near-zero epsilon
 inline constexpr float kSpectrumEpsilon = 1e-8f;  ///< Larger epsilon for log-magnitude operations
+inline constexpr float kAmpEpsilon = 1e-9f;       ///< Guard for amp-to-dB and divide-by-amplitude
 inline constexpr float kFloorDb = -120.0f;        ///< Numerical dB floor
 inline constexpr double kFloorDbD = -120.0;
 inline constexpr float kSilenceDb = -80.0f;             ///< Silence threshold

@@ -10,6 +10,8 @@
 
 namespace sonare {
 
+using sonare::constants::kTwoPi;
+
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
                                    float Q) {
   if (sr <= 0) throw std::invalid_argument("wavelet_lengths: sr must be positive");

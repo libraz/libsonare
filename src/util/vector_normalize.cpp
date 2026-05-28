@@ -11,6 +11,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 float compute_norm(const float* x, std::size_t n, NormType type) {

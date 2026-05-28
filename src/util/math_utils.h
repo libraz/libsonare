@@ -13,11 +13,6 @@
 
 namespace sonare {
 
-// Re-export universal constants for backward compatibility.
-using constants::kEpsilon;
-using constants::kPi;
-using constants::kTwoPi;
-
 /// @brief Clamps a value between min and max.
 /// @tparam T Numeric type
 /// @param value Value to clamp
@@ -100,7 +95,7 @@ T norm_l2(const T* data, size_t size) {
 template <typename T>
 void normalize_l2(T* data, size_t size) {
   T n = norm_l2(data, size);
-  if (n > static_cast<T>(kEpsilon)) {
+  if (n > static_cast<T>(sonare::constants::kEpsilon)) {
     for (size_t i = 0; i < size; ++i) {
       data[i] /= n;
     }

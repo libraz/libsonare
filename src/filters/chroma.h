@@ -7,12 +7,25 @@
 
 namespace sonare {
 
+/// @brief Filterbank row normalization strategy.
+/// @details Mirrors librosa.filters.chroma's ``norm`` parameter. librosa's
+///          default is L2; we expose it here so the filterbank itself is
+///          librosa-compatible.
+enum class ChromaFilterNorm {
+  None,  ///< Do not normalize
+  L1,    ///< Each chroma row sums to 1
+  L2,    ///< Each chroma row has unit Euclidean norm (librosa default)
+};
+
 /// @brief Configuration for Chroma filterbank.
 struct ChromaFilterConfig {
   int n_chroma = 12;    ///< Number of chroma bins (typically 12)
   float tuning = 0.0f;  ///< Tuning deviation in fractions of a chroma bin
   float fmin = 0.0f;    ///< Minimum frequency (0 = C1 ~32.7 Hz)
   int n_octaves = 7;    ///< Number of octaves to span
+  /// Per-row filter normalization. Defaults to L2 to match librosa's
+  /// ``librosa.filters.chroma(norm=2)`` default.
+  ChromaFilterNorm norm = ChromaFilterNorm::L2;
 };
 
 /// @brief Converts frequency to pitch class (0-11, C=0).

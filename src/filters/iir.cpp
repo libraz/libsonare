@@ -9,6 +9,8 @@
 #include "util/math_utils.h"
 
 namespace sonare {
+
+using sonare::constants::kTwoPi;
 namespace {
 
 BiquadCoeffs to_filter_coeffs(const rt::BiquadCoeffs& c) { return {c.b0, c.b1, c.b2, c.a1, c.a2}; }

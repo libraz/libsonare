@@ -3,6 +3,7 @@ add_library(kissfft STATIC
   ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
   ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
 )
+set_target_properties(kissfft PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(kissfft SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/third_party/kissfft)
 target_compile_definitions(kissfft PRIVATE KISS_FFT_FIXED=0)
 # Disable warnings for third-party code
@@ -16,10 +17,13 @@ endif()
 set(SONARE_SOURCES
   util/math_utils.cpp
   util/frame.cpp
+  util/fractional_octave.cpp
+  util/lpc.cpp
   util/nnls.cpp
   util/padding.cpp
   util/peak.cpp
   util/sequence.cpp
+  util/stereo_metrics.cpp
   util/vector_normalize.cpp
   core/convert.cpp
   core/window.cpp
@@ -98,6 +102,7 @@ set(SONARE_SOURCES
   sonare_c_effects.cpp
   sonare_c_features.cpp
   sonare_c_compat.cpp
+  sonare_c_editing.cpp
   sonare_c_internal.cpp
   sonare_c_memory.cpp
 )
@@ -152,8 +157,24 @@ if(NOT BUILD_WASM AND NOT _sonare_ffmpeg_mode STREQUAL "OFF")
   endif()
 endif()
 
-# Library
-add_library(sonare_core STATIC ${SONARE_SOURCES})
+# Core object library shared by the static archive and the shared-language
+# binding target, so BUILD_SHARED does not recompile the same core sources.
+add_library(sonare_core_objects OBJECT ${SONARE_SOURCES})
+set_target_properties(sonare_core_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_include_directories(sonare_core_objects PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(sonare_core_objects SYSTEM PUBLIC
+  ${CMAKE_SOURCE_DIR}/third_party/kissfft
+  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
+  ${CMAKE_SOURCE_DIR}/third_party/minimp3
+  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+)
+target_link_libraries(sonare_core_objects PUBLIC Eigen3::Eigen)
+target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
+
+add_library(sonare_core STATIC $<TARGET_OBJECTS:sonare_core_objects>)
 
 target_include_directories(sonare_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -166,7 +187,6 @@ target_include_directories(sonare_core SYSTEM PUBLIC
 )
 
 target_link_libraries(sonare_core PUBLIC Eigen3::Eigen kissfft)
-target_compile_options(sonare_core PRIVATE ${SONARE_WARNING_FLAGS})
 
 # Threading support for parallel analysis on native builds
 if(NOT BUILD_WASM)
@@ -176,6 +196,7 @@ endif()
 
 if(SONARE_FFMPEG_ENABLED)
   target_link_libraries(sonare_core PUBLIC PkgConfig::FFMPEG)
+  target_compile_definitions(sonare_core_objects PUBLIC SONARE_WITH_FFMPEG=1)
   target_compile_definitions(sonare_core PUBLIC SONARE_WITH_FFMPEG=1)
 endif()
 
@@ -237,7 +258,6 @@ if(BUILD_MASTERING)
     mastering/assistant/audio_profile.cpp
     mastering/assistant/suggester.cpp
     mastering/common/hysteresis_ja.cpp
-    mastering/common/lpc.cpp
     mastering/common/noise_tracker.cpp
     mastering/dynamics/brickwall_limiter.cpp
     mastering/dynamics/compressor.cpp
@@ -426,6 +446,7 @@ if(BUILD_GRAPH)
 endif()
 if(BUILD_MIXING)
   target_link_libraries(sonare_engine PUBLIC sonare_mixing)
+  target_compile_definitions(sonare_engine PUBLIC SONARE_WITH_MIXING=1)
 endif()
 target_compile_options(sonare_engine PRIVATE ${SONARE_WARNING_FLAGS})
 set_target_properties(sonare_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -479,9 +500,6 @@ if(BUILD_PITCH_EDITOR)
   set_target_properties(sonare_pitch_editor PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
-if(BUILD_VOICE_CHANGER AND NOT BUILD_MASTERING)
-  message(FATAL_ERROR "BUILD_VOICE_CHANGER requires BUILD_MASTERING for LPC helpers")
-endif()
 if(BUILD_VOICE_CHANGER AND NOT BUILD_PITCH_EDITOR)
   message(FATAL_ERROR "BUILD_VOICE_CHANGER requires BUILD_PITCH_EDITOR for C API helpers")
 endif()
@@ -489,7 +507,11 @@ endif()
 if(BUILD_VOICE_CHANGER)
   add_library(sonare_voice_changer STATIC
     editing/voice_changer/formant_warp.cpp
+    editing/voice_changer/isp_limiter.cpp
+    editing/voice_changer/realtime_voice_changer.cpp
+    editing/voice_changer/streaming_formant.cpp
     editing/voice_changer/streaming_retune.cpp
+    editing/voice_changer/streaming_reverb.cpp
     editing/voice_changer/voice_changer.cpp
   )
   target_include_directories(sonare_voice_changer PUBLIC
@@ -501,16 +523,17 @@ if(BUILD_VOICE_CHANGER)
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
-  target_link_libraries(sonare_voice_changer PUBLIC sonare_core sonare_mastering sonare_pitch_editor)
+  target_link_libraries(sonare_voice_changer PUBLIC sonare_core sonare_pitch_editor)
   target_compile_options(sonare_voice_changer PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_voice_changer PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # Shared library for language bindings (Python ctypes, etc.)
 if(BUILD_SHARED)
-  set(SONARE_SHARED_SOURCES ${SONARE_SOURCES})
+  set(SONARE_SHARED_SOURCES $<TARGET_OBJECTS:sonare_core_objects>)
   if(BUILD_MASTERING)
-    list(APPEND SONARE_SHARED_SOURCES sonare_c_mastering.cpp)
+    list(APPEND SONARE_SHARED_SOURCES sonare_c_mastering.cpp sonare_c_mastering_repair.cpp
+                                      sonare_c_mastering_dynamics.cpp)
   endif()
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
@@ -532,14 +555,18 @@ if(BUILD_SHARED)
     ${CMAKE_SOURCE_DIR}/third_party/minimp3
     ${CMAKE_SOURCE_DIR}/third_party/r8brain
   )
-  target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen kissfft)
-  if(BUILD_MASTERING)
+  target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen)
+  if(BUILD_MASTERING AND NOT BUILD_MIXING)
     target_link_libraries(sonare_shared PUBLIC sonare_mastering)
+  endif()
+  if(BUILD_MASTERING)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MASTERING=1)
   endif()
   target_link_libraries(sonare_shared PUBLIC sonare_engine)
-  if(BUILD_PITCH_EDITOR)
+  if(BUILD_PITCH_EDITOR AND NOT BUILD_VOICE_CHANGER)
     target_link_libraries(sonare_shared PUBLIC sonare_pitch_editor)
+  endif()
+  if(BUILD_PITCH_EDITOR)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_PITCH_EDITOR=1)
   endif()
   if(BUILD_VOICE_CHANGER)
@@ -547,11 +574,9 @@ if(BUILD_SHARED)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_VOICE_CHANGER=1)
   endif()
   if(BUILD_MIXING)
-    target_link_libraries(sonare_shared PUBLIC sonare_mixing)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING=1)
     if(BUILD_GRAPH)
       # sonare_c_mixing.cpp routes the mixer through the routing graph.
-      target_link_libraries(sonare_shared PUBLIC sonare_graph)
       target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_GRAPH=1)
     endif()
   endif()
