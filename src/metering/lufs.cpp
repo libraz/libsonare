@@ -6,10 +6,14 @@
 #include <numeric>
 
 #include "rt/biquad_design.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare::metering {
+
+using sonare::constants::kEpsilon;
+
 namespace {
 
 using Biquad = rt::BiquadCoeffsD;
@@ -207,7 +211,8 @@ float loudness_range_from_short_term(const std::vector<float>& values) {
 float short_term_overlap_for(int sample_rate, float duration_sec) {
   if (sample_rate <= 0 || duration_sec <= 0.0f) return 0.0f;
   const float block = duration_sec * static_cast<float>(sample_rate);
-  const float hop = std::max(1.0f, std::round(0.1f * static_cast<float>(sample_rate)));
+  const float hop =
+      std::max(1.0f, std::round(kLufsShortTermHopSec * static_cast<float>(sample_rate)));
   return std::clamp(1.0f - hop / block, 0.0f, 0.95f);
 }
 
@@ -236,9 +241,11 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
   const std::vector<double> integrated_blocks =
       block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
                                        config.block_duration_sec, config.block_overlap);
+  // ITU-R BS.1770-4 Annex 2: momentary uses a fixed 75% overlap (100 ms hop @ 400 ms),
+  // independent of `config.block_overlap` (which controls integrated gating density).
   const std::vector<float> momentary = energies_to_lufs(
       block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
-                                       config.momentary_duration_sec, config.block_overlap));
+                                       config.momentary_duration_sec, kLufsMomentaryOverlap));
   const std::vector<float> short_term = energies_to_lufs(block_energies_weighted_channels(
       weighted_channels, frames, channels, sample_rate, config.short_term_duration_sec,
       short_term_overlap_for(sample_rate, config.short_term_duration_sec)));
@@ -252,6 +259,13 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
 }
 
 float ebur128_loudness_range(const Audio& audio) {
+  // k_weighted() interprets `audio.data()` as a single mono channel. Reject
+  // multi-channel input explicitly so future Audio subclasses (or callers that
+  // smuggle interleaved buffers via a wrapper) get a clear error instead of a
+  // garbage LRA reading. Today Audio is mono-only so this branch is effectively
+  // a future-proof guard, but it documents the contract at runtime.
+  SONARE_CHECK_MSG(audio.channels() == 1, ErrorCode::InvalidParameter,
+                   "ebur128_loudness_range requires mono input");
   if (audio.empty()) return 0.0f;
 
   // EBU Tech 3342: short-term loudness, 3 s window, 100 ms hop.
@@ -308,9 +322,11 @@ float ebur128_loudness_range(const Audio& audio) {
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) {
   validate_config(config);
 
+  // ITU-R BS.1770-4 Annex 2: momentary uses a fixed 75% overlap (100 ms hop @ 400 ms),
+  // independent of `config.block_overlap`.
   const std::vector<float> weighted = k_weighted(audio);
   return energies_to_lufs(block_energies(weighted, audio.sample_rate(),
-                                         config.momentary_duration_sec, config.block_overlap));
+                                         config.momentary_duration_sec, kLufsMomentaryOverlap));
 }
 
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config) {

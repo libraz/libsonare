@@ -6,11 +6,14 @@
 #include <limits>
 
 #include "rt/polyphase_fir.h"
+#include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 
 namespace sonare::metering {
+
+using sonare::constants::kEpsilon;
+
 namespace {
 
 const ::sonare::rt::PolyphaseFir& filter_for(int oversample_factor) {

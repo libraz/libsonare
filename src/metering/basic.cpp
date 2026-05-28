@@ -5,12 +5,15 @@
 #include <limits>
 
 #include "metering/clipping.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 
 namespace sonare::metering {
+
+using sonare::constants::kEpsilon;
+
 namespace {
 
 float frame_rms_db(const float* data, size_t start, size_t end) {

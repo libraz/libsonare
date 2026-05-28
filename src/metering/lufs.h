@@ -14,6 +14,15 @@ inline constexpr float kLufsAbsoluteGate = -70.0f;
 inline constexpr float kLufsIntegratedRelativeGate = -10.0f;
 inline constexpr float kLufsRangeRelativeGate = -20.0f;
 
+/// @brief ITU-R BS.1770-4 Annex 2 momentary overlap (75% over 400 ms = 100 ms hop).
+/// @details Fixed by spec; not user-configurable. See ITU-R BS.1770-4 §2.4.
+inline constexpr float kLufsMomentaryOverlap = 0.75f;
+
+/// @brief ITU-R BS.1770-4 / EBU R128 short-term and gating window hop (100 ms).
+/// @details Used together with `short_term_duration_sec` (3 s) to derive the
+///          short-term overlap that yields a 100 ms hop. Fixed by spec.
+inline constexpr float kLufsShortTermHopSec = 0.1f;
+
 struct LufsResult {
   float integrated_lufs = 0.0f;
   float momentary_lufs = 0.0f;
@@ -25,6 +34,11 @@ struct LufsConfig {
   float absolute_gate_lufs = kLufsAbsoluteGate;
   float relative_gate_lu = kLufsIntegratedRelativeGate;
   float block_duration_sec = 0.400f;
+  /// @brief Overlap used for the **integrated** LUFS gating blocks only.
+  /// @details The momentary (400 ms) and short-term (3 s) overlaps are fixed by
+  ///          ITU-R BS.1770-4 (75% / 100 ms hop respectively) and are NOT
+  ///          affected by this value. Changing `block_overlap` only alters the
+  ///          density of gating blocks used to compute integrated loudness.
   float block_overlap = 0.75f;
   float momentary_duration_sec = 0.400f;
   float short_term_duration_sec = 3.0f;
@@ -37,12 +51,16 @@ std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config =
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config = {});
 
 /// @brief Computes the EBU R128 Loudness Range (LRA) in LU.
-/// @param audio Input audio (mono)
+/// @param audio Input audio (mono only). Multi-channel input throws
+///              SonareException with ErrorCode::InvalidParameter; downmix the
+///              signal yourself (or use the multi-channel `lufs_interleaved`
+///              API for a proper BS.1770 loudness measurement) before calling.
 /// @details Implements the standard EBU Tech 3342 algorithm: K-weighted short-term
 ///          loudness over 3 s windows with 100 ms hops, an absolute gate of -70 LUFS,
 ///          and a relative gate 20 LU below the ungated mean loudness. The LRA is the
 ///          difference between the 95th and 10th percentiles of the gated distribution.
 /// @return Loudness range in LU (0 if insufficient data).
+/// @throws SonareException (InvalidParameter) if @p audio is not mono.
 float ebur128_loudness_range(const Audio& audio);
 
 }  // namespace sonare::metering
