@@ -11,6 +11,8 @@
 
 namespace sonare {
 
+using sonare::constants::kTwoPi;
+
 namespace {
 
 inline float column_norm(const float* X, int rows, int cols, int j) {

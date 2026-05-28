@@ -7,6 +7,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Creates a chord pattern from intervals.

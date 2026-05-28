@@ -11,6 +11,8 @@
 #include "util/exception.h"
 
 namespace sonare {
+
+using sonare::constants::kEpsilon;
 namespace {
 
 std::vector<float> normalize_to_unit(std::vector<float> values, size_t target_size) {

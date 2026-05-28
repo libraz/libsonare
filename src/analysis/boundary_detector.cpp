@@ -13,6 +13,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Normalizes a feature vector (L2 normalization).

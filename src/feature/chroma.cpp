@@ -11,6 +11,9 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+using sonare::constants::kTwoPi;
+
 namespace {
 
 std::vector<float> normalize_chroma_columns(std::vector<float> features, int n_chroma, int n_frames,

@@ -4,10 +4,12 @@
 #include <complex>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 
 namespace sonare {
+
+using sonare::constants::kTwoPi;
 
 namespace {
 

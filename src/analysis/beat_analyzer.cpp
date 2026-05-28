@@ -18,6 +18,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Converts BPM to period in frames.

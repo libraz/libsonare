@@ -15,6 +15,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Center-pad the onset envelope by win_length/2 with reflect-equivalent

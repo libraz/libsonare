@@ -7,6 +7,8 @@
 
 namespace sonare::effects::modulation {
 
+using sonare::constants::kPi;
+
 Phaser::Phaser(PhaserConfig config) : config_(config) {}
 
 void Phaser::prepare(double sample_rate, int) {

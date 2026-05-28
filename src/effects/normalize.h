@@ -37,16 +37,6 @@ Audio trim(const Audio& audio, float threshold_db = -60.0f, int frame_length = 2
 std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float threshold_db = -60.0f,
                                                     int frame_length = 2048, int hop_length = 512);
 
-/// @brief Computes peak amplitude in dB.
-/// @param audio Input audio
-/// @return Peak amplitude in dB (0 dB = full scale)
-float peak_db(const Audio& audio);
-
-/// @brief Computes RMS level in dB.
-/// @param audio Input audio
-/// @return RMS level in dB
-float rms_db(const Audio& audio);
-
 /// @brief Applies gain to audio.
 ///
 /// Output samples are hard-clipped to the [-1, 1] range after gain is applied,

@@ -15,6 +15,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Cache key for CQT kernel
@@ -24,18 +26,22 @@ struct CqtKernelCacheKey {
   float fmin;
   int n_bins;
   int bins_per_octave;
+  float filter_scale;
+  WindowType window;
 
   bool operator==(const CqtKernelCacheKey& other) const {
     return sample_rate == other.sample_rate && hop_length == other.hop_length &&
            std::abs(fmin - other.fmin) < 0.01f && n_bins == other.n_bins &&
-           bins_per_octave == other.bins_per_octave;
+           bins_per_octave == other.bins_per_octave &&
+           std::abs(filter_scale - other.filter_scale) < 1e-4f && window == other.window;
   }
 };
 
 struct CqtKernelCacheKeyHash {
   size_t operator()(const CqtKernelCacheKey& k) const {
     return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
-           (std::hash<int>()(k.bins_per_octave) << 2);
+           (std::hash<int>()(k.bins_per_octave) << 2) ^ (std::hash<float>()(k.filter_scale) << 3) ^
+           (std::hash<int>()(static_cast<int>(k.window)) << 4);
   }
 };
 
@@ -69,7 +75,13 @@ CqtKernelCache& cqt_kernel_cache() {
 
 /// @brief Get or create cached CQT kernel with Eigen matrix
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
-  CqtKernelCacheKey key{sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave};
+  CqtKernelCacheKey key{sr,
+                        config.hop_length,
+                        config.fmin,
+                        config.n_bins,
+                        config.bins_per_octave,
+                        config.filter_scale,
+                        config.window};
 
   CqtKernelCache& cache = cqt_kernel_cache();
   std::lock_guard<std::mutex> lock(cache.mutex);
@@ -393,10 +405,17 @@ Audio icqt(const CqtResult& cqt_result, int length) {
   const int n_fft = kernel.fft_length();
   const int n_freq = n_fft / 2 + 1;
 
+  // Per-bin reciprocal kernel power. The stored basis is `conj(FFT(wavelet))`
+  // for an analytic-like wavelet, so its energy is concentrated on one half of
+  // the spectrum (whichever half holds +ω after the conjugate). The previous
+  // implementation summed only `[0, n_fft/2]`, missing most of that energy and
+  // doubling the reconstructed amplitude. Match librosa's icqt: sum over all
+  // `n_fft` bins of `|inv_basis|^2` so `freq_power = (n_fft / length) /
+  // sum(|basis|^2)` is computed against the full kernel energy.
   std::vector<float> freq_power(n_bins, 0.0f);
   for (int k = 0; k < n_bins; ++k) {
     double power = 0.0;
-    for (int b = 0; b < n_freq; ++b) {
+    for (int b = 0; b < n_fft; ++b) {
       power += std::norm(basis[static_cast<size_t>(k) * n_fft + b]);
     }
     if (power > 0.0 && lengths[k] > 0.0f) {
@@ -422,6 +441,9 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     }
     fft.inverse(spectrum.data(), frame.data());
 
+    // librosa's icqt delegates OLA to `istft(window="ones")`, which divides
+    // the sum-of-frames by the per-sample sum of `window**2 == 1`, i.e. the
+    // overlap count. We replicate that here with `weight[idx] += 1`.
     const int start = t * hop_length;
     for (int n = 0; n < n_fft; ++n) {
       const size_t idx = static_cast<size_t>(start + n);

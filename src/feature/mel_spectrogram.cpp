@@ -120,10 +120,13 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   // BLAS-optimized matrix multiplication
   mfcc_map.noalias() = dct_map * log_mel_map;
 
-  // Apply liftering if requested
+  // Apply liftering if requested.
+  // librosa uses np.arange(1, 1 + n_mfcc), so coefficient k (0-indexed) is
+  // multiplied by 1 + (L/2) * sin(pi * (k + 1) / L). Using k+1 ensures the DC
+  // coefficient (k=0) receives a nonzero lift, matching librosa 0.11.0.
   if (lifter > 0.0f) {
     for (int k = 0; k < n_mfcc; ++k) {
-      float lift = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k) / lifter);
+      float lift = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k + 1) / lifter);
       for (int t = 0; t < n_frames_; ++t) {
         mfcc_out[k * n_frames_ + t] *= lift;
       }

@@ -4,14 +4,50 @@
 #include "effects/remix.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <stdexcept>
+#include <vector>
 
-#include "feature/spectral.h"
 #include "util/constants.h"
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
+
+/// @brief Returns the indices where `y` changes sign, with librosa-compatible
+///        zero handling.
+/// @details Equivalent to `sonare::zero_crossings(y, n, threshold,
+///          ref_magnitude=false, pad=true, zero_pos=true)` from
+///          `feature/spectral.h`, inlined here so the effects layer does not
+///          depend on `feature/`. Mirrors `librosa.zero_crossings` semantics:
+///          values with |v| <= threshold are treated as zero, and the sign of
+///          zero is considered positive (uses `std::signbit`). With pad=true,
+///          index 0 is always reported.
+std::vector<int> zero_crossings_for_remix(const float* y, std::size_t n, float threshold) {
+  std::vector<int> indices;
+  if (n == 0) return indices;
+
+  auto sample_sign = [&](float v) -> int {
+    if (v >= -threshold && v <= threshold) v = 0.0f;
+    return std::signbit(v) ? -1 : +1;
+  };
+
+  // pad=true: index 0 is always reported.
+  indices.push_back(0);
+
+  int prev_sign = sample_sign(y[0]);
+  for (std::size_t i = 1; i < n; ++i) {
+    const int cur_sign = sample_sign(y[i]);
+    if (cur_sign != prev_sign) {
+      indices.push_back(static_cast<int>(i));
+    }
+    prev_sign = cur_sign;
+  }
+  return indices;
+}
 
 /// @brief Returns the element of `sorted_zeros` closest to `value`.
 /// @details Mirrors librosa.util.match_events (with left=right=True).
@@ -45,7 +81,7 @@ std::vector<float> remix(const float* y, std::size_t n,
 
   std::vector<int> zeros;
   if (align_zeros) {
-    zeros = zero_crossings(y, n, constants::kEpsilon, false, true, true);
+    zeros = zero_crossings_for_remix(y, n, constants::kEpsilon);
     // Force end-of-signal onto zeros (mirrors librosa).
     zeros.push_back(static_cast<int>(n));
   }

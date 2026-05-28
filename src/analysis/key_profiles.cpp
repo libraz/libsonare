@@ -8,6 +8,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Rotates a profile to start at a given root.

@@ -8,6 +8,8 @@
 #include "util/constants.h"
 
 namespace sonare {
+
+using sonare::constants::kEpsilon;
 namespace {
 
 float normalized_strength(const std::vector<float>& onset_strength, int frame) {

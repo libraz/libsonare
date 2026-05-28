@@ -15,10 +15,12 @@
 #include "filters/chroma.h"
 #include "filters/mel.h"
 #include "streaming/stream_analyzer_utils.h"
+#include "util/constants.h"
 #include "util/math_utils.h"
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
 using namespace streaming_detail;
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {

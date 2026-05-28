@@ -26,18 +26,21 @@ struct VqtKernelCacheKey {
   int n_bins;
   int bins_per_octave;
   float gamma;
+  WindowType window;
 
   bool operator==(const VqtKernelCacheKey& other) const {
     return sample_rate == other.sample_rate && hop_length == other.hop_length &&
            std::abs(fmin - other.fmin) < 0.01f && n_bins == other.n_bins &&
-           bins_per_octave == other.bins_per_octave && std::abs(gamma - other.gamma) < 0.01f;
+           bins_per_octave == other.bins_per_octave && std::abs(gamma - other.gamma) < 0.01f &&
+           window == other.window;
   }
 };
 
 struct VqtKernelCacheKeyHash {
   size_t operator()(const VqtKernelCacheKey& k) const {
     return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
-           (std::hash<int>()(k.bins_per_octave) << 2) ^ (std::hash<float>()(k.gamma) << 3);
+           (std::hash<int>()(k.bins_per_octave) << 2) ^ (std::hash<float>()(k.gamma) << 3) ^
+           (std::hash<int>()(static_cast<int>(k.window)) << 4);
   }
 };
 
@@ -72,7 +75,8 @@ VqtKernelCache& vqt_kernel_cache() {
 /// @brief Get or create cached VQT kernel with Eigen matrix
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   VqtKernelCacheKey key{
-      sr, config.hop_length, config.fmin, config.n_bins, config.bins_per_octave, config.gamma};
+      sr,           config.hop_length, config.fmin, config.n_bins, config.bins_per_octave,
+      config.gamma, config.window};
 
   VqtKernelCache& cache = vqt_kernel_cache();
   std::lock_guard<std::mutex> lock(cache.mutex);
@@ -178,6 +182,8 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   std::vector<std::complex<float>> complex_time_kernel(kernel->fft_length_, {0.0f, 0.0f});
   std::vector<std::complex<float>> complex_freq_kernel(kernel->fft_length_);
 
+  const float inv_n_fft = 1.0f / static_cast<float>(kernel->fft_length_);
+
   for (int k = 0; k < config.n_bins; ++k) {
     float freq = kernel->frequencies_[k];
     int length = kernel->lengths_[k];
@@ -185,12 +191,20 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // Create window
     std::vector<float> window = create_window(config.window, length);
 
-    // Compute normalization
+    // Compute L1 normalization (equivalent to librosa's util.normalize(norm=1)
+    // for a Hann-windowed complex sinusoid: |window[n] * exp(j*phase)| = window[n],
+    // so sum(|kernel|) = sum(window)).
     float win_sum = 0.0f;
     for (int i = 0; i < length; ++i) {
       win_sum += window[i];
     }
-    float norm = 1.0f / win_sum;
+    // Bake librosa's `lengths/n_fft` basis scaling into the kernel so that
+    // (a) the per-frame inner product can drop the explicit `1/n_fft` factor and
+    // (b) the final per-bin `1/sqrt(length)` scaling matches the CQT path's
+    //     amplitude convention exactly (see cqt.cpp lines 226-231, 345-350).
+    // This makes the gamma=0 (CQT delegation) and gamma>0 paths produce
+    // continuous output magnitudes for the same input.
+    float norm = (win_sum > 0.0f) ? (static_cast<float>(length) * inv_n_fft) / win_sum : 0.0f;
 
     // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*n/sr)
     std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
@@ -265,11 +279,16 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   VectorXcf result(n_bins);
 
   const float* data = padded_signal.data();
-  float norm_factor = 1.0f / static_cast<float>(fft_length);
-  std::vector<float> sqrt_lengths(n_bins, 1.0f);
+  // Per-bin 1/sqrt(L) factor for librosa's `scale=True` mode (the default).
+  // The kernel already absorbs the `lengths/n_fft` basis scaling (see
+  // VqtKernel::create), so no explicit `1/n_fft` is applied to the inner
+  // product here. The matching code path lives in cqt.cpp (`inv_sqrt_len`).
+  std::vector<float> inv_sqrt_lengths(n_bins, 1.0f);
   const auto& lengths = kernel->lengths();
   for (int k = 0; k < n_bins; ++k) {
-    if (lengths[k] > 0) sqrt_lengths[k] = std::sqrt(static_cast<float>(lengths[k]));
+    if (lengths[k] > 0) {
+      inv_sqrt_lengths[k] = 1.0f / std::sqrt(static_cast<float>(lengths[k]));
+    }
   }
 
   // Progress reporting interval
@@ -294,13 +313,16 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
     // Complex FFT of frame (full spectrum)
     fft.forward_complex(complex_frame.data(), frame_fft.data());
 
-    // Compute all correlations at once using cached Eigen matrix
+    // Compute all correlations at once using cached Eigen matrix.
+    // The basis already absorbs the `lengths/n_fft` factor (see
+    // VqtKernel::create), so no extra `1/n_fft` normalisation is needed here —
+    // mirroring the CQT path.
     Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_length);
-    result.noalias() = kernel_matrix * frame_vec * norm_factor;
+    result.noalias() = kernel_matrix * frame_vec;
 
-    // Copy to output
+    // Copy to output (apply librosa-compatible /sqrt(length) scaling)
     for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] = result(k) * sqrt_lengths[k];
+      output[k * n_frames + t] = result(k) * inv_sqrt_lengths[k];
     }
 
     // Report progress

@@ -12,6 +12,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Computes frequency for each FFT bin.
@@ -135,6 +137,15 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
     for (int k = 0; k < n_bins; ++k) {
       float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
       total += mag;
+    }
+
+    // librosa returns the lowest bin frequency (0 Hz) when the frame has no
+    // energy. Without this short-circuit, ``threshold = 0`` would still match
+    // bin 0 on the first iteration, but the explicit path documents the
+    // empty-frame contract and avoids relying on cumulative >= 0.
+    if (total <= 0.0f) {
+      rolloff[t] = 0.0f;
+      continue;
     }
 
     float threshold = roll_percent * total;
@@ -285,7 +296,13 @@ std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frame
   // Output is [order + 1, n_frames] with coefficients ordered highest-degree first.
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
 
-  // Build Vandermonde matrix A [n_bins x (order + 1)] with columns x^order, x^(order-1), ..., 1.
+  // Build Vandermonde matrix A [n_bins x (order + 1)] with columns
+  // x^order, x^(order-1), ..., 1. With raw frequencies up to ~sr/2 (~11 kHz at
+  // sr=22050), the high-degree columns can grow astronomically (11025^5 ~ 1.6e20),
+  // wrecking the Jacobi SVD conditioning even in double precision. NumPy's
+  // np.polyfit (which librosa wraps) sidesteps this by column-scaling the
+  // Vandermonde matrix to unit max-norm before lstsq, then unscaling the
+  // resulting coefficients. We mirror that here.
   Eigen::MatrixXd A(n_bins, order + 1);
   for (int k = 0; k < n_bins; ++k) {
     double x = static_cast<double>(freqs[k]);
@@ -296,8 +313,19 @@ std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frame
     }
   }
 
-  // Solve A * c = y in least squares sense. Use SVD for numerical robustness
-  // (matches numpy.linalg.lstsq used internally by np.polyfit).
+  // Column-norm scaling: divide each column by its max absolute value so each
+  // column of the scaled matrix has max-norm 1. Columns that are identically
+  // zero (only possible if all freqs[k] == 0, e.g. n_fft is degenerate) keep
+  // a scale of 1 to avoid division by zero.
+  Eigen::VectorXd scale(order + 1);
+  for (int p = 0; p <= order; ++p) {
+    const double col_max = A.col(p).cwiseAbs().maxCoeff();
+    scale(p) = (col_max > 0.0) ? col_max : 1.0;
+    A.col(p) /= scale(p);
+  }
+
+  // Solve A_scaled * c_scaled = y in least squares sense. Use SVD for numerical
+  // robustness (matches numpy.linalg.lstsq used internally by np.polyfit).
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
 
   std::vector<float> out(static_cast<size_t>(order + 1) * static_cast<size_t>(n_frames), 0.0f);
@@ -306,9 +334,10 @@ std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frame
     for (int k = 0; k < n_bins; ++k) {
       y(k) = static_cast<double>(magnitude[k * n_frames + t]);
     }
-    Eigen::VectorXd c = svd.solve(y);
+    Eigen::VectorXd c_scaled = svd.solve(y);
+    // Unscale: c[p] = c_scaled[p] / scale[p] so out is in the original units.
     for (int p = 0; p <= order; ++p) {
-      out[p * n_frames + t] = static_cast<float>(c(p));
+      out[p * n_frames + t] = static_cast<float>(c_scaled(p) / scale(p));
     }
   }
   return out;

@@ -7,6 +7,8 @@
 
 namespace sonare::effects::common {
 
+using sonare::constants::kTwoPi;
+
 DcBlocker::DcBlocker(float pole) { set_pole(pole); }
 
 void DcBlocker::prepare(double sample_rate, int) {

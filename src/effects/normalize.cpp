@@ -2,18 +2,41 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
-#include "metering/basic.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare {
 
-float peak_db(const Audio& audio) { return metering::peak_db(audio); }
+using sonare::constants::kEpsilon;
 
-float rms_db(const Audio& audio) { return metering::rms_db(audio); }
+namespace {
+
+/// @brief Peak amplitude of @p audio in dB; returns -inf for silence or empty input.
+/// @details Local helper to keep effects/ free of metering/ dependencies.
+///          Equivalent to sonare::metering::peak_db on the same input, but
+///          implemented in terms of core primitives so the effects layer
+///          stays at the `core/` dependency tier.
+float audio_peak_db(const Audio& audio) {
+  if (audio.empty()) return -std::numeric_limits<float>::infinity();
+  const float peak = peak_abs(audio.data(), audio.size());
+  if (peak < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  return linear_to_db(peak);
+}
+
+/// @brief RMS level of @p audio in dB; returns -inf for silence or empty input.
+float audio_rms_db(const Audio& audio) {
+  if (audio.empty()) return -std::numeric_limits<float>::infinity();
+  const float r = rms(audio.data(), audio.size());
+  if (r < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  return linear_to_db(r);
+}
+
+}  // namespace
 
 Audio apply_gain(const Audio& audio, float gain_db) {
   if (audio.empty()) return audio;
@@ -35,7 +58,7 @@ Audio apply_gain(const Audio& audio, float gain_db) {
 Audio normalize(const Audio& audio, float target_db) {
   if (audio.empty()) return audio;
 
-  float current_peak = peak_db(audio);
+  float current_peak = audio_peak_db(audio);
 
   if (std::isinf(current_peak)) {
     return audio;  ///< Silent audio, nothing to normalize
@@ -48,7 +71,7 @@ Audio normalize(const Audio& audio, float target_db) {
 Audio normalize_rms(const Audio& audio, float target_db) {
   if (audio.empty()) return audio;
 
-  float current_rms = rms_db(audio);
+  float current_rms = audio_rms_db(audio);
 
   if (std::isinf(current_rms)) {
     return audio;  ///< Silent audio

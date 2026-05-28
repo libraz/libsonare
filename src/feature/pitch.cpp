@@ -14,6 +14,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 /// @brief Parabolic interpolation for sub-sample precision.

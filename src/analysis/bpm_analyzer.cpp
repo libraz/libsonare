@@ -13,6 +13,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
                                                  float bpm_min, float bpm_max, float bin_width) {
   if (candidates.empty() || bpm_min >= bpm_max || bin_width <= 0.0f) {

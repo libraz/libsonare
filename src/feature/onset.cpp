@@ -9,6 +9,8 @@
 
 namespace sonare {
 
+using sonare::constants::kEpsilon;
+
 namespace {
 
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
@@ -50,10 +52,19 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
     env_map = diff.array().max(0.0f).colwise().mean();
   }
 
-  /// Detrend: remove mean
-  if (config.detrend && n_frames > 0) {
-    Eigen::Map<Eigen::ArrayXf> env_array(onset_env.data(), n_frames);
-    env_array -= env_array.mean();
+  /// Detrend: remove mean. We compute the mean over the valid range
+  /// ``[lag, n_frames)`` only — the leading ``lag`` samples are zero-pad from
+  /// the difference operation and must not bias the mean. Subtracting from the
+  /// same valid range keeps the padded prefix at 0, so a subsequent
+  /// center-frame shift (applied by the Audio overload) does not pull negative
+  /// values into the output. librosa applies a DC-blocker IIR filter at this
+  /// point; mean-subtraction is the libsonare-equivalent approximation, and
+  /// excluding the prefix matches librosa's behavior of running the filter on
+  /// the post-aggregation, post-padding envelope without leading-zero bias.
+  if (config.detrend && n_frames > config.lag) {
+    const int valid_len = n_frames - config.lag;
+    Eigen::Map<Eigen::ArrayXf> valid_view(onset_env.data() + config.lag, valid_len);
+    valid_view -= valid_view.mean();
   }
 
   return onset_env;
@@ -128,13 +139,16 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
     }
   }
 
-  // Apply detrend per band using Eigen
-  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> onset_map(
-      onset_multi.data(), n_bands, n_frames);
-
-  if (config.detrend && n_frames > 0) {
-    Eigen::VectorXf row_means = onset_map.rowwise().mean();
-    onset_map.colwise() -= row_means;
+  // Apply detrend per band, excluding the leading ``lag`` zero prefix so it
+  // does not bias the per-band mean. Subtraction stays inside the valid range
+  // to keep the padded prefix at 0 (see ``compute_onset_strength`` above).
+  if (config.detrend && n_frames > config.lag) {
+    const int valid_len = n_frames - config.lag;
+    for (int b = 0; b < n_bands; ++b) {
+      Eigen::Map<Eigen::ArrayXf> valid_row(onset_multi.data() + b * n_frames + config.lag,
+                                           valid_len);
+      valid_row -= valid_row.mean();
+    }
   }
 
   return onset_multi;

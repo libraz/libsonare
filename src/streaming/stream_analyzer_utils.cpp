@@ -5,10 +5,13 @@
 
 #include "core/fft.h"
 #include "filters/mel.h"
+#include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/math_utils.h"
 
 namespace sonare::streaming_detail {
+
+using sonare::constants::kEpsilon;
 
 std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft) {
   std::vector<float> freqs(n_bins);
