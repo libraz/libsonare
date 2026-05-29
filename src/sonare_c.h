@@ -65,6 +65,18 @@ typedef enum {
   SONARE_TEMPOGRAM_COSINE = 1
 } SonareTempogramMode;
 
+/* Ordinals mirror sonare::editing::voice_changer::VoiceCharacterPreset; do not
+   reorder. The string ids returned by sonare_voice_character_preset_id() are
+   exactly the entries (in this order) of SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS. */
+typedef enum {
+  SONARE_VC_PRESET_NEUTRAL_MONITOR = 0,
+  SONARE_VC_PRESET_BRIGHT_IDOL = 1,
+  SONARE_VC_PRESET_SOFT_WHISPER = 2,
+  SONARE_VC_PRESET_DEEP_NARRATOR = 3,
+  SONARE_VC_PRESET_ROBOT_MASCOT = 4,
+  SONARE_VC_PRESET_DARK_VILLAIN = 5
+} SonareVoiceCharacterPreset;
+
 // Opaque types
 typedef struct SonareAudio SonareAudio;
 typedef struct SonareAnalyzer SonareAnalyzer;
@@ -72,6 +84,7 @@ typedef struct SonareMixer SonareMixer;
 typedef struct SonareStrip SonareStrip;
 typedef struct SonareEq SonareEq;
 typedef struct SonareRealtimeEngine SonareRealtimeEngine;
+typedef struct SonareRealtimeVoiceChanger SonareRealtimeVoiceChanger;
 typedef struct SonareStreamAnalyzer SonareStreamAnalyzer;
 
 #define SONARE_EQ_MAX_BANDS 24
@@ -886,6 +899,243 @@ int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMaster
 /// @brief Destroy and free the handle.
 void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);
 
+// ----------------------------------------------------------------------------
+// Mastering: offline repair processors (declick, denoise_classical)
+// ----------------------------------------------------------------------------
+
+// Algorithm modes for sonare_mastering_repair_denoise_classical.
+#define SONARE_DENOISE_MODE_LOG_MMSE 0              // Ephraim-Malah LSA (1985)
+#define SONARE_DENOISE_MODE_MMSE_STSA 1             // Ephraim-Malah STSA (1984)
+#define SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION 2  // Berouti spectral subtraction (1979)
+
+// Noise PSD estimators for sonare_mastering_repair_denoise_classical.
+#define SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE 0  // Quietest-frames quantile
+#define SONARE_DENOISE_NOISE_ESTIMATOR_MCRA 1      // Minimum-controlled recursive averaging
+#define SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA 2     // Improved MCRA with SPP gating
+
+/// @brief Flat POD mirror of @c mastering::repair::DeclickConfig.
+/// @details Pass NULL to @ref sonare_mastering_repair_declick to use library defaults.
+typedef struct {
+  float threshold;           // amplitude threshold vs LPC prediction (default 0.8)
+  float neighbor_ratio;      // ratio vs neighbour amplitude (default 4.0)
+  size_t max_click_samples;  // max click run length in samples (default 8)
+  int lpc_order;             // LPC order used for prediction (default 20)
+  float residual_ratio;      // residual / signal threshold (default 8.0)
+} SonareDeclickConfig;
+
+/// @brief Flat POD mirror of @c mastering::repair::DenoiseClassicalConfig.
+/// @details Pass NULL to @ref sonare_mastering_repair_denoise_classical to use library
+///          defaults. The library validates @c n_fft (must be a power of two) and
+///          @c hop_length (> 0); other fields are clamped by the underlying processor.
+typedef struct {
+  int mode;                         // SONARE_DENOISE_MODE_*
+  int noise_estimator;              // SONARE_DENOISE_NOISE_ESTIMATOR_*
+  int n_fft;                        // STFT size (default 1024, power of two)
+  int hop_length;                   // hop in samples (default 256)
+  float dd_alpha;                   // decision-directed SNR smoothing (default 0.98)
+  float gain_floor;                 // minimum bin gain, linear (default 0.05)
+  float over_subtraction;           // Berouti alpha (SpectralSubtraction only)
+  float spectral_floor;             // Berouti beta (SpectralSubtraction only)
+  float noise_estimation_quantile;  // noise-only frame fraction (default 0.1)
+  int speech_presence_gain;         // 0/1 (default 1)
+  int gain_smoothing;               // 0/1 (default 1)
+} SonareDenoiseClassicalConfig;
+
+/// @brief Offline LPC-based declicker.
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
+                                            const SonareDeclickConfig* config, float** out,
+                                            size_t* out_length);
+
+/// @brief Offline STFT-domain classical denoiser
+///        (LogMMSE / MMSE-STSA / SpectralSubtraction).
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
+                                                      int sample_rate,
+                                                      const SonareDenoiseClassicalConfig* config,
+                                                      float** out, size_t* out_length);
+
+/// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
+typedef struct {
+  float clip_threshold;  // amplitude above which a sample is considered clipped (default 0.98)
+  int lpc_order;         // LPC order used for prediction (default 36)
+  int iterations;        // LPC reconstruction iterations (default 2)
+  float lpc_blend;       // LPC vs interpolation blend (default 0.65)
+} SonareDeclipConfig;
+
+/// @brief Offline LPC-based declipper.
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
+                                           const SonareDeclipConfig* config, float** out,
+                                           size_t* out_length);
+
+// Algorithm modes for sonare_mastering_repair_decrackle.
+#define SONARE_DECRACKLE_MODE_MEDIAN 0
+#define SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE 1
+
+/// @brief Flat POD mirror of @c mastering::repair::DecrackleConfig.
+typedef struct {
+  float threshold;  // crackle detection threshold (default 0.4)
+  int mode;         // SONARE_DECRACKLE_MODE_*
+  int levels;       // wavelet decomposition levels (default 4)
+} SonareDecrackleConfig;
+
+/// @brief Offline crackle suppressor (median or wavelet-shrinkage).
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
+                                              const SonareDecrackleConfig* config, float** out,
+                                              size_t* out_length);
+
+/// @brief Flat POD mirror of @c mastering::repair::DehumConfig.
+typedef struct {
+  float fundamental_hz;   // mains-hum fundamental (default 50 Hz)
+  int harmonics;          // notch count including fundamental (default 4)
+  float q;                // notch Q (default 20)
+  int adaptive;           // 0/1; enable adaptive tracking (default 0)
+  float search_range_hz;  // tracking search range in Hz (default 2)
+  float adaptation;       // tracking step size (default 0.25)
+  int frame_size;         // analysis frame size (default 2048, must be >= 16)
+  float pll_bandwidth;    // PLL bandwidth (default 0.01)
+} SonareDehumConfig;
+
+/// @brief Offline mains-hum remover (cascaded notch filters with optional PLL tracking).
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
+                                          const SonareDehumConfig* config, float** out,
+                                          size_t* out_length);
+
+/// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
+typedef struct {
+  float threshold;         // late-reverb detection threshold (default 0.05)
+  float attenuation;       // suppression amount, linear (default 0.5)
+  int n_fft;               // STFT size (default 1024, power of two)
+  int hop_length;          // hop in samples (default 256)
+  float t60_sec;           // estimated T60 (default 0.4)
+  float late_delay_ms;     // late-reverb onset relative to direct (default 50)
+  float over_subtraction;  // Berouti alpha (default 1.0)
+  float spectral_floor;    // Berouti beta (default 0.08)
+  int wpe_enabled;         // 0/1; enable WPE pre-stage (default 0)
+  int wpe_iterations;      // WPE EM iterations (default 2)
+  int wpe_taps;            // WPE filter taps (default 3)
+  float wpe_strength;      // WPE blend weight (default 0.7)
+} SonareDereverbClassicalConfig;
+
+/// @brief Offline classical dereverberator (spectral subtraction + optional WPE pre-stage).
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareDereverbClassicalConfig* config,
+                                                       float** out, size_t* out_length);
+
+// Trimming modes for sonare_mastering_repair_trim_silence.
+#define SONARE_TRIM_SILENCE_MODE_PEAK 0
+#define SONARE_TRIM_SILENCE_MODE_LUFS_GATED 1
+
+/// @brief Flat POD mirror of @c mastering::repair::TrimSilenceConfig.
+typedef struct {
+  float threshold;         // peak threshold (default 0.001 for Peak mode)
+  size_t padding_samples;  // leading/trailing samples to retain (default 0)
+  int mode;                // SONARE_TRIM_SILENCE_MODE_*
+  float gate_lufs;         // LUFS gate threshold (default -60 for LufsGated mode)
+  float window_ms;         // analysis window in milliseconds (default 400)
+} SonareTrimSilenceConfig;
+
+/// @brief Offline silence trimmer (peak threshold or LUFS-gated).
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareTrimSilenceConfig* config, float** out,
+                                                 size_t* out_length);
+
+// ============================================================================
+// Mastering: offline dynamics processors (compressor, gate, transient_shaper)
+// ----------------------------------------------------------------------------
+// These are dedicated offline entry points for the most-used dynamics modules.
+// They run the streaming processor (prepare + single-block process) over the
+// full input buffer and return a heap-allocated mono output buffer. For
+// other dynamics flavours (deesser, expander, parallel_comp, etc.) use
+// sonare_mastering_process / apply_named_processor with the canonical name.
+// ============================================================================
+
+// Detector modes for sonare_mastering_dynamics_compressor.
+#define SONARE_COMPRESSOR_DETECTOR_PEAK 0
+#define SONARE_COMPRESSOR_DETECTOR_RMS 1
+#define SONARE_COMPRESSOR_DETECTOR_LOG_RMS 2
+
+/// @brief Flat POD mirror of @c mastering::dynamics::CompressorConfig.
+typedef struct {
+  float threshold_db;         // default -18 dB
+  float ratio;                // default 2.0 (clamped to >= 1)
+  float attack_ms;            // default 10
+  float release_ms;           // default 100
+  float knee_db;              // default 0
+  float makeup_gain_db;       // default 0
+  int auto_makeup;            // bool: 0 = off (default), nonzero = on
+  int detector;               // SONARE_COMPRESSOR_DETECTOR_*; default RMS
+  int sidechain_hpf_enabled;  // bool: 0 = off (default), nonzero = on
+  float sidechain_hpf_hz;     // default 100
+  float pdr_time_ms;          // program-dependent release ms; default 0
+  float pdr_release_scale;    // PDR release multiplier; default 1.0
+} SonareCompressorConfig;
+
+/// @brief Offline feed-forward compressor. Processes the buffer in place
+///        (after copying) and returns a new heap-allocated output. Release
+///        with @ref sonare_free_floats. @p out_latency_samples may be NULL.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareCompressorConfig* config, float** out,
+                                                 size_t* out_length, int* out_latency_samples);
+
+/// @brief Flat POD mirror of @c mastering::dynamics::GateConfig.
+typedef struct {
+  float threshold_db;        // open above this level; default -50 dB
+  float attack_ms;           // default 2 ms
+  float release_ms;          // default 80 ms
+  float range_db;            // closed-state attenuation; default -80 dB
+  float hold_ms;             // minimum open time; default 0
+  float close_threshold_db;  // hysteresis (clamped <= threshold_db); default -50
+  float key_hpf_hz;          // sidechain HPF; default 0 (disabled)
+} SonareGateConfig;
+
+/// @brief Offline noise gate. Output buffer is heap-allocated; release with
+///        @ref sonare_free_floats. @p out_latency_samples may be NULL.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, int sample_rate,
+                                           const SonareGateConfig* config, float** out,
+                                           size_t* out_length, int* out_latency_samples);
+
+/// @brief Flat POD mirror of @c mastering::dynamics::TransientShaperConfig.
+typedef struct {
+  float attack_gain_db;     // default +3 dB
+  float sustain_gain_db;    // default 0
+  float fast_attack_ms;     // default 0
+  float fast_release_ms;    // default 20
+  float slow_attack_ms;     // default 15
+  float slow_release_ms;    // default 200
+  float sensitivity;        // default 1.0 (clamped >= 0)
+  float max_gain_db;        // safety clamp; default 12 dB
+  float gain_smoothing_ms;  // default 0 (disabled)
+  float lookahead_ms;       // default 0 (disabled)
+} SonareTransientShaperConfig;
+
+/// @brief Offline transient shaper (envelope-difference based). Output buffer
+///        is heap-allocated; release with @ref sonare_free_floats.
+///        @p out_latency_samples may be NULL.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareTransientShaperConfig* config,
+                                                       float** out, size_t* out_length,
+                                                       int* out_latency_samples);
+
 // ============================================================================
 // Mixing
 // ============================================================================
@@ -1071,6 +1321,219 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);
+
+/// @brief Flat POD mirror of @c editing::voice_changer::RealtimeVoiceChangerConfig
+///        for C callers that want to avoid the JSON round-trip.
+/// @details Field ordering follows the nested C++ struct (top-level →
+///          retune → formant → eq → gate → compressor → deesser → reverb →
+///          limiter). Values pass through @c normalize_realtime_voice_changer_config
+///          before being applied, so out-of-range entries are clamped rather than
+///          rejected (matching the JSON entry point).
+typedef struct {
+  float input_gain_db;
+  float output_gain_db;
+  float wet_mix;
+
+  float retune_semitones;
+  float retune_mix;
+  int retune_grain_size;
+
+  float formant_factor;
+  float formant_amount;
+  float formant_body;
+  float formant_brightness;
+  float formant_nasal;
+
+  float eq_highpass_hz;
+  float eq_body_db;
+  float eq_presence_db;
+  float eq_air_db;
+
+  float gate_threshold_db;
+  float gate_attack_ms;
+  float gate_release_ms;
+  float gate_range_db;
+
+  float compressor_threshold_db;
+  float compressor_ratio;
+  float compressor_attack_ms;
+  float compressor_release_ms;
+  float compressor_makeup_gain_db;
+
+  float deesser_frequency_hz;
+  float deesser_threshold_db;
+  float deesser_ratio;
+  float deesser_range_db;
+
+  float reverb_mix;
+  float reverb_time_ms;
+  float reverb_damping;
+  int reverb_seed;
+
+  float limiter_ceiling_db;
+  float limiter_release_ms;
+} SonareRealtimeVoiceChangerConfig;
+
+// Verify the POD struct layout is stable. The ABI version constant
+// SONARE_VOICE_CHANGER_ABI_VERSION below MUST be bumped whenever this size
+// or any field offset changes. Bindings that rely on POD memcpy across the
+// FFI boundary (Rust FFI, raw C ABI consumers) read this size at compile
+// time and detect ABI drift before a single byte is exchanged.
+//
+// Layout: 32 float fields + 2 int fields, every member is 4 bytes and
+// 4-byte aligned -> no struct padding on any target we ship. Exact equality
+// (not >=) so silent padding insertion fails the check too.
+#ifdef __cplusplus
+static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 34u * sizeof(float),
+              "SonareRealtimeVoiceChangerConfig unexpected size");
+#endif
+
+/// @section voice_changer_threading Thread safety
+/// @details
+/// - `sonare_realtime_voice_changer_process_mono`,
+///   `sonare_realtime_voice_changer_process_interleaved`,
+///   `sonare_realtime_voice_changer_process_planar_stereo` and
+///   `sonare_realtime_voice_changer_latency_samples` are realtime-safe: they
+///   neither allocate nor throw.
+/// - `sonare_realtime_voice_changer_create*`,
+///   `sonare_realtime_voice_changer_destroy`,
+///   `sonare_realtime_voice_changer_set_config`,
+///   `sonare_realtime_voice_changer_set_config_json` and the JSON validator
+///   entry points allocate and parse — call them only from the configuration
+///   thread.
+/// - On a single handle, the realtime thread and the configuration thread may
+///   run concurrently, but two threads MUST NOT call any `_process_*` function
+///   on the same handle simultaneously.
+/// - `sonare_realtime_voice_changer_set_config` and
+///   `sonare_realtime_voice_changer_set_config_json` are themselves safe to
+///   call concurrently with a `_process_*` function on the same handle: the
+///   new configuration is published through a lock-free snapshot mechanism and
+///   adopted by the realtime thread at the next block boundary. Two threads
+///   MUST NOT call `set_config*` concurrently with each other on the same
+///   handle (single-producer hand-off).
+
+/// @brief Populates @p out with the canonical (normalized) defaults for the
+///        named preset.
+SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPreset preset,
+                                                        SonareRealtimeVoiceChangerConfig* out);
+
+/// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
+///        a flat POD config. Pass NULL to start from the neutral-monitor preset.
+SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChangerConfig* config,
+                                                 int sample_rate, int max_block_size,
+                                                 int num_channels,
+                                                 SonareRealtimeVoiceChanger** out);
+
+/// @brief Realtime-safe configuration update from a POD config.
+SonareError sonare_realtime_voice_changer_set_config(
+    SonareRealtimeVoiceChanger* handle, const SonareRealtimeVoiceChangerConfig* config);
+
+/// @brief Reads the handle's current (normalized) configuration into @p out.
+SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceChanger* handle,
+                                                     SonareRealtimeVoiceChangerConfig* out);
+
+/// @brief Creates a streaming realtime voice changer handle from a preset id or
+///        a full chain config JSON document.
+/// @details @p preset_or_config_json may be one of the preset ids returned by
+///          @ref sonare_realtime_voice_changer_preset_names, or a JSON object
+///          following the realtime-voice-changer-preset schema. The created
+///          handle pre-allocates all internal buffers (including a planar
+///          deinterleave scratch) so every subsequent process call is
+///          realtime-safe.
+/// @note Release the handle with @ref sonare_realtime_voice_changer_destroy.
+SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_config_json,
+                                                      int sample_rate, int max_block_size,
+                                                      int num_channels,
+                                                      SonareRealtimeVoiceChanger** out);
+/// @brief Releases a handle created by @ref sonare_realtime_voice_changer_create_json.
+void sonare_realtime_voice_changer_destroy(SonareRealtimeVoiceChanger* handle);
+/// @brief Resets streaming state (envelopes, reverb tails, smoothed gains).
+SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* handle);
+/// @brief Realtime-safe configuration update; accepts a preset id or a JSON config.
+SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceChanger* handle,
+                                                          const char* preset_or_config_json);
+/// @brief Processes a single mono block. @p num_samples must be <= max_block_size.
+SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChanger* handle,
+                                                       const float* input, float* output,
+                                                       size_t num_samples);
+/// @brief Processes an interleaved block. Uses a pre-allocated planar scratch
+///        buffer; never allocates at runtime.
+SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoiceChanger* handle,
+                                                              const float* input, float* output,
+                                                              size_t num_frames, int num_channels);
+/// @brief Process a block of planar (non-interleaved) stereo audio in place.
+/// @details @p left and @p right point to separate float buffers of length
+///          @p num_frames. The handle must have been prepared with at least
+///          2 channels. Like the interleaved variant, this is realtime-safe.
+SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
+                                                                float* left, float* right,
+                                                                size_t num_frames);
+/// @brief Reports the chain's processing latency in samples (= retune grain).
+SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
+                                                          int* out_latency_samples);
+/// @brief Returns the live (normalized) configuration of the handle as a JSON
+///        document. Useful for UI sync and for round-tripping the post-
+///        normalize state across language boundaries.
+/// @note The returned string is heap-allocated and MUST be released with
+///       @ref sonare_free_string.
+SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceChanger* handle,
+                                                      char** out_json);
+/// @brief Returns a newline-separated, NUL-terminated list of preset ids.
+///        The pointer points to static storage and must NOT be freed.
+/// @details Newline (`\n`) is used for the separator to match the convention of
+///          every other `*_names` API in this header. Bindings should split
+///          the returned string on `\n` and drop empty entries. The set of
+///          preset identifiers is also available at compile time via
+///          @ref SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS.
+const char* sonare_realtime_voice_changer_preset_names(void);
+/// @brief Canonical newline-separated list of voice-changer preset identifiers.
+/// @details Bindings (TS unions, Python enums, etc.) should reference this
+///          macro instead of hand-copying the literal strings. The separator
+///          mirrors @ref sonare_realtime_voice_changer_preset_names.
+#define SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS \
+  "neutral-monitor\nbright-idol\nsoft-whisper\ndeep-narrator\nrobot-mascot\ndark-villain"
+/// @brief Returns the canonical id string for a @ref SonareVoiceCharacterPreset enum.
+/// @details Returns NULL for unknown enum values. The pointer is static storage
+///          and must NOT be freed.
+const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset preset);
+/// @brief Returns the canonical JSON document for the named preset.
+/// @note The returned string is heap-allocated and MUST be released with
+///       @ref sonare_free_string.
+SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** out_json);
+/// @brief Validates a preset JSON document.
+/// @details On success (return SONARE_OK), @p out_normalized_json receives a
+///          canonicalized JSON copy and @p out_error stays NULL. On failure
+///          (return SONARE_ERROR_INVALID_PARAMETER), @p out_error receives a
+///          human-readable message and @p out_normalized_json stays NULL.
+/// @note In every case, any non-NULL pointer returned through @p out_normalized_json
+///       or @p out_error MUST be released with @ref sonare_free_string by the
+///       caller.
+SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
+                                                               char** out_normalized_json,
+                                                               char** out_error);
+
+/// @brief Compile-time mirror of the runtime ABI version returned by
+///        @ref sonare_voice_changer_abi_version. Bindings can `static_assert` /
+///        `assertEqual` the runtime value against this at attach time.
+#define SONARE_VOICE_CHANGER_ABI_VERSION 1u
+
+/// @brief Returns the runtime ABI version of the
+///        @ref SonareRealtimeVoiceChangerConfig POD layout.
+/// @details Bindings that pass the POD struct across the C ABI (Rust, raw C
+///          consumers) call this at attach time and compare against their
+///          compile-time expectation; a mismatch means the host libsonare was
+///          built against a different struct layout and the POD path would
+///          corrupt memory. JSON-based bindings (Node/Python via
+///          @ref sonare_realtime_voice_changer_create_json) are tolerant of
+///          layout drift and do not need to gate on this.
+///
+///          Distinct from @ref sonare_engine_abi_version (which tracks the
+///          realtime command queue layout) so that voice-changer-only
+///          consumers can pin a narrower compatibility envelope.
+///
+///          Always equals @ref SONARE_VOICE_CHANGER_ABI_VERSION at the time
+///          libsonare was built.
+uint32_t sonare_voice_changer_abi_version(void);
 
 SonareError sonare_engine_create(SonareRealtimeEngine** out);
 void sonare_engine_destroy(SonareRealtimeEngine* engine);
@@ -1687,6 +2150,192 @@ SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, f
 /// @brief Per-block short-term LUFS time series.
 SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, float** out,
                                    size_t* out_length);
+
+// ============================================================================
+// Metering - offline basic / true-peak / clipping / dynamic range
+// ============================================================================
+
+/// @brief Sample-peak in dBFS over the whole buffer.
+SonareError sonare_metering_peak_db(const float* samples, size_t length, int sample_rate,
+                                    float* out_db);
+
+/// @brief RMS level in dBFS over the whole buffer.
+SonareError sonare_metering_rms_db(const float* samples, size_t length, int sample_rate,
+                                   float* out_db);
+
+/// @brief Crest factor in dB (peak_db - rms_db).
+SonareError sonare_metering_crest_factor_db(const float* samples, size_t length, int sample_rate,
+                                            float* out_db);
+
+/// @brief DC offset (mean) of the buffer in linear amplitude.
+SonareError sonare_metering_dc_offset(const float* samples, size_t length, int sample_rate,
+                                      float* out_value);
+
+/// @brief Inter-sample (true) peak in dBFS. @p oversample_factor must be a
+///        power of two in [1, 16]; pass 0 for the library default (4).
+SonareError sonare_metering_true_peak_db(const float* samples, size_t length, int sample_rate,
+                                         int oversample_factor, float* out_db);
+
+/// @brief A single contiguous run of samples that clipped (or exceeded
+///        @p threshold). Mirrors @c sonare::metering::ClippingRegion.
+typedef struct {
+  size_t start_sample;
+  size_t end_sample;
+  size_t length;
+  float peak;
+} SonareClippingRegion;
+
+/// @brief Aggregated clipping report for a buffer. @c regions is heap-allocated
+///        by libsonare; free with @ref sonare_free_clipping_result.
+typedef struct {
+  size_t clipped_samples;
+  float clipping_ratio;
+  float max_clipped_peak;
+  SonareClippingRegion* regions;
+  size_t region_count;
+} SonareClippingResult;
+
+/// @brief Detects clipped sample runs.
+/// @param threshold Linear absolute threshold (typical: 0.999f). Pass 0.0f for
+///                  the library default.
+/// @param min_region_samples Minimum run length to report. Pass 0 for the
+///                  library default (1).
+SonareError sonare_metering_detect_clipping(const float* samples, size_t length, int sample_rate,
+                                            float threshold, size_t min_region_samples,
+                                            SonareClippingResult* out);
+
+void sonare_free_clipping_result(SonareClippingResult* result);
+
+/// @brief Offline dynamic-range result. @c window_rms_db is heap-allocated;
+///        free with @ref sonare_free_dynamic_range_result.
+typedef struct {
+  float dynamic_range_db;
+  float low_percentile_db;
+  float high_percentile_db;
+  float* window_rms_db;
+  size_t window_count;
+} SonareDynamicRangeResult;
+
+/// @brief Sliding-window dynamic range (high_percentile_db - low_percentile_db).
+/// @param window_sec Analysis window length in seconds (0.0 = library default 3.0).
+/// @param hop_sec Hop between windows in seconds (0.0 = library default 1.0).
+/// @param low_percentile Lower percentile in [0,1] (0.0 = library default 0.10).
+/// @param high_percentile Upper percentile in [0,1] (0.0 = library default 0.95).
+SonareError sonare_metering_dynamic_range(const float* samples, size_t length, int sample_rate,
+                                          float window_sec, float hop_sec, float low_percentile,
+                                          float high_percentile, SonareDynamicRangeResult* out);
+
+void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result);
+
+// ============================================================================
+// Metering - stereo / phase-scope / spectrum (offline)
+// ============================================================================
+
+/// @brief Pearson correlation in [-1, 1] between two equal-length mono
+///        channels. Returns 0.0 when both channels are silent.
+SonareError sonare_metering_stereo_correlation(const float* left, const float* right, size_t length,
+                                               int sample_rate, float* out_value);
+
+/// @brief Side / mid energy ratio in [0, ~]. 0 = pure mono, ~1 = wide stereo.
+SonareError sonare_metering_stereo_width(const float* left, const float* right, size_t length,
+                                         int sample_rate, float* out_value);
+
+/// @brief Single point of a mid/side vectorscope.
+typedef struct {
+  float mid;
+  float side;
+} SonareVectorscopePoint;
+
+/// @brief Heap-allocated vectorscope result. Free with
+///        @ref sonare_free_vectorscope_result.
+typedef struct {
+  SonareVectorscopePoint* points;
+  size_t point_count;
+} SonareVectorscopeResult;
+
+/// @brief Per-sample mid/side point series for the (left, right) buffer.
+SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
+                                        int sample_rate, SonareVectorscopeResult* out);
+
+void sonare_free_vectorscope_result(SonareVectorscopeResult* result);
+
+/// @brief Single phase-scope point. @c angle_rad is atan2(side, mid).
+typedef struct {
+  float mid;
+  float side;
+  float radius;
+  float angle_rad;
+} SonarePhaseScopePoint;
+
+/// @brief Heap-allocated phase-scope result. @c points is freed via
+///        @ref sonare_free_phase_scope_result.
+typedef struct {
+  SonarePhaseScopePoint* points;
+  size_t point_count;
+  float correlation;
+  float average_abs_angle_rad;
+  float max_radius;
+} SonarePhaseScopeResult;
+
+/// @brief Phase-scope (Lissajous + summary stats) for a stereo pair.
+SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
+                                        int sample_rate, SonarePhaseScopeResult* out);
+
+void sonare_free_phase_scope_result(SonarePhaseScopeResult* result);
+
+/// @brief Spectrum-meter result. All four arrays have length @c bin_count
+///        (@c n_fft / 2 + 1). Free with @ref sonare_free_spectrum_result.
+typedef struct {
+  float* frequencies;
+  float* magnitude;
+  float* power;
+  float* db;
+  size_t bin_count;
+  int n_fft;
+  int sample_rate;
+} SonareSpectrumResult;
+
+/// @brief Single-frame magnitude / power / dB spectrum for the first
+///        @c n_fft samples of @p samples.
+/// @param n_fft FFT size. Pass 0 for the library default (2048).
+/// @param apply_octave_smoothing Non-zero applies fractional-octave smoothing
+///        to magnitude (power and dB are rederived from the smoothed magnitude).
+/// @param octave_fraction Smoothing fraction (e.g. 3 = 1/3-octave). Pass 0 for
+///        the library default (3).
+/// @param db_ref Linear reference for the dB conversion. Pass 0.0f for 1.0.
+/// @param db_amin Linear floor used to avoid log(0). Pass 0.0f for the library
+///        default (sonare::constants::kEpsilon).
+SonareError sonare_metering_spectrum(const float* samples, size_t length, int sample_rate,
+                                     int n_fft, int apply_octave_smoothing, int octave_fraction,
+                                     float db_ref, float db_amin, SonareSpectrumResult* out);
+
+void sonare_free_spectrum_result(SonareSpectrumResult* result);
+
+// ============================================================================
+// Editing - Scale quantizer (12-TET pitch target picker)
+// ============================================================================
+
+/// @brief Quantize a MIDI note number to the nearest pitch class enabled by
+///        @p mode_mask, anchored to @p reference_midi.
+/// @param root Root pitch class in [0, 11] (0 = C, ... 11 = B).
+/// @param mode_mask 12-bit mask. Bit i (LSB = 0) is the i-th pitch class
+///                  relative to @p root. E.g. 0b101010110101 = natural major.
+/// @param reference_midi MIDI number used as the chromatic origin (e.g. 69 for
+///                  A4 = 440 Hz). Pass 0.0f for the library default.
+/// @param midi Input MIDI value (may be fractional).
+/// @param out_quantized_midi Receives the quantized MIDI value.
+SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float reference_midi,
+                                       float midi, float* out_quantized_midi);
+
+/// @brief Returns the quantization correction in semitones (quantized - input).
+SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, float reference_midi,
+                                              float midi, float* out_semitones);
+
+/// @brief Returns 1 if @p pitch_class is enabled by @p mode_mask (relative to
+///        @p root), 0 otherwise. Returns @c SONARE_ERROR_INVALID_PARAMETER for
+///        out-of-range @p pitch_class.
+SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int pitch_class,
+                                             int* out_enabled);
 
 // ============================================================================
 // Core - Resample

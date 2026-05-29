@@ -4,7 +4,6 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "mastering/api/chain.h"
@@ -18,7 +17,7 @@
 #include "mastering/maximizer/streaming_preview.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
-#include "util/json_escape.h"
+#include "util/json.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -130,216 +129,61 @@ const char* join_names(const std::vector<std::string>& values, std::string& stor
   throw SonareException(ErrorCode::InvalidParameter, "sonare_eq_set_band: " + message);
 }
 
-struct JsonValue {
-  enum class Type { Number, Bool, String };
-  Type type = Type::Number;
-  double number = 0.0;
-  bool boolean = false;
-  std::string string;
-};
+// EQ band JSON parsing now delegates to the shared util::json::parse so we
+// only maintain one JSON grammar across the C API. The accessor helpers below
+// adapt the generic util::json::Value to the EQ-specific error model
+// (SonareException with the sonare_eq_set_band: prefix).
 
-class EqBandJsonParser {
- public:
-  explicit EqBandJsonParser(const std::string& text) : text_(text) {}
+using JsonValue = sonare::util::json::Value;
 
-  std::unordered_map<std::string, JsonValue> parse() {
-    std::unordered_map<std::string, JsonValue> out;
-    skip_ws();
-    expect('{');
-    if (!consume('}')) {
-      while (true) {
-        std::string key = parse_string();
-        expect(':');
-        JsonValue value = parse_value();
-        if (!out.emplace(std::move(key), std::move(value)).second) {
-          invalid_eq_json("duplicate JSON field");
-        }
-        if (consume('}')) break;
-        expect(',');
-      }
-    }
-    skip_ws();
-    if (pos_ != text_.size()) {
-      invalid_eq_json("trailing data after JSON object");
-    }
-    return out;
-  }
-
- private:
-  void skip_ws() {
-    while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_]))) {
-      ++pos_;
-    }
-  }
-
-  bool consume(char c) {
-    skip_ws();
-    if (pos_ < text_.size() && text_[pos_] == c) {
-      ++pos_;
-      return true;
-    }
-    return false;
-  }
-
-  void expect(char c) {
-    skip_ws();
-    if (pos_ >= text_.size() || text_[pos_] != c) {
-      invalid_eq_json(std::string("expected JSON character: ") + c);
-    }
-    ++pos_;
-  }
-
-  bool peek(const char* literal) const {
-    const std::string value(literal);
-    return text_.compare(pos_, value.size(), value) == 0;
-  }
-
-  JsonValue parse_value() {
-    skip_ws();
-    if (pos_ >= text_.size()) invalid_eq_json("expected JSON value");
-    if (text_[pos_] == '"') {
-      JsonValue value;
-      value.type = JsonValue::Type::String;
-      value.string = parse_string();
-      return value;
-    }
-    if (peek("true")) {
-      pos_ += 4;
-      JsonValue value;
-      value.type = JsonValue::Type::Bool;
-      value.boolean = true;
-      return value;
-    }
-    if (peek("false")) {
-      pos_ += 5;
-      JsonValue value;
-      value.type = JsonValue::Type::Bool;
-      value.boolean = false;
-      return value;
-    }
-    JsonValue value;
-    value.type = JsonValue::Type::Number;
-    value.number = parse_number();
-    return value;
-  }
-
-  std::string parse_string() {
-    skip_ws();
-    if (pos_ >= text_.size() || text_[pos_] != '"') {
-      invalid_eq_json("expected JSON string");
-    }
-    ++pos_;
-    std::string out;
-    while (pos_ < text_.size()) {
-      const char c = text_[pos_++];
-      if (c == '"') return out;
-      if (c == '\\') {
-        if (pos_ >= text_.size()) invalid_eq_json("unterminated JSON escape");
-        const char escaped = text_[pos_++];
-        switch (escaped) {
-          case '"':
-          case '\\':
-          case '/':
-            out.push_back(escaped);
-            break;
-          case 'n':
-            out.push_back('\n');
-            break;
-          case 't':
-            out.push_back('\t');
-            break;
-          default:
-            invalid_eq_json("unsupported JSON string escape");
-        }
-        continue;
-      }
-      out.push_back(c);
-    }
-    invalid_eq_json("unterminated JSON string");
-  }
-
-  double parse_number() {
-    skip_ws();
-    const size_t start = pos_;
-    if (pos_ < text_.size() && text_[pos_] == '-') ++pos_;
-    const size_t int_start = pos_;
-    while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-    if (pos_ == int_start) invalid_eq_json("expected JSON number");
-    if (pos_ < text_.size() && text_[pos_] == '.') {
-      ++pos_;
-      const size_t frac_start = pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-      if (pos_ == frac_start) invalid_eq_json("invalid JSON number");
-    }
-    if (pos_ < text_.size() && (text_[pos_] == 'e' || text_[pos_] == 'E')) {
-      ++pos_;
-      if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-')) ++pos_;
-      const size_t exp_start = pos_;
-      while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_]))) ++pos_;
-      if (pos_ == exp_start) invalid_eq_json("invalid JSON number");
-    }
-    try {
-      return std::stod(text_.substr(start, pos_ - start));
-    } catch (const std::exception&) {
-      invalid_eq_json("invalid JSON number");
-    }
-  }
-
-  const std::string& text_;
-  size_t pos_ = 0;
-};
-
-using JsonObject = std::unordered_map<std::string, JsonValue>;
-
-const JsonValue* find_json_value(const JsonObject& object, const char* key) {
-  const auto it = object.find(key);
-  return it == object.end() ? nullptr : &it->second;
+const JsonValue* find_json_value(const JsonValue& object, const char* key) {
+  return object.is_object() ? object.find(key) : nullptr;
 }
 
-double json_number(const JsonObject& object, const char* key, double fallback) {
+double json_number(const JsonValue& object, const char* key, double fallback) {
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
-  if (value->type != JsonValue::Type::Number) {
+  if (!value->is_number()) {
     invalid_eq_json(std::string("expected numeric JSON field: ") + key);
   }
-  return value->number;
+  return value->as_number();
 }
 
-double json_number_any(const JsonObject& object, const char* first_key, const char* second_key,
+double json_number_any(const JsonValue& object, const char* first_key, const char* second_key,
                        double fallback) {
   const JsonValue* value = find_json_value(object, first_key);
-  if (value && value->type != JsonValue::Type::Number) {
+  if (value && !value->is_number()) {
     invalid_eq_json(std::string("expected numeric JSON field: ") + first_key);
   }
-  if (value) return value->number;
+  if (value) return value->as_number();
   return json_number(object, second_key, fallback);
 }
 
-bool json_bool(const JsonObject& object, const char* key, bool fallback) {
+bool json_bool(const JsonValue& object, const char* key, bool fallback) {
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
-  if (value->type == JsonValue::Type::Bool) return value->boolean;
-  if (value->type == JsonValue::Type::Number) return value->number != 0.0;
+  if (value->is_bool()) return value->as_bool();
+  if (value->is_number()) return value->as_number() != 0.0;
   invalid_eq_json(std::string("expected boolean JSON field: ") + key);
 }
 
-bool json_bool_any(const JsonObject& object, const char* first_key, const char* second_key,
+bool json_bool_any(const JsonValue& object, const char* first_key, const char* second_key,
                    bool fallback) {
   const JsonValue* value = find_json_value(object, first_key);
   if (value) return json_bool(object, first_key, fallback);
   return json_bool(object, second_key, fallback);
 }
 
-std::string json_string(const JsonObject& object, const char* key, const std::string& fallback) {
+std::string json_string(const JsonValue& object, const char* key, const std::string& fallback) {
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
-  if (value->type != JsonValue::Type::String) {
+  if (!value->is_string()) {
     invalid_eq_json(std::string("expected string JSON field: ") + key);
   }
-  return value->string;
+  return value->as_string();
 }
 
-std::string json_string_any(const JsonObject& object, const char* first_key, const char* second_key,
+std::string json_string_any(const JsonValue& object, const char* first_key, const char* second_key,
                             const std::string& fallback) {
   const JsonValue* value = find_json_value(object, first_key);
   if (value) return json_string(object, first_key, fallback);
@@ -408,7 +252,16 @@ sonare::mastering::eq::PhaseMode parse_band_phase(const std::string& value) {
 
 sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   if (!band_json) invalid_eq_json("band_json must not be null");
-  const JsonObject json = EqBandJsonParser(std::string(band_json)).parse();
+  JsonValue json;
+  try {
+    // Strict parse: duplicate `type` (or any other) field is treated as a
+    // hard error so callers cannot pass an ambiguous spec and silently take
+    // the last value.
+    json = sonare::util::json::parse_strict(std::string(band_json));
+  } catch (const sonare::util::json::JsonError& ex) {
+    invalid_eq_json(std::string("invalid JSON: ") + ex.what());
+  }
+  if (!json.is_object()) invalid_eq_json("band_json must be a JSON object");
   sonare::mastering::eq::EqBand band;
   band.type = parse_band_type(json_string(json, "type", "Peak"));
   band.coeff_mode = parse_coeff_mode(json_string_any(json, "coeffMode", "coeff_mode", "Rbj"));

@@ -42,96 +42,36 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
                             size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = harmonic(audio);
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [](const Audio& a) { return harmonic(a); });
 }
 
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = percussive(audio);
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [](const Audio& a) { return percussive(a); });
 }
 
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = time_stretch(audio, rate);
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [rate](const Audio& a) { return time_stretch(a, rate); });
 }
 
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = pitch_shift(audio, semitones);
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [semitones](const Audio& a) { return pitch_shift(a, semitones); });
 }
 
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = normalize(audio, target_db);
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [target_db](const Audio& a) { return normalize(a, target_db); });
 }
 
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = trim(audio, threshold_db);
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [threshold_db](const Audio& a) { return trim(a, threshold_db); });
 }
