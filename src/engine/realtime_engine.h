@@ -14,10 +14,7 @@
 #include "engine/boundary_splitter.h"
 #include "engine/capture.h"
 #include "engine/clip_player.h"
-#include "engine/meter_telemetry.h"
 #include "engine/metronome.h"
-#include "engine/mixing_runtime.h"
-#include "engine/monitor_runtime.h"
 #include "engine/telemetry.h"
 #include "rt/command.h"
 #include "rt/param_smoother.h"
@@ -28,6 +25,11 @@
 
 #if defined(SONARE_WITH_GRAPH)
 #include "engine/graph_runtime.h"
+#endif
+#if defined(SONARE_WITH_MIXING)
+#include "engine/meter_telemetry.h"
+#include "engine/mixing_runtime.h"
+#include "engine/monitor_runtime.h"
 #endif
 
 namespace sonare::engine {
@@ -47,7 +49,9 @@ class RealtimeEngine {
 
   bool push_command(const rt::Command& command) noexcept;
   bool pop_telemetry(Telemetry& out) noexcept;
+#if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
+#endif
   void set_tempo(double bpm);
   void set_time_signature(int numerator, int denominator);
   void set_loop(double start_ppq, double end_ppq, bool enabled) noexcept;
@@ -75,6 +79,7 @@ class RealtimeEngine {
 
   // Mixing channel-strip insert stage. bind_mixing_strip binds a control-thread
   // ChannelStrip whose process_at runs per sub-block when mixing is enabled.
+#if defined(SONARE_WITH_MIXING)
   bool bind_mixing_strip(mixing::ChannelStrip* strip) noexcept;
   void set_mixing_enabled(bool enabled) noexcept { mixing_enabled_ = enabled; }
   bool mixing_enabled() const noexcept { return mixing_enabled_; }
@@ -88,6 +93,7 @@ class RealtimeEngine {
   void set_monitoring_enabled(bool enabled) noexcept { monitoring_enabled_ = enabled; }
   bool monitoring_enabled() const noexcept { return monitoring_enabled_; }
   MonitorRuntime& monitor() noexcept { return monitor_runtime_; }
+#endif
 
   // Default ramp time for engine-level kSetParamSmoothed commands, in ms.
   void set_param_smoothing_ms(float smoothing_ms) noexcept;
@@ -135,10 +141,14 @@ class RealtimeEngine {
   ClipPlayer clip_player_{};
   CaptureSink capture_sink_{};
   Metronome metronome_{};
+#if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};
+#endif
   automation::AutomationEngine automation_{};
+#if defined(SONARE_WITH_MIXING)
   MixingRuntime mixing_runtime_{};
   MonitorRuntime monitor_runtime_{};
+#endif
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};
   BoundarySplitter boundary_splitter_{};
@@ -163,12 +173,14 @@ class RealtimeEngine {
   // Pre-allocated channel pointer scratch reused by render_offline so the
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
-  std::vector<float> monitor_bus_storage_{};
   static constexpr size_t kMaxAudioChannels = 64;
+#if defined(SONARE_WITH_MIXING)
+  std::vector<float> monitor_bus_storage_{};
   std::array<float*, kMaxAudioChannels> monitor_bus_channels_{};
 
   bool mixing_enabled_ = false;
   bool monitoring_enabled_ = false;
+#endif
   std::atomic<float> param_smoothing_ms_{20.0f};
   float applied_param_smoothing_ms_ = 20.0f;  // audio thread only
   double sample_rate_ = 48000.0;

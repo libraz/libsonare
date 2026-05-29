@@ -36,8 +36,11 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   clip_player_.prepare(sample_rate, max_block_size_);
   clip_player_.set_tempo_map(&tempo_map_);
   metronome_.prepare(sample_rate, &tempo_map_);
+#if defined(SONARE_WITH_MIXING)
   meter_tap_.prepare(sample_rate, max_block_size_, 0, telemetry_capacity);
+#endif
   automation_.prepare(sample_rate, &tempo_map_);
+#if defined(SONARE_WITH_MIXING)
   mixing_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_bus_storage_.assign(static_cast<size_t>(max_block_size_) * monitor_bus_channels_.size(),
@@ -46,6 +49,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
     monitor_bus_channels_[ch] =
         monitor_bus_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
+#endif
   commands_.reserve(next_power_of_two(std::max<size_t>(command_capacity, 2)));
   // Telemetry is a single-producer queue with the audio thread as its only
   // producer; reserve it here so process()/enqueue_telemetry never push to an
@@ -492,6 +496,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
   }
 }
 
+#if defined(SONARE_WITH_MIXING)
 bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) noexcept {
   if (strip != nullptr && monitor_runtime_.contains(strip)) {
     return false;
@@ -511,6 +516,7 @@ bool RealtimeEngine::add_monitor_strip(mixing::ChannelStrip* strip) noexcept {
   }
   return monitor_runtime_.add_strip(strip);
 }
+#endif
 
 void RealtimeEngine::set_param_smoothing_ms(float smoothing_ms) noexcept {
   param_smoothing_ms_.store(std::max(smoothing_ms, 0.0f), std::memory_order_relaxed);
@@ -590,6 +596,9 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
 void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_out, int num_channels,
                                       int offset, int num_frames,
                                       bool fold_monitor_to_main) noexcept {
+#if !defined(SONARE_WITH_MIXING)
+  (void)fold_monitor_to_main;
+#endif
   std::array<float*, kMaxAudioChannels> sub_channels{};
   int channels = 0;
   const int scratch_channels =
@@ -609,6 +618,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     clip_player_.process_at(sub_channels.data(), channels, num_frames,
                             transport_.sample_position());
     metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());
+#if defined(SONARE_WITH_MIXING)
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
     // sample-accurately at the sub-block's timeline position when enabled.
     if (mixing_enabled_) {
@@ -641,6 +651,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       }
     }
+#endif
   }
 #if defined(SONARE_WITH_GRAPH)
   graph_runtime_.process(io, num_channels, offset, num_frames);
@@ -649,7 +660,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   (void)offset;
 #endif
   if (channels > 0 && num_frames > 0) {
+#if defined(SONARE_WITH_MIXING)
     meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame());
+#endif
     const float* const* capture_channels =
         reinterpret_cast<const float* const*>(sub_channels.data());
     capture_sink_.process(capture_channels, channels, num_frames, transport_.sample_position());
