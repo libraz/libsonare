@@ -6,9 +6,9 @@
 #include <vector>
 
 #include "core/fft.h"
-#include "mastering/common/lpc.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/lpc.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -84,8 +84,7 @@ Audio FormantWarp::process(const Audio& audio) const {
       windowed[static_cast<size_t>(i)] = s * hann[static_cast<size_t>(i)];
     }
 
-    const auto model =
-        sonare::mastering::common::lpc_autocorrelation(windowed.data(), windowed.size(), order);
+    const auto model = sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order);
 
     // Degenerate frame: pass the windowed signal through OLA unchanged.
     if (model.variance < kEpsilon || model.ar.size() < 2 || model.ar[0] == 0.0f) {
@@ -103,7 +102,7 @@ Audio FormantWarp::process(const Audio& audio) const {
 
     // LPC residual (inverse filtering), zero-padded to n_fft.
     const std::vector<float> residual =
-        sonare::mastering::common::lpc_residual(windowed.data(), windowed.size(), model);
+        sonare::lpc_residual(windowed.data(), windowed.size(), model);
     std::fill(padded.begin(), padded.end(), 0.0f);
     std::copy(residual.begin(), residual.end(), padded.begin());
     fft.forward(padded.data(), spec.data());

@@ -5,6 +5,8 @@
 #include <stdexcept>
 
 #include "util/constants.h"
+// <stdexcept> is retained for prepare()'s argument validation; process_block
+// is noexcept by contract and must not throw — see below.
 
 namespace sonare::editing::voice_changer {
 
@@ -117,19 +119,24 @@ void StreamingRetune::emit_grain() noexcept {
   synth_pos_ = (synth_pos_ + static_cast<std::size_t>(hop_a_)) % accum_cap_;
 }
 
-void StreamingRetune::process_block(const float* input, float* output, int num_samples) {
+void StreamingRetune::process_block(const float* input, float* output, int num_samples) noexcept {
+  // Pre-condition violations are silent no-ops to keep this RT-safe (no throw,
+  // no allocation). Callers that need diagnostics must validate at prepare()
+  // time, which is the only place where exceptions are appropriate. Throwing
+  // here would terminate the audio thread via std::terminate because the
+  // immediate caller (RealtimeVoiceChanger::process_block) is noexcept.
+  if (num_samples <= 0) return;
+  if (input == nullptr || output == nullptr) return;
   if (sample_rate_ <= 0.0) {
-    throw std::logic_error("StreamingRetune must be prepared before processing");
-  }
-  if (num_samples < 0 || num_samples > max_block_size_) {
-    throw std::invalid_argument("invalid block size");
-  }
-  if ((input == nullptr || output == nullptr) && num_samples > 0) {
-    throw std::invalid_argument("buffers must not be null");
-  }
-  if (num_samples == 0) {
+    // prepare() not called yet. Pass through rather than producing garbage
+    // from an uninitialized ring/window state. Mirrors StreamingFormant's
+    // behaviour for symmetry. This must precede the max_block_size_ check
+    // because the default max_block_size_ is 0, which would otherwise treat
+    // every non-empty block as oversized and silently drop the passthrough.
+    if (input != output) std::copy_n(input, num_samples, output);
     return;
   }
+  if (num_samples > max_block_size_) return;
 
   const float mix = std::clamp(config_.mix, 0.0f, 1.0f);
 

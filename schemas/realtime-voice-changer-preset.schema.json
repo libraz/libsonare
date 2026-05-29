@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libsonare.local/schemas/realtime-voice-changer-preset.schema.json",
+  "title": "Realtime Voice Changer Preset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "dsp"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Preset schema version. Must be 1 in the current libsonare release. Future versions will widen this constant to a range and add an explicit upgrade path in validate_realtime_voice_changer_preset_json (see src/editing/voice_changer/realtime_voice_changer.cpp). Bumping this without a migration is a breaking change."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "minLength": 1,
+      "maxLength": 96
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "description": { "type": "string", "maxLength": 512 },
+    "category": {
+      "type": "string",
+      "enum": ["monitor", "bright", "soft", "deep", "robot", "dark", "custom"]
+    },
+    "macros": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
+        "formant": { "type": "number", "minimum": 0.55, "maximum": 1.65 },
+        "brightness": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "space": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "intensity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "noiseControl": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "sibilance": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    },
+    "dsp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retune", "formant", "eq", "gate", "compressor", "deesser", "reverb", "limiter"],
+      "properties": {
+        "inputGainDb": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
+        "outputGainDb": { "type": "number", "minimum": -36.0, "maximum": 12.0 },
+        "wetMix": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "retune": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["semitones", "mix", "grainSize"],
+          "properties": {
+            "semitones": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
+            "mix": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "grainSize": { "type": "integer", "minimum": 0, "maximum": 8192 }
+          }
+        },
+        "formant": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["factor", "amount", "body", "brightness", "nasal"],
+          "properties": {
+            "factor": { "type": "number", "minimum": 0.55, "maximum": 1.65 },
+            "amount": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "body": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+            "brightness": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+            "nasal": { "type": "number", "minimum": -1.0, "maximum": 1.0 }
+          }
+        },
+        "eq": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["highpassHz", "bodyDb", "presenceDb", "airDb"],
+          "properties": {
+            "highpassHz": { "type": "number", "minimum": 20.0, "maximum": 300.0 },
+            "bodyDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 },
+            "presenceDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 },
+            "airDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 }
+          }
+        },
+        "gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["thresholdDb", "attackMs", "releaseMs", "rangeDb"],
+          "properties": {
+            "thresholdDb": { "type": "number", "minimum": -90.0, "maximum": -12.0 },
+            "attackMs": { "type": "number", "minimum": 0.05, "maximum": 100.0 },
+            "releaseMs": { "type": "number", "minimum": 5.0, "maximum": 1000.0 },
+            "rangeDb": { "type": "number", "minimum": 0.0, "maximum": 80.0 }
+          }
+        },
+        "compressor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["thresholdDb", "ratio", "attackMs", "releaseMs", "makeupGainDb"],
+          "properties": {
+            "thresholdDb": { "type": "number", "minimum": -60.0, "maximum": 0.0 },
+            "ratio": { "type": "number", "minimum": 1.0, "maximum": 20.0 },
+            "attackMs": { "type": "number", "minimum": 0.05, "maximum": 200.0 },
+            "releaseMs": { "type": "number", "minimum": 5.0, "maximum": 2000.0 },
+            "makeupGainDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 }
+          }
+        },
+        "deesser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["frequencyHz", "thresholdDb", "rangeDb"],
+          "properties": {
+            "frequencyHz": { "type": "number", "minimum": 3000.0, "maximum": 12000.0 },
+            "thresholdDb": { "type": "number", "minimum": -60.0, "maximum": -6.0 },
+            "ratio": { "type": "number", "minimum": 1.0, "maximum": 20.0 },
+            "rangeDb": { "type": "number", "minimum": 0.0, "maximum": 24.0 }
+          }
+        },
+        "reverb": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mix", "timeMs", "damping", "seed"],
+          "properties": {
+            "mix": { "type": "number", "minimum": 0.0, "maximum": 0.45 },
+            "timeMs": { "type": "number", "minimum": 40.0, "maximum": 1800.0 },
+            "damping": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "seed": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+          }
+        },
+        "limiter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ceilingDb", "releaseMs"],
+          "properties": {
+            "ceilingDb": { "type": "number", "minimum": -12.0, "maximum": -1.0 },
+            "releaseMs": { "type": "number", "minimum": 1.0, "maximum": 500.0 }
+          }
+        }
+      }
+    }
+  }
+}
+

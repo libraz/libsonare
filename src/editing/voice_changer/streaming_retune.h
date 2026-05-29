@@ -32,7 +32,16 @@ class StreamingRetune {
   void set_config(const StreamingRetuneConfig& config);
   const StreamingRetuneConfig& config() const noexcept { return config_; }
 
-  void process_block(const float* input, float* output, int num_samples);
+  /// @brief Process a block of samples. RT-safe and @c noexcept.
+  /// @details Pre-condition violations (not prepared, oversize block, null
+  ///          buffers) are silent no-ops to keep this audio-thread callable.
+  ///          When @ref sample_rate_ is zero (prepare() never ran) the output
+  ///          buffer is filled by passing the input through unchanged so
+  ///          callers observe defined samples rather than uninitialized
+  ///          memory. Callers MUST validate inputs at the control thread
+  ///          level via @ref prepare; this method exists only as a
+  ///          last-resort defence against terminating the audio thread.
+  void process_block(const float* input, float* output, int num_samples) noexcept;
   int grain_size() const noexcept { return grain_size_; }
 
  private:

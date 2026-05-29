@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libsonare.local/schemas/realtime-voice-changer-preset-pack.schema.json",
+  "title": "Realtime Voice Changer Preset Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "presets"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "packId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "minLength": 1,
+      "maxLength": 96
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "description": { "type": "string", "maxLength": 512 },
+    "author": { "type": "string", "maxLength": 128 },
+    "presets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "realtime-voice-changer-preset.schema.json" }
+    }
+  }
+}
+
