@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "mastering/common/lpc.h"
+#include "util/lpc.h"
 
 namespace sonare::mastering::repair {
 namespace {
@@ -38,6 +38,24 @@ float interpolate_fallback(const std::vector<float>& samples, size_t start, size
              : left + (right - left) * t;
 }
 
+/// @brief LPC-based reconstruction of a single clipped region.
+///
+/// Minimal Janssen-style improvement over the previous implementation: Burg
+/// AR(p) estimation is fed **only the known (unclipped) samples** rather than
+/// the whole signal (which used to include the in-progress interpolated values
+/// and steadily contaminated the spectral model across iterations). Burg sees
+/// the concatenation of every non-clipped run in the signal; the small
+/// discontinuities at the join points are far less harmful to the spectral
+/// envelope than the run-away contamination of the original loop.
+///
+/// The forward AR prediction used to fill the gap, the cubic/linear fallback,
+/// and the `lpc_blend` weighting all behave exactly as before.
+///
+/// TODO(declip): replace the open-loop forward AR predictor with a full
+/// Janssen linear-system solver (minimise ||A x||^2 over the unknown samples
+/// via the closed-form normal equations). The current code is the conservative
+/// minimal fix for the spectral-pollution bug; the full solver requires more
+/// careful boundary handling and is tracked as a follow-up task.
 void reconstruct_region_lpc(std::vector<float>& samples, size_t start, size_t end,
                             const DeclipConfig& config) {
   for (size_t j = start; j < end; ++j) {
@@ -49,8 +67,20 @@ void reconstruct_region_lpc(std::vector<float>& samples, size_t start, size_t en
       std::min(config.lpc_order, static_cast<int>(std::max<size_t>(1, samples.size() / 4)));
   if (!can_use_lpc(samples.size(), order)) return;
 
+  // Build Burg's training set from samples *outside* every clipped run, using
+  // the same threshold the outer loop applies. This keeps the model anchored
+  // to clean data and stops the original "train on filled-in values" bug.
+  std::vector<float> known;
+  known.reserve(samples.size());
+  for (size_t i = 0; i < samples.size(); ++i) {
+    if (std::abs(samples[i]) < config.clip_threshold) {
+      known.push_back(samples[i]);
+    }
+  }
+  if (!can_use_lpc(known.size(), order)) return;
+
   for (int iteration = 0; iteration < std::max(config.iterations, 1); ++iteration) {
-    const auto model = common::lpc_burg(samples.data(), samples.size(), order);
+    const auto model = sonare::lpc_burg(known.data(), known.size(), order);
     for (size_t j = start; j < end; ++j) {
       double predicted = 0.0;
       const size_t max_k = std::min(model.ar.size() - 1, j);

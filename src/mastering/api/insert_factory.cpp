@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "mastering/api/json_params.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -62,6 +61,7 @@
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 #ifdef SONARE_HAVE_FX
 #include <algorithm>
@@ -84,8 +84,27 @@ using detail::ParamMap;
 
 std::vector<Param> parse_insert_params_json(const std::string& json_params) {
   try {
-    return detail::parse_flat_json_params(json_params, true);
+    if (json_params.empty()) return {};
+    // Strict parse: insert params are a flat map of `{name: value}` and a
+    // duplicate key would silently shadow the earlier value, which is almost
+    // certainly a caller bug worth surfacing.
+    const auto root = sonare::util::json::parse_strict(json_params);
+    if (!root.is_object()) throw std::invalid_argument("expected JSON object");
+    std::vector<Param> params;
+    params.reserve(root.as_object().size());
+    for (const auto& [key, value] : root.as_object()) {
+      if (value.is_bool()) {
+        params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
+      } else if (value.is_number()) {
+        params.push_back(Param{key, value.as_number()});
+      } else {
+        throw std::invalid_argument("JSON params values must be numbers or booleans");
+      }
+    }
+    return params;
   } catch (const std::invalid_argument& e) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
+  } catch (const sonare::util::json::JsonError& e) {
     throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
   }
 }

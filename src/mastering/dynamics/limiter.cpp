@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
@@ -10,7 +12,15 @@
 
 namespace sonare::mastering::dynamics {
 
-Limiter::Limiter(LimiterConfig config) : config_(config) { validate_config(config_); }
+Limiter::Limiter(LimiterConfig config)
+    : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<LimiterConfig>>()) {
+  validate_config(config_);
+  // Seed the publisher so a downstream audio thread that starts before
+  // prepare() sees a defined snapshot. prepare() will publish again with
+  // post-prepare derived state already applied so the first audio block does
+  // not redundantly recompute coefficients.
+  config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
+}
 
 void Limiter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -22,18 +32,43 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
-  update_release_coeff();
+  update_coefficients(config_);
   prepared_ = true;
   lookahead_.clear();
   gain_smoothers_.clear();
   reset();
+  // Re-publish so the audio thread observes the same snapshot that prepare()
+  // already applied; adopt_snapshot_for_block() skips the redundant
+  // recomputation when current() == applied_snapshot_.
+  auto fresh = std::make_shared<const LimiterConfig>(config_);
+  applied_snapshot_ = fresh.get();
+  config_publisher_->publish(std::move(fresh));
+  config_publisher_->acquire();
+}
+
+const LimiterConfig* Limiter::adopt_snapshot_for_block() noexcept {
+  // Audio-thread entry. acquire() drains the publish ring to the newest
+  // snapshot and retires superseded ones via the wait-free retire ring (no
+  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
+  // re-derive the scalar coefficients — those writes target members the per-
+  // sample loop reads, but the loop has not started yet for this block, so no
+  // race.
+  config_publisher_->acquire();
+  const LimiterConfig* current = config_publisher_->current();
+  if (current && current != applied_snapshot_) {
+    update_coefficients(*current);
+    applied_snapshot_ = current;
+  }
+  // Fallback path: only reachable if the constructor's initial publish was
+  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
+  // was never called. In that case use the control-thread mirror; the per-
+  // sample loop is itself guarded by prepared_ so this path stays defined.
+  return current ? current : &config_;
 }
 
 void Limiter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) {
-    throw std::logic_error("Limiter must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "Limiter");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }
@@ -51,7 +86,12 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     }
   }
 
-  const float ceiling = db_to_linear(config_.threshold_db);
+  // Adopt the latest published configuration once per block. The returned
+  // pointer is stable for the entire per-sample loop — RtPublisher only
+  // changes its current() value inside acquire(), and we already called it.
+  const LimiterConfig& cfg = *adopt_snapshot_for_block();
+
+  const float ceiling = db_to_linear(cfg.threshold_db);
   float min_gain = 1.0f;
   std::vector<float> delayed(static_cast<size_t>(num_channels), 0.0f);
   for (int i = 0; i < num_samples; ++i) {
@@ -85,11 +125,16 @@ void Limiter::reset() {
 }
 
 void Limiter::set_config(const LimiterConfig& config) {
+  // Control-thread side: validate before publishing so any throw leaves both
+  // the control-thread mirror (config_) and the audio-thread snapshot
+  // unchanged. The audio thread sees the new snapshot only after publish()
+  // succeeds; validation never runs partway through a config_ write that the
+  // audio thread could observe. Note: changing lookahead_ms does NOT resize
+  // the lookahead buffers from this call (that would require allocation); the
+  // buffer size is fixed at prepare() time.
   validate_config(config);
   config_ = config;
-  if (prepared_) {
-    prepare(sample_rate_, 0);
-  }
+  config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
 }
 
 void Limiter::set_release_ms(float release_ms) {
@@ -97,26 +142,28 @@ void Limiter::set_release_ms(float release_ms) {
     throw std::invalid_argument("limiter release must be non-negative");
   }
   config_.release_ms = release_ms;
-  if (prepared_) {
-    update_release_coeff();
-  }
+  // Re-publish so the audio thread picks up the new release time via the
+  // standard snapshot path (keeps a single source of truth for derived state).
+  config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
 }
 
 bool Limiter::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.threshold_db = value;
-      return true;
+      break;
     case 1:
       config_.release_ms = std::max(0.0f, value);
-      // Recompute the release coefficient in place; preserves gain-smoother state.
-      if (prepared_) {
-        update_release_coeff();
-      }
-      return true;
+      break;
     default:
       return false;
   }
+  // Publish the mutated config_ as a new snapshot so the audio thread adopts
+  // it (and re-derives release_coeff_ via update_coefficients) on the next
+  // block. set_parameter is therefore NOT realtime-safe under the snapshot
+  // model — the shared_ptr allocation matches set_config().
+  config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
+  return true;
 }
 
 void Limiter::validate_config(const LimiterConfig& config) {
@@ -141,8 +188,8 @@ void Limiter::prepare_buffers(int num_channels) {
   }
 }
 
-void Limiter::update_release_coeff() {
-  release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
+void Limiter::update_coefficients(const LimiterConfig& config) {
+  release_coeff_ = time_to_coefficient(sample_rate_, config.release_ms);
 }
 
 }  // namespace sonare::mastering::dynamics

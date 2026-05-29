@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
@@ -39,7 +41,15 @@ float compute_makeup_db(const CompressorConfig& config) {
 
 }  // namespace
 
-Compressor::Compressor(CompressorConfig config) : config_(config) { validate_config(config_); }
+Compressor::Compressor(CompressorConfig config)
+    : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<CompressorConfig>>()) {
+  validate_config(config_);
+  // Seed the publisher so a downstream audio thread that starts before
+  // prepare() sees a defined snapshot. prepare() will publish again with
+  // post-prepare derived state already applied so the first audio block does
+  // not redundantly recompute coefficients.
+  config_publisher_->publish(std::make_shared<const CompressorConfig>(config_));
+}
 
 void Compressor::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -50,17 +60,42 @@ void Compressor::prepare(double sample_rate, int max_block_size) {
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
-  update_coefficients();
+  update_coefficients(config_);
   hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
   hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
   reset();
+  // Re-publish so the audio thread observes the same snapshot that prepare()
+  // already applied; adopt_snapshot_for_block() skips the redundant
+  // recomputation when current() == applied_snapshot_.
+  auto fresh = std::make_shared<const CompressorConfig>(config_);
+  applied_snapshot_ = fresh.get();
+  config_publisher_->publish(std::move(fresh));
+  config_publisher_->acquire();
+}
+
+const CompressorConfig* Compressor::adopt_snapshot_for_block() noexcept {
+  // Audio-thread entry. acquire() drains the publish ring to the newest
+  // snapshot and retires superseded ones via the wait-free retire ring (no
+  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
+  // re-derive the scalar coefficients — those writes target members the per-
+  // sample loop reads, but the loop has not started yet for this block, so no
+  // race.
+  config_publisher_->acquire();
+  const CompressorConfig* current = config_publisher_->current();
+  if (current && current != applied_snapshot_) {
+    update_coefficients(*current);
+    applied_snapshot_ = current;
+  }
+  // Fallback path: only reachable if the constructor's initial publish was
+  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
+  // was never called. In that case use the control-thread mirror; the per-
+  // sample loop is itself guarded by prepared_ so this path stays defined.
+  return current ? current : &config_;
 }
 
 void Compressor::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) {
-    throw std::logic_error("Compressor must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "Compressor");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }
@@ -76,7 +111,11 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     }
   }
 
-  const float makeup_db = compute_makeup_db(config_);
+  // Adopt the latest published configuration once per block. The returned
+  // pointer is stable for the entire per-sample loop — RtPublisher only
+  // changes its current() value inside acquire(), and we already called it.
+  const CompressorConfig& cfg = *adopt_snapshot_for_block();
+  const float makeup_db = compute_makeup_db(cfg);
 
   if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
       static_cast<size_t>(num_channels) > hpf_y1_.size()) {
@@ -96,7 +135,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     float power_sum = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
       float s = channels[ch][i];
-      if (config_.sidechain_hpf_enabled) {
+      if (cfg.sidechain_hpf_enabled) {
         const auto idx = static_cast<size_t>(ch);
         const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
         hpf_x1_[idx] = s;
@@ -109,7 +148,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     const float power_lin = power_sum * inv_channels;
 
     float level_db = kFloorDb;
-    switch (config_.detector) {
+    switch (cfg.detector) {
       case DetectorMode::Peak:
         level_db = linear_to_db(peak_lin);
         break;
@@ -127,13 +166,13 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
         break;
     }
 
-    const float target_db = gain_reduction_db(level_db, config_);
+    const float target_db = gain_reduction_db(level_db, cfg);
     pdr_state_db_ = pdr_coeff_ * pdr_state_db_ + (1.0f - pdr_coeff_) * target_db;
     const float pdr_amount =
-        config_.pdr_time_ms > 0.0f ? std::clamp(-pdr_state_db_ / 24.0f, 0.0f, 1.0f) : 0.0f;
+        cfg.pdr_time_ms > 0.0f ? std::clamp(-pdr_state_db_ / 24.0f, 0.0f, 1.0f) : 0.0f;
     const float release_coeff = time_to_coefficient(
-        sample_rate_, config_.release_ms *
-                          (1.0f + pdr_amount * std::max(config_.pdr_release_scale - 1.0f, 0.0f)));
+        sample_rate_,
+        cfg.release_ms * (1.0f + pdr_amount * std::max(cfg.pdr_release_scale - 1.0f, 0.0f)));
     const float reduction_state_db =
         reduction_smoother_.smooth_bidirectional(target_db, release_coeff, true);
 
@@ -157,41 +196,38 @@ void Compressor::reset() {
 }
 
 void Compressor::set_config(const CompressorConfig& config) {
+  // Control-thread side: validate before publishing so any throw leaves both
+  // the control-thread mirror (config_) and the audio-thread snapshot
+  // unchanged. The audio thread sees the new snapshot only after publish()
+  // succeeds; validation never runs partway through a config_ write that the
+  // audio thread could observe.
   validate_config(config);
   config_ = config;
-  if (prepared_) {
-    update_coefficients();
-    reset();
-  }
+  config_publisher_->publish(std::make_shared<const CompressorConfig>(config_));
 }
 
 bool Compressor::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.threshold_db = value;
-      return true;
+      break;
     case 1:
       config_.ratio = std::max(1.0f, value);
-      return true;
+      break;
     case 2:
       config_.attack_ms = std::max(0.0f, value);
-      // Recompute smoother coefficients in place; preserves envelope state.
-      if (prepared_) {
-        reduction_smoother_.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-      }
-      return true;
+      break;
     case 3:
       config_.release_ms = std::max(0.0f, value);
-      if (prepared_) {
-        reduction_smoother_.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-      }
-      return true;
+      break;
     case 4:
       config_.makeup_gain_db = value;
-      return true;
+      break;
     default:
       return false;
   }
+  config_publisher_->publish(std::make_shared<const CompressorConfig>(config_));
+  return true;
 }
 
 void Compressor::validate_config(const CompressorConfig& config) {
@@ -229,15 +265,15 @@ float Compressor::gain_reduction_db(float input_db, const CompressorConfig& conf
   return -compressed_over_db;
 }
 
-void Compressor::update_coefficients() {
-  reduction_smoother_.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+void Compressor::update_coefficients(const CompressorConfig& config) {
+  reduction_smoother_.prepare(sample_rate_, config.attack_ms, config.release_ms);
   rms_coeff_ = time_to_coefficient(sample_rate_, kRmsWindowMs);
   log_rms_coeff_ = time_to_coefficient(sample_rate_, kLogRmsWindowMs);
-  pdr_coeff_ = time_to_coefficient(sample_rate_, config_.pdr_time_ms);
+  pdr_coeff_ = time_to_coefficient(sample_rate_, config.pdr_time_ms);
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Same
   // 6 dB/oct slope as a 1-pole RC, but the cutoff is frequency-accurate.
   const auto hpf =
-      common::onepole_highpass_coeffs(static_cast<double>(config_.sidechain_hpf_hz), sample_rate_);
+      common::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz), sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
 }

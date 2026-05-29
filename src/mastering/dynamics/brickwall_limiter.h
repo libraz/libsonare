@@ -3,8 +3,11 @@
 /// @file brickwall_limiter.h
 /// @brief Hard-ceiling limiter that guarantees sample peaks do not exceed the ceiling.
 
+#include <memory>
+
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/limiter.h"
+#include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -22,8 +25,31 @@ class BrickwallLimiter : public common::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
+  /// @brief Publishes a new configuration to the realtime processing chain.
+  /// @details Safe to call concurrently with @ref process on the same instance
+  ///          for @c ceiling_db and @c release_ms updates only: those fields
+  ///          are picked up by the audio thread from a lock-free snapshot
+  ///          (see @c rt::RtPublisher) at the start of the next block and
+  ///          applied via RT-safe scalar coefficient updates on the inner
+  ///          @ref Limiter. Changing @c lookahead_ms requires resizing the
+  ///          lookahead ring buffers, which is NOT realtime-safe; that branch
+  ///          re-runs @ref prepare on the control thread and MUST NOT race
+  ///          with @ref process. May allocate (the snapshot @c shared_ptr,
+  ///          and the buffer resize on lookahead changes) and is therefore
+  ///          NOT realtime-safe itself; call from the configuration thread
+  ///          only. Two threads MUST NOT call @ref set_config concurrently
+  ///          with each other (single-producer hand-off). Throws
+  ///          @c std::invalid_argument with the same rules as the
+  ///          constructor; on throw the published configuration is unchanged
+  ///          (validation happens before publish, never partway).
   void set_config(const BrickwallLimiterConfig& config);
   void set_release_ms(float release_ms);
+  /// @brief Returns the most recently published configuration as observed by
+  ///        the configuration thread.
+  /// @details NOT realtime-safe and NOT safe to call concurrently with
+  ///          @ref set_config (the returned reference may be invalidated by a
+  ///          subsequent publish). Intended for UI sync / round-trip tests on
+  ///          the configuration thread.
   const BrickwallLimiterConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
   int hard_clip_count() const noexcept { return hard_clip_count_; }
@@ -37,8 +63,37 @@ class BrickwallLimiter : public common::ProcessorBase {
 
  private:
   static void validate_config(const BrickwallLimiterConfig& config);
+  /// @brief Recomputes scalar derived coefficients (forwards ceiling and
+  ///        release to the inner @ref Limiter via its RT-safe parameter
+  ///        setters) from @p config. RT-safe: scalar math only, no
+  ///        allocation, no buffer resize.
+  /// @details Called from prepare() and — via @ref adopt_snapshot_for_block —
+  ///          from the audio thread when a new configuration snapshot is
+  ///          adopted between blocks. Never resizes the lookahead buffers; a
+  ///          changed @c lookahead_ms is handled by the control-thread
+  ///          @ref set_config branch that re-runs @ref prepare.
+  void update_coefficients(const BrickwallLimiterConfig& config);
+  /// @brief Audio-thread hand-off: adopts any pending snapshot and, if a new
+  ///        one was adopted, recomputes derived coefficients. Returns a
+  ///        pointer to the configuration the block should use; falls back to
+  ///        the control-thread @c config_ mirror only when no snapshot has been
+  ///        published yet (unreachable after prepare() runs because prepare()
+  ///        always publishes an initial snapshot).
+  const BrickwallLimiterConfig* adopt_snapshot_for_block() noexcept;
 
   BrickwallLimiterConfig config_{};
+  /// @brief Lock-free single-producer (config thread) / single-consumer (audio
+  ///        thread) snapshot publisher. Held by @c unique_ptr so
+  ///        BrickwallLimiter itself remains move-constructible (RtPublisher
+  ///        deletes its copy and move operations to keep the SPSC ring indices
+  ///        position-stable); the indirection is touched once per block from
+  ///        the audio thread and never per-sample.
+  std::unique_ptr<rt::RtPublisher<BrickwallLimiterConfig>> config_publisher_;
+  /// @brief Tracks which snapshot pointer the audio thread last applied to
+  ///        derived coefficients. When @c config_publisher_.current() differs
+  ///        from this, the audio thread re-runs @ref update_coefficients
+  ///        before processing.
+  const BrickwallLimiterConfig* applied_snapshot_ = nullptr;
   Limiter limiter_;
   bool prepared_ = false;
   double sample_rate_ = 48000.0;

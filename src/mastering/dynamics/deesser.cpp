@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
@@ -17,7 +19,15 @@ using sonare::constants::kPiD;
 
 }  // namespace
 
-DeEsser::DeEsser(DeEsserConfig config) : config_(config) { validate_config(config_); }
+DeEsser::DeEsser(DeEsserConfig config)
+    : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<DeEsserConfig>>()) {
+  validate_config(config_);
+  // Seed the publisher so a downstream audio thread that starts before
+  // prepare() sees a defined snapshot. prepare() will publish again with
+  // post-prepare derived state already applied so the first audio block does
+  // not redundantly recompute coefficients.
+  config_publisher_->publish(std::make_shared<const DeEsserConfig>(config_));
+}
 
 void DeEsser::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -29,7 +39,6 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
-  update_filter_coeff();
   if (bandpass_.size() < kRealtimePreparedChannels) {
     bandpass_.resize(kRealtimePreparedChannels, filter_coeffs_);
   }
@@ -39,17 +48,40 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
   if (followers_.size() < kRealtimePreparedChannels) {
     followers_.resize(kRealtimePreparedChannels);
   }
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  update_coefficients(config_);
   reset();
+  // Re-publish so the audio thread observes the same snapshot that prepare()
+  // already applied; adopt_snapshot_for_block() skips the redundant
+  // recomputation when current() == applied_snapshot_.
+  auto fresh = std::make_shared<const DeEsserConfig>(config_);
+  applied_snapshot_ = fresh.get();
+  config_publisher_->publish(std::move(fresh));
+  config_publisher_->acquire();
+}
+
+const DeEsserConfig* DeEsser::adopt_snapshot_for_block() noexcept {
+  // Audio-thread entry. acquire() drains the publish ring to the newest
+  // snapshot and retires superseded ones via the wait-free retire ring (no
+  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
+  // re-derive the scalar coefficients — those writes target members the per-
+  // sample loop reads, but the loop has not started yet for this block, so no
+  // race.
+  config_publisher_->acquire();
+  const DeEsserConfig* current = config_publisher_->current();
+  if (current && current != applied_snapshot_) {
+    update_coefficients(*current);
+    applied_snapshot_ = current;
+  }
+  // Fallback path: only reachable if the constructor's initial publish was
+  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
+  // was never called. In that case use the control-thread mirror; the per-
+  // sample loop is itself guarded by prepared_ so this path stays defined.
+  return current ? current : &config_;
 }
 
 void DeEsser::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) {
-    throw std::logic_error("DeEsser must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "DeEsser");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }
@@ -61,6 +93,12 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
   }
 
   ensure_state(num_channels);
+
+  // Adopt the latest published configuration once per block. The returned
+  // pointer is stable for the entire per-sample loop — RtPublisher only
+  // changes its current() value inside acquire(), and we already called it.
+  const DeEsserConfig& cfg = *adopt_snapshot_for_block();
+
   float max_reduction = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
@@ -74,7 +112,7 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
       const float input = channels[ch][i];
       const float sibilant = filter2.process(filter.process(input));
       const float envelope = follower.process(sibilant);
-      const float reduction_db = gain_reduction_db(linear_to_db(envelope), config_);
+      const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
       channels[ch][i] = input * db_to_linear(reduction_db);
       max_reduction = std::min(max_reduction, reduction_db);
     }
@@ -93,62 +131,46 @@ void DeEsser::reset() {
 }
 
 void DeEsser::set_config(const DeEsserConfig& config) {
+  // Control-thread side: validate before publishing so any throw leaves both
+  // the control-thread mirror (config_) and the audio-thread snapshot
+  // unchanged. The audio thread sees the new snapshot only after publish()
+  // succeeds; validation never runs partway through a config_ write that the
+  // audio thread could observe.
   validate_config(config);
   config_ = config;
-  if (prepared_) {
-    update_filter_coeff();
-    for (auto& follower : followers_) {
-      follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-    }
-    reset();
-  }
+  config_publisher_->publish(std::make_shared<const DeEsserConfig>(config_));
 }
 
 bool DeEsser::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // Keep frequency positive (validate_config invariant); update_filter_coeff
+      // Keep frequency positive (validate_config invariant); update_coefficients
       // clamps the effective cutoff to a valid range and preserves filter state.
       config_.frequency_hz = std::max(value, 1.0f);
-      if (prepared_) {
-        update_filter_coeff();
-      }
-      return true;
+      break;
     case 1:
       config_.threshold_db = value;
-      return true;
+      break;
     case 2:
       config_.ratio = std::max(1.0f, value);
-      return true;
+      break;
     case 3:
       config_.attack_ms = std::max(0.0f, value);
-      // Recompute follower coefficients in place; preserves envelope state.
-      if (prepared_) {
-        for (auto& follower : followers_) {
-          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-        }
-      }
-      return true;
+      break;
     case 4:
       config_.release_ms = std::max(0.0f, value);
-      if (prepared_) {
-        for (auto& follower : followers_) {
-          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-        }
-      }
-      return true;
+      break;
     case 5:
       config_.range_db = std::max(0.0f, value);
-      return true;
+      break;
     case 6:
       config_.bandpass_q = std::max(1.0e-3f, value);
-      if (prepared_) {
-        update_filter_coeff();
-      }
-      return true;
+      break;
     default:
       return false;
   }
+  config_publisher_->publish(std::make_shared<const DeEsserConfig>(config_));
+  return true;
 }
 
 void DeEsser::validate_config(const DeEsserConfig& config) {
@@ -178,10 +200,10 @@ void DeEsser::ensure_state(int num_channels) {
   throw std::invalid_argument("num_channels exceeds prepared DeEsser state");
 }
 
-void DeEsser::update_filter_coeff() {
+void DeEsser::update_coefficients(const DeEsserConfig& config) {
   const float nyquist = static_cast<float>(sample_rate_ * 0.5);
-  const float cutoff = std::clamp(config_.frequency_hz, 10.0f, nyquist * 0.98f);
-  const float q = std::max(1.0e-3f, config_.bandpass_q);
+  const float cutoff = std::clamp(config.frequency_hz, 10.0f, nyquist * 0.98f);
+  const float q = std::max(1.0e-3f, config.bandpass_q);
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
   const auto coeffs = rt::rbj_bandpass(w0, q);
   filter_coeffs_.b0 = coeffs.b0;
@@ -202,6 +224,9 @@ void DeEsser::update_filter_coeff() {
     filter = filter_coeffs_;
     filter.z1 = z1;
     filter.z2 = z2;
+  }
+  for (auto& follower : followers_) {
+    follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
   }
 }
 

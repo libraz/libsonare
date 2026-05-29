@@ -3,6 +3,17 @@
 #include <cmath>
 #include <stdexcept>
 
+// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
+// `core/ + util/ + rt/`, yet `reference_loudness` is intrinsically a LUFS
+// measurement and so has no implementation path that avoids `metering/lufs.h`.
+// Proper fixes (pick one):
+//   1. Relocate this entire helper under `mastering/assistant/` (the only
+//      sub-module allowed to reach into `metering/`).
+//   2. Change the public signature to take pre-measured LUFS values as
+//      parameters, pushing the measurement up to the C API / WASM bridge layer
+//      that links against `metering/` directly.
+// Until that is decided, this include is the only remaining layer-rule
+// violation in this translation unit.
 #include "metering/lufs.h"
 
 namespace sonare::mastering::match {

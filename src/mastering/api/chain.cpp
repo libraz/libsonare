@@ -5,9 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <memory>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -31,6 +29,19 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
+// `core/ + util/ + rt/`. The `MasteringChain` reports `input_lufs`,
+// `output_lufs`, `output_true_peak_dbtp`, and `output_lra` on every result
+// (consumed by the C API and WASM bindings), and the loudness target stage
+// internally needs `metering::lufs()` to compute the per-pass gain. Possible
+// future fixes:
+//   1. Move the loudness-target stage of the chain into `mastering/assistant/`
+//      (or into a dedicated `editing/loudness_target` module) and have the
+//      core chain only return raw audio + per-stage gain reductions.
+//   2. Drop the loudness reporting fields from `MonoChainResult` /
+//      `StereoChainResult` and have callers re-measure with `metering/`.
+//   3. Accept pre-measured input loudness as a parameter and have the C/WASM
+//      bridge perform the post-chain LUFS / dBTP / LRA measurement.
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
 

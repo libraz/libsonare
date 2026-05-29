@@ -2,7 +2,11 @@
 
 #include <stdexcept>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::stereo {
+
+using sonare::constants::kInvSqrt2;
 
 namespace {
 
@@ -18,10 +22,12 @@ void validate_buffers(const float* a, const float* b, float* c, float* d, size_t
 }  // namespace
 
 MidSideSample encode_sample(float left, float right) {
-  return {(left + right) * 0.5f, (left - right) * 0.5f};
+  return {(left + right) * kInvSqrt2, (left - right) * kInvSqrt2};
 }
 
-MidSideSample decode_sample(float mid, float side) { return {mid + side, mid - side}; }
+MidSideSample decode_sample(float mid, float side) {
+  return {(mid + side) * kInvSqrt2, (mid - side) * kInvSqrt2};
+}
 
 void encode_buffer(const float* left, const float* right, float* mid, float* side, size_t length) {
   validate_buffers(left, right, mid, side, length);

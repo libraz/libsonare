@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
@@ -16,8 +18,15 @@ namespace {
 constexpr int kMaxChannels = 2;
 }  // namespace
 
-SidechainRouter::SidechainRouter(SidechainRouterConfig config) : config_(config) {
+SidechainRouter::SidechainRouter(SidechainRouterConfig config)
+    : config_(config),
+      config_publisher_(std::make_unique<rt::RtPublisher<SidechainRouterConfig>>()) {
   validate_config(config_);
+  // Seed the publisher so a downstream audio thread that starts before
+  // prepare() sees a defined snapshot. prepare() will publish again with
+  // post-prepare derived state already applied so the first audio block does
+  // not redundantly recompute coefficients.
+  config_publisher_->publish(std::make_shared<const SidechainRouterConfig>(config_));
 }
 
 void SidechainRouter::prepare(double sample_rate, int max_block_size) {
@@ -32,32 +41,49 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
   lookahead_samples_ = static_cast<int>(
       std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate_));
   prepared_ = true;
-  if (config_.sidechain_hpf_enabled) {
-    const auto hpf = common::onepole_highpass_coeffs(static_cast<double>(config_.sidechain_hpf_hz),
-                                                     sample_rate_);
-    hpf_b0_ = hpf.b0;
-    hpf_a1_ = hpf.a1;
-  }
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
   for (auto& lookahead : lookahead_) {
     lookahead.prepare(static_cast<size_t>(lookahead_samples_));
   }
   for (auto& lookahead : gain_lookahead_) {
     lookahead.prepare(static_cast<size_t>(lookahead_samples_));
   }
+  update_coefficients(config_);
   // Preallocate detector HPF state for the maximum supported channel count so
   // it never has to grow on the audio thread.
   ensure_hpf_state(kMaxChannels);
   reset();
+  // Re-publish so the audio thread observes the same snapshot that prepare()
+  // already applied; adopt_snapshot_for_block() skips the redundant
+  // recomputation when current() == applied_snapshot_.
+  auto fresh = std::make_shared<const SidechainRouterConfig>(config_);
+  applied_snapshot_ = fresh.get();
+  config_publisher_->publish(std::move(fresh));
+  config_publisher_->acquire();
+}
+
+const SidechainRouterConfig* SidechainRouter::adopt_snapshot_for_block() noexcept {
+  // Audio-thread entry. acquire() drains the publish ring to the newest
+  // snapshot and retires superseded ones via the wait-free retire ring (no
+  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
+  // re-derive the scalar coefficients — those writes target members the per-
+  // sample loop reads, but the loop has not started yet for this block, so no
+  // race.
+  config_publisher_->acquire();
+  const SidechainRouterConfig* current = config_publisher_->current();
+  if (current && current != applied_snapshot_) {
+    update_coefficients(*current);
+    applied_snapshot_ = current;
+  }
+  // Fallback path: only reachable if the constructor's initial publish was
+  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
+  // was never called. In that case use the control-thread mirror; the per-
+  // sample loop is itself guarded by prepared_ so this path stays defined.
+  return current ? current : &config_;
 }
 
 void SidechainRouter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) {
-    throw std::logic_error("SidechainRouter must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "SidechainRouter");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }
@@ -67,6 +93,11 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   if (channels == nullptr) {
     throw std::invalid_argument("channels must not be null");
   }
+
+  // Adopt the latest published configuration once per block. The returned
+  // pointer is stable for the entire per-sample loop — RtPublisher only
+  // changes its current() value inside acquire(), and we already called it.
+  const SidechainRouterConfig& cfg = *adopt_snapshot_for_block();
 
   ensure_followers(num_channels);
   ensure_lookahead(num_channels);
@@ -80,13 +111,13 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
 
     auto& follower = followers_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
-      const float detector = detector_sample(channels, ch, i);
-      if (config_.key_listen) {
+      const float detector = detector_sample(channels, ch, i, cfg);
+      if (cfg.key_listen) {
         channels[ch][i] = detector;
         continue;
       }
       const float envelope = follower.process(detector);
-      const float reduction_db = gain_reduction_db(linear_to_db(envelope), config_);
+      const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
       const float reduction_gain = db_to_linear(reduction_db);
       const float main_sample = lookahead_samples_ > 0
                                     ? lookahead_[static_cast<size_t>(ch)].process(channels[ch][i])
@@ -151,55 +182,38 @@ void SidechainRouter::clear_sidechain() {
 }
 
 void SidechainRouter::set_config(const SidechainRouterConfig& config) {
+  // Control-thread side: validate before publishing so any throw leaves both
+  // the control-thread mirror (config_) and the audio-thread snapshot
+  // unchanged. The audio thread sees the new snapshot only after publish()
+  // succeeds; validation never runs partway through a config_ write that the
+  // audio thread could observe.
   validate_config(config);
   config_ = config;
-  if (prepared_) {
-    lookahead_samples_ = static_cast<int>(
-        std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate_));
-    for (auto& follower : followers_) {
-      follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-    }
-    for (auto& lookahead : lookahead_) {
-      lookahead.prepare(static_cast<size_t>(lookahead_samples_));
-    }
-    for (auto& lookahead : gain_lookahead_) {
-      lookahead.prepare(static_cast<size_t>(lookahead_samples_));
-    }
-    reset();
-  }
+  config_publisher_->publish(std::make_shared<const SidechainRouterConfig>(config_));
 }
 
 bool SidechainRouter::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.threshold_db = value;
-      return true;
+      break;
     case 1:
       config_.ratio = std::max(1.0f, value);
-      return true;
+      break;
     case 2:
       config_.attack_ms = std::max(0.0f, value);
-      // Recompute follower coefficients in place; preserves envelope state.
-      if (prepared_) {
-        for (auto& follower : followers_) {
-          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-        }
-      }
-      return true;
+      break;
     case 3:
       config_.release_ms = std::max(0.0f, value);
-      if (prepared_) {
-        for (auto& follower : followers_) {
-          follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-        }
-      }
-      return true;
+      break;
     case 4:
       config_.range_db = std::max(0.0f, value);
-      return true;
+      break;
     default:
       return false;
   }
+  config_publisher_->publish(std::make_shared<const SidechainRouterConfig>(config_));
+  return true;
 }
 
 void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
@@ -218,6 +232,16 @@ float SidechainRouter::gain_reduction_db(float input_db, const SidechainRouterCo
   const float over_db = input_db - config.threshold_db;
   const float reduction = over_db * (1.0f - 1.0f / config.ratio);
   return -std::min(config.range_db, reduction);
+}
+
+void SidechainRouter::update_coefficients(const SidechainRouterConfig& config) {
+  for (auto& follower : followers_) {
+    follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
+  }
+  const auto hpf =
+      common::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz), sample_rate_);
+  hpf_b0_ = hpf.b0;
+  hpf_a1_ = hpf.a1;
 }
 
 void SidechainRouter::ensure_followers(int num_channels) {
@@ -255,7 +279,8 @@ void SidechainRouter::ensure_hpf_state(int num_channels) {
   hpf_y1_.resize(target, 0.0f);
 }
 
-float SidechainRouter::detector_sample(float* const* channels, int channel, int sample) {
+float SidechainRouter::detector_sample(float* const* channels, int channel, int sample,
+                                       const SidechainRouterConfig& cfg) {
   if (sidechain_channels_ == nullptr || sidechain_num_channels_ == 0 ||
       sidechain_num_samples_ == 0) {
     return channels[channel][sample];
@@ -266,7 +291,7 @@ float SidechainRouter::detector_sample(float* const* channels, int channel, int 
   }
   float detector = 0.0f;
   int detector_channel = std::min(channel, sidechain_num_channels_ - 1);
-  if (config_.mono_summing) {
+  if (cfg.mono_summing) {
     for (int ch = 0; ch < sidechain_num_channels_; ++ch)
       detector += sidechain_channels_[ch][sample];
     detector /= static_cast<float>(sidechain_num_channels_);
@@ -274,7 +299,7 @@ float SidechainRouter::detector_sample(float* const* channels, int channel, int 
   } else {
     detector = sidechain_channels_[detector_channel][sample];
   }
-  if (config_.sidechain_hpf_enabled && detector_channel < static_cast<int>(hpf_x1_.size())) {
+  if (cfg.sidechain_hpf_enabled && detector_channel < static_cast<int>(hpf_x1_.size())) {
     auto idx = static_cast<size_t>(detector_channel);
     const float y = hpf_b0_ * (detector - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
     hpf_x1_[idx] = detector;

@@ -10,7 +10,6 @@
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/hysteresis_ja.h"
 #include "mastering/common/lookahead_buffer.h"
-#include "mastering/common/lpc.h"
 #include "mastering/common/noise_tracker.h"
 #include "mastering/common/oversampler.h"
 #include "mastering/common/param_smoother.h"

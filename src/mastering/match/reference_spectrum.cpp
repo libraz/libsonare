@@ -9,10 +9,12 @@
 
 #include "core/fft.h"
 #include "core/window.h"
-#include "metering/spectrum.h"
 #include "util/constants.h"
+#include "util/fractional_octave.h"
 
 namespace sonare::mastering::match {
+
+using sonare::constants::kEpsilon;
 namespace {
 
 std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
@@ -63,7 +65,7 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
     magnitude[static_cast<size_t>(bin)] = static_cast<float>(std::sqrt(mean_power));
   }
   if (config.apply_octave_smoothing) {
-    magnitude = metering::smooth_fractional_octave(magnitude, frequencies, config.octave_fraction);
+    magnitude = util::smooth_fractional_octave(magnitude, frequencies, config.octave_fraction);
   }
 
   std::vector<float> db(static_cast<size_t>(n_bins), sonare::constants::kFloorDb);

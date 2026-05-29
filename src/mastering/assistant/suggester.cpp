@@ -5,11 +5,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <sstream>
 #include <string>
+#include <utility>
 
 #include "mastering/api/presets.h"
-#include "util/json_escape.h"
+#include "util/json.h"
 
 namespace sonare::mastering::assistant {
 namespace {
@@ -155,31 +155,49 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
 }
 
 std::string assistant_result_to_json(const AssistantResult& result) {
-  std::ostringstream json;
-  json << "{\"chainConfig\":" << api::chain_config_to_json(result.config) << ",\"explanation\":[";
-  for (size_t index = 0; index < result.explanation.size(); ++index) {
-    if (index > 0) json << ',';
-    json << '"' << sonare::util::escape_json_string(result.explanation[index]) << '"';
+  namespace json = sonare::util::json;
+
+  // Parse the chain-config JSON back into a tree so it nests as a real object
+  // (instead of an opaque string). chain_config_to_json itself uses util::json
+  // so the round-trip is lossless and locale-safe.
+  json::Value chain_config = json::parse(api::chain_config_to_json(result.config));
+
+  json::Array explanation;
+  explanation.reserve(result.explanation.size());
+  for (const auto& line : result.explanation) {
+    explanation.emplace_back(json::Value(line));
   }
-  json << "],\"genreCandidates\":[";
-  for (size_t index = 0; index < result.genre_candidates.size(); ++index) {
-    if (index > 0) json << ',';
-    const auto& candidate = result.genre_candidates[index];
-    json << "{\"name\":\"" << sonare::util::escape_json_string(candidate.name)
-         << "\",\"score\":" << candidate.score << '}';
+
+  json::Array genre_candidates;
+  genre_candidates.reserve(result.genre_candidates.size());
+  for (const auto& candidate : result.genre_candidates) {
+    json::Object entry;
+    entry.emplace("name", json::Value(candidate.name));
+    entry.emplace("score", json::Value(candidate.score));
+    genre_candidates.emplace_back(json::Value(std::move(entry)));
   }
-  json << "],\"profile\":{\"durationSec\":" << result.profile.duration_sec
-       << ",\"bpm\":" << result.profile.bpm
-       << ",\"bpmConfidence\":" << result.profile.bpm_confidence
-       << ",\"integratedLufs\":" << result.profile.loudness.integrated_lufs
-       << ",\"lraLu\":" << result.profile.loudness.lra_lu
-       << ",\"truePeakDb\":" << result.profile.loudness.true_peak_db
-       << ",\"crestFactorDb\":" << result.profile.loudness.crest_factor_db
-       << ",\"spectralCentroidHz\":" << result.profile.spectral.centroid_hz
-       << ",\"spectralFlatness\":" << result.profile.spectral.flatness
-       << ",\"attackDensity\":" << result.profile.dynamics.attack_density
-       << ",\"sustainRatio\":" << result.profile.dynamics.sustain_ratio << "}}";
-  return json.str();
+
+  // Flat "profile" object: mirrors the previous schema (no nested loudness /
+  // spectral / dynamics groups — that nesting only exists in audio_profile_to_json).
+  json::Object profile;
+  profile.emplace("durationSec", json::Value(result.profile.duration_sec));
+  profile.emplace("bpm", json::Value(result.profile.bpm));
+  profile.emplace("bpmConfidence", json::Value(result.profile.bpm_confidence));
+  profile.emplace("integratedLufs", json::Value(result.profile.loudness.integrated_lufs));
+  profile.emplace("lraLu", json::Value(result.profile.loudness.lra_lu));
+  profile.emplace("truePeakDb", json::Value(result.profile.loudness.true_peak_db));
+  profile.emplace("crestFactorDb", json::Value(result.profile.loudness.crest_factor_db));
+  profile.emplace("spectralCentroidHz", json::Value(result.profile.spectral.centroid_hz));
+  profile.emplace("spectralFlatness", json::Value(result.profile.spectral.flatness));
+  profile.emplace("attackDensity", json::Value(result.profile.dynamics.attack_density));
+  profile.emplace("sustainRatio", json::Value(result.profile.dynamics.sustain_ratio));
+
+  json::Object root;
+  root.emplace("chainConfig", std::move(chain_config));
+  root.emplace("explanation", json::Value(std::move(explanation)));
+  root.emplace("genreCandidates", json::Value(std::move(genre_candidates)));
+  root.emplace("profile", json::Value(std::move(profile)));
+  return json::dump(json::Value(std::move(root)));
 }
 
 }  // namespace sonare::mastering::assistant

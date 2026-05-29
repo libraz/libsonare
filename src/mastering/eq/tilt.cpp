@@ -23,9 +23,7 @@ void TiltEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void TiltEq::process(float* const* channels, int num_channels, int num_samples) {
-  if (!prepared_) {
-    throw std::logic_error("TiltEq must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "TiltEq");
   eq_.process(channels, num_channels, num_samples);
 }
 

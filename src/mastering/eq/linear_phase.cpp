@@ -13,6 +13,8 @@
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
+
+using sonare::constants::kTwoPi;
 namespace {
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
@@ -176,9 +178,7 @@ void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
 
 void LinearPhaseEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) {
-    throw std::logic_error("LinearPhaseEq must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "LinearPhaseEq");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }

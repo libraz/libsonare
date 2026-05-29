@@ -253,9 +253,7 @@ void ParametricEq::validate_band_index(size_t index) {
 }
 
 void ParametricEq::ensure_prepared() const {
-  if (!prepared_) {
-    throw std::logic_error("ParametricEq must be prepared before processing");
-  }
+  ProcessorBase::ensure_prepared(prepared_, "ParametricEq");
 }
 
 }  // namespace sonare::mastering::eq

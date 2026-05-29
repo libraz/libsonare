@@ -2,12 +2,21 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "mastering/maximizer/true_peak_limiter.h"
+// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
+// `core/ + util/ + rt/`. `loudness_optimize` performs a LUFS-target gain match
+// followed by an oversampled true-peak limiter, so removing the metering
+// dependency requires either:
+//   1. Relocating this processor (or its loudness-measurement portion) under
+//      `mastering/assistant/`, the only sub-module allowed to reach into
+//      `metering/`.
+//   2. Or changing the signature to accept `target_lufs - current_lufs` as a
+//      pre-computed gain offset, pushing the measurement responsibility up to
+//      the C API / WASM bridge.
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
 #include "util/db.h"

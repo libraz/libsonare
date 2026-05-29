@@ -79,6 +79,15 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
+// `core/ + util/ + rt/`. `apply_named_processor` populates `input_lufs` /
+// `output_lufs` on every `MonoResult` / `StereoResult` (relied on by the C API
+// and WASM bridge), which requires `metering::lufs()`. To remove this include
+// the LUFS reporting must move out of this layer; suggested follow-ups:
+//   1. Drop the loudness fields from the result structs and have callers
+//      re-measure with `metering/` directly.
+//   2. Move the dispatcher into `mastering/assistant/` (the only sub-module
+//      allowed to depend on `metering/`).
 #include "metering/lufs.h"
 
 namespace sonare::mastering::api {

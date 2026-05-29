@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "mastering/common/lpc.h"
+#include "util/lpc.h"
 
 namespace sonare::mastering::repair {
 namespace {
@@ -27,8 +27,8 @@ std::vector<bool> detect_clicks(const std::vector<float>& samples, const Declick
       std::min(config.lpc_order, static_cast<int>(std::max<size_t>(1, samples.size() / 4)));
   if (!can_use_lpc(samples.size(), order)) return mask;
 
-  const auto model = common::lpc_burg(samples.data(), samples.size(), order);
-  const auto residual = common::lpc_residual(samples.data(), samples.size(), model);
+  const auto model = sonare::lpc_burg(samples.data(), samples.size(), order);
+  const auto residual = sonare::lpc_residual(samples.data(), samples.size(), model);
   constexpr size_t kRadius = 8;
   for (size_t i = 1; i + 1 < samples.size(); ++i) {
     const size_t begin = i > kRadius ? i - kRadius : 0;
@@ -68,7 +68,7 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
   const int order = std::min(lpc_order, static_cast<int>(std::max<size_t>(1, output.size() / 4)));
   if (!can_use_lpc(output.size(), order)) return;
 
-  const auto model = common::lpc_burg(output.data(), output.size(), order);
+  const auto model = sonare::lpc_burg(output.data(), output.size(), order);
   for (size_t j = start; j < end; ++j) {
     double predicted = 0.0;
     const size_t max_k = std::min(model.ar.size() - 1, j);

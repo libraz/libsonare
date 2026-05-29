@@ -57,7 +57,7 @@ void AirBand::prepare(double sample_rate, int max_block_size) {
 
 void AirBand::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) throw std::logic_error("AirBand must be prepared before processing");
+  ensure_prepared(prepared_, "AirBand");
   if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr) throw std::invalid_argument("channels must not be null");

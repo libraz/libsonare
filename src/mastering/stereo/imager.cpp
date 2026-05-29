@@ -41,9 +41,7 @@ void Imager::prepare(double sample_rate, int max_block_size) {
 
 void Imager::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
-  if (!prepared_) {
-    throw std::logic_error("Imager must be prepared before processing");
-  }
+  ensure_prepared(prepared_, "Imager");
   if (num_channels < 0 || num_samples < 0) {
     throw std::invalid_argument("num_channels and num_samples must be non-negative");
   }

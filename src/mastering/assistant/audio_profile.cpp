@@ -7,7 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
-#include <sstream>
+#include <utility>
 
 #include "analysis/bpm_analyzer.h"
 #include "core/spectrum.h"
@@ -18,9 +18,11 @@
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
 #include "util/constants.h"
-#include "util/json_escape.h"
+#include "util/json.h"
 
 namespace sonare::mastering::assistant {
+
+using sonare::constants::kEpsilon;
 namespace {
 
 constexpr float kMinDb = sonare::constants::kFloorDb;
@@ -215,34 +217,49 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
 }
 
 std::string audio_profile_to_json(const AudioProfile& profile) {
-  std::ostringstream json;
-  json << "{\"durationSec\":" << profile.duration_sec << ",\"bpm\":" << profile.bpm
-       << ",\"bpmConfidence\":" << profile.bpm_confidence << ",\"loudness\":{"
-       << "\"integratedLufs\":" << profile.loudness.integrated_lufs
-       << ",\"lraLu\":" << profile.loudness.lra_lu
-       << ",\"truePeakDb\":" << profile.loudness.true_peak_db
-       << ",\"crestFactorDb\":" << profile.loudness.crest_factor_db << "},\"spectral\":{"
-       << "\"subRmsDb\":" << profile.spectral.sub_rms_db
-       << ",\"lowRmsDb\":" << profile.spectral.low_rms_db
-       << ",\"lowMidRmsDb\":" << profile.spectral.low_mid_rms_db
-       << ",\"midRmsDb\":" << profile.spectral.mid_rms_db
-       << ",\"highMidRmsDb\":" << profile.spectral.high_mid_rms_db
-       << ",\"highRmsDb\":" << profile.spectral.high_rms_db
-       << ",\"airRmsDb\":" << profile.spectral.air_rms_db
-       << ",\"centroidHz\":" << profile.spectral.centroid_hz
-       << ",\"flatness\":" << profile.spectral.flatness
-       << ",\"rolloffHz\":" << profile.spectral.rolloff_hz << "},\"dynamics\":{"
-       << "\"shortTermLufsStd\":" << profile.dynamics.short_term_lufs_std
-       << ",\"attackDensity\":" << profile.dynamics.attack_density
-       << ",\"sustainRatio\":" << profile.dynamics.sustain_ratio << "},\"genreCandidates\":[";
-  for (size_t index = 0; index < profile.genre_candidates.size(); ++index) {
-    if (index > 0) json << ',';
-    const auto& candidate = profile.genre_candidates[index];
-    json << "{\"name\":\"" << sonare::util::escape_json_string(candidate.name)
-         << "\",\"score\":" << candidate.score << '}';
+  namespace json = sonare::util::json;
+
+  json::Object loudness;
+  loudness.emplace("integratedLufs", json::Value(profile.loudness.integrated_lufs));
+  loudness.emplace("lraLu", json::Value(profile.loudness.lra_lu));
+  loudness.emplace("truePeakDb", json::Value(profile.loudness.true_peak_db));
+  loudness.emplace("crestFactorDb", json::Value(profile.loudness.crest_factor_db));
+
+  json::Object spectral;
+  spectral.emplace("subRmsDb", json::Value(profile.spectral.sub_rms_db));
+  spectral.emplace("lowRmsDb", json::Value(profile.spectral.low_rms_db));
+  spectral.emplace("lowMidRmsDb", json::Value(profile.spectral.low_mid_rms_db));
+  spectral.emplace("midRmsDb", json::Value(profile.spectral.mid_rms_db));
+  spectral.emplace("highMidRmsDb", json::Value(profile.spectral.high_mid_rms_db));
+  spectral.emplace("highRmsDb", json::Value(profile.spectral.high_rms_db));
+  spectral.emplace("airRmsDb", json::Value(profile.spectral.air_rms_db));
+  spectral.emplace("centroidHz", json::Value(profile.spectral.centroid_hz));
+  spectral.emplace("flatness", json::Value(profile.spectral.flatness));
+  spectral.emplace("rolloffHz", json::Value(profile.spectral.rolloff_hz));
+
+  json::Object dynamics;
+  dynamics.emplace("shortTermLufsStd", json::Value(profile.dynamics.short_term_lufs_std));
+  dynamics.emplace("attackDensity", json::Value(profile.dynamics.attack_density));
+  dynamics.emplace("sustainRatio", json::Value(profile.dynamics.sustain_ratio));
+
+  json::Array genre_candidates;
+  genre_candidates.reserve(profile.genre_candidates.size());
+  for (const auto& candidate : profile.genre_candidates) {
+    json::Object entry;
+    entry.emplace("name", json::Value(candidate.name));
+    entry.emplace("score", json::Value(candidate.score));
+    genre_candidates.emplace_back(json::Value(std::move(entry)));
   }
-  json << "]}";
-  return json.str();
+
+  json::Object root;
+  root.emplace("durationSec", json::Value(profile.duration_sec));
+  root.emplace("bpm", json::Value(profile.bpm));
+  root.emplace("bpmConfidence", json::Value(profile.bpm_confidence));
+  root.emplace("loudness", json::Value(std::move(loudness)));
+  root.emplace("spectral", json::Value(std::move(spectral)));
+  root.emplace("dynamics", json::Value(std::move(dynamics)));
+  root.emplace("genreCandidates", json::Value(std::move(genre_candidates)));
+  return json::dump(json::Value(std::move(root)));
 }
 
 }  // namespace sonare::mastering::assistant
