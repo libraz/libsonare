@@ -5,7 +5,9 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
+#include "editing/voice_changer/realtime_voice_changer.h"
 #include "mastering/api/chain.h"
 #include "mastering/eq/equalizer.h"
 #include "streaming/stream_analyzer.h"
@@ -93,6 +95,45 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
 
   static Napi::FunctionReference constructor_;
 };
+
+class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWrap> {
+ public:
+  static Napi::Object Init(Napi::Env env, Napi::Object exports);
+  explicit RealtimeVoiceChangerWrap(const Napi::CallbackInfo& info);
+  ~RealtimeVoiceChangerWrap();
+
+  RealtimeVoiceChangerWrap(const RealtimeVoiceChangerWrap&) = delete;
+  RealtimeVoiceChangerWrap& operator=(const RealtimeVoiceChangerWrap&) = delete;
+  RealtimeVoiceChangerWrap(RealtimeVoiceChangerWrap&&) = delete;
+  RealtimeVoiceChangerWrap& operator=(RealtimeVoiceChangerWrap&&) = delete;
+
+ private:
+  Napi::Value Prepare(const Napi::CallbackInfo& info);
+  Napi::Value Reset(const Napi::CallbackInfo& info);
+  Napi::Value SetConfig(const Napi::CallbackInfo& info);
+  Napi::Value ConfigJson(const Napi::CallbackInfo& info);
+  Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value ProcessMono(const Napi::CallbackInfo& info);
+  Napi::Value ProcessMonoInto(const Napi::CallbackInfo& info);
+  Napi::Value ProcessInterleaved(const Napi::CallbackInfo& info);
+  Napi::Value ProcessInterleavedInto(const Napi::CallbackInfo& info);
+
+  sonare::editing::voice_changer::RealtimeVoiceChanger changer_;
+  bool prepared_ = false;
+  int max_block_size_ = 0;
+  int channels_ = 1;
+  // RT-safe scratch buffers allocated once in prepare(). planar_scratch_ holds
+  // channels_ * max_block_size_ floats and planar_ptrs_ exposes a pointer
+  // table into it for the planar process_block API.
+  std::vector<float> planar_scratch_;
+  std::vector<float*> planar_ptrs_;
+
+  static Napi::FunctionReference constructor_;
+};
+
+Napi::Value RealtimeVoiceChangerPresetNames(const Napi::CallbackInfo& info);
+Napi::Value RealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info);
+Napi::Value ValidateRealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info);
 
 /// @brief N-API wrapper around sonare::StreamAnalyzer.
 ///

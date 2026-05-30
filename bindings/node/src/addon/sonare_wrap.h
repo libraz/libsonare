@@ -45,6 +45,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value DetectDownbeats(const Napi::CallbackInfo& info);
   static Napi::Value DetectOnsets(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
+  static Napi::Value AnalyzeAsync(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeSections(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeMelody(const Napi::CallbackInfo& info);
@@ -58,6 +59,27 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Lufs(const Napi::CallbackInfo& info);
   static Napi::Value MomentaryLufs(const Napi::CallbackInfo& info);
   static Napi::Value ShortTermLufs(const Napi::CallbackInfo& info);
+
+  // Metering - basic / true-peak / clipping / dynamic range
+  static Napi::Value MeteringPeakDb(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringRmsDb(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringCrestFactorDb(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringDcOffset(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringTruePeakDb(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringDetectClipping(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringDynamicRange(const Napi::CallbackInfo& info);
+
+  // Metering - stereo / phase-scope / spectrum
+  static Napi::Value MeteringStereoCorrelation(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringStereoWidth(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringVectorscope(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringPhaseScope(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringSpectrum(const Napi::CallbackInfo& info);
+
+  // Editing - scale quantizer
+  static Napi::Value ScaleQuantizeMidi(const Napi::CallbackInfo& info);
+  static Napi::Value ScaleCorrectionSemitones(const Napi::CallbackInfo& info);
+  static Napi::Value ScalePitchClassEnabled(const Napi::CallbackInfo& info);
   static Napi::Value Version(const Napi::CallbackInfo& info);
   static Napi::Value HasFfmpegSupport(const Napi::CallbackInfo& info);
 
@@ -83,7 +105,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MixingScenePresetJson(const Napi::CallbackInfo& info);
   static Napi::Value MixStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudio(const Napi::CallbackInfo& info);
+  static Napi::Value MasterAudioAsync(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioStereo(const Napi::CallbackInfo& info);
+  static Napi::Value MasterAudioStereoAsync(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcessorNames(const Napi::CallbackInfo& info);
@@ -96,6 +120,13 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringAssistantSuggest(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAudioProfile(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStreamingPreview(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDeclick(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDenoiseClassical(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDeclip(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDecrackle(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDehum(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDereverbClassical(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairTrimSilence(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
 
   // Features - Spectrogram

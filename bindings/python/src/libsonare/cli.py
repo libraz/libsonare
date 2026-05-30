@@ -92,6 +92,79 @@ def _parse_kv_params(value: str) -> dict[str, float]:
     return params
 
 
+def _load_voice_preset_pack(path: str, preset_id: str) -> dict:
+    with open(path, encoding="utf-8") as fh:
+        pack = json.load(fh)
+    presets = pack.get("presets")
+    if not isinstance(presets, list):
+        raise ValueError("preset pack must contain a presets array")
+    matches = [
+        preset for preset in presets if isinstance(preset, dict) and preset.get("id") == preset_id
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"duplicate preset id in preset pack: {preset_id}")
+    if not matches:
+        raise ValueError(f"preset not found in preset pack: {preset_id}")
+    return matches[0]
+
+
+def _parse_voice_set_value(raw: str):
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+
+
+def _set_nested_value(root: dict, path: str, value) -> None:
+    parts = [part for part in path.split(".") if part]
+    if not parts:
+        raise ValueError("empty --set path")
+    cursor = root
+    for part in parts[:-1]:
+        child = cursor.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            cursor[part] = child
+        cursor = child
+    cursor[parts[-1]] = value
+
+
+def _apply_voice_macro_override(root: dict, path: str, value) -> None:
+    # Maps the UI macro names (pitch/formant/space/intensity/output) to
+    # concrete dsp.* paths so `--set macros.X=...` from the CLI is convenient.
+    # CLI-only sugar; the core loader treats `dsp` as authoritative and never
+    # derives dsp from macros (see backup/realtime-voice-changer-brushup-plan.md).
+    # Keep the mapping in sync with `apply_voice_macro_override` in
+    # tools/sonare_cli.cpp.
+    if not isinstance(value, (int, float)):
+        return
+    if path == "macros.pitch":
+        _set_nested_value(root, "dsp.retune.semitones", value)
+    elif path == "macros.formant":
+        _set_nested_value(root, "dsp.formant.factor", value)
+    elif path == "macros.space":
+        _set_nested_value(root, "dsp.reverb.mix", value)
+    elif path == "macros.intensity":
+        _set_nested_value(root, "dsp.compressor.ratio", 1.0 + value * 4.0)
+    elif path == "macros.output":
+        _set_nested_value(root, "dsp.outputGainDb", value)
+
+
+def _apply_voice_sets(preset: str | dict, assignments: list[str] | None) -> str | dict:
+    if not assignments:
+        return preset
+    root = json.loads(preset) if isinstance(preset, str) else json.loads(json.dumps(preset))
+    for group in assignments:
+        for assignment in [item for item in group.split(",") if item]:
+            if "=" not in assignment:
+                raise ValueError(f"invalid --set assignment: {assignment}")
+            path, raw = assignment.split("=", 1)
+            value = _parse_voice_set_value(raw)
+            _set_nested_value(root, path, value)
+            _apply_voice_macro_override(root, path, value)
+    return root
+
+
 def _format_time(seconds: float) -> str:
     """Format seconds as mm:ss."""
     mm = int(seconds) // 60
@@ -651,15 +724,31 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
 
 
 def cmd_voice_change(args: argparse.Namespace) -> int:
-    from . import voice_change
+    from . import realtime_voice_changer_preset_json, voice_change, voice_change_realtime
 
     samples, sr = _load_audio(args.file)
-    result = voice_change(
-        samples,
-        sample_rate=sr,
-        pitch_semitones=args.pitch_semitones,
-        formant_factor=args.formant_factor,
-    )
+    if args.preset or args.preset_json or args.preset_pack or args.set:
+        preset: str | dict
+        if args.preset_json:
+            with open(args.preset_json, encoding="utf-8") as fh:
+                preset = json.load(fh)
+        elif args.preset_pack:
+            preset = _load_voice_preset_pack(args.preset_pack, args.preset or "neutral-monitor")
+        elif args.set:
+            preset = json.loads(
+                realtime_voice_changer_preset_json(args.preset or "neutral-monitor")
+            )
+        else:
+            preset = args.preset
+        preset = _apply_voice_sets(preset, args.set)
+        result = voice_change_realtime(samples, sample_rate=sr, preset=preset)
+    else:
+        result = voice_change(
+            samples,
+            sample_rate=sr,
+            pitch_semitones=args.pitch_semitones,
+            formant_factor=args.formant_factor,
+        )
 
     if args.output:
         _write_wav(args.output, result, sr)
@@ -673,6 +762,44 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         print(f"  Voice change: {len(result)} samples")
         if args.output:
             print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_voice_presets(args: argparse.Namespace) -> int:
+    from . import realtime_voice_changer_preset_names
+
+    names = realtime_voice_changer_preset_names()
+    if args.json:
+        print(json.dumps({"presets": names}))
+    else:
+        for name in names:
+            print(name)
+    return 0
+
+
+def cmd_voice_preset(args: argparse.Namespace) -> int:
+    from . import realtime_voice_changer_preset_json
+
+    print(realtime_voice_changer_preset_json(args.preset))
+    return 0
+
+
+def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
+    from . import validate_realtime_voice_changer_preset_json
+
+    if args.preset:
+        preset = _load_voice_preset_pack(args.file, args.preset)
+        preset = _apply_voice_sets(preset, args.set)
+        text = json.dumps(preset)
+    else:
+        with open(args.file, encoding="utf-8") as fh:
+            text = fh.read()
+        text_or_preset = _apply_voice_sets(text, args.set)
+        text = json.dumps(text_or_preset) if isinstance(text_or_preset, dict) else text_or_preset
+    result = validate_realtime_voice_changer_preset_json(text)
+    print(
+        json.dumps(result) if args.json else result.get("normalizedJson", result.get("error", ""))
+    )
     return 0
 
 
@@ -1311,6 +1438,36 @@ def main() -> None:
     voice_change_p.add_argument(
         "--formant-factor", type=float, default=1.0, help="Formant scaling factor (1.0 = unchanged)"
     )
+    voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
+    voice_change_p.add_argument("--preset-json", help="Realtime voice changer preset JSON file")
+    voice_change_p.add_argument(
+        "--preset-pack", help="Realtime voice changer preset pack JSON file"
+    )
+    voice_change_p.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="PATH=VALUE",
+        help="Override preset JSON fields, e.g. dsp.outputGainDb=-2",
+    )
+    voice_presets_p = sub.add_parser("voice-presets", help="List realtime voice changer presets")
+    voice_presets_p.add_argument("--json", action="store_true", help="Emit JSON")
+    voice_preset_p = sub.add_parser("voice-preset", help="Print a realtime voice changer preset")
+    voice_preset_p.add_argument("--preset", default="neutral-monitor", help="Preset id")
+    voice_preset_p.add_argument("--json", action="store_true", help="Emit JSON")
+    voice_preset_validate_p = sub.add_parser(
+        "voice-preset-validate", parents=[common], help="Validate and normalize voice preset JSON"
+    )
+    voice_preset_validate_p.add_argument(
+        "--preset", default="", help="Preset id when validating a pack"
+    )
+    voice_preset_validate_p.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="PATH=VALUE",
+        help="Override preset JSON fields before validation",
+    )
 
     # Analysis commands
     acoustic_p = sub.add_parser("acoustic", parents=[common], help="Estimate acoustic parameters")
@@ -1452,6 +1609,7 @@ def main() -> None:
         "eq",
         "mastering-processor",
         "mastering-pair-analyze",
+        "voice-preset-validate",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
 
@@ -1479,6 +1637,9 @@ def main() -> None:
         "pitch-correct": cmd_pitch_correct,
         "note-stretch": cmd_note_stretch,
         "voice-change": cmd_voice_change,
+        "voice-presets": cmd_voice_presets,
+        "voice-preset": cmd_voice_preset,
+        "voice-preset-validate": cmd_voice_preset_validate,
         "acoustic": cmd_acoustic,
         "rhythm": cmd_rhythm,
         "dynamics": cmd_dynamics,

@@ -71,10 +71,13 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/effects/preemphasis.cpp
   ${SONARE_ROOT}/src/effects/remix.cpp
   ${SONARE_ROOT}/src/effects/silence.cpp
+  ${SONARE_ROOT}/src/util/fractional_octave.cpp
   ${SONARE_ROOT}/src/util/frame.cpp
+  ${SONARE_ROOT}/src/util/lpc.cpp
   ${SONARE_ROOT}/src/util/padding.cpp
   ${SONARE_ROOT}/src/util/peak.cpp
   ${SONARE_ROOT}/src/util/sequence.cpp
+  ${SONARE_ROOT}/src/util/stereo_metrics.cpp
   ${SONARE_ROOT}/src/util/vector_normalize.cpp
   ${SONARE_ROOT}/src/mastering/maximizer/loudness_optimize.cpp
   ${SONARE_ROOT}/src/metering/basic.cpp
@@ -112,6 +115,7 @@ set(SONARE_SOURCES
   ${SONARE_ROOT}/src/sonare_c_effects.cpp
   ${SONARE_ROOT}/src/sonare_c_features.cpp
   ${SONARE_ROOT}/src/sonare_c_compat.cpp
+  ${SONARE_ROOT}/src/sonare_c_editing.cpp
   ${SONARE_ROOT}/src/sonare_c_internal.cpp
   ${SONARE_ROOT}/src/sonare_c_memory.cpp
 )

@@ -4,6 +4,9 @@ from .analyzer import (
     Mixer as Mixer,
 )
 from .analyzer import (
+    RealtimeVoiceChanger as RealtimeVoiceChanger,
+)
+from .analyzer import (
     StreamingEqualizer as StreamingEqualizer,
 )
 from .analyzer import (
@@ -160,6 +163,27 @@ from .analyzer import (
     mastering_processor_names as mastering_processor_names,
 )
 from .analyzer import (
+    mastering_repair_declick as mastering_repair_declick,
+)
+from .analyzer import (
+    mastering_repair_declip as mastering_repair_declip,
+)
+from .analyzer import (
+    mastering_repair_decrackle as mastering_repair_decrackle,
+)
+from .analyzer import (
+    mastering_repair_dehum as mastering_repair_dehum,
+)
+from .analyzer import (
+    mastering_repair_denoise_classical as mastering_repair_denoise_classical,
+)
+from .analyzer import (
+    mastering_repair_dereverb_classical as mastering_repair_dereverb_classical,
+)
+from .analyzer import (
+    mastering_repair_trim_silence as mastering_repair_trim_silence,
+)
+from .analyzer import (
     mastering_stereo_analysis_names as mastering_stereo_analysis_names,
 )
 from .analyzer import (
@@ -173,6 +197,21 @@ from .analyzer import (
 )
 from .analyzer import (
     mel_to_hz as mel_to_hz,
+)
+from .analyzer import (
+    metering_phase_scope as metering_phase_scope,
+)
+from .analyzer import (
+    metering_spectrum as metering_spectrum,
+)
+from .analyzer import (
+    metering_stereo_correlation as metering_stereo_correlation,
+)
+from .analyzer import (
+    metering_stereo_width as metering_stereo_width,
+)
+from .analyzer import (
+    metering_vectorscope as metering_vectorscope,
 )
 from .analyzer import (
     mfcc as mfcc,
@@ -232,6 +271,12 @@ from .analyzer import (
     preemphasis as preemphasis,
 )
 from .analyzer import (
+    realtime_voice_changer_preset_json as realtime_voice_changer_preset_json,
+)
+from .analyzer import (
+    realtime_voice_changer_preset_names as realtime_voice_changer_preset_names,
+)
+from .analyzer import (
     resample as resample,
 )
 from .analyzer import (
@@ -280,6 +325,9 @@ from .analyzer import (
     trim_silence as trim_silence,
 )
 from .analyzer import (
+    validate_realtime_voice_changer_preset_json as validate_realtime_voice_changer_preset_json,
+)
+from .analyzer import (
     vector_normalize as vector_normalize,
 )
 from .analyzer import (
@@ -287,6 +335,9 @@ from .analyzer import (
 )
 from .analyzer import (
     voice_change as voice_change,
+)
+from .analyzer import (
+    voice_change_realtime as voice_change_realtime,
 )
 from .analyzer import (
     vqt as vqt,
@@ -445,6 +496,9 @@ from .types import (
     ParameterInfo as ParameterInfo,
 )
 from .types import (
+    PhaseScopeReport as PhaseScopeReport,
+)
+from .types import (
     PitchClass as PitchClass,
 )
 from .types import (
@@ -464,6 +518,9 @@ from .types import (
 )
 from .types import (
     SendTiming as SendTiming,
+)
+from .types import (
+    SpectrumReport as SpectrumReport,
 )
 from .types import (
     StftResult as StftResult,
@@ -500,6 +557,9 @@ from .types import (
 )
 from .types import (
     TransportState as TransportState,
+)
+from .types import (
+    VectorscopeReport as VectorscopeReport,
 )
 
 __version__: str

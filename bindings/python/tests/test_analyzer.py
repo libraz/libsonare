@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from ._helpers import LIB_AVAILABLE
+
 
 def _generate_sine(freq: float, sr: int, duration: float) -> list[float]:
     """Generate a sine wave test signal."""
@@ -22,21 +24,7 @@ def _generate_sine(freq: float, sr: int, duration: float) -> list[float]:
     return [math.sin(2 * math.pi * freq * i / sr) for i in range(n)]
 
 
-def _lib_available() -> bool:
-    """Check if libsonare shared library is available."""
-    env_path = os.environ.get("SONARE_LIB_PATH")
-    if env_path and Path(env_path).exists():
-        return True
-
-    project_root = Path(__file__).parent.parent.parent.parent
-    lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    return any(
-        (project_root / build_dir / "lib" / lib_name).exists()
-        for build_dir in ("build-mastering-api", "build", "build-mastering")
-    )
-
-
-pytestmark = pytest.mark.skipif(not _lib_available(), reason="libsonare shared library not found")
+pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 
 
 def _ffmpeg_cli() -> str | None:
@@ -175,26 +163,35 @@ def test_detect_bpm_with_silence() -> None:
 
 
 def test_detect_key_with_silence() -> None:
-    """detect_key does not crash on silent audio."""
-    from libsonare import detect_key
+    """detect_key returns the documented C-major fallback on silence."""
+    from libsonare import PitchClass, detect_key
+    from libsonare.types import Mode
 
     silence = [0.0] * 22050
     key = detect_key(silence, sample_rate=22050)
-    assert key.root is not None
-    assert key.mode is not None
+    # Silence has no tonal content, so detect_key falls back to C major.
+    assert key.root == PitchClass.C
+    assert key.mode == Mode.MAJOR
     assert isinstance(key.confidence, float)
+    # Confidence on silence stays low (empirically ~0.25).
+    assert key.confidence < 0.5
 
 
 def test_analyze_with_silence() -> None:
-    """analyze does not crash on silent audio."""
-    from libsonare import analyze
+    """analyze returns the documented fallbacks on silent audio."""
+    from libsonare import PitchClass, analyze
+    from libsonare.types import Mode
 
     silence = [0.0] * 22050
     result = analyze(silence, sample_rate=22050)
     assert isinstance(result.bpm, float)
     assert isinstance(result.bpm_confidence, float)
-    assert result.key is not None
-    assert result.time_signature is not None
+    # Silence has no tonal content: detect_key falls back to C major.
+    assert result.key.root == PitchClass.C
+    assert result.key.mode == Mode.MAJOR
+    # Time signature falls back to 4/4 when no rhythmic content is present.
+    assert result.time_signature.numerator == 4
+    assert result.time_signature.denominator == 4
     assert isinstance(result.beat_times, list)
 
 
@@ -272,15 +269,19 @@ def test_audio_detect_bpm() -> None:
 
 
 def test_audio_detect_key() -> None:
-    """Audio.detect_key returns a Key with a root."""
-    from libsonare import Audio
+    """Audio.detect_key returns the documented C-major fallback on silence."""
+    from libsonare import Audio, PitchClass
+    from libsonare.types import Mode
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     key = audio.detect_key()
-    assert key.root is not None
-    assert isinstance(key.name, str)
-    assert isinstance(key.short_name, str)
-    assert isinstance(key.shortName, str)
+    # Silence has no tonal content, so detect_key falls back to C major.
+    assert key.root == PitchClass.C
+    assert key.mode == Mode.MAJOR
+    # Name accessors must agree with the resolved root/mode.
+    assert key.name == "C major"
+    assert key.short_name == "C"
+    assert key.shortName == key.short_name
 
 
 def test_audio_detect_beats() -> None:
@@ -495,14 +496,17 @@ def test_mixing_presets_and_stereo_mix() -> None:
 
 
 def test_audio_analyze() -> None:
-    """Audio.analyze returns a full AnalysisResult."""
-    from libsonare import Audio
+    """Audio.analyze returns a full AnalysisResult with documented silence fallbacks."""
+    from libsonare import Audio, PitchClass
+    from libsonare.types import Mode
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     result = audio.analyze()
     assert isinstance(result.bpm, float)
-    assert result.key is not None
-    assert isinstance(result.key.name, str)
+    # Silence has no tonal content, so detect_key falls back to C major.
+    assert result.key.root == PitchClass.C
+    assert result.key.mode == Mode.MAJOR
+    assert result.key.name == "C major"
     assert isinstance(result.beatTimes, list)
     assert isinstance(result.beats, list)
 
@@ -928,16 +932,31 @@ def test_detect_bpm_click_track() -> None:
 
 
 def test_detect_key_a_major() -> None:
-    """detect_key identifies A as root from 440 Hz sine."""
+    """detect_key identifies A major from an A-major triad (A + C# + E)."""
     from libsonare import PitchClass, detect_key
     from libsonare.types import Mode
 
-    tone = _generate_sine(440, 22050, 2.0)
-    key = detect_key(tone, sample_rate=22050)
-    assert key.confidence > 0.0
+    sr = 22050
+    duration = 2.0
+    n = int(sr * duration)
+    # A major triad: A4 (440), C#5 (554.37), E5 (659.26). A bare 440 Hz sine
+    # has no third, so the Krumhansl profile collapses to A minor; supplying
+    # the full triad disambiguates the mode.
+    triad = [
+        (
+            math.sin(2 * math.pi * 440.00 * i / sr)
+            + math.sin(2 * math.pi * 554.37 * i / sr)
+            + math.sin(2 * math.pi * 659.26 * i / sr)
+        )
+        / 3.0
+        for i in range(n)
+    ]
+    key = detect_key(triad, sample_rate=sr)
+    assert key.root == PitchClass.A
+    assert key.mode == Mode.MAJOR
+    # An unambiguous triad should yield high confidence (empirically ~0.98).
+    assert key.confidence > 0.8
     assert key.confidence <= 1.0
-    assert isinstance(key.root, PitchClass)
-    assert isinstance(key.mode, Mode)
 
 
 def test_detect_beats_returns_sorted() -> None:

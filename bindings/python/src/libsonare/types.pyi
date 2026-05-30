@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from enum import IntEnum
 
+import numpy as np
+from numpy.typing import NDArray
+
 class PitchClass(IntEnum):
     C: PitchClass
     CS: PitchClass
@@ -319,6 +322,47 @@ class DynamicsResult:
     def loudnessTimes(self) -> list[float]: ...
     @property
     def loudnessRmsDb(self) -> list[float]: ...
+
+class VectorscopeReport:
+    mid: NDArray[np.float32]
+    side: NDArray[np.float32]
+    def __init__(self, mid: NDArray[np.float32], side: NDArray[np.float32]) -> None: ...
+
+class PhaseScopeReport:
+    mid: NDArray[np.float32]
+    side: NDArray[np.float32]
+    radius: NDArray[np.float32]
+    angle_rad: NDArray[np.float32]
+    correlation: float
+    average_abs_angle_rad: float
+    max_radius: float
+    def __init__(
+        self,
+        mid: NDArray[np.float32],
+        side: NDArray[np.float32],
+        radius: NDArray[np.float32],
+        angle_rad: NDArray[np.float32],
+        correlation: float,
+        average_abs_angle_rad: float,
+        max_radius: float,
+    ) -> None: ...
+
+class SpectrumReport:
+    frequencies: NDArray[np.float32]
+    magnitude: NDArray[np.float32]
+    power: NDArray[np.float32]
+    db: NDArray[np.float32]
+    n_fft: int
+    sample_rate: int
+    def __init__(
+        self,
+        frequencies: NDArray[np.float32],
+        magnitude: NDArray[np.float32],
+        power: NDArray[np.float32],
+        db: NDArray[np.float32],
+        n_fft: int,
+        sample_rate: int,
+    ) -> None: ...
 
 class TimbreResult:
     brightness: float

@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -17,6 +19,13 @@
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/streaming_preview.h"
+#include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
+#include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/dereverb_classical.h"
+#include "mastering/repair/trim_silence.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_utils.h"
 
@@ -306,27 +315,6 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   return out;
   SONARE_NODE_CATCH(env)
 }
-
-namespace {
-
-std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object) {
-  std::vector<sonare::mastering::api::Param> params;
-  Napi::Array names = object.GetPropertyNames();
-  for (uint32_t index = 0; index < names.Length(); ++index) {
-    Napi::Value key_value = names.Get(index);
-    Napi::Value value = object.Get(key_value);
-    if (key_value.IsString() && value.IsNumber()) {
-      params.push_back(
-          {key_value.As<Napi::String>().Utf8Value(), value.As<Napi::Number>().DoubleValue()});
-    } else if (key_value.IsString() && value.IsBoolean()) {
-      params.push_back({key_value.As<Napi::String>().Utf8Value(),
-                        value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
-    }
-  }
-  return params;
-}
-
-}  // namespace
 
 Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -729,6 +717,193 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   out.Set("stages", stages);
   return out;
   SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
+// Local copy of VecToFloat32 (the one on SonareWrap is private and the async
+// workers are not friends of SonareWrap).
+Napi::Float32Array VecToTypedArray(Napi::Env env, const std::vector<float>& vec) {
+  Napi::Float32Array array = Napi::Float32Array::New(env, vec.size());
+  if (!vec.empty()) {
+    std::memcpy(array.Data(), vec.data(), vec.size() * sizeof(float));
+  }
+  return array;
+}
+
+// Helper: serialise a MonoChainResult into a JS object on the main thread.
+Napi::Object MonoResultToObject(Napi::Env env,
+                                const sonare::mastering::api::MonoChainResult& result) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("samples", VecToTypedArray(env, result.samples));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages.size());
+  for (size_t i = 0; i < result.stages.size(); ++i) {
+    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  }
+  out.Set("stages", stages);
+  return out;
+}
+
+// Off-main-thread mono master_audio. Copies samples + overrides into the
+// worker so the JS thread can release its Float32Array view.
+class MasterAudioAsyncWorker : public Napi::AsyncWorker {
+ public:
+  MasterAudioAsyncWorker(Napi::Env env, std::string preset_name, std::vector<float> samples,
+                         int sample_rate, std::vector<sonare::mastering::api::Param> overrides)
+      : Napi::AsyncWorker(env),
+        deferred_(Napi::Promise::Deferred::New(env)),
+        preset_name_(std::move(preset_name)),
+        samples_(std::move(samples)),
+        sample_rate_(sample_rate),
+        overrides_(std::move(overrides)) {}
+
+  void Execute() override {
+    try {
+      auto preset = sonare::mastering::api::preset_from_string(preset_name_);
+      result_ = sonare::mastering::api::master_audio_mono(preset, samples_.data(), samples_.size(),
+                                                          sample_rate_, overrides_.data(),
+                                                          overrides_.size());
+    } catch (const std::exception& e) {
+      SetError(e.what());
+    }
+  }
+
+  void OnOK() override {
+    Napi::HandleScope scope(Env());
+    deferred_.Resolve(MonoResultToObject(Env(), result_));
+  }
+
+  void OnError(const Napi::Error& error) override {
+    Napi::HandleScope scope(Env());
+    deferred_.Reject(error.Value());
+  }
+
+  Napi::Promise GetPromise() { return deferred_.Promise(); }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  std::string preset_name_;
+  std::vector<float> samples_;
+  int sample_rate_;
+  std::vector<sonare::mastering::api::Param> overrides_;
+  sonare::mastering::api::MonoChainResult result_;
+};
+
+class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
+ public:
+  MasterAudioStereoAsyncWorker(Napi::Env env, std::string preset_name, std::vector<float> left,
+                               std::vector<float> right, int sample_rate,
+                               std::vector<sonare::mastering::api::Param> overrides)
+      : Napi::AsyncWorker(env),
+        deferred_(Napi::Promise::Deferred::New(env)),
+        preset_name_(std::move(preset_name)),
+        left_(std::move(left)),
+        right_(std::move(right)),
+        sample_rate_(sample_rate),
+        overrides_(std::move(overrides)) {}
+
+  void Execute() override {
+    try {
+      auto preset = sonare::mastering::api::preset_from_string(preset_name_);
+      result_ = sonare::mastering::api::master_audio_stereo(preset, left_.data(), right_.data(),
+                                                            left_.size(), sample_rate_,
+                                                            overrides_.data(), overrides_.size());
+    } catch (const std::exception& e) {
+      SetError(e.what());
+    }
+  }
+
+  void OnOK() override {
+    Napi::HandleScope scope(Env());
+    Napi::Object out = Napi::Object::New(Env());
+    out.Set("left", VecToTypedArray(Env(), result_.left));
+    out.Set("right", VecToTypedArray(Env(), result_.right));
+    out.Set("sampleRate", Napi::Number::New(Env(), result_.sample_rate));
+    out.Set("inputLufs", Napi::Number::New(Env(), result_.input_lufs));
+    out.Set("outputLufs", Napi::Number::New(Env(), result_.output_lufs));
+    out.Set("appliedGainDb", Napi::Number::New(Env(), result_.applied_gain_db));
+    Napi::Array stages = Napi::Array::New(Env(), result_.stages.size());
+    for (size_t i = 0; i < result_.stages.size(); ++i) {
+      stages.Set(static_cast<uint32_t>(i), Napi::String::New(Env(), result_.stages[i]));
+    }
+    out.Set("stages", stages);
+    deferred_.Resolve(out);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    Napi::HandleScope scope(Env());
+    deferred_.Reject(error.Value());
+  }
+
+  Napi::Promise GetPromise() { return deferred_.Promise(); }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  std::string preset_name_;
+  std::vector<float> left_;
+  std::vector<float> right_;
+  int sample_rate_;
+  std::vector<sonare::mastering::api::Param> overrides_;
+  sonare::mastering::api::StereoChainResult result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (presetName, Float32Array, sampleRate, overrides?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  auto typed = info[1].As<Napi::Float32Array>();
+  std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
+  int sample_rate = info[2].As<Napi::Number>().Int32Value();
+  std::vector<sonare::mastering::api::Param> overrides;
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    overrides = ParamsFromObject(info[3].As<Napi::Object>());
+  }
+  auto* worker = new MasterAudioAsyncWorker(env, std::move(preset_name), std::move(samples),
+                                            sample_rate, std::move(overrides));
+  Napi::Promise promise = worker->GetPromise();
+  worker->Queue();
+  return promise;
+}
+
+Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (presetName, left, right, sampleRate, overrides?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  auto left_typed = info[1].As<Napi::Float32Array>();
+  auto right_typed = info[2].As<Napi::Float32Array>();
+  if (left_typed.ElementLength() != right_typed.ElementLength()) {
+    Napi::TypeError::New(env, "left and right channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<float> left(left_typed.Data(), left_typed.Data() + left_typed.ElementLength());
+  std::vector<float> right(right_typed.Data(), right_typed.Data() + right_typed.ElementLength());
+  int sample_rate = info[3].As<Napi::Number>().Int32Value();
+  std::vector<sonare::mastering::api::Param> overrides;
+  if (info.Length() >= 5 && info[4].IsObject()) {
+    overrides = ParamsFromObject(info[4].As<Napi::Object>());
+  }
+  auto* worker =
+      new MasterAudioStereoAsyncWorker(env, std::move(preset_name), std::move(left),
+                                       std::move(right), sample_rate, std::move(overrides));
+  Napi::Promise promise = worker->GetPromise();
+  worker->Queue();
+  return promise;
 }
 
 Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
@@ -1159,6 +1334,333 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
                            ? sonare::mastering::maximizer::streaming_preview(audio)
                            : sonare::mastering::maximizer::streaming_preview(audio, platforms);
   return Napi::String::New(env, sonare::mastering::maximizer::streaming_preview_to_json(results));
+  SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
+int repair_int_option(const Napi::Object& object, const char* key, int fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsNumber() ? value.As<Napi::Number>().Int32Value() : fallback;
+}
+
+float repair_float_option(const Napi::Object& object, const char* key, float fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsNumber() ? value.As<Napi::Number>().FloatValue() : fallback;
+}
+
+bool repair_bool_option(const Napi::Object& object, const char* key, bool fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
+}
+
+sonare::mastering::repair::DenoiseMode parse_denoise_mode(
+    const Napi::Object& options, sonare::mastering::repair::DenoiseMode fallback) {
+  Napi::Value value = options.Get("mode");
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (!value.IsString()) throw std::runtime_error("denoise mode must be a string");
+  std::string s = value.As<Napi::String>().Utf8Value();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "logmmse" || s == "log_mmse" || s == "lsa") {
+    return sonare::mastering::repair::DenoiseMode::LogMmse;
+  }
+  if (s == "mmsestsa" || s == "mmse_stsa" || s == "stsa") {
+    return sonare::mastering::repair::DenoiseMode::MmseStsa;
+  }
+  if (s == "spectralsubtraction" || s == "spectral_subtraction" || s == "ss") {
+    return sonare::mastering::repair::DenoiseMode::SpectralSubtraction;
+  }
+  throw std::runtime_error("unknown denoise mode: " + value.As<Napi::String>().Utf8Value());
+}
+
+sonare::mastering::repair::DenoiseNoiseEstimator parse_denoise_noise_estimator(
+    const Napi::Object& options, sonare::mastering::repair::DenoiseNoiseEstimator fallback) {
+  Napi::Value value = options.Get("noiseEstimator");
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (!value.IsString()) throw std::runtime_error("denoise noise estimator must be a string");
+  std::string s = value.As<Napi::String>().Utf8Value();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "quantile") return sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
+  if (s == "mcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Mcra;
+  if (s == "imcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Imcra;
+  throw std::runtime_error("unknown denoise noise estimator: " +
+                           value.As<Napi::String>().Utf8Value());
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::DeclickConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.threshold = repair_float_option(options, "threshold", config.threshold);
+    config.neighbor_ratio = repair_float_option(options, "neighborRatio", config.neighbor_ratio);
+    if (options.Has("maxClickSamples")) {
+      const int max_click_samples =
+          repair_int_option(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
+      if (max_click_samples <= 0) {
+        Napi::RangeError::New(env, "maxClickSamples must be positive").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      config.max_click_samples = static_cast<size_t>(max_click_samples);
+    }
+    config.lpc_order = repair_int_option(options, "lpcOrder", config.lpc_order);
+    config.residual_ratio = repair_float_option(options, "residualRatio", config.residual_ratio);
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::declick(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::DenoiseClassicalConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.mode = parse_denoise_mode(options, config.mode);
+    config.noise_estimator = parse_denoise_noise_estimator(options, config.noise_estimator);
+    config.n_fft = repair_int_option(options, "nFft", config.n_fft);
+    config.hop_length = repair_int_option(options, "hopLength", config.hop_length);
+    config.dd_alpha = repair_float_option(options, "ddAlpha", config.dd_alpha);
+    config.gain_floor = repair_float_option(options, "gainFloor", config.gain_floor);
+    config.over_subtraction =
+        repair_float_option(options, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = repair_float_option(options, "spectralFloor", config.spectral_floor);
+    config.noise_estimation_quantile =
+        repair_float_option(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
+    config.speech_presence_gain =
+        repair_bool_option(options, "speechPresenceGain", config.speech_presence_gain);
+    config.gain_smoothing = repair_bool_option(options, "gainSmoothing", config.gain_smoothing);
+  }
+  if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
+    Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (config.hop_length <= 0) {
+    Napi::RangeError::New(env, "hopLength must be positive").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::denoise_classical(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
+sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
+    const Napi::Object& options, sonare::mastering::repair::DecrackleMode fallback) {
+  Napi::Value value = options.Get("mode");
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (!value.IsString()) throw std::runtime_error("decrackle mode must be a string");
+  std::string s = value.As<Napi::String>().Utf8Value();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "median") return sonare::mastering::repair::DecrackleMode::Median;
+  if (s == "waveletshrinkage" || s == "wavelet_shrinkage" || s == "wavelet") {
+    return sonare::mastering::repair::DecrackleMode::WaveletShrinkage;
+  }
+  throw std::runtime_error("unknown decrackle mode: " + value.As<Napi::String>().Utf8Value());
+}
+
+sonare::mastering::repair::TrimSilenceMode parse_trim_silence_mode(
+    const Napi::Object& options, sonare::mastering::repair::TrimSilenceMode fallback) {
+  Napi::Value value = options.Get("mode");
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (!value.IsString()) throw std::runtime_error("trim silence mode must be a string");
+  std::string s = value.As<Napi::String>().Utf8Value();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "peak") return sonare::mastering::repair::TrimSilenceMode::Peak;
+  if (s == "lufsgated" || s == "lufs_gated" || s == "lufs") {
+    return sonare::mastering::repair::TrimSilenceMode::LufsGated;
+  }
+  throw std::runtime_error("unknown trim silence mode: " + value.As<Napi::String>().Utf8Value());
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::DeclipConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.clip_threshold = repair_float_option(options, "clipThreshold", config.clip_threshold);
+    config.lpc_order = repair_int_option(options, "lpcOrder", config.lpc_order);
+    config.iterations = repair_int_option(options, "iterations", config.iterations);
+    config.lpc_blend = repair_float_option(options, "lpcBlend", config.lpc_blend);
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::declip(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::DecrackleConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.threshold = repair_float_option(options, "threshold", config.threshold);
+    config.mode = parse_decrackle_mode(options, config.mode);
+    config.levels = repair_int_option(options, "levels", config.levels);
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::decrackle(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::DehumConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.fundamental_hz = repair_float_option(options, "fundamentalHz", config.fundamental_hz);
+    config.harmonics = repair_int_option(options, "harmonics", config.harmonics);
+    config.q = repair_float_option(options, "q", config.q);
+    config.adaptive = repair_bool_option(options, "adaptive", config.adaptive);
+    config.search_range_hz = repair_float_option(options, "searchRangeHz", config.search_range_hz);
+    config.adaptation = repair_float_option(options, "adaptation", config.adaptation);
+    config.frame_size = repair_int_option(options, "frameSize", config.frame_size);
+    config.pll_bandwidth = repair_float_option(options, "pllBandwidth", config.pll_bandwidth);
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::dehum(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::DereverbClassicalConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.threshold = repair_float_option(options, "threshold", config.threshold);
+    config.attenuation = repair_float_option(options, "attenuation", config.attenuation);
+    config.n_fft = repair_int_option(options, "nFft", config.n_fft);
+    config.hop_length = repair_int_option(options, "hopLength", config.hop_length);
+    config.t60_sec = repair_float_option(options, "t60Sec", config.t60_sec);
+    config.late_delay_ms = repair_float_option(options, "lateDelayMs", config.late_delay_ms);
+    config.over_subtraction =
+        repair_float_option(options, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = repair_float_option(options, "spectralFloor", config.spectral_floor);
+    config.wpe_enabled = repair_bool_option(options, "wpeEnabled", config.wpe_enabled);
+    config.wpe_iterations = repair_int_option(options, "wpeIterations", config.wpe_iterations);
+    config.wpe_taps = repair_int_option(options, "wpeTaps", config.wpe_taps);
+    config.wpe_strength = repair_float_option(options, "wpeStrength", config.wpe_strength);
+  }
+  if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
+    Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (config.hop_length <= 0 || config.hop_length > config.n_fft) {
+    Napi::RangeError::New(env, "hopLength must be in (0, nFft]").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::dereverb_classical(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::mastering::repair::TrimSilenceConfig config;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.threshold = repair_float_option(options, "threshold", config.threshold);
+    if (options.Has("paddingSamples")) {
+      const int padding_samples =
+          repair_int_option(options, "paddingSamples", static_cast<int>(config.padding_samples));
+      if (padding_samples < 0) {
+        Napi::RangeError::New(env, "paddingSamples must be non-negative")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      config.padding_samples = static_cast<size_t>(padding_samples);
+    }
+    config.mode = parse_trim_silence_mode(options, config.mode);
+    config.gate_lufs = repair_float_option(options, "gateLufs", config.gate_lufs);
+    config.window_ms = repair_float_option(options, "windowMs", config.window_ms);
+  }
+  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config);
+  std::vector<float> out(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out);
   SONARE_NODE_CATCH(env)
 }
 

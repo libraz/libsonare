@@ -8,6 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
 
 class PitchClass(IntEnum):
@@ -332,6 +337,69 @@ class LufsResult:
     @property
     def loudnessRange(self) -> float:  # noqa: N802
         return self.loudness_range
+
+
+@dataclass(frozen=True, slots=True)
+class ClippingRegion:
+    """One contiguous run of clipped samples reported by detect_clipping."""
+
+    start_sample: int
+    end_sample: int
+    length: int
+    peak: float
+
+
+@dataclass(frozen=True, slots=True)
+class ClippingReport:
+    """Aggregated clipping detection result (mirrors SonareClippingResult)."""
+
+    clipped_samples: int
+    clipping_ratio: float
+    max_clipped_peak: float
+    regions: list[ClippingRegion]
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicRangeReport:
+    """Sliding-window dynamic range report (mirrors SonareDynamicRangeResult)."""
+
+    dynamic_range_db: float
+    low_percentile_db: float
+    high_percentile_db: float
+    window_rms_db: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class VectorscopeReport:
+    """Mid/side vectorscope point series for a (left, right) stereo pair."""
+
+    mid: NDArray[np.float32]
+    side: NDArray[np.float32]
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseScopeReport:
+    """Phase-scope (Lissajous) point series plus summary stats."""
+
+    mid: NDArray[np.float32]
+    side: NDArray[np.float32]
+    radius: NDArray[np.float32]
+    angle_rad: NDArray[np.float32]
+    correlation: float
+    average_abs_angle_rad: float
+    max_radius: float
+
+
+@dataclass(frozen=True, slots=True)
+class SpectrumReport:
+    """Single-frame magnitude / power / dB spectrum (mirrors SonareSpectrumResult)."""
+
+    frequencies: NDArray[np.float32]
+    magnitude: NDArray[np.float32]
+    power: NDArray[np.float32]
+    db: NDArray[np.float32]
+    n_fft: int
+    sample_rate: int
 
 
 @dataclass(frozen=True, slots=True)

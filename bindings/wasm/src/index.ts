@@ -57,6 +57,7 @@ import type {
   PairProcessor,
   PanLaw,
   PitchResult,
+  RealtimeVoiceChangerConfigInput,
   Section,
   SectionType,
   SendTiming,
@@ -68,15 +69,9 @@ import type {
   StreamingPlatform,
   StreamingRetuneConfig,
   TempogramMode,
+  VoicePresetId,
 } from './public_types';
 import { KeyProfile as KeyProfileValues, Mode, PitchClass } from './public_types';
-import type {
-  AnalyzerStats,
-  FrameBuffer,
-  StreamConfig,
-  StreamFramesI16,
-  StreamFramesU8,
-} from './stream_types';
 import type {
   ProgressCallback,
   SonareModule,
@@ -107,7 +102,14 @@ import type {
   WasmStreamAnalyzer,
   WasmTempogramResult,
   WasmTrimResult,
-} from './wasm_types';
+} from './sonare.js';
+import type {
+  AnalyzerStats,
+  FrameBuffer,
+  StreamConfig,
+  StreamFramesI16,
+  StreamFramesU8,
+} from './stream_types';
 
 export type {
   AcousticResult,
@@ -155,6 +157,7 @@ export type {
   PanLaw,
   PanMode,
   PitchResult,
+  RealtimeVoiceChangerConfigInput,
   RhythmFeatures,
   Section,
   SendTiming,
@@ -166,6 +169,7 @@ export type {
   StreamingRetuneConfig,
   Timbre,
   TimeSignature,
+  VoicePresetId,
 } from './public_types';
 export {
   ChordQuality,
@@ -174,6 +178,7 @@ export {
   PitchClass,
   SectionType,
 } from './public_types';
+export type { ProgressCallback } from './sonare.js';
 export type {
   AnalyzerStats,
   BarChord,
@@ -185,7 +190,6 @@ export type {
   StreamFramesI16,
   StreamFramesU8,
 } from './stream_types';
-export type { ProgressCallback } from './wasm_types';
 
 export type EngineClip = WasmEngineClip;
 export type EngineParameterInfo = WasmEngineParameterInfo;
@@ -220,6 +224,43 @@ export interface MixerRealtimeBuffer {
   outLeft: Float32Array;
   outRight: Float32Array;
   process: (numSamples?: number) => void;
+}
+
+/**
+ * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono
+ * processing. The `input` / `output` `Float32Array`s are typed-memory views
+ * onto the WASM heap — write samples into `input`, call `process()`, then
+ * read from `output`. The views are owned by the {@link RealtimeVoiceChanger}
+ * and remain valid until `delete()` is called on it.
+ */
+export interface RealtimeVoiceChangerMonoBuffer {
+  input: Float32Array;
+  output: Float32Array;
+  process: () => void;
+}
+
+/**
+ * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} interleaved
+ * multi-channel processing. Layout is L0,R0,L1,R1,... for stereo. The views
+ * are owned by the {@link RealtimeVoiceChanger}.
+ */
+export interface RealtimeVoiceChangerInterleavedBuffer {
+  input: Float32Array;
+  output: Float32Array;
+  channels: number;
+  process: () => void;
+}
+
+/**
+ * Zero-copy realtime buffer for {@link RealtimeVoiceChanger} planar stereo
+ * processing. Each entry in `channels` is a heap-backed `Float32Array` for one
+ * channel (matching AudioWorklet's native layout). Process happens in place:
+ * write samples into each channel view, call `process()`, then read back from
+ * the same views.
+ */
+export interface RealtimeVoiceChangerPlanarBuffer {
+  channels: Float32Array[];
+  process: () => void;
 }
 
 function automationCurveCode(curve: AutomationCurve): number {
@@ -267,6 +308,62 @@ function sendTimingCode(timing: SendTiming | number): number {
 
 let module: SonareModule | null = null;
 let initPromise: Promise<void> | null = null;
+
+// ============================================================================
+// Input validation helpers (empty + NaN/Inf guards for sample buffers)
+// ============================================================================
+
+/**
+ * Per-call validation options accepted by guarded wrappers. Empty-buffer
+ * checks are always performed; pass `{ validate: false }` to opt out of the
+ * O(n) NaN/Inf scan on hot paths.
+ */
+export interface ValidateOptions {
+  validate?: boolean;
+}
+
+function assertNonEmptySamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  argName = 'samples',
+): void {
+  if (samples.length === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be empty`);
+  }
+}
+
+function assertFiniteSamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  validate: boolean,
+  argName = 'samples',
+): void {
+  if (!validate) {
+    return;
+  }
+  for (let i = 0; i < samples.length; i++) {
+    const v = samples[i] as number;
+    if (!Number.isFinite(v)) {
+      throw new RangeError(`${fnName}: ${argName} contains NaN or Inf at index ${i}`);
+    }
+  }
+}
+
+function assertSamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  validate: boolean,
+  argName = 'samples',
+): void {
+  assertNonEmptySamples(fnName, samples, argName);
+  assertFiniteSamples(fnName, samples, validate, argName);
+}
+
+function assertFiniteScalar(fnName: string, value: number, argName: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be a finite number`);
+  }
+}
 
 // ============================================================================
 // Initialization
@@ -325,6 +422,13 @@ export function engineAbiVersion(): number {
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.engineAbiVersion();
+}
+
+export function voiceChangerAbiVersion(): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.voiceChangerAbiVersion();
 }
 
 export function engineCapabilities(): EngineCapabilities {
@@ -569,10 +673,10 @@ export class RealtimeEngine {
  * Detect BPM from audio samples.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Detected BPM
  */
-export function detectBpm(samples: Float32Array, sampleRate: number): number {
+export function detectBpm(samples: Float32Array, sampleRate = 22050): number {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -583,12 +687,12 @@ export function detectBpm(samples: Float32Array, sampleRate: number): number {
  * Detect musical key from audio samples.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Detected key
  */
 export function detectKey(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   options: KeyDetectionOptions = {},
 ): Key {
   if (!module) {
@@ -685,7 +789,7 @@ function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefined): n
 
 export function detectKeyCandidates(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   options: KeyDetectionOptions = {},
 ): KeyCandidate[] {
   if (!module) {
@@ -711,10 +815,10 @@ export function detectKeyCandidates(
  * Detect onset times from audio samples.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of onset times in seconds
  */
-export function detectOnsets(samples: Float32Array, sampleRate: number): Float32Array {
+export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -725,10 +829,10 @@ export function detectOnsets(samples: Float32Array, sampleRate: number): Float32
  * Detect beat times from audio samples.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of beat times in seconds
  */
-export function detectBeats(samples: Float32Array, sampleRate: number): Float32Array {
+export function detectBeats(samples: Float32Array, sampleRate = 22050): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -739,10 +843,10 @@ export function detectBeats(samples: Float32Array, sampleRate: number): Float32A
  * Detect downbeat times from audio samples.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of downbeat times in seconds
  */
-export function detectDownbeats(samples: Float32Array, sampleRate: number): Float32Array {
+export function detectDownbeats(samples: Float32Array, sampleRate = 22050): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -767,13 +871,13 @@ function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): ChordAnalysi
  * Detect chords from audio samples.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param options - Optional chord detection settings
  * @returns Detected chord segments
  */
 export function detectChords(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   options: ChordDetectionOptions = {},
 ): ChordAnalysisResult {
   if (!module) {
@@ -857,10 +961,10 @@ function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
  * Perform complete music analysis.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Complete analysis result
  */
-export function analyze(samples: Float32Array, sampleRate: number): AnalysisResult {
+export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -870,7 +974,7 @@ export function analyze(samples: Float32Array, sampleRate: number): AnalysisResu
 
 export function analyzeImpulseResponse(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nOctaveBands = 6,
 ): AcousticResult {
   if (!module) {
@@ -886,7 +990,7 @@ export function analyzeImpulseResponse(
 
 export function detectAcoustic(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nOctaveBands = 6,
   nThirdOctaveSubbands = 24,
   minDecayDb = 30.0,
@@ -910,13 +1014,13 @@ export function detectAcoustic(
  * Perform complete music analysis with progress reporting.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param onProgress - Progress callback (progress: 0-1, stage: string)
  * @returns Complete analysis result
  */
 export function analyzeWithProgress(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   onProgress: ProgressCallback,
 ): AnalysisResult {
   if (!module) {
@@ -924,6 +1028,154 @@ export function analyzeWithProgress(
   }
   const result = module.analyzeWithProgress(samples, sampleRate, onProgress);
   return convertAnalysisResult(result);
+}
+
+export interface BpmCandidate {
+  bpm: number;
+  confidence: number;
+}
+
+export interface BpmAnalysisResult {
+  bpm: number;
+  confidence: number;
+  candidates: BpmCandidate[];
+  autocorrelation: Float32Array;
+  tempogram: Float32Array;
+}
+
+export interface RhythmAnalysisResult {
+  timeSignature: { numerator: number; denominator: number; confidence: number };
+  syncopation: number;
+  grooveType: string;
+  patternRegularity: number;
+  tempoStability: number;
+  bpm: number;
+  beatIntervals: Float32Array;
+}
+
+export interface LoudnessCurve {
+  times: Float32Array;
+  rmsDb: Float32Array;
+}
+
+export interface DynamicsAnalysisResult {
+  dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
+  crestFactor: number;
+  loudnessRangeDb: number;
+  isCompressed: boolean;
+  loudnessCurve: LoudnessCurve;
+}
+
+export interface TimbreFrame {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+}
+
+export interface TimbreAnalysisResult extends TimbreFrame {
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+  spectralRolloff: Float32Array;
+  timbreOverTime: TimbreFrame[];
+}
+
+/**
+ * Detailed BPM analysis (BPM, confidence, alternate candidates, autocorrelation,
+ * tempogram). Matches the Node `analyzeBpm` / Python `analyze_bpm` surface.
+ */
+export function analyzeBpm(
+  samples: Float32Array,
+  sampleRate = 22050,
+  bpmMin = 30.0,
+  bpmMax = 300.0,
+  startBpm = 120.0,
+  nFft = 2048,
+  hopLength = 512,
+  maxCandidates = 5,
+): BpmAnalysisResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.analyzeBpm(
+    samples,
+    sampleRate,
+    bpmMin,
+    bpmMax,
+    startBpm,
+    nFft,
+    hopLength,
+    maxCandidates,
+  );
+}
+
+/**
+ * Detailed rhythm analysis (time signature, groove, syncopation, beat intervals).
+ */
+export function analyzeRhythm(
+  samples: Float32Array,
+  sampleRate = 22050,
+  bpmMin = 60.0,
+  bpmMax = 200.0,
+  startBpm = 120.0,
+  nFft = 2048,
+  hopLength = 512,
+): RhythmAnalysisResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.analyzeRhythm(samples, sampleRate, bpmMin, bpmMax, startBpm, nFft, hopLength);
+}
+
+/**
+ * Dynamics analysis (RMS, peak, crest factor, LRA, loudness curve).
+ */
+export function analyzeDynamics(
+  samples: Float32Array,
+  sampleRate = 22050,
+  windowSec = 0.4,
+  hopLength = 512,
+  compressionThreshold = 6.0,
+): DynamicsAnalysisResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.analyzeDynamics(samples, sampleRate, windowSec, hopLength, compressionThreshold);
+}
+
+/**
+ * Timbre analysis (brightness/warmth/density/roughness/complexity plus spectral
+ * features and per-window timbre frames).
+ */
+export function analyzeTimbre(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nMfcc = 13,
+  windowSec = 0.5,
+): TimbreAnalysisResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.analyzeTimbre(samples, sampleRate, nFft, hopLength, nMels, nMfcc, windowSec);
+}
+
+/**
+ * Whether this WASM build was compiled with FFmpeg support. Mirrors Node /
+ * Python `hasFfmpegSupport`. In the published WASM binding this currently
+ * always returns `false` (FFmpeg is not bundled into the .wasm), but the API
+ * exists so caller code can branch on capabilities portably.
+ */
+export function hasFfmpegSupport(): boolean {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.hasFfmpegSupport();
 }
 
 // ============================================================================
@@ -934,14 +1186,14 @@ export function analyzeWithProgress(
  * Perform Harmonic-Percussive Source Separation (HPSS).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param kernelHarmonic - Horizontal median filter size for harmonic (default: 31)
  * @param kernelPercussive - Vertical median filter size for percussive (default: 31)
  * @returns Separated harmonic and percussive components
  */
 export function hpss(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   kernelHarmonic = 31,
   kernelPercussive = 31,
 ): HpssResult {
@@ -1024,9 +1276,9 @@ export function pitchShift(
  */
 export function pitchCorrectToMidi(
   samples: Float32Array,
-  sampleRate: number,
-  currentMidi: number,
-  targetMidi: number,
+  sampleRate = 22050,
+  currentMidi = 69.0,
+  targetMidi = 69.0,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -1046,10 +1298,10 @@ export function pitchCorrectToMidi(
  */
 export function noteStretch(
   samples: Float32Array,
-  sampleRate: number,
-  onsetSample: number,
-  offsetSample: number,
-  stretchRatio: number,
+  sampleRate = 22050,
+  onsetSample = 0,
+  offsetSample = 0,
+  stretchRatio = 1.0,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -1068,13 +1320,15 @@ export function noteStretch(
  */
 export function voiceChange(
   samples: Float32Array,
-  sampleRate: number,
-  pitchSemitones: number,
-  formantFactor: number,
+  sampleRate = 22050,
+  pitchSemitones = 0.0,
+  formantFactor = 1.0,
+  options: ValidateOptions = {},
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('voiceChange', samples, options.validate !== false);
   return module.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
 }
 
@@ -1097,7 +1351,7 @@ export function normalize(samples: Float32Array, sampleRate: number, targetDb = 
  * Apply mastering loudness normalization with a true-peak ceiling.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param targetLufs - Target integrated LUFS (default: -14)
  * @param ceilingDb - True/sample peak ceiling in dBFS (default: -1)
  * @param truePeakOversample - Oversampling factor used for peak estimation
@@ -1105,7 +1359,7 @@ export function normalize(samples: Float32Array, sampleRate: number, targetDb = 
  */
 export function mastering(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   targetLufs = -14.0,
   ceilingDb = -1.0,
   truePeakOversample = 4,
@@ -1147,7 +1401,7 @@ export function masteringStereoAnalysisNames(): StereoAnalysis[] {
 export function masteringProcess(
   processorName: SoloProcessor,
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): MasteringResult {
   if (!module) {
@@ -1160,7 +1414,7 @@ export function masteringProcessStereo(
   processorName: SoloProcessor,
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): MasteringStereoResult {
   if (!module) {
@@ -1176,7 +1430,7 @@ export function masteringPairProcess(
   processorName: PairProcessor,
   source: Float32Array,
   reference: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): MasteringResult {
   if (!module) {
@@ -1189,7 +1443,7 @@ export function masteringPairAnalyze(
   analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
   if (!module) {
@@ -1202,7 +1456,7 @@ export function masteringStereoAnalyze(
   analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
   if (!module) {
@@ -1213,7 +1467,7 @@ export function masteringStereoAnalyze(
 
 export function masteringAssistantSuggest(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
   if (!module) {
@@ -1224,7 +1478,7 @@ export function masteringAssistantSuggest(
 
 export function masteringAudioProfile(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
   if (!module) {
@@ -1235,7 +1489,7 @@ export function masteringAudioProfile(
 
 export function masteringStreamingPreview(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   platforms: StreamingPlatform[] = [],
 ): string {
   if (!module) {
@@ -1244,17 +1498,271 @@ export function masteringStreamingPreview(
   return module.masteringStreamingPreview(samples, sampleRate, platforms);
 }
 
+// ============================================================================
+// Mastering repair (declick, denoise_classical, declip, decrackle, dehum,
+// dereverb_classical, trim_silence) — hand-written bindings.
+// ============================================================================
+
+/** Options for `masteringRepairDeclick`. */
+export interface DeclickOptions {
+  threshold?: number;
+  neighborRatio?: number;
+  maxClickSamples?: number;
+  lpcOrder?: number;
+  residualRatio?: number;
+}
+
+/** Algorithms accepted by `masteringRepairDenoiseClassical`. */
+export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
+
+/** Noise PSD estimators accepted by `masteringRepairDenoiseClassical`. */
+export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra';
+
+/** Options for `masteringRepairDenoiseClassical`. */
+export interface DenoiseClassicalOptions {
+  mode?: DenoiseClassicalMode;
+  noiseEstimator?: DenoiseClassicalNoiseEstimator;
+  nFft?: number;
+  hopLength?: number;
+  ddAlpha?: number;
+  gainFloor?: number;
+  overSubtraction?: number;
+  spectralFloor?: number;
+  noiseEstimationQuantile?: number;
+  speechPresenceGain?: boolean;
+  gainSmoothing?: boolean;
+}
+
+/** Offline LPC-based declicker. */
+export function masteringRepairDeclick(
+  samples: Float32Array,
+  sampleRate: number,
+  options: DeclickOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairDeclick(samples, sampleRate, options);
+}
+
+/** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */
+export function masteringRepairDenoiseClassical(
+  samples: Float32Array,
+  sampleRate: number,
+  options: DenoiseClassicalOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairDenoiseClassical(samples, sampleRate, options);
+}
+
+/** Options for `masteringRepairDeclip`. */
+export interface DeclipOptions {
+  clipThreshold?: number;
+  lpcOrder?: number;
+  iterations?: number;
+  lpcBlend?: number;
+}
+
+/** Algorithms accepted by `masteringRepairDecrackle`. */
+export type DecrackleMode = 'median' | 'waveletShrinkage';
+
+/** Options for `masteringRepairDecrackle`. */
+export interface DecrackleOptions {
+  threshold?: number;
+  mode?: DecrackleMode;
+  levels?: number;
+}
+
+/** Options for `masteringRepairDehum`. */
+export interface DehumOptions {
+  fundamentalHz?: number;
+  harmonics?: number;
+  q?: number;
+  adaptive?: boolean;
+  searchRangeHz?: number;
+  adaptation?: number;
+  frameSize?: number;
+  pllBandwidth?: number;
+}
+
+/** Options for `masteringRepairDereverbClassical`. */
+export interface DereverbClassicalOptions {
+  threshold?: number;
+  attenuation?: number;
+  nFft?: number;
+  hopLength?: number;
+  t60Sec?: number;
+  lateDelayMs?: number;
+  overSubtraction?: number;
+  spectralFloor?: number;
+  wpeEnabled?: boolean;
+  wpeIterations?: number;
+  wpeTaps?: number;
+  wpeStrength?: number;
+}
+
+/** Trimming modes accepted by `masteringRepairTrimSilence`. */
+export type TrimSilenceMode = 'peak' | 'lufsGated';
+
+/** Options for `masteringRepairTrimSilence`. */
+export interface TrimSilenceOptions {
+  threshold?: number;
+  paddingSamples?: number;
+  mode?: TrimSilenceMode;
+  gateLufs?: number;
+  windowMs?: number;
+}
+
+/** Offline LPC-based declipper. */
+export function masteringRepairDeclip(
+  samples: Float32Array,
+  sampleRate: number,
+  options: DeclipOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairDeclip(samples, sampleRate, options);
+}
+
+/** Offline crackle suppressor (median or wavelet-shrinkage). */
+export function masteringRepairDecrackle(
+  samples: Float32Array,
+  sampleRate: number,
+  options: DecrackleOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairDecrackle(samples, sampleRate, options);
+}
+
+/** Offline mains-hum remover. */
+export function masteringRepairDehum(
+  samples: Float32Array,
+  sampleRate: number,
+  options: DehumOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairDehum(samples, sampleRate, options);
+}
+
+/** Offline classical dereverberator (spectral subtraction + optional WPE). */
+export function masteringRepairDereverbClassical(
+  samples: Float32Array,
+  sampleRate: number,
+  options: DereverbClassicalOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairDereverbClassical(samples, sampleRate, options);
+}
+
+/** Offline silence trimmer (peak threshold or LUFS-gated). */
+export function masteringRepairTrimSilence(
+  samples: Float32Array,
+  sampleRate: number,
+  options: TrimSilenceOptions = {},
+): Float32Array {
+  return requireModule().masteringRepairTrimSilence(samples, sampleRate, options);
+}
+
+// ============================================================================
+// Mastering — offline dynamics processors (compressor / gate / transient_shaper)
+// ============================================================================
+
+/** Compressor sidechain detector mode. */
+export type CompressorDetector = 'peak' | 'rms' | 'log_rms';
+
+/** Options for `masteringDynamicsCompressor`. */
+export interface CompressorOptions extends ValidateOptions {
+  thresholdDb?: number;
+  ratio?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  kneeDb?: number;
+  makeupGainDb?: number;
+  autoMakeup?: boolean;
+  detector?: CompressorDetector | number;
+  sidechainHpfEnabled?: boolean;
+  sidechainHpfHz?: number;
+  pdrTimeMs?: number;
+  pdrReleaseScale?: number;
+}
+
+/** Options for `masteringDynamicsGate`. */
+export interface GateOptions extends ValidateOptions {
+  thresholdDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  rangeDb?: number;
+  holdMs?: number;
+  closeThresholdDb?: number;
+  keyHpfHz?: number;
+}
+
+/** Options for `masteringDynamicsTransientShaper`. */
+export interface TransientShaperOptions extends ValidateOptions {
+  attackGainDb?: number;
+  sustainGainDb?: number;
+  fastAttackMs?: number;
+  fastReleaseMs?: number;
+  slowAttackMs?: number;
+  slowReleaseMs?: number;
+  sensitivity?: number;
+  maxGainDb?: number;
+  gainSmoothingMs?: number;
+  lookaheadMs?: number;
+}
+
+/** Result envelope returned by offline mastering dynamics processors. */
+export interface DynamicsResult {
+  samples: Float32Array;
+  latencySamples: number;
+}
+
+const COMPRESSOR_DETECTOR_MAP: Record<CompressorDetector, number> = {
+  peak: 0,
+  rms: 1,
+  log_rms: 2,
+};
+
+/** Offline feed-forward compressor (soft knee, optional auto-makeup / sidechain HPF). */
+export function masteringDynamicsCompressor(
+  samples: Float32Array,
+  sampleRate: number,
+  options: CompressorOptions = {},
+): DynamicsResult {
+  assertSamples('masteringDynamicsCompressor', samples, options.validate !== false);
+  const detector =
+    typeof options.detector === 'string'
+      ? COMPRESSOR_DETECTOR_MAP[options.detector]
+      : options.detector;
+  const opts: Record<string, unknown> = { ...options };
+  if (detector !== undefined) {
+    opts.detector = detector;
+  }
+  return requireModule().masteringDynamicsCompressor(samples, sampleRate, opts);
+}
+
+/** Offline noise gate (hysteresis, hold, optional key HPF). */
+export function masteringDynamicsGate(
+  samples: Float32Array,
+  sampleRate: number,
+  options: GateOptions = {},
+): DynamicsResult {
+  assertSamples('masteringDynamicsGate', samples, options.validate !== false);
+  return requireModule().masteringDynamicsGate(samples, sampleRate, options);
+}
+
+/** Offline transient shaper (envelope-difference attack/sustain control). */
+export function masteringDynamicsTransientShaper(
+  samples: Float32Array,
+  sampleRate: number,
+  options: TransientShaperOptions = {},
+): DynamicsResult {
+  assertSamples('masteringDynamicsTransientShaper', samples, options.validate !== false);
+  return requireModule().masteringDynamicsTransientShaper(samples, sampleRate, options);
+}
+
 /**
  * Apply a configurable mastering chain in WASM.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param config - Chain stage configuration
  * @returns Processed audio, loudness metadata, and applied stage names
  */
 export function masteringChain(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   config: MasteringChainConfig,
 ): MasteringChainResult {
   if (!module) {
@@ -1275,7 +1783,7 @@ export function masteringChain(
 export function masteringChainStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   config: MasteringChainConfig,
 ): MasteringStereoChainResult {
   if (!module) {
@@ -1291,14 +1799,14 @@ export function masteringChainStereo(
  * Apply a configurable mastering chain in WASM with progress reporting.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param config - Chain stage configuration
  * @param onProgress - Progress callback (progress: 0-1, stage: string)
  * @returns Processed audio, loudness metadata, and applied stage names
  */
 export function masteringChainWithProgress(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   config: MasteringChainConfig,
   onProgress: ProgressCallback,
 ): MasteringChainResult {
@@ -1326,7 +1834,7 @@ export function masteringChainWithProgress(
 export function masteringChainStereoWithProgress(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   config: MasteringChainConfig,
   onProgress: ProgressCallback,
 ): MasteringStereoChainResult {
@@ -1361,14 +1869,14 @@ export function masteringPresetNames(): MasteringPreset[] {
  * Apply a named mastering preset chain to mono audio.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param presetName - Preset identifier from {@link masteringPresetNames}
  * @param overrides - Optional flat overrides (dot-notation, e.g. `'loudness.targetLufs'`) applied on top of the preset. Pass `null` for preset defaults.
  * @returns Processed audio, loudness metadata, and applied stage names
  */
 export function masterAudio(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   presetName: MasteringPreset,
   overrides: Record<string, number | boolean> | null = null,
 ): MasteringChainResult {
@@ -1391,7 +1899,7 @@ export function masterAudio(
 export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   presetName: MasteringPreset,
   overrides: Record<string, number | boolean> | null = null,
 ): MasteringStereoChainResult {
@@ -1402,6 +1910,50 @@ export function masterAudioStereo(
     throw new Error('Stereo channel lengths must match.');
   }
   return module.masterAudioStereo(presetName, left, right, sampleRate, overrides);
+}
+
+/**
+ * Mono `masterAudio` with per-stage progress reporting. `onProgress` is invoked
+ * with `(progress, stage)` between each chain stage (progress is in [0,1]).
+ */
+export function masterAudioWithProgress(
+  samples: Float32Array,
+  sampleRate = 22050,
+  presetName: MasteringPreset,
+  onProgress: ProgressCallback,
+  overrides: Record<string, number | boolean> | null = null,
+): MasteringChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.masterAudioWithProgress(presetName, samples, sampleRate, overrides, onProgress);
+}
+
+/**
+ * Stereo `masterAudio` with per-stage progress reporting.
+ */
+export function masterAudioStereoWithProgress(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  presetName: MasteringPreset,
+  onProgress: ProgressCallback,
+  overrides: Record<string, number | boolean> | null = null,
+): MasteringStereoChainResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  if (left.length !== right.length) {
+    throw new Error('Stereo channel lengths must match.');
+  }
+  return module.masterAudioStereoWithProgress(
+    presetName,
+    left,
+    right,
+    sampleRate,
+    overrides,
+    onProgress,
+  );
 }
 
 export function mixingScenePresetNames(): string[] {
@@ -1472,7 +2024,7 @@ export function mixStereo(
  * ```
  */
 export class StreamingMasteringChain {
-  private chain: import('./wasm_types').WasmStreamingMasteringChain;
+  private chain: import('./sonare.js').WasmStreamingMasteringChain;
 
   constructor(config: MasteringChainConfig) {
     if (!module) {
@@ -1559,7 +2111,7 @@ export class StreamingMasteringChain {
  * ```
  */
 export class StreamingEqualizer {
-  private eq: import('./wasm_types').WasmStreamingEqualizer;
+  private eq: import('./sonare.js').WasmStreamingEqualizer;
 
   constructor(config: StreamingEqualizerConfig = {}) {
     if (!module) {
@@ -1697,7 +2249,7 @@ export class StreamingEqualizer {
  * the underlying WASM object.
  */
 export class StreamingRetune {
-  private retune: import('./wasm_types').WasmStreamingRetune;
+  private retune: import('./sonare.js').WasmStreamingRetune;
 
   constructor(config: StreamingRetuneConfig = {}) {
     if (!module) {
@@ -1749,32 +2301,207 @@ export class StreamingRetune {
 }
 
 // ============================================================================
+// RealtimeVoiceChanger Class
+// ============================================================================
+
+export class RealtimeVoiceChanger {
+  private changer: import('./sonare.js').WasmRealtimeVoiceChanger;
+
+  constructor(config: RealtimeVoiceChangerConfigInput = 'neutral-monitor') {
+    if (!module) {
+      throw new Error('Module not initialized. Call init() first.');
+    }
+    this.changer = module.createRealtimeVoiceChanger(config as Record<string, unknown> | string);
+  }
+
+  prepare(sampleRate: number, maxBlockSize = 128, channels = 1): void {
+    this.changer.prepare(sampleRate, maxBlockSize, channels);
+  }
+
+  reset(): void {
+    this.changer.reset();
+  }
+
+  setConfig(config: RealtimeVoiceChangerConfigInput): void {
+    this.changer.setConfig(config as Record<string, unknown> | string);
+  }
+
+  configJson(): string {
+    return this.changer.configJson();
+  }
+
+  latencySamples(): number {
+    return this.changer.latencySamples();
+  }
+
+  processMono(samples: Float32Array): Float32Array {
+    return this.changer.processMono(samples);
+  }
+
+  processMonoInto(samples: Float32Array, output: Float32Array): void {
+    this.changer.processMonoInto(samples, output);
+  }
+
+  processInterleaved(samples: Float32Array, channels: number): Float32Array {
+    return this.changer.processInterleaved(samples, channels);
+  }
+
+  processInterleavedInto(samples: Float32Array, channels: number, output: Float32Array): void {
+    this.changer.processInterleavedInto(samples, channels, output);
+  }
+
+  /**
+   * Acquire a typed-memory view onto the WASM heap for mono input.
+   *
+   * Write your input samples into the returned `Float32Array` directly (e.g.
+   * via `input.set(source)`); no copy crosses the JS↔C++ bridge until
+   * {@link processPreparedMono} is called. The view is owned by this
+   * RealtimeVoiceChanger and becomes invalid after {@link delete}; it may
+   * also be invalidated if you later call this method with a larger
+   * `numSamples` value (the underlying buffer may be reallocated).
+   */
+  getMonoInputBuffer(numSamples: number): Float32Array {
+    return this.changer.getMonoInputBuffer(numSamples);
+  }
+
+  /** Mono output view counterpart to {@link getMonoInputBuffer}. */
+  getMonoOutputBuffer(numSamples: number): Float32Array {
+    return this.changer.getMonoOutputBuffer(numSamples);
+  }
+
+  /**
+   * Process the previously-acquired mono input buffer in place. The output
+   * appears in the buffer returned by {@link getMonoOutputBuffer}. No JS↔C++
+   * sample-level crossings happen on this call — it just hands control to
+   * the underlying DSP on already-on-heap data.
+   */
+  processPreparedMono(numSamples: number): void {
+    this.changer.processPreparedMono(numSamples);
+  }
+
+  /** Interleaved input view (layout L0,R0,L1,R1,...). */
+  getInterleavedInputBuffer(numFrames: number, numChannels: number): Float32Array {
+    return this.changer.getInterleavedInputBuffer(numFrames, numChannels);
+  }
+
+  /** Interleaved output view counterpart. */
+  getInterleavedOutputBuffer(numFrames: number, numChannels: number): Float32Array {
+    return this.changer.getInterleavedOutputBuffer(numFrames, numChannels);
+  }
+
+  /**
+   * Process the previously-acquired interleaved buffer in place. Output
+   * appears in the buffer returned by {@link getInterleavedOutputBuffer}.
+   */
+  processPreparedInterleaved(numFrames: number, numChannels: number): void {
+    this.changer.processPreparedInterleaved(numFrames, numChannels);
+  }
+
+  /**
+   * Planar-channel input/output view (one Float32Array per channel). Matches
+   * AudioWorklet's native layout; processing happens in place.
+   */
+  getPlanarChannelBuffer(channel: number, numFrames: number): Float32Array {
+    return this.changer.getPlanarChannelBuffer(channel, numFrames);
+  }
+
+  /**
+   * Process the previously-acquired planar channel buffers in place. Each
+   * channel must have been obtained from {@link getPlanarChannelBuffer}
+   * with the same `numFrames`. Output replaces input in the same buffers.
+   */
+  processPreparedPlanar(numFrames: number): void {
+    this.changer.processPreparedPlanar(numFrames);
+  }
+
+  /**
+   * Convenience factory for the mono zero-copy path: returns the input/output
+   * heap views plus a `process()` thunk wired to the same `numSamples`. The
+   * views are reused across calls and become invalid after {@link delete}.
+   */
+  createRealtimeMonoBuffer(numSamples: number): RealtimeVoiceChangerMonoBuffer {
+    const input = this.getMonoInputBuffer(numSamples);
+    const output = this.getMonoOutputBuffer(numSamples);
+    return {
+      input,
+      output,
+      process: () => this.processPreparedMono(numSamples),
+    };
+  }
+
+  /** Same as {@link createRealtimeMonoBuffer} but for interleaved I/O. */
+  createRealtimeInterleavedBuffer(
+    numFrames: number,
+    numChannels: number,
+  ): RealtimeVoiceChangerInterleavedBuffer {
+    const input = this.getInterleavedInputBuffer(numFrames, numChannels);
+    const output = this.getInterleavedOutputBuffer(numFrames, numChannels);
+    return {
+      input,
+      output,
+      channels: numChannels,
+      process: () => this.processPreparedInterleaved(numFrames, numChannels),
+    };
+  }
+
+  /**
+   * Convenience factory for the planar zero-copy path. Acquires one
+   * heap-backed Float32Array per channel and returns a `process()` thunk
+   * wired to the same `numFrames`. Buffers are reused across calls and
+   * become invalid after {@link delete}.
+   */
+  createRealtimePlanarBuffer(
+    numFrames: number,
+    numChannels: number,
+  ): RealtimeVoiceChangerPlanarBuffer {
+    const channels: Float32Array[] = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+      channels.push(this.getPlanarChannelBuffer(ch, numFrames));
+    }
+    return {
+      channels,
+      process: () => this.processPreparedPlanar(numFrames),
+    };
+  }
+
+  delete(): void {
+    this.changer.delete();
+  }
+}
+
+export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.realtimeVoiceChangerPresetNames() as VoicePresetId[];
+}
+
+export function realtimeVoiceChangerPresetJson(id: VoicePresetId): string {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.realtimeVoiceChangerPresetJson(id);
+}
+
+export function validateRealtimeVoiceChangerPresetJson(json: string): {
+  ok: boolean;
+  normalizedJson?: string;
+  error?: string;
+} {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.validateRealtimeVoiceChangerPresetJson(json);
+}
+
+// ============================================================================
 // Mixer Class (scene-based persistent mixer)
 // ============================================================================
 
 /**
- * Get a built-in mixing scene preset serialized as JSON, normalized through the
- * C mixer API (the same path {@link Mixer.fromSceneJson} uses to load it).
- *
- * @deprecated Use {@link mixingScenePresetJson}, the canonical name shared with
- * the Node and Python bindings. This alias is retained for backwards
- * compatibility and may be removed in a future release. Both functions return a
- * scene JSON string that loads cleanly into a {@link Mixer}.
- *
- * @param preset - Preset name (see {@link mixingScenePresetNames})
- * @returns Scene JSON string
- */
-export function mixerScenePresetJson(preset: string): string {
-  if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
-  }
-  return module.mixerPresetJson(preset);
-}
-
-/**
  * Persistent, scene-based stereo mixer.
  *
- * Build one from a scene JSON string (e.g. {@link mixerScenePresetJson} or a
+ * Build one from a scene JSON string (e.g. {@link mixingScenePresetJson} or a
  * hand-authored scene), then feed per-strip stereo blocks through
  * {@link processStereo} to get the routed stereo master. Strips, sends, buses,
  * and inserts are described entirely by the scene; the routing graph is
@@ -1786,7 +2513,7 @@ export function mixerScenePresetJson(preset: string): string {
  *
  * @example
  * ```typescript
- * const mixer = Mixer.fromSceneJson(mixerScenePresetJson('basicStereo'), 48000, 512);
+ * const mixer = Mixer.fromSceneJson(mixingScenePresetJson('basicStereo'), 48000, 512);
  * try {
  *   const out = mixer.processStereo([stripL], [stripR]);
  * } finally {
@@ -1795,9 +2522,9 @@ export function mixerScenePresetJson(preset: string): string {
  * ```
  */
 export class Mixer {
-  private mixer: import('./wasm_types').WasmMixer;
+  private mixer: import('./sonare.js').WasmMixer;
 
-  private constructor(mixer: import('./wasm_types').WasmMixer) {
+  private constructor(mixer: import('./sonare.js').WasmMixer) {
     this.mixer = mixer;
   }
 
@@ -2179,14 +2906,14 @@ export function trim(samples: Float32Array, sampleRate: number, thresholdDb = -6
  * Compute Short-Time Fourier Transform (STFT).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns STFT result with magnitude and power spectrograms
  */
 export function stft(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
 ): StftResult {
@@ -2200,14 +2927,14 @@ export function stft(
  * Compute STFT and return magnitude in decibels.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns STFT result with dB values
  */
 export function stftDb(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
 ): { nBins: number; nFrames: number; db: Float32Array } {
@@ -2225,7 +2952,7 @@ export function stftDb(
  * Compute Mel spectrogram.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param nMels - Number of Mel bands (default: 128)
@@ -2233,7 +2960,7 @@ export function stftDb(
  */
 export function melSpectrogram(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
   nMels = 128,
@@ -2248,20 +2975,20 @@ export function melSpectrogram(
  * Compute MFCC (Mel-Frequency Cepstral Coefficients).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param nMels - Number of Mel bands (default: 128)
- * @param nMfcc - Number of MFCC coefficients (default: 13)
+ * @param nMfcc - Number of MFCC coefficients (default: 20)
  * @returns MFCC result
  */
 export function mfcc(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
   nMels = 128,
-  nMfcc = 13,
+  nMfcc = 20,
 ): MfccResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -2282,23 +3009,23 @@ export function mfcc(
  * @param nFrames - Number of time frames
  * @param sampleRate - Sample rate in Hz
  * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
+ * @param fmin - Lower Mel band edge in Hz (default: 0)
+ * @param fmax - Upper Mel band edge in Hz (default: sr/2 when 0)
  * @returns STFT power spectrogram result
  */
 export function melToStft(
   melPower: Float32Array,
   nMels: number,
   nFrames: number,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
-  hopLength = 512,
   fmin = 0,
   fmax = 0,
 ): StftPowerResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.melToStft(melPower, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax);
+  return module.melToStft(melPower, nMels, nFrames, sampleRate, nFft, fmin, fmax);
 }
 
 /**
@@ -2311,6 +3038,8 @@ export function melToStft(
  * @param sampleRate - Sample rate in Hz
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
+ * @param fmin - Minimum Mel frequency in Hz (default: 0)
+ * @param fmax - Maximum Mel frequency in Hz (default: 0 = sr/2)
  * @param nIter - Griffin-Lim iterations (default: 32)
  * @returns Reconstructed audio samples (mono, float32)
  */
@@ -2318,12 +3047,12 @@ export function melToAudio(
   melPower: Float32Array,
   nMels: number,
   nFrames: number,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
-  nIter = 32,
   fmin = 0,
   fmax = 0,
+  nIter = 32,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -2335,9 +3064,9 @@ export function melToAudio(
     sampleRate,
     nFft,
     hopLength,
-    nIter,
     fmin,
     fmax,
+    nIter,
   );
 }
 
@@ -2371,9 +3100,11 @@ export function mfccToMel(
  * @param nMfcc - Number of MFCC coefficients
  * @param nFrames - Number of time frames
  * @param nMels - Number of Mel bins (default: 128)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
+ * @param fmin - Minimum Mel frequency in Hz (default: 0)
+ * @param fmax - Maximum Mel frequency in Hz (default: 0 = sr/2)
  * @param nIter - Griffin-Lim iterations (default: 32)
  * @returns Reconstructed audio samples (mono, float32)
  */
@@ -2381,13 +3112,13 @@ export function mfccToAudio(
   mfccCoefficients: Float32Array,
   nMfcc: number,
   nFrames: number,
-  nMels: number,
-  sampleRate: number,
+  nMels = 128,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
-  nIter = 32,
   fmin = 0,
   fmax = 0,
+  nIter = 32,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -2400,9 +3131,9 @@ export function mfccToAudio(
     sampleRate,
     nFft,
     hopLength,
-    nIter,
     fmin,
     fmax,
+    nIter,
   );
 }
 
@@ -2414,14 +3145,14 @@ export function mfccToAudio(
  * Compute chromagram (pitch class distribution).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns Chroma features result
  */
 export function chroma(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
 ): ChromaResult {
@@ -2439,14 +3170,14 @@ export function chroma(
  * Compute spectral centroid (center of mass of spectrum).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns Spectral centroid in Hz for each frame
  */
 export function spectralCentroid(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
@@ -2460,14 +3191,14 @@ export function spectralCentroid(
  * Compute spectral bandwidth.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns Spectral bandwidth in Hz for each frame
  */
 export function spectralBandwidth(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
@@ -2481,7 +3212,7 @@ export function spectralBandwidth(
  * Compute spectral rolloff frequency.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param rollPercent - Percentage threshold (default: 0.85)
@@ -2489,7 +3220,7 @@ export function spectralBandwidth(
  */
 export function spectralRolloff(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
   rollPercent = 0.85,
@@ -2504,14 +3235,14 @@ export function spectralRolloff(
  * Compute spectral flatness.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns Spectral flatness for each frame (0 = tonal, 1 = noise-like)
  */
 export function spectralFlatness(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
@@ -2525,14 +3256,14 @@ export function spectralFlatness(
  * Compute zero crossing rate.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param frameLength - Frame length (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns Zero crossing rate for each frame
  */
 export function zeroCrossingRate(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   frameLength = 2048,
   hopLength = 512,
 ): Float32Array {
@@ -2546,14 +3277,14 @@ export function zeroCrossingRate(
  * Compute RMS energy.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param frameLength - Frame length (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @returns RMS energy for each frame
  */
 export function rmsEnergy(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   frameLength = 2048,
   hopLength = 512,
 ): Float32Array {
@@ -2571,7 +3302,7 @@ export function rmsEnergy(
  * Detect pitch using YIN algorithm.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param frameLength - Frame length (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param fmin - Minimum frequency in Hz (default: 65)
@@ -2581,7 +3312,7 @@ export function rmsEnergy(
  */
 export function pitchYin(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   frameLength = 2048,
   hopLength = 512,
   fmin = 65.0,
@@ -2598,7 +3329,7 @@ export function pitchYin(
  * Detect pitch using pYIN algorithm (probabilistic YIN with HMM smoothing).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param frameLength - Frame length (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param fmin - Minimum frequency in Hz (default: 65)
@@ -2608,7 +3339,7 @@ export function pitchYin(
  */
 export function pitchPyin(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   frameLength = 2048,
   hopLength = 512,
   fmin = 65.0,
@@ -2707,11 +3438,11 @@ export function noteToHz(note: string): number {
  * Convert frame index to time in seconds.
  *
  * @param frames - Frame index
- * @param sr - Sample rate in Hz
- * @param hopLength - Hop length in samples
+ * @param sr - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length in samples (default: 512)
  * @returns Time in seconds
  */
-export function framesToTime(frames: number, sr: number, hopLength: number): number {
+export function framesToTime(frames: number, sr = 22050, hopLength = 512): number {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -2722,11 +3453,11 @@ export function framesToTime(frames: number, sr: number, hopLength: number): num
  * Convert time in seconds to frame index.
  *
  * @param time - Time in seconds
- * @param sr - Sample rate in Hz
- * @param hopLength - Hop length in samples
+ * @param sr - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length in samples (default: 512)
  * @returns Frame index
  */
-export function timeToFrames(time: number, sr: number, hopLength: number): number {
+export function timeToFrames(time: number, sr = 22050, hopLength = 512): number {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -2902,7 +3633,7 @@ export function tonnetz(chromagram: Float32Array, nChroma: number, nFrames: numb
 
 export function tempogram(
   onsetEnvelope: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
   mode: TempogramMode = 'autocorrelation',
@@ -2915,7 +3646,7 @@ export function tempogram(
 
 export function cyclicTempogram(
   onsetEnvelope: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
   bpmMin = 60.0,
@@ -2929,7 +3660,7 @@ export function cyclicTempogram(
 
 export function plp(
   onsetEnvelope: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   hopLength = 512,
   tempoMin = 30.0,
   tempoMax = 300.0,
@@ -3131,10 +3862,15 @@ export function tempogramRatio(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Loudness measurement result
  */
-export function lufs(samples: Float32Array, sampleRate = 22050): LufsResult {
+export function lufs(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): LufsResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('lufs', samples, options.validate !== false);
   return module.lufs(samples, sampleRate);
 }
 
@@ -3145,10 +3881,15 @@ export function lufs(samples: Float32Array, sampleRate = 22050): LufsResult {
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Momentary LUFS values over time
  */
-export function momentaryLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+export function momentaryLufs(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('momentaryLufs', samples, options.validate !== false);
   return module.momentaryLufs(samples, sampleRate);
 }
 
@@ -3159,11 +3900,290 @@ export function momentaryLufs(samples: Float32Array, sampleRate = 22050): Float3
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Short-term LUFS values over time
  */
-export function shortTermLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+export function shortTermLufs(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('shortTermLufs', samples, options.validate !== false);
   return module.shortTermLufs(samples, sampleRate);
+}
+
+// ============================================================================
+// Metering — basic / true-peak / clipping / dynamic range
+// ============================================================================
+
+/** One contiguous run of clipped samples reported by `meteringDetectClipping`. */
+export interface ClippingRegion {
+  startSample: number;
+  endSample: number;
+  length: number;
+  peak: number;
+}
+
+/** Aggregated clipping report. */
+export interface ClippingReport {
+  clippedSamples: number;
+  clippingRatio: number;
+  maxClippedPeak: number;
+  regions: ClippingRegion[];
+}
+
+/** Sliding-window dynamic range report. */
+export interface DynamicRangeReport {
+  dynamicRangeDb: number;
+  lowPercentileDb: number;
+  highPercentileDb: number;
+  windowRmsDb: Float32Array;
+}
+
+function requireModule() {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module;
+}
+
+export function meteringPeakDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringPeakDb', samples, options.validate !== false);
+  return requireModule().meteringPeakDb(samples, sampleRate);
+}
+
+export function meteringRmsDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringRmsDb', samples, options.validate !== false);
+  return requireModule().meteringRmsDb(samples, sampleRate);
+}
+
+export function meteringCrestFactorDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringCrestFactorDb', samples, options.validate !== false);
+  return requireModule().meteringCrestFactorDb(samples, sampleRate);
+}
+
+export function meteringDcOffset(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringDcOffset', samples, options.validate !== false);
+  return requireModule().meteringDcOffset(samples, sampleRate);
+}
+
+/**
+ * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
+ * in [1, 16]; pass 0 to use the library default (4).
+ */
+export function meteringTruePeakDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  oversampleFactor = 4,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringTruePeakDb', samples, options.validate !== false);
+  return requireModule().meteringTruePeakDb(samples, sampleRate, oversampleFactor);
+}
+
+/**
+ * Detect contiguous runs of clipped samples.
+ *
+ * @param threshold Linear absolute threshold (default 0.999).
+ * @param minRegionSamples Minimum run length to report (default 1).
+ */
+export function meteringDetectClipping(
+  samples: Float32Array,
+  sampleRate = 22050,
+  threshold = 0.999,
+  minRegionSamples = 1,
+  options: ValidateOptions = {},
+): ClippingReport {
+  assertSamples('meteringDetectClipping', samples, options.validate !== false);
+  return requireModule().meteringDetectClipping(samples, sampleRate, threshold, minRegionSamples);
+}
+
+/**
+ * Sliding-window dynamic range. Pass 0 for any parameter to use the library
+ * default (window=3 s, hop=1 s, low=0.10, high=0.95).
+ */
+export function meteringDynamicRange(
+  samples: Float32Array,
+  sampleRate = 22050,
+  windowSec = 0,
+  hopSec = 0,
+  lowPercentile = 0,
+  highPercentile = 0,
+  options: ValidateOptions = {},
+): DynamicRangeReport {
+  assertSamples('meteringDynamicRange', samples, options.validate !== false);
+  return requireModule().meteringDynamicRange(
+    samples,
+    sampleRate,
+    windowSec,
+    hopSec,
+    lowPercentile,
+    highPercentile,
+  );
+}
+
+// ============================================================================
+// Metering — stereo / phase-scope / spectrum
+// ============================================================================
+
+/** Mid/side vectorscope point series for a (left, right) stereo pair. */
+export interface VectorscopeReport {
+  mid: Float32Array;
+  side: Float32Array;
+}
+
+/** Phase-scope (Lissajous) point series plus summary stats. */
+export interface PhaseScopeReport {
+  mid: Float32Array;
+  side: Float32Array;
+  radius: Float32Array;
+  angleRad: Float32Array;
+  correlation: number;
+  averageAbsAngleRad: number;
+  maxRadius: number;
+}
+
+/** Options for `meteringSpectrum`. */
+export interface SpectrumOptions {
+  /** FFT size. Pass 0 / omit for the library default (2048). */
+  nFft?: number;
+  /** Apply fractional-octave smoothing to magnitude. */
+  applyOctaveSmoothing?: boolean;
+  /** Smoothing fraction (e.g. 3 = 1/3-octave). 0 / omit = library default (3). */
+  octaveFraction?: number;
+  /** Linear reference for the dB conversion. 0 / omit = 1.0. */
+  dbRef?: number;
+  /** Linear floor used to avoid log(0). 0 / omit = library default. */
+  dbAmin?: number;
+}
+
+/** Single-frame magnitude / power / dB spectrum returned by `meteringSpectrum`. */
+export interface SpectrumReport {
+  frequencies: Float32Array;
+  magnitude: Float32Array;
+  power: Float32Array;
+  db: Float32Array;
+  nFft: number;
+  sampleRate: number;
+}
+
+/** Pearson correlation in [-1, 1] between two equal-length channels. */
+export function meteringStereoCorrelation(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  const validate = options.validate !== false;
+  assertSamples('meteringStereoCorrelation', left, validate, 'left');
+  assertSamples('meteringStereoCorrelation', right, validate, 'right');
+  return requireModule().meteringStereoCorrelation(left, right, sampleRate);
+}
+
+/** Side / mid energy ratio: 0 = pure mono, ~1 = wide stereo. */
+export function meteringStereoWidth(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  const validate = options.validate !== false;
+  assertSamples('meteringStereoWidth', left, validate, 'left');
+  assertSamples('meteringStereoWidth', right, validate, 'right');
+  return requireModule().meteringStereoWidth(left, right, sampleRate);
+}
+
+/** Per-sample mid/side point series (one entry per input frame). */
+export function meteringVectorscope(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): VectorscopeReport {
+  const validate = options.validate !== false;
+  assertSamples('meteringVectorscope', left, validate, 'left');
+  assertSamples('meteringVectorscope', right, validate, 'right');
+  return requireModule().meteringVectorscope(left, right, sampleRate);
+}
+
+/** Phase-scope point series plus summary stats. */
+export function meteringPhaseScope(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): PhaseScopeReport {
+  const validate = options.validate !== false;
+  assertSamples('meteringPhaseScope', left, validate, 'left');
+  assertSamples('meteringPhaseScope', right, validate, 'right');
+  return requireModule().meteringPhaseScope(left, right, sampleRate);
+}
+
+/** Single-frame spectrum view (uses the first `nFft` samples of `samples`). */
+export function meteringSpectrum(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options?: SpectrumOptions & ValidateOptions,
+): SpectrumReport {
+  const validate = options?.validate !== false;
+  assertSamples('meteringSpectrum', samples, validate);
+  return requireModule().meteringSpectrum(samples, sampleRate, options ?? {});
+}
+
+// ============================================================================
+// Editing — 12-TET scale quantizer
+// ============================================================================
+
+/**
+ * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.
+ *
+ * `modeMask` is a 12-bit mask. For natural C major use `0b101010110101`.
+ * `referenceMidi` defaults to A4 (69) when passed as 0.
+ */
+export function scaleQuantizeMidi(
+  root: number,
+  modeMask: number,
+  midi: number,
+  referenceMidi = 0,
+): number {
+  assertFiniteScalar('scaleQuantizeMidi', midi, 'midi');
+  assertFiniteScalar('scaleQuantizeMidi', referenceMidi, 'referenceMidi');
+  return requireModule().scaleQuantizeMidi(root, modeMask, midi, referenceMidi);
+}
+
+export function scaleCorrectionSemitones(
+  root: number,
+  modeMask: number,
+  midi: number,
+  referenceMidi = 0,
+): number {
+  assertFiniteScalar('scaleCorrectionSemitones', midi, 'midi');
+  assertFiniteScalar('scaleCorrectionSemitones', referenceMidi, 'referenceMidi');
+  return requireModule().scaleCorrectionSemitones(root, modeMask, midi, referenceMidi);
+}
+
+export function scalePitchClassEnabled(
+  root: number,
+  modeMask: number,
+  pitchClass: number,
+): boolean {
+  return requireModule().scalePitchClassEnabled(root, modeMask, pitchClass);
 }
 
 // ============================================================================
@@ -3299,15 +4319,15 @@ export class Audio {
     return pitchShift(this._samples, this._sampleRate, semitones);
   }
 
-  pitchCorrectToMidi(currentMidi: number, targetMidi: number): Float32Array {
+  pitchCorrectToMidi(currentMidi = 69.0, targetMidi = 69.0): Float32Array {
     return pitchCorrectToMidi(this._samples, this._sampleRate, currentMidi, targetMidi);
   }
 
-  noteStretch(onsetSample: number, offsetSample: number, stretchRatio: number): Float32Array {
+  noteStretch(onsetSample = 0, offsetSample = 0, stretchRatio = 1.0): Float32Array {
     return noteStretch(this._samples, this._sampleRate, onsetSample, offsetSample, stretchRatio);
   }
 
-  voiceChange(pitchSemitones: number, formantFactor: number): Float32Array {
+  voiceChange(pitchSemitones = 0.0, formantFactor = 1.0): Float32Array {
     return voiceChange(this._samples, this._sampleRate, pitchSemitones, formantFactor);
   }
 
@@ -3355,7 +4375,7 @@ export class Audio {
     return melSpectrogram(this._samples, this._sampleRate, nFft, hopLength, nMels);
   }
 
-  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 13): MfccResult {
+  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 20): MfccResult {
     return mfcc(this._samples, this._sampleRate, nFft, hopLength, nMels, nMfcc);
   }
 
@@ -3477,8 +4497,7 @@ export class StreamAnalyzer {
     if (!module) {
       throw new Error('Module not initialized. Call init() first.');
     }
-    const wasmModule = module;
-    const args = [
+    this.analyzer = new module.StreamAnalyzer(
       config.sampleRate,
       config.nFft ?? 2048,
       config.hopLength ?? 512,
@@ -3497,63 +4516,7 @@ export class StreamAnalyzer {
       config.bpmUpdateIntervalSec ?? 10,
       config.window ?? 0,
       config.outputFormat ?? 0,
-    ] as const;
-    const isArityError = (error: unknown): boolean => {
-      const message = String((error as { message?: unknown } | null)?.message ?? error);
-      return message.includes('invalid number of parameters');
-    };
-    const createLegacy = (): WasmStreamAnalyzer => {
-      const LegacyStreamAnalyzer = wasmModule.StreamAnalyzer as unknown as new (
-        sampleRate: number,
-        nFft: number,
-        hopLength: number,
-        nMels: number,
-        computeMel: boolean,
-        computeChroma: boolean,
-        computeOnset: boolean,
-        emitEveryNFrames: number,
-      ) => WasmStreamAnalyzer;
-      return new LegacyStreamAnalyzer(
-        args[0],
-        args[1],
-        args[2],
-        args[3],
-        args[8],
-        args[9],
-        args[10],
-        args[12],
-      );
-    };
-    const hasExtendedConfig =
-      config.fmin !== undefined ||
-      config.fmax !== undefined ||
-      config.tuningRefHz !== undefined ||
-      config.computeMagnitude !== undefined ||
-      config.computeSpectral !== undefined ||
-      config.magnitudeDownsample !== undefined ||
-      config.keyUpdateIntervalSec !== undefined ||
-      config.bpmUpdateIntervalSec !== undefined ||
-      config.window !== undefined ||
-      config.outputFormat !== undefined;
-    if (hasExtendedConfig) {
-      try {
-        this.analyzer = new wasmModule.StreamAnalyzer(...args);
-      } catch (error) {
-        if (!isArityError(error)) {
-          throw error;
-        }
-        this.analyzer = createLegacy();
-      }
-    } else {
-      try {
-        this.analyzer = createLegacy();
-      } catch (error) {
-        if (!isArityError(error)) {
-          throw error;
-        }
-        this.analyzer = new wasmModule.StreamAnalyzer(...args);
-      }
-    }
+    );
   }
 
   /**

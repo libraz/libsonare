@@ -17,6 +17,32 @@ export type KeyMode =
 
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
+export type VoicePresetId =
+  | 'neutral-monitor'
+  | 'bright-idol'
+  | 'soft-whisper'
+  | 'deep-narrator'
+  | 'robot-mascot'
+  | 'dark-villain';
+
+export interface RealtimeVoiceChangerPreset {
+  schemaVersion: 1;
+  id?: string;
+  name?: string;
+  description?: string;
+  macros?: Record<string, number>;
+  dsp?: Record<string, unknown>;
+}
+
+export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
+
+export interface RealtimeVoiceChangerOptions {
+  sampleRate: number;
+  maxBlockSize?: number;
+  channels?: 1 | 2;
+  preset?: RealtimeVoiceChangerConfigInput;
+}
+
 export type KeyProfile =
   | 'ks'
   | 'krumhansl'

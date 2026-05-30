@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal, TypeAlias
+
+import numpy as np
 
 from .types import (
     AcousticResult,
@@ -31,18 +33,21 @@ from .types import (
     MixResult,
     Mode,
     PanLaw,
+    PhaseScopeReport,
     PitchClass,
     PitchResult,
     RhythmResult,
     SectionResult,
     SendTiming,
+    SpectrumReport,
     StftResult,
     TimbreResult,
+    VectorscopeReport,
 )
 
 TempogramMode: TypeAlias = Literal["autocorrelation", "auto", "ac", "cosine"]
 
-FloatSamples: TypeAlias = Sequence[float] | list[float]
+FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 StripRef: TypeAlias = int | str
 
 def engine_abi_version() -> int: ...
@@ -276,7 +281,7 @@ def cqt(
     samples: FloatSamples,
     sample_rate: int = 22050,
     hop_length: int = 512,
-    fmin: float = ...,
+    fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
 ) -> CqtResult: ...
@@ -284,7 +289,7 @@ def vqt(
     samples: FloatSamples,
     sample_rate: int = 22050,
     hop_length: int = 512,
-    fmin: float = ...,
+    fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
     gamma: float = 0.0,
@@ -324,6 +329,38 @@ def voice_change(
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
 ) -> list[float]: ...
+
+class RealtimeVoiceChanger:
+    def __init__(
+        self,
+        sample_rate: int,
+        preset: str | Mapping[str, object] = "neutral-monitor",
+        *,
+        max_block_size: int = 128,
+        channels: int = 1,
+    ) -> None: ...
+    def close(self) -> None: ...
+    def __enter__(self) -> RealtimeVoiceChanger: ...
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
+    def reset(self) -> None: ...
+    def set_config(self, preset: str | Mapping[str, object]) -> None: ...
+    def latency_samples(self) -> int: ...
+    def config_json(self) -> str: ...
+    def process_mono(self, samples: FloatSamples) -> np.ndarray: ...
+    def process_interleaved(
+        self, samples: FloatSamples, channels: int | None = None
+    ) -> np.ndarray: ...
+
+def voice_change_realtime(
+    samples: FloatSamples,
+    sample_rate: int = 48000,
+    preset: str | Mapping[str, object] = "neutral-monitor",
+    *,
+    channels: int = 1,
+) -> np.ndarray: ...
+def realtime_voice_changer_preset_names() -> list[str]: ...
+def realtime_voice_changer_preset_json(preset: str) -> str: ...
+def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]: ...
 def normalize(
     samples: FloatSamples, sample_rate: int = 22050, target_db: float = -3.0
 ) -> list[float]: ...
@@ -410,20 +447,36 @@ class Mixer:
         send_id: str,
         destination_bus_id: str,
         send_db: float = 0.0,
-        timing: SendTiming | str | int = ...,
+        timing: SendTiming | str | int = SendTiming.POST_FADER,
     ) -> int: ...
     def set_send_db(self, strip: StripRef, index: int, db: float) -> None: ...
-    def strip_meter(self, strip: StripRef, tap: MeterTap | str | int = ...) -> MixMeterSnapshot: ...
-    def meter_tap(self, strip: StripRef, tap: MeterTap | str | int = ...) -> MixMeterSnapshot: ...
+    def strip_meter(
+        self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
+    ) -> MixMeterSnapshot: ...
+    def meter_tap(
+        self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
+    ) -> MixMeterSnapshot: ...
     def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]: ...
     def schedule_fader_automation(
-        self, strip: StripRef, sample_pos: int, fader_db: float, curve: AutomationCurveArg = ...
+        self,
+        strip: StripRef,
+        sample_pos: int,
+        fader_db: float,
+        curve: AutomationCurveArg = AutomationCurve.LINEAR,
     ) -> None: ...
     def schedule_pan_automation(
-        self, strip: StripRef, sample_pos: int, pan: float, curve: AutomationCurveArg = ...
+        self,
+        strip: StripRef,
+        sample_pos: int,
+        pan: float,
+        curve: AutomationCurveArg = AutomationCurve.LINEAR,
     ) -> None: ...
     def schedule_width_automation(
-        self, strip: StripRef, sample_pos: int, width: float, curve: AutomationCurveArg = ...
+        self,
+        strip: StripRef,
+        sample_pos: int,
+        width: float,
+        curve: AutomationCurveArg = AutomationCurve.LINEAR,
     ) -> None: ...
     def schedule_send_automation(
         self,
@@ -431,7 +484,7 @@ class Mixer:
         send_index: int,
         sample_pos: int,
         db: float,
-        curve: AutomationCurveArg = ...,
+        curve: AutomationCurveArg = AutomationCurve.LINEAR,
     ) -> None: ...
     def schedule_insert_automation(
         self,
@@ -440,7 +493,7 @@ class Mixer:
         param_id: int,
         sample_pos: int,
         value: float,
-        curve: AutomationCurveArg = ...,
+        curve: AutomationCurveArg = AutomationCurve.LINEAR,
     ) -> None: ...
     def process_stereo(
         self,
@@ -722,7 +775,111 @@ def tempogram_ratio(
     factors: FloatSamples | None = None,
 ) -> list[float]: ...
 def nnls_chroma(samples: FloatSamples, sample_rate: int = 22050) -> tuple[int, list[float]]: ...
+def mastering_repair_declick(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.8,
+    neighbor_ratio: float = 4.0,
+    max_click_samples: int = 8,
+    lpc_order: int = 20,
+    residual_ratio: float = 8.0,
+) -> np.ndarray[Any, Any]: ...
+def mastering_repair_denoise_classical(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    mode: int | str = "logMmse",
+    noise_estimator: int | str = "quantile",
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    dd_alpha: float = 0.98,
+    gain_floor: float = 0.05,
+    over_subtraction: float = 2.0,
+    spectral_floor: float = 0.05,
+    noise_estimation_quantile: float = 0.1,
+    speech_presence_gain: bool = True,
+    gain_smoothing: bool = True,
+) -> np.ndarray[Any, Any]: ...
+def mastering_repair_declip(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    clip_threshold: float = 0.98,
+    lpc_order: int = 36,
+    iterations: int = 2,
+    lpc_blend: float = 0.65,
+) -> np.ndarray[Any, Any]: ...
+def mastering_repair_decrackle(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.4,
+    mode: int | str = "median",
+    levels: int = 4,
+) -> np.ndarray[Any, Any]: ...
+def mastering_repair_dehum(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    fundamental_hz: float = 50.0,
+    harmonics: int = 4,
+    q: float = 20.0,
+    adaptive: bool = False,
+    search_range_hz: float = 2.0,
+    adaptation: float = 0.25,
+    frame_size: int = 2048,
+    pll_bandwidth: float = 0.01,
+) -> np.ndarray[Any, Any]: ...
+def mastering_repair_dereverb_classical(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.05,
+    attenuation: float = 0.5,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> np.ndarray[Any, Any]: ...
+def mastering_repair_trim_silence(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.001,
+    padding_samples: int = 0,
+    mode: int | str = "peak",
+    gate_lufs: float = -60.0,
+    window_ms: float = 400.0,
+) -> np.ndarray[Any, Any]: ...
 def lufs(samples: FloatSamples, sample_rate: int = 22050) -> LufsResult: ...
 def momentary_lufs(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def short_term_lufs(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
+def metering_stereo_correlation(
+    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+) -> float: ...
+def metering_stereo_width(
+    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+) -> float: ...
+def metering_vectorscope(
+    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+) -> VectorscopeReport: ...
+def metering_phase_scope(
+    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+) -> PhaseScopeReport: ...
+def metering_spectrum(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 0,
+    apply_octave_smoothing: bool = False,
+    octave_fraction: int = 0,
+    db_ref: float = 0.0,
+    db_amin: float = 0.0,
+) -> SpectrumReport: ...
 def resample(samples: FloatSamples, src_sr: int, target_sr: int) -> list[float]: ...

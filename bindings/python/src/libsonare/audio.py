@@ -128,6 +128,9 @@ from .analyzer import (
     voice_change as _voice_change,
 )
 from .analyzer import (
+    voice_change_realtime as _voice_change_realtime,
+)
+from .analyzer import (
     zero_crossing_rate as _zero_crossing_rate,
 )
 from .types import (
@@ -599,6 +602,10 @@ class Audio:
     ) -> list[float]:
         """Apply a voice-change effect with independent pitch and formant control."""
         return _voice_change(self.data, self.sample_rate, pitch_semitones, formant_factor)
+
+    def voice_change_realtime(self, preset: str = "bright-idol") -> list[float]:
+        """Apply the integrated realtime voice changer chain offline."""
+        return _voice_change_realtime(self.data, self.sample_rate, preset)
 
     def normalize(self, target_db: float = -3.0) -> list[float]:
         """Normalize audio to a target dB level."""

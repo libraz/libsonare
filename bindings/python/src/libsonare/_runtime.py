@@ -5,6 +5,8 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+import numpy as np
+
 # _runtime is the shared re-export hub: feature submodules do
 # `from ._runtime import *`, so forward the full C-struct and public type
 # surfaces here instead of maintaining a partial hand-written list (an
@@ -43,13 +45,106 @@ def _check(rc: int) -> None:
         raise RuntimeError(msg.decode("utf-8") if msg else f"sonare error {rc}")
 
 
+def _validate_samples(
+    fn_name: str,
+    samples: object,
+    *,
+    validate: bool = True,
+    arg_name: str = "samples",
+) -> np.ndarray:
+    """Coerce ``samples`` to a contiguous float32 buffer and apply input guards.
+
+    Always rejects empty buffers with ``ValueError``. When ``validate`` is True
+    (the default), additionally scans for NaN / Inf and raises ``ValueError``
+    on the first offending index. Hot paths may pass ``validate=False`` to
+    skip the O(n) scan.
+    """
+    buf = _as_float32_buffer(samples)
+    if int(buf.shape[0]) == 0:
+        raise ValueError(f"{fn_name}: {arg_name} must not be empty")
+    if validate:
+        # `np.isfinite` is vectorised C, so this stays cheap relative to the
+        # actual DSP call but lets us surface the *index* of the bad value.
+        finite = np.isfinite(buf)
+        if not bool(finite.all()):
+            bad = int(np.argmin(finite))
+            raise ValueError(
+                f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}"
+            )
+    return buf
+
+
+def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
+    """Reject NaN / Inf scalar inputs with ``ValueError``."""
+    v = float(value)
+    if not np.isfinite(v):
+        raise ValueError(f"{fn_name}: {arg_name} must be a finite number")
+    return v
+
+
+def _as_float32_buffer(samples: object) -> np.ndarray:
+    """Coerce ``samples`` to a contiguous ``float32`` 1-D numpy buffer.
+
+    Zero-copy when the input is already a contiguous ``float32`` ndarray; one
+    bulk C-level copy otherwise (``np.ascontiguousarray`` for non-contig
+    float32 input, ``np.asarray`` for lists/tuples/array.array).
+    """
+    if isinstance(samples, np.ndarray):
+        if samples.dtype == np.float32 and samples.flags["C_CONTIGUOUS"] and samples.ndim == 1:
+            return samples
+        # Cast / flatten / make contiguous in a single pass.
+        return np.ascontiguousarray(samples, dtype=np.float32).reshape(-1)
+    # list / tuple / array.array / generator → bulk-convert via NumPy's
+    # vectorised C path (orders of magnitude faster than `(c_float*N)(*seq)`).
+    return np.ascontiguousarray(np.asarray(samples, dtype=np.float32)).reshape(-1)
+
+
 def _to_c_float_array(
-    samples: Sequence[float] | list[float],
+    samples: Sequence[float] | list[float] | np.ndarray,
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
-    """Convert a sample sequence to a ctypes float array."""
-    length = len(samples)
-    c_array = (ctypes.c_float * length)(*samples)
+    """Convert a sample sequence to a ctypes float array (zero-copy when possible).
+
+    The returned ctypes array shares memory with an internal numpy buffer when
+    the input is already a contiguous ``float32`` ndarray, eliminating the
+    per-element Python→C marshalling that used to dominate hot paths like
+    :class:`RealtimeVoiceChanger.process_mono` (128 samples / 2.9 ms at 44.1 kHz).
+
+    A reference to the backing buffer is attached to the returned ctypes
+    array via ``_np_backing`` so it cannot be collected while the C call is
+    in flight.
+    """
+    buf = _as_float32_buffer(samples)
+    length = int(buf.shape[0])
+    if length == 0:  # noqa: SIM108
+        # `from_buffer` rejects zero-length buffers on some platforms; fall
+        # back to a freshly allocated empty array.
+        c_array = (ctypes.c_float * 0)()
+    else:
+        c_array = (ctypes.c_float * length).from_buffer(buf)
+    # Defensive: pin the numpy buffer to the ctypes object so callers that
+    # only retain ``c_array`` cannot accidentally drop the underlying memory.
+    c_array._np_backing = buf  # type: ignore[attr-defined]
     return c_array, length
+
+
+def _from_c_float_array(array: object, count: int) -> np.ndarray:
+    """Copy a C ``float*`` (or fixed-length ``c_float * N`` array) into numpy.
+
+    Accepts either a ``ctypes.Array`` (e.g. ``(c_float * N)``) or a
+    ``POINTER(c_float)`` and returns an independent ``float32`` ndarray
+    (``copy=True`` semantics) so callers may safely free the C-side
+    allocation immediately afterwards.
+    """
+    if count <= 0:
+        return np.empty(0, dtype=np.float32)
+    if isinstance(array, ctypes.Array):
+        # `np.frombuffer` on a `(c_float * N)` shares memory; `.copy()` makes
+        # the returned array safe to outlive the source ctypes buffer.
+        return np.frombuffer(array, dtype=np.float32, count=count).copy()
+    # POINTER(c_float) path: materialise a fixed-size view at the same address.
+    arr_type = ctypes.c_float * count
+    view = arr_type.from_address(ctypes.addressof(array.contents))  # type: ignore[union-attr]
+    return np.frombuffer(view, dtype=np.float32, count=count).copy()
 
 
 def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int32], int]:

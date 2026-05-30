@@ -257,7 +257,7 @@ class Mixer:
         send_id: str,
         destination_bus_id: str,
         send_db: float = 0.0,
-        timing: SendTiming | str | int = SendTiming.PRE_FADER,
+        timing: SendTiming | str | int = SendTiming.POST_FADER,
     ) -> int:
         """Add a send from a strip to a bus and return its send index.
 

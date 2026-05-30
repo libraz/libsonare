@@ -779,6 +779,18 @@ def engine_abi_version() -> int:
     return int(_get_lib().sonare_engine_abi_version())
 
 
+def voice_changer_abi_version() -> int:
+    """Return the realtime voice-changer ABI version.
+
+    Bindings that rely on the flat POD ``SonareRealtimeVoiceChangerConfig``
+    layout (Rust FFI, raw C consumers) should call this at attach time and
+    compare against the compile-time constant exported by the host library.
+    JSON-based callers (this binding) do not need to gate on this; it is
+    exposed for parity with the C/Node/WASM surfaces.
+    """
+    return int(_get_lib().sonare_voice_changer_abi_version())
+
+
 def has_ffmpeg_support() -> bool:
     """Return whether the loaded libsonare was compiled with FFmpeg support.
 

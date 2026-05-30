@@ -7,8 +7,9 @@ import type {
   EngineParameterInfo,
   EngineTelemetry,
   MixerRealtimeBuffer,
+  RealtimeVoiceChangerConfigInput,
 } from './index';
-import { engineCapabilities, Mixer, RealtimeEngine } from './index';
+import { engineCapabilities, Mixer, RealtimeEngine, RealtimeVoiceChanger } from './index';
 import type { AutomationCurve } from './public_types';
 import type { SonareRtModule } from './sonare-rt';
 
@@ -46,6 +47,31 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   telemetrySharedBuffer?: SharedArrayBuffer;
   telemetryRingCapacity?: number;
 }
+
+export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
+  preset?: RealtimeVoiceChangerConfigInput;
+  sampleRate?: number;
+  blockSize?: number;
+  channelCount?: number;
+}
+
+export interface SonareRealtimeVoiceChangerSetConfigMessage {
+  type: 'setConfig';
+  preset: RealtimeVoiceChangerConfigInput;
+}
+
+export interface SonareRealtimeVoiceChangerResetMessage {
+  type: 'reset';
+}
+
+export interface SonareRealtimeVoiceChangerDestroyMessage {
+  type: 'destroy';
+}
+
+export type SonareRealtimeVoiceChangerMessage =
+  | SonareRealtimeVoiceChangerSetConfigMessage
+  | SonareRealtimeVoiceChangerResetMessage
+  | SonareRealtimeVoiceChangerDestroyMessage;
 
 export interface SonareRealtimeEngineNodeCapabilities {
   mode: 'sab' | 'postMessage';
@@ -315,6 +341,13 @@ function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
 
 function isEngineCommandRecord(value: unknown): value is SonareEngineCommandRecord {
   return isRecord(value) && typeof value.type === 'number';
+}
+
+function isRealtimeVoiceChangerMessage(value: unknown): value is SonareRealtimeVoiceChangerMessage {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+  return value.type === 'setConfig' || value.type === 'reset' || value.type === 'destroy';
 }
 
 function isEngineTelemetryRecord(value: unknown): value is SonareEngineTelemetryRecord {
@@ -981,6 +1014,7 @@ export class SonareWorkletProcessor {
  * load the dedicated Emscripten AudioWorklet module.
  */
 export class SonareRealtimeEngineWorkletProcessor {
+  private static warnedChannelScratchOverflow = false;
   readonly sampleRate: number;
   readonly blockSize: number;
   readonly channelCount: number;
@@ -992,6 +1026,14 @@ export class SonareRealtimeEngineWorkletProcessor {
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
   private lastMeterFrame = Number.NEGATIVE_INFINITY;
+  // Pre-allocated worst-case input scratch buffers. The main thread allocates
+  // these in the constructor; process() reuses them via subarray() so it never
+  // touches the V8 heap allocator (which would risk GC stalls on the audio
+  // thread). One scratch buffer per channel sized to blockSize.
+  private readonly channelScratch: Float32Array[];
+  // Reused array of subarray views passed to engine.process() each block.
+  // Pre-allocating this array avoids growing-array allocations from .push().
+  private readonly channelScratchViews: Float32Array[];
 
   constructor(
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
@@ -1018,6 +1060,13 @@ export class SonareRealtimeEngineWorkletProcessor {
         )
       : undefined;
     this.engine = new RealtimeEngine(this.sampleRate, this.blockSize);
+    // Worst-case allocation: channelCount full-blockSize Float32Arrays.
+    this.channelScratch = new Array(this.channelCount);
+    this.channelScratchViews = new Array(this.channelCount);
+    for (let ch = 0; ch < this.channelCount; ch++) {
+      this.channelScratch[ch] = new Float32Array(this.blockSize);
+      this.channelScratchViews[ch] = this.channelScratch[ch];
+    }
   }
 
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
@@ -1040,18 +1089,38 @@ export class SonareRealtimeEngineWorkletProcessor {
 
     this.drainCommands();
 
-    const channels: Float32Array[] = [];
-    const input = inputs[0];
-    for (let ch = 0; ch < this.channelCount; ch++) {
-      const source = input?.[ch];
-      const channel = new Float32Array(frames);
-      if (source && source.length === frames) {
-        channel.set(source);
+    // Clamp `frames` to the pre-allocated scratch capacity. The earlier
+    // `frames > this.blockSize` branch already returns early, so this is
+    // defensive — but we warn once if it ever fires so the contract violation
+    // is visible.
+    const scratchCapacity = this.channelScratch[0]?.length ?? 0;
+    let usableFrames = frames;
+    if (usableFrames > scratchCapacity) {
+      if (!SonareRealtimeEngineWorkletProcessor.warnedChannelScratchOverflow) {
+        SonareRealtimeEngineWorkletProcessor.warnedChannelScratchOverflow = true;
+        // biome-ignore lint/suspicious/noConsole: realtime-safety diagnostic.
+        console.warn(
+          `SonareRealtimeEngineWorkletProcessor: requested ${usableFrames} frames ` +
+            `exceeds pre-allocated capacity ${scratchCapacity}; clamping.`,
+        );
       }
-      channels.push(channel);
+      usableFrames = scratchCapacity;
+    }
+    const input = inputs[0];
+    // Reuse the scratch buffers via subarray() — these are views over the
+    // pre-allocated Float32Array storage and do not allocate on the heap.
+    for (let ch = 0; ch < this.channelCount; ch++) {
+      const scratch = this.channelScratch[ch];
+      const source = input?.[ch];
+      if (source && source.length === usableFrames) {
+        scratch.set(source, 0);
+      } else {
+        scratch.fill(0, 0, usableFrames);
+      }
+      this.channelScratchViews[ch] = scratch.subarray(0, usableFrames);
     }
 
-    const processed = this.engine.process(channels);
+    const processed = this.engine.process(this.channelScratchViews);
     for (let ch = 0; ch < output.length; ch++) {
       const target = output[ch];
       const source = processed[ch] ?? processed[0];
@@ -1990,6 +2059,181 @@ export class SonareEngine {
   }
 }
 
+export class SonareRealtimeVoiceChangerWorkletProcessor {
+  private static warnedMonoOverflow = false;
+  private static warnedInterleavedOverflow = false;
+  private changer: RealtimeVoiceChanger;
+  private readonly sampleRate: number;
+  private readonly blockSize: number;
+  private readonly channelCount: number;
+  // WASM-heap typed-memory views, sized to the worst case (blockSize *
+  // channelCount). Acquired on the main thread (constructor) so the
+  // audio-thread process() never crosses an allocation boundary.
+  private monoInput: Float32Array;
+  private monoOutput: Float32Array;
+  // Planar heap-backed views (one Float32Array per channel) used by the
+  // multi-channel path. AudioWorklet inputs/outputs are already planar
+  // Float32Arrays, so this avoids the per-sample interleave/deinterleave
+  // passes that the older interleaved path needed.
+  private planarChannels: Float32Array[];
+  private destroyed = false;
+
+  constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions = {}) {
+    this.sampleRate = options.sampleRate ?? 48000;
+    this.blockSize = options.blockSize ?? 128;
+    this.channelCount = Math.max(1, Math.floor(options.channelCount ?? 1));
+    this.changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+    this.changer.prepare(this.sampleRate, this.blockSize, this.channelCount);
+    // Acquire WASM-heap views once, sized to the worst case. These are alive
+    // for the lifetime of the changer; if the host requests more frames per
+    // process() than blockSize, we clamp (see ensure*Capacity).
+    this.monoInput = this.changer.getMonoInputBuffer(this.blockSize);
+    this.monoOutput = this.changer.getMonoOutputBuffer(this.blockSize);
+    this.planarChannels = [];
+    if (this.channelCount > 1) {
+      for (let ch = 0; ch < this.channelCount; ch++) {
+        this.planarChannels.push(this.changer.getPlanarChannelBuffer(ch, this.blockSize));
+      }
+    }
+  }
+
+  /**
+   * Handles a control-plane message from the main thread. Runs on the
+   * AudioWorklet global scope but OUTSIDE of `process()` (i.e. outside the
+   * realtime audio callback), so it is safe to perform JSON parsing and
+   * DSP coefficient recomputation here. `setConfig` MUST NOT be deferred
+   * into `process()` because that would block the audio thread for longer
+   * than one render quantum (e.g. 128 samples / 44.1 kHz = ~2.9 ms).
+   */
+  receiveMessage(message: SonareRealtimeVoiceChangerMessage): void {
+    if (this.destroyed) {
+      return;
+    }
+    if (message.type === 'setConfig') {
+      // Apply synchronously on the message-handler thread. `setConfig` may
+      // allocate and parse JSON internally; doing it here keeps `process()`
+      // realtime-safe.
+      this.changer.setConfig(message.preset);
+    } else if (message.type === 'reset') {
+      this.changer.reset();
+    } else if (message.type === 'destroy') {
+      this.destroy();
+    }
+  }
+
+  process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
+    const output = outputs[0];
+    if (this.destroyed || !output || output.length === 0) {
+      return !this.destroyed;
+    }
+
+    const input = inputs[0];
+    const requestedFrames = output[0]?.length ?? 0;
+    const requestedChannels = Math.min(this.channelCount, output.length);
+    if (requestedFrames === 0 || requestedChannels === 0) {
+      return true;
+    }
+
+    if (requestedChannels === 1) {
+      // Clamp to the pre-allocated capacity; warn (once) if the host violated
+      // the contract. We never reallocate on the audio thread.
+      const frames = this.ensureMonoCapacity(requestedFrames);
+      const source = input?.[0];
+      if (source) {
+        this.monoInput.set(source.subarray(0, frames));
+      } else {
+        this.monoInput.fill(0, 0, frames);
+      }
+      this.changer.processMonoInto(
+        this.monoInput.subarray(0, frames),
+        this.monoOutput.subarray(0, frames),
+      );
+      output[0].set(this.monoOutput.subarray(0, frames));
+      return true;
+    }
+
+    const frames = this.ensureInterleavedCapacity(requestedFrames, requestedChannels);
+    const channels = requestedChannels;
+    // Planar zero-copy path: AudioWorklet's input[ch] is already a
+    // Float32Array per channel, so we set() straight into the heap-backed
+    // planar view and processPreparedPlanar runs in place.
+    for (let ch = 0; ch < channels; ch++) {
+      const src = input?.[ch];
+      const dst = this.planarChannels[ch];
+      if (!dst) {
+        continue;
+      }
+      if (src) {
+        dst.set(src.subarray(0, frames));
+      } else {
+        dst.fill(0, 0, frames);
+      }
+    }
+    this.changer.processPreparedPlanar(frames);
+    for (let ch = 0; ch < channels; ch++) {
+      const src = this.planarChannels[ch];
+      if (src) {
+        output[ch].set(src.subarray(0, frames));
+      }
+      // No `for frame` inner loop needed; output[ch] is a Float32Array.
+    }
+    return true;
+  }
+
+  destroy(): void {
+    if (this.destroyed) {
+      return;
+    }
+    this.destroyed = true;
+    this.changer.delete();
+  }
+
+  /**
+   * Returns the number of frames we can actually process given the
+   * pre-allocated capacity. If the host requests more frames than the
+   * worst-case block size declared at construction time, we clamp to the
+   * available capacity and warn once — we MUST NOT reallocate on the
+   * realtime audio thread.
+   */
+  private ensureMonoCapacity(frames: number): number {
+    const capacity = this.monoInput.length;
+    if (frames <= capacity) {
+      return frames;
+    }
+    if (!SonareRealtimeVoiceChangerWorkletProcessor.warnedMonoOverflow) {
+      SonareRealtimeVoiceChangerWorkletProcessor.warnedMonoOverflow = true;
+      // biome-ignore lint/suspicious/noConsole: realtime-safety diagnostic.
+      console.warn(
+        `SonareRealtimeVoiceChangerWorkletProcessor: requested ${frames} mono frames ` +
+          `exceeds pre-allocated capacity ${capacity}; clamping. ` +
+          'Increase blockSize at construction time to avoid this.',
+      );
+    }
+    return capacity;
+  }
+
+  /**
+   * Same contract as ensureMonoCapacity but for the planar per-channel
+   * scratch. Returns the number of frames that fit in the available capacity.
+   */
+  private ensureInterleavedCapacity(frames: number, channels: number): number {
+    const capacity = this.planarChannels[0]?.length ?? 0;
+    if (frames <= capacity) {
+      return frames;
+    }
+    if (!SonareRealtimeVoiceChangerWorkletProcessor.warnedInterleavedOverflow) {
+      SonareRealtimeVoiceChangerWorkletProcessor.warnedInterleavedOverflow = true;
+      // biome-ignore lint/suspicious/noConsole: realtime-safety diagnostic.
+      console.warn(
+        `SonareRealtimeVoiceChangerWorkletProcessor: requested ${frames}x${channels} ` +
+          `planar frames exceeds pre-allocated capacity ${capacity}; clamping. ` +
+          'Increase blockSize or channelCount at construction time to avoid this.',
+      );
+    }
+    return capacity;
+  }
+}
+
 export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'): void {
   const scope = globalThis as unknown as {
     AudioWorkletProcessor?: new () => object;
@@ -2027,6 +2271,47 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
     }
   }
   scope.registerProcessor(name, RegisteredSonareWorkletProcessor);
+}
+
+export function registerSonareRealtimeVoiceChangerWorkletProcessor(
+  name = 'sonare-realtime-voice-changer-processor',
+): void {
+  const scope = globalThis as unknown as {
+    AudioWorkletProcessor?: new () => object;
+    registerProcessor?: (processorName: string, processorCtor: unknown) => void;
+  };
+  if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
+    throw new Error('AudioWorkletProcessor is not available in this context.');
+  }
+  const Base = scope.AudioWorkletProcessor;
+  class RegisteredSonareRealtimeVoiceChangerWorkletProcessor extends Base {
+    private bridge: SonareRealtimeVoiceChangerWorkletProcessor;
+    readonly port?: WorkletPort;
+
+    constructor(options?: {
+      processorOptions?: SonareRealtimeVoiceChangerWorkletProcessorOptions;
+    }) {
+      super();
+      const port = this.port;
+      this.bridge = new SonareRealtimeVoiceChangerWorkletProcessor(options?.processorOptions ?? {});
+      const onMessage = (event: { data: unknown }) => {
+        if (isRealtimeVoiceChangerMessage(event.data)) {
+          this.bridge.receiveMessage(event.data);
+        }
+      };
+      if (port?.addEventListener) {
+        port.addEventListener('message', onMessage);
+        port.start?.();
+      } else if (port) {
+        port.onmessage = onMessage;
+      }
+    }
+
+    process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
+      return this.bridge.process(inputs, outputs);
+    }
+  }
+  scope.registerProcessor(name, RegisteredSonareRealtimeVoiceChangerWorkletProcessor);
 }
 
 export function registerSonareRealtimeEngineWorkletProcessor(
@@ -2092,6 +2377,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         if (!options.rtModuleUrl) {
           throw new Error('rtModuleUrl is required for sonare-rt AudioWorklet runtime.');
         }
+        const rtModuleUrl = options.rtModuleUrl;
         const memory = new WebAssembly.Memory({ initial: 1024, maximum: 1024, shared: true });
         const globalFactory = (
           globalThis as typeof globalThis & {
@@ -2104,7 +2390,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         ).SonareRtModuleFactory;
         const moduleFactory = globalFactory
           ? { default: globalFactory }
-          : ((await import(options.rtModuleUrl)) as {
+          : ((await import(rtModuleUrl)) as {
               default: (options?: {
                 wasmMemory?: WebAssembly.Memory;
                 wasmBinary?: ArrayBuffer | Uint8Array;
@@ -2114,7 +2400,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         const module = await moduleFactory.default({
           wasmMemory: memory,
           wasmBinary: options.rtWasmBinary,
-          locateFile: (path) => options.rtModuleUrl!.replace(/[^/]*$/, path),
+          locateFile: (path) => rtModuleUrl.replace(/[^/]*$/, path),
         });
         this.rtBridge = new SonareRtRealtimeEngineRuntime({
           module,

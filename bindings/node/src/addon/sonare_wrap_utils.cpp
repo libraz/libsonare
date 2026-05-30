@@ -106,6 +106,23 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
   return key;
 }
 
+std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object) {
+  std::vector<sonare::mastering::api::Param> params;
+  Napi::Array names = object.GetPropertyNames();
+  for (uint32_t index = 0; index < names.Length(); ++index) {
+    Napi::Value key_value = names.Get(index);
+    Napi::Value value = object.Get(key_value);
+    if (key_value.IsString() && value.IsNumber()) {
+      params.push_back(
+          {key_value.As<Napi::String>().Utf8Value(), value.As<Napi::Number>().DoubleValue()});
+    } else if (key_value.IsString() && value.IsBoolean()) {
+      params.push_back({key_value.As<Napi::String>().Utf8Value(),
+                        value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
+    }
+  }
+  return params;
+}
+
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));

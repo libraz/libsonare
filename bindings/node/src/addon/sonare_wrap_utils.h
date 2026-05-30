@@ -5,7 +5,9 @@
 
 #include <exception>
 #include <new>
+#include <vector>
 
+#include "mastering/api/named_processor.h"
 #include "sonare_c.h"
 #include "util/exception.h"
 
@@ -19,6 +21,9 @@ const char* ModeNameLocal(SonareMode mode);
 const char* ChordQualityName(SonareChordQuality quality);
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence);
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis);
+
+/// @brief Convert a JS object of {name -> number|boolean} into mastering API params.
+std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object);
 
 }  // namespace sonare_node
 

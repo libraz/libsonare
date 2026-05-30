@@ -1382,15 +1382,61 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
 // row-major [n_mels x n_frames] power spectrogram; the MFCC matrix is a
 // row-major [n_mfcc x n_frames] coefficient matrix.
 
-// melToStft(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?, fmin?, fmax?)
+// melToStft(mel, nMels, nFrames, sampleRate?, nFft?, fmin?, fmax?)
 // -> { nBins, nFrames, power: Float32Array }
+//
+// hop_length is intentionally absent: sonare::mel_to_stft does not consume it
+// (the inverse mel projection is per-frame). Keep this signature in sync with
+// the WASM / Python / C surfaces.
 Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env,
+                         "Expected (Float32Array, nMels, nFrames, sampleRate?, nFft?, fmin?, "
+                         "fmax?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int n_mels = info[1].As<Napi::Number>().Int32Value();
+  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  const int sr =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
+  const int n_fft =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
+  const float fmin =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 0.0f;
+  const float fmax =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
+
+  sonare::MelConfig config;
+  config.n_fft = n_fft;
+  config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
+
+  std::vector<float> stft = sonare::mel_to_stft(typed.Data(), n_mels, n_frames, config, sr);
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("nBins", Napi::Number::New(env, n_fft / 2 + 1));
+  out.Set("nFrames", Napi::Number::New(env, n_frames));
+  out.Set("power", VecToFloat32(env, stft));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+// melToAudio(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?, fmin?, fmax?, nIter?)
+// -> Float32Array (reconstructed audio)
+Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
                          "Expected (Float32Array, nMels, nFrames, sampleRate?, nFft?, "
-                         "hopLength?)")
+                         "hopLength?, fmin?, fmax?, nIter?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1409,53 +1455,8 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
   const float fmax =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
-
-  sonare::MelConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.n_mels = n_mels;
-  config.fmin = fmin;
-  config.fmax = fmax;
-
-  std::vector<float> stft = sonare::mel_to_stft(typed.Data(), n_mels, n_frames, config, sr);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("nBins", Napi::Number::New(env, n_fft / 2 + 1));
-  out.Set("nFrames", Napi::Number::New(env, n_frames));
-  out.Set("power", VecToFloat32(env, stft));
-  return out;
-  SONARE_NODE_CATCH(env)
-}
-
-// melToAudio(mel, nMels, nFrames, sampleRate?, nFft?, hopLength?, nIter?, fmin?, fmax?)
-// -> Float32Array (reconstructed audio)
-Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, nMels, nFrames, sampleRate?, nFft?, "
-                         "hopLength?, nIter?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const int n_mels = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
-  const int sr =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
   const int n_iter =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 32;
-  const float fmin =
-      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
-  const float fmax =
-      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().Int32Value() : 32;
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -1498,15 +1499,15 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-// mfccToAudio(mfcc, nMfcc, nFrames, sampleRate?, nFft?, hopLength?, nMels?, nIter?, fmin?, fmax?)
+// mfccToAudio(mfcc, nMfcc, nFrames, nMels?, sampleRate?, nFft?, hopLength?, fmin?, fmax?, nIter?)
 // -> Float32Array (reconstructed audio)
 Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env,
-                         "Expected (Float32Array, nMfcc, nFrames, sampleRate?, nFft?, "
-                         "hopLength?, nMels?, nIter?)")
+                         "Expected (Float32Array, nMfcc, nFrames, nMels?, sampleRate?, nFft?, "
+                         "hopLength?, fmin?, fmax?, nIter?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1515,20 +1516,20 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int n_mfcc = info[1].As<Napi::Number>().Int32Value();
   const int n_frames = info[2].As<Napi::Number>().Int32Value();
-  const int sr =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
   const int n_mels =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 128;
-  const int n_iter =
-      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().Int32Value() : 32;
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
+  const int sr =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 22050;
+  const int n_fft =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 2048;
+  const int hop_length =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 512;
   const float fmin =
-      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
   const float fmax =
-      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().FloatValue() : 0.0f;
+  const int n_iter =
+      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().Int32Value() : 32;
 
   sonare::MelConfig config;
   config.n_fft = n_fft;

@@ -19,7 +19,6 @@ import {
   melToStft,
   mfcc,
   mfccToAudio,
-  mixerScenePresetJson,
   mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
@@ -64,29 +63,43 @@ describe('v1.2 feature additions (WASM)', () => {
   const signal = generateSine(220, SR, 3.0);
 
   describe('onset envelope', () => {
-    it('returns a finite envelope', () => {
+    it('returns a finite per-frame envelope sized to the audio length', () => {
       const env = onsetEnvelope(signal, SR);
-      expect(env.length).toBeGreaterThan(0);
+      // ~ ceil(signal.length / hop_length=512). Allow ±2 for librosa-style padding/centering.
+      const expectedFrames = Math.ceil(signal.length / 512);
+      expect(env.length).toBeGreaterThanOrEqual(expectedFrames - 2);
+      expect(env.length).toBeLessThanOrEqual(expectedFrames + 2);
       expect(allFinite(env)).toBe(true);
     });
   });
 
   describe('tempogram family', () => {
-    it('Fourier tempogram returns an [nBins x nFrames] matrix', () => {
+    it('Fourier tempogram returns an [nBins x nFrames] matrix of non-negative magnitudes', () => {
       const env = onsetEnvelope(signal, SR);
       const ft = fourierTempogram(env, SR);
-      expect(ft.nBins).toBeGreaterThan(0);
-      expect(ft.nFrames).toBeGreaterThan(0);
+      // Default win_length is 384 → n_bins = win_length / 2 + 1 = 193.
+      expect(ft.nBins).toBe(193);
+      // Fourier tempogram frames align to the onset-envelope length.
+      expect(ft.nFrames).toBe(env.length);
       expect(ft.data.length).toBe(ft.nBins * ft.nFrames);
       expect(allFinite(ft.data)).toBe(true);
+      // Magnitudes must be non-negative.
+      for (const v of ft.data) {
+        expect(v).toBeGreaterThanOrEqual(0);
+      }
     });
 
-    it('tempogram ratio returns one value per default factor', () => {
+    it('tempogram ratio returns one finite value per default factor', () => {
       const env = onsetEnvelope(signal, SR);
       const tg = tempogram(env, SR);
       const ratios = tempogramRatio(tg.data, tg.winLength, SR);
+      // Defaults to {0.5, 1, 2, 3, 4}.
       expect(ratios.length).toBe(5);
       expect(allFinite(ratios)).toBe(true);
+      // Ratio values are normalized magnitudes — non-negative.
+      for (const v of ratios) {
+        expect(v).toBeGreaterThanOrEqual(0);
+      }
     });
 
     it('plp returns a pulse curve aligned to the envelope', () => {
@@ -98,12 +111,20 @@ describe('v1.2 feature additions (WASM)', () => {
   });
 
   describe('NNLS chroma', () => {
-    it('returns a 12 x nFrames matrix', () => {
+    it('returns a 12 x nFrames matrix with normalized non-negative entries', () => {
       const result = nnlsChroma(signal, SR);
       expect(result.nChroma).toBe(12);
-      expect(result.nFrames).toBeGreaterThan(0);
+      // Aligns to the same hop grid as onset_envelope (~ signal.length / 512).
+      const expectedFrames = Math.ceil(signal.length / 512);
+      expect(result.nFrames).toBeGreaterThanOrEqual(expectedFrames - 2);
+      expect(result.nFrames).toBeLessThanOrEqual(expectedFrames + 2);
       expect(result.data.length).toBe(result.nChroma * result.nFrames);
       expect(allFinite(result.data)).toBe(true);
+      // NNLS chroma is non-negative and normalized to [0, 1] per librosa convention.
+      for (const v of result.data) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1.0 + 1e-5);
+      }
     });
   });
 
@@ -122,40 +143,90 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(loud.integratedLufs).toBeGreaterThan(quiet.integratedLufs);
     });
 
-    it('momentary/short-term series are non-empty and finite', () => {
-      expect(momentaryLufs(signal, SR).length).toBeGreaterThan(0);
-      expect(shortTermLufs(signal, SR).length).toBeGreaterThan(0);
-      expect(allFinite(momentaryLufs(signal, SR))).toBe(true);
+    it('momentary/short-term series are non-empty, finite, and within audible LUFS range', () => {
+      const mom = momentaryLufs(signal, SR);
+      const st = shortTermLufs(signal, SR);
+      // 3-second 0.5-amplitude tone -> at least a couple of 400ms momentary windows
+      // and at least one 3s short-term window.
+      expect(mom.length).toBeGreaterThan(2);
+      expect(st.length).toBeGreaterThanOrEqual(1);
+      expect(allFinite(mom)).toBe(true);
+      expect(allFinite(st)).toBe(true);
+      // Every value should land in a sensible loudness range; a 0.5-amp tone is
+      // ~-9 LUFS, and -Infinity (a previous silent-input bug we want to catch)
+      // would fail the > -100 check.
+      for (const v of mom) {
+        expect(v).toBeGreaterThan(-100);
+        expect(v).toBeLessThan(0);
+      }
+      for (const v of st) {
+        expect(v).toBeGreaterThan(-100);
+        expect(v).toBeLessThan(0);
+      }
     });
   });
 
   describe('editing DSP (pitch correct / note stretch / voice change)', () => {
-    it('pitchCorrectToMidi returns a non-empty finite buffer', () => {
+    function peakAmplitude(arr: Float32Array): number {
+      let p = 0;
+      for (const v of arr) {
+        const a = Math.abs(v);
+        if (a > p) {
+          p = a;
+        }
+      }
+      return p;
+    }
+
+    it('pitchCorrectToMidi preserves length and stays within audio range', () => {
       const out = pitchCorrectToMidi(signal, SR, 57, 60);
       expect(out).toBeInstanceOf(Float32Array);
-      expect(out.length).toBeGreaterThan(0);
+      // Phase-vocoder pitch correction returns the input length verbatim.
+      expect(out.length).toBe(signal.length);
       expect(allFinite(out)).toBe(true);
+      const peak = peakAmplitude(out);
+      // Input peak is 0.5; allow up to ~1.0 for pitch-correction overshoot but
+      // catch obvious blow-ups / silence.
+      expect(peak).toBeGreaterThan(0.05);
+      expect(peak).toBeLessThanOrEqual(1.0);
     });
 
-    it('noteStretch returns a non-empty finite buffer', () => {
+    it('noteStretch lengthens the buffer by the stretch ratio', () => {
       const out = noteStretch(signal, SR, 0, signal.length, 1.5);
       expect(out).toBeInstanceOf(Float32Array);
-      expect(out.length).toBeGreaterThan(0);
       expect(allFinite(out)).toBe(true);
+      // Stretching by 1.5 must lengthen the output (allow ±2% for windowing).
+      const expected = Math.round(signal.length * 1.5);
+      expect(out.length).toBeGreaterThanOrEqual(Math.floor(expected * 0.98));
+      expect(out.length).toBeLessThanOrEqual(Math.ceil(expected * 1.02));
+      const peak = peakAmplitude(out);
+      expect(peak).toBeGreaterThan(0.05);
+      expect(peak).toBeLessThanOrEqual(1.0);
     });
 
-    it('voiceChange returns a non-empty finite buffer', () => {
+    it('voiceChange preserves length and amplitude range', () => {
       const out = voiceChange(signal, SR, 2, 1.1);
       expect(out).toBeInstanceOf(Float32Array);
-      expect(out.length).toBeGreaterThan(0);
       expect(allFinite(out)).toBe(true);
+      // Voice changer is duration-preserving; allow a tiny boundary slack.
+      expect(out.length).toBeGreaterThanOrEqual(signal.length - 4);
+      expect(out.length).toBeLessThanOrEqual(signal.length + 4);
+      const peak = peakAmplitude(out);
+      expect(peak).toBeGreaterThan(0.05);
+      expect(peak).toBeLessThanOrEqual(1.0);
     });
 
-    it('exposes the editing methods on the Audio class', () => {
+    it('exposes the editing methods on the Audio class with the same shapes', () => {
       const audio = Audio.fromBuffer(signal, SR);
-      expect(audio.pitchCorrectToMidi(57, 60).length).toBeGreaterThan(0);
-      expect(audio.noteStretch(0, signal.length, 1.5).length).toBeGreaterThan(0);
-      expect(audio.voiceChange(2, 1.1).length).toBeGreaterThan(0);
+      const corrected = audio.pitchCorrectToMidi(57, 60);
+      const stretched = audio.noteStretch(0, signal.length, 1.5);
+      const voiced = audio.voiceChange(2, 1.1);
+      expect(corrected.length).toBe(signal.length);
+      expect(stretched.length).toBeGreaterThan(signal.length);
+      expect(voiced.length).toBeGreaterThanOrEqual(signal.length - 4);
+      expect(allFinite(corrected)).toBe(true);
+      expect(allFinite(stretched)).toBe(true);
+      expect(allFinite(voiced)).toBe(true);
     });
   });
 
@@ -358,13 +429,28 @@ describe('v1.2 feature additions (WASM)', () => {
   });
 
   describe('Audio class methods', () => {
-    it('exposes onsetEnvelope/nnlsChroma/lufs/momentaryLufs/shortTermLufs', () => {
+    it('exposes onsetEnvelope/nnlsChroma/lufs/momentaryLufs/shortTermLufs with finite values', () => {
       const audio = Audio.fromBuffer(signal, SR);
-      expect(audio.onsetEnvelope().length).toBeGreaterThan(0);
-      expect(audio.nnlsChroma().nChroma).toBe(12);
-      expect(Number.isFinite(audio.lufs().integratedLufs)).toBe(true);
-      expect(audio.momentaryLufs().length).toBeGreaterThan(0);
-      expect(audio.shortTermLufs().length).toBeGreaterThan(0);
+      const env = audio.onsetEnvelope();
+      expect(env.length).toBeGreaterThan(0);
+      expect(allFinite(env)).toBe(true);
+
+      const nc = audio.nnlsChroma();
+      expect(nc.nChroma).toBe(12);
+      expect(nc.data.length).toBe(nc.nChroma * nc.nFrames);
+      expect(allFinite(nc.data)).toBe(true);
+
+      const integrated = audio.lufs().integratedLufs;
+      expect(Number.isFinite(integrated)).toBe(true);
+      expect(integrated).toBeGreaterThan(-100);
+      expect(integrated).toBeLessThan(0);
+
+      const mom = audio.momentaryLufs();
+      const st = audio.shortTermLufs();
+      expect(mom.length).toBeGreaterThan(0);
+      expect(st.length).toBeGreaterThan(0);
+      expect(allFinite(mom)).toBe(true);
+      expect(allFinite(st)).toBe(true);
     });
   });
 
@@ -453,11 +539,6 @@ describe('v1.2 feature additions (WASM)', () => {
         mixer.delete();
       }
     });
-
-    it('mixerScenePresetJson aliases the canonical preset JSON', () => {
-      const json = mixerScenePresetJson('vocalReverbSend');
-      expect(json).toContain('"vocal-verb"');
-    });
   });
 
   describe('sections / melody / CQT / VQT parity', () => {
@@ -470,12 +551,12 @@ describe('v1.2 feature additions (WASM)', () => {
       const fmax = 4000;
 
       const mel = melSpectrogram(tone, SR, nFft, hop, nMels);
-      const stft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, hop, fmin, fmax);
+      const stft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, fmin, fmax);
       expect(stft.nBins).toBe(nFft / 2 + 1);
       expect(stft.nFrames).toBe(mel.nFrames);
       expect(allFinite(stft.power)).toBe(true);
 
-      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, 2, fmin, fmax);
+      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, fmin, fmax, 2);
       expect(audio.length).toBeGreaterThan(0);
       expect(allFinite(audio)).toBe(true);
 
@@ -488,9 +569,9 @@ describe('v1.2 feature additions (WASM)', () => {
         SR,
         nFft,
         hop,
-        2,
         fmin,
         fmax,
+        2,
       );
       expect(mfccAudio.length).toBeGreaterThan(0);
       expect(allFinite(mfccAudio)).toBe(true);

@@ -785,7 +785,10 @@ describe('Sonare WASM Module', () => {
       expect(Array.isArray(result.genreCandidates)).toBe(true);
       expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
       expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
-      expect(result.chainConfig.params['repair.declick.enabled']).toBe(1);
+      // After the chain_json.cpp migration to util::json, booleans serialize as
+      // JSON `true`/`false` (per RFC 8259) instead of `1`/`0`. Both representations
+      // mean the same thing to callers; the test now reflects the spec-compliant form.
+      expect(result.chainConfig.params['repair.declick.enabled']).toBe(true);
     });
 
     it('should expose mastering audio profiles in WASM', () => {

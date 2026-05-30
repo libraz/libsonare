@@ -10,3 +10,5 @@
 #   universal: false
 
 -e file:.
+numpy==2.4.6
+    # via libsonare

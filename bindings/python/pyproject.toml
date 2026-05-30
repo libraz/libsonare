@@ -28,13 +28,18 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    # NumPy is required at runtime: hot paths (RealtimeVoiceChanger and the
+    # shared `_to_c_float_array` ctypes bridge) rely on numpy buffers for
+    # zero-copy marshalling. Element-wise ctypes conversion was a real-time
+    # blocker (128-sample / 2.9 ms blocks could not meet deadline at 44.1 kHz).
+    "numpy>=1.24",
+]
 
 [project.scripts]
 sonare = "libsonare.cli:main"
 
 [project.optional-dependencies]
-numpy = ["numpy>=1.24"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",

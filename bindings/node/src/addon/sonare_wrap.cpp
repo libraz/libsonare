@@ -85,6 +85,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::DetectDownbeats, "detectDownbeats"));
   exports.Set("detectOnsets", Napi::Function::New(env, &SonareWrap::DetectOnsets, "detectOnsets"));
   exports.Set("analyze", Napi::Function::New(env, &SonareWrap::Analyze, "analyze"));
+  exports.Set("analyzeAsync", Napi::Function::New(env, &SonareWrap::AnalyzeAsync, "analyzeAsync"));
   exports.Set("analyzeWithProgress",
               Napi::Function::New(env, &SonareWrap::AnalyzeWithProgress, "analyzeWithProgress"));
   exports.Set("analyzeSections",
@@ -109,6 +110,40 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MomentaryLufs, "momentaryLufs"));
   exports.Set("shortTermLufs",
               Napi::Function::New(env, &SonareWrap::ShortTermLufs, "shortTermLufs"));
+  exports.Set("meteringPeakDb",
+              Napi::Function::New(env, &SonareWrap::MeteringPeakDb, "meteringPeakDb"));
+  exports.Set("meteringRmsDb",
+              Napi::Function::New(env, &SonareWrap::MeteringRmsDb, "meteringRmsDb"));
+  exports.Set("meteringCrestFactorDb", Napi::Function::New(env, &SonareWrap::MeteringCrestFactorDb,
+                                                           "meteringCrestFactorDb"));
+  exports.Set("meteringDcOffset",
+              Napi::Function::New(env, &SonareWrap::MeteringDcOffset, "meteringDcOffset"));
+  exports.Set("meteringTruePeakDb",
+              Napi::Function::New(env, &SonareWrap::MeteringTruePeakDb, "meteringTruePeakDb"));
+  exports.Set(
+      "meteringDetectClipping",
+      Napi::Function::New(env, &SonareWrap::MeteringDetectClipping, "meteringDetectClipping"));
+  exports.Set("meteringDynamicRange",
+              Napi::Function::New(env, &SonareWrap::MeteringDynamicRange, "meteringDynamicRange"));
+  exports.Set("meteringStereoCorrelation",
+              Napi::Function::New(env, &SonareWrap::MeteringStereoCorrelation,
+                                  "meteringStereoCorrelation"));
+  exports.Set("meteringStereoWidth",
+              Napi::Function::New(env, &SonareWrap::MeteringStereoWidth, "meteringStereoWidth"));
+  exports.Set("meteringVectorscope",
+              Napi::Function::New(env, &SonareWrap::MeteringVectorscope, "meteringVectorscope"));
+  exports.Set("meteringPhaseScope",
+              Napi::Function::New(env, &SonareWrap::MeteringPhaseScope, "meteringPhaseScope"));
+  exports.Set("meteringSpectrum",
+              Napi::Function::New(env, &SonareWrap::MeteringSpectrum, "meteringSpectrum"));
+  exports.Set("scaleQuantizeMidi",
+              Napi::Function::New(env, &SonareWrap::ScaleQuantizeMidi, "scaleQuantizeMidi"));
+  exports.Set(
+      "scaleCorrectionSemitones",
+      Napi::Function::New(env, &SonareWrap::ScaleCorrectionSemitones, "scaleCorrectionSemitones"));
+  exports.Set(
+      "scalePitchClassEnabled",
+      Napi::Function::New(env, &SonareWrap::ScalePitchClassEnabled, "scalePitchClassEnabled"));
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
   exports.Set("hasFfmpegSupport",
               Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
@@ -149,8 +184,13 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                                            "mixingScenePresetJson"));
   exports.Set("mixStereo", Napi::Function::New(env, &SonareWrap::MixStereo, "mixStereo"));
   exports.Set("masterAudio", Napi::Function::New(env, &SonareWrap::MasterAudio, "masterAudio"));
+  exports.Set("masterAudioAsync",
+              Napi::Function::New(env, &SonareWrap::MasterAudioAsync, "masterAudioAsync"));
   exports.Set("masterAudioStereo",
               Napi::Function::New(env, &SonareWrap::MasterAudioStereo, "masterAudioStereo"));
+  exports.Set(
+      "masterAudioStereoAsync",
+      Napi::Function::New(env, &SonareWrap::MasterAudioStereoAsync, "masterAudioStereoAsync"));
   exports.Set(
       "masterAudioWithProgress",
       Napi::Function::New(env, &SonareWrap::MasterAudioWithProgress, "masterAudioWithProgress"));
@@ -184,6 +224,25 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringStreamingPreview",
               Napi::Function::New(env, &SonareWrap::MasteringStreamingPreview,
                                   "masteringStreamingPreview"));
+  exports.Set(
+      "masteringRepairDeclick",
+      Napi::Function::New(env, &SonareWrap::MasteringRepairDeclick, "masteringRepairDeclick"));
+  exports.Set("masteringRepairDenoiseClassical",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDenoiseClassical,
+                                  "masteringRepairDenoiseClassical"));
+  exports.Set("masteringRepairDeclip", Napi::Function::New(env, &SonareWrap::MasteringRepairDeclip,
+                                                           "masteringRepairDeclip"));
+  exports.Set(
+      "masteringRepairDecrackle",
+      Napi::Function::New(env, &SonareWrap::MasteringRepairDecrackle, "masteringRepairDecrackle"));
+  exports.Set("masteringRepairDehum",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDehum, "masteringRepairDehum"));
+  exports.Set("masteringRepairDereverbClassical",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbClassical,
+                                  "masteringRepairDereverbClassical"));
+  exports.Set("masteringRepairTrimSilence",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairTrimSilence,
+                                  "masteringRepairTrimSilence"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
 
   // Features - Spectrogram
@@ -277,6 +336,15 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Streaming - StreamingEqualizer
   StreamingEqualizerWrap::Init(env, exports);
+
+  // Streaming - RealtimeVoiceChanger
+  RealtimeVoiceChangerWrap::Init(env, exports);
+  exports.Set("realtimeVoiceChangerPresetNames",
+              Napi::Function::New(env, RealtimeVoiceChangerPresetNames));
+  exports.Set("realtimeVoiceChangerPresetJson",
+              Napi::Function::New(env, RealtimeVoiceChangerPresetJson));
+  exports.Set("validateRealtimeVoiceChangerPresetJson",
+              Napi::Function::New(env, ValidateRealtimeVoiceChangerPresetJson));
 
   // Streaming - StreamAnalyzer (real-time frame analyzer)
   StreamAnalyzerWrap::Init(env, exports);

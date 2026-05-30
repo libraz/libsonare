@@ -376,7 +376,9 @@ describe('sonare native binding', () => {
       expect(Array.isArray(result.genreCandidates)).toBe(true);
       expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
       expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
-      expect(result.chainConfig.params['repair.declick.enabled']).toBe(1);
+      // After chain_json.cpp moved to util::json::dump, booleans serialize as
+      // JSON `true`/`false` (RFC 8259) instead of `1`/`0`. Same semantics.
+      expect(result.chainConfig.params['repair.declick.enabled']).toBe(true);
     });
 
     it('exposes mastering audio profiles', () => {

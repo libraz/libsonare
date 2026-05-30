@@ -855,6 +855,25 @@ export interface StreamingRetuneConfig {
   grainSize?: number;
 }
 
+export type VoicePresetId =
+  | 'neutral-monitor'
+  | 'bright-idol'
+  | 'soft-whisper'
+  | 'deep-narrator'
+  | 'robot-mascot'
+  | 'dark-villain';
+
+export interface RealtimeVoiceChangerPreset {
+  schemaVersion: 1;
+  id?: string;
+  name?: string;
+  description?: string;
+  macros?: Record<string, number>;
+  dsp?: Record<string, unknown>;
+}
+
+export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
+
 /** Options for {@link StreamingEqualizer.match}. */
 export interface EqMatchOptions {
   sampleRate?: number;

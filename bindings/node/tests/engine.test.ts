@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { engineAbiVersion, RealtimeEngine } from '../src/index.js';
+import { engineAbiVersion, RealtimeEngine, voiceChangerAbiVersion } from '../src/index.js';
 
 describe('RealtimeEngine native binding', () => {
   it('exposes engine ABI version', () => {
     expect(engineAbiVersion()).toBeGreaterThan(0);
+  });
+
+  it('exposes voice changer ABI version', () => {
+    const v = voiceChangerAbiVersion();
+    expect(Number.isFinite(v)).toBe(true);
+    expect(v).toBeGreaterThan(0);
   });
 
   it('processes a block and drains telemetry', () => {

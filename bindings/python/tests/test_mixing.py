@@ -4,28 +4,12 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import sys
-from pathlib import Path
 
 import pytest
 
+from ._helpers import LIB_AVAILABLE
 
-def _lib_available() -> bool:
-    """Check if libsonare shared library is available."""
-    env_path = os.environ.get("SONARE_LIB_PATH")
-    if env_path and Path(env_path).exists():
-        return True
-
-    project_root = Path(__file__).parent.parent.parent.parent
-    lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    return any(
-        (project_root / build_dir / "lib" / lib_name).exists()
-        for build_dir in ("build-mastering-api", "build", "build-mastering")
-    )
-
-
-pytestmark = pytest.mark.skipif(not _lib_available(), reason="libsonare shared library not found")
+pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 
 
 def _first_preset_json() -> str:

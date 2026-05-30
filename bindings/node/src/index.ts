@@ -51,6 +51,8 @@ import type {
   PairProcessor,
   PanLaw,
   PitchResult,
+  RealtimeVoiceChangerConfigInput,
+  RealtimeVoiceChangerOptions,
   RhythmResult,
   Section,
   SendTiming,
@@ -67,10 +69,59 @@ import type {
   StripRef,
   TempogramMode,
   TimbreResult,
+  VoicePresetId,
 } from './types.js';
 
 const require = createRequire(import.meta.url);
 const addon = require('../build/Release/sonare-node.node');
+
+/**
+ * Per-call validation options accepted by guarded wrappers. Empty-buffer
+ * checks are always performed; pass `{ validate: false }` to opt out of the
+ * O(n) NaN/Inf scan on hot paths where the caller already controls the data.
+ */
+export interface ValidateOptions {
+  validate?: boolean;
+}
+
+function assertNonEmptySamples(fnName: string, samples: ArrayLike<number>, argName = 'samples'): void {
+  if (samples.length === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be empty`);
+  }
+}
+
+function assertFiniteSamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  validate: boolean,
+  argName = 'samples',
+): void {
+  if (!validate) {
+    return;
+  }
+  for (let i = 0; i < samples.length; i++) {
+    const v = samples[i] as number;
+    if (!Number.isFinite(v)) {
+      throw new RangeError(`${fnName}: ${argName} contains NaN or Inf at index ${i}`);
+    }
+  }
+}
+
+function assertSamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  validate: boolean,
+  argName = 'samples',
+): void {
+  assertNonEmptySamples(fnName, samples, argName);
+  assertFiniteSamples(fnName, samples, validate, argName);
+}
+
+function assertFiniteScalar(fnName: string, value: number, argName: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be a finite number`);
+  }
+}
 
 /**
  * Audio object wrapping decoded audio samples.
@@ -288,11 +339,11 @@ export class Audio {
     return addon.pitchShift(this.getData(), this.getSampleRate(), semitones);
   }
 
-  pitchCorrectToMidi(currentMidi: number, targetMidi: number): Float32Array {
+  pitchCorrectToMidi(currentMidi = 69.0, targetMidi = 69.0): Float32Array {
     return addon.pitchCorrectToMidi(this.getData(), this.getSampleRate(), currentMidi, targetMidi);
   }
 
-  noteStretch(onsetSample: number, offsetSample: number, stretchRatio: number): Float32Array {
+  noteStretch(onsetSample = 0, offsetSample = 0, stretchRatio = 1.0): Float32Array {
     return addon.noteStretch(
       this.getData(),
       this.getSampleRate(),
@@ -302,7 +353,7 @@ export class Audio {
     );
   }
 
-  voiceChange(pitchSemitones: number, formantFactor = 1.0): Float32Array {
+  voiceChange(pitchSemitones = 0.0, formantFactor = 1.0): Float32Array {
     return addon.voiceChange(this.getData(), this.getSampleRate(), pitchSemitones, formantFactor);
   }
 
@@ -377,7 +428,7 @@ export class Audio {
     return addon.melSpectrogram(this.getData(), this.getSampleRate(), nFft, hopLength, nMels);
   }
 
-  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 13): MfccResult {
+  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 20): MfccResult {
     return addon.mfcc(this.getData(), this.getSampleRate(), nFft, hopLength, nMels, nMfcc);
   }
 
@@ -473,6 +524,56 @@ export class Audio {
 
   shortTermLufs(): Float32Array {
     return addon.shortTermLufs(this.getData(), this.getSampleRate());
+  }
+}
+
+export class RealtimeVoiceChanger {
+  private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
+
+  constructor(options: RealtimeVoiceChangerOptions) {
+    this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+    this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
+  }
+
+  reset(): void {
+    this.native.reset();
+  }
+
+  setConfig(config: RealtimeVoiceChangerConfigInput): void {
+    this.native.setConfig(config);
+  }
+
+  configJson(): string {
+    return this.native.configJson();
+  }
+
+  latencySamples(): number {
+    return this.native.latencySamples();
+  }
+
+  processMono(input: Float32Array): Float32Array {
+    return this.native.processMono(input);
+  }
+
+  processMonoInto(input: Float32Array, output: Float32Array): void {
+    this.native.processMonoInto(input, output);
+  }
+
+  processInterleaved(input: Float32Array, channels: 1 | 2): Float32Array {
+    return this.native.processInterleaved(input, channels);
+  }
+
+  processInterleavedInto(input: Float32Array, channels: 1 | 2, output: Float32Array): void {
+    this.native.processInterleavedInto(input, channels, output);
+  }
+
+  destroy(): void {
+    // N-API ObjectWrap instances do not have a `.delete` method, so this guard
+    // is purely defensive in case the native binding ever exposes one. The
+    // real lifecycle is GC-driven via the C++ destructor.
+    if (typeof this.native.delete === 'function') {
+      this.native.delete();
+    }
   }
 }
 
@@ -704,6 +805,10 @@ export function engineAbiVersion(): number {
   return addon.engineAbiVersion();
 }
 
+export function voiceChangerAbiVersion(): number {
+  return addon.voiceChangerAbiVersion();
+}
+
 // ============================================================================
 // Standalone functions
 // ============================================================================
@@ -747,6 +852,15 @@ export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResu
 }
 
 /**
+ * Asynchronous variant of {@link analyze}. Runs the DSP pipeline on a libuv
+ * worker thread so the JS event loop is never blocked. The returned promise
+ * resolves with the same shape as the synchronous version.
+ */
+export function analyzeAsync(samples: Float32Array, sampleRate = 22050): Promise<AnalysisResult> {
+  return addon.analyzeAsync(samples, sampleRate);
+}
+
+/**
  * Run the full music analysis, reporting per-stage progress.
  *
  * The progress callback is invoked synchronously during analysis with a
@@ -755,7 +869,7 @@ export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResu
  */
 export function analyzeWithProgress(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   onProgress: AnalysisProgressCallback,
 ): AnalysisResult {
   return addon.analyzeWithProgress(samples, sampleRate, onProgress);
@@ -964,8 +1078,8 @@ export function pitchShift(
 export function pitchCorrectToMidi(
   samples: Float32Array,
   sampleRate = 22050,
-  currentMidi: number,
-  targetMidi: number,
+  currentMidi = 69.0,
+  targetMidi = 69.0,
 ): Float32Array {
   return addon.pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
 }
@@ -973,9 +1087,9 @@ export function pitchCorrectToMidi(
 export function noteStretch(
   samples: Float32Array,
   sampleRate = 22050,
-  onsetSample: number,
-  offsetSample: number,
-  stretchRatio: number,
+  onsetSample = 0,
+  offsetSample = 0,
+  stretchRatio = 1.0,
 ): Float32Array {
   return addon.noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
 }
@@ -983,10 +1097,54 @@ export function noteStretch(
 export function voiceChange(
   samples: Float32Array,
   sampleRate = 22050,
-  pitchSemitones: number,
+  pitchSemitones = 0.0,
   formantFactor = 1.0,
+  options: ValidateOptions = {},
 ): Float32Array {
+  const validate = options.validate !== false;
+  assertSamples('voiceChange', samples, validate);
   return addon.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
+}
+
+export function voiceChangeRealtime(
+  samples: Float32Array,
+  sampleRate = 48000,
+  preset: RealtimeVoiceChangerConfigInput = 'neutral-monitor',
+  options: ValidateOptions = {},
+): Float32Array {
+  const validate = options.validate !== false;
+  assertSamples('voiceChangeRealtime', samples, validate);
+  const block = 512;
+  const changer = new RealtimeVoiceChanger({
+    sampleRate,
+    maxBlockSize: block,
+    channels: 1,
+    preset,
+  });
+  const output = new Float32Array(samples.length);
+  for (let pos = 0; pos < samples.length; pos += block) {
+    const inputBlock = samples.subarray(pos, Math.min(samples.length, pos + block));
+    const outputBlock = output.subarray(pos, pos + inputBlock.length);
+    changer.processMonoInto(inputBlock, outputBlock);
+  }
+  changer.destroy();
+  return output;
+}
+
+export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
+  return addon.realtimeVoiceChangerPresetNames() as VoicePresetId[];
+}
+
+export function realtimeVoiceChangerPresetJson(id: VoicePresetId): string {
+  return addon.realtimeVoiceChangerPresetJson(id);
+}
+
+export function validateRealtimeVoiceChangerPresetJson(json: string): {
+  ok: boolean;
+  normalizedJson?: string;
+  error?: string;
+} {
+  return addon.validateRealtimeVoiceChangerPresetJson(json);
 }
 
 export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 0.0): Float32Array {
@@ -1342,6 +1500,22 @@ export function masterAudio(
   return addon.masterAudio(preset, samples, sampleRate, overrides);
 }
 
+/**
+ * Asynchronous variant of {@link masterAudio}. Runs the full chain on a libuv
+ * worker thread; the returned promise resolves with the same shape as the
+ * synchronous version. Progress reporting is not available on the async path
+ * (use the synchronous `masterAudio` with `onProgress` if you need it, or
+ * spin up multiple async calls in parallel).
+ */
+export function masterAudioAsync(
+  samples: Float32Array,
+  sampleRate = 22050,
+  preset: MasteringPreset = 'pop',
+  overrides: Record<string, number | boolean> = {},
+): Promise<MasteringChainResult> {
+  return addon.masterAudioAsync(preset, samples, sampleRate, overrides);
+}
+
 export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
@@ -1361,6 +1535,19 @@ export function masterAudioStereo(
     );
   }
   return addon.masterAudioStereo(preset, left, right, sampleRate, overrides);
+}
+
+/**
+ * Asynchronous variant of {@link masterAudioStereo}.
+ */
+export function masterAudioStereoAsync(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  preset: MasteringPreset = 'pop',
+  overrides: Record<string, number | boolean> = {},
+): Promise<MasteringChainStereoResult> {
+  return addon.masterAudioStereoAsync(preset, left, right, sampleRate, overrides);
 }
 
 export function masteringProcessorNames(): SoloProcessor[] {
@@ -1433,6 +1620,237 @@ export function masteringStreamingPreview(
   return addon.masteringStreamingPreview(samples, sampleRate, platforms);
 }
 
+/** Options for `masteringRepairDeclick`. */
+export interface DeclickOptions {
+  threshold?: number;
+  neighborRatio?: number;
+  maxClickSamples?: number;
+  lpcOrder?: number;
+  residualRatio?: number;
+}
+
+/** Algorithms accepted by `masteringRepairDenoiseClassical`. */
+export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
+
+/** Noise PSD estimators accepted by `masteringRepairDenoiseClassical`. */
+export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra';
+
+/** Options for `masteringRepairDenoiseClassical`. */
+export interface DenoiseClassicalOptions {
+  mode?: DenoiseClassicalMode;
+  noiseEstimator?: DenoiseClassicalNoiseEstimator;
+  nFft?: number;
+  hopLength?: number;
+  ddAlpha?: number;
+  gainFloor?: number;
+  overSubtraction?: number;
+  spectralFloor?: number;
+  noiseEstimationQuantile?: number;
+  speechPresenceGain?: boolean;
+  gainSmoothing?: boolean;
+}
+
+/** Offline LPC-based declicker. */
+export function masteringRepairDeclick(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: DeclickOptions = {},
+): Float32Array {
+  return addon.masteringRepairDeclick(samples, sampleRate, options);
+}
+
+/** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */
+export function masteringRepairDenoiseClassical(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: DenoiseClassicalOptions = {},
+): Float32Array {
+  return addon.masteringRepairDenoiseClassical(samples, sampleRate, options);
+}
+
+/** Options for `masteringRepairDeclip`. */
+export interface DeclipOptions {
+  clipThreshold?: number;
+  lpcOrder?: number;
+  iterations?: number;
+  lpcBlend?: number;
+}
+
+/** Algorithms accepted by `masteringRepairDecrackle`. */
+export type DecrackleMode = 'median' | 'waveletShrinkage';
+
+/** Options for `masteringRepairDecrackle`. */
+export interface DecrackleOptions {
+  threshold?: number;
+  mode?: DecrackleMode;
+  levels?: number;
+}
+
+/** Options for `masteringRepairDehum`. */
+export interface DehumOptions {
+  fundamentalHz?: number;
+  harmonics?: number;
+  q?: number;
+  adaptive?: boolean;
+  searchRangeHz?: number;
+  adaptation?: number;
+  frameSize?: number;
+  pllBandwidth?: number;
+}
+
+/** Options for `masteringRepairDereverbClassical`. */
+export interface DereverbClassicalOptions {
+  threshold?: number;
+  attenuation?: number;
+  nFft?: number;
+  hopLength?: number;
+  t60Sec?: number;
+  lateDelayMs?: number;
+  overSubtraction?: number;
+  spectralFloor?: number;
+  wpeEnabled?: boolean;
+  wpeIterations?: number;
+  wpeTaps?: number;
+  wpeStrength?: number;
+}
+
+/** Trimming modes accepted by `masteringRepairTrimSilence`. */
+export type TrimSilenceMode = 'peak' | 'lufsGated';
+
+/** Options for `masteringRepairTrimSilence`. */
+export interface TrimSilenceOptions {
+  threshold?: number;
+  paddingSamples?: number;
+  mode?: TrimSilenceMode;
+  gateLufs?: number;
+  windowMs?: number;
+}
+
+/** Offline LPC-based declipper. */
+export function masteringRepairDeclip(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: DeclipOptions = {},
+): Float32Array {
+  return addon.masteringRepairDeclip(samples, sampleRate, options);
+}
+
+/** Offline crackle suppressor (median or wavelet-shrinkage). */
+export function masteringRepairDecrackle(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: DecrackleOptions = {},
+): Float32Array {
+  return addon.masteringRepairDecrackle(samples, sampleRate, options);
+}
+
+/** Offline mains-hum remover. */
+export function masteringRepairDehum(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: DehumOptions = {},
+): Float32Array {
+  return addon.masteringRepairDehum(samples, sampleRate, options);
+}
+
+/** Offline classical dereverberator (spectral subtraction + optional WPE). */
+export function masteringRepairDereverbClassical(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: DereverbClassicalOptions = {},
+): Float32Array {
+  return addon.masteringRepairDereverbClassical(samples, sampleRate, options);
+}
+
+/** Offline silence trimmer (peak threshold or LUFS-gated). */
+export function masteringRepairTrimSilence(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: TrimSilenceOptions = {},
+): Float32Array {
+  return addon.masteringRepairTrimSilence(samples, sampleRate, options);
+}
+
+/** Detector mode for `masteringDynamicsCompressor`. */
+export type CompressorDetector = 'peak' | 'rms' | 'log_rms' | 'logRms' | 0 | 1 | 2;
+
+/** Options for `masteringDynamicsCompressor`. */
+export interface CompressorOptions extends ValidateOptions {
+  thresholdDb?: number;
+  ratio?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  kneeDb?: number;
+  makeupGainDb?: number;
+  autoMakeup?: boolean;
+  detector?: CompressorDetector;
+  sidechainHpfEnabled?: boolean;
+  sidechainHpfHz?: number;
+  pdrTimeMs?: number;
+  pdrReleaseScale?: number;
+}
+
+/** Options for `masteringDynamicsGate`. */
+export interface GateOptions extends ValidateOptions {
+  thresholdDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  rangeDb?: number;
+  holdMs?: number;
+  closeThresholdDb?: number;
+  keyHpfHz?: number;
+}
+
+/** Options for `masteringDynamicsTransientShaper`. */
+export interface TransientShaperOptions extends ValidateOptions {
+  attackGainDb?: number;
+  sustainGainDb?: number;
+  fastAttackMs?: number;
+  fastReleaseMs?: number;
+  slowAttackMs?: number;
+  slowReleaseMs?: number;
+  sensitivity?: number;
+  maxGainDb?: number;
+  gainSmoothingMs?: number;
+  lookaheadMs?: number;
+}
+
+/** Result of an offline dynamics processor call. */
+export interface DynamicsProcessorResult {
+  samples: Float32Array;
+  latencySamples: number;
+}
+
+/** Offline feed-forward compressor (soft-knee, optional makeup, sidechain HPF, PDR). */
+export function masteringDynamicsCompressor(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: CompressorOptions = {},
+): DynamicsProcessorResult {
+  assertSamples('masteringDynamicsCompressor', samples, options.validate !== false);
+  return addon.masteringDynamicsCompressor(samples, sampleRate, options);
+}
+
+/** Offline noise gate with hysteresis, hold, and optional key HPF. */
+export function masteringDynamicsGate(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: GateOptions = {},
+): DynamicsProcessorResult {
+  assertSamples('masteringDynamicsGate', samples, options.validate !== false);
+  return addon.masteringDynamicsGate(samples, sampleRate, options);
+}
+
+/** Offline transient shaper (envelope-difference attack/sustain control). */
+export function masteringDynamicsTransientShaper(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: TransientShaperOptions = {},
+): DynamicsProcessorResult {
+  assertSamples('masteringDynamicsTransientShaper', samples, options.validate !== false);
+  return addon.masteringDynamicsTransientShaper(samples, sampleRate, options);
+}
+
 export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -60.0): Float32Array {
   return addon.trim(samples, sampleRate, thresholdDb);
 }
@@ -1473,7 +1891,7 @@ export function mfcc(
   nFft = 2048,
   hopLength = 512,
   nMels = 128,
-  nMfcc = 13,
+  nMfcc = 20,
 ): MfccResult {
   return addon.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc);
 }
@@ -1519,11 +1937,10 @@ export function melToStft(
   nFrames: number,
   sampleRate = 22050,
   nFft = 2048,
-  hopLength = 512,
   fmin = 0,
   fmax = 0,
 ): InverseStftResult {
-  return addon.melToStft(mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax);
+  return addon.melToStft(mel, nMels, nFrames, sampleRate, nFft, fmin, fmax);
 }
 
 /** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
@@ -1534,11 +1951,11 @@ export function melToAudio(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
-  nIter = 32,
   fmin = 0,
   fmax = 0,
+  nIter = 32,
 ): Float32Array {
-  return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, nIter, fmin, fmax);
+  return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter);
 }
 
 /** Reconstruct a mel spectrogram from MFCCs (`nMels` mel bands, dB scale). */
@@ -1556,25 +1973,25 @@ export function mfccToAudio(
   mfcc: Float32Array,
   nMfcc: number,
   nFrames: number,
+  nMels = 128,
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
-  nMels = 128,
-  nIter = 32,
   fmin = 0,
   fmax = 0,
+  nIter = 32,
 ): Float32Array {
   return addon.mfccToAudio(
     mfcc,
     nMfcc,
     nFrames,
+    nMels,
     sampleRate,
     nFft,
     hopLength,
-    nMels,
-    nIter,
     fmin,
     fmax,
+    nIter,
   );
 }
 
@@ -1683,11 +2100,11 @@ export function noteToHz(note: string): number {
   return addon.noteToHz(note);
 }
 
-export function framesToTime(frames: number, sr: number, hopLength: number): number {
+export function framesToTime(frames: number, sr = 22050, hopLength = 512): number {
   return addon.framesToTime(frames, sr, hopLength);
 }
 
-export function timeToFrames(time: number, sr: number, hopLength: number): number {
+export function timeToFrames(time: number, sr = 22050, hopLength = 512): number {
   return addon.timeToFrames(time, sr, hopLength);
 }
 
@@ -1817,7 +2234,7 @@ export function tempogram(
 
 export function cyclicTempogram(
   onsetEnvelope: Float32Array,
-  sampleRate: number,
+  sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
   bpmMin = 60.0,
@@ -1872,16 +2289,287 @@ export function nnlsChroma(
   return addon.nnlsChroma(samples, sampleRate);
 }
 
-export function lufs(samples: Float32Array, sampleRate = 22050): LufsResult {
+export function lufs(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): LufsResult {
+  assertSamples('lufs', samples, options.validate !== false);
   return addon.lufs(samples, sampleRate);
 }
 
-export function momentaryLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+export function momentaryLufs(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): Float32Array {
+  assertSamples('momentaryLufs', samples, options.validate !== false);
   return addon.momentaryLufs(samples, sampleRate);
 }
 
-export function shortTermLufs(samples: Float32Array, sampleRate = 22050): Float32Array {
+export function shortTermLufs(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): Float32Array {
+  assertSamples('shortTermLufs', samples, options.validate !== false);
   return addon.shortTermLufs(samples, sampleRate);
+}
+
+/** One contiguous run of clipped samples reported by `meteringDetectClipping`. */
+export interface ClippingRegion {
+  startSample: number;
+  endSample: number;
+  length: number;
+  peak: number;
+}
+
+/** Aggregated clipping report (mirrors C SonareClippingResult). */
+export interface ClippingReport {
+  clippedSamples: number;
+  clippingRatio: number;
+  maxClippedPeak: number;
+  regions: ClippingRegion[];
+}
+
+/** Sliding-window dynamic range report (mirrors C SonareDynamicRangeResult). */
+export interface DynamicRangeReport {
+  dynamicRangeDb: number;
+  lowPercentileDb: number;
+  highPercentileDb: number;
+  windowRmsDb: Float32Array;
+}
+
+export function meteringPeakDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringPeakDb', samples, options.validate !== false);
+  return addon.meteringPeakDb(samples, sampleRate);
+}
+
+export function meteringRmsDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringRmsDb', samples, options.validate !== false);
+  return addon.meteringRmsDb(samples, sampleRate);
+}
+
+export function meteringCrestFactorDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringCrestFactorDb', samples, options.validate !== false);
+  return addon.meteringCrestFactorDb(samples, sampleRate);
+}
+
+export function meteringDcOffset(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringDcOffset', samples, options.validate !== false);
+  return addon.meteringDcOffset(samples, sampleRate);
+}
+
+/**
+ * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
+ * in [1, 16]; pass 0 to use the library default (4).
+ */
+export function meteringTruePeakDb(
+  samples: Float32Array,
+  sampleRate = 22050,
+  oversampleFactor = 4,
+  options: ValidateOptions = {},
+): number {
+  assertSamples('meteringTruePeakDb', samples, options.validate !== false);
+  return addon.meteringTruePeakDb(samples, sampleRate, oversampleFactor);
+}
+
+/**
+ * Detect contiguous runs of clipped samples.
+ *
+ * @param threshold Linear absolute threshold (default 0.999).
+ * @param minRegionSamples Minimum run length to report (default 1).
+ */
+export function meteringDetectClipping(
+  samples: Float32Array,
+  sampleRate = 22050,
+  threshold = 0.999,
+  minRegionSamples = 1,
+  options: ValidateOptions = {},
+): ClippingReport {
+  assertSamples('meteringDetectClipping', samples, options.validate !== false);
+  return addon.meteringDetectClipping(samples, sampleRate, threshold, minRegionSamples);
+}
+
+/**
+ * Sliding-window dynamic range (high_percentile_db - low_percentile_db).
+ * Pass 0 for any parameter to use the library default
+ * (window=3 s, hop=1 s, low=0.10, high=0.95).
+ */
+export function meteringDynamicRange(
+  samples: Float32Array,
+  sampleRate = 22050,
+  windowSec = 0,
+  hopSec = 0,
+  lowPercentile = 0,
+  highPercentile = 0,
+  options: ValidateOptions = {},
+): DynamicRangeReport {
+  assertSamples('meteringDynamicRange', samples, options.validate !== false);
+  return addon.meteringDynamicRange(
+    samples,
+    sampleRate,
+    windowSec,
+    hopSec,
+    lowPercentile,
+    highPercentile,
+  );
+}
+
+/** Mid/side vectorscope point series for a (left, right) stereo pair. */
+export interface VectorscopeReport {
+  mid: Float32Array;
+  side: Float32Array;
+}
+
+/** Phase-scope (Lissajous) point series plus summary stats. */
+export interface PhaseScopeReport {
+  mid: Float32Array;
+  side: Float32Array;
+  radius: Float32Array;
+  angleRad: Float32Array;
+  correlation: number;
+  averageAbsAngleRad: number;
+  maxRadius: number;
+}
+
+/** Options for `meteringSpectrum`. */
+export interface SpectrumOptions {
+  /** FFT size. Pass 0 / omit for the library default (2048). */
+  nFft?: number;
+  /** Apply fractional-octave smoothing to magnitude. */
+  applyOctaveSmoothing?: boolean;
+  /** Smoothing fraction (e.g. 3 = 1/3-octave). 0 / omit = library default (3). */
+  octaveFraction?: number;
+  /** Linear reference for the dB conversion. 0 / omit = 1.0. */
+  dbRef?: number;
+  /** Linear floor used to avoid log(0). 0 / omit = library default. */
+  dbAmin?: number;
+}
+
+/** Single-frame magnitude / power / dB spectrum returned by `meteringSpectrum`. */
+export interface SpectrumReport {
+  frequencies: Float32Array;
+  magnitude: Float32Array;
+  power: Float32Array;
+  db: Float32Array;
+  nFft: number;
+  sampleRate: number;
+}
+
+/** Pearson correlation in [-1, 1] between two equal-length channels. */
+export function meteringStereoCorrelation(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  const validate = options.validate !== false;
+  assertSamples('meteringStereoCorrelation', left, validate, 'left');
+  assertSamples('meteringStereoCorrelation', right, validate, 'right');
+  return addon.meteringStereoCorrelation(left, right, sampleRate);
+}
+
+/** Side / mid energy ratio: 0 = pure mono, ~1 = wide stereo. */
+export function meteringStereoWidth(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): number {
+  const validate = options.validate !== false;
+  assertSamples('meteringStereoWidth', left, validate, 'left');
+  assertSamples('meteringStereoWidth', right, validate, 'right');
+  return addon.meteringStereoWidth(left, right, sampleRate);
+}
+
+/** Per-sample mid/side point series (one entry per input frame). */
+export function meteringVectorscope(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): VectorscopeReport {
+  const validate = options.validate !== false;
+  assertSamples('meteringVectorscope', left, validate, 'left');
+  assertSamples('meteringVectorscope', right, validate, 'right');
+  return addon.meteringVectorscope(left, right, sampleRate);
+}
+
+/** Phase-scope point series plus summary stats. */
+export function meteringPhaseScope(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): PhaseScopeReport {
+  const validate = options.validate !== false;
+  assertSamples('meteringPhaseScope', left, validate, 'left');
+  assertSamples('meteringPhaseScope', right, validate, 'right');
+  return addon.meteringPhaseScope(left, right, sampleRate);
+}
+
+/** Single-frame spectrum view (uses the first `nFft` samples of `samples`). */
+export function meteringSpectrum(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options?: SpectrumOptions & ValidateOptions,
+): SpectrumReport {
+  const validate = options?.validate !== false;
+  assertSamples('meteringSpectrum', samples, validate);
+  return addon.meteringSpectrum(samples, sampleRate, options ?? {});
+}
+
+/**
+ * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.
+ *
+ * `modeMask` is a 12-bit mask. For natural C major use `0b101010110101`.
+ * `referenceMidi` defaults to A4 (69) when passed as 0.
+ */
+export function scaleQuantizeMidi(
+  root: number,
+  modeMask: number,
+  midi: number,
+  referenceMidi = 0,
+): number {
+  assertFiniteScalar('scaleQuantizeMidi', midi, 'midi');
+  assertFiniteScalar('scaleQuantizeMidi', referenceMidi, 'referenceMidi');
+  return addon.scaleQuantizeMidi(root, modeMask, midi, referenceMidi);
+}
+
+export function scaleCorrectionSemitones(
+  root: number,
+  modeMask: number,
+  midi: number,
+  referenceMidi = 0,
+): number {
+  assertFiniteScalar('scaleCorrectionSemitones', midi, 'midi');
+  assertFiniteScalar('scaleCorrectionSemitones', referenceMidi, 'referenceMidi');
+  return addon.scaleCorrectionSemitones(root, modeMask, midi, referenceMidi);
+}
+
+export function scalePitchClassEnabled(
+  root: number,
+  modeMask: number,
+  pitchClass: number,
+): boolean {
+  return addon.scalePitchClassEnabled(root, modeMask, pitchClass);
 }
 
 export function resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array {
@@ -2065,7 +2753,7 @@ export class Mixer {
    * @param gainDb - Group gain offset in dB
    * @param members - Strip ids that belong to the group
    */
-  addVcaGroup(id: string, gainDb: number, members: string[] = []): void {
+  addVcaGroup(id: string, gainDb = 0.0, members: string[] = []): void {
     this.native.addVcaGroup(id, gainDb, members);
   }
 

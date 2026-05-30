@@ -19,6 +19,8 @@ librt==0.11.0
 mypy==2.1.0
 mypy-extensions==1.1.0
     # via mypy
+numpy==2.4.6
+    # via libsonare
 packaging==26.0
     # via pytest
 pathspec==1.1.1

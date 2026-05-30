@@ -24,11 +24,19 @@ from libsonare import (
     ParameterInfo,
     RealtimeEngine,
     engine_abi_version,
+    voice_changer_abi_version,
 )
 
 
 def test_engine_abi_version() -> None:
     assert engine_abi_version() > 0
+
+
+def test_voice_changer_abi_version() -> None:
+    """The RVC POD ABI version is exposed for parity with Node/WASM."""
+    v = voice_changer_abi_version()
+    assert isinstance(v, int)
+    assert v > 0
 
 
 def test_engine_transport_state_and_live_parameters() -> None:

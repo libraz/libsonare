@@ -2,7 +2,7 @@
  * Type declarations for the Emscripten-generated WASM module with embind
  */
 
-interface SonareModuleOptions {
+export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
   onRuntimeInitialized?: () => void;
   print?: (text: string) => void;
@@ -10,7 +10,7 @@ interface SonareModuleOptions {
 }
 
 // Result types
-interface WasmKeyResult {
+export interface WasmKeyResult {
   root: number;
   mode: number;
   confidence: number;
@@ -18,17 +18,17 @@ interface WasmKeyResult {
   shortName: string;
 }
 
-interface WasmKeyCandidateResult {
+export interface WasmKeyCandidateResult {
   key: WasmKeyResult;
   correlation: number;
 }
 
-interface WasmBeatResult {
+export interface WasmBeatResult {
   time: number;
   strength: number;
 }
 
-interface WasmChordResult {
+export interface WasmChordResult {
   root: number;
   bass: number;
   quality: number;
@@ -38,7 +38,7 @@ interface WasmChordResult {
   name: string;
 }
 
-interface WasmSectionResult {
+export interface WasmSectionResult {
   type: number;
   start: number;
   end: number;
@@ -47,7 +47,7 @@ interface WasmSectionResult {
   name: string;
 }
 
-interface WasmTimbreResult {
+export interface WasmTimbreResult {
   brightness: number;
   warmth: number;
   density: number;
@@ -55,26 +55,26 @@ interface WasmTimbreResult {
   complexity: number;
 }
 
-interface WasmDynamicsResult {
+export interface WasmDynamicsResult {
   dynamicRangeDb: number;
   loudnessRangeDb: number;
   crestFactor: number;
   isCompressed: boolean;
 }
 
-interface WasmRhythmResult {
+export interface WasmRhythmResult {
   syncopation: number;
   grooveType: string;
   patternRegularity: number;
 }
 
-interface WasmTimeSignatureResult {
+export interface WasmTimeSignatureResult {
   numerator: number;
   denominator: number;
   confidence: number;
 }
 
-interface WasmAnalysisResult {
+export interface WasmAnalysisResult {
   bpm: number;
   bpmConfidence: number;
   key: WasmKeyResult;
@@ -88,11 +88,69 @@ interface WasmAnalysisResult {
   form: string;
 }
 
-interface WasmChordAnalysisResult {
+export interface WasmBpmCandidate {
+  bpm: number;
+  confidence: number;
+}
+
+export interface WasmBpmAnalysisResult {
+  bpm: number;
+  confidence: number;
+  candidates: WasmBpmCandidate[];
+  autocorrelation: Float32Array;
+  tempogram: Float32Array;
+}
+
+export interface WasmRhythmAnalysisResult {
+  timeSignature: WasmTimeSignatureResult;
+  syncopation: number;
+  grooveType: string;
+  patternRegularity: number;
+  tempoStability: number;
+  bpm: number;
+  beatIntervals: Float32Array;
+}
+
+export interface WasmLoudnessCurveResult {
+  times: Float32Array;
+  rmsDb: Float32Array;
+}
+
+export interface WasmDynamicsAnalysisResult {
+  dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
+  crestFactor: number;
+  loudnessRangeDb: number;
+  isCompressed: boolean;
+  loudnessCurve: WasmLoudnessCurveResult;
+}
+
+export interface WasmTimbreFrameResult {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+}
+
+export interface WasmTimbreAnalysisResult {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+  spectralRolloff: Float32Array;
+  timbreOverTime: WasmTimbreFrameResult[];
+}
+
+export interface WasmChordAnalysisResult {
   chords: WasmChordResult[];
 }
 
-interface WasmAcousticResult {
+export interface WasmAcousticResult {
   rt60: number;
   edt: number;
   c50: number;
@@ -106,13 +164,13 @@ interface WasmAcousticResult {
   isBlind: boolean;
 }
 
-interface WasmHpssResult {
+export interface WasmHpssResult {
   harmonic: Float32Array;
   percussive: Float32Array;
   sampleRate: number;
 }
 
-interface WasmStftResult {
+export interface WasmStftResult {
   nBins: number;
   nFrames: number;
   nFft: number;
@@ -122,13 +180,13 @@ interface WasmStftResult {
   power: Float32Array;
 }
 
-interface WasmStftDbResult {
+export interface WasmStftDbResult {
   nBins: number;
   nFrames: number;
   db: Float32Array;
 }
 
-interface WasmMelResult {
+export interface WasmMelResult {
   nMels: number;
   nFrames: number;
   sampleRate: number;
@@ -137,25 +195,25 @@ interface WasmMelResult {
   db: Float32Array;
 }
 
-interface WasmMfccResult {
+export interface WasmMfccResult {
   nMfcc: number;
   nFrames: number;
   coefficients: Float32Array;
 }
 
-interface WasmStftPowerResult {
+export interface WasmStftPowerResult {
   nBins: number;
   nFrames: number;
   power: Float32Array;
 }
 
-interface WasmMelPowerResult {
+export interface WasmMelPowerResult {
   nMels: number;
   nFrames: number;
   power: Float32Array;
 }
 
-interface WasmChromaResult {
+export interface WasmChromaResult {
   nChroma: number;
   nFrames: number;
   sampleRate: number;
@@ -164,7 +222,7 @@ interface WasmChromaResult {
   meanEnergy: number[];
 }
 
-interface WasmPitchResult {
+export interface WasmPitchResult {
   f0: Float32Array;
   voicedProb: Float32Array;
   voicedFlag: boolean[];
@@ -173,48 +231,48 @@ interface WasmPitchResult {
   meanF0: number;
 }
 
-interface WasmTrimResult {
+export interface WasmTrimResult {
   audio: Float32Array;
   startSample: number;
   endSample: number;
 }
 
-interface WasmFrameResult {
+export interface WasmFrameResult {
   nFrames: number;
   frames: Float32Array;
 }
 
-interface WasmTempogramResult {
+export interface WasmTempogramResult {
   nFrames: number;
   winLength: number;
   data: Float32Array;
 }
 
-interface WasmCyclicTempogramResult {
+export interface WasmCyclicTempogramResult {
   nFrames: number;
   nBins: number;
   data: Float32Array;
 }
 
-interface WasmFourierTempogramResult {
+export interface WasmFourierTempogramResult {
   nBins: number;
   nFrames: number;
   data: Float32Array;
 }
 
-interface WasmNnlsChromaResult {
+export interface WasmNnlsChromaResult {
   nChroma: number;
   nFrames: number;
   data: Float32Array;
 }
 
-interface WasmMelodyPoint {
+export interface WasmMelodyPoint {
   time: number;
   frequency: number;
   confidence: number;
 }
 
-interface WasmMelodyResult {
+export interface WasmMelodyResult {
   points: WasmMelodyPoint[];
   pitchRangeOctaves: number;
   pitchStability: number;
@@ -222,7 +280,7 @@ interface WasmMelodyResult {
   vibratoRate: number;
 }
 
-interface WasmCqtResult {
+export interface WasmCqtResult {
   nBins: number;
   nFrames: number;
   hopLength: number;
@@ -231,14 +289,14 @@ interface WasmCqtResult {
   frequencies: Float32Array;
 }
 
-interface WasmLufsResult {
+export interface WasmLufsResult {
   integratedLufs: number;
   momentaryLufs: number;
   shortTermLufs: number;
   loudnessRange: number;
 }
 
-interface WasmMasteringResult {
+export interface WasmMasteringResult {
   samples: Float32Array;
   sampleRate: number;
   inputLufs: number;
@@ -247,11 +305,11 @@ interface WasmMasteringResult {
   latencySamples?: number;
 }
 
-interface WasmMasteringChainResult extends WasmMasteringResult {
+export interface WasmMasteringChainResult extends WasmMasteringResult {
   stages: string[];
 }
 
-interface WasmMasteringStereoChainResult {
+export interface WasmMasteringStereoChainResult {
   left: Float32Array;
   right: Float32Array;
   sampleRate: number;
@@ -261,7 +319,7 @@ interface WasmMasteringStereoChainResult {
   stages: string[];
 }
 
-interface WasmMasteringStereoResult {
+export interface WasmMasteringStereoResult {
   left: Float32Array;
   right: Float32Array;
   sampleRate: number;
@@ -271,7 +329,7 @@ interface WasmMasteringStereoResult {
   latencySamples: number;
 }
 
-interface WasmMixMeterSnapshot {
+export interface WasmMixMeterSnapshot {
   peakDbL: number;
   peakDbR: number;
   rmsDbL: number;
@@ -291,14 +349,14 @@ interface WasmMixMeterSnapshot {
   seq: number;
 }
 
-interface WasmMixResult {
+export interface WasmMixResult {
   left: Float32Array;
   right: Float32Array;
   sampleRate: number;
   meters: WasmMixMeterSnapshot[];
 }
 
-interface WasmEngineClip {
+export interface WasmEngineClip {
   id?: number;
   channels: Float32Array[];
   startPpq: number;
@@ -310,7 +368,7 @@ interface WasmEngineClip {
   fadeOutSamples?: number;
 }
 
-interface WasmEngineParameterInfo {
+export interface WasmEngineParameterInfo {
   id: number;
   name: string;
   unit: string;
@@ -321,33 +379,33 @@ interface WasmEngineParameterInfo {
   defaultCurve: number;
 }
 
-interface WasmEngineAutomationPoint {
+export interface WasmEngineAutomationPoint {
   ppq: number;
   value: number;
   curveToNext?: number;
 }
 
-interface WasmEngineMarker {
+export interface WasmEngineMarker {
   id: number;
   ppq: number;
   name?: string;
 }
 
-interface WasmEngineMetronomeConfig {
+export interface WasmEngineMetronomeConfig {
   enabled: boolean;
   beatGain?: number;
   accentGain?: number;
   clickSamples?: number;
 }
 
-interface WasmEngineGraphNode {
+export interface WasmEngineGraphNode {
   id: string;
   type?: number;
   gainDb?: number;
   numPorts?: number;
 }
 
-interface WasmEngineGraphConnection {
+export interface WasmEngineGraphConnection {
   sourceNode: string;
   sourcePort: number;
   destNode: string;
@@ -355,12 +413,12 @@ interface WasmEngineGraphConnection {
   mix?: number;
 }
 
-interface WasmEngineGraphParameterBinding {
+export interface WasmEngineGraphParameterBinding {
   paramId: number;
   nodeId: string;
 }
 
-interface WasmEngineGraphSpec {
+export interface WasmEngineGraphSpec {
   nodes: WasmEngineGraphNode[];
   connections: WasmEngineGraphConnection[];
   inputNode: string;
@@ -369,7 +427,7 @@ interface WasmEngineGraphSpec {
   parameterBindings?: WasmEngineGraphParameterBinding[];
 }
 
-interface WasmEngineTelemetry {
+export interface WasmEngineTelemetry {
   type: number;
   error: number;
   renderFrame: number;
@@ -379,7 +437,7 @@ interface WasmEngineTelemetry {
   value: number;
 }
 
-interface WasmEngineMeterTelemetry {
+export interface WasmEngineMeterTelemetry {
   targetId: number;
   renderFrame: number;
   seq: number;
@@ -399,14 +457,14 @@ interface WasmEngineMeterTelemetry {
   droppedRecords: number;
 }
 
-interface WasmEngineCaptureStatus {
+export interface WasmEngineCaptureStatus {
   capturedFrames: number;
   overflowCount: number;
   armed: boolean;
   punchEnabled: boolean;
 }
 
-interface WasmEngineTransportState {
+export interface WasmEngineTransportState {
   playing: boolean;
   looping: boolean;
   renderFrame: number;
@@ -418,7 +476,7 @@ interface WasmEngineTransportState {
   sampleRate: number;
 }
 
-interface WasmEngineBounceOptions {
+export interface WasmEngineBounceOptions {
   totalFrames: number;
   blockSize?: number;
   numChannels?: number;
@@ -431,7 +489,7 @@ interface WasmEngineBounceOptions {
   ditherSeed?: number;
 }
 
-interface WasmEngineBounceResult {
+export interface WasmEngineBounceResult {
   interleaved: Float32Array;
   frames: number;
   numChannels: number;
@@ -439,7 +497,7 @@ interface WasmEngineBounceResult {
   integratedLufs: number;
 }
 
-interface WasmEngineFreezeOptions {
+export interface WasmEngineFreezeOptions {
   totalFrames: number;
   blockSize?: number;
   numChannels?: number;
@@ -448,18 +506,18 @@ interface WasmEngineFreezeOptions {
   gain?: number;
 }
 
-interface WasmEngineFreezeResult {
+export interface WasmEngineFreezeResult {
   clipId: number;
   frames: number;
   numChannels: number;
 }
 
-interface WasmEngineProcessWithMonitorResult {
+export interface WasmEngineProcessWithMonitorResult {
   output: Float32Array[];
   monitor: Float32Array[];
 }
 
-interface WasmRealtimeEngine {
+export interface WasmRealtimeEngine {
   prepare: (
     sampleRate: number,
     maxBlockSize: number,
@@ -512,10 +570,10 @@ interface WasmRealtimeEngine {
   delete: () => void;
 }
 
-type ProgressCallback = (progress: number, stage: string) => void;
-type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
+export type ProgressCallback = (progress: number, stage: string) => void;
+export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
-interface SonareModule {
+export interface SonareModule {
   // Quick API (high-level)
   detectBpm: (samples: Float32Array, sampleRate: number) => number;
   detectKey: (samples: Float32Array, sampleRate: number) => WasmKeyResult;
@@ -583,8 +641,137 @@ interface SonareModule {
     sampleRate: number,
     progressCallback: ProgressCallback | null,
   ) => WasmAnalysisResult;
+  analyzeBpm: (
+    samples: Float32Array,
+    sampleRate: number,
+    bpmMin: number,
+    bpmMax: number,
+    startBpm: number,
+    nFft: number,
+    hopLength: number,
+    maxCandidates: number,
+  ) => WasmBpmAnalysisResult;
+  analyzeRhythm: (
+    samples: Float32Array,
+    sampleRate: number,
+    bpmMin: number,
+    bpmMax: number,
+    startBpm: number,
+    nFft: number,
+    hopLength: number,
+  ) => WasmRhythmAnalysisResult;
+  analyzeDynamics: (
+    samples: Float32Array,
+    sampleRate: number,
+    windowSec: number,
+    hopLength: number,
+    compressionThreshold: number,
+  ) => WasmDynamicsAnalysisResult;
+  analyzeTimbre: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nMels: number,
+    nMfcc: number,
+    windowSec: number,
+  ) => WasmTimbreAnalysisResult;
+  detectKeyCandidates: (samples: Float32Array, sampleRate: number) => WasmKeyCandidateResult[];
+  hasFfmpegSupport: () => boolean;
   version: () => string;
   engineAbiVersion: () => number;
+  voiceChangerAbiVersion: () => number;
+
+  meteringPeakDb: (samples: Float32Array, sampleRate: number) => number;
+  meteringRmsDb: (samples: Float32Array, sampleRate: number) => number;
+  meteringCrestFactorDb: (samples: Float32Array, sampleRate: number) => number;
+  meteringDcOffset: (samples: Float32Array, sampleRate: number) => number;
+  meteringTruePeakDb: (
+    samples: Float32Array,
+    sampleRate: number,
+    oversampleFactor: number,
+  ) => number;
+  meteringDetectClipping: (
+    samples: Float32Array,
+    sampleRate: number,
+    threshold: number,
+    minRegionSamples: number,
+  ) => {
+    clippedSamples: number;
+    clippingRatio: number;
+    maxClippedPeak: number;
+    regions: Array<{ startSample: number; endSample: number; length: number; peak: number }>;
+  };
+  meteringDynamicRange: (
+    samples: Float32Array,
+    sampleRate: number,
+    windowSec: number,
+    hopSec: number,
+    lowPercentile: number,
+    highPercentile: number,
+  ) => {
+    dynamicRangeDb: number;
+    lowPercentileDb: number;
+    highPercentileDb: number;
+    windowRmsDb: Float32Array;
+  };
+
+  meteringStereoCorrelation: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+  ) => number;
+  meteringStereoWidth: (left: Float32Array, right: Float32Array, sampleRate: number) => number;
+  meteringVectorscope: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+  ) => { mid: Float32Array; side: Float32Array };
+  meteringPhaseScope: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+  ) => {
+    mid: Float32Array;
+    side: Float32Array;
+    radius: Float32Array;
+    angleRad: Float32Array;
+    correlation: number;
+    averageAbsAngleRad: number;
+    maxRadius: number;
+  };
+  meteringSpectrum: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: {
+      nFft?: number;
+      applyOctaveSmoothing?: boolean;
+      octaveFraction?: number;
+      dbRef?: number;
+      dbAmin?: number;
+    },
+  ) => {
+    frequencies: Float32Array;
+    magnitude: Float32Array;
+    power: Float32Array;
+    db: Float32Array;
+    nFft: number;
+    sampleRate: number;
+  };
+
+  scaleQuantizeMidi: (
+    root: number,
+    modeMask: number,
+    midi: number,
+    referenceMidi: number,
+  ) => number;
+  scaleCorrectionSemitones: (
+    root: number,
+    modeMask: number,
+    midi: number,
+    referenceMidi: number,
+  ) => number;
+  scalePitchClassEnabled: (root: number, modeMask: number, pitchClass: number) => boolean;
 
   // Effects
   hpss: (
@@ -677,6 +864,41 @@ interface SonareModule {
     sampleRate: number,
     platforms: Array<{ name: string; targetLufs: number; ceilingDb: number }>,
   ) => string;
+  masteringRepairDeclick: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
+  masteringRepairDenoiseClassical: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
+  masteringRepairDeclip: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
+  masteringRepairDecrackle: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
+  masteringRepairDehum: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
+  masteringRepairDereverbClassical: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
+  masteringRepairTrimSilence: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => Float32Array;
   masteringChain: (
     samples: Float32Array,
     sampleRate: number,
@@ -714,6 +936,21 @@ interface SonareModule {
     right: Float32Array,
     sampleRate: number,
     overrides: Record<string, number | boolean> | null,
+  ) => WasmMasteringStereoChainResult;
+  masterAudioWithProgress: (
+    presetName: string,
+    samples: Float32Array,
+    sampleRate: number,
+    overrides: Record<string, number | boolean> | null,
+    progressCallback: ProgressCallback | null,
+  ) => WasmMasteringChainResult;
+  masterAudioStereoWithProgress: (
+    presetName: string,
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    overrides: Record<string, number | boolean> | null,
+    progressCallback: ProgressCallback | null,
   ) => WasmMasteringStereoChainResult;
   mixingScenePresetNames: () => string[];
   mixingScenePresetJson: (presetName: string) => string;
@@ -763,7 +1000,6 @@ interface SonareModule {
     nFrames: number,
     sampleRate: number,
     nFft: number,
-    hopLength: number,
     fmin: number,
     fmax: number,
   ) => WasmStftPowerResult;
@@ -774,9 +1010,9 @@ interface SonareModule {
     sampleRate: number,
     nFft: number,
     hopLength: number,
-    nIter: number,
     fmin: number,
     fmax: number,
+    nIter: number,
   ) => Float32Array;
   mfccToMel: (
     mfcc: Float32Array,
@@ -792,9 +1028,9 @@ interface SonareModule {
     sampleRate: number,
     nFft: number,
     hopLength: number,
-    nIter: number,
     fmin: number,
     fmax: number,
+    nIter: number,
   ) => Float32Array;
 
   // Features - Chroma
@@ -1083,13 +1319,23 @@ interface SonareModule {
 
   // Streaming - StreamingRetune
   createStreamingRetune: (config: Record<string, unknown>) => WasmStreamingRetune;
+  createRealtimeVoiceChanger: (
+    config: Record<string, unknown> | string,
+  ) => WasmRealtimeVoiceChanger;
+  realtimeVoiceChangerPresetNames: () => string[];
+  realtimeVoiceChangerPresetJson: (id: string) => string;
+  validateRealtimeVoiceChangerPresetJson: (json: string) => {
+    ok: boolean;
+    normalizedJson?: string;
+    error?: string;
+  };
 
   // Mixing - scene-based Mixer
   createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
   mixerPresetJson: (presetName: string) => string;
 }
 
-interface WasmStreamingMasteringChain {
+export interface WasmStreamingMasteringChain {
   prepare: (sampleRate: number, maxBlockSize: number, numChannels: number) => void;
   processMono: (samples: Float32Array) => Float32Array;
   processStereo: (
@@ -1102,7 +1348,7 @@ interface WasmStreamingMasteringChain {
   delete: () => void;
 }
 
-interface WasmEqSpectrumSnapshot {
+export interface WasmEqSpectrumSnapshot {
   preLeft: Float32Array;
   preRight: Float32Array;
   postLeft: Float32Array;
@@ -1113,7 +1359,7 @@ interface WasmEqSpectrumSnapshot {
   seq: number;
 }
 
-interface WasmStreamingEqualizer {
+export interface WasmStreamingEqualizer {
   setBand: (index: number, band: Record<string, unknown>) => void;
   clear: () => void;
   setPhaseMode: (mode: number) => void;
@@ -1136,7 +1382,7 @@ interface WasmStreamingEqualizer {
   delete: () => void;
 }
 
-interface WasmStreamingRetune {
+export interface WasmStreamingRetune {
   prepare: (sampleRate: number, maxBlockSize: number) => void;
   reset: () => void;
   setConfig: (config: Record<string, unknown>) => void;
@@ -1146,7 +1392,32 @@ interface WasmStreamingRetune {
   delete: () => void;
 }
 
-interface WasmMixer {
+export interface WasmRealtimeVoiceChanger {
+  prepare: (sampleRate: number, maxBlockSize: number, channels: number) => void;
+  reset: () => void;
+  setConfig: (config: Record<string, unknown> | string) => void;
+  configJson: () => string;
+  latencySamples: () => number;
+  processMono: (samples: Float32Array) => Float32Array;
+  processMonoInto: (samples: Float32Array, output: Float32Array) => void;
+  processInterleaved: (samples: Float32Array, channels: number) => Float32Array;
+  processInterleavedInto: (samples: Float32Array, channels: number, output: Float32Array) => void;
+  // Zero-copy "prepared" path. The returned Float32Array is a typed_memory_view
+  // backed by the WASM heap; it is only valid until the next call to a method
+  // that may grow the underlying scratch buffer (i.e. another get*Buffer with a
+  // larger length) or until delete().
+  getMonoInputBuffer: (numSamples: number) => Float32Array;
+  getMonoOutputBuffer: (numSamples: number) => Float32Array;
+  processPreparedMono: (numSamples: number) => void;
+  getInterleavedInputBuffer: (numFrames: number, numChannels: number) => Float32Array;
+  getInterleavedOutputBuffer: (numFrames: number, numChannels: number) => Float32Array;
+  processPreparedInterleaved: (numFrames: number, numChannels: number) => void;
+  getPlanarChannelBuffer: (channel: number, numFrames: number) => Float32Array;
+  processPreparedPlanar: (numFrames: number) => void;
+  delete: () => void;
+}
+
+export interface WasmMixer {
   compile: () => void;
   processStereo: (
     leftChannels: Float32Array[],
@@ -1226,20 +1497,20 @@ interface WasmMixer {
   delete: () => void;
 }
 
-interface WasmGoniometerPoint {
+export interface WasmGoniometerPoint {
   left: number;
   right: number;
 }
 
 // Streaming types for StreamAnalyzer
-interface WasmChordChange {
+export interface WasmChordChange {
   root: number;
   quality: number;
   startTime: number;
   confidence: number;
 }
 
-interface WasmBarChord {
+export interface WasmBarChord {
   barIndex: number;
   root: number;
   quality: number;
@@ -1247,12 +1518,12 @@ interface WasmBarChord {
   confidence: number;
 }
 
-interface WasmPatternScore {
+export interface WasmPatternScore {
   name: string;
   score: number;
 }
 
-interface WasmProgressiveEstimate {
+export interface WasmProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
   bpmCandidateCount: number;
@@ -1277,14 +1548,14 @@ interface WasmProgressiveEstimate {
   updated: boolean;
 }
 
-interface WasmAnalyzerStats {
+export interface WasmAnalyzerStats {
   totalFrames: number;
   totalSamples: number;
   durationSeconds: number;
   estimate: WasmProgressiveEstimate;
 }
 
-interface WasmFrameBuffer {
+export interface WasmFrameBuffer {
   nFrames: number;
   timestamps: Float32Array;
   mel: Float32Array;
@@ -1298,7 +1569,7 @@ interface WasmFrameBuffer {
   chordConfidence: Float32Array;
 }
 
-interface WasmStreamFramesU8 {
+export interface WasmStreamFramesU8 {
   nFrames: number;
   nMels: number;
   timestamps: Float32Array;
@@ -1310,7 +1581,7 @@ interface WasmStreamFramesU8 {
   spectralFlatness: Uint8Array;
 }
 
-interface WasmStreamFramesI16 {
+export interface WasmStreamFramesI16 {
   nFrames: number;
   nMels: number;
   timestamps: Float32Array;
@@ -1322,7 +1593,7 @@ interface WasmStreamFramesI16 {
   spectralFlatness: Int16Array;
 }
 
-interface WasmStreamAnalyzer {
+export interface WasmStreamAnalyzer {
   process: (samples: Float32Array) => void;
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
   availableFrames: () => number;
