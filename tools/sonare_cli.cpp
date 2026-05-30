@@ -9,6 +9,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <locale>
 #include <map>
 #include <numeric>
 #include <sstream>
@@ -34,6 +35,7 @@
 #include "core/synthesis.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
+#include "editing/voice_changer/realtime_voice_changer.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
@@ -75,6 +77,7 @@
 #include "quick.h"
 #include "sonare.h"
 #include "util/frame.h"
+#include "util/json.h"
 #include "util/padding.h"
 #include "util/peak.h"
 #include "util/vector_normalize.h"
@@ -103,6 +106,111 @@ std::vector<int> parse_int_list(const std::string& text) {
   }
   if (values.empty()) throw std::invalid_argument("--values must contain at least one integer");
   return values;
+}
+
+std::string read_plain_text_file(const std::string& path) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    throw std::invalid_argument("cannot open text file: " + path);
+  }
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  return buffer.str();
+}
+
+std::vector<std::string> split_string(const std::string& text, char delimiter) {
+  std::vector<std::string> values;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, delimiter)) {
+    if (!item.empty()) values.push_back(item);
+  }
+  return values;
+}
+
+sonare::util::json::Value parse_cli_json_scalar(const std::string& raw) {
+  try {
+    return sonare::util::json::parse(raw);
+  } catch (const std::exception&) {
+    return sonare::util::json::Value(raw);
+  }
+}
+
+void set_json_path(sonare::util::json::Value& root, const std::string& path,
+                   sonare::util::json::Value value) {
+  auto parts = split_string(path, '.');
+  if (parts.empty()) throw std::invalid_argument("empty --set path");
+  if (!root.is_object()) root = sonare::util::json::Object{};
+  sonare::util::json::Value* cursor = &root;
+  for (size_t i = 0; i + 1 < parts.size(); ++i) {
+    auto& object = cursor->as_object();
+    auto it = object.find(parts[i]);
+    if (it == object.end() || !it->second.is_object()) {
+      it = object.insert_or_assign(parts[i], sonare::util::json::Object{}).first;
+    }
+    cursor = &it->second;
+  }
+  cursor->as_object()[parts.back()] = std::move(value);
+}
+
+// Maps the UI macro names (pitch/formant/space/intensity/output) to concrete
+// dsp.* paths so `--set macros.X=...` from the CLI is convenient. This is
+// intentionally CLI-only sugar; the core loader treats `dsp` as authoritative
+// and never derives dsp from macros (see backup/realtime-voice-changer-brushup-plan.md).
+// Keep the mapping in sync with `_apply_voice_macro_override` in
+// bindings/python/src/libsonare/cli.py.
+void apply_voice_macro_override(sonare::util::json::Value& root, const std::string& path,
+                                const sonare::util::json::Value& value) {
+  if (!value.is_number()) return;
+  const double number = value.as_number();
+  if (path == "macros.pitch") {
+    set_json_path(root, "dsp.retune.semitones", number);
+  } else if (path == "macros.formant") {
+    set_json_path(root, "dsp.formant.factor", number);
+  } else if (path == "macros.space") {
+    set_json_path(root, "dsp.reverb.mix", number);
+  } else if (path == "macros.intensity") {
+    set_json_path(root, "dsp.compressor.ratio", 1.0 + number * 4.0);
+  } else if (path == "macros.output") {
+    set_json_path(root, "dsp.outputGainDb", number);
+  }
+}
+
+std::string find_voice_preset_in_pack(const std::string& pack_json, const std::string& preset_id) {
+  const auto root = sonare::util::json::parse(pack_json);
+  const auto* presets = root.find("presets");
+  if (presets == nullptr || !presets->is_array()) {
+    throw std::invalid_argument("preset pack must contain a presets array");
+  }
+  const sonare::util::json::Value* match = nullptr;
+  for (const auto& item : presets->as_array()) {
+    const auto* id = item.find("id");
+    if (id == nullptr || !id->is_string()) continue;
+    if (id->as_string() == preset_id) {
+      if (match != nullptr)
+        throw std::invalid_argument("duplicate preset id in preset pack: " + preset_id);
+      match = &item;
+    }
+  }
+  if (match == nullptr)
+    throw std::invalid_argument("preset not found in preset pack: " + preset_id);
+  return sonare::util::json::dump(*match);
+}
+
+std::string apply_voice_preset_sets(std::string config_text, const std::string& set_options) {
+  if (set_options.empty()) return config_text;
+  auto root = sonare::util::json::parse(config_text);
+  for (const auto& assignment : split_string(set_options, ',')) {
+    const auto eq = assignment.find('=');
+    if (eq == std::string::npos || eq == 0) {
+      throw std::invalid_argument("invalid --set assignment: " + assignment);
+    }
+    const std::string path = assignment.substr(0, eq);
+    auto value = parse_cli_json_scalar(assignment.substr(eq + 1));
+    set_json_path(root, path, value);
+    apply_voice_macro_override(root, path, value);
+  }
+  return sonare::util::json::dump(root);
 }
 
 PitchClass parse_pitch_class_option(const std::string& value) {
@@ -1226,25 +1334,98 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     return 1;
   }
 
-  editing::voice_changer::VoiceChangerConfig config;
-  config.pitch_semitones = args.get_float("pitch-semitones", 0.0f);
-  config.formant_factor = args.get_float("formant-factor", 1.0f);
-  editing::voice_changer::VoiceChanger changer(config);
-  Audio result = changer.process(audio);
+  Audio result;
+  std::string preset_id;
+  int latency_samples = 0;
+  float pitch_semitones = 0.0f;
+  float formant_factor = 1.0f;
+  if (args.has("preset") || args.has("preset-json") || args.has("preset-pack") || args.has("set")) {
+    preset_id = args.get_string("preset", "neutral-monitor");
+    std::string config_text = preset_id;
+    if (args.has("preset-json")) {
+      config_text = read_plain_text_file(args.get_string("preset-json"));
+    } else if (args.has("preset-pack")) {
+      config_text = find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
+                                              preset_id);
+    } else if (args.has("set")) {
+      const auto id = editing::voice_changer::realtime_voice_changer_preset_from_id(preset_id);
+      config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
+    }
+    if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
+    auto config = editing::voice_changer::realtime_voice_changer_config_from_json(config_text);
+    editing::voice_changer::RealtimeVoiceChanger changer(config);
+    constexpr int kBlock = 512;
+    changer.prepare(audio.sample_rate(), kBlock, 1);
+    std::vector<float> output(audio.size(), 0.0f);
+    for (size_t pos = 0; pos < audio.size(); pos += kBlock) {
+      const int n = static_cast<int>(std::min<size_t>(kBlock, audio.size() - pos));
+      changer.process_block(audio.data() + pos, output.data() + pos, n);
+    }
+    latency_samples = changer.latency_samples();
+    result = Audio::from_vector(std::move(output), audio.sample_rate());
+  } else {
+    pitch_semitones = args.get_float("pitch-semitones", 0.0f);
+    formant_factor = args.get_float("formant-factor", 1.0f);
+    editing::voice_changer::VoiceChangerConfig config;
+    config.pitch_semitones = pitch_semitones;
+    config.formant_factor = formant_factor;
+    editing::voice_changer::VoiceChanger changer(config);
+    result = changer.process(audio);
+  }
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("output", args.output_file)
-        .kv("pitch_semitones", config.pitch_semitones)
-        .kv("formant_factor", config.formant_factor)
-        .kv("duration", result.duration())
-        .end_object()
-        .print();
+        .kv("durationSec", result.duration())
+        .kv("sampleRate", result.sample_rate())
+        .kv("latencySamples", latency_samples);
+    if (!preset_id.empty()) {
+      json.kv("presetId", preset_id);
+    } else {
+      // Offline voice-change path: echo the simple pitch/formant knobs the
+      // caller supplied so JSON consumers can correlate input args with the
+      // result without re-parsing CLI flags.
+      json.kv("pitch_semitones", pitch_semitones).kv("formant_factor", formant_factor);
+    }
+    json.end_object().print();
   } else if (!args.quiet) {
     std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
   }
+  return 0;
+}
+
+int cmd_voice_presets(const CliArgs& args, const Audio&) {
+  const auto names = editing::voice_changer::realtime_voice_changer_preset_names();
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().key("presets").begin_array();
+    for (const auto& name : names) json.value(name);
+    json.end_array().end_object().print();
+  } else {
+    for (const auto& name : names) std::cout << name << "\n";
+  }
+  return 0;
+}
+
+int cmd_voice_preset(const CliArgs& args, const Audio&) {
+  const std::string preset = args.get_string("preset", "neutral-monitor");
+  const auto id = editing::voice_changer::realtime_voice_changer_preset_from_id(preset);
+  std::cout << editing::voice_changer::realtime_voice_changer_preset_json(id) << "\n";
+  return 0;
+}
+
+int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
+  const std::string path = args.get_string("preset-json", args.input_file);
+  if (path.empty()) throw std::invalid_argument("voice-preset-validate requires a JSON file");
+  std::string config_text = read_plain_text_file(path);
+  if (args.has("preset")) {
+    config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
+  }
+  if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
+  const auto config = editing::voice_changer::realtime_voice_changer_config_from_json(config_text);
+  std::cout << editing::voice_changer::realtime_voice_changer_config_to_json(config) << "\n";
   return 0;
 }
 
@@ -1432,7 +1613,20 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
     if (eq == std::string::npos) continue;
-    params.push_back({item.substr(0, eq), std::stod(item.substr(eq + 1))});
+    // Locale-independent parse: std::stod follows LC_NUMERIC, which DAW plugin
+    // hosts sometimes set to e.g. de_DE (comma as decimal separator). Imbue the
+    // classic locale so "1.5" always parses as 1.5 regardless of host locale.
+    // Matches the policy in util/json.h.
+    const std::string value_text = item.substr(eq + 1);
+    std::istringstream ss(value_text);
+    ss.imbue(std::locale::classic());
+    double value = 0.0;
+    ss >> value;
+    if (!ss || ss.peek() != std::char_traits<char>::eof()) {
+      throw std::invalid_argument("invalid numeric value for parameter '" + item.substr(0, eq) +
+                                  "': " + value_text);
+    }
+    params.push_back({item.substr(0, eq), value});
   }
   return params;
 }
@@ -3075,6 +3269,10 @@ const std::vector<CommandInfo>& get_commands() {
       {"pitch-correct", "Correct pitch to target MIDI note", cmd_pitch_correct, true},
       {"note-stretch", "Stretch a note region", cmd_note_stretch, true},
       {"voice-change", "Apply pitch and formant voice change", cmd_voice_change, true},
+      {"voice-presets", "List realtime voice changer presets", cmd_voice_presets, false},
+      {"voice-preset", "Print a realtime voice changer preset JSON", cmd_voice_preset, false},
+      {"voice-preset-validate", "Normalize a realtime voice changer preset JSON",
+       cmd_voice_preset_validate, false},
       {"hpss", "Harmonic-percussive separation", cmd_hpss, true},
       {"preemphasis", "Apply pre-emphasis filtering", cmd_preemphasis, true},
       {"deemphasis", "Apply de-emphasis filtering", cmd_deemphasis, true},

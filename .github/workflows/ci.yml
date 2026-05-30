@@ -180,13 +180,43 @@ jobs:
             tests/fixtures/audit_manifests.py \
             tests/fixtures/run_optional_fixture_report.py \
             tests/fixtures/evaluate_optional_fixture_targets.py \
-            tests/fixtures/compare_optional_fixture_reports.py
+            tests/fixtures/compare_optional_fixture_reports.py \
+            tests/fixtures/realtime_voice_changer_parity.py \
+            tests/fixtures/realtime_voice_changer_quality_gate.py
           python tests/fixtures/audit_manifests.py
+      - name: Build shared library for Python fixture
+        # The Python binding loads libsonare via dlopen; the static-library
+        # build above can't satisfy that. Configure a second tree with
+        # BUILD_SHARED=ON so we can exercise the realtime voice changer quality
+        # gate without rebuilding the full coverage tree.
+        run: |
+          cmake -B build-shared \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DBUILD_CLI=OFF \
+            -DBUILD_SHARED=ON
+          cmake --build build-shared --parallel --target sonare
       - name: Type-check Python stubs
         working-directory: bindings/python
         run: |
           python -m pip install -e . mypy
           python -m mypy --strict ../../tests/typing/python_smoke.py
+      - name: Realtime voice changer quality gate
+        # Exercises every built-in preset on synthetic speech-like signals and
+        # asserts LUFS / peak / throughput bands. Catches DSP regressions the
+        # unit tests don't (e.g. envelope follower drift, preset metadata
+        # mismatches). Uses the shared library built one step earlier.
+        env:
+          SONARE_LIB_DIR: ${{ github.workspace }}/build-shared/lib
+        working-directory: bindings/python
+        run: |
+          # Resolve the platform-specific shared lib file inside the dir above.
+          libpath="$(ls "$SONARE_LIB_DIR"/libsonare.so "$SONARE_LIB_DIR"/libsonare.dylib 2>/dev/null | head -n 1)"
+          if [ -z "$libpath" ]; then
+            echo "No shared sonare library found under $SONARE_LIB_DIR" >&2
+            exit 1
+          fi
+          SONARE_LIB_PATH="$libpath" python ../../tests/fixtures/realtime_voice_changer_quality_gate.py
 
       - name: Type-check Node preset literals
         working-directory: bindings/node
