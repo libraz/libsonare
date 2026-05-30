@@ -1,0 +1,82 @@
+# Parity-checker allowlist: intentional, reviewed divergences.
+# See README.md for the meaning of each section and how to add an entry.
+# Keys are the canonical snake_case names (C name without the `sonare_` prefix).
+
+# ---------------------------------------------------------------------------
+# [surface_only] — symbols with NO C-API counterpart that are intentional.
+# These are platform-specific helpers, not coverage drift.
+# Suffix/prefix wildcards (`*progress`, `engine_*`) are supported.
+# ---------------------------------------------------------------------------
+[surface_only]
+# Symbols that exist on multiple bindings but are deliberately binding-only.
+any = [
+  "init",                  # WASM async module init
+  "assert_samples",        # exported input validators (Node + WASM)
+  "assert_finite_samples",
+  "assert_finite_scalar",
+  "assert_non_empty_samples",
+]
+
+node = [
+  "analyze_async",          # libuv async variant, JS-only
+  "analyze_with_progress",  # progress-callback variant, JS-only
+  "*with_progress",
+  "voice_change_realtime",  # realtime voice changer, JS-only ergonomic wrapper
+]
+
+wasm = [
+  "require_module",         # WASM module-handle accessor
+  "is_initialized",         # WASM init-state probe
+  "engine_capabilities",    # WASM build capability descriptor
+  "*with_progress",
+  "analyze_with_progress",
+]
+
+# ---------------------------------------------------------------------------
+# [coverage] — canonical C functions allowed to be ABSENT on a surface.
+# Seed empty: we want to SURFACE coverage gaps, not pre-hide them. Add an
+# entry only after confirming the omission is deliberate (e.g. file I/O in WASM).
+# ---------------------------------------------------------------------------
+[coverage]
+# Example (disabled): wasm = ["audio_from_file"]
+
+# ---------------------------------------------------------------------------
+# [order] — keys whose facade param order legitimately differs from the C ABI
+# beyond the options-bag-prefix convention. Seed empty.
+# ---------------------------------------------------------------------------
+[order]
+
+# ---------------------------------------------------------------------------
+# [default] — "key.param" entries whose default may differ across facades.
+# Seed empty: default drift is the highest-value signal; do not pre-hide it.
+# ---------------------------------------------------------------------------
+[default]
+params = []
+
+# ---------------------------------------------------------------------------
+# [enum] — "key.param" entries whose enum value-sets may differ across surfaces.
+# TS unions often carry extra alias spellings (e.g. 'stereo-pan' + 'stereoPan')
+# that the C enum lacks; add reviewed aliases here.
+# ---------------------------------------------------------------------------
+[enum]
+params = []
+
+# ---------------------------------------------------------------------------
+# [input_naming] — canonical keys whose audio-input params (samples/sr/...) are
+# allowed to be named differently across surfaces. Seed empty: input naming is
+# real signal worth triaging.
+# ---------------------------------------------------------------------------
+[input_naming]
+keys = []
+
+# ---------------------------------------------------------------------------
+# [tuning] — central knobs. Leave empty to use the built-in defaults in
+# compare.py. Set these only to override.
+#   input_roles:     leading audio-input param names stripped before the
+#                    config-order comparison (and compared by the input check).
+#   handle_prefixes: C name prefixes treated as handle/class APIs (coverage of
+#                    these is informational; matched against facade class methods).
+# ---------------------------------------------------------------------------
+[tuning]
+# input_roles = ["samples", "sample_rate", "sr", "left", "right", "mono", "audio", "x", "y", "buffer", "data", "length"]
+# handle_prefixes = ["audio", "eq", "mixer", "engine", "strip", "stream", "streaming", "realtime", "voice", "free", "master"]
