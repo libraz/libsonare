@@ -510,10 +510,10 @@ def realtime_voice_changer_preset_names() -> list[str]:
     return [s for s in raw.decode("utf-8").split("\n") if s.strip()]
 
 
-def realtime_voice_changer_preset_json(preset: str) -> str:
+def realtime_voice_changer_preset_json(name: str) -> str:
     lib = _get_lib()
     out = ctypes.c_void_p()
-    rc = lib.sonare_realtime_voice_changer_preset_json(preset.encode("utf-8"), ctypes.byref(out))
+    rc = lib.sonare_realtime_voice_changer_preset_json(name.encode("utf-8"), ctypes.byref(out))
     _check(rc)
     try:
         return ctypes.string_at(out).decode("utf-8")
@@ -644,14 +644,14 @@ def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChanger
 def normalize(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    target_db: float = -3.0,
+    target_db: float = 0.0,
 ) -> list[float]:
     """Normalize audio to a target dB level.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        target_db: Target peak level in dB (default -3.0).
+        target_db: Target peak level in dB (default 0.0 = full scale).
 
     Returns:
         List of normalized samples.
@@ -1106,7 +1106,13 @@ def _coerce_compressor_detector(value: int | str) -> int:
 
 
 def _run_dynamics(
-    lib_fn, samples, sample_rate: int, config, *, fn_name: str = "mastering_dynamics", validate: bool = True
+    lib_fn,
+    samples,
+    sample_rate: int,
+    config,
+    *,
+    fn_name: str = "mastering_dynamics",
+    validate: bool = True,
 ) -> tuple[np.ndarray, int]:
     """Invoke a dynamics ``(samples, sr, &config, &out, &out_length, &out_latency)``
     C call and return ``(output ndarray, latency_samples)``.

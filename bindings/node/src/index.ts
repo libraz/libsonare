@@ -84,7 +84,11 @@ export interface ValidateOptions {
   validate?: boolean;
 }
 
-function assertNonEmptySamples(fnName: string, samples: ArrayLike<number>, argName = 'samples'): void {
+function assertNonEmptySamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  argName = 'samples',
+): void {
   if (samples.length === 0) {
     throw new RangeError(`${fnName}: ${argName} must not be empty`);
   }
@@ -1135,8 +1139,8 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
   return addon.realtimeVoiceChangerPresetNames() as VoicePresetId[];
 }
 
-export function realtimeVoiceChangerPresetJson(id: VoicePresetId): string {
-  return addon.realtimeVoiceChangerPresetJson(id);
+export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
+  return addon.realtimeVoiceChangerPresetJson(name);
 }
 
 export function validateRealtimeVoiceChangerPresetJson(json: string): {
@@ -1490,14 +1494,14 @@ export function masteringPresetNames(): MasteringPreset[] {
 export function masterAudio(
   samples: Float32Array,
   sampleRate = 22050,
-  preset: MasteringPreset = 'pop',
+  presetName: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
   if (onProgress) {
-    return addon.masterAudioWithProgress(preset, samples, sampleRate, overrides, onProgress);
+    return addon.masterAudioWithProgress(presetName, samples, sampleRate, overrides, onProgress);
   }
-  return addon.masterAudio(preset, samples, sampleRate, overrides);
+  return addon.masterAudio(presetName, samples, sampleRate, overrides);
 }
 
 /**
@@ -1510,23 +1514,23 @@ export function masterAudio(
 export function masterAudioAsync(
   samples: Float32Array,
   sampleRate = 22050,
-  preset: MasteringPreset = 'pop',
+  presetName: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
 ): Promise<MasteringChainResult> {
-  return addon.masterAudioAsync(preset, samples, sampleRate, overrides);
+  return addon.masterAudioAsync(presetName, samples, sampleRate, overrides);
 }
 
 export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  preset: MasteringPreset = 'pop',
+  presetName: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
   if (onProgress) {
     return addon.masterAudioStereoWithProgress(
-      preset,
+      presetName,
       left,
       right,
       sampleRate,
@@ -1534,7 +1538,7 @@ export function masterAudioStereo(
       onProgress,
     );
   }
-  return addon.masterAudioStereo(preset, left, right, sampleRate, overrides);
+  return addon.masterAudioStereo(presetName, left, right, sampleRate, overrides);
 }
 
 /**
@@ -1544,10 +1548,10 @@ export function masterAudioStereoAsync(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  preset: MasteringPreset = 'pop',
+  presetName: MasteringPreset = 'pop',
   overrides: Record<string, number | boolean> = {},
 ): Promise<MasteringChainStereoResult> {
-  return addon.masterAudioStereoAsync(preset, left, right, sampleRate, overrides);
+  return addon.masterAudioStereoAsync(presetName, left, right, sampleRate, overrides);
 }
 
 export function masteringProcessorNames(): SoloProcessor[] {
@@ -2176,12 +2180,12 @@ export function frameSignal(
   return addon.frameSignal(samples, frameLength, hopLength);
 }
 
-export function padCenter(values: Float32Array, size: number, padValue = 0.0): Float32Array {
-  return addon.padCenter(values, size, padValue);
+export function padCenter(values: Float32Array, targetSize: number, padValue = 0.0): Float32Array {
+  return addon.padCenter(values, targetSize, padValue);
 }
 
-export function fixLength(values: Float32Array, size: number, padValue = 0.0): Float32Array {
-  return addon.fixLength(values, size, padValue);
+export function fixLength(values: Float32Array, targetSize: number, padValue = 0.0): Float32Array {
+  return addon.fixLength(values, targetSize, padValue);
 }
 
 export function fixFrames(
@@ -2580,8 +2584,8 @@ export function mixingScenePresetNames(): string[] {
   return addon.mixingScenePresetNames();
 }
 
-export function mixingScenePresetJson(preset: string): string {
-  return addon.mixingScenePresetJson(preset);
+export function mixingScenePresetJson(presetName: string): string {
+  return addon.mixingScenePresetJson(presetName);
 }
 
 const PAN_LAW_VALUES: Record<PanLaw, number> = {

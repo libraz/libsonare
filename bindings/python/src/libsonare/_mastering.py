@@ -408,7 +408,7 @@ def mastering_preset_names() -> list[str]:
 def master_audio(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    preset: str = "pop",
+    preset_name: str = "pop",
     overrides: dict[str, float | int | bool] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> MasteringChainResult:
@@ -417,7 +417,7 @@ def master_audio(
     Args:
         samples: Mono audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        preset: Preset identifier from :func:`mastering_preset_names`.
+        preset_name: Preset identifier from :func:`mastering_preset_names`.
         overrides: Optional flat / nested overrides applied on top of the preset
             defaults. Keys use the same dot-notation as :func:`mastering_chain`.
         on_progress: Optional callback ``(progress, stage)`` invoked after each
@@ -435,7 +435,7 @@ def master_audio(
     out = SonareMasteringChainResult()
     if on_progress is None:
         rc = lib.sonare_master_audio(
-            preset.encode("utf-8"),
+            preset_name.encode("utf-8"),
             c_array,
             ctypes.c_size_t(length),
             ctypes.c_int(sample_rate),
@@ -448,7 +448,7 @@ def master_audio(
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress)  # keep alive across the C call
         rc = lib.sonare_master_audio_with_progress(
-            preset.encode("utf-8"),
+            preset_name.encode("utf-8"),
             c_array,
             ctypes.c_size_t(length),
             ctypes.c_int(sample_rate),
@@ -476,13 +476,13 @@ def master_audio_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    preset: str = "pop",
+    preset_name: str = "pop",
     overrides: dict[str, float | int | bool] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> MasteringChainStereoResult:
     """Apply a named mastering preset chain to stereo audio.
 
-    See :func:`master_audio` for the ``preset``, ``overrides`` and
+    See :func:`master_audio` for the ``preset_name``, ``overrides`` and
     ``on_progress`` semantics.
     """
     lib = _get_lib()
@@ -496,7 +496,7 @@ def master_audio_stereo(
     out = SonareMasteringChainStereoResult()
     if on_progress is None:
         rc = lib.sonare_master_audio_stereo(
-            preset.encode("utf-8"),
+            preset_name.encode("utf-8"),
             left_array,
             right_array,
             ctypes.c_size_t(left_length),
@@ -510,7 +510,7 @@ def master_audio_stereo(
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress)  # keep alive across the C call
         rc = lib.sonare_master_audio_stereo_with_progress(
-            preset.encode("utf-8"),
+            preset_name.encode("utf-8"),
             left_array,
             right_array,
             ctypes.c_size_t(left_length),

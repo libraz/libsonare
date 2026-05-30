@@ -1968,14 +1968,14 @@ export function mixingScenePresetNames(): string[] {
  * name shared with the Node and Python bindings; the returned JSON loads
  * directly into a {@link Mixer} via {@link Mixer.fromSceneJson}.
  *
- * @param preset - Preset name (see {@link mixingScenePresetNames})
+ * @param presetName - Preset name (see {@link mixingScenePresetNames})
  * @returns Scene JSON string
  */
-export function mixingScenePresetJson(preset: string): string {
+export function mixingScenePresetJson(presetName: string): string {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.mixingScenePresetJson(preset);
+  return module.mixingScenePresetJson(presetName);
 }
 
 export function mixStereo(
@@ -2476,11 +2476,11 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
   return module.realtimeVoiceChangerPresetNames() as VoicePresetId[];
 }
 
-export function realtimeVoiceChangerPresetJson(id: VoicePresetId): string {
+export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.realtimeVoiceChangerPresetJson(id);
+  return module.realtimeVoiceChangerPresetJson(name);
 }
 
 export function validateRealtimeVoiceChangerPresetJson(json: string): {
@@ -3565,18 +3565,18 @@ export function frameSignal(
   return module.frameSignal(samples, frameLength, hopLength);
 }
 
-export function padCenter(values: Float32Array, size: number, padValue = 0.0): Float32Array {
+export function padCenter(values: Float32Array, targetSize: number, padValue = 0.0): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.padCenter(values, size, padValue);
+  return module.padCenter(values, targetSize, padValue);
 }
 
-export function fixLength(values: Float32Array, size: number, padValue = 0.0): Float32Array {
+export function fixLength(values: Float32Array, targetSize: number, padValue = 0.0): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.fixLength(values, size, padValue);
+  return module.fixLength(values, targetSize, padValue);
 }
 
 export function fixFrames(frames: Int32Array, xMin = 0, xMax = -1, pad = true): Int32Array {
@@ -3601,11 +3601,7 @@ export function peakPick(
   return module.peakPick(values, preMax, postMax, preAvg, postAvg, delta, wait);
 }
 
-export function vectorNormalize(
-  values: Float32Array,
-  normType = 0,
-  threshold = 1e-12,
-): Float32Array {
+export function vectorNormalize(values: Float32Array, normType = 0, threshold = 0.0): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }

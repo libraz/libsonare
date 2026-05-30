@@ -241,23 +241,23 @@ def frame_signal(
 
 def pad_center(
     values: Sequence[float] | list[float],
-    size: int,
+    target_size: int,
     pad_value: float = 0.0,
 ) -> list[float]:
     """Pad an array by centering it within target size."""
     return _call_float_transform(
-        "sonare_pad_center", values, ctypes.c_size_t(size), ctypes.c_float(pad_value)
+        "sonare_pad_center", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
     )
 
 
 def fix_length(
     values: Sequence[float] | list[float],
-    size: int,
+    target_size: int,
     pad_value: float = 0.0,
 ) -> list[float]:
     """Crop or pad an array to exact length."""
     return _call_float_transform(
-        "sonare_fix_length", values, ctypes.c_size_t(size), ctypes.c_float(pad_value)
+        "sonare_fix_length", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
     )
 
 

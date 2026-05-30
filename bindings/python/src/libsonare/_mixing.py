@@ -20,13 +20,13 @@ def mixing_scene_preset_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
-def mixing_scene_preset_json(preset: str) -> str:
+def mixing_scene_preset_json(preset_name: str) -> str:
     """Return the JSON scene template for a built-in mixer preset."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixing_scene_preset_json"):
         raise RuntimeError("libsonare was built without mixing support")
     json_ptr = ctypes.c_void_p()
-    rc = lib.sonare_mixing_scene_preset_json(preset.encode("utf-8"), ctypes.byref(json_ptr))
+    rc = lib.sonare_mixing_scene_preset_json(preset_name.encode("utf-8"), ctypes.byref(json_ptr))
     _check(rc)
     try:
         return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""

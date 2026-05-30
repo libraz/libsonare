@@ -218,7 +218,7 @@ def test_compat_numeric_and_signal_utilities() -> None:
     framed = libsonare.frame_signal([1.0, 2.0, 3.0, 4.0], frame_length=2, hop_length=1)
     assert framed[0] == 3
     assert framed[1] == pytest.approx([1.0, 2.0, 2.0, 3.0, 3.0, 4.0])
-    assert libsonare.fix_length([1.0, 2.0], size=4, pad_value=-1.0) == pytest.approx(
+    assert libsonare.fix_length([1.0, 2.0], target_size=4, pad_value=-1.0) == pytest.approx(
         [1.0, 2.0, -1.0, -1.0]
     )
     assert libsonare.fix_frames([2, 4], x_min=0, x_max=5, pad=True) == [0, 2, 4, 5]
