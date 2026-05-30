@@ -224,6 +224,14 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringStreamingPreview",
               Napi::Function::New(env, &SonareWrap::MasteringStreamingPreview,
                                   "masteringStreamingPreview"));
+  exports.Set("masteringDynamicsCompressor",
+              Napi::Function::New(env, &SonareWrap::MasteringDynamicsCompressor,
+                                  "masteringDynamicsCompressor"));
+  exports.Set("masteringDynamicsGate", Napi::Function::New(env, &SonareWrap::MasteringDynamicsGate,
+                                                           "masteringDynamicsGate"));
+  exports.Set("masteringDynamicsTransientShaper",
+              Napi::Function::New(env, &SonareWrap::MasteringDynamicsTransientShaper,
+                                  "masteringDynamicsTransientShaper"));
   exports.Set(
       "masteringRepairDeclick",
       Napi::Function::New(env, &SonareWrap::MasteringRepairDeclick, "masteringRepairDeclick"));

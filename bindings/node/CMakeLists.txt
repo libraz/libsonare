@@ -262,6 +262,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_include_directories(${PROJECT_NAME} PRIVATE
   ${CMAKE_JS_INC}
   ${NAPI_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/addon
   ${SONARE_ROOT}/src
   ${SONARE_ROOT}/third_party/kissfft
   ${SONARE_ROOT}/third_party/dr_libs
@@ -283,6 +284,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   NAPI_DISABLE_CPP_EXCEPTIONS
   KISS_FFT_FIXED=0
   SONARE_WITH_GRAPH=1
+  SONARE_WITH_MIXING=1
   SONARE_WITH_PITCH_EDITOR=1
   SONARE_WITH_VOICE_CHANGER=1
   # Enable the effects.reverb.* branch of the channel-strip insert factory

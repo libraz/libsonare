@@ -104,7 +104,7 @@ describe('editing effects', () => {
     ).toBe(false);
     expect(
       validateRealtimeVoiceChangerPresetJson(
-        '{"schemaVersion":1,"id":"x","name":"x","dsp":{"retune":{"semitones":0,"mix":0,"grainSize":0},"formant":{"factor":1,"amount":0,"body":0,"brightness":0,"nasal":0},"eq":{"highpassHz":80,"bodyDb":0,"presenceDb":0,"airDb":0},"gate":{"thresholdDb":-55,"attackMs":2,"releaseMs":100,"rangeDb":18},"compressor":{"thresholdDb":-22,"ratio":2.5,"attackMs":6,"releaseMs":90,"makeupGainDb":1},"deesser":{"frequencyHz":7200,"thresholdDb":-28,"rangeDb":8},"reverb":{"mix":0.04,"timeMs":320,"damping":0.55,"seed":1},"limiter":{"ceilingDb":-1,"releaseMs":50}}}',
+        '{"schemaVersion":1,"id":"x","name":"x","dsp":{"retune":{"semitones":0,"mix":0,"grainSize":0},"formant":{"factor":1,"amount":0,"body":0,"brightness":0,"nasal":0},"eq":{"highpassHz":80,"bodyDb":0,"presenceDb":0,"airDb":0},"gate":{"thresholdDb":-55,"attackMs":2,"releaseMs":100,"rangeDb":18},"compressor":{"thresholdDb":-22,"ratio":2.5,"attackMs":6,"releaseMs":90,"makeupGainDb":1},"deesser":{"frequencyHz":7200,"thresholdDb":-28,"ratio":3,"rangeDb":8},"reverb":{"mix":0.04,"timeMs":320,"damping":0.55,"seed":1},"limiter":{"ceilingDb":-1,"releaseMs":50}}}',
       ).ok,
     ).toBe(true);
   });

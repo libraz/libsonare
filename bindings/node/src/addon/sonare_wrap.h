@@ -120,6 +120,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringAssistantSuggest(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAudioProfile(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStreamingPreview(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringDynamicsCompressor(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringDynamicsGate(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringDynamicsTransientShaper(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDeclick(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDenoiseClassical(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDeclip(const Napi::CallbackInfo& info);
