@@ -899,6 +899,21 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringDynamicsCompressor: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => { samples: Float32Array; latencySamples: number };
+  masteringDynamicsGate: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => { samples: Float32Array; latencySamples: number };
+  masteringDynamicsTransientShaper: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => { samples: Float32Array; latencySamples: number };
   masteringChain: (
     samples: Float32Array,
     sampleRate: number,
