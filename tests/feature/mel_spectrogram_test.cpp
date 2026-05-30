@@ -11,6 +11,7 @@
 #include "util/constants.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
@@ -141,9 +142,10 @@ TEST_CASE("MelSpectrogram mfcc with liftering", "[mel_spectrogram]") {
 
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
 
-  int n_mfcc = 13;
+  const int n_mfcc = 13;
+  const float lifter = 22.0f;
   std::vector<float> mfcc_no_lift = mel.mfcc(n_mfcc, 0.0f);
-  std::vector<float> mfcc_lift = mel.mfcc(n_mfcc, 22.0f);
+  std::vector<float> mfcc_lift = mel.mfcc(n_mfcc, lifter);
 
   // Liftering should change values
   bool different = false;
@@ -154,6 +156,23 @@ TEST_CASE("MelSpectrogram mfcc with liftering", "[mel_spectrogram]") {
     }
   }
   REQUIRE(different);
+
+  // Verify the lifter formula matches librosa: 1 + (L/2) * sin(pi * (k+1) / L)
+  // The DC coefficient (k=0) must receive a nonzero lift (regression test for
+  // an off-by-one bug where the lift factor was computed with k instead of k+1).
+  const int n_frames = mel.n_frames();
+  for (int k = 0; k < n_mfcc; ++k) {
+    const float expected_lift =
+        1.0f +
+        (lifter / 2.0f) * std::sin(sonare::constants::kPi * static_cast<float>(k + 1) / lifter);
+    for (int t = 0; t < n_frames; ++t) {
+      const float base = mfcc_no_lift[k * n_frames + t];
+      const float expected = base * expected_lift;
+      // Use absolute tolerance scaled by magnitude so zero values don't break WithinRel.
+      const float tol = std::max(1e-4f, std::abs(expected) * 1e-5f);
+      REQUIRE_THAT(mfcc_lift[k * n_frames + t], WithinAbs(expected, tol));
+    }
+  }
 }
 
 TEST_CASE("MelSpectrogram delta", "[mel_spectrogram]") {

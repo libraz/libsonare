@@ -24,6 +24,7 @@
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
+using sonare::constants::kTwoPi;
 
 namespace {
 
@@ -488,11 +489,13 @@ TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]
   REQUIRE(scene.find("\"timing\":\"post\"") != std::string::npos);
 
   // Connections survive, including the bus -> return edge that routes the send.
-  REQUIRE(scene.find("\"source\":\"vocal-verb\",\"destination\":\"vocal-verb-return\"") !=
+  // Key order follows the alphabetic ordering of util::json::Object (std::map),
+  // so "destination" precedes "source" in the serialized JSON.
+  REQUIRE(scene.find("\"destination\":\"vocal-verb-return\",\"source\":\"vocal-verb\"") !=
           std::string::npos);
-  REQUIRE(scene.find("\"source\":\"vocal-verb-return\",\"destination\":\"master\"") !=
+  REQUIRE(scene.find("\"destination\":\"master\",\"source\":\"vocal-verb-return\"") !=
           std::string::npos);
-  REQUIRE(scene.find("\"source\":\"vocal\",\"destination\":\"master\"") != std::string::npos);
+  REQUIRE(scene.find("\"destination\":\"master\",\"source\":\"vocal\"") != std::string::npos);
 
   // Re-parsing the round-tripped JSON must rebuild a working mixer.
   SonareMixer* restored = sonare_mixer_from_scene_json(scene.c_str(), kSr, kBlock);

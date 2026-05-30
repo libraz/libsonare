@@ -149,6 +149,51 @@ TEST_CASE("Declip uses LPC reconstruction when enough context is available",
   REQUIRE(result[20] < 0.9f);
 }
 
+namespace {
+
+// Generate a sine wave + low-amplitude noise, then hard-clip at +/- threshold.
+// Returns the original (unclipped) and clipped signals separately so tests can
+// measure SDR improvements without re-deriving the reference.
+struct ClippedFixture {
+  std::vector<float> original;
+  std::vector<float> clipped;
+};
+
+ClippedFixture make_clipped_sine(size_t n, float freq_hz, float amp, float sample_rate,
+                                 float clip_thresh, uint32_t seed) {
+  ClippedFixture fx;
+  fx.original.resize(n);
+  fx.clipped.resize(n);
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<float> noise(-0.005f, 0.005f);
+  constexpr double kPi = 3.14159265358979323846;
+  for (size_t i = 0; i < n; ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    const float x = amp * static_cast<float>(std::sin(2.0 * kPi * freq_hz * t)) + noise(rng);
+    fx.original[i] = x;
+    fx.clipped[i] = std::clamp(x, -clip_thresh, clip_thresh);
+  }
+  return fx;
+}
+
+}  // namespace
+
+TEST_CASE("Declip preserves all unclipped samples exactly", "[mastering][repair]") {
+  // Regression test for the bug where Burg was retrained on filled-in samples:
+  // even after the LPC step, samples outside any clipped region must remain
+  // bit-identical to the input.
+  const auto fx = make_clipped_sine(2048, 700.0f, 0.92f, 48000.0f, 0.5f, 0xFACE);
+  const auto clipped_audio = Audio::from_buffer(fx.clipped.data(), fx.clipped.size(), 48000);
+  const auto result = declip(clipped_audio, {0.5f, 24, 2, 1.0f});
+
+  REQUIRE(result.size() == fx.clipped.size());
+  for (size_t i = 0; i < fx.clipped.size(); ++i) {
+    if (std::abs(fx.clipped[i]) < 0.5f) {
+      REQUIRE(result[i] == fx.clipped[i]);
+    }
+  }
+}
+
 TEST_CASE("Dehum notch filter reduces fundamental tone", "[mastering][repair]") {
   std::vector<float> samples(4800);
   for (size_t i = 0; i < samples.size(); ++i) {

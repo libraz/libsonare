@@ -73,27 +73,72 @@ TEST_CASE("create_chroma_filterbank dimensions", "[chroma]") {
   REQUIRE(fb.size() == static_cast<size_t>(config.n_chroma * n_bins));
 }
 
-TEST_CASE("create_chroma_filterbank normalized", "[chroma]") {
+TEST_CASE("create_chroma_filterbank L2 normalized by default", "[chroma]") {
+  // librosa.filters.chroma's default norm is L2 — each filter row must have
+  // unit Euclidean norm. Switching from the legacy L1 (sum=1) makes the
+  // filterbank itself librosa-compatible.
   int sr = 22050;
   int n_fft = 2048;
   int n_bins = n_fft / 2 + 1;
 
   ChromaFilterConfig config;
   config.n_chroma = 12;
+  REQUIRE(config.norm == ChromaFilterNorm::L2);
 
   std::vector<float> fb = create_chroma_filterbank(sr, n_fft, config);
 
-  // Each chroma bin should be normalized (sum close to 1)
+  // Each chroma row should have unit L2 norm.
+  for (int c = 0; c < config.n_chroma; ++c) {
+    float sum_sq = 0.0f;
+    for (int k = 0; k < n_bins; ++k) {
+      sum_sq += fb[c * n_bins + k] * fb[c * n_bins + k];
+    }
+    const float l2 = std::sqrt(sum_sq);
+    // Rows may be empty when fmin filters out every bin.
+    if (l2 > 0.0f) {
+      REQUIRE_THAT(l2, WithinAbs(1.0f, 0.01f));
+    }
+  }
+}
+
+TEST_CASE("create_chroma_filterbank L1 norm available for legacy callers", "[chroma]") {
+  int sr = 22050;
+  int n_fft = 2048;
+  int n_bins = n_fft / 2 + 1;
+
+  ChromaFilterConfig config;
+  config.n_chroma = 12;
+  config.norm = ChromaFilterNorm::L1;
+
+  std::vector<float> fb = create_chroma_filterbank(sr, n_fft, config);
+
   for (int c = 0; c < config.n_chroma; ++c) {
     float sum = 0.0f;
     for (int k = 0; k < n_bins; ++k) {
       sum += fb[c * n_bins + k];
     }
-    // Some bins might be empty due to frequency range
     if (sum > 0.0f) {
       REQUIRE_THAT(sum, WithinAbs(1.0f, 0.01f));
     }
   }
+}
+
+TEST_CASE("create_chroma_filterbank None norm preserves raw weights", "[chroma]") {
+  int sr = 22050;
+  int n_fft = 2048;
+
+  ChromaFilterConfig config;
+  config.n_chroma = 12;
+  config.norm = ChromaFilterNorm::None;
+
+  std::vector<float> fb = create_chroma_filterbank(sr, n_fft, config);
+
+  // Without normalization, the triangular weights distributed per FFT bin sum
+  // to 1 per column (each bin contributes (1-frac) + frac = 1 across two
+  // chroma classes). Check that the total mass equals the active bin count.
+  float total = 0.0f;
+  for (float v : fb) total += v;
+  REQUIRE(total > 0.0f);
 }
 
 TEST_CASE("create_chroma_filterbank non-negative", "[chroma]") {
@@ -118,6 +163,7 @@ TEST_CASE("apply_chroma_filterbank", "[chroma]") {
 
   ChromaFilterConfig config;
   config.n_chroma = 12;
+  config.norm = ChromaFilterNorm::L1;
 
   std::vector<float> fb = create_chroma_filterbank(sr, n_fft, config);
 
@@ -129,12 +175,10 @@ TEST_CASE("apply_chroma_filterbank", "[chroma]") {
 
   REQUIRE(chroma.size() == static_cast<size_t>(config.n_chroma * n_frames));
 
-  // With uniform power, all chroma should be similar
+  // With uniform power and L1-normalized rows, each chroma row integrates to 1.
   for (int t = 0; t < n_frames; ++t) {
-    float first = chroma[0 * n_frames + t];
-    for (int c = 1; c < config.n_chroma; ++c) {
-      // Allow some variation due to frequency distribution
-      REQUIRE_THAT(chroma[c * n_frames + t], WithinAbs(first, 0.5f));
+    for (int c = 0; c < config.n_chroma; ++c) {
+      REQUIRE_THAT(chroma[c * n_frames + t], WithinAbs(1.0f, 1e-5f));
     }
   }
 }

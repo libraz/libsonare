@@ -244,6 +244,77 @@ TEST_CASE("LUFS curves expose momentary and short term blocks", "[meter]") {
   REQUIRE(std::isfinite(short_term.front()));
 }
 
+TEST_CASE("LUFS momentary measures -23 LUFS sine within tolerance", "[meter][lufs]") {
+  // 1 kHz sine at peak amplitude sqrt(2) * 10^(-23/20) has -23 dBFS RMS and
+  // over 3 s should yield a
+  // momentary loudness peak around -23 LUFS for the K-weighted signal.
+  // The K-weighting at 1 kHz is approximately 0 dB, so dBFS ~= LUFS here.
+  const int sample_rate = 48000;
+  const float duration_sec = 3.0f;
+  const float amplitude = 0.1001186529f;
+  const int n_samples = static_cast<int>(static_cast<float>(sample_rate) * duration_sec);
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(i)] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  const auto momentary = metering::momentary_lufs(audio);
+
+  REQUIRE(!momentary.empty());
+  const float peak = *std::max_element(momentary.begin(), momentary.end());
+  REQUIRE(std::isfinite(peak));
+  REQUIRE_THAT(peak, WithinAbs(-23.0f, 0.5f));
+}
+
+TEST_CASE("LUFS momentary is invariant to LufsConfig::block_overlap (BS.1770-4 spec)",
+          "[meter][lufs]") {
+  // ITU-R BS.1770-4 Annex 2 fixes momentary overlap at 75% (100 ms hop @ 400 ms block).
+  // Changing the user-facing `block_overlap` (which is for integrated gating) MUST NOT
+  // alter momentary loudness output.
+  const int sample_rate = 48000;
+  const int n_samples = sample_rate * 3;
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(i)] =
+        0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  metering::LufsConfig cfg_a;
+  cfg_a.block_overlap = 0.5f;
+  metering::LufsConfig cfg_b;
+  cfg_b.block_overlap = 0.75f;
+
+  const auto momentary_a = metering::momentary_lufs(audio, cfg_a);
+  const auto momentary_b = metering::momentary_lufs(audio, cfg_b);
+
+  REQUIRE(momentary_a.size() == momentary_b.size());
+  REQUIRE(!momentary_a.empty());
+  for (size_t i = 0; i < momentary_a.size(); ++i) {
+    const float a = momentary_a[i];
+    const float b = momentary_b[i];
+    if (std::isfinite(a) || std::isfinite(b)) {
+      REQUIRE(std::isfinite(a));
+      REQUIRE(std::isfinite(b));
+      REQUIRE_THAT(a, WithinAbs(b, 1e-4f));
+    }
+  }
+
+  // Also verify the lufs_interleaved path: momentary field must match between
+  // configs since BS.1770-4 spec is fixed.
+  const auto full_a =
+      metering::lufs_interleaved(samples.data(), samples.size(), 1, sample_rate, cfg_a);
+  const auto full_b =
+      metering::lufs_interleaved(samples.data(), samples.size(), 1, sample_rate, cfg_b);
+  REQUIRE(std::isfinite(full_a.momentary_lufs));
+  REQUIRE(std::isfinite(full_b.momentary_lufs));
+  REQUIRE_THAT(full_a.momentary_lufs, WithinAbs(full_b.momentary_lufs, 1e-4f));
+}
+
 TEST_CASE("LUFS interleaved overlapped short-term path stays finite", "[meter]") {
   // Synthetic mono signal with a clear loud-then-quiet level change over a few
   // seconds. With the default config (block_overlap = 0.75) the momentary and
@@ -270,6 +341,33 @@ TEST_CASE("LUFS interleaved overlapped short-term path stays finite", "[meter]")
   REQUIRE(std::isfinite(result.short_term_lufs));
   REQUIRE(std::isfinite(result.loudness_range));
   REQUIRE(result.loudness_range >= 0.0f);
+}
+
+TEST_CASE("ebur128_loudness_range accepts mono input", "[meter][lufs]") {
+  // Mono input is the documented contract. A steady tone should yield a near
+  // -zero LRA and no exception.
+  const Audio audio = make_sine(0.5f, 48000, 5.0f);
+
+  float lra = 0.0f;
+  REQUIRE_NOTHROW(lra = metering::ebur128_loudness_range(audio));
+  REQUIRE(std::isfinite(lra));
+  REQUIRE(lra >= 0.0f);
+  REQUIRE(lra < 1.0f);  // steady tone => very small loudness range
+}
+
+TEST_CASE("ebur128_loudness_range handles empty input", "[meter][lufs]") {
+  const Audio audio;  // empty (still mono)
+  REQUIRE_THAT(metering::ebur128_loudness_range(audio), WithinAbs(0.0f, 1e-7f));
+}
+
+TEST_CASE("ebur128_loudness_range mono contract guard", "[meter][lufs]") {
+  // The current `Audio` class is hardcoded mono (`channels() == 1`), so the
+  // guard never fires today. Make the contract explicit: if `channels()` ever
+  // returns something other than 1, the function MUST refuse rather than
+  // silently mis-interpret the buffer.
+  const Audio audio = make_sine(0.5f, 48000, 1.0f);
+  REQUIRE(audio.channels() == 1);
+  REQUIRE_NOTHROW(metering::ebur128_loudness_range(audio));
 }
 
 TEST_CASE("dynamic range reports zero for steady signal", "[meter]") {

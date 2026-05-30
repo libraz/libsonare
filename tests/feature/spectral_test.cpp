@@ -291,6 +291,81 @@ TEST_CASE("spectral_contrast uses librosa band quantile means", "[spectral]") {
   REQUIRE_THAT(contrast[2], WithinAbs(2.6884532f, 1e-6f));
 }
 
+TEST_CASE("poly_features stays numerically stable at high order", "[spectral][poly_features]") {
+  // Regression guard: prior to the Vandermonde column-scaling fix, building the
+  // design matrix from raw bin frequencies (up to ~sr/2 ~= 11 kHz) made the high
+  // -order columns explode (11025^5 ~ 1.6e20), pushing the Jacobi SVD beyond
+  // double precision and producing NaN / Inf coefficients. With column-norm
+  // scaling all coefficients must remain finite at orders 1..5.
+  const int sr = 22050;
+  const int n_bins = 1025;  // n_fft = 2048
+  const int n_fft = 2048;
+  const int n_frames = 3;
+
+  // Spectrum whose magnitude is a smooth linear function of the bin frequency
+  // (so a low-order polyfit has a meaningful, well-defined answer).
+  const float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
+  for (int k = 0; k < n_bins; ++k) {
+    const float freq = static_cast<float>(k) * bin_width;
+    const float value = 1.0f + 0.001f * freq;
+    for (int t = 0; t < n_frames; ++t) {
+      magnitude[static_cast<size_t>(k * n_frames + t)] = value;
+    }
+  }
+
+  for (int order = 1; order <= 5; ++order) {
+    auto coeffs = poly_features(magnitude.data(), n_bins, n_frames, sr, n_fft, order);
+    REQUIRE(coeffs.size() == static_cast<size_t>((order + 1) * n_frames));
+    for (size_t i = 0; i < coeffs.size(); ++i) {
+      CAPTURE(order, i);
+      REQUIRE(std::isfinite(coeffs[i]));
+    }
+
+    // For a linear magnitude(freq) target, the fitted polynomial evaluated at a
+    // few representative bins must reproduce the input within a sane tolerance.
+    // Coefficients are stored high-degree first: out[p * n_frames + t] is the
+    // coefficient of x^(order - p).
+    const int check_bins[] = {64, 256, 512};
+    for (int t = 0; t < n_frames; ++t) {
+      for (int kk : check_bins) {
+        const double x = static_cast<double>(kk) * static_cast<double>(bin_width);
+        double y = 0.0;
+        double xp = 1.0;
+        for (int p = order; p >= 0; --p) {
+          y += static_cast<double>(coeffs[static_cast<size_t>(p * n_frames + t)]) * xp;
+          xp *= x;
+        }
+        const double expected =
+            1.0 + 0.001 * static_cast<double>(kk) * static_cast<double>(bin_width);
+        CAPTURE(order, t, kk, y, expected);
+        // Generous tolerance: high-order fits to a linear target introduce
+        // small numerical wiggles that grow with order, but the reconstruction
+        // must still hover near the truth (not blow up to Inf).
+        REQUIRE(std::isfinite(y));
+        REQUIRE(std::abs(y - expected) < 0.5);
+      }
+    }
+  }
+}
+
+TEST_CASE("poly_features column scaling preserves linear-order values",
+          "[spectral][poly_features]") {
+  // For order = 1, column-scaled and unscaled solves must agree to high
+  // precision: this guards against an off-by-one in the unscaling step.
+  Audio audio = create_sine_audio(1000.0f);
+  StftConfig config;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+
+  auto coeffs = poly_features(spec, audio.sample_rate(), 1);
+  REQUIRE(coeffs.size() == static_cast<size_t>(2 * spec.n_frames()));
+  for (float c : coeffs) {
+    REQUIRE(std::isfinite(c));
+  }
+}
+
 TEST_CASE("zero_crossing_rate basic", "[spectral]") {
   Audio audio = create_sine_audio(1000.0f);
 

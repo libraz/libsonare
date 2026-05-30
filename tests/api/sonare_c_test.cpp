@@ -8,6 +8,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -35,6 +36,10 @@ float max_abs(const float* samples, size_t length) {
     peak = std::max(peak, std::abs(samples[i]));
   }
   return peak;
+}
+
+float* non_null_sentinel_float_ptr() {
+  return reinterpret_cast<float*>(static_cast<std::uintptr_t>(0x1));
 }
 
 std::vector<std::string> split_lines(const char* text) {
@@ -1225,6 +1230,595 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     }
   }
 }
+
+TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(440.0f, sr, 0.5f);
+  for (auto& s : samples) s *= 0.3f;
+  // Inject a few impulsive clicks (sample-wide spikes).
+  for (size_t i = 0; i < 5; ++i) {
+    samples[2000 + i * 1500] = 1.0f;
+  }
+
+  SECTION("returns same-length cleaned buffer with NULL config (defaults)") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, &out,
+                                            &out_length) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == samples.size());
+    // Output should be finite and not silent (the wrapper preserves the signal).
+    REQUIRE(std::isfinite(max_abs(out, out_length)));
+    REQUIRE(max_abs(out, out_length) > 0.1f);
+    sonare_free_floats(out);
+  }
+
+  SECTION("accepts explicit config") {
+    SonareDeclickConfig config = {};
+    config.threshold = 0.8f;
+    config.neighbor_ratio = 4.0f;
+    config.max_click_samples = 8;
+    config.lpc_order = 20;
+    config.residual_ratio = 8.0f;
+
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &config, &out,
+                                            &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("rejects null out / bad inputs") {
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, nullptr,
+                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_declick(nullptr, 0, sr, nullptr, &out, &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+
+  SECTION("invalid config returns invalid parameter and clears output") {
+    SonareDeclickConfig config = {};
+    config.threshold = 0.0f;
+    config.neighbor_ratio = 4.0f;
+    config.max_click_samples = 8;
+    config.lpc_order = 20;
+    config.residual_ratio = 8.0f;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &config, &out,
+                                            &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
+  const int sr = 22050;
+  auto signal = generate_sine(440.0f, sr, 1.0f);
+  // Add white noise.
+  std::vector<float> noisy(signal.size());
+  uint32_t state = 1u;
+  for (size_t i = 0; i < signal.size(); ++i) {
+    state = state * 1664525u + 1013904223u;
+    float u = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);  // [0,1)
+    float n = (u - 0.5f) * 0.4f;
+    noisy[i] = 0.5f * signal[i] + n;
+  }
+
+  SECTION("LogMMSE default config reduces noise floor") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, nullptr, &out,
+                                                      &out_length) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == noisy.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("Berouti SpectralSubtraction config runs") {
+    SonareDenoiseClassicalConfig config = {};
+    config.mode = SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION;
+    config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.dd_alpha = 0.98f;
+    config.gain_floor = 0.05f;
+    config.over_subtraction = 2.0f;
+    config.spectral_floor = 0.05f;
+    config.noise_estimation_quantile = 0.1f;
+    config.speech_presence_gain = 0;
+    config.gain_smoothing = 1;
+
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
+                                                      &out_length) == SONARE_OK);
+    REQUIRE(out_length == noisy.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("rejects non-power-of-two n_fft and bad hop") {
+    SonareDenoiseClassicalConfig config = {};
+    config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
+    config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
+    config.n_fft = 1500;  // not a power of two
+    config.hop_length = 256;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
+                                                      &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+
+    config.n_fft = 1024;
+    config.hop_length = 0;
+    out = non_null_sentinel_float_ptr();
+    out_length = 123;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
+                                                      &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+
+  SECTION("rejects unknown mode and noise estimator enums") {
+    SonareDenoiseClassicalConfig config = {};
+    config.mode = 999;
+    config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.dd_alpha = 0.98f;
+    config.gain_floor = 0.05f;
+    config.over_subtraction = 2.0f;
+    config.spectral_floor = 0.05f;
+    config.noise_estimation_quantile = 0.1f;
+    config.speech_presence_gain = 1;
+    config.gain_smoothing = 1;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
+                                                      &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+
+    config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
+    config.noise_estimator = 999;
+    out = non_null_sentinel_float_ptr();
+    out_length = 123;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
+                                                      &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_declip", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(440.0f, sr, 0.5f);
+  // Hard-clip the signal at +/- 0.9.
+  for (auto& s : samples) {
+    s = std::max(-0.9f, std::min(0.9f, s * 2.0f));
+  }
+
+  SECTION("default config restores a length-matching buffer") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, nullptr, &out,
+                                           &out_length) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == samples.size());
+    REQUIRE(std::isfinite(max_abs(out, out_length)));
+    sonare_free_floats(out);
+  }
+
+  SECTION("explicit config") {
+    SonareDeclipConfig config = {};
+    config.clip_threshold = 0.85f;
+    config.lpc_order = 24;
+    config.iterations = 1;
+    config.lpc_blend = 0.5f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &out,
+                                           &out_length) == SONARE_OK);
+    sonare_free_floats(out);
+  }
+
+  SECTION("invalid config returns invalid parameter and clears output") {
+    SonareDeclipConfig config = {};
+    config.clip_threshold = 2.0f;
+    config.lpc_order = 24;
+    config.iterations = 1;
+    config.lpc_blend = 0.5f;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &out,
+                                           &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(440.0f, sr, 0.5f);
+  for (auto& s : samples) s *= 0.4f;
+  // Inject crackle impulses.
+  for (size_t i = 500; i < samples.size(); i += 1700) {
+    samples[i] = (i % 2 == 0) ? 0.95f : -0.95f;
+  }
+
+  SECTION("median mode (default)") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, nullptr, &out,
+                                              &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("wavelet shrinkage mode") {
+    SonareDecrackleConfig config = {};
+    config.threshold = 0.4f;
+    config.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
+    config.levels = 4;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config, &out,
+                                              &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("invalid config returns invalid parameter and clears output") {
+    SonareDecrackleConfig config = {};
+    config.threshold = 0.0f;
+    config.mode = SONARE_DECRACKLE_MODE_MEDIAN;
+    config.levels = 4;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config, &out,
+                                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+
+  SECTION("rejects unknown mode enum") {
+    SonareDecrackleConfig config = {};
+    config.threshold = 0.4f;
+    config.mode = 999;
+    config.levels = 4;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config, &out,
+                                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto signal = generate_sine(440.0f, sr, 1.0f);
+  auto hum = generate_sine(50.0f, sr, 1.0f);
+  std::vector<float> samples(signal.size());
+  for (size_t i = 0; i < signal.size(); ++i) samples[i] = 0.5f * signal[i] + 0.2f * hum[i];
+
+  SECTION("static notch (default)") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, nullptr, &out,
+                                          &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("adaptive tracking with explicit config") {
+    SonareDehumConfig config = {};
+    config.fundamental_hz = 50.0f;
+    config.harmonics = 4;
+    config.q = 20.0f;
+    config.adaptive = 1;
+    config.search_range_hz = 2.0f;
+    config.adaptation = 0.25f;
+    config.frame_size = 2048;
+    config.pll_bandwidth = 0.01f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &config, &out,
+                                          &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("invalid config returns invalid parameter and clears output") {
+    SonareDehumConfig config = {};
+    config.fundamental_hz = 0.0f;
+    config.harmonics = 4;
+    config.q = 20.0f;
+    config.frame_size = 2048;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &config, &out,
+                                          &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(440.0f, sr, 1.0f);
+  for (auto& s : samples) s *= 0.5f;
+
+  SECTION("default config") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, nullptr,
+                                                       &out, &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("WPE-enabled config") {
+    SonareDereverbClassicalConfig config = {};
+    config.threshold = 0.05f;
+    config.attenuation = 0.5f;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.t60_sec = 0.4f;
+    config.late_delay_ms = 50.0f;
+    config.over_subtraction = 1.0f;
+    config.spectral_floor = 0.08f;
+    config.wpe_enabled = 1;
+    config.wpe_iterations = 2;
+    config.wpe_taps = 3;
+    config.wpe_strength = 0.7f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, &config,
+                                                       &out, &out_length) == SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("rejects bad n_fft / hop_length") {
+    SonareDereverbClassicalConfig config = {};
+    config.threshold = 0.05f;
+    config.attenuation = 0.5f;
+    config.n_fft = 1500;  // not a power of two
+    config.hop_length = 256;
+    config.t60_sec = 0.4f;
+    config.late_delay_ms = 50.0f;
+    config.over_subtraction = 1.0f;
+    config.spectral_floor = 0.08f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, &config,
+                                                       &out, &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+
+    config.n_fft = 1024;
+    config.hop_length = 2048;  // larger than n_fft
+    out = non_null_sentinel_float_ptr();
+    out_length = 123;
+    REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, &config,
+                                                       &out, &out_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
+  const int sr = 48000;
+  const size_t silent_pad = 2400;  // 50 ms
+  std::vector<float> samples(silent_pad, 0.0f);
+  auto sig = generate_sine(440.0f, sr, 0.2f);
+  for (auto& s : sig) s *= 0.5f;
+  samples.insert(samples.end(), sig.begin(), sig.end());
+  samples.insert(samples.end(), silent_pad, 0.0f);
+
+  SECTION("peak mode (default) shortens the buffer") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, nullptr, &out,
+                                                 &out_length) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length < samples.size());
+    REQUIRE(out_length > 0);
+    sonare_free_floats(out);
+  }
+
+  SECTION("LUFS-gated mode with padding") {
+    SonareTrimSilenceConfig config = {};
+    config.threshold = 0.001f;
+    config.padding_samples = 1200;
+    config.mode = SONARE_TRIM_SILENCE_MODE_LUFS_GATED;
+    config.gate_lufs = -40.0f;
+    config.window_ms = 400.0f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config, &out,
+                                                 &out_length) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length > 0);
+    sonare_free_floats(out);
+  }
+
+  SECTION("invalid config returns invalid parameter and clears output") {
+    SonareTrimSilenceConfig config = {};
+    config.threshold = -1.0f;
+    config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
+    config.window_ms = 400.0f;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config, &out,
+                                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+
+  SECTION("rejects unknown mode enum") {
+    SonareTrimSilenceConfig config = {};
+    config.threshold = 0.001f;
+    config.padding_samples = 0;
+    config.mode = 999;
+    config.gate_lufs = -60.0f;
+    config.window_ms = 400.0f;
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_length = 123;
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config, &out,
+                                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+}
+
+namespace {
+float max_abs_sample(const float* buf, size_t length) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < length; ++i) {
+    peak = std::max(peak, std::abs(buf[i]));
+  }
+  return peak;
+}
+}  // namespace
+
+TEST_CASE("sonare_mastering_dynamics_compressor", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_sine(440.0f, sr, 0.5f);
+  for (auto& s : samples) s *= 0.9f;  // hot signal so compression engages
+
+  SECTION("default config returns finite buffer of the same length") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    int latency = -1;
+    REQUIRE(sonare_mastering_dynamics_compressor(samples.data(), samples.size(), sr, nullptr, &out,
+                                                 &out_length, &latency) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == samples.size());
+    REQUIRE(latency >= 0);
+    REQUIRE(std::isfinite(max_abs_sample(out, out_length)));
+    sonare_free_floats(out);
+  }
+
+  SECTION("strong threshold + 4:1 ratio reduces peak vs input") {
+    SonareCompressorConfig config = {};
+    config.threshold_db = -24.0f;
+    config.ratio = 4.0f;
+    config.attack_ms = 1.0f;
+    config.release_ms = 50.0f;
+    config.knee_db = 0.0f;
+    config.makeup_gain_db = 0.0f;
+    config.auto_makeup = 0;
+    config.detector = SONARE_COMPRESSOR_DETECTOR_PEAK;
+    config.sidechain_hpf_hz = 100.0f;
+    config.pdr_release_scale = 1.0f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_dynamics_compressor(samples.data(), samples.size(), sr, &config, &out,
+                                                 &out_length, nullptr) == SONARE_OK);
+    const float in_peak = max_abs_sample(samples.data(), samples.size());
+    const float out_peak = max_abs_sample(out, out_length);
+    REQUIRE(out_peak < in_peak);
+    sonare_free_floats(out);
+  }
+
+  SECTION("NULL output pointer returns invalid parameter") {
+    REQUIRE(sonare_mastering_dynamics_compressor(samples.data(), samples.size(), sr, nullptr,
+                                                 nullptr, nullptr,
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_mastering_dynamics_gate", "[c_api][mastering]") {
+  const int sr = 48000;
+  // 200 ms of loud tone followed by 200 ms of near-silence.
+  std::vector<float> samples;
+  auto loud = generate_sine(440.0f, sr, 0.2f);
+  samples.insert(samples.end(), loud.begin(), loud.end());
+  for (auto& s : loud) s *= 0.0005f;  // -66 dBFS, well below default -50 threshold
+  samples.insert(samples.end(), loud.begin(), loud.end());
+
+  SECTION("default config returns finite buffer of the same length") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_dynamics_gate(samples.data(), samples.size(), sr, nullptr, &out,
+                                           &out_length, nullptr) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == samples.size());
+    REQUIRE(std::isfinite(max_abs_sample(out, out_length)));
+    sonare_free_floats(out);
+  }
+
+  SECTION("gate attenuates the silent tail vs input") {
+    SonareGateConfig config = {};
+    config.threshold_db = -40.0f;
+    config.attack_ms = 1.0f;
+    config.release_ms = 20.0f;
+    config.range_db = -60.0f;
+    config.close_threshold_db = -40.0f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_dynamics_gate(samples.data(), samples.size(), sr, &config, &out,
+                                           &out_length, nullptr) == SONARE_OK);
+    // Last 50 ms of the input should be quieter on output (gated down).
+    const size_t tail = static_cast<size_t>(0.05 * sr);
+    const float in_tail_peak = max_abs_sample(samples.data() + samples.size() - tail, tail);
+    const float out_tail_peak = max_abs_sample(out + out_length - tail, tail);
+    REQUIRE(out_tail_peak < in_tail_peak);
+    sonare_free_floats(out);
+  }
+}
+
+TEST_CASE("sonare_mastering_dynamics_transient_shaper", "[c_api][mastering]") {
+  const int sr = 48000;
+  auto samples = generate_clicks(120.0f, sr, 2.0f);
+  for (auto& s : samples) s *= 0.5f;
+
+  SECTION("default config returns finite buffer of the same length") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    int latency = -1;
+    REQUIRE(sonare_mastering_dynamics_transient_shaper(samples.data(), samples.size(), sr, nullptr,
+                                                       &out, &out_length, &latency) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == samples.size());
+    REQUIRE(latency >= 0);
+    REQUIRE(std::isfinite(max_abs_sample(out, out_length)));
+    sonare_free_floats(out);
+  }
+
+  SECTION("boosted attack lifts the click peaks") {
+    SonareTransientShaperConfig config = {};
+    config.attack_gain_db = 9.0f;
+    config.sustain_gain_db = 0.0f;
+    config.fast_attack_ms = 0.0f;
+    config.fast_release_ms = 10.0f;
+    config.slow_attack_ms = 30.0f;
+    config.slow_release_ms = 200.0f;
+    config.sensitivity = 1.0f;
+    config.max_gain_db = 12.0f;
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_dynamics_transient_shaper(samples.data(), samples.size(), sr, &config,
+                                                       &out, &out_length, nullptr) == SONARE_OK);
+    const float in_peak = max_abs_sample(samples.data(), samples.size());
+    const float out_peak = max_abs_sample(out, out_length);
+    REQUIRE(out_peak > in_peak);
+    sonare_free_floats(out);
+  }
+}
 #endif
 
 TEST_CASE("sonare_onset_strength", "[c_api]") {
@@ -1496,6 +2090,267 @@ TEST_CASE("sonare_momentary_lufs and sonare_short_term_lufs", "[c_api]") {
     REQUIRE(sonare_momentary_lufs(nullptr, samples.size(), 48000, &out, &count) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_short_term_lufs(nullptr, samples.size(), 48000, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_metering basic offline meters", "[c_api]") {
+  SECTION("peak / rms / crest / dc agree with library") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    float peak = 0.0f;
+    float rms = 0.0f;
+    float crest = 0.0f;
+    float dc = 0.0f;
+    REQUIRE(sonare_metering_peak_db(samples.data(), samples.size(), 48000, &peak) == SONARE_OK);
+    REQUIRE(sonare_metering_rms_db(samples.data(), samples.size(), 48000, &rms) == SONARE_OK);
+    REQUIRE(sonare_metering_crest_factor_db(samples.data(), samples.size(), 48000, &crest) ==
+            SONARE_OK);
+    REQUIRE(sonare_metering_dc_offset(samples.data(), samples.size(), 48000, &dc) == SONARE_OK);
+    REQUIRE(std::isfinite(peak));
+    REQUIRE(std::isfinite(rms));
+    REQUIRE(peak >= rms);
+    REQUIRE(crest == Catch::Approx(peak - rms).margin(1e-3f));
+    REQUIRE(std::abs(dc) < 1e-2f);
+  }
+
+  SECTION("rejects null output and bad inputs") {
+    auto samples = generate_sine(440.0f, 48000, 0.1f);
+    float out = 0.0f;
+    REQUIRE(sonare_metering_peak_db(samples.data(), samples.size(), 48000, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 3, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);  // 3 is not a power of two
+  }
+}
+
+TEST_CASE("sonare_metering_true_peak_db", "[c_api]") {
+  SECTION("matches sample peak within a small margin for low-frequency sine") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    float peak_db_value = 0.0f;
+    float tp_db = 0.0f;
+    REQUIRE(sonare_metering_peak_db(samples.data(), samples.size(), 48000, &peak_db_value) ==
+            SONARE_OK);
+    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 0, &tp_db) ==
+            SONARE_OK);
+    // True peak >= sample peak (inter-sample peaks can only be higher).
+    REQUIRE(tp_db >= peak_db_value - 0.1f);
+  }
+}
+
+TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
+  SECTION("reports clipped regions and frees them") {
+    // Hard-clipped signal: ones in a run.
+    std::vector<float> samples(8000, 0.1f);
+    for (size_t i = 1000; i < 1064; ++i) samples[i] = 1.0f;
+    SonareClippingResult result = {};
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.999f, 0,
+                                            &result) == SONARE_OK);
+    REQUIRE(result.region_count >= 1);
+    REQUIRE(result.regions != nullptr);
+    REQUIRE(result.clipped_samples >= 1);
+    REQUIRE(result.max_clipped_peak >= 1.0f);
+    sonare_free_clipping_result(&result);
+    REQUIRE(result.regions == nullptr);
+    REQUIRE(result.region_count == 0);
+  }
+
+  SECTION("clean signal reports zero regions") {
+    auto samples = generate_sine(440.0f, 48000, 0.5f);
+    for (auto& s : samples) s *= 0.3f;
+    SonareClippingResult result = {};
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.999f, 0,
+                                            &result) == SONARE_OK);
+    REQUIRE(result.region_count == 0);
+    REQUIRE(result.regions == nullptr);
+    sonare_free_clipping_result(&result);
+  }
+}
+
+TEST_CASE("sonare_metering_dynamic_range", "[c_api]") {
+  SECTION("returns a positive DR for varying-level signal") {
+    // 5 seconds: alternate 0.5s loud / 0.5s quiet.
+    int sr = 48000;
+    int total = sr * 5;
+    std::vector<float> samples(total, 0.0f);
+    auto loud = generate_sine(440.0f, sr, 0.5f);
+    for (int i = 0; i < 5; ++i) {
+      int offset = i * sr;
+      float amp = (i % 2 == 0) ? 0.8f : 0.05f;
+      for (size_t j = 0; j < loud.size() && offset + j < samples.size(); ++j) {
+        samples[offset + j] = loud[j] * amp;
+      }
+    }
+    SonareDynamicRangeResult result = {};
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), sr, 0.0f, 0.0f, 0.0f,
+                                          0.0f, &result) == SONARE_OK);
+    REQUIRE(result.window_count > 0);
+    REQUIRE(result.window_rms_db != nullptr);
+    REQUIRE(result.dynamic_range_db > 0.0f);
+    sonare_free_dynamic_range_result(&result);
+    REQUIRE(result.window_rms_db == nullptr);
+  }
+
+  SECTION("rejects inverted percentiles") {
+    auto samples = generate_sine(440.0f, 48000, 1.0f);
+    SonareDynamicRangeResult result = {};
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), 48000, 0.0f, 0.0f, 0.9f,
+                                          0.1f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_metering stereo wrappers", "[c_api]") {
+  const int sr = 48000;
+  auto left = generate_sine(440.0f, sr, 0.5f);
+  std::vector<float> right_in_phase = left;
+  std::vector<float> right_inverted(left.size());
+  for (size_t i = 0; i < left.size(); ++i) right_inverted[i] = -left[i];
+
+  SECTION("correlation: in-phase ≈ +1, inverted ≈ -1") {
+    float c = 0.0f;
+    REQUIRE(sonare_metering_stereo_correlation(left.data(), right_in_phase.data(), left.size(), sr,
+                                               &c) == SONARE_OK);
+    REQUIRE(c == Catch::Approx(1.0f).margin(1e-3f));
+    REQUIRE(sonare_metering_stereo_correlation(left.data(), right_inverted.data(), left.size(), sr,
+                                               &c) == SONARE_OK);
+    REQUIRE(c == Catch::Approx(-1.0f).margin(1e-3f));
+  }
+
+  SECTION("stereo_width: mono ≈ 0, inverted > mono") {
+    float mono_width = 0.0f;
+    float inv_width = 0.0f;
+    REQUIRE(sonare_metering_stereo_width(left.data(), right_in_phase.data(), left.size(), sr,
+                                         &mono_width) == SONARE_OK);
+    REQUIRE(sonare_metering_stereo_width(left.data(), right_inverted.data(), left.size(), sr,
+                                         &inv_width) == SONARE_OK);
+    REQUIRE(mono_width < 1e-3f);
+    REQUIRE(inv_width > mono_width);
+  }
+
+  SECTION("vectorscope returns one point per sample and frees cleanly") {
+    SonareVectorscopeResult result = {};
+    REQUIRE(sonare_metering_vectorscope(left.data(), right_in_phase.data(), left.size(), sr,
+                                        &result) == SONARE_OK);
+    REQUIRE(result.point_count == left.size());
+    REQUIRE(result.points != nullptr);
+    // In-phase: side ≈ 0 for every sample.
+    float max_side = 0.0f;
+    for (size_t i = 0; i < result.point_count; ++i) {
+      max_side = std::max(max_side, std::abs(result.points[i].side));
+    }
+    REQUIRE(max_side < 1e-3f);
+    sonare_free_vectorscope_result(&result);
+    REQUIRE(result.points == nullptr);
+    REQUIRE(result.point_count == 0);
+  }
+
+  SECTION("phase_scope populates summary stats") {
+    SonarePhaseScopeResult result = {};
+    REQUIRE(sonare_metering_phase_scope(left.data(), right_in_phase.data(), left.size(), sr,
+                                        &result) == SONARE_OK);
+    REQUIRE(result.point_count == left.size());
+    REQUIRE(result.points != nullptr);
+    REQUIRE(result.correlation == Catch::Approx(1.0f).margin(1e-3f));
+    REQUIRE(result.max_radius > 0.0f);
+    sonare_free_phase_scope_result(&result);
+    REQUIRE(result.points == nullptr);
+    REQUIRE(result.point_count == 0);
+  }
+
+  SECTION("rejects null pair / null out") {
+    float out_v = 0.0f;
+    REQUIRE(sonare_metering_stereo_correlation(nullptr, right_in_phase.data(), left.size(), sr,
+                                               &out_v) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_stereo_correlation(left.data(), right_in_phase.data(), left.size(), sr,
+                                               nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareVectorscopeResult vs = {};
+    REQUIRE(sonare_metering_vectorscope(left.data(), nullptr, left.size(), sr, &vs) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_metering_spectrum", "[c_api]") {
+  SECTION("returns n_fft/2+1 bins and a peak near the tone frequency") {
+    const int sr = 48000;
+    const int n_fft = 2048;
+    auto samples = generate_sine(1000.0f, sr, 0.5f);
+    SonareSpectrumResult result = {};
+    REQUIRE(sonare_metering_spectrum(samples.data(), samples.size(), sr, n_fft, 0, 0, 0.0f, 0.0f,
+                                     &result) == SONARE_OK);
+    REQUIRE(result.bin_count == static_cast<size_t>(n_fft / 2 + 1));
+    REQUIRE(result.n_fft == n_fft);
+    REQUIRE(result.sample_rate == sr);
+    REQUIRE(result.frequencies != nullptr);
+    REQUIRE(result.magnitude != nullptr);
+    REQUIRE(result.power != nullptr);
+    REQUIRE(result.db != nullptr);
+    // Identify the peak bin.
+    size_t peak_bin = 0;
+    float peak_mag = -1.0f;
+    for (size_t i = 0; i < result.bin_count; ++i) {
+      if (result.magnitude[i] > peak_mag) {
+        peak_mag = result.magnitude[i];
+        peak_bin = i;
+      }
+    }
+    const float peak_freq = result.frequencies[peak_bin];
+    REQUIRE(peak_freq == Catch::Approx(1000.0f).margin(60.0f));
+    // power[i] ≈ magnitude[i]^2.
+    REQUIRE(result.power[peak_bin] ==
+            Catch::Approx(result.magnitude[peak_bin] * result.magnitude[peak_bin]).margin(1e-2f));
+    sonare_free_spectrum_result(&result);
+    REQUIRE(result.frequencies == nullptr);
+    REQUIRE(result.bin_count == 0);
+  }
+
+  SECTION("rejects non-power-of-two n_fft") {
+    auto samples = generate_sine(440.0f, 48000, 0.1f);
+    SonareSpectrumResult result = {};
+    REQUIRE(sonare_metering_spectrum(samples.data(), samples.size(), 48000, 1500, 0, 0, 0.0f, 0.0f,
+                                     &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
+  // C major scale mask: C D E F G A B (bits 0,2,4,5,7,9,11).
+  static constexpr uint16_t kCMajorMask = 0b101010110101;
+
+  SECTION("snaps an off-scale note to the nearest in-scale neighbour") {
+    // C#4 (61) -> nearest in C major is C4 (60) or D4 (62); either is acceptable.
+    float out = 0.0f;
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 61.0f, &out) == SONARE_OK);
+    REQUIRE(
+        (out == Catch::Approx(60.0f).margin(0.01f) || out == Catch::Approx(62.0f).margin(0.01f)));
+  }
+
+  SECTION("in-scale notes pass through") {
+    float out = 0.0f;
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 60.0f, &out) == SONARE_OK);
+    REQUIRE(out == Catch::Approx(60.0f).margin(0.01f));
+  }
+
+  SECTION("correction_semitones agrees with quantize_midi") {
+    float q = 0.0f;
+    float c = 0.0f;
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 61.4f, &q) == SONARE_OK);
+    REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, 0.0f, 61.4f, &c) == SONARE_OK);
+    REQUIRE(c == Catch::Approx(q - 61.4f).margin(0.01f));
+  }
+
+  SECTION("pitch_class_enabled reflects the mode mask") {
+    int enabled = -1;
+    REQUIRE(sonare_scale_pitch_class_enabled(0, kCMajorMask, 0, &enabled) == SONARE_OK);
+    REQUIRE(enabled == 1);  // C is in C major
+    REQUIRE(sonare_scale_pitch_class_enabled(0, kCMajorMask, 1, &enabled) == SONARE_OK);
+    REQUIRE(enabled == 0);  // C# is not
+  }
+
+  SECTION("rejects bad roots / pitch classes / empty mask") {
+    float out = 0.0f;
+    REQUIRE(sonare_scale_quantize_midi(-1, kCMajorMask, 0.0f, 60.0f, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_scale_quantize_midi(0, 0, 0.0f, 60.0f, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    int enabled = -1;
+    REQUIRE(sonare_scale_pitch_class_enabled(0, kCMajorMask, 12, &enabled) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }

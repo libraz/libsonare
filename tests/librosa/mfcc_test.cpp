@@ -63,11 +63,14 @@ TEST_CASE("MFCC reference compatibility", "[mfcc][reference]") {
   for (const auto& item : data) {
     int n_mfcc = item["n_mfcc"].as_int();
     int n_mels = item["n_mels"].as_int();
+    // lifter defaults to 0 for backwards compatibility with older reference files.
+    float lifter = item.contains("lifter") ? static_cast<float>(item["lifter"].as_int()) : 0.0f;
     const auto& ref_mean = item["mean"].as_array();
     const auto& ref_std = item["std"].as_array();
 
-    std::string section_name =
-        "n_mfcc=" + std::to_string(n_mfcc) + " n_mels=" + std::to_string(n_mels);
+    std::string section_name = "n_mfcc=" + std::to_string(n_mfcc) +
+                               " n_mels=" + std::to_string(n_mels) +
+                               " lifter=" + std::to_string(static_cast<int>(lifter));
 
     SECTION(section_name) {
       // Create 440Hz tone
@@ -82,8 +85,8 @@ TEST_CASE("MFCC reference compatibility", "[mfcc][reference]") {
 
       MelSpectrogram mel_spec = MelSpectrogram::compute(audio, mel_config);
 
-      // Compute MFCC
-      auto mfcc_data = mel_spec.mfcc(n_mfcc);
+      // Compute MFCC (with optional liftering)
+      auto mfcc_data = mel_spec.mfcc(n_mfcc, lifter);
       int n_frames = mel_spec.n_frames();
 
       // Verify shape

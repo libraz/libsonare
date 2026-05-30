@@ -11,6 +11,7 @@
 #include "util/json_reader.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 using namespace sonare::test;
 
 namespace {

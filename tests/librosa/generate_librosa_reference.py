@@ -74,27 +74,32 @@ def generate_mfcc_reference():
     y = librosa.tone(440.0, sr=sr, duration=duration)
 
     refs = []
+    # lifter=0 (no liftering) and lifter=22 (typical librosa value) covered.
     for n_mfcc in [13, 20]:
         for n_mels in [64, 128]:
-            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, n_mels=n_mels)
+            for lifter in [0, 22]:
+                mfcc = librosa.feature.mfcc(
+                    y=y, sr=sr, n_mfcc=n_mfcc, n_mels=n_mels, lifter=lifter
+                )
 
-            # Selected frames for frame-level comparison
-            selected_frames = [5, 10, 15, 20]
-            frame_data = {}
-            for f in selected_frames:
-                if f < mfcc.shape[1]:
-                    frame_data[str(f)] = mfcc[:, f].tolist()
+                # Selected frames for frame-level comparison
+                selected_frames = [5, 10, 15, 20]
+                frame_data = {}
+                for f in selected_frames:
+                    if f < mfcc.shape[1]:
+                        frame_data[str(f)] = mfcc[:, f].tolist()
 
-            refs.append({
-                "signal": "440Hz_tone",
-                "sr": sr,
-                "n_mfcc": n_mfcc,
-                "n_mels": n_mels,
-                "shape": list(mfcc.shape),
-                "mean": mfcc.mean(axis=1).tolist(),
-                "std": mfcc.std(axis=1).tolist(),
-                "selected_frames": frame_data,
-            })
+                refs.append({
+                    "signal": "440Hz_tone",
+                    "sr": sr,
+                    "n_mfcc": n_mfcc,
+                    "n_mels": n_mels,
+                    "lifter": lifter,
+                    "shape": list(mfcc.shape),
+                    "mean": mfcc.mean(axis=1).tolist(),
+                    "std": mfcc.std(axis=1).tolist(),
+                    "selected_frames": frame_data,
+                })
 
     return refs
 

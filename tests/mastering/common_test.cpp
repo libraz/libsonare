@@ -1,13 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <type_traits>
 #include <vector>
 
 #include "mastering/common/adaa.h"
 #include "mastering/common/delay_line.h"
 #include "mastering/common/envelope_follower.h"
 #include "mastering/common/lookahead_buffer.h"
-#include "mastering/common/lpc.h"
 #include "mastering/common/noise_tracker.h"
 #include "mastering/common/nonlinearities.h"
 #include "mastering/common/oversampler.h"
@@ -18,9 +18,27 @@
 #include "mastering/common/scoped_no_denormals.h"
 #include "mastering/common/sliding_max.h"
 #include "mastering/master.h"
+#include "rt/adaa.h"
+#include "rt/delay_line.h"
+#include "rt/envelope_follower.h"
+#include "rt/lookahead_buffer.h"
+#include "rt/nonlinearities.h"
+#include "rt/oversampler.h"
+#include "rt/param_smoother.h"
+#include "rt/partitioned_convolver.h"
+#include "rt/processor_base.h"
+#include "rt/processor_chain.h"
+#include "rt/scoped_no_denormals.h"
+#include "rt/sliding_max.h"
+#include "util/lpc.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare::mastering::common;
+using sonare::ar_interpolate;
+using sonare::lpc_autocorrelation;
+using sonare::lpc_burg;
+using sonare::lpc_residual;
+using sonare::LpcResult;
 
 namespace {
 
@@ -64,6 +82,21 @@ TEST_CASE("Mastering umbrella header exposes representative modules", "[masterin
   REQUIRE(eq.sample_rate() == 48000.0);
   REQUIRE(compressor.config().ratio == 2.0f);
   REQUIRE(maximizer.config().ceiling_db == -1.0f);
+}
+
+TEST_CASE("Mastering common realtime helpers are aliases of rt primitives", "[mastering]") {
+  static_assert(std::is_same_v<DelayLine, sonare::rt::DelayLine>);
+  static_assert(std::is_same_v<EnvelopeFollower, sonare::rt::EnvelopeFollower>);
+  static_assert(std::is_same_v<LookaheadBuffer, sonare::rt::LookaheadBuffer>);
+  static_assert(std::is_same_v<ParamSmoother, sonare::rt::ParamSmoother>);
+  static_assert(std::is_same_v<PartitionedConvolver, sonare::rt::PartitionedConvolver>);
+  static_assert(std::is_same_v<ProcessorBase, sonare::rt::ProcessorBase>);
+  static_assert(std::is_same_v<ScopedNoDenormals, sonare::rt::ScopedNoDenormals>);
+  static_assert(std::is_same_v<SlidingMax<float>, sonare::rt::SlidingMax<float>>);
+  static_assert(std::is_same_v<TanhNonlinearity, sonare::rt::TanhNonlinearity>);
+  static_assert(
+      std::is_same_v<Adaa1<TanhNonlinearity>, sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>>);
+  SUCCEED();
 }
 
 TEST_CASE("ParamSmoother reaches target immediately with zero time", "[mastering]") {

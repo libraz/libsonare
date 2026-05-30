@@ -124,6 +124,27 @@ TEST_CASE("chain config JSON rejects malformed input", "[mastering][preset][json
                     std::invalid_argument);
 }
 
+TEST_CASE("chain config JSON rejects unknown top-level keys", "[mastering][preset][json]") {
+  // Allowed top-level keys: {"version", "params"}. The validator delegates the
+  // check to util::json::schema::has_allowed_keys, which surfaces the offending
+  // field name in the error so callers can act on it.
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{},\"extra\":1}"),
+                    std::invalid_argument);
+  // Legitimate documents must still parse cleanly — guards against an over-tight
+  // allowlist regression.
+  REQUIRE_NOTHROW(chain_config_from_json("{\"version\":1,\"params\":{}}"));
+}
+
+TEST_CASE("chain config JSON rejects duplicate top-level keys", "[mastering][preset][json]") {
+  // Strict parser: a duplicate `"version"` key would otherwise silently take
+  // the last-write value and could hide a bumped/incompatible version in the
+  // first occurrence. Fail fast instead.
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"version\":2,\"params\":{}}"),
+                    std::invalid_argument);
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{},\"params\":{}}"),
+                    std::invalid_argument);
+}
+
 TEST_CASE("preset_config(Pop) has expected enabled stages", "[mastering][preset]") {
   auto config = preset_config(Preset::Pop);
   REQUIRE(config.dynamics.compressor.enabled);

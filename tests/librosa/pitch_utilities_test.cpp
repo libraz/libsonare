@@ -12,6 +12,7 @@
 #include "util/json_reader.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 using namespace sonare::test;
 
 TEST_CASE("pitch_tuning matches librosa within tolerance", "[librosa][pitch_utilities]") {

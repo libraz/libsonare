@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(sonare_tests
   test_main.cpp
   util/math_utils_test.cpp
+  util/json_test.cpp
   util/frame_test.cpp
   util/padding_test.cpp
   util/peak_test.cpp
@@ -136,7 +137,7 @@ add_executable(sonare_tests
   librosa/reassigned_test.cpp
 )
 
-target_link_libraries(sonare_tests PRIVATE sonare_core sonare_rt sonare_automation sonare_engine Catch2::Catch2WithMain)
+target_link_libraries(sonare_tests PRIVATE sonare_engine Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -171,8 +172,14 @@ if(BUILD_MASTERING)
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp
   )
-  target_link_libraries(sonare_tests PRIVATE sonare_mastering)
-  target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering.cpp)
+  if(NOT BUILD_MIXING)
+    target_link_libraries(sonare_tests PRIVATE sonare_mastering)
+  endif()
+  target_sources(sonare_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_repair.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_dynamics.cpp
+  )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
     target_sources(sonare_tests PRIVATE mastering/ebu_r128_compliance_test.cpp)
@@ -191,7 +198,6 @@ if(BUILD_MIXING)
     mixing/routing_test.cpp
   )
   target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_mixing.cpp)
-  target_link_libraries(sonare_tests PRIVATE sonare_mixing)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
 endif()
 
@@ -200,19 +206,22 @@ if(BUILD_GRAPH)
     engine/graph_runtime_test.cpp
     graph/graph_test.cpp
   )
-  target_link_libraries(sonare_tests PRIVATE sonare_graph)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_GRAPH=1)
 endif()
 
 if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/creative_fx_test.cpp)
-  target_link_libraries(sonare_tests PRIVATE sonare_fx)
+  if(NOT BUILD_MASTERING)
+    target_link_libraries(sonare_tests PRIVATE sonare_fx)
+  endif()
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_FX=1)
 endif()
 
 if(BUILD_PITCH_EDITOR)
   target_sources(sonare_tests PRIVATE editing/pitch_editor_test.cpp)
-  target_link_libraries(sonare_tests PRIVATE sonare_pitch_editor)
+  if(NOT BUILD_VOICE_CHANGER)
+    target_link_libraries(sonare_tests PRIVATE sonare_pitch_editor)
+  endif()
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_PITCH_EDITOR=1)
 endif()
 

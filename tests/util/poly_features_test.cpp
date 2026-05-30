@@ -12,6 +12,7 @@
 #include "util/constants.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 using Catch::Matchers::WithinAbs;
 
 namespace {

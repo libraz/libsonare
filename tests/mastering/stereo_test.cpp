@@ -86,6 +86,102 @@ TEST_CASE("MidSide encode and decode round-trips stereo buffers", "[mastering][s
   }
 }
 
+TEST_CASE("MidSide encode preserves total energy (AES convention)", "[mastering][stereo]") {
+  // A pair of decorrelated sines (different frequency + amplitude per channel)
+  // exercises both the sum (mid) and difference (side) paths.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 4096;
+  auto left = sine(440.0f, kSampleRate, kSamples, 0.42f);
+  auto right = sine(660.0f, kSampleRate, kSamples, 0.17f);
+  // Inject a phase offset on right to create non-trivial side content.
+  for (int i = 0; i < kSamples; ++i) {
+    right[static_cast<size_t>(i)] +=
+        0.11f * static_cast<float>(std::cos(2.0 * kPi * 880.0 * i / kSampleRate));
+  }
+
+  std::vector<float> mid(left.size());
+  std::vector<float> side(left.size());
+  encode_buffer(left.data(), right.data(), mid.data(), side.data(), left.size());
+
+  double lr_energy = 0.0;
+  double ms_energy = 0.0;
+  for (size_t i = 0; i < left.size(); ++i) {
+    lr_energy += static_cast<double>(left[i]) * left[i] + static_cast<double>(right[i]) * right[i];
+    ms_energy += static_cast<double>(mid[i]) * mid[i] + static_cast<double>(side[i]) * side[i];
+  }
+
+  // Energy preservation: M^2 + S^2 == L^2 + R^2 within float round-off.
+  REQUIRE(lr_energy > 0.0);
+  const double ratio_db = 10.0 * std::log10(ms_energy / lr_energy);
+  REQUIRE(std::abs(ratio_db) < 0.05);  // tighter than 0.1 dB target
+}
+
+TEST_CASE("MidSide buffer roundtrip is bit-near-exact", "[mastering][stereo]") {
+  // Stress the round-trip with a longer, mixed signal.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 2048;
+  auto left = sine(523.25f, kSampleRate, kSamples, 0.31f);
+  auto right = sine(783.99f, kSampleRate, kSamples, 0.27f);
+  const auto original_left = left;
+  const auto original_right = right;
+
+  std::vector<float> mid(left.size());
+  std::vector<float> side(left.size());
+  encode_buffer(left.data(), right.data(), mid.data(), side.data(), left.size());
+  decode_buffer(mid.data(), side.data(), left.data(), right.data(), left.size());
+
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE_THAT(left[i], WithinAbs(original_left[i], 1.0e-6f));
+    REQUIRE_THAT(right[i], WithinAbs(original_right[i], 1.0e-6f));
+  }
+}
+
+TEST_CASE("MidSide preserves loudness when side gain is applied", "[mastering][stereo]") {
+  // Real-world scenario: encode -> apply +6 dB to side -> decode. With the
+  // energy-preserving convention the predicted L/R energy after a +g_side dB
+  // boost equals 0.5 * (1 + g_side^2) * (L^2 + R^2) for an uncorrelated pair,
+  // and matches the analytic expression exactly for a mid+side decomposition.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 4096;
+  auto left = sine(330.0f, kSampleRate, kSamples, 0.22f);
+  auto right = sine(495.0f, kSampleRate, kSamples, 0.14f);
+
+  std::vector<float> mid(left.size());
+  std::vector<float> side(left.size());
+  encode_buffer(left.data(), right.data(), mid.data(), side.data(), left.size());
+
+  // Energy in M and S separately before gain.
+  double pre_mid = 0.0;
+  double pre_side = 0.0;
+  for (size_t i = 0; i < mid.size(); ++i) {
+    pre_mid += static_cast<double>(mid[i]) * mid[i];
+    pre_side += static_cast<double>(side[i]) * side[i];
+  }
+
+  // Apply +6 dB to side only (linear gain 2.0).
+  constexpr float kSideGain = 2.0f;
+  for (size_t i = 0; i < side.size(); ++i) {
+    side[i] *= kSideGain;
+  }
+
+  std::vector<float> out_left(left.size());
+  std::vector<float> out_right(left.size());
+  decode_buffer(mid.data(), side.data(), out_left.data(), out_right.data(), left.size());
+
+  double post_energy = 0.0;
+  for (size_t i = 0; i < out_left.size(); ++i) {
+    post_energy += static_cast<double>(out_left[i]) * out_left[i] +
+                   static_cast<double>(out_right[i]) * out_right[i];
+  }
+  // Predicted energy: pre_mid + kSideGain^2 * pre_side (since decode is
+  // unitary up to round-off and total energy equals M^2 + S^2).
+  const double predicted =
+      pre_mid + static_cast<double>(kSideGain) * static_cast<double>(kSideGain) * pre_side;
+  REQUIRE(predicted > 0.0);
+  const double err_db = 10.0 * std::log10(post_energy / predicted);
+  REQUIRE(std::abs(err_db) < 0.05);  // within 0.05 dB
+}
+
 TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") {
   auto mid = sine(1000.0f, 48000, 48000, 0.25f);
   auto side = sine(1500.0f, 48000, 48000, 0.05f);

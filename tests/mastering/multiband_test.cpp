@@ -13,6 +13,8 @@
 
 using namespace sonare::mastering::multiband;
 
+using sonare::constants::kPi;
+
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;

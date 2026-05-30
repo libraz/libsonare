@@ -15,6 +15,8 @@
 #include "sonare_c.h"
 #include "util/constants.h"
 
+using sonare::constants::kPi;
+
 namespace {
 
 constexpr int kSourceSampleRate = 48000;

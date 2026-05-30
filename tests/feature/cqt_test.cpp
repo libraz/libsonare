@@ -11,7 +11,6 @@
 #include "util/constants.h"
 
 using namespace sonare;
-using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
@@ -376,3 +375,176 @@ TEST_CASE("CqtResult at accessor", "[cqt]") {
   REQUIRE_THROWS(result.at(0, result.n_frames()));
   REQUIRE_THROWS(result.at(result.n_bins(), 0));
 }
+
+// D-21 regression: changing only `filter_scale` must invalidate the kernel
+// cache. Previously the cache key omitted filter_scale, so two configurations
+// that differ only in filter scaling produced identical (incorrectly cached)
+// kernels and therefore identical outputs.
+TEST_CASE("CQT kernel cache distinguishes filter_scale", "[cqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  CqtConfig cfg_a;
+  cfg_a.fmin = 65.4f;
+  cfg_a.n_bins = 36;
+  cfg_a.hop_length = 256;
+  cfg_a.bins_per_octave = 12;
+  cfg_a.filter_scale = 1.0f;
+
+  CqtConfig cfg_b = cfg_a;
+  cfg_b.filter_scale = 2.0f;  // longer filters -> different kernel
+
+  CqtResult res_a = cqt(audio, cfg_a);
+  CqtResult res_b = cqt(audio, cfg_b);
+
+  REQUIRE(res_a.n_bins() == res_b.n_bins());
+  // filter_scale=2 widens the kernel support, which can grow n_fft and shift
+  // the frame count. The relevant correctness signal is that the outputs are
+  // *not* bit-identical (cache collision would force equality).
+  const auto& mag_a = res_a.magnitude();
+  const auto& mag_b = res_b.magnitude();
+
+  // Compare overlapping frames bin by bin and require at least one meaningful
+  // difference. Identical caches would make every value equal.
+  const int n_frames = std::min(res_a.n_frames(), res_b.n_frames());
+  const int n_bins = res_a.n_bins();
+  double max_diff = 0.0;
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      const float va = mag_a[k * res_a.n_frames() + t];
+      const float vb = mag_b[k * res_b.n_frames() + t];
+      max_diff = std::max(max_diff, static_cast<double>(std::abs(va - vb)));
+    }
+  }
+  CAPTURE(max_diff);
+  REQUIRE(max_diff > 1e-3);
+}
+
+// Regression: the CQT kernel cache key must include `window` so that two
+// configurations differing only in the window function never alias to the same
+// cached kernel. The current `cqt()` implementation hardcodes a Hann wavelet
+// in `wavelet()`, so the externally observable output does not yet depend on
+// `config.window`; this test exercises the cache key path with different
+// windows to guard against a stale-kernel regression if the CQT kernel ever
+// starts honoring `config.window` (as the VQT kernel already does).
+TEST_CASE("CQT kernel cache distinguishes window type", "[cqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  CqtConfig cfg_a;
+  cfg_a.fmin = 65.4f;
+  cfg_a.n_bins = 36;
+  cfg_a.hop_length = 256;
+  cfg_a.bins_per_octave = 12;
+  cfg_a.window = WindowType::Hann;
+
+  CqtConfig cfg_b = cfg_a;
+  cfg_b.window = WindowType::Hamming;  // different window -> different cache slot
+
+  CqtResult res_a = cqt(audio, cfg_a);
+  CqtResult res_b = cqt(audio, cfg_b);
+
+  REQUIRE(res_a.n_bins() == res_b.n_bins());
+  REQUIRE(res_a.n_frames() == res_b.n_frames());
+
+  // Re-issuing the original configuration must still return the original
+  // (Hann) kernel rather than a Hamming-keyed entry from the second call.
+  CqtResult res_a_again = cqt(audio, cfg_a);
+  const auto& mag_a = res_a.magnitude();
+  const auto& mag_a_again = res_a_again.magnitude();
+  REQUIRE(mag_a.size() == mag_a_again.size());
+  for (size_t i = 0; i < mag_a.size(); ++i) {
+    REQUIRE(mag_a[i] == mag_a_again[i]);
+  }
+}
+
+// Suppress deprecated warning for icqt round-trip tests.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+
+// D-24 regression: with the freq_power normalization restricted to the
+// positive-only half (n_fft/2 + 1) of a conjugate-form kernel, the icqt output
+// was over-amplified by roughly 2x for analytic-like wavelets. After summing
+// across all n_fft kernel bins, a sine round-trip should now sit close to the
+// original amplitude rather than ~2x above it.
+TEST_CASE("icqt round-trip amplitude matches input within ~1.5x", "[cqt][icqt][regression]") {
+  const int sr = 22050;
+  Audio original = generate_sine(440.0f, 0.5f, sr);
+
+  CqtConfig config;
+  config.fmin = 65.4f;
+  config.n_bins = 48;
+  config.hop_length = 256;
+
+  CqtResult result = cqt(original, config);
+  Audio reconstructed = icqt(result, static_cast<int>(original.size()));
+
+  REQUIRE(reconstructed.size() == original.size());
+
+  // Trim the leading/trailing 10% to skip transient frames where windowing /
+  // OLA coverage is incomplete and the amplitude ratio is unreliable.
+  const size_t margin = original.size() / 10;
+  double ref_energy = 0.0;
+  double rec_energy = 0.0;
+  for (size_t i = margin; i < original.size() - margin; ++i) {
+    const double x = original.data()[i];
+    const double y = reconstructed.data()[i];
+    ref_energy += x * x;
+    rec_energy += y * y;
+  }
+  REQUIRE(ref_energy > 0.0);
+
+  // Energy ratio (rec/ref). Under the old half-spectrum normalisation this
+  // came out near 4x (amplitude ratio ~2x squared). With the full-spectrum
+  // fix it must stay within 1.5x amplitude (i.e. 2.25x energy) of the input.
+  const double energy_ratio = rec_energy / ref_energy;
+  CAPTURE(energy_ratio);
+  REQUIRE(energy_ratio > 1.0 / 2.25);
+  REQUIRE(energy_ratio < 2.25);
+}
+
+// D-9 / D-24 round-trip quality: reconstruction error must stay better than
+// -5 dB relative to the input on a clean tone. CQT inversion is inherently
+// lossy (no exact inverse exists) so this is a coarse sanity bar — the
+// pre-fix state with broken OLA / half-spectrum normalisation produced an
+// energy ratio near 4x, which corresponds to SNR < 0 dB. Anything above 0 dB
+// passes "the reconstruction looks like the input", and we lock in 5 dB so a
+// future regression in either fix is caught immediately.
+TEST_CASE("icqt round-trip SNR is positive for a clean tone", "[cqt][icqt][regression]") {
+  const int sr = 22050;
+  Audio original = generate_sine(440.0f, 0.5f, sr);
+
+  CqtConfig config;
+  config.fmin = 65.4f;
+  config.n_bins = 48;
+  config.hop_length = 256;
+
+  CqtResult result = cqt(original, config);
+  Audio reconstructed = icqt(result, static_cast<int>(original.size()));
+
+  // Skip the first/last hop_length samples where OLA coverage is incomplete.
+  const size_t margin = static_cast<size_t>(config.hop_length);
+  REQUIRE(original.size() > 2 * margin);
+  double ref_energy = 0.0;
+  double err_energy = 0.0;
+  for (size_t i = margin; i < original.size() - margin; ++i) {
+    const double x = original.data()[i];
+    const double y = reconstructed.data()[i];
+    const double e = y - x;
+    ref_energy += x * x;
+    err_energy += e * e;
+  }
+  REQUIRE(ref_energy > 0.0);
+  const double snr_db = 10.0 * std::log10(ref_energy / std::max(err_energy, 1e-20));
+  CAPTURE(snr_db);
+  REQUIRE(snr_db > 5.0);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif

@@ -929,3 +929,54 @@ TEST_CASE("UpwardExpander channel-count changes perform no heap allocation after
   expander.process(mono, 1, kBlock);
   REQUIRE(guard.count() == 0);
 }
+
+#ifdef SONARE_WITH_VOICE_CHANGER
+#include "editing/voice_changer/realtime_voice_changer.h"
+
+TEST_CASE("RealtimeVoiceChanger process_block performs no heap allocation after prepare",
+          "[voice_changer][rt]") {
+  constexpr int kBlock = 128;
+  constexpr int kSampleRate = 48000;
+
+  sonare::editing::voice_changer::RealtimeVoiceChanger changer(
+      sonare::editing::voice_changer::realtime_voice_changer_preset(
+          sonare::editing::voice_changer::VoiceCharacterPreset::NeutralMonitor));
+  changer.prepare(kSampleRate, kBlock, 1);
+
+  std::array<float, kBlock> input{};
+  std::array<float, kBlock> output{};
+  input.fill(0.01f);
+
+  // Warm up: drive one block so any lazy first-block work (initial snapshot
+  // adoption, derived-state computation) completes before we start counting.
+  changer.process_block(input.data(), output.data(), kBlock);
+
+  AllocationGuard guard;
+  changer.process_block(input.data(), output.data(), kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("RealtimeVoiceChanger planar process_block performs no heap allocation after prepare",
+          "[voice_changer][rt]") {
+  constexpr int kBlock = 128;
+  constexpr int kSampleRate = 48000;
+
+  sonare::editing::voice_changer::RealtimeVoiceChanger changer(
+      sonare::editing::voice_changer::realtime_voice_changer_preset(
+          sonare::editing::voice_changer::VoiceCharacterPreset::BrightIdol));
+  changer.prepare(kSampleRate, kBlock, 2);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.05f);
+  right.fill(-0.05f);
+  float* channels[] = {left.data(), right.data()};
+
+  // Warm up block.
+  changer.process_block(channels, 2, kBlock);
+
+  AllocationGuard guard;
+  changer.process_block(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+#endif  // SONARE_WITH_VOICE_CHANGER

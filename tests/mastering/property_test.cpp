@@ -18,6 +18,8 @@
 
 using Catch::Matchers::WithinAbs;
 
+using sonare::constants::kPi;
+
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;

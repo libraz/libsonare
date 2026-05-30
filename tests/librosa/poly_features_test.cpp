@@ -13,6 +13,7 @@
 #include "util/json_reader.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 using namespace sonare::test;
 
 TEST_CASE("poly_features matches librosa (linear fit)", "[librosa][poly_features]") {

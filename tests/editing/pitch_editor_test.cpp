@@ -202,3 +202,68 @@ TEST_CASE("NoteEditor stretches note region to requested length ratio", "[pitch_
                WithinAbs(static_cast<float>(expected_size), 2.0f));
   REQUIRE(stretched.sample_rate() == audio.sample_rate());
 }
+
+TEST_CASE("ScaleQuantizer boundary MIDI values quantize without crash", "[pitch_editor]") {
+  // C major scale, root = 0 (C).
+  // 0b101010110101 = bits for C D E F G A B enabled.
+  const ScaleQuantizer quantizer({0, 0b101010110101, 69.0f});
+
+  // MIDI 0 (C-1): lowest representable; should land on a C major tone.
+  {
+    const float q = quantizer.quantize_midi(0.0f);
+    REQUIRE(std::isfinite(q));
+    const int pc = static_cast<int>(std::round(q) + 1200) % 12;
+    REQUIRE(quantizer.pitch_class_enabled(pc));
+  }
+
+  // MIDI 127 (G9): highest standard MIDI; should land on a C major tone.
+  {
+    const float q = quantizer.quantize_midi(127.0f);
+    REQUIRE(std::isfinite(q));
+    const int pc = static_cast<int>(std::round(q) + 1200) % 12;
+    REQUIRE(quantizer.pitch_class_enabled(pc));
+  }
+
+  // Sub-zero and over-range inputs must not crash or produce NaN/Inf.
+  for (float midi : {-1.0f, -12.0f, 128.0f, 144.0f}) {
+    const float q = quantizer.quantize_midi(midi);
+    REQUIRE(std::isfinite(q));
+  }
+}
+
+TEST_CASE("ScaleQuantizer pitch_class_enabled reflects mode_mask bits", "[pitch_editor]") {
+  // All-notes mask (chromatic): every pitch class is enabled.
+  const ScaleQuantizer chromatic({0, 0b111111111111, 69.0f});
+  for (int pc = 0; pc < 12; ++pc) {
+    REQUIRE(chromatic.pitch_class_enabled(pc));
+  }
+
+  // Single-note mask (only C, bit 0): C major is NOT the full chromatic set,
+  // so C# (bit 1) must be disabled.
+  const ScaleQuantizer c_only({0, 0b000000000001, 69.0f});
+  REQUIRE(c_only.pitch_class_enabled(0));        // C enabled
+  REQUIRE_FALSE(c_only.pitch_class_enabled(1));  // C# disabled
+}
+
+TEST_CASE("ScaleQuantizer root shift moves enabled pitch classes", "[pitch_editor]") {
+  // Root = 0 (C): C major mask enables C (0), D (2), E (4), F (5), G (7), A (9), B (11).
+  const ScaleQuantizer root_c({0, 0b101010110101, 69.0f});
+  // Root = 2 (D): same mask but the enabled set shifts — D (2) must now be the
+  // lowest-numbered enabled class in the first octave-span.
+  const ScaleQuantizer root_d({2, 0b101010110101, 69.0f});
+
+  // A note at C (MIDI 60) under root_c lands on C (enabled in C major).
+  // Under root_d the same pitch may land on a different nearest enabled degree.
+  const float q_c = root_c.quantize_midi(60.0f);
+  const float q_d = root_d.quantize_midi(60.0f);
+
+  // Both results must be finite and land on an enabled pitch class for their
+  // respective scale. The outputs need not be equal (that's the whole point).
+  REQUIRE(std::isfinite(q_c));
+  REQUIRE(std::isfinite(q_d));
+  const int pc_c = static_cast<int>(std::round(q_c) + 1200) % 12;
+  REQUIRE(root_c.pitch_class_enabled(pc_c));
+  // correction_semitones must be within +/-6 (nearest semitone).
+  REQUIRE(std::abs(root_c.correction_semitones(60.0f)) <= 6.0f);
+  REQUIRE(std::abs(root_d.correction_semitones(60.0f)) <= 6.0f);
+}

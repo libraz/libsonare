@@ -318,6 +318,47 @@ TEST_CASE("vqt different gamma values", "[vqt]") {
   }
 }
 
+// Regression: changing only `window` must invalidate the VQT kernel cache.
+// Previously the cache key omitted `window`, so two configurations that differ
+// only in the window function reused the first-cached kernel and produced
+// identical (incorrect) outputs. The VQT kernel actually consumes
+// `config.window` via `create_window(...)`, so different windows must produce
+// numerically different spectrograms.
+TEST_CASE("VQT kernel cache distinguishes window type", "[vqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  VqtConfig cfg_a;
+  cfg_a.fmin = 65.4f;
+  cfg_a.n_bins = 36;
+  cfg_a.hop_length = 256;
+  cfg_a.bins_per_octave = 12;
+  cfg_a.gamma = 24.0f;  // gamma > 0 so vqt() does not delegate to cqt()
+  cfg_a.window = WindowType::Hann;
+
+  VqtConfig cfg_b = cfg_a;
+  cfg_b.window = WindowType::Hamming;  // different window -> different kernel
+
+  VqtResult res_a = vqt(audio, cfg_a);
+  VqtResult res_b = vqt(audio, cfg_b);
+
+  REQUIRE(res_a.n_bins() == res_b.n_bins());
+  REQUIRE(res_a.n_frames() == res_b.n_frames());
+
+  const auto& mag_a = res_a.magnitude();
+  const auto& mag_b = res_b.magnitude();
+  REQUIRE(mag_a.size() == mag_b.size());
+
+  // Compare frame by frame and require at least one meaningful difference.
+  // A cache key collision (the bug being regression-tested) would force every
+  // value to be equal because the Hamming call would reuse the Hann kernel.
+  double max_diff = 0.0;
+  for (size_t i = 0; i < mag_a.size(); ++i) {
+    max_diff = std::max(max_diff, static_cast<double>(std::abs(mag_a[i] - mag_b[i])));
+  }
+  CAPTURE(max_diff);
+  REQUIRE(max_diff > 1e-4);
+}
+
 // =============================================================================
 // Reference-formula tests
 // =============================================================================
@@ -470,6 +511,167 @@ TEST_CASE("vqt energy concentration for pure tone", "[vqt][reference]") {
       REQUIRE(bin_energy[target_bin] > bin_energy[k]);
     }
   }
+}
+
+// =============================================================================
+// Regression tests for librosa `scale=True` normalisation
+// =============================================================================
+
+TEST_CASE("vqt librosa scale=True normalisation direction", "[vqt][regression]") {
+  // librosa.vqt(scale=True) (the default) divides the inner product by
+  // sqrt(filter_length). Combined with the basis scaling baked into the
+  // kernel, the per-bin amplitude at the matched bin grows like ~sqrt(L).
+  //
+  // Regression guard: a previous implementation multiplied by sqrt(L) at the
+  // *output* stage while also missing the basis-side `L/n_fft` factor, which
+  // produced magnitudes ~3 orders of magnitude smaller than librosa for the
+  // matched bin (the "high-frequency bins over-attenuated" report).
+  const int sr = 22050;
+  const float freq = 440.0f;
+  const float duration = 2.0f;
+  Audio audio = generate_sine(freq, duration, sr);
+
+  VqtConfig cfg;
+  cfg.fmin = 65.4f;  // C2
+  cfg.n_bins = 48;
+  cfg.bins_per_octave = 12;
+  cfg.gamma = 24.0f;
+
+  VqtResult result = vqt(audio, cfg);
+
+  // Locate the bin nearest 440 Hz.
+  const auto& freqs = result.frequencies();
+  int target_bin = 0;
+  float best_diff = std::abs(freqs[0] - freq);
+  for (int k = 1; k < result.n_bins(); ++k) {
+    float d = std::abs(freqs[k] - freq);
+    if (d < best_diff) {
+      best_diff = d;
+      target_bin = k;
+    }
+  }
+
+  // Mid-frame magnitude at the matched bin (steady-state, away from edges).
+  const auto& mag = result.magnitude();
+  const int n_frames = result.n_frames();
+  const int mid_frame = n_frames / 2;
+  const float peak_mag = mag[target_bin * n_frames + mid_frame];
+
+  // For a sine of amplitude 1.0, the matched-bin peak magnitude must be of
+  // order unity (specifically ~0.5 * sqrt(length) with librosa scaling). The
+  // bug produced ~0.01, so even a very loose lower bound catches it.
+  REQUIRE(peak_mag > 1.0f);
+  // And an upper bound to catch the other failure mode (forgetting the
+  // `1/sqrt(L)` and over-amplifying).
+  REQUIRE(peak_mag < 100.0f);
+}
+
+TEST_CASE("vqt amplitude continuous across gamma=0 boundary", "[vqt][regression]") {
+  // gamma=0 delegates to cqt(); gamma>0 uses the dedicated VQT path. The two
+  // kernel constructions differ but must agree on the librosa-compatible
+  // amplitude convention, otherwise sweeping gamma toward 0 produces a step
+  // discontinuity in the output magnitudes.
+  const int sr = 22050;
+  const float freq = 440.0f;
+  Audio audio = generate_sine(freq, 2.0f, sr);
+
+  VqtConfig cfg;
+  cfg.fmin = 65.4f;
+  cfg.n_bins = 48;
+  cfg.bins_per_octave = 12;
+
+  cfg.gamma = 0.0f;
+  VqtResult res_cqt = vqt(audio, cfg);
+  cfg.gamma = 0.01f;  // tiny but non-zero -> takes the VQT path
+  VqtResult res_vqt = vqt(audio, cfg);
+
+  REQUIRE(res_cqt.n_bins() == res_vqt.n_bins());
+  REQUIRE(res_cqt.n_frames() == res_vqt.n_frames());
+
+  // Find the peak bin in the CQT result.
+  const auto& mag_cqt = res_cqt.magnitude();
+  const auto& mag_vqt = res_vqt.magnitude();
+  const int n_frames = res_cqt.n_frames();
+  int peak_bin = 0;
+  float peak_e = 0.0f;
+  for (int k = 0; k < res_cqt.n_bins(); ++k) {
+    float e = 0.0f;
+    for (int t = 0; t < n_frames; ++t) e += mag_cqt[k * n_frames + t];
+    if (e > peak_e) {
+      peak_e = e;
+      peak_bin = k;
+    }
+  }
+
+  // Peak bin should match between paths.
+  int peak_bin_vqt = 0;
+  float peak_e_vqt = 0.0f;
+  for (int k = 0; k < res_vqt.n_bins(); ++k) {
+    float e = 0.0f;
+    for (int t = 0; t < n_frames; ++t) e += mag_vqt[k * n_frames + t];
+    if (e > peak_e_vqt) {
+      peak_e_vqt = e;
+      peak_bin_vqt = k;
+    }
+  }
+  REQUIRE(peak_bin == peak_bin_vqt);
+
+  // The mid-frame peak amplitude must agree within a small factor. The two
+  // kernel constructions are not identical, but with matching scaling
+  // conventions they should agree to better than 20%.
+  const int mid = n_frames / 2;
+  const float cqt_peak = mag_cqt[peak_bin * n_frames + mid];
+  const float vqt_peak = mag_vqt[peak_bin * n_frames + mid];
+  REQUIRE(cqt_peak > 0.0f);
+  REQUIRE(vqt_peak > 0.0f);
+  const float ratio = vqt_peak / cqt_peak;
+  CAPTURE(cqt_peak, vqt_peak, ratio);
+  REQUIRE(ratio > 0.5f);
+  REQUIRE(ratio < 2.0f);
+}
+
+TEST_CASE("vqt scaling follows librosa sqrt(L) order of magnitude", "[vqt][regression]") {
+  // librosa.vqt(scale=True) emits, for a matched pure tone, a peak magnitude
+  // of roughly 0.5 * sqrt(filter_length). Confirm we are within that order of
+  // magnitude (factor of 2x in either direction). The previous bug missed this
+  // by ~1000x.
+  const int sr = 22050;
+  const float freq = 440.0f;
+  Audio audio = generate_sine(freq, 2.0f, sr);
+
+  VqtConfig cfg;
+  cfg.fmin = 65.4f;
+  cfg.n_bins = 48;
+  cfg.bins_per_octave = 12;
+  cfg.gamma = 24.0f;
+
+  auto kernel = VqtKernel::create(sr, cfg);
+  REQUIRE(kernel != nullptr);
+
+  VqtResult result = vqt(audio, cfg);
+
+  // Locate matched bin via energy sum.
+  const auto& mag = result.magnitude();
+  const int n_frames = result.n_frames();
+  std::vector<float> bin_energy(result.n_bins(), 0.0f);
+  for (int k = 0; k < result.n_bins(); ++k) {
+    for (int t = 0; t < n_frames; ++t) bin_energy[k] += mag[k * n_frames + t];
+  }
+  int peak_bin = 0;
+  for (int k = 1; k < result.n_bins(); ++k) {
+    if (bin_energy[k] > bin_energy[peak_bin]) peak_bin = k;
+  }
+
+  // Expected order of magnitude: 0.5 * sqrt(length).
+  const int L = kernel->lengths()[peak_bin];
+  REQUIRE(L > 0);
+  const float expected = 0.5f * std::sqrt(static_cast<float>(L));
+
+  // Mid-frame mag at peak bin (steady-state).
+  const float measured = mag[peak_bin * n_frames + n_frames / 2];
+  CAPTURE(L, expected, measured);
+  REQUIRE(measured > 0.5f * expected);
+  REQUIRE(measured < 2.0f * expected);
 }
 
 TEST_CASE("ivqt respects requested output length", "[vqt][inverse]") {

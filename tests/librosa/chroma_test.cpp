@@ -15,6 +15,7 @@
 #include "util/math_utils.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
 

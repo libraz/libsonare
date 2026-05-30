@@ -22,6 +22,7 @@
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
+using sonare::constants::kTwoPi;
 
 namespace {
 

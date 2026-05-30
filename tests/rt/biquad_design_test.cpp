@@ -24,7 +24,7 @@ void require_close(const sonare::rt::BiquadCoeffsD& actual,
 TEST_CASE("RBJ high-shelf cached design matches direct double design", "[rt][biquad]") {
   constexpr double frequency = 10000.0;
   constexpr double sample_rate = 48000.0;
-  constexpr double q = 1.0 / 1.4142135623730951;
+  constexpr double q = sonare::constants::kButterworthQD;
 
   const auto design = sonare::rt::rbj_high_shelf_design_d(frequency, sample_rate, q);
   require_close(sonare::rt::rbj_high_shelf_from_design_d(design, 0.0),
@@ -61,6 +61,45 @@ TEST_CASE("Matched one-pole low-pass alpha helper matches legacy exponential for
                WithinAbs(static_cast<float>(expected), 1.0e-7f));
   REQUIRE(sonare::rt::one_pole_lowpass_alpha_matched(-1.0f, sample_rate) == 0.0f);
   REQUIRE(sonare::rt::one_pole_lowpass_alpha_matched(1000.0f, -1.0) == 1.0f);
+}
+
+TEST_CASE("One-pole alpha from time_ms matches the time-domain form", "[rt][biquad]") {
+  // Cross-check: the time-ms parameterization must match the legacy
+  // voice_changer::coeff_ms formula `1 - exp(-1 / (tau * sample_rate))` for
+  // sane inputs, and saturate cleanly for sub-floor and degenerate inputs.
+  constexpr double sample_rate = 48000.0;
+  for (float ms : {0.1f, 1.0f, 5.0f, 50.0f, 500.0f}) {
+    const float tau_sec = ms * 0.001f;
+    const double expected = 1.0 - std::exp(-1.0 / (static_cast<double>(tau_sec) * sample_rate));
+    REQUIRE_THAT(sonare::rt::one_pole_alpha_from_time_ms(ms, sample_rate),
+                 WithinAbs(static_cast<float>(expected), 1.0e-6f));
+  }
+  // Floor of 0.05 ms — anything smaller (including 0 and negatives) collapses
+  // to the floor value so the result stays in [0, 1] and avoids divide-by-zero.
+  REQUIRE(sonare::rt::one_pole_alpha_from_time_ms(0.0f, sample_rate) ==
+          sonare::rt::one_pole_alpha_from_time_ms(0.05f, sample_rate));
+  REQUIRE(sonare::rt::one_pole_alpha_from_time_ms(-100.0f, sample_rate) ==
+          sonare::rt::one_pole_alpha_from_time_ms(0.05f, sample_rate));
+  // Non-positive sample rate is degenerate; report 1.0 (fully open) like the
+  // matched/frequency form.
+  REQUIRE(sonare::rt::one_pole_alpha_from_time_ms(10.0f, -1.0) == 1.0f);
+}
+
+TEST_CASE("frequency_to_w0 clamps frequency to a safe range", "[rt][biquad]") {
+  constexpr double sample_rate = 48000.0;
+  // Mid-band frequency: linear map 2*pi*f/sr.
+  const float expected_mid = static_cast<float>(sonare::constants::kTwoPiD * 1000.0 / sample_rate);
+  REQUIRE_THAT(sonare::rt::frequency_to_w0(1000.0f, sample_rate), WithinAbs(expected_mid, 1.0e-7f));
+  // Sub-20 Hz must clamp UP to 20 Hz.
+  REQUIRE(sonare::rt::frequency_to_w0(1.0f, sample_rate) ==
+          sonare::rt::frequency_to_w0(20.0f, sample_rate));
+  // Above 0.45 * Nyquist must clamp DOWN; biquad designs become unstable as
+  // w0 approaches pi, so callers rely on this safety net.
+  const float nyq_safe = static_cast<float>(sample_rate * 0.45);
+  REQUIRE(sonare::rt::frequency_to_w0(static_cast<float>(sample_rate), sample_rate) ==
+          sonare::rt::frequency_to_w0(nyq_safe, sample_rate));
+  // Non-positive sample rate is degenerate; report 0.
+  REQUIRE(sonare::rt::frequency_to_w0(1000.0f, -1.0) == 0.0f);
 }
 
 TEST_CASE("K-weighting uses BS.1770 DeMan design away from 48 kHz", "[rt][biquad]") {

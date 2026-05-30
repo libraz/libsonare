@@ -10,6 +10,7 @@
 #include "util/constants.h"
 
 using namespace sonare;
+using namespace sonare::constants;
 
 namespace {
 std::vector<float> tone(int sr, float duration, float freq, float amp) {

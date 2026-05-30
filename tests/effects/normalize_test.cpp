@@ -8,11 +8,14 @@
 #include <cmath>
 #include <vector>
 
+#include "metering/basic.h"
 #include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
+using sonare::metering::peak_db;
+using sonare::metering::rms_db;
 
 namespace {
 
