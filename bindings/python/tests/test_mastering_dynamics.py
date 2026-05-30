@@ -75,7 +75,7 @@ class TestCompressor:
             mastering_dynamics_compressor(x, SR, detector=999)
 
     def test_empty_input_raises(self) -> None:
-        with pytest.raises(ValueError, match="non-empty"):
+        with pytest.raises(ValueError, match="samples must not be empty"):
             mastering_dynamics_compressor(np.array([], dtype=np.float32), SR)
 
 

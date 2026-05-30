@@ -513,6 +513,62 @@ class SonareDeclickConfig(ctypes.Structure):
     ]
 
 
+# SonareCompressorConfig.detector values.
+SONARE_COMPRESSOR_DETECTOR_PEAK = 0
+SONARE_COMPRESSOR_DETECTOR_RMS = 1
+SONARE_COMPRESSOR_DETECTOR_LOG_RMS = 2
+
+
+class SonareCompressorConfig(ctypes.Structure):
+    """Maps to SonareCompressorConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("threshold_db", ctypes.c_float),
+        ("ratio", ctypes.c_float),
+        ("attack_ms", ctypes.c_float),
+        ("release_ms", ctypes.c_float),
+        ("knee_db", ctypes.c_float),
+        ("makeup_gain_db", ctypes.c_float),
+        ("auto_makeup", ctypes.c_int),
+        ("detector", ctypes.c_int),
+        ("sidechain_hpf_enabled", ctypes.c_int),
+        ("sidechain_hpf_hz", ctypes.c_float),
+        ("pdr_time_ms", ctypes.c_float),
+        ("pdr_release_scale", ctypes.c_float),
+    ]
+
+
+class SonareGateConfig(ctypes.Structure):
+    """Maps to SonareGateConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("threshold_db", ctypes.c_float),
+        ("attack_ms", ctypes.c_float),
+        ("release_ms", ctypes.c_float),
+        ("range_db", ctypes.c_float),
+        ("hold_ms", ctypes.c_float),
+        ("close_threshold_db", ctypes.c_float),
+        ("key_hpf_hz", ctypes.c_float),
+    ]
+
+
+class SonareTransientShaperConfig(ctypes.Structure):
+    """Maps to SonareTransientShaperConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("attack_gain_db", ctypes.c_float),
+        ("sustain_gain_db", ctypes.c_float),
+        ("fast_attack_ms", ctypes.c_float),
+        ("fast_release_ms", ctypes.c_float),
+        ("slow_attack_ms", ctypes.c_float),
+        ("slow_release_ms", ctypes.c_float),
+        ("sensitivity", ctypes.c_float),
+        ("max_gain_db", ctypes.c_float),
+        ("gain_smoothing_ms", ctypes.c_float),
+        ("lookahead_ms", ctypes.c_float),
+    ]
+
+
 # SonareDenoiseClassicalConfig.mode values.
 SONARE_DENOISE_MODE_LOG_MMSE = 0
 SONARE_DENOISE_MODE_MMSE_STSA = 1
@@ -2268,6 +2324,27 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.POINTER(_cfg),
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
+            ]
+
+    # --- Mastering: offline dynamics processors ---
+    # The dynamics signature appends `int* out_latency_samples` to the repair
+    # shape, so we register it separately from the repair loop above.
+    for _name, _cfg in (
+        ("sonare_mastering_dynamics_compressor", SonareCompressorConfig),
+        ("sonare_mastering_dynamics_gate", SonareGateConfig),
+        ("sonare_mastering_dynamics_transient_shaper", SonareTransientShaperConfig),
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(_cfg),
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_int),
             ]
 
     # --- Features - Spectrogram ---
