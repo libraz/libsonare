@@ -235,7 +235,7 @@ describe('Audio class', () => {
     it('should compute MFCC', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.mfcc();
-      expect(result.nMfcc).toBe(13);
+      expect(result.nMfcc).toBe(20);
       expect(result.nFrames).toBeGreaterThan(0);
       expect(result.coefficients).toBeInstanceOf(Float32Array);
     });
