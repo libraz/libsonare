@@ -39,19 +39,60 @@ wasm = [
 # ---------------------------------------------------------------------------
 [coverage]
 # Example (disabled): wasm = ["audio_from_file"]
+# detect_chords_ex is not a separate facade function: the facade `detect_chords`
+# IS the extended form (it exposes all SonareChordDetectionOptions fields and
+# calls sonare_detect_chords_ex). So the `_ex` variant is covered, not missing.
+node = ["detect_chords_ex"]
+wasm = ["detect_chords_ex"]
+python = ["detect_chords_ex"]
 
 # ---------------------------------------------------------------------------
 # [order] — keys whose facade param order legitimately differs from the C ABI
 # beyond the options-bag-prefix convention. Seed empty.
 # ---------------------------------------------------------------------------
 [order]
+# scale_quantize_midi / scale_correction_semitones: C orders the optional
+# reference pitch BEFORE the value being quantized (root, mode_mask,
+# reference_midi, midi). All facades use the ergonomic order (root, mode_mask,
+# midi, reference_midi=default) and remap to C order internally (verified in the
+# addon / embind / ctypes wrappers).
+#
+# preemphasis / deemphasis: C is (coef, zi, use_zi); Node/WASM expose
+# (coef, zi?) and derive use_zi from whether zi was supplied.
+# tempogram: the facades expose a single `mode` selector (cyclic / fourier /
+# autocorr) that folds the C `center` / `norm` flags; Node/WASM replace
+# center+norm with `mode`, Python keeps center+norm and adds `mode`. Documented
+# ergonomic convenience, not order drift.
+node = [
+  "scale_quantize_midi",
+  "scale_correction_semitones",
+  "preemphasis",
+  "deemphasis",
+  "tempogram",
+]
+wasm = [
+  "scale_quantize_midi",
+  "scale_correction_semitones",
+  "preemphasis",
+  "deemphasis",
+  "tempogram",
+]
+
+# detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
+# that map to the extended C variants (detect_key_candidates_with_modes /
+# _with_extended_options). strip_meter (python): the extra `tap` selector maps
+# to the metering-tap variant. Both are legitimate extended-facade params.
+python = ["detect_key_candidates", "strip_meter", "tempogram"]
 
 # ---------------------------------------------------------------------------
 # [default] — "key.param" entries whose default may differ across facades.
 # Seed empty: default drift is the highest-value signal; do not pre-hide it.
 # ---------------------------------------------------------------------------
 [default]
-params = []
+# mastering_streaming_preview.platforms: Node/WASM default to an empty array
+# `[]`, Python to `None` -- both mean "no platform targets". Semantically equal
+# empty-collection sentinels, not a behavioral default drift.
+params = ["mastering_streaming_preview.platforms"]
 
 # ---------------------------------------------------------------------------
 # [enum] — "key.param" entries whose enum value-sets may differ across surfaces.
@@ -67,7 +108,10 @@ params = []
 # real signal worth triaging.
 # ---------------------------------------------------------------------------
 [input_naming]
-keys = []
+# WASM renames the primary feature-buffer input for clarity: `mel` -> `melPower`
+# and `mfcc` -> `mfccCoefficients`. Same buffer, descriptive spelling — not a
+# drift. (Node and C keep `mel` / `mfcc`.)
+keys = ["mel_to_stft", "mel_to_audio", "mfcc_to_mel", "mfcc_to_audio"]
 
 # ---------------------------------------------------------------------------
 # [tuning] — central knobs. Leave empty to use the built-in defaults in

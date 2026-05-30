@@ -72,7 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     selected = [s.strip() for s in args.surface.split(",") if s.strip()]
     invalid = [s for s in selected if s not in SURFACES]
     if invalid:
-        ap.error(f"unknown surface(s): {', '.join(invalid)} (valid: {', '.join(SURFACES)})")
+        ap.error(
+            f"unknown surface(s): {', '.join(invalid)} (valid: {', '.join(SURFACES)})"
+        )
     if "c" not in selected:
         selected = ["c", *selected]  # C is the canonical reference; always needed.
     # Preserve canonical surface order.

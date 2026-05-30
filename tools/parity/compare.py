@@ -49,6 +49,18 @@ DEFAULT_INPUT_ROLES = (
     "buffer",
     "data",
     "length",
+    # Primary feature-buffer inputs to reconstruction / tempo functions. These
+    # play the same leading-input role as ``samples`` (the array the function
+    # operates on); facades may rename them for clarity (``mel`` -> ``mel_power``,
+    # ``mfcc`` -> ``mfcc_coefficients``). The input-naming check compares the
+    # spellings; the order check strips them as the leading input group.
+    "mel",
+    "mel_power",
+    "mfcc",
+    "mfcc_coefficients",
+    "onset_envelope",
+    "tempogram_data",
+    "values",
 )
 
 # C prefixes that denote handle / class-based APIs (create/destroy/handle ops
@@ -168,9 +180,7 @@ def build_report(
     # Class-method keys per facade (for handle/class matching).
     method_keys = {s: _method_keys(extractions.get(s)) for s in selected}
 
-    rep.handle_keys = sorted(
-        k for k in c_index if _is_handle_key(k, handle_prefixes)
-    )
+    rep.handle_keys = sorted(k for k in c_index if _is_handle_key(k, handle_prefixes))
 
     # --- Coverage matrix ---
     for key in sorted(all_keys):
@@ -188,9 +198,7 @@ def build_report(
             if present_free or present_method:
                 continue
             if allow.coverage_ok(key, s):
-                rep.findings.append(
-                    Finding("coverage", key, s, "", allowlisted=True)
-                )
+                rep.findings.append(Finding("coverage", key, s, "", allowlisted=True))
                 continue
             # Informational when: handle/class API (matched as methods elsewhere)
             # or the CLI surface (curated subset).
@@ -252,9 +260,27 @@ def build_report(
 
 
 def _config_names(sig: FunctionSig, roles: set[str]) -> list[str]:
-    """Core (non-structural) param names with the leading input group removed."""
+    """Core (non-structural) config param names.
+
+    The leading audio-input group is removed, and any audio-input ROLE name
+    (buffers like ``left`` / ``right``, the sample-rate alias ``sr`` /
+    ``sample_rate``, the buffer-companion ``length``, ...) is dropped wherever it
+    appears -- a non-leading buffer arg (e.g. the ``left`` / ``right`` channels of
+    ``master_audio_stereo``, which sit AFTER ``preset_name`` in the C signature)
+    is still an input the facades surface positionally, so it carries no
+    config-order signal. Progress-callback params the facades add for streaming
+    reporting (``on_progress``; Node already types it as a function and skips it)
+    are dropped too.
+    """
     names = [p.name for p in sig.core_params()]
-    return _strip_leading_input(names, roles)
+    names = _strip_leading_input(names, roles)
+    return [n for n in names if n not in roles and n not in _CALLBACK_NAMES]
+
+
+# Progress / streaming callback params the facades add for ergonomic reporting.
+# They have no C config counterpart (C uses a separate ``_with_progress`` entry)
+# and carry no config-order signal.
+_CALLBACK_NAMES = {"on_progress", "onprogress"}
 
 
 def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
@@ -295,7 +321,8 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
                         ),
                         detail={"param": pname, "defaults": declared},
                         location="; ".join(
-                            f"{s}={sigs[s].file}:{sigs[s].line}" for s in sorted(declared)
+                            f"{s}={sigs[s].file}:{sigs[s].line}"
+                            for s in sorted(declared)
                         ),
                     )
                 )
@@ -305,8 +332,40 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
 # legitimately flatten into individual fields (or fold into an options bag).
 _STRUCT_BAG_NAMES = {"config", "params", "options", "overrides", "opts"}
 
+# Sample-rate spellings. In several C functions (tempogram/mel/mfcc/pcen
+# families) ``sr`` / ``sample_rate`` is a POSITIONAL C argument that sits inside
+# what the facades expose as a leading config field rather than in the
+# audio-input group. The facades consistently spell it ``sample_rate`` /
+# ``sampleRate`` and place it just after the primary buffer. Treat it as an
+# alias of the C positional ``sr`` and drop it from the config-order comparison
+# (it is an intentional, consistent facade convention, not order drift).
+_SAMPLE_RATE_NAMES = {"sample_rate", "sr"}
 
-def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
+# Buffer-companion length params (the count that accompanies a ``const float*``
+# buffer). C carries them as a positional arg; facades derive length from the
+# array, so they have no facade counterpart. Stripped before the audio-input
+# naming check so the buffer names line up.
+_BUFFER_COMPANION_NAMES = {"length", "size", "len"}
+
+# detect_chords is exposed by the facades in its EXTENDED form: the facade
+# config is the 7 base params of C ``sonare_detect_chords`` plus the extra
+# fields of ``SonareChordDetectionOptions`` (the struct used by the
+# ``sonare_detect_chords_ex`` variant). These trailing extended fields are
+# legitimate, so the order check accepts the base C order as a prefix.
+_CHORD_EXTENDED_FIELDS = (
+    "use_hmm",
+    "hmm_beam_width",
+    "use_key_context",
+    "key_root",
+    "key_mode",
+    "detect_inversions",
+    "chroma_method",
+)
+
+
+def _order_drift(
+    c_index, indexed, allow, rep: Report, selected, roles: set[str]
+) -> None:
     for key, csig in c_index.items():
         c_cfg = _config_names(csig, roles)
         # When C itemizes no config params, or its only config param is an opaque
@@ -330,6 +389,14 @@ def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]
             # facade exposing a STRICT PREFIX of the C config order is fine.
             if s_cfg == c_cfg[: len(s_cfg)]:
                 continue
+            # detect_chords is exposed in its EXTENDED (``_ex``) form: C base
+            # order followed by the SonareChordDetectionOptions extra fields.
+            if (
+                key == "detect_chords"
+                and s_cfg[: len(c_cfg)] == c_cfg
+                and tuple(s_cfg[len(c_cfg) :]) == _CHORD_EXTENDED_FIELDS
+            ):
+                continue
             rep.findings.append(
                 Finding(
                     category="order",
@@ -345,14 +412,27 @@ def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]
             )
 
 
+# Audio-input role names that carry no naming signal across surfaces: the
+# buffer-companion length count (C-only, facades derive it from the array) and
+# the sample-rate alias (a consistent facade convention, see _SAMPLE_RATE_NAMES).
+_INPUT_NOISE_NAMES = _BUFFER_COMPANION_NAMES | _SAMPLE_RATE_NAMES
+
+
 def _input_names(sig: FunctionSig, roles: set[str]) -> list[str]:
-    """Leading audio-input role param names of a signature (raw, includes structural)."""
+    """Leading audio-input buffer param names of a signature.
+
+    The buffer-companion length and sample-rate alias are dropped so only the
+    actual buffer parameter names (``samples`` / ``left`` / ``right`` / ...) are
+    compared for naming consistency.
+    """
     names = [p.name for p in sig.params]
     n = _leading_input_group(names, roles)
-    return names[:n]
+    return [nm for nm in names[:n] if nm not in _INPUT_NOISE_NAMES]
 
 
-def _input_naming(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
+def _input_naming(
+    c_index, indexed, allow, rep: Report, selected, roles: set[str]
+) -> None:
     """Flag when the audio-input params are named inconsistently across surfaces."""
     facades = [s for s in _FACADE_SURFACES if s in indexed]
     keys = set()
@@ -367,9 +447,15 @@ def _input_naming(c_index, indexed, allow, rep: Report, selected, roles: set[str
                 g = _input_names(indexed[s][key], roles)
                 if g:
                     groups[s] = g
-        # Include C's input naming where C declares input-role names.
+        # Include C's input naming where C declares input-role names. Drop the
+        # buffer-companion length and the sample-rate alias so only the buffer
+        # parameter names are compared.
         if key in c_index:
-            cg = [p.name for p in c_index[key].params if p.name in roles]
+            cg = [
+                p.name
+                for p in c_index[key].params
+                if p.name in roles and p.name not in _INPUT_NOISE_NAMES
+            ]
             if cg:
                 groups["c"] = cg
         if len(groups) < 2:
@@ -414,7 +500,9 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
                 continue
             sets: dict[str, tuple[str, ...]] = {}
             for s, sig in sigs.items():
-                match = next((p for p in sig.params if p.name == pname and p.enum_values), None)
+                match = next(
+                    (p for p in sig.params if p.name == pname and p.enum_values), None
+                )
                 if match is not None:
                     sets[s] = match.enum_values
             distinct = {frozenset(v) for v in sets.values()}
@@ -428,6 +516,9 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
                             f"enum value-set drift for '{key}.{pname}': "
                             + "; ".join(f"{s}={sorted(sets[s])}" for s in sorted(sets))
                         ),
-                        detail={"param": pname, "sets": {s: list(v) for s, v in sets.items()}},
+                        detail={
+                            "param": pname,
+                            "sets": {s: list(v) for s, v in sets.items()},
+                        },
                     )
                 )

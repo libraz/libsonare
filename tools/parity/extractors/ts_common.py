@@ -40,7 +40,9 @@ _STRUCTURAL_NAMES = {"options", "validate", "on_progress"}
 # export function foo(  ... up to the closing paren before the return type
 _FUNC_HEAD = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
 # class method head: indented `name(` that is not a keyword/control statement.
-_METHOD_HEAD = re.compile(r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
+_METHOD_HEAD = re.compile(
+    r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE
+)
 _TYPE_UNION = re.compile(r"export\s+type\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);", re.DOTALL)
 _STRING_LIT = re.compile(r"""['"]([^'"]+)['"]""")
 
@@ -111,7 +113,8 @@ def _parse_ts_param(decl: str, enum_types: dict[str, tuple[str, ...]]) -> Param:
         type_str = type_str.strip()
     else:
         name_part = lhs
-    name_part = name_part.lstrip("?").strip()
+    # Optional-param marker may sit on either side: `?options` or `options?`.
+    name_part = name_part.strip().strip("?").strip()
     norm = normalize_param_name(name_part)
 
     enum_values: tuple[str, ...] = ()
@@ -165,14 +168,18 @@ def _parse_text(
         bal = _balanced_arglist(text, open_idx)
         if bal is None:
             ex.unparsed += 1
-            ex.unparsed_notes.append(f"{file}:{_line_of(text, open_idx)}: {name} (unbalanced args)")
+            ex.unparsed_notes.append(
+                f"{file}:{_line_of(text, open_idx)}: {name} (unbalanced args)"
+            )
             continue
         inner, _ = bal
         try:
             params = [_parse_ts_param(p, enum_types) for p in _split_ts_args(inner)]
         except Exception:  # noqa: BLE001
             ex.unparsed += 1
-            ex.unparsed_notes.append(f"{file}:{_line_of(text, open_idx)}: {name} (param parse)")
+            ex.unparsed_notes.append(
+                f"{file}:{_line_of(text, open_idx)}: {name} (param parse)"
+            )
             continue
         key = canonical_key(name, surface)
         seen_here.add(name)
@@ -239,7 +246,9 @@ def _parse_text(
         )
 
 
-def extract_ts(root: Path, surface: str, index_rel: str, generated_glob: str) -> Extraction:
+def extract_ts(
+    root: Path, surface: str, index_rel: str, generated_glob: str
+) -> Extraction:
     ex = Extraction(surface=surface)
     index_path = root / index_rel
     gen_dir = root / generated_glob

@@ -110,12 +110,21 @@ def _parse_param(decl: str) -> Param:
         structural = True  # callback/user_data/json_out/... no facade analog
     elif lname in ("samples", "data", "length", "sample_rate", "size", "len"):
         structural = True  # input-buffer plumbing folded by facades
-    elif is_ptr and lname in ("audio", "self", "handle", "engine", "out_key", "out_bpm"):
+    elif is_ptr and lname in (
+        "audio",
+        "self",
+        "handle",
+        "engine",
+        "out_key",
+        "out_bpm",
+    ):
         structural = True
     elif name == "":
         structural = True
 
-    return Param(name=name, raw_name=name, default=None, type=full_type, structural=structural)
+    return Param(
+        name=name, raw_name=name, default=None, type=full_type, structural=structural
+    )
 
 
 def _included_generated_headers(root: Path) -> list[Path]:

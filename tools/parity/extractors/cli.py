@@ -79,7 +79,11 @@ def _extract_python_cli(root: Path, ex: Extraction) -> None:
             call = node.value
             if _is_attr_call(call, "add_parser") and call.args:
                 cmd = _str_const(call.args[0])
-                if cmd and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                if (
+                    cmd
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                ):
                     var_to_cmd[node.targets[0].id] = kebab_to_snake(cmd)
 
     # Third pass: `<var>.add_argument("--opt", default=..., type=..., action=...)`

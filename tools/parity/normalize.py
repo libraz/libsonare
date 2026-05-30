@@ -68,15 +68,31 @@ def normalize_param_name(name: str) -> str:
     return name.lower()
 
 
+# Enum members whose integer value is 0 across the C ABI and every facade. A
+# facade may spell a zero-valued default either as the bare ``0`` (Node/WASM) or
+# as the named enum member (Python ``PitchClass.C`` / ``Mode.MAJOR`` / ...). They
+# denote the same wire value, so we fold the named member to its integer.
+_ENUM_MEMBER_INT = {
+    "PitchClass.C": "0",
+    "Mode.MAJOR": "0",
+    "Mode.MINOR": "1",
+    "ChromaMethod.STFT": "0",
+    "ChromaMethod.NNLS": "1",
+}
+
+
 def normalize_default(value: str | None) -> str | None:
     """Normalize a default literal so cross-surface comparison is meaningful.
 
     Folds Python/JS/C++ boolean spellings together, drops trailing ``.0`` on
-    floats, and strips quotes around string defaults.
+    floats, strips quotes around string defaults, and maps zero-valued enum
+    members (``PitchClass.C``) to their integer wire value.
     """
     if value is None:
         return None
     v = value.strip()
+    if v in _ENUM_MEMBER_INT:
+        return _ENUM_MEMBER_INT[v]
     low = v.lower()
     if low in ("true", "false"):
         return low
