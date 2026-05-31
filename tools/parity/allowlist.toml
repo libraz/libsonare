@@ -217,6 +217,17 @@ python = [
 params = []
 
 # ---------------------------------------------------------------------------
+# [core_default] — "key.param" entries whose facade default is ALLOWED to differ
+# from the C++ core config-struct field initializer (compare._core_default_drift,
+# driven by core_map.toml). Use ONLY for an intentional facade-vs-core
+# difference, e.g. a "0 = use library default" sentinel the facade exposes that
+# the core struct spells as its concrete value. Seed empty: every mapped numeric
+# / boolean default currently matches its core struct initializer.
+# ---------------------------------------------------------------------------
+[core_default]
+params = []
+
+# ---------------------------------------------------------------------------
 # [enum] — "key.param" entries whose enum value-sets may differ across surfaces.
 # TS unions often carry extra alias spellings (e.g. 'stereo-pan' + 'stereoPan')
 # that the C enum lacks; add reviewed aliases here.

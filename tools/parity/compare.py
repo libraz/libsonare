@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from allowlist import Allowlist
+from core_defaults import CoreConfig
 from model import Extraction, FunctionSig
 from normalize import canonical_default, is_empty_collection_default
 
@@ -180,6 +181,7 @@ def build_report(
     extractions: dict[str, Extraction],
     allow: Allowlist,
     selected: list[str],
+    core_configs: dict[str, CoreConfig] | None = None,
 ) -> Report:
     rep = Report(surfaces=selected)
     indexed = {s: _index(ex) for s, ex in extractions.items()}
@@ -228,8 +230,7 @@ def build_report(
                     stripped = key[len(prefix) :]
                     break
             if stripped is not None and (
-                stripped in method_keys.get(s, set())
-                or stripped in indexed.get(s, {})
+                stripped in method_keys.get(s, set()) or stripped in indexed.get(s, {})
             ):
                 continue
             if allow.coverage_ok(key, s):
@@ -307,6 +308,10 @@ def build_report(
 
     # --- 5. Enum value-set drift ---
     _enum_drift(indexed, allow, rep)
+
+    # --- 6. Core-default drift (facade vs C++ core struct design default) ---
+    if core_configs:
+        _core_default_drift(indexed, core_configs, allow, rep, roles)
 
     return rep
 
@@ -584,5 +589,62 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
                             "param": pname,
                             "sets": {s: list(v) for s, v in sets.items()},
                         },
+                    )
+                )
+
+
+def _core_default_drift(
+    indexed,
+    core_configs: dict[str, CoreConfig],
+    allow,
+    rep: Report,
+    roles: set[str],
+) -> None:
+    """Flag a facade default that diverges from its C++ core struct initializer.
+
+    The facade-vs-facade default check (``_default_drift``) only sees the three
+    facades; it is blind to the case where every facade AGREES on a value the
+    C++ core design never intended. This check anchors each mapped facade param
+    on the numeric / boolean field initializer of its C++ core config struct
+    (see ``core_map.toml`` + ``extractors/cpp_struct.py``) and reports any
+    divergence. Only params a facade actually declares a default for, and only
+    struct fields with a literal initializer, are compared.
+    """
+    facades = [s for s in _FACADE_SURFACES if s in indexed]
+    for key in sorted(core_configs):
+        cfg = core_configs[key]
+        if not cfg.fields:
+            continue
+        for s in facades:
+            sig = indexed[s].get(key)
+            if sig is None:
+                continue
+            for p in sig.core_params():
+                if p.name in roles or p.default is None:
+                    continue
+                core_def = cfg.core_default_for(p.name)
+                if core_def is None:
+                    continue
+                if allow.core_default_ok(key, p.name):
+                    continue
+                if canonical_default(p.default) == canonical_default(core_def):
+                    continue
+                field_name = cfg.rename.get(p.name, p.name)
+                rep.findings.append(
+                    Finding(
+                        category="core_default",
+                        key=key,
+                        surface=s,
+                        message=(
+                            f"core-default drift for '{key}.{p.name}': "
+                            f"{s}={p.default} vs C++ {cfg.struct}.{field_name}={core_def}"
+                        ),
+                        detail={
+                            "param": p.name,
+                            "facade": p.default,
+                            "core": core_def,
+                            "struct": cfg.struct,
+                        },
+                        location=f"{sig.file}:{sig.line} (core {cfg.header})",
                     )
                 )

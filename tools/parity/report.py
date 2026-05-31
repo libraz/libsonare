@@ -7,10 +7,11 @@ from dataclasses import asdict
 
 from compare import Report
 
-_CATEGORIES = ("coverage", "default", "order", "input", "enum")
+_CATEGORIES = ("coverage", "default", "core_default", "order", "input", "enum")
 _CAT_TITLE = {
     "coverage": "Coverage gaps / surface-only symbols",
     "default": "Default drift (cross-facade)",
+    "core_default": "Core-default drift (facade vs C++ core struct)",
     "order": "Argument order / count / name mismatch (vs C, config params)",
     "input": "Audio-input param naming consistency",
     "enum": "Enum value-set mismatch",

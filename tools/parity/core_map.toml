@@ -1,0 +1,80 @@
+# Maps a canonical function key to the C++ CORE config struct whose field
+# initializers are the "design" default for that function's parameters. The
+# core-default parity check (compare._core_default_drift) compares each binding
+# facade's declared default against these struct field initializers, so a facade
+# silently drifting from the core design value (or all facades agreeing on a
+# value the core never intended) is caught -- the facade-vs-facade default check
+# cannot see this class of drift.
+#
+# Only NUMERIC / BOOLEAN field initializers are compared (see
+# extractors/cpp_struct.py); enum, string, named-constant and aggregate
+# initializers are skipped. The check fires only for a field a facade actually
+# declares a default for -- fields the facades don't expose are ignored. A
+# genuine, intentional facade-vs-core difference (e.g. a "0 = use library
+# default" sentinel) is suppressed via [core_default] in allowlist.toml.
+#
+# [map.<canonical_key>]
+#   header = "<path to .h relative to repo root>"
+#   struct = "<C++ struct name>"
+#   [map.<canonical_key>.rename]   # optional: facade_param = struct_field
+#     kernel_harmonic = "kernel_size_harmonic"
+
+[map.analyze_bpm]
+header = "src/analysis/bpm_analyzer.h"
+struct = "BpmConfig"
+
+[map.analyze_rhythm]
+header = "src/analysis/rhythm_analyzer.h"
+struct = "RhythmConfig"
+
+[map.analyze_dynamics]
+header = "src/analysis/dynamics_analyzer.h"
+struct = "DynamicsConfig"
+
+[map.analyze_timbre]
+header = "src/analysis/timbre_analyzer.h"
+struct = "TimbreConfig"
+
+[map.analyze_sections]
+header = "src/analysis/section_analyzer.h"
+struct = "SectionConfig"
+
+[map.analyze_melody]
+header = "src/analysis/melody_analyzer.h"
+struct = "MelodyConfig"
+
+[map.analyze_impulse_response]
+header = "src/analysis/acoustic_analyzer.h"
+struct = "AcousticConfig"
+
+[map.detect_acoustic]
+header = "src/analysis/acoustic_analyzer.h"
+struct = "AcousticConfig"
+
+[map.detect_chords]
+header = "src/analysis/chord_analyzer.h"
+struct = "ChordConfig"
+
+[map.detect_key]
+header = "src/analysis/key_analyzer.h"
+struct = "KeyConfig"
+
+[map.mel_spectrogram]
+header = "src/feature/mel_spectrogram.h"
+struct = "MelConfig"
+
+[map.mfcc]
+header = "src/feature/mel_spectrogram.h"
+struct = "MelConfig"
+
+[map.cqt]
+header = "src/feature/cqt.h"
+struct = "CqtConfig"
+
+[map.vqt]
+header = "src/feature/vqt.h"
+struct = "VqtConfig"
+
+[map.pitch_yin]
+header = "src/feature/pitch.h"
+struct = "PitchConfig"

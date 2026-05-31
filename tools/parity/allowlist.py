@@ -36,6 +36,7 @@ class Allowlist:
     surface_only: dict[str, list[str]] = field(default_factory=dict)
     order: dict[str, list[str]] = field(default_factory=dict)
     default: list[str] = field(default_factory=list)
+    core_default: list[str] = field(default_factory=list)
     enum: list[str] = field(default_factory=list)
     input_naming: list[str] = field(default_factory=list)
     # Overrides for the central tuning knobs (empty -> use compare.py defaults).
@@ -59,6 +60,9 @@ class Allowlist:
     def default_ok(self, key: str, param: str) -> bool:
         return _match(f"{key}.{param}", self.default)
 
+    def core_default_ok(self, key: str, param: str) -> bool:
+        return _match(f"{key}.{param}", self.core_default)
+
     def enum_ok(self, key: str, param: str) -> bool:
         return _match(f"{key}.{param}", self.enum)
 
@@ -72,6 +76,7 @@ def load(path: Path) -> Allowlist:
         surface_only={k: list(v) for k, v in data.get("surface_only", {}).items()},
         order={k: list(v) for k, v in data.get("order", {}).items()},
         default=list(data.get("default", {}).get("params", [])),
+        core_default=list(data.get("core_default", {}).get("params", [])),
         enum=list(data.get("enum", {}).get("params", [])),
         input_naming=list(data.get("input_naming", {}).get("keys", [])),
         input_roles=list(data.get("tuning", {}).get("input_roles", [])),

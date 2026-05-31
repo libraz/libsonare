@@ -2,8 +2,9 @@
 """Cross-binding parity drift checker for libsonare.
 
 Compares every language surface (Python, Node, WASM, CLI) against the C API
-(the canonical ABI) and reports four kinds of drift: coverage gaps, default
-drift, argument order/count/name mismatch, and enum value-set mismatch.
+(the canonical ABI) and reports six kinds of drift: coverage gaps, cross-facade
+default drift, facade-vs-C++-core default drift (core_map.toml), argument
+order/count/name mismatch, audio-input naming, and enum value-set mismatch.
 
 Standard library only (ast, re, json, argparse, pathlib, tomllib, dataclasses).
 Read-only: it never modifies repository sources.
@@ -29,6 +30,7 @@ if str(_HERE) not in sys.path:
 
 import allowlist as allowlist_mod  # noqa: E402
 import compare  # noqa: E402
+import core_defaults  # noqa: E402
 import report as report_mod  # noqa: E402
 from extractors import c_api, cli, node_ts, python_pyi, wasm_ts  # noqa: E402
 from model import SURFACES  # noqa: E402
@@ -67,6 +69,12 @@ def main(argv: list[str] | None = None) -> int:
         default=_HERE / "allowlist.toml",
         help="Path to allowlist.toml",
     )
+    ap.add_argument(
+        "--core-map",
+        type=Path,
+        default=_HERE / "core_map.toml",
+        help="Path to core_map.toml (facade-vs-C++-core default check)",
+    )
     args = ap.parse_args(argv)
 
     selected = [s.strip() for s in args.surface.split(",") if s.strip()]
@@ -81,12 +89,13 @@ def main(argv: list[str] | None = None) -> int:
     selected = [s for s in SURFACES if s in selected]
 
     allow = allowlist_mod.load(args.allowlist)
+    core_configs = core_defaults.load(args.core_map, args.root)
 
     extractions = {}
     for s in selected:
         extractions[s] = _EXTRACTORS[s](args.root)
 
-    rep = compare.build_report(extractions, allow, selected)
+    rep = compare.build_report(extractions, allow, selected, core_configs)
 
     if args.json:
         print(report_mod.to_json(rep))
