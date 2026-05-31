@@ -2147,20 +2147,17 @@ class MixerWasm {
 
   // Sets the strip's fader level in dB.
   void setFaderDb(unsigned int strip_index, float db) {
-    checkStripError(sonare_strip_set_fader_db(stripAt(strip_index), db),
-                    "failed to set fader");
+    checkStripError(sonare_strip_set_fader_db(stripAt(strip_index), db), "failed to set fader");
   }
 
   // Sets the strip's pan position. pan_mode is processor-specific.
   void setPan(unsigned int strip_index, float pan, int pan_mode) {
-    checkStripError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode),
-                    "failed to set pan");
+    checkStripError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode), "failed to set pan");
   }
 
   // Sets the strip's stereo width.
   void setWidth(unsigned int strip_index, float width) {
-    checkStripError(sonare_strip_set_width(stripAt(strip_index), width),
-                    "failed to set width");
+    checkStripError(sonare_strip_set_width(stripAt(strip_index), width), "failed to set width");
   }
 
   // Sets the strip's mute state.

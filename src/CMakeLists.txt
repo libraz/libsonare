@@ -532,8 +532,14 @@ endif()
 if(BUILD_SHARED)
   set(SONARE_SHARED_SOURCES $<TARGET_OBJECTS:sonare_core_objects>)
   if(BUILD_MASTERING)
-    list(APPEND SONARE_SHARED_SOURCES sonare_c_mastering.cpp sonare_c_mastering_repair.cpp
-                                      sonare_c_mastering_dynamics.cpp)
+    list(APPEND SONARE_SHARED_SOURCES
+         sonare_c_mastering_apply.cpp
+         sonare_c_mastering_chain.cpp
+         sonare_c_mastering_dynamics.cpp
+         sonare_c_mastering_eq.cpp
+         sonare_c_mastering_preset.cpp
+         sonare_c_mastering_repair.cpp
+         sonare_c_mastering_streaming.cpp)
   endif()
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)

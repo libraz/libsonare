@@ -176,9 +176,13 @@ if(BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_mastering)
   endif()
   target_sources(sonare_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_repair.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_apply.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_chain.cpp
     ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_dynamics.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_eq.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_preset.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_repair.cpp
+    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_streaming.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
