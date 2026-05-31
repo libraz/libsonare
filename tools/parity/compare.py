@@ -58,6 +58,7 @@ DEFAULT_INPUT_ROLES = (
     "mel_power",
     "mfcc",
     "mfcc_coefficients",
+    "mfcc_coeffs",
     "onset_envelope",
     "tempogram_data",
     "values",
@@ -229,8 +230,15 @@ def build_report(
                 continue
             rep.surface_only[s].append(key)
             allowlisted = allow.surface_only_ok(key, s)
-            # CLI-only commands are an expected curated surface -> informational.
-            informational = s == "cli"
+            # A surface-only symbol whose raw_name carries a '.' is a facade
+            # CLASS METHOD (e.g. "Mixer.add_bus", "Audio.fromBuffer"): an
+            # ergonomic handle/instance method with no C free-function
+            # counterpart. Keep it visible but informational (out of the
+            # CI-failing set). CLI-only commands are likewise an expected
+            # curated surface -> informational. Free-function surface-only
+            # symbols stay active (real coverage signal worth triaging).
+            is_method = "." in sig.raw_name
+            informational = is_method or s == "cli"
             rep.findings.append(
                 Finding(
                     category="coverage",

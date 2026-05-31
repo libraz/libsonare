@@ -9,19 +9,42 @@
 # ---------------------------------------------------------------------------
 [surface_only]
 # Symbols that exist on multiple bindings but are deliberately binding-only.
+# The `mastering*` / `mix_stereo` / `onset_envelope` entries are ERGONOMIC
+# facade free-function names for C operations that exist under a different
+# (reordered) C name — see the matching [coverage] notes. Renaming the public
+# facade API to mirror C is out of scope, so these are intentional, not drift:
+#   mastering_pair_analyze   <- C mastering_analyze_pair
+#   mastering_stereo_analyze <- C mastering_analyze_stereo
+#   mastering_process_stereo <- C mastering_apply_processor_stereo
+#   mastering_pair_process   <- C mastering_apply_pair_processor
+#   mastering                <- high-level convenience wrapper (apply_processor)
+#   mix_stereo               <- stereo mix convenience
+#   onset_envelope           <- facade name for C onset_strength
+#   validate_realtime_voice_changer_preset_json <- facade-side JSON validator
+#                                                   (no C free function)
 any = [
   "init",                  # WASM async module init
   "assert_samples",        # exported input validators (Node + WASM)
   "assert_finite_samples",
   "assert_finite_scalar",
   "assert_non_empty_samples",
+  "mastering",
+  "mastering_pair_analyze",
+  "mastering_pair_process",
+  "mastering_process_stereo",
+  "mastering_stereo_analyze",
+  "mix_stereo",
+  "onset_envelope",
+  "validate_realtime_voice_changer_preset_json",
 ]
 
 node = [
   "analyze_async",          # libuv async variant, JS-only
   "analyze_with_progress",  # progress-callback variant, JS-only
   "*with_progress",
-  "voice_change_realtime",  # realtime voice changer, JS-only ergonomic wrapper
+  "voice_change_realtime",  # realtime voice changer ergonomic wrapper (also python)
+  "master_audio_async",         # libuv async variant, JS-only
+  "master_audio_stereo_async",  # libuv async variant, JS-only
 ]
 
 wasm = [
@@ -32,6 +55,10 @@ wasm = [
   "analyze_with_progress",
 ]
 
+python = [
+  "voice_change_realtime",  # realtime voice changer ergonomic wrapper (also node)
+]
+
 # ---------------------------------------------------------------------------
 # [coverage] — canonical C functions allowed to be ABSENT on a surface.
 # Seed empty: we want to SURFACE coverage gaps, not pre-hide them. Add an
@@ -39,12 +66,88 @@ wasm = [
 # ---------------------------------------------------------------------------
 [coverage]
 # Example (disabled): wasm = ["audio_from_file"]
-# detect_chords_ex is not a separate facade function: the facade `detect_chords`
-# IS the extended form (it exposes all SonareChordDetectionOptions fields and
-# calls sonare_detect_chords_ex). So the `_ex` variant is covered, not missing.
-node = ["detect_chords_ex"]
-wasm = ["detect_chords_ex"]
-python = ["detect_chords_ex"]
+#
+# --- C functions FOLDED INTO the base facade (extended / options variants) ---
+# These C entry points are NOT separate facade functions: the base facade
+# function exposes them through an options/mode argument or a callback, the same
+# pattern as detect_chords -> detect_chords_ex (the template below).
+#
+#   detect_chords_ex: the facade `detect_chords` IS the extended form (it
+#     exposes all SonareChordDetectionOptions fields and calls
+#     sonare_detect_chords_ex). So the `_ex` variant is covered, not missing.
+#   detect_key_with_options / _and_modes / _with_extended_options and the
+#     detect_key_candidates_with_modes / _with_extended_options family: folded
+#     into the facade `detect_key` / `detect_key_candidates` extended params
+#     (modes / profile / genre_hint).
+#   tempogram_with_mode: folded into `tempogram`'s `mode` selector.
+#   onset_strength: exposed by the facades under the ergonomic name
+#     `onset_envelope`.
+#   error_message / last_error_message: C-ABI error-string helpers consumed
+#     internally by each facade's error layer (mapped to native exceptions),
+#     not part of the public facade surface.
+#
+# --- mastering ops exposed under ERGONOMIC facade names (see [surface_only]) ---
+#   mastering_analyze_pair / mastering_analyze_stereo / mastering_apply_processor
+#   / mastering_apply_pair_processor / mastering_apply_processor_stereo: these C
+#   operations are surfaced by the facade free functions mastering_pair_analyze /
+#   mastering_stereo_analyze / mastering_process / mastering_pair_process /
+#   mastering_process_stereo (listed in [surface_only] below). Same op, facade
+#   spelling.
+node = [
+  "detect_chords_ex",
+  "detect_key_with_options",
+  "detect_key_with_options_and_modes",
+  "detect_key_with_extended_options",
+  "detect_key_candidates_with_modes",
+  "detect_key_candidates_with_extended_options",
+  "tempogram_with_mode",
+  "onset_strength",
+  "error_message",
+  "last_error_message",
+  "mastering_chain_with_progress",
+  "mastering_chain_stereo_with_progress",
+  "mastering_analyze_pair",
+  "mastering_analyze_stereo",
+  "mastering_apply_processor",
+  "mastering_apply_pair_processor",
+  "mastering_apply_processor_stereo",
+]
+wasm = [
+  "detect_chords_ex",
+  "detect_key_with_options",
+  "detect_key_with_options_and_modes",
+  "detect_key_with_extended_options",
+  "detect_key_candidates_with_modes",
+  "detect_key_candidates_with_extended_options",
+  "tempogram_with_mode",
+  "onset_strength",
+  "error_message",
+  "last_error_message",
+  "mastering_analyze_pair",
+  "mastering_analyze_stereo",
+  "mastering_apply_processor",
+  "mastering_apply_pair_processor",
+  "mastering_apply_processor_stereo",
+]
+python = [
+  "detect_chords_ex",
+  "detect_key_with_options",
+  "detect_key_with_options_and_modes",
+  "detect_key_with_extended_options",
+  "detect_key_candidates_with_modes",
+  "detect_key_candidates_with_extended_options",
+  "tempogram_with_mode",
+  "onset_strength",
+  "error_message",
+  "last_error_message",
+  "mastering_chain_with_progress",
+  "mastering_chain_stereo_with_progress",
+  "mastering_analyze_pair",
+  "mastering_analyze_stereo",
+  "mastering_apply_processor",
+  "mastering_apply_pair_processor",
+  "mastering_apply_processor_stereo",
+]
 
 # ---------------------------------------------------------------------------
 # [order] — keys whose facade param order legitimately differs from the C ABI
@@ -82,7 +185,16 @@ wasm = [
 # that map to the extended C variants (detect_key_candidates_with_modes /
 # _with_extended_options). strip_meter (python): the extra `tap` selector maps
 # to the metering-tap variant. Both are legitimate extended-facade params.
-python = ["detect_key_candidates", "strip_meter", "tempogram"]
+# scale_quantize_midi / scale_correction_semitones (python): same ergonomic
+# (root, mode_mask, midi, reference_midi=default) order as Node/WASM above,
+# remapped to the C order internally by the ctypes wrapper.
+python = [
+  "detect_key_candidates",
+  "strip_meter",
+  "tempogram",
+  "scale_quantize_midi",
+  "scale_correction_semitones",
+]
 
 # ---------------------------------------------------------------------------
 # [default] — "key.param" entries whose default may differ across facades.

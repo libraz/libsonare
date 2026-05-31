@@ -1,6 +1,6 @@
 .PHONY: all build release test test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-node test-wasm
+       test-python test-node test-wasm parity
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -88,6 +88,11 @@ test-node: build-node
 
 test-wasm: build-wasm-binding
 	cd bindings/wasm && yarn test
+
+# Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
+# it reads the binding sources directly and exits non-zero on active drift.
+parity:
+	python3 tools/parity/check_parity.py
 
 # Coverage targets
 coverage-build:
