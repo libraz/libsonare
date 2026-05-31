@@ -127,13 +127,48 @@ def _parse_param(decl: str) -> Param:
     )
 
 
-def _included_generated_headers(root: Path) -> list[Path]:
-    return sorted((root / "src" / "generated").glob("*_gen.h"))
+# Local public-API includes: ``#include "sonare_c_effects.h"`` etc. The monolith
+# ``sonare_c.h`` was split into domain headers (commit 38aa15c), so the canonical
+# C surface is now spread across the headers it pulls in. We follow those local
+# includes transitively to reconstruct the full surface. Internal / helper
+# headers are excluded -- they hold private plumbing, not the public ABI.
+_LOCAL_INCLUDE_RE = re.compile(r'#include\s+"(sonare_c[A-Za-z0-9_]*\.h)"')
+
+
+def _is_internal_header(name: str) -> bool:
+    return name.endswith("_internal.h") or "_helpers" in name
+
+
+def _collect_api_headers(root: Path) -> list[Path]:
+    """All public C-API headers, starting from sonare_c.h and following its
+    local ``sonare_c*.h`` includes transitively (excluding internal/helpers)."""
+    src = root / "src"
+    out: list[Path] = []
+    seen: set[Path] = set()
+    queue: list[Path] = [src / "sonare_c.h"]
+    while queue:
+        path = queue.pop(0)
+        if path in seen or not path.exists():
+            continue
+        seen.add(path)
+        out.append(path)
+        raw = path.read_text(encoding="utf-8")
+        for inc in _LOCAL_INCLUDE_RE.findall(raw):
+            if _is_internal_header(inc):
+                continue
+            child = src / inc
+            if child not in seen:
+                queue.append(child)
+    # Generated headers (when codegen is active) as a backstop.
+    for gen in sorted((src / "generated").glob("*_gen.h")):
+        if gen not in seen:
+            out.append(gen)
+    return out
 
 
 def extract(root: Path) -> Extraction:
     ex = Extraction(surface="c")
-    files = [root / "src" / "sonare_c.h", *_included_generated_headers(root)]
+    files = _collect_api_headers(root)
     seen: set[str] = set()
     for path in files:
         if not path.exists():
