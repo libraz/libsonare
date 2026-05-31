@@ -43,6 +43,8 @@ _FUNC_HEAD = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\("
 _METHOD_HEAD = re.compile(
     r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE
 )
+# `export class Foo` / `export abstract class Foo` heads.
+_CLASS_HEAD = re.compile(r"export\s+(?:abstract\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\b")
 _TYPE_UNION = re.compile(r"export\s+type\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);", re.DOTALL)
 _STRING_LIT = re.compile(r"""['"]([^'"]+)['"]""")
 
@@ -196,54 +198,56 @@ def _parse_text(
 
     if not parse_methods:
         return
-    # Audio class methods. Limit to the body of `export class Audio { ... }`.
-    cls = re.search(r"export\s+class\s+Audio\b", text)
-    if not cls:
-        return
-    body = _balanced_arglist  # not used; manual brace scan below
-    start = text.find("{", cls.end())
-    if start < 0:
-        return
-    depth = 0
-    end = start
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0:
-                end = i
-                break
-    class_body = text[start : end + 1]
-    base_line = _line_of(text, start)
-    for m in _METHOD_HEAD.finditer(class_body):
-        name = m.group(1)
-        if name in _NON_METHOD or name.startswith("_"):
+    # Methods of EVERY exported class (Audio, Mixer, RealtimeEngine,
+    # StreamAnalyzer, StreamingMasteringChain, RealtimeVoiceChanger, ...). Each
+    # class body is brace-matched and its methods recorded as
+    # ``<ClassName>.<method>`` so the handle/class coverage matcher can credit
+    # the prefix-stripped C handle keys against them.
+    for cls in _CLASS_HEAD.finditer(text):
+        class_name = cls.group(1)
+        start = text.find("{", cls.end())
+        if start < 0:
             continue
-        open_idx = m.end() - 1
-        bal = _balanced_arglist(class_body, open_idx)
-        if bal is None:
-            continue
-        inner, after = bal
-        # Must be a method: a `{` should follow the (optional) return type.
-        tail = class_body[after : after + 80]
-        if "{" not in tail:
-            continue
-        try:
-            params = [_parse_ts_param(p, enum_types) for p in _split_ts_args(inner)]
-        except Exception:  # noqa: BLE001
-            continue
-        key = canonical_key(name, surface)
-        ex.functions.append(
-            FunctionSig(
-                key=key,
-                surface=surface,
-                raw_name="Audio." + name,
-                params=params,
-                file=file,
-                line=base_line + class_body.count("\n", 0, m.start()),
+        depth = 0
+        end = start
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        class_body = text[start : end + 1]
+        base_line = _line_of(text, start)
+        for m in _METHOD_HEAD.finditer(class_body):
+            name = m.group(1)
+            if name in _NON_METHOD or name.startswith("_"):
+                continue
+            open_idx = m.end() - 1
+            bal = _balanced_arglist(class_body, open_idx)
+            if bal is None:
+                continue
+            inner, after = bal
+            # Must be a method: a `{` should follow the (optional) return type.
+            tail = class_body[after : after + 80]
+            if "{" not in tail:
+                continue
+            try:
+                params = [_parse_ts_param(p, enum_types) for p in _split_ts_args(inner)]
+            except Exception:  # noqa: BLE001
+                continue
+            key = canonical_key(name, surface)
+            ex.functions.append(
+                FunctionSig(
+                    key=key,
+                    surface=surface,
+                    raw_name=f"{class_name}.{name}",
+                    params=params,
+                    file=file,
+                    line=base_line + class_body.count("\n", 0, m.start()),
+                )
             )
-        )
 
 
 def extract_ts(

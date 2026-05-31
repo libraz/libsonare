@@ -111,3 +111,76 @@ def normalize_default(value: str | None) -> str | None:
     except ValueError:
         pass
     return v
+
+
+# A dotted enum-member token: ``SendTiming.POST_FADER`` / ``AutomationCurve.LINEAR``
+# / ``MeterTap.POST_FADER``. The class part is an Identifier, the member part is
+# UPPER_SNAKE. Python facades spell enum defaults this way; Node/WASM spell the
+# SAME value as a camelCase string-union literal (``postFader`` / ``linear``).
+_ENUM_MEMBER_TOKEN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Z][A-Z0-9_]*$")
+
+# Empty-collection literals. A facade may spell "no value" as an empty array /
+# object (``[]`` / ``{}``). A peer facade may instead spell it ``None`` / ``null``.
+# When a param mixes the two, they are the same collection sentinel (handled in
+# compare._default_drift, which only equates ``none`` with ``[]`` when a peer
+# actually declares an empty collection).
+EMPTY_COLLECTION_LITERALS = frozenset({"[]", "{}", "()", "list()", "dict()", "set()"})
+
+
+def is_empty_collection_default(value: str | None) -> bool:
+    """True when ``value`` is an empty-collection literal (``[]`` / ``{}`` / ...)."""
+    if value is None:
+        return False
+    return value.strip() in EMPTY_COLLECTION_LITERALS
+
+
+def _alnum_fold(s: str) -> str:
+    """Lowercase ``s`` and drop every non-alphanumeric character.
+
+    ``SendTiming.POST_FADER`` member ``POST_FADER`` -> ``postfader``;
+    ``postFader`` -> ``postfader``; ``LINEAR`` -> ``linear``.
+    """
+    return "".join(ch for ch in s.lower() if ch.isalnum())
+
+
+def canonical_default(value: str | None) -> str | None:
+    """Canonicalize a default for cross-surface EQUALITY comparison only.
+
+    This is a stronger, comparison-only form than :func:`normalize_default`:
+    it folds enum-member spellings (``EnumClass.MEMBER`` vs the equivalent
+    camelCase string-union literal, e.g. ``SendTiming.POST_FADER`` and
+    ``postFader`` both -> ``postfader``) so the *same* enum value declared with
+    different spellings across facades compares equal.
+
+    It is intentionally NOT used to rewrite the value shown in the finding
+    message (that keeps the surface-native spelling); it only drives the
+    "are these defaults distinct?" test. Empty-collection vs ``None``
+    equivalence is handled separately in ``compare._default_drift`` (it is
+    conditional on a peer declaring an empty collection).
+
+    Returns ``None`` for an absent default (``None`` input). Genuine numeric
+    and ``None`` defaults pass through unchanged.
+    """
+    if value is None:
+        return None
+    v = value.strip()
+    norm = normalize_default(v)
+    if norm is None:
+        return None
+    if norm == "none":
+        return "none"
+    # Dotted enum-member form (Python facade): fold the MEMBER name only, so
+    # ``SendTiming.POST_FADER`` -> ``postfader`` matches the Node/WASM string
+    # literal ``postFader`` -> ``postfader``. Only the Identifier.UPPER_SNAKE
+    # shape is collapsed; numeric / None / quoted-string defaults are untouched.
+    if _ENUM_MEMBER_TOKEN.match(v):
+        member = v.split(".", 1)[1]
+        return _alnum_fold(member)
+    # A bare identifier-like string default (already de-quoted by
+    # normalize_default): fold to lowercase-alphanumeric so a camelCase /
+    # kebab / snake spelling of the same enum value compares equal to the
+    # folded enum-member form above. Numeric and boolean tokens fold to
+    # themselves (digits/letters survive), so this does not conflate them.
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_\-]*", norm):
+        return _alnum_fold(norm)
+    return norm

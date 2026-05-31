@@ -166,12 +166,18 @@ python = [
 # autocorr) that folds the C `center` / `norm` flags; Node/WASM replace
 # center+norm with `mode`, Python keeps center+norm and adds `mode`. Documented
 # ergonomic convenience, not order drift.
+# strip_meter (wasm/node): the C handle method `sonare_strip_meter` takes a
+# `strip` handle; the facades follow the documented handle->index convention
+# (the handle becomes a numeric `strip_index`) and add a `tap` metering-tap
+# selector, the same extended-facade shape already accepted for strip_meter
+# (python) below. Same op, handle->index + tap-selector — not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "preemphasis",
   "deemphasis",
   "tempogram",
+  "strip_meter",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -179,6 +185,7 @@ wasm = [
   "preemphasis",
   "deemphasis",
   "tempogram",
+  "strip_meter",
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -201,10 +208,13 @@ python = [
 # Seed empty: default drift is the highest-value signal; do not pre-hide it.
 # ---------------------------------------------------------------------------
 [default]
-# mastering_streaming_preview.platforms: Node/WASM default to an empty array
-# `[]`, Python to `None` -- both mean "no platform targets". Semantically equal
-# empty-collection sentinels, not a behavioral default drift.
-params = ["mastering_streaming_preview.platforms"]
+# Empty-collection sentinels (Node/WASM `[]` vs Python `None`, both meaning
+# "no value") and enum-member-vs-string-union spellings (`SendTiming.POST_FADER`
+# vs `postFader`) are folded to a common form in compare._default_drift /
+# normalize.canonical_default, so they are NOT allowlisted per-key here. That
+# covers mastering_streaming_preview.platforms, add_vca_group.members, and the
+# add_send/meter_tap/strip_meter/schedule_*_automation enum defaults generally.
+params = []
 
 # ---------------------------------------------------------------------------
 # [enum] — "key.param" entries whose enum value-sets may differ across surfaces.

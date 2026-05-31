@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 
 from allowlist import Allowlist
 from model import Extraction, FunctionSig
+from normalize import canonical_default, is_empty_collection_default
 
 # Language facade surfaces that share defaults (C carries none).
 _FACADE_SURFACES = ("python", "node", "wasm")
@@ -87,6 +88,23 @@ HANDLE_PREFIX_FREEFN_EXCEPTIONS = (
     "master_audio",
     "master_audio_stereo",
     "voice_change",
+)
+
+# Full handle-instance prefixes. A C handle key (e.g. ``mixer_add_bus``) carries
+# the handle type as a leading token group; the facades expose the same op as a
+# bare class method (``Mixer.add_bus`` -> key ``add_bus``). To credit coverage we
+# strip the longest matching prefix and retry the tail against the facade's
+# method/free keys. Ordered LONGEST-FIRST so multi-token prefixes win over their
+# single-token shadows (``stream_analyzer_`` before ``stream_``-style tokens).
+_HANDLE_FULL_PREFIXES = (
+    "streaming_mastering_chain_",
+    "stream_analyzer_",
+    "realtime_voice_changer_",
+    "engine_",
+    "mixer_",
+    "strip_",
+    "eq_",
+    "audio_",
 )
 
 
@@ -198,13 +216,39 @@ def build_report(
             present_method = key in method_keys.get(s, set())
             if present_free or present_method:
                 continue
+            # Handle-instance C key (``mixer_add_bus``): the facade exposes the
+            # same op as a bare class method (``Mixer.add_bus`` -> key
+            # ``add_bus``), so the handle prefix is stripped there. Strip the
+            # longest matching handle prefix and retry the tail against this
+            # surface's method-keys AND free-function keys; a match means the op
+            # IS exposed -- covered, no finding.
+            stripped = None
+            for prefix in _HANDLE_FULL_PREFIXES:
+                if key.startswith(prefix) and len(key) > len(prefix):
+                    stripped = key[len(prefix) :]
+                    break
+            if stripped is not None and (
+                stripped in method_keys.get(s, set())
+                or stripped in indexed.get(s, {})
+            ):
+                continue
             if allow.coverage_ok(key, s):
                 rep.findings.append(Finding("coverage", key, s, "", allowlisted=True))
                 continue
-            # Informational when: handle/class API (matched as methods elsewhere)
-            # or the CLI surface (curated subset).
-            informational = is_handle or s == "cli"
-            if is_handle:
+            # C memory-management helper (``free_floats`` / ``free_*_result`` /
+            # ``free_stream_*``): a heap-result / buffer release helper with NO
+            # facade counterpart by design (the facades free via GC / RAII).
+            # Report it as informational, never an active gap.
+            is_free_helper = key.startswith("free_")
+            # Informational when: handle/class API (matched as methods elsewhere),
+            # a memory-management helper, or the CLI surface (curated subset).
+            informational = is_handle or is_free_helper or s == "cli"
+            if is_free_helper:
+                msg = (
+                    f"C memory-management helper '{key}' not exposed in {s} "
+                    "(facade uses GC/RAII)"
+                )
+            elif is_handle:
                 msg = f"C handle/class function '{key}' not exposed as {s} method/function"
             elif s == "cli":
                 msg = f"C function '{key}' not exposed by the (curated) CLI"
@@ -316,7 +360,19 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
                 if match is None or match.default is None:
                     continue
                 declared[s] = match.default
-            distinct = set(declared.values())
+            # Canonicalize for the distinctness test (enum-member vs camelCase
+            # string-union literals fold to a common form). The raw surface
+            # spelling is still shown in the message.
+            canon = {s: canonical_default(v) for s, v in declared.items()}
+            # Collection-sentinel equivalence: when at least one facade spells
+            # the default as an empty collection (``[]`` / ``{}``) and another
+            # spells it ``None``, both mean "no value" -- fold ``none`` to the
+            # empty-collection form so they compare equal.
+            if any(is_empty_collection_default(v) for v in declared.values()):
+                for s, v in declared.items():
+                    if canon[s] == "none" or is_empty_collection_default(v):
+                        canon[s] = "\0empty-collection\0"
+            distinct = set(canon.values())
             if len(distinct) > 1:
                 rep.findings.append(
                     Finding(
