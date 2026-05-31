@@ -12,11 +12,14 @@ from .types import (
     BpmAnalysisResult,
     ChordAnalysisResult,
     ChromaResult,
+    ClippingReport,
     CqtResult,
+    DynamicRangeReport,
     DynamicsResult,
     EqSpectrumSnapshot,
     GoniometerPoint,
     HpssResult,
+    InverseResult,
     Key,
     KeyCandidate,
     KeyProfile,
@@ -882,4 +885,133 @@ def metering_spectrum(
     db_ref: float = 0.0,
     db_amin: float = 0.0,
 ) -> SpectrumReport: ...
+def metering_peak_db(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> float: ...
+def metering_rms_db(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> float: ...
+def metering_crest_factor_db(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> float: ...
+def metering_dc_offset(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> float: ...
+def metering_true_peak_db(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    oversample_factor: int = 4,
+    *,
+    validate: bool = True,
+) -> float: ...
+def metering_detect_clipping(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    threshold: float = 0.999,
+    min_region_samples: int = 1,
+    *,
+    validate: bool = True,
+) -> ClippingReport: ...
+def metering_dynamic_range(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    window_sec: float = 0.0,
+    hop_sec: float = 0.0,
+    low_percentile: float = 0.0,
+    high_percentile: float = 0.0,
+    *,
+    validate: bool = True,
+) -> DynamicRangeReport: ...
+def scale_quantize_midi(
+    root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
+) -> float: ...
+def scale_correction_semitones(
+    root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
+) -> float: ...
+def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool: ...
+def mel_to_stft(
+    mel: FloatSamples,
+    n_mels: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+) -> InverseResult: ...
+def mel_to_audio(
+    mel: FloatSamples,
+    n_mels: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+    n_iter: int = 32,
+) -> list[float]: ...
+def mfcc_to_mel(
+    mfcc_coeffs: FloatSamples,
+    n_mfcc: int,
+    n_frames: int,
+    n_mels: int = 128,
+) -> InverseResult: ...
+def mfcc_to_audio(
+    mfcc_coeffs: FloatSamples,
+    n_mfcc: int,
+    n_frames: int,
+    n_mels: int = 128,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+    n_iter: int = 32,
+) -> list[float]: ...
+def mastering_dynamics_compressor(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold_db: float = -18.0,
+    ratio: float = 2.0,
+    attack_ms: float = 10.0,
+    release_ms: float = 100.0,
+    knee_db: float = 0.0,
+    makeup_gain_db: float = 0.0,
+    auto_makeup: bool = False,
+    detector: int | str = "rms",
+    sidechain_hpf_enabled: bool = False,
+    sidechain_hpf_hz: float = 100.0,
+    pdr_time_ms: float = 0.0,
+    pdr_release_scale: float = 1.0,
+    validate: bool = True,
+) -> tuple[np.ndarray[Any, Any], int]: ...
+def mastering_dynamics_gate(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold_db: float = -50.0,
+    attack_ms: float = 2.0,
+    release_ms: float = 80.0,
+    range_db: float = -80.0,
+    hold_ms: float = 0.0,
+    close_threshold_db: float = -50.0,
+    key_hpf_hz: float = 0.0,
+    validate: bool = True,
+) -> tuple[np.ndarray[Any, Any], int]: ...
+def mastering_dynamics_transient_shaper(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    attack_gain_db: float = 3.0,
+    sustain_gain_db: float = 0.0,
+    fast_attack_ms: float = 0.0,
+    fast_release_ms: float = 20.0,
+    slow_attack_ms: float = 15.0,
+    slow_release_ms: float = 200.0,
+    sensitivity: float = 1.0,
+    max_gain_db: float = 12.0,
+    gain_smoothing_ms: float = 0.0,
+    lookahead_ms: float = 0.0,
+    validate: bool = True,
+) -> tuple[np.ndarray[Any, Any], int]: ...
 def resample(samples: FloatSamples, src_sr: int, target_sr: int) -> list[float]: ...

@@ -323,6 +323,45 @@ class DynamicsResult:
     @property
     def loudnessRmsDb(self) -> list[float]: ...
 
+class ClippingRegion:
+    start_sample: int
+    end_sample: int
+    length: int
+    peak: float
+    def __init__(self, start_sample: int, end_sample: int, length: int, peak: float) -> None: ...
+
+class ClippingReport:
+    clipped_samples: int
+    clipping_ratio: float
+    max_clipped_peak: float
+    regions: list[ClippingRegion]
+    def __init__(
+        self,
+        clipped_samples: int,
+        clipping_ratio: float,
+        max_clipped_peak: float,
+        regions: list[ClippingRegion],
+    ) -> None: ...
+
+class DynamicRangeReport:
+    dynamic_range_db: float
+    low_percentile_db: float
+    high_percentile_db: float
+    window_rms_db: list[float]
+    def __init__(
+        self,
+        dynamic_range_db: float,
+        low_percentile_db: float,
+        high_percentile_db: float,
+        window_rms_db: list[float],
+    ) -> None: ...
+
+class InverseResult:
+    rows: int
+    n_frames: int
+    data: list[float]
+    def __init__(self, rows: int, n_frames: int, data: list[float]) -> None: ...
+
 class VectorscopeReport:
     mid: NDArray[np.float32]
     side: NDArray[np.float32]
