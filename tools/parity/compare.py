@@ -657,13 +657,14 @@ def _core_default_drift(
                         surface=s,
                         message=(
                             f"core-default drift for '{key}.{p.name}': "
-                            f"{s}={p.default} vs C++ {cfg.struct}.{field_name}={core_def}"
+                            f"{s}={p.default} vs C++ {cfg.name}.{field_name}={core_def}"
                         ),
                         detail={
                             "param": p.name,
                             "facade": p.default,
                             "core": core_def,
-                            "struct": cfg.struct,
+                            "anchor": cfg.name,
+                            "kind": cfg.kind,
                         },
                         location=f"{sig.file}:{sig.line} (core {cfg.header})",
                     )

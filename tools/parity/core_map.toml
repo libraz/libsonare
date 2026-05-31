@@ -161,3 +161,105 @@ struct = "GateConfig"
 [map.mastering_dynamics_transient_shaper]
 header = "src/mastering/dynamics/transient_shaper.h"
 struct = "TransientShaperConfig"
+
+# ---------------------------------------------------------------------------
+# [func.<key>] — functions whose canonical defaults are C++ FREE-FUNCTION
+# DEFAULT ARGUMENTS (no config struct), e.g. `float top_db = 80.0f`. The
+# extractor reads the default args of `cpp_func` in `header` (merging overloads,
+# dropping any param whose default disagrees across overloads). Same comparison
+# as struct-backed entries; sample-rate / buffer params are role-stripped.
+# ---------------------------------------------------------------------------
+
+[func.amplitude_to_db]
+header = "src/core/db_convert.h"
+cpp_func = "amplitude_to_db"
+
+[func.power_to_db]
+header = "src/core/db_convert.h"
+cpp_func = "power_to_db"
+
+[func.db_to_amplitude]
+header = "src/core/db_convert.h"
+cpp_func = "db_to_amplitude"
+
+[func.db_to_power]
+header = "src/core/db_convert.h"
+cpp_func = "db_to_power"
+
+[func.spectral_bandwidth]
+header = "src/feature/spectral.h"
+cpp_func = "spectral_bandwidth"
+
+[func.spectral_rolloff]
+header = "src/feature/spectral.h"
+cpp_func = "spectral_rolloff"
+
+[func.zero_crossing_rate]
+header = "src/feature/spectral.h"
+cpp_func = "zero_crossing_rate"
+
+[func.rms_energy]
+header = "src/feature/spectral.h"
+cpp_func = "rms_energy"
+
+[func.frames_to_samples]
+header = "src/core/convert.h"
+cpp_func = "frames_to_samples"
+
+[func.samples_to_frames]
+header = "src/core/convert.h"
+cpp_func = "samples_to_frames"
+
+[func.preemphasis]
+header = "src/effects/preemphasis.h"
+cpp_func = "preemphasis"
+
+[func.deemphasis]
+header = "src/effects/preemphasis.h"
+cpp_func = "deemphasis"
+
+[func.normalize]
+header = "src/effects/normalize.h"
+cpp_func = "normalize"
+
+[func.trim]
+header = "src/effects/normalize.h"
+cpp_func = "trim"
+
+[func.split_silence]
+header = "src/effects/silence.h"
+cpp_func = "split"
+
+[func.trim_silence]
+header = "src/effects/silence.h"
+cpp_func = "trim"
+
+[func.fix_frames]
+header = "src/util/padding.h"
+cpp_func = "fix_frames"
+
+[func.fix_length]
+header = "src/util/padding.h"
+cpp_func = "fix_length"
+
+[func.pad_center]
+header = "src/util/padding.h"
+cpp_func = "pad_center"
+
+[func.mel_to_audio]
+header = "src/feature/inverse.h"
+cpp_func = "mel_to_audio"
+
+[func.mfcc_to_audio]
+header = "src/feature/inverse.h"
+cpp_func = "mfcc_to_audio"
+
+[func.mfcc_to_mel]
+header = "src/feature/inverse.h"
+cpp_func = "mfcc_to_mel"
+
+[func.vector_normalize]
+header = "src/util/vector_normalize.h"
+cpp_func = "normalize"
+[func.vector_normalize.rename]
+norm_type = "norm"
