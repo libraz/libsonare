@@ -662,7 +662,7 @@ def analyze_sections(
     sample_rate: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
-    min_section_sec: float = 8.0,
+    min_section_sec: float = 4.0,
 ) -> SectionResult:
     """Detect song-structure sections (intro/verse/chorus/...).
 
@@ -714,7 +714,7 @@ def analyze_melody(
     fmin: float = 65.0,
     fmax: float = 2093.0,
     frame_length: int = 2048,
-    hop_length: int = 512,
+    hop_length: int = 256,
     threshold: float = 0.1,
 ) -> MelodyResult:
     """Extract the melody contour from monophonic audio via YIN.

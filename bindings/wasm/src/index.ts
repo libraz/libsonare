@@ -990,7 +990,7 @@ export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResu
 
 export function analyzeImpulseResponse(
   samples: Float32Array,
-  sampleRate = 22050,
+  sampleRate = 48000,
   nOctaveBands = 6,
 ): AcousticResult {
   if (!module) {
@@ -1006,7 +1006,7 @@ export function analyzeImpulseResponse(
 
 export function detectAcoustic(
   samples: Float32Array,
-  sampleRate = 22050,
+  sampleRate = 48000,
   nOctaveBands = 6,
   nThirdOctaveSubbands = 24,
   minDecayDb = 30.0,
@@ -3782,7 +3782,7 @@ export function vqt(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
- * @param minSectionSec - Minimum section duration in seconds (default: 8.0)
+ * @param minSectionSec - Minimum section duration in seconds (default: 4.0)
  * @returns Array of detected sections
  */
 export function analyzeSections(
@@ -3790,7 +3790,7 @@ export function analyzeSections(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
-  minSectionSec = 8.0,
+  minSectionSec = 4.0,
 ): Section[] {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
@@ -3818,7 +3818,7 @@ export function analyzeMelody(
   fmin = 65.0,
   fmax = 2093.0,
   frameLength = 2048,
-  hopLength = 512,
+  hopLength = 256,
   threshold = 0.1,
 ): MelodyResult {
   if (!module) {

@@ -85,11 +85,12 @@ class Mixer:
             raise RuntimeError("libsonare was built without insert-automation support")
         return int(lib.sonare_mixer_strip_count(self._handle))
 
-    def add_bus(self, bus_id: str, role: str | None = None) -> None:
+    def add_bus(self, bus_id: str, role: str = "aux") -> None:
         """Add a bus to the mixer topology.
 
-        ``role`` is one of ``"master"``, ``"aux"``, or ``"submix"`` (``None``
-        defaults to ``"aux"``). The routing graph is marked dirty; call
+        ``role`` is one of ``"master"``, ``"aux"``, or ``"submix"`` and defaults
+        to ``"aux"`` (the C-API canonical default applied for a null role in
+        ``sonare_mixer_add_bus``). The routing graph is marked dirty; call
         :meth:`compile` (or :meth:`process_stereo`) to rebuild.
         """
         self._require()

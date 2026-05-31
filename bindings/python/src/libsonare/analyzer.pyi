@@ -269,7 +269,7 @@ def analyze_sections(
     sample_rate: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
-    min_section_sec: float = 8.0,
+    min_section_sec: float = 4.0,
 ) -> SectionResult: ...
 def analyze_melody(
     samples: FloatSamples,
@@ -277,7 +277,7 @@ def analyze_melody(
     fmin: float = 65.0,
     fmax: float = 2093.0,
     frame_length: int = 2048,
-    hop_length: int = 512,
+    hop_length: int = 256,
     threshold: float = 0.1,
 ) -> MelodyResult: ...
 def cqt(
@@ -353,6 +353,9 @@ class RealtimeVoiceChanger:
     def process_interleaved(
         self, samples: FloatSamples, channels: int | None = None
     ) -> np.ndarray: ...
+    def process_planar_stereo(
+        self, left: FloatSamples, right: FloatSamples
+    ) -> tuple[np.ndarray, np.ndarray]: ...
 
 def voice_change_realtime(
     samples: FloatSamples,
@@ -427,7 +430,7 @@ class Mixer:
     def compile(self) -> None: ...
     def strip_count(self) -> int: ...
     def strip_by_id(self, strip_id: str) -> int: ...
-    def add_bus(self, bus_id: str, role: str | None = None) -> None: ...
+    def add_bus(self, bus_id: str, role: str = "aux") -> None: ...
     def remove_bus(self, bus_id: str) -> None: ...
     def bus_count(self) -> int: ...
     def add_vca_group(

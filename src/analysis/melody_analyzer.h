@@ -27,8 +27,8 @@ struct MelodyContour {
 
 /// @brief Configuration for melody analysis.
 struct MelodyConfig {
-  float fmin = 80.0f;       ///< Minimum frequency in Hz
-  float fmax = 1000.0f;     ///< Maximum frequency in Hz
+  float fmin = 65.0f;       ///< Minimum frequency in Hz (C2)
+  float fmax = 2093.0f;     ///< Maximum frequency in Hz (C7)
   int frame_length = 2048;  ///< Frame length in samples
   int hop_length = 256;     ///< Hop length in samples
   float threshold = 0.1f;   ///< YIN threshold (lower = stricter)

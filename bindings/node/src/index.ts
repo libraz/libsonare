@@ -895,7 +895,7 @@ export function analyzeSections(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
-  minSectionSec = 8.0,
+  minSectionSec = 4.0,
 ): Section[] {
   return addon.analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec);
 }
@@ -907,7 +907,7 @@ export function analyzeMelody(
   fmin = 65.0,
   fmax = 2093.0,
   frameLength = 2048,
-  hopLength = 512,
+  hopLength = 256,
   threshold = 0.1,
 ): MelodyResult {
   return addon.analyzeMelody(samples, sampleRate, fmin, fmax, frameLength, hopLength, threshold);
