@@ -2139,6 +2139,36 @@ class MixerWasm {
     return strip;
   }
 
+  // Sets the strip's input trim in dB.
+  void setInputTrimDb(unsigned int strip_index, float db) {
+    checkStripError(sonare_strip_set_input_trim_db(stripAt(strip_index), db),
+                    "failed to set input trim");
+  }
+
+  // Sets the strip's fader level in dB.
+  void setFaderDb(unsigned int strip_index, float db) {
+    checkStripError(sonare_strip_set_fader_db(stripAt(strip_index), db),
+                    "failed to set fader");
+  }
+
+  // Sets the strip's pan position. pan_mode is processor-specific.
+  void setPan(unsigned int strip_index, float pan, int pan_mode) {
+    checkStripError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode),
+                    "failed to set pan");
+  }
+
+  // Sets the strip's stereo width.
+  void setWidth(unsigned int strip_index, float width) {
+    checkStripError(sonare_strip_set_width(stripAt(strip_index), width),
+                    "failed to set width");
+  }
+
+  // Sets the strip's mute state.
+  void setMuted(unsigned int strip_index, bool muted) {
+    checkStripError(sonare_strip_set_muted(stripAt(strip_index), muted ? 1 : 0),
+                    "failed to set muted");
+  }
+
   // Sets the strip's solo state. Takes effect on the next process without a
   // graph recompile.
   void setSoloed(unsigned int strip_index, bool soloed) {
@@ -5430,6 +5460,11 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("stripCount", &MixerWasm::stripCount)
       .function("scheduleInsertAutomation", &MixerWasm::scheduleInsertAutomation)
       .function("stripById", &MixerWasm::stripById)
+      .function("setInputTrimDb", &MixerWasm::setInputTrimDb)
+      .function("setFaderDb", &MixerWasm::setFaderDb)
+      .function("setPan", &MixerWasm::setPan)
+      .function("setWidth", &MixerWasm::setWidth)
+      .function("setMuted", &MixerWasm::setMuted)
       .function("setSoloed", &MixerWasm::setSoloed)
       .function("setSoloSafe", &MixerWasm::setSoloSafe)
       .function("setPolarityInvert", &MixerWasm::setPolarityInvert)

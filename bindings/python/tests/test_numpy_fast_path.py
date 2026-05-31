@@ -163,6 +163,28 @@ def test_process_interleaved_returns_ndarray() -> None:
     np.testing.assert_array_equal(out[0::2], out[1::2])
 
 
+def test_process_planar_stereo_returns_ndarray_pair() -> None:
+    """``process_planar_stereo`` must return a ``(left, right)`` float32 pair."""
+    sr = 48000
+    n_frames = 512
+    left = _sine(n_frames, sr=sr)
+    right = _sine(n_frames, sr=sr)
+
+    with libsonare.RealtimeVoiceChanger(sr, "bright-idol", max_block_size=128, channels=2) as ch:
+        out_left, out_right = ch.process_planar_stereo(left, right)
+
+    assert isinstance(out_left, np.ndarray)
+    assert isinstance(out_right, np.ndarray)
+    assert out_left.dtype == np.float32
+    assert out_right.dtype == np.float32
+    assert out_left.shape == (n_frames,)
+    assert out_right.shape == (n_frames,)
+    assert np.all(np.isfinite(out_left))
+    assert np.all(np.isfinite(out_right))
+    # Identical L/R input must produce identical L/R output (state symmetry).
+    np.testing.assert_array_equal(out_left, out_right)
+
+
 def test_voice_change_realtime_returns_ndarray() -> None:
     """The offline convenience wrapper must surface the ndarray result."""
     sr = 48000

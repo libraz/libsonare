@@ -1999,6 +1999,13 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_size_t,
         ctypes.c_int,
     ]
+    lib.sonare_realtime_voice_changer_process_planar_stereo.restype = ctypes.c_int32
+    lib.sonare_realtime_voice_changer_process_planar_stereo.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+    ]
     lib.sonare_realtime_voice_changer_latency_samples.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_latency_samples.argtypes = [
         ctypes.c_void_p,

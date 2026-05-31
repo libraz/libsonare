@@ -294,6 +294,22 @@ function panLawCode(panLaw: PanLaw | number): number {
   }
 }
 
+function panModeCode(panMode: PanMode | number): number {
+  if (typeof panMode === 'number') {
+    return panMode;
+  }
+  switch (panMode) {
+    case 'stereoPan':
+    case 'stereo-pan':
+      return 1;
+    case 'dualPan':
+    case 'dual-pan':
+      return 2;
+    default:
+      return 0;
+  }
+}
+
 function meterTapCode(tap: MeterTap | number): number {
   return tap === 'preFader' || tap === 0 ? 0 : 1;
 }
@@ -2691,6 +2707,31 @@ export class Mixer {
   /** Number of VCA groups in the mixer topology. */
   vcaGroupCount(): number {
     return this.mixer.vcaGroupCount();
+  }
+
+  /** Set the strip's input trim in dB. */
+  setInputTrimDb(stripIndex: number, db: number): void {
+    this.mixer.setInputTrimDb(stripIndex, db);
+  }
+
+  /** Set the strip's fader level in dB. */
+  setFaderDb(stripIndex: number, db: number): void {
+    this.mixer.setFaderDb(stripIndex, db);
+  }
+
+  /** Set the strip's pan position. */
+  setPan(stripIndex: number, pan: number, panMode: PanMode | number = 0): void {
+    this.mixer.setPan(stripIndex, pan, panModeCode(panMode));
+  }
+
+  /** Set the strip's stereo width. */
+  setWidth(stripIndex: number, width: number): void {
+    this.mixer.setWidth(stripIndex, width);
+  }
+
+  /** Set the strip's mute state. */
+  setMuted(stripIndex: number, muted: boolean): void {
+    this.mixer.setMuted(stripIndex, muted);
   }
 
   /**

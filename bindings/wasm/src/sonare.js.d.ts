@@ -1459,6 +1459,11 @@ export interface WasmMixer {
     curve: number,
   ) => void;
   stripById: (id: string) => number;
+  setInputTrimDb: (stripIndex: number, db: number) => void;
+  setFaderDb: (stripIndex: number, db: number) => void;
+  setPan: (stripIndex: number, pan: number, panMode: number) => void;
+  setWidth: (stripIndex: number, width: number) => void;
+  setMuted: (stripIndex: number, muted: boolean) => void;
   setSoloed: (stripIndex: number, soloed: boolean) => void;
   setSoloSafe: (stripIndex: number, soloSafe: boolean) => void;
   setPolarityInvert: (stripIndex: number, invertLeft: boolean, invertRight: boolean) => void;

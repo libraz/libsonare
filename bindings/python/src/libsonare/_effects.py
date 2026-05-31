@@ -472,6 +472,39 @@ class RealtimeVoiceChanger:
             _check(rc)
         return out_buf
 
+    def process_planar_stereo(
+        self,
+        left: Sequence[float] | list[float] | np.ndarray,
+        right: Sequence[float] | list[float] | np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Process planar (non-interleaved) stereo audio block-by-block.
+
+        ``left`` and ``right`` are separate channel buffers of equal length.
+        The handle must have been prepared with at least 2 channels. Returns a
+        ``(left, right)`` tuple of ``numpy.ndarray`` (dtype ``float32``)
+        processed in place.
+        """
+        left_buf = _as_float32_buffer(left)
+        right_buf = _as_float32_buffer(right)
+        total = int(left_buf.shape[0])
+        if total != int(right_buf.shape[0]):
+            raise ValueError("left and right channels must have equal length")
+        # Copy into fresh contiguous output buffers; the C call mutates in place.
+        out_left = np.array(left_buf, dtype=np.float32, copy=True)
+        out_right = np.array(right_buf, dtype=np.float32, copy=True)
+        step = self._max_block_size
+        for pos in range(0, total, step):
+            length = min(step, total - pos)
+            l_block = out_left[pos : pos + length]
+            r_block = out_right[pos : pos + length]
+            c_left = (ctypes.c_float * length).from_buffer(l_block)
+            c_right = (ctypes.c_float * length).from_buffer(r_block)
+            rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
+                self._handle, c_left, c_right, ctypes.c_size_t(length)
+            )
+            _check(rc)
+        return out_left, out_right
+
 
 def voice_change_realtime(
     samples: Sequence[float] | list[float] | np.ndarray,

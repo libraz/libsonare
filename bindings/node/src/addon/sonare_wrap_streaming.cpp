@@ -723,6 +723,7 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleaved>("processInterleaved"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedInto>(
               "processInterleavedInto"),
+          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereo>("processPlanarStereo"),
       });
 
   constructor_ = Napi::Persistent(func);
@@ -955,6 +956,43 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::Callbac
       out_data[i * static_cast<size_t>(channels) + ch] = src[i];
     }
   }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!prepared_) {
+    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "Expected (leftFloat32Array, rightFloat32Array)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (channels_ < 2) {
+    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared with at least 2 channels")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  Napi::Float32Array left = info[0].As<Napi::Float32Array>();
+  Napi::Float32Array right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::RangeError::New(env, "left and right lengths must match").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t frames = left.ElementLength();
+  if (frames > static_cast<size_t>(max_block_size_)) {
+    Napi::RangeError::New(env, "block exceeds maxBlockSize").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  // In-place planar stereo: the planar process_block reads and writes the
+  // supplied channel buffers directly, so the caller's L/R arrays are mutated.
+  float* channels[2] = {left.Data(), right.Data()};
+  changer_.process_block(channels, 2, static_cast<int>(frames));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

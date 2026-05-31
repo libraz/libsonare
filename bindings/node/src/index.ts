@@ -571,6 +571,16 @@ export class RealtimeVoiceChanger {
     this.native.processInterleavedInto(input, channels, output);
   }
 
+  /**
+   * Process a block of planar (non-interleaved) stereo audio in place. The
+   * `left` and `right` buffers must have equal length and are mutated with the
+   * processed output. Requires the changer to have been prepared with at least
+   * 2 channels.
+   */
+  processPlanarStereo(left: Float32Array, right: Float32Array): void {
+    this.native.processPlanarStereo(left, right);
+  }
+
   destroy(): void {
     // N-API ObjectWrap instances do not have a `.delete` method, so this guard
     // is purely defensive in case the native binding ever exposes one. The
@@ -2769,6 +2779,31 @@ export class Mixer {
   /** Number of VCA groups in the mixer topology. */
   vcaGroupCount(): number {
     return this.native.vcaGroupCount();
+  }
+
+  /** Set a strip's input trim in dB (applied before the channel processing). */
+  setInputTrimDb(strip: StripRef, db: number): void {
+    this.native.setInputTrimDb(strip, db);
+  }
+
+  /** Set a strip's fader gain in dB. */
+  setFaderDb(strip: StripRef, db: number): void {
+    this.native.setFaderDb(strip, db);
+  }
+
+  /** Set a strip's pan position (-1..1) with an optional pan mode. */
+  setPan(strip: StripRef, pan: number, panMode = 0): void {
+    this.native.setPan(strip, pan, panMode);
+  }
+
+  /** Set a strip's stereo width (0 = mono, 1 = original, >1 = widened). */
+  setWidth(strip: StripRef, width: number): void {
+    this.native.setWidth(strip, width);
+  }
+
+  /** Set a strip's mute state. */
+  setMuted(strip: StripRef, muted: boolean): void {
+    this.native.setMuted(strip, muted);
   }
 
   /** Set a strip's solo state. Takes effect on the next process (no recompile). */

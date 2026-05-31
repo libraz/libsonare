@@ -117,6 +117,7 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   Napi::Value ProcessMonoInto(const Napi::CallbackInfo& info);
   Napi::Value ProcessInterleaved(const Napi::CallbackInfo& info);
   Napi::Value ProcessInterleavedInto(const Napi::CallbackInfo& info);
+  Napi::Value ProcessPlanarStereo(const Napi::CallbackInfo& info);
 
   sonare::editing::voice_changer::RealtimeVoiceChanger changer_;
   bool prepared_ = false;

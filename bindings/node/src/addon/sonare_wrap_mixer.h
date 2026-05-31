@@ -44,6 +44,11 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   void Destroy(const Napi::CallbackInfo& info);
 
   // Strip-targeted state setters.
+  Napi::Value SetInputTrimDb(const Napi::CallbackInfo& info);
+  Napi::Value SetFaderDb(const Napi::CallbackInfo& info);
+  Napi::Value SetPan(const Napi::CallbackInfo& info);
+  Napi::Value SetWidth(const Napi::CallbackInfo& info);
+  Napi::Value SetMuted(const Napi::CallbackInfo& info);
   Napi::Value SetSoloed(const Napi::CallbackInfo& info);
   Napi::Value SetSoloSafe(const Napi::CallbackInfo& info);
   Napi::Value SetPolarityInvert(const Napi::CallbackInfo& info);

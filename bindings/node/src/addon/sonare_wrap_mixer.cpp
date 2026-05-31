@@ -46,6 +46,11 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation"),
           InstanceMethod<&MixerWrap::ToSceneJson>("toSceneJson"),
           InstanceMethod<&MixerWrap::Destroy>("destroy"),
+          InstanceMethod<&MixerWrap::SetInputTrimDb>("setInputTrimDb"),
+          InstanceMethod<&MixerWrap::SetFaderDb>("setFaderDb"),
+          InstanceMethod<&MixerWrap::SetPan>("setPan"),
+          InstanceMethod<&MixerWrap::SetWidth>("setWidth"),
+          InstanceMethod<&MixerWrap::SetMuted>("setMuted"),
           InstanceMethod<&MixerWrap::SetSoloed>("setSoloed"),
           InstanceMethod<&MixerWrap::SetSoloSafe>("setSoloSafe"),
           InstanceMethod<&MixerWrap::SetPolarityInvert>("setPolarityInvert"),
@@ -294,6 +299,100 @@ SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi:
         .ThrowAsJavaScriptException();
   }
   return strip;
+}
+
+Napi::Value MixerWrap::SetInputTrimDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, db: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_input_trim_db(strip, info[1].As<Napi::Number>().FloatValue());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env,
+                     std::string("failed to set strip input trim: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetFaderDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, db: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_fader_db(strip, info[1].As<Napi::Number>().FloatValue());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip fader: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, pan: number, panMode?: number)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const int pan_mode =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 0;
+  SonareError err = sonare_strip_set_pan(strip, info[1].As<Napi::Number>().FloatValue(), pan_mode);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip pan: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetWidth(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, width: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_width(strip, info[1].As<Napi::Number>().FloatValue());
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip width: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetMuted(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsBoolean()) {
+    Napi::TypeError::New(env, "Expected (strip, muted: boolean)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_set_muted(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to set strip muted: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
 }
 
 Napi::Value MixerWrap::SetSoloed(const Napi::CallbackInfo& info) {
