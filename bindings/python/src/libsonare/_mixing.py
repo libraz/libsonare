@@ -252,6 +252,31 @@ class Mixer:
             )
         )
 
+    def set_fader_db(self, strip: StripRef, db: float) -> None:
+        """Set a strip's fader gain in dB (takes effect without a recompile)."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_fader_db(handle, ctypes.c_float(db)))
+
+    def set_input_trim_db(self, strip: StripRef, db: float) -> None:
+        """Set a strip's input trim in dB."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_input_trim_db(handle, ctypes.c_float(db)))
+
+    def set_pan(self, strip: StripRef, pan: float, pan_mode: int = 0) -> None:
+        """Set a strip's pan position (``pan_mode``: 0=balance, 1=stereo, 2=dual)."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_pan(handle, ctypes.c_float(pan), ctypes.c_int(pan_mode)))
+
+    def set_width(self, strip: StripRef, width: float) -> None:
+        """Set a strip's stereo width."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_width(handle, ctypes.c_float(width)))
+
+    def set_muted(self, strip: StripRef, muted: bool) -> None:
+        """Set a strip's mute state (takes effect without a recompile)."""
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_set_muted(handle, ctypes.c_int(1 if muted else 0)))
+
     def add_send(
         self,
         strip: StripRef,
