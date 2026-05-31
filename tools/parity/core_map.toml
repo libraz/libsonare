@@ -78,3 +78,86 @@ struct = "VqtConfig"
 [map.pitch_yin]
 header = "src/feature/pitch.h"
 struct = "PitchConfig"
+
+[map.pitch_pyin]
+header = "src/feature/pitch.h"
+struct = "PitchConfig"
+
+[map.chroma]
+header = "src/feature/chroma.h"
+struct = "ChromaConfig"
+
+[map.hpss]
+header = "src/effects/hpss.h"
+struct = "HpssConfig"
+[map.hpss.rename]
+kernel_harmonic = "kernel_size_harmonic"
+kernel_percussive = "kernel_size_percussive"
+
+[map.tempogram]
+header = "src/feature/rhythm.h"
+struct = "TempogramConfig"
+
+[map.cyclic_tempogram]
+header = "src/feature/rhythm.h"
+struct = "TempogramConfig"
+
+[map.fourier_tempogram]
+header = "src/feature/rhythm.h"
+struct = "TempogramConfig"
+
+[map.plp]
+header = "src/feature/rhythm.h"
+struct = "PlpConfig"
+
+[map.pcen]
+header = "src/core/pcen.h"
+struct = "PcenConfig"
+
+[map.detect_key_candidates]
+header = "src/analysis/key_analyzer.h"
+struct = "KeyConfig"
+
+# Mastering processors are hand-written across all four bindings (the codegen
+# system documented in CLAUDE.md was removed from this branch), so their facade
+# defaults are only checked facade-vs-facade unless anchored here on the C++
+# core config struct.
+[map.mastering_repair_declick]
+header = "src/mastering/repair/declick.h"
+struct = "DeclickConfig"
+
+[map.mastering_repair_declip]
+header = "src/mastering/repair/declip.h"
+struct = "DeclipConfig"
+
+[map.mastering_repair_decrackle]
+header = "src/mastering/repair/decrackle.h"
+struct = "DecrackleConfig"
+
+[map.mastering_repair_dehum]
+header = "src/mastering/repair/dehum.h"
+struct = "DehumConfig"
+
+[map.mastering_repair_denoise_classical]
+header = "src/mastering/repair/denoise_classical.h"
+struct = "DenoiseClassicalConfig"
+
+[map.mastering_repair_dereverb_classical]
+header = "src/mastering/repair/dereverb_classical.h"
+struct = "DereverbClassicalConfig"
+
+[map.mastering_repair_trim_silence]
+header = "src/mastering/repair/trim_silence.h"
+struct = "TrimSilenceConfig"
+
+[map.mastering_dynamics_compressor]
+header = "src/mastering/dynamics/compressor.h"
+struct = "CompressorConfig"
+
+[map.mastering_dynamics_gate]
+header = "src/mastering/dynamics/gate.h"
+struct = "GateConfig"
+
+[map.mastering_dynamics_transient_shaper]
+header = "src/mastering/dynamics/transient_shaper.h"
+struct = "TransientShaperConfig"

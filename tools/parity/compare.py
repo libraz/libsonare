@@ -27,10 +27,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import re
+
 from allowlist import Allowlist
 from core_defaults import CoreConfig
 from model import Extraction, FunctionSig
-from normalize import canonical_default, is_empty_collection_default
+from normalize import (
+    canonical_core_default,
+    canonical_default,
+    is_empty_collection_default,
+)
 
 # Language facade surfaces that share defaults (C carries none).
 _FACADE_SURFACES = ("python", "node", "wasm")
@@ -627,7 +633,21 @@ def _core_default_drift(
                     continue
                 if allow.core_default_ok(key, p.name):
                     continue
-                if canonical_default(p.default) == canonical_default(core_def):
+                if "::" in core_def:
+                    # Enum-member core default. The facade may spell it as a
+                    # member string ('stft') or a bare integer (0). We can fold
+                    # the string spelling to compare, but an integer needs an
+                    # enum value table we don't carry -- skip the integer case
+                    # rather than risk a false positive (the facade-vs-facade
+                    # enum-set check already guards enum consistency).
+                    facade_canon = canonical_default(p.default)
+                    if facade_canon is not None and re.fullmatch(
+                        r"-?\d+", facade_canon
+                    ):
+                        continue
+                    if facade_canon == canonical_core_default(core_def):
+                        continue
+                elif canonical_default(p.default) == canonical_default(core_def):
                     continue
                 field_name = cfg.rename.get(p.name, p.name)
                 rep.findings.append(

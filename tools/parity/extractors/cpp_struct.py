@@ -5,14 +5,26 @@ config parameter is the field initializer in its C++ core struct (e.g.
 ``struct MelodyConfig { float fmin = 65.0f; ... };``). Those values are compared
 against the defaults each binding facade declares.
 
-Only SIMPLE LITERAL initializers are extracted -- a numeric literal
-(``65.0f`` / ``2048`` / ``-1``) or a boolean (``true`` / ``false``). Enum
-members (``WindowType::Hann``), named constants (``constants::kC1Hz``), string
-literals (``"auto"``) and braced / aggregate initializers (``{Mode::Major}``)
-are intentionally SKIPPED: they cannot be compared to a facade default without a
-value-resolution layer, and skipping keeps the check free of false positives.
+Three kinds of field initializer are recognized:
+
+* numeric / boolean literal (``65.0f`` / ``2048`` / ``true``) -- kept verbatim.
+* named-constant reference (``constants::kC1Hz`` / ``chord_constants::kFoo``)
+  -- RESOLVED to the constant's literal value via :func:`scan_constants` (only
+  constants defined as a direct numeric literal are resolvable; computed ones
+  fall through and are skipped).
+* enum-member reference (``WindowType::Hann`` / ``TempogramMode::kAutocorrelation``)
+  -- kept verbatim as ``Type::Member``; the comparison side canonicalizes it.
+
+String literals (``"auto"``) and braced / aggregate initializers
+(``{Mode::Major}``) are SKIPPED -- they cannot be compared to a facade default
+without more machinery, and skipping keeps the check free of false positives.
 Nested scopes (method bodies, braced initializers) are dropped before matching,
 so only the struct's own field initializers are seen.
+
+Disambiguation of the Google-style ``k``-prefix: enum members (``kAutocorrelation``)
+and constants (``kC1Hz``) share a name shape, so a qualified RHS is resolved as a
+CONSTANT first (looked up in the scanned constants map); only if that lookup
+fails is it treated as an enum member.
 """
 
 from __future__ import annotations
@@ -26,6 +38,31 @@ _FIELD_RE = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*([^;{}]+?)\s*;")
 
 # A simple numeric literal (optionally signed, with C++ float / int suffixes).
 _NUMERIC_RE = re.compile(r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[fFlLuU]*$")
+
+# A qualified name ``Ns::...::Member`` (enum member or qualified constant ref).
+_QUALIFIED_RE = re.compile(r"^(?:[A-Za-z_]\w*::)+[A-Za-z_]\w*$")
+
+# A ``constexpr`` / ``const`` numeric constant definition: ``kName = <literal>;``.
+_CONST_RE = re.compile(
+    r"\bconst(?:expr)?\s+[A-Za-z_][\w:]*\s+(k[A-Za-z]\w*)\s*=\s*([^;{}]+?)\s*;"
+)
+
+
+def scan_constants(paths: list[Path]) -> dict[str, str]:
+    """Map ``kName -> literal`` for every direct-numeric-literal constant found.
+
+    Scans each header for ``[inline|static] const[expr] <type> kName = <num>;``.
+    Computed constants (RHS not a bare numeric literal) are skipped.
+    """
+    out: dict[str, str] = {}
+    for p in paths:
+        if not p.exists():
+            continue
+        for name, rhs in _CONST_RE.findall(p.read_text(encoding="utf-8")):
+            rhs = rhs.strip()
+            if _NUMERIC_RE.match(rhs):
+                out.setdefault(name, rhs)
+    return out
 
 
 def _struct_body(text: str, struct_name: str) -> str | None:
@@ -64,12 +101,17 @@ def _depth0(body: str) -> str:
     return "".join(out)
 
 
-def extract_struct_defaults(header_path: Path, struct_name: str) -> dict[str, str]:
-    """Map ``field_name -> literal default`` for one C++ struct.
+def extract_struct_defaults(
+    header_path: Path, struct_name: str, constants: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Map ``field_name -> default`` for one C++ struct.
 
-    Returns only fields whose initializer is a numeric or boolean literal.
-    Returns an empty dict if the file or struct is not found.
+    The default is a numeric / boolean literal, a resolved named constant's
+    literal, or a raw ``Type::Member`` enum reference. Fields whose initializer
+    is none of these (string literal, aggregate, unresolved constant) are
+    omitted. Returns an empty dict if the file or struct is not found.
     """
+    constants = constants or {}
     if not header_path.exists():
         return {}
     body = _struct_body(header_path.read_text(encoding="utf-8"), struct_name)
@@ -79,5 +121,15 @@ def extract_struct_defaults(header_path: Path, struct_name: str) -> dict[str, st
     for name, rhs in _FIELD_RE.findall(_depth0(body)):
         rhs = rhs.strip()
         if _NUMERIC_RE.match(rhs) or rhs in ("true", "false"):
+            out.setdefault(name, rhs)
+            continue
+        # Resolve a named-constant reference (bare ``kFoo`` or ``ns::kFoo``)
+        # FIRST so a ``k``-prefixed constant is not mistaken for an enum member.
+        final = rhs.split("::")[-1]
+        if final in constants:
+            out.setdefault(name, constants[final])
+            continue
+        # Otherwise a qualified ``Type::Member`` is an enum member reference.
+        if _QUALIFIED_RE.match(rhs):
             out.setdefault(name, rhs)
     return out

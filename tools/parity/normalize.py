@@ -184,3 +184,25 @@ def canonical_default(value: str | None) -> str | None:
     if re.fullmatch(r"[A-Za-z][A-Za-z0-9_\-]*", norm):
         return _alnum_fold(norm)
     return norm
+
+
+def canonical_core_default(value: str | None) -> str | None:
+    """Canonicalize a C++ CORE struct default (literal or ``Type::Member``).
+
+    Numeric / boolean / resolved-constant literals go through
+    :func:`canonical_default`. A C++ enum-member reference ``Type::Member`` is
+    folded to its member name (dropping a Google-style leading ``k`` before an
+    uppercase letter, so ``TempogramMode::kAutocorrelation`` -> ``autocorrelation``
+    matches the facade string ``'autocorrelation'``; ``ChromaMethod::STFT`` ->
+    ``stft``). This mirrors how :func:`canonical_default` folds the facade-side
+    enum spelling, so the two compare equal when they denote the same member.
+    """
+    if value is None:
+        return None
+    v = value.strip()
+    if "::" in v:
+        member = v.split("::")[-1]
+        if len(member) >= 2 and member[0] == "k" and member[1].isupper():
+            member = member[1:]
+        return _alnum_fold(member)
+    return canonical_default(v)

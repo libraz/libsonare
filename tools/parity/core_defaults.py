@@ -12,7 +12,12 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from extractors.cpp_struct import extract_struct_defaults
+from extractors.cpp_struct import extract_struct_defaults, scan_constants
+
+# Headers always scanned for named numeric constants (in addition to every
+# header named in core_map.toml, where module-local constants like
+# ``chord_constants::*`` live).
+_GLOBAL_CONSTANT_HEADERS = ("src/util/constants.h",)
 
 
 @dataclass
@@ -37,12 +42,18 @@ def load(map_path: Path, root: Path) -> dict[str, CoreConfig]:
     if not map_path.exists():
         return {}
     data = tomllib.loads(map_path.read_text(encoding="utf-8"))
+    entries = data.get("map", {})
+    # Scan constants from the global header(s) plus every mapped struct's header
+    # (module-local constants such as ``chord_constants::*`` are defined there).
+    const_headers = [root / h for h in _GLOBAL_CONSTANT_HEADERS]
+    const_headers += [root / spec["header"] for spec in entries.values()]
+    constants = scan_constants(const_headers)
     out: dict[str, CoreConfig] = {}
-    for key, spec in data.get("map", {}).items():
+    for key, spec in entries.items():
         header = spec["header"]
         struct = spec["struct"]
         rename = dict(spec.get("rename", {}))
-        fields = extract_struct_defaults(root / header, struct)
+        fields = extract_struct_defaults(root / header, struct, constants)
         out[key] = CoreConfig(
             key=key, header=header, struct=struct, fields=fields, rename=rename
         )
