@@ -77,9 +77,7 @@ class TestEmptyGuards:
             mastering_dynamics_compressor(np.empty(0, dtype=np.float32), SR)
 
     def test_mastering_dynamics_gate_rejects_empty(self):
-        with pytest.raises(
-            ValueError, match=r"mastering_dynamics_gate: samples must not be empty"
-        ):
+        with pytest.raises(ValueError, match=r"mastering_dynamics_gate: samples must not be empty"):
             mastering_dynamics_gate(np.empty(0, dtype=np.float32), SR)
 
     def test_mastering_dynamics_transient_shaper_rejects_empty(self):
@@ -94,9 +92,7 @@ class TestEmptyGuards:
             voice_change(np.empty(0, dtype=np.float32))
 
     def test_voice_change_realtime_rejects_empty(self):
-        with pytest.raises(
-            ValueError, match=r"voice_change_realtime: samples must not be empty"
-        ):
+        with pytest.raises(ValueError, match=r"voice_change_realtime: samples must not be empty"):
             voice_change_realtime(np.empty(0, dtype=np.float32))
 
 

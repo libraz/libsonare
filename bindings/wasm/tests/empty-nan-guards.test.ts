@@ -84,7 +84,9 @@ describe('empty-sample guards (WASM)', () => {
     );
   });
   it('voiceChange rejects empty', () => {
-    expect(() => voiceChange(new Float32Array(0))).toThrow(/voiceChange: samples must not be empty/);
+    expect(() => voiceChange(new Float32Array(0))).toThrow(
+      /voiceChange: samples must not be empty/,
+    );
   });
 });
 
@@ -119,9 +121,9 @@ describe('validate=false skips NaN check (WASM)', () => {
     );
   });
   it('masteringDynamicsCompressor with validate=false does not throw on NaN', () => {
-    expect(() =>
-      masteringDynamicsCompressor(withNaN(), SR, { validate: false }),
-    ).not.toThrow(/samples contains NaN or Inf/);
+    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).not.toThrow(
+      /samples contains NaN or Inf/,
+    );
   });
 });
 

@@ -637,9 +637,7 @@ def short_term_lufs(
 # ============================================================================
 
 
-def _metering_scalar(
-    name: str, samples, sample_rate: int, *, validate: bool = True
-) -> float:
+def _metering_scalar(name: str, samples, sample_rate: int, *, validate: bool = True) -> float:
     samples = _validate_samples(name, samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -653,21 +651,15 @@ def _metering_scalar(
 
 def metering_peak_db(samples, sample_rate: int = 22050, *, validate: bool = True) -> float:
     """Sample-peak in dBFS over the buffer."""
-    return _metering_scalar(
-        "sonare_metering_peak_db", samples, sample_rate, validate=validate
-    )
+    return _metering_scalar("sonare_metering_peak_db", samples, sample_rate, validate=validate)
 
 
 def metering_rms_db(samples, sample_rate: int = 22050, *, validate: bool = True) -> float:
     """RMS level in dBFS over the buffer."""
-    return _metering_scalar(
-        "sonare_metering_rms_db", samples, sample_rate, validate=validate
-    )
+    return _metering_scalar("sonare_metering_rms_db", samples, sample_rate, validate=validate)
 
 
-def metering_crest_factor_db(
-    samples, sample_rate: int = 22050, *, validate: bool = True
-) -> float:
+def metering_crest_factor_db(samples, sample_rate: int = 22050, *, validate: bool = True) -> float:
     """Crest factor in dB (peak_db - rms_db)."""
     return _metering_scalar(
         "sonare_metering_crest_factor_db", samples, sample_rate, validate=validate
@@ -676,9 +668,7 @@ def metering_crest_factor_db(
 
 def metering_dc_offset(samples, sample_rate: int = 22050, *, validate: bool = True) -> float:
     """DC offset (mean) of the buffer in linear amplitude."""
-    return _metering_scalar(
-        "sonare_metering_dc_offset", samples, sample_rate, validate=validate
-    )
+    return _metering_scalar("sonare_metering_dc_offset", samples, sample_rate, validate=validate)
 
 
 def metering_true_peak_db(
@@ -750,9 +740,7 @@ def metering_detect_clipping(
         lib.sonare_free_clipping_result(ctypes.byref(out))
 
 
-def _stereo_scalar(
-    name: str, left, right, sample_rate: int, *, validate: bool = True
-) -> float:
+def _stereo_scalar(name: str, left, right, sample_rate: int, *, validate: bool = True) -> float:
     left = _validate_samples(name, left, validate=validate, arg_name="left")
     right = _validate_samples(name, right, validate=validate, arg_name="right")
     lib = _get_lib()
@@ -785,9 +773,7 @@ def metering_stereo_correlation(
     )
 
 
-def metering_stereo_width(
-    left, right, sample_rate: int = 22050, *, validate: bool = True
-) -> float:
+def metering_stereo_width(left, right, sample_rate: int = 22050, *, validate: bool = True) -> float:
     """Side / mid energy ratio: 0 = pure mono, ~1 = wide stereo."""
     return _stereo_scalar(
         "sonare_metering_stereo_width",
@@ -802,12 +788,8 @@ def metering_vectorscope(
     left, right, sample_rate: int = 22050, *, validate: bool = True
 ) -> VectorscopeReport:
     """Per-sample mid/side point series for a (left, right) stereo pair."""
-    left = _validate_samples(
-        "metering_vectorscope", left, validate=validate, arg_name="left"
-    )
-    right = _validate_samples(
-        "metering_vectorscope", right, validate=validate, arg_name="right"
-    )
+    left = _validate_samples("metering_vectorscope", left, validate=validate, arg_name="left")
+    right = _validate_samples("metering_vectorscope", right, validate=validate, arg_name="right")
     lib = _get_lib()
     left_array, left_len = _to_c_float_array(left)
     right_array, right_len = _to_c_float_array(right)
@@ -844,12 +826,8 @@ def metering_phase_scope(
     left, right, sample_rate: int = 22050, *, validate: bool = True
 ) -> PhaseScopeReport:
     """Phase-scope point series plus summary stats for a stereo pair."""
-    left = _validate_samples(
-        "metering_phase_scope", left, validate=validate, arg_name="left"
-    )
-    right = _validate_samples(
-        "metering_phase_scope", right, validate=validate, arg_name="right"
-    )
+    left = _validate_samples("metering_phase_scope", left, validate=validate, arg_name="left")
+    right = _validate_samples("metering_phase_scope", right, validate=validate, arg_name="right")
     lib = _get_lib()
     left_array, left_len = _to_c_float_array(left)
     right_array, right_len = _to_c_float_array(right)
@@ -1019,9 +997,7 @@ def scale_quantize_midi(
     ``reference_midi`` selects the anchor (default A4 = 69).
     """
     midi = _validate_scalar("scale_quantize_midi", midi, "midi")
-    reference_midi = _validate_scalar(
-        "scale_quantize_midi", reference_midi, "reference_midi"
-    )
+    reference_midi = _validate_scalar("scale_quantize_midi", reference_midi, "reference_midi")
     return _scale_scalar("sonare_scale_quantize_midi", root, mode_mask, reference_midi, midi)
 
 

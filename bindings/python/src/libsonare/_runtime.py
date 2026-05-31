@@ -68,9 +68,7 @@ def _validate_samples(
         finite = np.isfinite(buf)
         if not bool(finite.all()):
             bad = int(np.argmin(finite))
-            raise ValueError(
-                f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}"
-            )
+            raise ValueError(f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}")
     return buf
 
 
