@@ -313,6 +313,16 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);
+/// @brief Fills @p options with documented defaults for sonare_engine_bounce_offline.
+/// @details This is the canonical source of bounce-option defaults for all
+///   language bindings. Callers should invoke this helper first and then
+///   override only the fields they care about, which guarantees the same
+///   normalization target (SONARE_DEFAULT_BOUNCE_TARGET_LUFS) across the C,
+///   Node, Python and WASM facades.
+/// @param options Output struct; must not be NULL.
+/// @return @c SONARE_OK on success or @c SONARE_ERROR_INVALID_PARAMETER if
+///         @p options is NULL.
+SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options);
 /// @brief Free the heap-allocated buffer held by a bounce result.
 /// @param result Result whose @c interleaved buffer is deleted and nulled.
 void sonare_free_bounce_result(SonareEngineBounceResult* result);

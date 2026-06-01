@@ -5117,7 +5117,12 @@ class RealtimeEngineWasm {
     std::vector<float> interleaved = interleave(channels);
     const size_t frames = channels.empty() ? 0 : channels[0].size();
     if (boolProperty(options_val, "normalizeLufs", false)) {
-      const float target_lufs = floatProperty(options_val, "targetLufs", -14.0f);
+      // Pull the canonical fallback target from the C API so the WASM facade
+      // never drifts away from the C/Node/Python bounce normalization target.
+      // See SONARE_DEFAULT_BOUNCE_TARGET_LUFS in src/sonare_c_types.h and the
+      // sentinel handling in sonare_engine_bounce_offline.
+      const float target_lufs =
+          floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
       const auto loudness =
           metering::lufs_interleaved(interleaved.data(), frames, num_channels, target_sample_rate);
       if (std::isfinite(loudness.integrated_lufs)) {

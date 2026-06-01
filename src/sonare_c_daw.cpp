@@ -134,6 +134,27 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
 
 namespace {
 
+// Pin the PPQ-domain automation curve ordinal mapping used by
+// sonare_engine_set_automation_lane (via SonareAutomationPoint.curve_to_next).
+// A reorder of automation::CurveType in src/automation/parameter.h would
+// silently re-map every persisted SonareAutomationPoint without these asserts.
+// IMPORTANT: this scheme (0=Hold, 1=Linear, 2=Exponential, 3=SCurve) is
+// intentionally DIFFERENT from the sample-accurate scheme used by
+// sonare_strip_schedule_*_automation in sonare_c_mixing.cpp
+// (which maps 0=Linear, 1=Exponential, 2=Hold, 3=SCurve onto the unrelated
+// mixing::AutomationCurveType enum). The two C APIs target different C++
+// subsystems and the divergence is documented at each API surface; do NOT
+// unify them without an ABI break.
+static_assert(static_cast<int>(automation::CurveType::kHold) == 0,
+              "automation::CurveType::kHold must be ordinal 0 to keep "
+              "SonareAutomationPoint.curve_to_next ABI stable");
+static_assert(static_cast<int>(automation::CurveType::kLinear) == 1,
+              "automation::CurveType::kLinear must be ordinal 1");
+static_assert(static_cast<int>(automation::CurveType::kExponential) == 2,
+              "automation::CurveType::kExponential must be ordinal 2");
+static_assert(static_cast<int>(automation::CurveType::kSCurve) == 3,
+              "automation::CurveType::kSCurve must be ordinal 3");
+
 automation::CurveType curve_from_int(int curve) {
   switch (curve) {
     case 0:
@@ -739,6 +760,21 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
   SONARE_C_CATCH
 }
 
+SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options) {
+  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  *options = SonareEngineBounceOptions{};
+  options->block_size = 128;
+  options->num_channels = 2;
+  options->target_sample_rate = 48000;
+  options->source_sample_rate = 48000;
+  options->normalize_lufs = 0;
+  options->target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
+  options->dither = 0;
+  options->dither_bits = 16;
+  options->dither_seed = 0;
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out) {
@@ -763,10 +799,22 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   channels = resample_channels(channels, options->source_sample_rate, options->target_sample_rate);
   std::vector<float> interleaved = interleave_channels(channels);
   if (options->normalize_lufs) {
+    // target_lufs == 0.0f is the documented "use default" sentinel; promote it
+    // to the canonical SONARE_DEFAULT_BOUNCE_TARGET_LUFS so a zero-initialised
+    // SonareEngineBounceOptions normalises to the same target regardless of
+    // which binding (C, Node, Python, WASM) populated the struct. The
+    // static_assert below pins the macro to the value the WASM wrapper used
+    // to hardcode at the embind layer (see src/wasm/bindings.cpp::bounceOffline).
+    static_assert(SONARE_DEFAULT_BOUNCE_TARGET_LUFS == -14.0f,
+                  "SONARE_DEFAULT_BOUNCE_TARGET_LUFS must match the WASM/Node "
+                  "facade default to keep cross-binding bounce behaviour identical");
+    const float effective_target_lufs =
+        options->target_lufs == 0.0f ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS : options->target_lufs;
     const auto loudness = metering::lufs_interleaved(
         interleaved.data(), channels[0].size(), options->num_channels, options->target_sample_rate);
     if (std::isfinite(loudness.integrated_lufs)) {
-      const float gain = std::pow(10.0f, (options->target_lufs - loudness.integrated_lufs) / 20.0f);
+      const float gain =
+          std::pow(10.0f, (effective_target_lufs - loudness.integrated_lufs) / 20.0f);
       for (auto& sample : interleaved) {
         sample *= gain;
       }

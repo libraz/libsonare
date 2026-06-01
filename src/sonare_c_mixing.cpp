@@ -22,6 +22,27 @@
 
 namespace {
 
+// Pin the sample-accurate mixing automation curve ordinal mapping used by
+// sonare_strip_schedule_*_automation. A reorder of
+// sonare::mixing::AutomationCurveType in src/mixing/automation_lane.h would
+// silently remap every queued strip-automation curve without these asserts.
+// IMPORTANT: this scheme (0=Linear, 1=Exponential, 2=Hold, 3=SCurve) is
+// intentionally DIFFERENT from the PPQ-domain scheme used by
+// SonareAutomationPoint.curve_to_next in sonare_c_daw.cpp
+// (which maps 0=Hold, 1=Linear, 2=Exponential, 3=SCurve onto the unrelated
+// automation::CurveType enum). The two C APIs target different C++
+// subsystems and the divergence is documented at each API surface; do NOT
+// unify them without an ABI break.
+static_assert(static_cast<int>(sonare::mixing::AutomationCurveType::Linear) == 0,
+              "sonare::mixing::AutomationCurveType::Linear must be ordinal 0 to keep "
+              "sonare_strip_schedule_*_automation curve ABI stable");
+static_assert(static_cast<int>(sonare::mixing::AutomationCurveType::Exponential) == 1,
+              "sonare::mixing::AutomationCurveType::Exponential must be ordinal 1");
+static_assert(static_cast<int>(sonare::mixing::AutomationCurveType::Hold) == 2,
+              "sonare::mixing::AutomationCurveType::Hold must be ordinal 2");
+static_assert(static_cast<int>(sonare::mixing::AutomationCurveType::SCurve) == 3,
+              "sonare::mixing::AutomationCurveType::SCurve must be ordinal 3");
+
 bool parse_automation_curve(int curve, sonare::mixing::AutomationCurveType* out) noexcept {
   if (!out) {
     return false;

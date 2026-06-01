@@ -184,6 +184,15 @@ typedef struct {
 typedef struct {
   double ppq;
   float value;
+  /* PPQ-domain curve to the next breakpoint. Used by
+     sonare_engine_set_automation_lane. The ordinal mapping is:
+       0 = Hold, 1 = Linear (default), 2 = Exponential, 3 = SCurve
+     IMPORTANT: this is a DIFFERENT ordinal scheme from the sample-accurate
+     sonare_strip_schedule_*_automation curves in sonare_c_mixing.h
+     (where 0 = Linear, 1 = Exponential, 2 = Hold, 3 = SCurve). The two
+     paths target different C++ subsystems (automation::CurveType vs
+     mixing::AutomationCurveType) and are kept distinct for ABI stability.
+     Verify the ordinal table for the API you are calling. */
   int curve_to_next;
 } SonareAutomationPoint;
 
@@ -230,6 +239,13 @@ typedef struct {
   int punch_enabled;
 } SonareEngineCaptureStatus;
 
+/* Canonical fallback target loudness used by sonare_engine_bounce_offline when
+   normalize_lufs is enabled but target_lufs is left at 0.0f (its zero-init
+   sentinel). Matches streaming-platform reference loudness (Spotify/YouTube).
+   Bindings (WASM, Node, Python) MUST surface this same default; do not
+   hardcode a different value. */
+#define SONARE_DEFAULT_BOUNCE_TARGET_LUFS (-14.0f)
+
 typedef struct {
   int64_t total_frames;
   int block_size;
@@ -237,6 +253,11 @@ typedef struct {
   int target_sample_rate;
   int source_sample_rate;
   int normalize_lufs;
+  /* Target integrated loudness in LUFS when normalize_lufs != 0. The value
+     0.0f is treated as a "use default" sentinel and is normalized to
+     SONARE_DEFAULT_BOUNCE_TARGET_LUFS (-14.0 LUFS). Pass a non-zero value
+     to override. Call sonare_engine_bounce_options_default() to obtain a
+     fully-initialized options struct with documented defaults. */
   float target_lufs;
   int dither; /* 0 = none, 1 = RPDF, 2 = TPDF, 3 = noise-shaped */
   int dither_bits;
