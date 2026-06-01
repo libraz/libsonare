@@ -6,10 +6,10 @@
 #include <array>
 #include <vector>
 
-#include "mastering/common/biquad_design.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/eq_band.h"
 #include "mastering/eq/linear_phase.h"
+#include "rt/biquad_design.h"
+#include "rt/processor_base.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -34,7 +34,7 @@ enum class CutFilterSlope {
   Brickwall,
 };
 
-class CutFilter : public common::ProcessorBase {
+class CutFilter : public rt::ProcessorBase {
  public:
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -70,7 +70,7 @@ class CutFilter : public common::ProcessorBase {
   };
 
   struct Section {
-    common::BiquadCoeffs coeffs{};
+    sonare::rt::BiquadCoeffs coeffs{};
     bool enabled = false;
   };
 

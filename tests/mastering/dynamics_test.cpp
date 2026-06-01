@@ -64,12 +64,12 @@ float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>
   return peak;
 }
 
-void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
+void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
 }
 
-void process_stereo(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& left,
+void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
                     std::vector<float>& right) {
   float* channels[] = {left.data(), right.data()};
   processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));

@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
 
@@ -15,7 +15,7 @@ struct HaasEnhancerConfig {
   bool delay_right = true;
 };
 
-class HaasEnhancer : public common::ProcessorBase {
+class HaasEnhancer : public rt::ProcessorBase {
  public:
   explicit HaasEnhancer(HaasEnhancerConfig config = {});
 

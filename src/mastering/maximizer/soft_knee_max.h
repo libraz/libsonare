@@ -11,7 +11,7 @@ struct SoftKneeMaxConfig {
   float release_ms = 50.0f;
 };
 
-class SoftKneeMax : public common::ProcessorBase {
+class SoftKneeMax : public rt::ProcessorBase {
  public:
   explicit SoftKneeMax(SoftKneeMaxConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

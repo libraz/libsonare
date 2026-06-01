@@ -8,7 +8,7 @@
 
 #include "core/fft.h"
 #include "core/window.h"
-#include "mastering/common/partitioned_convolver.h"
+#include "rt/partitioned_convolver.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -147,7 +147,7 @@ int next_power_of_two(size_t value) {
 std::vector<float> apply_fir_partitioned(const Audio& audio, const std::vector<float>& kernel,
                                          int partition_size, int latency_compensation) {
   const int block_size = partition_size > 0 ? partition_size : 256;
-  common::PartitionedConvolver convolver({block_size});
+  sonare::rt::PartitionedConvolver convolver({block_size});
   convolver.set_impulse_response(kernel);
 
   const size_t padded_size = ((audio.size() + kernel.size() + static_cast<size_t>(block_size) - 1) /

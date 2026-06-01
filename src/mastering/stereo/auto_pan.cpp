@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -30,7 +30,7 @@ void AutoPan::prepare(double sample_rate, int max_block_size) {
 }
 
 void AutoPan::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AutoPan");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,

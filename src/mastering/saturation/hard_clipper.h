@@ -2,19 +2,19 @@
 
 #include <vector>
 
-#include "mastering/common/adaa.h"
-#include "mastering/common/aliasing_control.h"
-#include "mastering/common/nonlinearities.h"
-#include "mastering/common/processor_base.h"
+#include "rt/adaa.h"
+#include "rt/aliasing_control.h"
+#include "rt/nonlinearities.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
 struct HardClipperConfig {
   float ceiling = 1.0f;
-  common::AliasingControl aliasing = common::AliasingControl::None;
+  sonare::rt::AliasingControl aliasing = sonare::rt::AliasingControl::None;
 };
 
-class HardClipper : public common::ProcessorBase {
+class HardClipper : public rt::ProcessorBase {
  public:
   explicit HardClipper(HardClipperConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
@@ -45,8 +45,8 @@ class HardClipper : public common::ProcessorBase {
 
   HardClipperConfig config_{};
   bool prepared_ = false;
-  std::vector<common::Adaa1<common::HardClipNonlinearity>> hard_clip_adaa_;
-  std::vector<common::Adaa2<common::HardClipNonlinearity>> hard_clip_adaa2_;
+  std::vector<sonare::rt::Adaa1<sonare::rt::HardClipNonlinearity>> hard_clip_adaa_;
+  std::vector<sonare::rt::Adaa2<sonare::rt::HardClipNonlinearity>> hard_clip_adaa2_;
 };
 
 }  // namespace sonare::mastering::saturation

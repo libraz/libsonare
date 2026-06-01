@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -23,7 +23,7 @@ void PultecEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void PultecEq::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   eq_.process(channels, num_channels, num_samples);
   if (component_model_ == PultecComponentModel::CurveOnly && output_drive_ <= 0.0f) {
     return;

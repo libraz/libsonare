@@ -2,9 +2,9 @@
 
 #include <vector>
 
-#include "mastering/common/adaa.h"
-#include "mastering/common/nonlinearities.h"
 #include "mastering/saturation/waveshaper.h"
+#include "rt/adaa.h"
+#include "rt/nonlinearities.h"
 
 namespace sonare::mastering::saturation {
 
@@ -12,10 +12,10 @@ struct SoftClipperConfig {
   float drive_db = 0.0f;
   float ceiling = 1.0f;
   float mix = 1.0f;
-  common::AliasingControl aliasing = common::AliasingControl::None;
+  sonare::rt::AliasingControl aliasing = sonare::rt::AliasingControl::None;
 };
 
-class SoftClipper : public common::ProcessorBase {
+class SoftClipper : public rt::ProcessorBase {
  public:
   explicit SoftClipper(SoftClipperConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
@@ -39,7 +39,7 @@ class SoftClipper : public common::ProcessorBase {
 
   SoftClipperConfig config_{};
   bool prepared_ = false;
-  std::vector<common::Adaa1<common::TanhNonlinearity>> tanh_adaa_;
+  std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>> tanh_adaa_;
 };
 
 }  // namespace sonare::mastering::saturation

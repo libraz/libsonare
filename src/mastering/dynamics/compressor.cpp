@@ -5,8 +5,8 @@
 #include <memory>
 #include <utility>
 
-#include "mastering/common/biquad_design.h"
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -94,7 +94,7 @@ const CompressorConfig* Compressor::adopt_snapshot_for_block() noexcept {
 }
 
 void Compressor::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Compressor");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -275,8 +275,8 @@ void Compressor::update_coefficients(const CompressorConfig& config) {
   pdr_coeff_ = time_to_coefficient(sample_rate_, config.pdr_time_ms);
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Same
   // 6 dB/oct slope as a 1-pole RC, but the cutoff is frequency-accurate.
-  const auto hpf =
-      common::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz), sample_rate_);
+  const auto hpf = sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz),
+                                                       sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
 }

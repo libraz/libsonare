@@ -3,7 +3,7 @@
 /// @file stereo_balance.h
 /// @brief Left/right balance and pan style gain processor.
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
 
@@ -12,7 +12,7 @@ struct StereoBalanceConfig {
   bool constant_power = true;
 };
 
-class StereoBalance : public common::ProcessorBase {
+class StereoBalance : public rt::ProcessorBase {
  public:
   explicit StereoBalance(StereoBalanceConfig config = {});
 

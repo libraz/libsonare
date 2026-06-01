@@ -18,7 +18,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::api::internal {
@@ -36,7 +36,7 @@ namespace sonare::mastering::api::internal {
 ///    zeros, processed, then the leading `latency` output samples are
 ///    discarded so the delayed tail is flushed out and the result is time-
 ///    aligned with the input.
-inline void run_processor_mono(common::ProcessorBase& processor, std::vector<float>& samples,
+inline void run_processor_mono(rt::ProcessorBase& processor, std::vector<float>& samples,
                                int sample_rate) {
   if (samples.empty()) {
     return;
@@ -65,7 +65,7 @@ inline void run_processor_mono(common::ProcessorBase& processor, std::vector<flo
 /// @brief Stereo counterpart to run_processor_mono(). @p left and @p right must
 ///        have identical length. Both channels are padded, processed, and
 ///        trimmed together so they stay sample-accurately aligned.
-inline void run_processor_stereo(common::ProcessorBase& processor, std::vector<float>& left,
+inline void run_processor_stereo(rt::ProcessorBase& processor, std::vector<float>& left,
                                  std::vector<float>& right, int sample_rate) {
   if (left.empty()) {
     return;

@@ -16,7 +16,7 @@ struct DuckingConfig {
   float lookahead_ms = 0.0f;
 };
 
-class DuckingProcessor : public common::ProcessorBase {
+class DuckingProcessor : public rt::ProcessorBase {
  public:
   explicit DuckingProcessor(DuckingConfig config = {});
 

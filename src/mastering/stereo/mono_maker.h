@@ -3,7 +3,7 @@
 /// @file mono_maker.h
 /// @brief Stereo to mono low-frequency utility.
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
 
@@ -11,7 +11,7 @@ struct MonoMakerConfig {
   float amount = 1.0f;
 };
 
-class MonoMaker : public common::ProcessorBase {
+class MonoMaker : public rt::ProcessorBase {
  public:
   explicit MonoMaker(MonoMakerConfig config = {});
 

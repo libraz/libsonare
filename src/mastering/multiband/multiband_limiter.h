@@ -5,9 +5,9 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/limiter.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
 
@@ -20,7 +20,7 @@ struct MultibandLimiterConfig {
   };
 };
 
-class MultibandLimiter : public common::ProcessorBase {
+class MultibandLimiter : public rt::ProcessorBase {
  public:
   explicit MultibandLimiter(MultibandLimiterConfig config = {});
 

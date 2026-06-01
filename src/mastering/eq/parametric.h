@@ -7,12 +7,12 @@
 #include <cstddef>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/eq_band.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
-class ParametricEq : public common::ProcessorBase {
+class ParametricEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 24;
 

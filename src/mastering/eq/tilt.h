@@ -3,12 +3,12 @@
 /// @file tilt.h
 /// @brief Simple two-shelf tilt equalizer.
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
-class TiltEq : public common::ProcessorBase {
+class TiltEq : public rt::ProcessorBase {
  public:
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;

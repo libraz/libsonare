@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
-#include "mastering/common/biquad_design.h"
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -51,7 +51,7 @@ void ParametricEq::prepare_channels(int num_channels) {
 }
 
 void ParametricEq::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared();
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -179,34 +179,34 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
   const double w0 = 2.0 * kPiD * static_cast<double>(band.frequency_hz) / sample_rate;
   const float w0f = static_cast<float>(w0);
   const float qf = static_cast<float>(q);
-  const auto from_common = [](const common::BiquadCoeffs& c) {
+  const auto from_common = [](const sonare::rt::BiquadCoeffs& c) {
     return Coefficients{c.b0, c.b1, c.b2, c.a1, c.a2};
   };
   if (band.slope_db_oct == 6) {
     if (band.type == EqBandType::LowPass) {
-      return from_common(common::first_order_lowpass(w0f));
+      return from_common(sonare::rt::first_order_lowpass(w0f));
     }
     if (band.type == EqBandType::HighPass) {
-      return from_common(common::first_order_highpass(w0f));
+      return from_common(sonare::rt::first_order_highpass(w0f));
     }
   }
 
   if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
     switch (band.type) {
       case EqBandType::Peak:
-        return from_common(common::vicanek_peak(w0f, qf, band.gain_db));
+        return from_common(sonare::rt::vicanek_peak(w0f, qf, band.gain_db));
       case EqBandType::LowPass:
-        return from_common(common::vicanek_lowpass(w0f, qf));
+        return from_common(sonare::rt::vicanek_lowpass(w0f, qf));
       case EqBandType::HighPass:
-        return from_common(common::vicanek_highpass(w0f, qf));
+        return from_common(sonare::rt::vicanek_highpass(w0f, qf));
       case EqBandType::BandPass:
-        return from_common(common::vicanek_bandpass(w0f, qf));
+        return from_common(sonare::rt::vicanek_bandpass(w0f, qf));
       case EqBandType::Notch:
-        return from_common(common::vicanek_notch(w0f, qf));
+        return from_common(sonare::rt::vicanek_notch(w0f, qf));
       case EqBandType::LowShelf:
-        return from_common(common::vicanek_low_shelf(w0f, band.gain_db));
+        return from_common(sonare::rt::vicanek_low_shelf(w0f, band.gain_db));
       case EqBandType::HighShelf:
-        return from_common(common::vicanek_high_shelf(w0f, band.gain_db));
+        return from_common(sonare::rt::vicanek_high_shelf(w0f, band.gain_db));
       case EqBandType::TiltShelf:
       case EqBandType::FlatTilt:
         // Vicanek matched-Z designs have no closed-form for tilt/flat-tilt;
@@ -221,25 +221,25 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
 
   switch (band.type) {
     case EqBandType::Peak:
-      return from_common(common::rbj_peak(w0f, qf, band.gain_db));
+      return from_common(sonare::rt::rbj_peak(w0f, qf, band.gain_db));
 
     case EqBandType::LowPass:
-      return from_common(common::rbj_lowpass(w0f, qf));
+      return from_common(sonare::rt::rbj_lowpass(w0f, qf));
 
     case EqBandType::HighPass:
-      return from_common(common::rbj_highpass(w0f, qf));
+      return from_common(sonare::rt::rbj_highpass(w0f, qf));
 
     case EqBandType::BandPass:
-      return from_common(common::rbj_bandpass(w0f, qf));
+      return from_common(sonare::rt::rbj_bandpass(w0f, qf));
 
     case EqBandType::Notch:
-      return from_common(common::rbj_notch(w0f, qf));
+      return from_common(sonare::rt::rbj_notch(w0f, qf));
 
     case EqBandType::LowShelf:
-      return from_common(common::rbj_low_shelf(w0f, qf, band.gain_db));
+      return from_common(sonare::rt::rbj_low_shelf(w0f, qf, band.gain_db));
 
     case EqBandType::HighShelf:
-      return from_common(common::rbj_high_shelf(w0f, qf, band.gain_db));
+      return from_common(sonare::rt::rbj_high_shelf(w0f, qf, band.gain_db));
 
     case EqBandType::TiltShelf:
     case EqBandType::FlatTilt:

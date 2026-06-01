@@ -6,8 +6,8 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -24,7 +24,7 @@ struct ParallelCompConfig {
   float output_ceiling_db = 0.0f;
 };
 
-class ParallelComp : public common::ProcessorBase {
+class ParallelComp : public rt::ProcessorBase {
  public:
   explicit ParallelComp(ParallelCompConfig config = {});
 
@@ -101,7 +101,7 @@ class ParallelComp : public common::ProcessorBase {
   const ParallelCompConfig* applied_snapshot_ = nullptr;
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
-  std::vector<common::EnvelopeFollower> followers_;
+  std::vector<sonare::rt::EnvelopeFollower> followers_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "mastering/common/biquad.h"
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
 
@@ -14,7 +14,7 @@ struct AirBandConfig {
   float dynamic_range_db = 3.0f;
 };
 
-class AirBand : public common::ProcessorBase {
+class AirBand : public rt::ProcessorBase {
  public:
   explicit AirBand(AirBandConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

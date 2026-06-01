@@ -50,7 +50,7 @@ float rms_tail(const std::vector<float>& samples, size_t skip = 0) {
   return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
-void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
+void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
 }
@@ -125,8 +125,8 @@ TEST_CASE("Waveshaper applies nonlinear shaping", "[mastering][saturation]") {
 
 TEST_CASE("Waveshaper supports ADAA for tanh and arctan curves", "[mastering][saturation]") {
   Waveshaper direct({0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh});
-  Waveshaper adaa({0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh,
-                   sonare::mastering::common::AliasingControl::Adaa1});
+  Waveshaper adaa(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh, sonare::rt::AliasingControl::Adaa1});
   direct.prepare(48000.0, 128);
   adaa.prepare(48000.0, 128);
 
@@ -137,8 +137,8 @@ TEST_CASE("Waveshaper supports ADAA for tanh and arctan curves", "[mastering][sa
 
   REQUIRE(adaa_signal[0] < direct_signal[0]);
 
-  adaa.set_config({0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Arctan,
-                   sonare::mastering::common::AliasingControl::Adaa1});
+  adaa.set_config(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Arctan, sonare::rt::AliasingControl::Adaa1});
   std::vector<float> arctan_signal = {1.0f};
   process(adaa, arctan_signal);
   REQUIRE(arctan_signal[0] > 0.0f);
@@ -162,8 +162,8 @@ TEST_CASE("SoftClipper and HardClipper constrain peaks", "[mastering][saturation
 }
 
 TEST_CASE("SoftClipper and HardClipper support ADAA mode", "[mastering][saturation]") {
-  SoftClipper soft({0.0f, 1.0f, 1.0f, sonare::mastering::common::AliasingControl::Adaa1});
-  HardClipper hard({1.0f, sonare::mastering::common::AliasingControl::Adaa1});
+  SoftClipper soft({0.0f, 1.0f, 1.0f, sonare::rt::AliasingControl::Adaa1});
+  HardClipper hard({1.0f, sonare::rt::AliasingControl::Adaa1});
   soft.prepare(48000.0, 128);
   hard.prepare(48000.0, 128);
 

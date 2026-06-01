@@ -5,7 +5,7 @@
 #include <memory>
 #include <utility>
 
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -67,7 +67,7 @@ const LimiterConfig* Limiter::adopt_snapshot_for_block() noexcept {
 }
 
 void Limiter::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Limiter");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,

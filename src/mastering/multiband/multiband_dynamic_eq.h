@@ -5,9 +5,9 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/dynamic_eq.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
 
@@ -16,7 +16,7 @@ struct MultibandDynamicEqConfig {
   std::vector<std::vector<eq::DynamicEqBand>> bands{{}, {}, {}};
 };
 
-class MultibandDynamicEq : public common::ProcessorBase {
+class MultibandDynamicEq : public rt::ProcessorBase {
  public:
   explicit MultibandDynamicEq(MultibandDynamicEqConfig config = {});
 

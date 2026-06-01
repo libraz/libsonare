@@ -5,9 +5,9 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
 
@@ -20,7 +20,7 @@ struct MultibandCompressorConfig {
   };
 };
 
-class MultibandCompressor : public common::ProcessorBase {
+class MultibandCompressor : public rt::ProcessorBase {
  public:
   explicit MultibandCompressor(MultibandCompressorConfig config = {});
 

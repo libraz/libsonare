@@ -2,9 +2,9 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/multiband/crossover.h"
 #include "mastering/saturation/exciter.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -17,7 +17,7 @@ struct MultibandExciterConfig {
   };
 };
 
-class MultibandExciter : public common::ProcessorBase {
+class MultibandExciter : public rt::ProcessorBase {
  public:
   explicit MultibandExciter(MultibandExciterConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

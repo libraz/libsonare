@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
 
@@ -17,7 +17,7 @@ struct SpectralShaperConfig {
   float range_db = 12.0f;
 };
 
-class SpectralShaper : public common::ProcessorBase {
+class SpectralShaper : public rt::ProcessorBase {
  public:
   explicit SpectralShaper(SpectralShaperConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
@@ -47,7 +47,7 @@ class SpectralShaper : public common::ProcessorBase {
   std::vector<float> low_state_;
   std::vector<float> band_low_state_;
   std::vector<float> gain_state_;
-  std::vector<common::EnvelopeFollower> envelopes_;
+  std::vector<sonare::rt::EnvelopeFollower> envelopes_;
   float last_reduction_db_ = 0.0f;
 };
 

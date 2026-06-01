@@ -5,8 +5,8 @@
 #include <memory>
 #include <utility>
 
-#include "mastering/common/biquad_design.h"
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
 
@@ -82,7 +82,7 @@ const SidechainRouterConfig* SidechainRouter::adopt_snapshot_for_block() noexcep
 }
 
 void SidechainRouter::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SidechainRouter");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -240,8 +240,8 @@ void SidechainRouter::update_coefficients(const SidechainRouterConfig& config) {
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
   }
-  const auto hpf =
-      common::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz), sample_rate_);
+  const auto hpf = sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz),
+                                                       sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
 }

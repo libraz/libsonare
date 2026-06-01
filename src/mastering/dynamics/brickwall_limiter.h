@@ -5,8 +5,8 @@
 
 #include <memory>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/limiter.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -17,7 +17,7 @@ struct BrickwallLimiterConfig {
   float release_ms = 50.0f;
 };
 
-class BrickwallLimiter : public common::ProcessorBase {
+class BrickwallLimiter : public rt::ProcessorBase {
  public:
   explicit BrickwallLimiter(BrickwallLimiterConfig config = {});
 

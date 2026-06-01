@@ -6,8 +6,8 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -24,7 +24,7 @@ struct VocalRiderConfig {
   bool linked_detection = true;
 };
 
-class VocalRider : public common::ProcessorBase {
+class VocalRider : public rt::ProcessorBase {
  public:
   explicit VocalRider(VocalRiderConfig config = {});
 
@@ -101,7 +101,7 @@ class VocalRider : public common::ProcessorBase {
   const VocalRiderConfig* applied_snapshot_ = nullptr;
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
-  std::vector<common::EnvelopeFollower> followers_;
+  std::vector<rt::EnvelopeFollower> followers_;
   float linked_gain_state_db_ = 0.0f;
   // Per-channel smoothed gain state for the unlinked path, persisted across
   // blocks so toggling linked/unlinked does not introduce a discontinuity.

@@ -6,9 +6,9 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -34,7 +34,7 @@ struct CompressorConfig {
   float pdr_release_scale = 1.0f;
 };
 
-class Compressor : public common::ProcessorBase {
+class Compressor : public rt::ProcessorBase {
  public:
   explicit Compressor(CompressorConfig config = {});
 
@@ -130,7 +130,7 @@ class Compressor : public common::ProcessorBase {
   float pdr_state_db_ = 0.0f;
   float pdr_coeff_ = 0.0f;
   // Log-domain attack/release smoothing on the gain-reduction signal (in dB).
-  common::EnvelopeFollower reduction_smoother_;
+  sonare::rt::EnvelopeFollower reduction_smoother_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

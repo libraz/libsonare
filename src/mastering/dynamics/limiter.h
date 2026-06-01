@@ -6,9 +6,9 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/lookahead_buffer.h"
-#include "mastering/common/processor_base.h"
+#include "rt/envelope_follower.h"
+#include "rt/lookahead_buffer.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -19,7 +19,7 @@ struct LimiterConfig {
   float release_ms = 50.0f;
 };
 
-class Limiter : public common::ProcessorBase {
+class Limiter : public rt::ProcessorBase {
  public:
   explicit Limiter(LimiterConfig config = {});
 
@@ -98,8 +98,8 @@ class Limiter : public common::ProcessorBase {
   double sample_rate_ = 48000.0;
   int lookahead_samples_ = 0;
   bool prepared_ = false;
-  std::vector<common::LookaheadBuffer> lookahead_;
-  std::vector<common::EnvelopeFollower> gain_smoothers_;
+  std::vector<sonare::rt::LookaheadBuffer> lookahead_;
+  std::vector<sonare::rt::EnvelopeFollower> gain_smoothers_;
   float release_coeff_ = 0.0f;
   float last_gain_reduction_db_ = 0.0f;
 };

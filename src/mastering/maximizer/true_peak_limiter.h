@@ -5,11 +5,11 @@
 
 #include <vector>
 
-#include "mastering/common/lookahead_buffer.h"
-#include "mastering/common/oversampler.h"
-#include "mastering/common/sliding_max.h"
-#include "mastering/common/true_peak_filter.h"
 #include "mastering/dynamics/brickwall_limiter.h"
+#include "rt/lookahead_buffer.h"
+#include "rt/oversampler.h"
+#include "rt/sliding_max.h"
+#include "rt/true_peak_filter.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -21,7 +21,7 @@ struct TruePeakLimiterConfig {
   bool apply_gain_at_input_rate = false;
 };
 
-class TruePeakLimiter : public common::ProcessorBase {
+class TruePeakLimiter : public rt::ProcessorBase {
  public:
   explicit TruePeakLimiter(TruePeakLimiterConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
@@ -51,10 +51,10 @@ class TruePeakLimiter : public common::ProcessorBase {
 
   TruePeakLimiterConfig config_{};
   dynamics::BrickwallLimiter limiter_;
-  common::TruePeakFilter true_peak_filter_;
-  common::Oversampler downsampler_{4};
-  std::vector<common::LookaheadBuffer> lookahead_;
-  std::vector<common::LookaheadBuffer> oversampled_lookahead_;
+  sonare::rt::TruePeakFilter true_peak_filter_;
+  sonare::rt::Oversampler downsampler_{4};
+  std::vector<sonare::rt::LookaheadBuffer> lookahead_;
+  std::vector<sonare::rt::LookaheadBuffer> oversampled_lookahead_;
   std::vector<std::vector<float>> true_peak_history_;
   std::vector<const float*> input_ptrs_;
   std::vector<float*> oversampled_ptrs_;
@@ -64,7 +64,7 @@ class TruePeakLimiter : public common::ProcessorBase {
   std::vector<float> linked_abs_;
   std::vector<float> input_rate_gain_;
   std::vector<float> downsampled_;
-  common::SlidingMax<float> oversampled_peak_window_{1};
+  sonare::rt::SlidingMax<float> oversampled_peak_window_{1};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   int lookahead_samples_ = 0;

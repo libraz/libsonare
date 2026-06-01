@@ -13,7 +13,6 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/common/loudness_measure.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -31,6 +30,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::api {
 namespace {

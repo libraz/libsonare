@@ -65,7 +65,6 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/suggester.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -101,6 +100,7 @@
 #include "mixing/channel_strip.h"
 #include "quick.h"
 #include "rt/command.h"
+#include "rt/processor_base.h"
 #include "sonare.h"
 #include "sonare_c.h"
 #include "streaming/stream_analyzer.h"
@@ -265,12 +265,12 @@ KeyProfileType keyProfileFromInt(int profile_type) {
 // compensating helpers in `mastering::api::internal` so the WASM bridge,
 // `MasteringChain`, and `apply_named_processor` all go through the same
 // implementation and stay in sync.
-void processMono(mastering::common::ProcessorBase& processor, std::vector<float>& samples,
+void processMono(sonare::rt::ProcessorBase& processor, std::vector<float>& samples,
                  int sample_rate) {
   mastering::api::internal::run_processor_mono(processor, samples, sample_rate);
 }
 
-void processStereo(mastering::common::ProcessorBase& processor, std::vector<float>& left,
+void processStereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
                    std::vector<float>& right, int sample_rate) {
   mastering::api::internal::run_processor_stereo(processor, left, right, sample_rate);
 }

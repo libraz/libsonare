@@ -8,9 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/partitioned_convolver.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "rt/partitioned_convolver.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
@@ -32,7 +32,7 @@ struct LinearPhaseEqConfig {
   Resolution resolution = Resolution::Custom;
 };
 
-class LinearPhaseEq : public common::ProcessorBase {
+class LinearPhaseEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = ParametricEq::kMaxBands;
 
@@ -66,7 +66,7 @@ class LinearPhaseEq : public common::ProcessorBase {
   struct ChannelState {
     std::vector<float> history;
     size_t write_index = 0;
-    std::unique_ptr<common::PartitionedConvolver> convolver;
+    std::unique_ptr<sonare::rt::PartitionedConvolver> convolver;
     bool convolver_kernel_current = false;
   };
 

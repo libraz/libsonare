@@ -3,7 +3,7 @@
 /// @file auto_pan.h
 /// @brief LFO-based stereo auto panner.
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
 
@@ -13,7 +13,7 @@ struct AutoPanConfig {
   float phase = 0.0f;
 };
 
-class AutoPan : public common::ProcessorBase {
+class AutoPan : public rt::ProcessorBase {
  public:
   explicit AutoPan(AutoPanConfig config = {});
 

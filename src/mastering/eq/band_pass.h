@@ -3,12 +3,12 @@
 /// @file band_pass.h
 /// @brief Dedicated band-pass and notch filters.
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
-class BandPassEq : public common::ProcessorBase {
+class BandPassEq : public rt::ProcessorBase {
  public:
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;

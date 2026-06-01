@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -14,7 +14,7 @@ struct ExciterConfig {
   float even_odd_mix = 0.5f;
 };
 
-class Exciter : public common::ProcessorBase {
+class Exciter : public rt::ProcessorBase {
  public:
   explicit Exciter(ExciterConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

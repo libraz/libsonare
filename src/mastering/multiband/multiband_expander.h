@@ -5,9 +5,9 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/expander.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
 
@@ -20,7 +20,7 @@ struct MultibandExpanderConfig {
   };
 };
 
-class MultibandExpander : public common::ProcessorBase {
+class MultibandExpander : public rt::ProcessorBase {
  public:
   explicit MultibandExpander(MultibandExpanderConfig config = {});
 

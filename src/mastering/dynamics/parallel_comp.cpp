@@ -5,7 +5,7 @@
 #include <memory>
 #include <utility>
 
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
 
@@ -63,7 +63,7 @@ const ParallelCompConfig* ParallelComp::adopt_snapshot_for_block() noexcept {
 }
 
 void ParallelComp::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "ParallelComp");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,

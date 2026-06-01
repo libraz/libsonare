@@ -5,10 +5,10 @@
 
 #include <vector>
 
-#include "mastering/common/adaa.h"
-#include "mastering/common/aliasing_control.h"
-#include "mastering/common/nonlinearities.h"
-#include "mastering/common/processor_base.h"
+#include "rt/adaa.h"
+#include "rt/aliasing_control.h"
+#include "rt/nonlinearities.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -24,10 +24,10 @@ struct WaveshaperConfig {
   float output_gain_db = 0.0f;
   float bias = 0.0f;
   WaveshaperCurve curve = WaveshaperCurve::Tanh;
-  common::AliasingControl aliasing = common::AliasingControl::None;
+  sonare::rt::AliasingControl aliasing = sonare::rt::AliasingControl::None;
 };
 
-class Waveshaper : public common::ProcessorBase {
+class Waveshaper : public rt::ProcessorBase {
  public:
   explicit Waveshaper(WaveshaperConfig config = {});
 
@@ -57,8 +57,8 @@ class Waveshaper : public common::ProcessorBase {
 
   WaveshaperConfig config_{};
   bool prepared_ = false;
-  std::vector<common::Adaa1<common::TanhNonlinearity>> tanh_adaa_;
-  std::vector<common::Adaa1<common::ArctanNonlinearity>> arctan_adaa_;
+  std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>> tanh_adaa_;
+  std::vector<sonare::rt::Adaa1<sonare::rt::ArctanNonlinearity>> arctan_adaa_;
 };
 
 }  // namespace sonare::mastering::saturation

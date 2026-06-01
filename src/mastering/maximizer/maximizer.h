@@ -3,8 +3,8 @@
 /// @file maximizer.h
 /// @brief Input-gain maximizer with a hard output ceiling.
 
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/brickwall_limiter.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -15,7 +15,7 @@ struct MaximizerConfig {
   float release_ms = 50.0f;
 };
 
-class Maximizer : public common::ProcessorBase {
+class Maximizer : public rt::ProcessorBase {
  public:
   explicit Maximizer(MaximizerConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

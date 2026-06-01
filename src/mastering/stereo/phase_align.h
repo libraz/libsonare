@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
 
@@ -15,7 +15,7 @@ struct PhaseAlignConfig {
   float fractional_delay_samples = 0.0f;
 };
 
-class PhaseAlign : public common::ProcessorBase {
+class PhaseAlign : public rt::ProcessorBase {
  public:
   explicit PhaseAlign(PhaseAlignConfig config = {});
 

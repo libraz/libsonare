@@ -6,12 +6,12 @@
 #include <array>
 #include <cstddef>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
-class ApiStyleEq : public common::ProcessorBase {
+class ApiStyleEq : public rt::ProcessorBase {
  public:
   enum class Band {
     Low = 0,

@@ -6,9 +6,9 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -21,7 +21,7 @@ struct ExpanderConfig {
   float range_db = -60.0f;
 };
 
-class Expander : public common::ProcessorBase {
+class Expander : public rt::ProcessorBase {
  public:
   explicit Expander(ExpanderConfig config = {});
 
@@ -96,7 +96,7 @@ class Expander : public common::ProcessorBase {
   const ExpanderConfig* applied_snapshot_ = nullptr;
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
-  std::vector<common::EnvelopeFollower> followers_;
+  std::vector<sonare::rt::EnvelopeFollower> followers_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

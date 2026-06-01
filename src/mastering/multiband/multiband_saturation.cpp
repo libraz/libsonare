@@ -3,11 +3,11 @@
 #include <algorithm>
 #include <utility>
 
-#include "mastering/common/scoped_no_denormals.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/tube.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
 
@@ -15,7 +15,7 @@ namespace sonare::mastering::multiband {
 
 namespace {
 
-std::unique_ptr<common::ProcessorBase> make_processor(const SaturationBandConfig& band) {
+std::unique_ptr<rt::ProcessorBase> make_processor(const SaturationBandConfig& band) {
   // Map the shared band config onto each algorithm's native parameters. drive_db
   // and mix carry over where the algorithm supports them; output_gain_db is
   // applied uniformly by the multiband loop so it works for every type.
@@ -79,7 +79,7 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandSaturation::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MultibandSaturation");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,

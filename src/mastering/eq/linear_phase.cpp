@@ -6,9 +6,8 @@
 
 #include "core/fft.h"
 #include "core/window.h"
-#include "mastering/common/biquad_design.h"
-#include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -51,7 +50,7 @@ double clamp_frequency(double frequency_hz, double sample_rate) {
   return std::clamp(frequency_hz, 1.0, sample_rate * 0.5 - 1.0);
 }
 
-common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) {
+sonare::rt::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) {
   const double center = clamp_frequency(band.frequency_hz, sample_rate);
   const float omega =
       static_cast<float>(sonare::constants::kTwoPi * center / static_cast<double>(sample_rate));
@@ -60,19 +59,19 @@ common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) 
   if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
     switch (band.type) {
       case EqBandType::Peak:
-        return common::vicanek_peak(omega, q, band.gain_db);
+        return sonare::rt::vicanek_peak(omega, q, band.gain_db);
       case EqBandType::LowShelf:
-        return common::vicanek_low_shelf(omega, band.gain_db);
+        return sonare::rt::vicanek_low_shelf(omega, band.gain_db);
       case EqBandType::HighShelf:
-        return common::vicanek_high_shelf(omega, band.gain_db);
+        return sonare::rt::vicanek_high_shelf(omega, band.gain_db);
       case EqBandType::LowPass:
-        return common::vicanek_lowpass(omega, q);
+        return sonare::rt::vicanek_lowpass(omega, q);
       case EqBandType::HighPass:
-        return common::vicanek_highpass(omega, q);
+        return sonare::rt::vicanek_highpass(omega, q);
       case EqBandType::BandPass:
-        return common::vicanek_bandpass(omega, q);
+        return sonare::rt::vicanek_bandpass(omega, q);
       case EqBandType::Notch:
-        return common::vicanek_notch(omega, q);
+        return sonare::rt::vicanek_notch(omega, q);
       case EqBandType::TiltShelf:
       case EqBandType::FlatTilt:
         // Vicanek matched-Z designs have no closed-form for tilt/flat-tilt;
@@ -89,19 +88,19 @@ common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) 
 
   switch (band.type) {
     case EqBandType::Peak:
-      return common::rbj_peak(omega, q, band.gain_db);
+      return sonare::rt::rbj_peak(omega, q, band.gain_db);
     case EqBandType::LowShelf:
-      return common::rbj_low_shelf(omega, q, band.gain_db);
+      return sonare::rt::rbj_low_shelf(omega, q, band.gain_db);
     case EqBandType::HighShelf:
-      return common::rbj_high_shelf(omega, q, band.gain_db);
+      return sonare::rt::rbj_high_shelf(omega, q, band.gain_db);
     case EqBandType::LowPass:
-      return common::rbj_lowpass(omega, q);
+      return sonare::rt::rbj_lowpass(omega, q);
     case EqBandType::HighPass:
-      return common::rbj_highpass(omega, q);
+      return sonare::rt::rbj_highpass(omega, q);
     case EqBandType::BandPass:
-      return common::rbj_bandpass(omega, q);
+      return sonare::rt::rbj_bandpass(omega, q);
     case EqBandType::Notch:
-      return common::rbj_notch(omega, q);
+      return sonare::rt::rbj_notch(omega, q);
     case EqBandType::TiltShelf:
     case EqBandType::FlatTilt:
       throw SonareException(ErrorCode::InvalidParameter, "unsupported EQ band type");
@@ -130,7 +129,7 @@ float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double samp
     const float omega =
         static_cast<float>(sonare::constants::kTwoPi * clamp_frequency(frequency_hz, sample_rate) /
                            static_cast<double>(sample_rate));
-    return common::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
+    return sonare::rt::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
   }
   const int order = cut_order(band.slope_db_oct);
   if (order == 0) {
@@ -145,10 +144,10 @@ float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double samp
       static_cast<float>(sonare::constants::kTwoPi * center / static_cast<double>(sample_rate));
   float magnitude = 1.0f;
   if ((order % 2) != 0) {
-    magnitude *= common::biquad_magnitude(band.type == EqBandType::HighPass
-                                              ? common::first_order_highpass(w0)
-                                              : common::first_order_lowpass(w0),
-                                          omega);
+    magnitude *= sonare::rt::biquad_magnitude(band.type == EqBandType::HighPass
+                                                  ? sonare::rt::first_order_highpass(w0)
+                                                  : sonare::rt::first_order_lowpass(w0),
+                                              omega);
   }
   const int pair_count = order / 2;
   for (int pair = pair_count - 1; pair >= 0; --pair) {
@@ -156,10 +155,10 @@ float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double samp
     if (pair == pair_count - 1 && std::abs(band.q - sonare::constants::kButterworthQ) > 1.0e-6f) {
       stage_q = std::max(band.q, 1.0e-6f);
     }
-    magnitude *= common::biquad_magnitude(band.type == EqBandType::HighPass
-                                              ? common::rbj_highpass(w0, stage_q)
-                                              : common::rbj_lowpass(w0, stage_q),
-                                          omega);
+    magnitude *= sonare::rt::biquad_magnitude(band.type == EqBandType::HighPass
+                                                  ? sonare::rt::rbj_highpass(w0, stage_q)
+                                                  : sonare::rt::rbj_lowpass(w0, stage_q),
+                                              omega);
   }
   return magnitude;
 }
@@ -186,7 +185,7 @@ void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void LinearPhaseEq::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "LinearPhaseEq");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -362,8 +361,8 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
     for (auto& state : states_) {
       if (config_.use_partitioned_convolution && partition_size > 0) {
         if (!state.convolver) {
-          state.convolver = std::make_unique<common::PartitionedConvolver>(
-              common::PartitionedConvolverConfig{partition_size});
+          state.convolver = std::make_unique<sonare::rt::PartitionedConvolver>(
+              sonare::rt::PartitionedConvolverConfig{partition_size});
           state.convolver_kernel_current = false;
         }
         if (!state.convolver_kernel_current) {
@@ -385,8 +384,8 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
     state.write_index = 0;
     const int partition_size = active_partition_size();
     if (config_.use_partitioned_convolution && partition_size > 0) {
-      state.convolver = std::make_unique<common::PartitionedConvolver>(
-          common::PartitionedConvolverConfig{partition_size});
+      state.convolver = std::make_unique<sonare::rt::PartitionedConvolver>(
+          sonare::rt::PartitionedConvolverConfig{partition_size});
       state.convolver->set_impulse_response(kernel_);
       state.convolver_kernel_current = true;
     }
@@ -455,7 +454,7 @@ float LinearPhaseEq::band_magnitude(const EqBand& band, double frequency_hz, dou
   if (is_cut_band(band.type)) {
     return cut_cascade_magnitude(band, frequency_hz, sample_rate);
   }
-  return common::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
+  return sonare::rt::biquad_magnitude(design_band_biquad(band, sample_rate), omega);
 }
 
 }  // namespace sonare::mastering::eq

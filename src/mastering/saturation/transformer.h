@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -13,7 +13,7 @@ struct TransformerConfig {
   float mix = 1.0f;
 };
 
-class Transformer : public common::ProcessorBase {
+class Transformer : public rt::ProcessorBase {
  public:
   explicit Transformer(TransformerConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

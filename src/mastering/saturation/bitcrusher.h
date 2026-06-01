@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/final/dither.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -17,7 +17,7 @@ struct BitCrusherConfig {
   uint32_t dither_seed = 0x51A7E5u;
 };
 
-class BitCrusher : public common::ProcessorBase {
+class BitCrusher : public rt::ProcessorBase {
  public:
   explicit BitCrusher(BitCrusherConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "mastering/common/biquad.h"
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -24,7 +24,7 @@ struct DeEsserConfig {
   float bandpass_q = 1.5f;
 };
 
-class DeEsser : public common::ProcessorBase {
+class DeEsser : public rt::ProcessorBase {
  public:
   explicit DeEsser(DeEsserConfig config = {});
 
@@ -107,7 +107,7 @@ class DeEsser : public common::ProcessorBase {
   Biquad filter_coeffs_;
   std::vector<Biquad> bandpass_;
   std::vector<Biquad> bandpass2_;
-  std::vector<common::EnvelopeFollower> followers_;
+  std::vector<sonare::rt::EnvelopeFollower> followers_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

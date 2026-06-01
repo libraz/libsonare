@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
 
@@ -39,7 +39,7 @@ struct MultibandSaturationConfig {
   };
 };
 
-class MultibandSaturation : public common::ProcessorBase {
+class MultibandSaturation : public rt::ProcessorBase {
  public:
   explicit MultibandSaturation(MultibandSaturationConfig config = {});
   ~MultibandSaturation() override;
@@ -75,7 +75,7 @@ class MultibandSaturation : public common::ProcessorBase {
   CrossoverScratch scratch_;
   // One real saturation processor per band (type chosen by config). Created in
   // rebuild_processors()/prepare(); never allocated on the audio thread.
-  std::vector<std::unique_ptr<common::ProcessorBase>> processors_;
+  std::vector<std::unique_ptr<rt::ProcessorBase>> processors_;
 };
 
 }  // namespace sonare::mastering::multiband

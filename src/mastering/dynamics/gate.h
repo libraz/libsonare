@@ -6,8 +6,8 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -22,7 +22,7 @@ struct GateConfig {
   float key_hpf_hz = 0.0f;
 };
 
-class Gate : public common::ProcessorBase {
+class Gate : public rt::ProcessorBase {
  public:
   explicit Gate(GateConfig config = {});
 

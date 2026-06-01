@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
-#include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -90,7 +90,7 @@ void CutFilter::prepare_channels(int num_channels) {
 }
 
 void CutFilter::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "CutFilter");
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -213,8 +213,8 @@ void CutFilter::build_sections(std::array<Section, kMaxSections>& sections, EqBa
       static_cast<float>(2.0 * kPiD * static_cast<double>(frequency_hz) / sample_rate_);
   size_t section_index = 0;
   if ((order % 2) != 0) {
-    sections[section_index++] = {type == EqBandType::HighPass ? common::first_order_highpass(w0)
-                                                              : common::first_order_lowpass(w0),
+    sections[section_index++] = {type == EqBandType::HighPass ? sonare::rt::first_order_highpass(w0)
+                                                              : sonare::rt::first_order_lowpass(w0),
                                  true};
   }
 
@@ -224,8 +224,9 @@ void CutFilter::build_sections(std::array<Section, kMaxSections>& sections, EqBa
     if (pair == pair_count - 1 && std::abs(q - kButterworthQ) > 1.0e-6f) {
       stage_q = std::max(q, 1.0e-6f);
     }
-    sections[section_index++] = {type == EqBandType::HighPass ? common::rbj_highpass(w0, stage_q)
-                                                              : common::rbj_lowpass(w0, stage_q),
+    sections[section_index++] = {type == EqBandType::HighPass
+                                     ? sonare::rt::rbj_highpass(w0, stage_q)
+                                     : sonare::rt::rbj_lowpass(w0, stage_q),
                                  true};
   }
 }

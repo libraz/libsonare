@@ -9,10 +9,10 @@
 #include <cstdint>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/linear_phase.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_engine.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
@@ -22,7 +22,7 @@ struct EqualizerProcessorConfig {
   LinearPhaseEqConfig linear_phase_config{};
 };
 
-class EqualizerProcessor : public common::ProcessorBase {
+class EqualizerProcessor : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 24;
 

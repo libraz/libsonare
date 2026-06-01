@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
 
@@ -13,7 +13,7 @@ struct LowEndFocusConfig {
   float transient_tightness = 0.0f;
 };
 
-class LowEndFocus : public common::ProcessorBase {
+class LowEndFocus : public rt::ProcessorBase {
  public:
   explicit LowEndFocus(LowEndFocusConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

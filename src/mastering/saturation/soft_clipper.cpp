@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::saturation {
@@ -19,7 +19,7 @@ void SoftClipper::prepare(double sample_rate, int max_block_size) {
 }
 
 void SoftClipper::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SoftClipper");
   if (num_channels < 0 || num_samples < 0)
     throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
@@ -77,7 +77,7 @@ float SoftClipper::process_sample(float sample, int channel) {
   const float drive = Waveshaper::db_to_linear(config_.drive_db);
   const float normalized = sample * drive / config_.ceiling;
   const float wet =
-      config_.ceiling * (config_.aliasing == common::AliasingControl::Adaa1
+      config_.ceiling * (config_.aliasing == sonare::rt::AliasingControl::Adaa1
                              ? tanh_adaa_[static_cast<size_t>(channel)].process(normalized)
                              : std::tanh(normalized));
   return sample * (1.0f - config_.mix) + wet * config_.mix;

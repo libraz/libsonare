@@ -5,8 +5,8 @@
 #include <limits>
 #include <vector>
 
-#include "mastering/common/scoped_no_denormals.h"
-#include "mastering/common/sliding_max.h"
+#include "rt/scoped_no_denormals.h"
+#include "rt/sliding_max.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -39,7 +39,7 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   update_time_constants();
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
   limiter_.prepare(sample_rate_, max_block_size_);
-  true_peak_filter_ = common::TruePeakFilter(0, config_.oversample_factor);
+  true_peak_filter_ = sonare::rt::TruePeakFilter(0, config_.oversample_factor);
   downsampler_.set_factor(config_.oversample_factor);
   oversampled_peak_window_.prepare(
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
@@ -78,7 +78,7 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
 
   // All supported oversampling factors (2, 4, 8) use the sample-accurate
   // polyphase brickwall path; validate_config rejects any other value.
-  common::ScopedNoDenormals no_denormals;
+  sonare::rt::ScopedNoDenormals no_denormals;
   process_polyphase(channels, num_channels, num_samples);
 }
 

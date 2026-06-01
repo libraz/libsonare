@@ -7,9 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/envelope_follower.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -27,7 +27,7 @@ struct TransientShaperConfig {
   float lookahead_ms = 0.0f;
 };
 
-class TransientShaper : public common::ProcessorBase {
+class TransientShaper : public rt::ProcessorBase {
  public:
   explicit TransientShaper(TransientShaperConfig config = {});
 
@@ -118,8 +118,8 @@ class TransientShaper : public common::ProcessorBase {
   // gain_smoothing_ms; recomputed by update_coefficients() from prepare() and
   // adopt_snapshot_for_block().
   float gain_smoothing_coeff_ = 0.0f;
-  std::vector<common::EnvelopeFollower> fast_followers_;
-  std::vector<common::EnvelopeFollower> slow_followers_;
+  std::vector<rt::EnvelopeFollower> fast_followers_;
+  std::vector<rt::EnvelopeFollower> slow_followers_;
   std::vector<float> gain_state_db_;
   std::vector<std::vector<float>> lookahead_;
   std::vector<size_t> lookahead_index_;

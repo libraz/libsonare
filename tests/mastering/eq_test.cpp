@@ -6,7 +6,6 @@
 #include <complex>
 #include <vector>
 
-#include "mastering/common/biquad_design.h"
 #include "mastering/eq/api_style.h"
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
@@ -22,6 +21,7 @@
 #include "mastering/eq/spectrum_engine.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "mastering/eq/tilt.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -77,12 +77,12 @@ float kernel_magnitude_at(const std::vector<float>& kernel, double frequency_hz,
   return static_cast<float>(std::abs(response));
 }
 
-void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
+void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
 }
 
-void process_stereo(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& left,
+void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
                     std::vector<float>& right) {
   float* channels[] = {left.data(), right.data()};
   processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
@@ -235,10 +235,10 @@ TEST_CASE("ParametricEq Vicanek high shelf falls back when endpoint error is exc
   constexpr int sample_rate = 48000;
   constexpr float gain_db = 24.0f;
   const float w0 = static_cast<float>(2.0 * kPiD * 18000.0 / sample_rate);
-  const auto coeffs = sonare::mastering::common::vicanek_high_shelf(w0, gain_db);
+  const auto coeffs = sonare::rt::vicanek_high_shelf(w0, gain_db);
 
-  const float nyquist_mag = sonare::mastering::common::biquad_magnitude(
-      coeffs, static_cast<float>(sonare::constants::kPiD * 0.999));
+  const float nyquist_mag =
+      sonare::rt::biquad_magnitude(coeffs, static_cast<float>(sonare::constants::kPiD * 0.999));
   REQUIRE_THAT(20.0f * std::log10(nyquist_mag), WithinAbs(gain_db, 0.05f));
 
   ParametricEq eq;
@@ -1403,11 +1403,11 @@ TEST_CASE("LinearPhaseEq kernel follows RBJ biquad magnitude", "[mastering][eq]"
   const EqBand band{EqBandType::Peak, 1000.0f, 6.0f, kButterworthQ, true};
   eq.set_band(0, band);
 
-  const auto coeffs = sonare::mastering::common::rbj_peak(
+  const auto coeffs = sonare::rt::rbj_peak(
       static_cast<float>(2.0 * kPiD * band.frequency_hz / sample_rate), band.q, band.gain_db);
 
   for (double frequency_hz : {250.0, 1000.0, 4000.0}) {
-    const float expected = sonare::mastering::common::biquad_magnitude(
+    const float expected = sonare::rt::biquad_magnitude(
         coeffs, static_cast<float>(2.0 * kPiD * frequency_hz / sample_rate));
     const float actual = kernel_magnitude_at(eq.kernel(), frequency_hz, sample_rate);
     INFO("frequency: " << frequency_hz);

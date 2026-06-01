@@ -21,7 +21,7 @@ struct AdaptiveReleaseConfig {
   float release_smoothing_ms = 20.0f;
 };
 
-class AdaptiveRelease : public common::ProcessorBase {
+class AdaptiveRelease : public rt::ProcessorBase {
  public:
   explicit AdaptiveRelease(AdaptiveReleaseConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

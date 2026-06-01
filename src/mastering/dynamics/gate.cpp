@@ -5,8 +5,8 @@
 #include <memory>
 #include <utility>
 
-#include "mastering/common/biquad_design.h"
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/biquad_design.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -68,7 +68,7 @@ const GateConfig* Gate::adopt_snapshot_for_block() noexcept {
 }
 
 void Gate::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Gate");
   if (num_channels < 0 || num_samples < 0)
     throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
@@ -183,7 +183,7 @@ void Gate::update_coefficients(const GateConfig& config) {
   // which is a passthrough so leaving them at the default is safe.
   if (config.key_hpf_hz > 0.0f) {
     const auto hpf =
-        common::onepole_highpass_coeffs(static_cast<double>(config.key_hpf_hz), sample_rate_);
+        sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.key_hpf_hz), sample_rate_);
     hpf_b0_ = hpf.b0;
     hpf_a1_ = hpf.a1;
   } else {

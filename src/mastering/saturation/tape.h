@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
-#include "mastering/common/oversampler.h"
-#include "mastering/common/processor_base.h"
+#include "rt/oversampler.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -36,7 +36,7 @@ struct TapeConfig {
   int oversample_factor = 1;
 };
 
-class Tape : public common::ProcessorBase {
+class Tape : public rt::ProcessorBase {
  public:
   explicit Tape(TapeConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
@@ -87,7 +87,7 @@ class Tape : public common::ProcessorBase {
   std::vector<common::JilesAthertonState> states_;
   std::vector<Biquad> head_bump_;
   std::vector<float> gap_state_;
-  common::Oversampler oversampler_;
+  sonare::rt::Oversampler oversampler_;
 };
 
 }  // namespace sonare::mastering::saturation

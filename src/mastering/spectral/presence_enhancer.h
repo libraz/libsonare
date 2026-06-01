@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "mastering/common/biquad.h"
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
 
@@ -14,7 +14,7 @@ struct PresenceEnhancerConfig {
   float q = 1.2f;
 };
 
-class PresenceEnhancer : public common::ProcessorBase {
+class PresenceEnhancer : public rt::ProcessorBase {
  public:
   explicit PresenceEnhancer(PresenceEnhancerConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;

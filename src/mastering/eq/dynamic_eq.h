@@ -7,8 +7,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
@@ -28,7 +28,7 @@ struct DynamicEqBand {
   float lookahead_ms = 0.0f;
 };
 
-class DynamicEq : public common::ProcessorBase {
+class DynamicEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 8;
 

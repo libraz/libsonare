@@ -45,7 +45,7 @@ float peak_abs(const std::vector<float>& samples) {
   return peak;
 }
 
-void process(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& mono) {
+void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
   float* channels[] = {mono.data()};
   processor.process(channels, 1, static_cast<int>(mono.size()));
 }

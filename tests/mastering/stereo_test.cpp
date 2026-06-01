@@ -41,7 +41,7 @@ float rms_tail(const std::vector<float>& samples, size_t skip) {
   return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
-void process_stereo(sonare::mastering::common::ProcessorBase& processor, std::vector<float>& left,
+void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
                     std::vector<float>& right) {
   float* channels[] = {left.data(), right.data()};
   processor.process(channels, 2, static_cast<int>(left.size()));

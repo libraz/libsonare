@@ -6,9 +6,9 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/envelope_follower.h"
-#include "mastering/common/lookahead_buffer.h"
-#include "mastering/common/processor_base.h"
+#include "rt/envelope_follower.h"
+#include "rt/lookahead_buffer.h"
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -26,7 +26,7 @@ struct SidechainRouterConfig {
   float lookahead_ms = 0.0f;
 };
 
-class SidechainRouter : public common::ProcessorBase {
+class SidechainRouter : public rt::ProcessorBase {
  public:
   explicit SidechainRouter(SidechainRouterConfig config = {});
 
@@ -125,9 +125,9 @@ class SidechainRouter : public common::ProcessorBase {
   const float* const* sidechain_channels_ = nullptr;
   int sidechain_num_channels_ = 0;
   int sidechain_num_samples_ = 0;
-  std::vector<common::EnvelopeFollower> followers_;
-  std::vector<common::LookaheadBuffer> lookahead_;
-  std::vector<common::LookaheadBuffer> gain_lookahead_;
+  std::vector<sonare::rt::EnvelopeFollower> followers_;
+  std::vector<sonare::rt::LookaheadBuffer> lookahead_;
+  std::vector<sonare::rt::LookaheadBuffer> gain_lookahead_;
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;
   float hpf_b0_ = 1.0f;

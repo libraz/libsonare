@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
-#include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -18,6 +17,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "rt/processor_base.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
@@ -27,7 +27,7 @@ namespace sonare::mastering::api {
 // ---------------------------------------------------------------------------
 
 struct StreamingMasteringChain::Impl {
-  std::vector<std::unique_ptr<common::ProcessorBase>> processors;
+  std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
 };
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
@@ -82,7 +82,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   impl_->processors.clear();
   stage_names_.clear();
 
-  auto add_stage = [&](std::unique_ptr<common::ProcessorBase> proc, const char* name) {
+  auto add_stage = [&](std::unique_ptr<rt::ProcessorBase> proc, const char* name) {
     proc->prepare(sample_rate, max_block_size);
     impl_->processors.push_back(std::move(proc));
     stage_names_.emplace_back(name);

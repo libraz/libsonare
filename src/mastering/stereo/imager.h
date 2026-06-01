@@ -3,7 +3,7 @@
 /// @file imager.h
 /// @brief Stereo width processor.
 
-#include "mastering/common/processor_base.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
 
@@ -14,7 +14,7 @@ struct ImagerConfig {
   bool preserve_energy = true;
 };
 
-class Imager : public common::ProcessorBase {
+class Imager : public rt::ProcessorBase {
  public:
   explicit Imager(ImagerConfig config = {});
 

@@ -6,8 +6,8 @@
 #include <array>
 #include <vector>
 
-#include "mastering/common/processor_base.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
 
@@ -27,7 +27,7 @@ struct MultibandImagerConfig {
   };
 };
 
-class MultibandImager : public common::ProcessorBase {
+class MultibandImager : public rt::ProcessorBase {
  public:
   explicit MultibandImager(MultibandImagerConfig config = {});
 

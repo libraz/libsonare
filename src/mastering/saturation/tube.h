@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "mastering/common/oversampler.h"
-#include "mastering/common/processor_base.h"
+#include "rt/oversampler.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
 
@@ -16,7 +16,7 @@ struct TubeConfig {
   float harmonic_drive = 1.0f;
 };
 
-class Tube : public common::ProcessorBase {
+class Tube : public rt::ProcessorBase {
  public:
   explicit Tube(TubeConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
@@ -46,7 +46,7 @@ class Tube : public common::ProcessorBase {
   TubeConfig tube_config_{};
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
-  common::Oversampler oversampler_{4};
+  sonare::rt::Oversampler oversampler_{4};
   std::vector<float> scratch_;
   std::vector<float> miller_state_;
 };

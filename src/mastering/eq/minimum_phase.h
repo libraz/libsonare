@@ -7,12 +7,12 @@
 /// reconstruction engine. It exposes the low-latency Natural Phase path by
 /// forcing supported bands through the Vicanek coefficient design.
 
-#include "mastering/common/processor_base.h"
 #include "mastering/eq/parametric.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::eq {
 
-class MinimumPhaseEq : public common::ProcessorBase {
+class MinimumPhaseEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = ParametricEq::kMaxBands;
 

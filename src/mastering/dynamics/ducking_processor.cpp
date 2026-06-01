@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "mastering/common/scoped_no_denormals.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
@@ -19,7 +19,7 @@ void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
 }
 
 void DuckingProcessor::process(float* const* channels, int num_channels, int num_samples) {
-  sonare::mastering::common::ScopedNoDenormals guard;
+  sonare::rt::ScopedNoDenormals guard;
   router_.process(channels, num_channels, num_samples);
 }
 
