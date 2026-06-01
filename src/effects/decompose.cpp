@@ -6,13 +6,15 @@
 #include <cmath>
 #include <random>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
 
 namespace {
 
-constexpr float kEps = 1e-9f;
+// Divide-by-amplitude / near-zero guard (== sonare::constants::kAmpEpsilon, 1e-9f).
+constexpr float kEps = sonare::constants::kAmpEpsilon;
 
 /// @brief Random non-negative initialisation, seeded for determinism.
 void init_random(std::vector<float>& W, std::vector<float>& H, int n_features, int n_components,

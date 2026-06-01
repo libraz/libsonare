@@ -9,6 +9,8 @@
 #include <numeric>
 #include <vector>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -426,6 +428,30 @@ TEST_CASE("Spectrogram from_complex", "[spectrum]") {
   // Verify data
   REQUIRE(spec.at(0, 0) == std::complex<float>(1.0f, 1.0f));
   REQUIRE(spec.at(2, 1) == std::complex<float>(3.0f, 2.0f));
+}
+
+TEST_CASE("Spectrogram from_complex rejects invalid dimensions", "[spectrum][edge]") {
+  constexpr int n_fft = 8;
+  constexpr int hop_length = 4;
+  constexpr int sr = 22050;
+
+  // Non-null buffer so the failure is attributable to the dimension check.
+  std::vector<std::complex<float>> data(8, {1.0f, 0.0f});
+
+  // n_bins <= 0
+  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 0, 3, n_fft, hop_length, sr),
+                    SonareException);
+  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), -1, 3, n_fft, hop_length, sr),
+                    SonareException);
+
+  // n_frames <= 0
+  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 5, 0, n_fft, hop_length, sr),
+                    SonareException);
+  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 5, -1, n_fft, hop_length, sr),
+                    SonareException);
+
+  // A valid small case still succeeds.
+  REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), 2, 1, n_fft, hop_length, sr));
 }
 
 TEST_CASE("Spectrogram from_complex can preserve non-centered origin", "[spectrum]") {

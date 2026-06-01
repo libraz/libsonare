@@ -180,18 +180,27 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
       magnitude, n_bins, n_frames);
 
-  Eigen::ArrayXXf power = mag_map.array().square().max(kAmin);
-  Eigen::RowVectorXf sum_log = power.log().colwise().sum();
-  Eigen::RowVectorXf sum_linear = power.colwise().sum();
+  // Raw power per bin and its per-frame maximum (before the amin floor). A frame
+  // whose entire spectrum sits at/below the floor is silent; librosa returns 0
+  // flatness for such frames rather than the maximally-flat 1.0 the floored
+  // geometric/arithmetic ratio would otherwise produce.
+  Eigen::ArrayXXf raw_power = mag_map.array().square();
+  Eigen::ArrayXf frame_max = raw_power.colwise().maxCoeff().transpose();
+
+  Eigen::ArrayXXf power = raw_power.max(kAmin);
+  Eigen::ArrayXf sum_log = power.log().colwise().sum().transpose();
+  Eigen::ArrayXf sum_linear = power.colwise().sum().transpose();
 
   std::vector<float> flatness(n_frames);
-  Eigen::Map<Eigen::RowVectorXf> result_map(flatness.data(), n_frames);
+  Eigen::Map<Eigen::ArrayXf> result_map(flatness.data(), n_frames);
 
   float n_bins_f = static_cast<float>(n_bins);
-  Eigen::ArrayXf geometric_mean = (sum_log.array() / n_bins_f).exp();
-  Eigen::ArrayXf arithmetic_mean = sum_linear.array() / n_bins_f;
+  Eigen::ArrayXf geometric_mean = (sum_log / n_bins_f).exp();
+  Eigen::ArrayXf arithmetic_mean = sum_linear / n_bins_f;
 
-  result_map = geometric_mean / arithmetic_mean;
+  // Silent frames (max power <= floor) report 0; others use the geo/arith ratio.
+  result_map =
+      (frame_max > kAmin).select(geometric_mean / arithmetic_mean, Eigen::ArrayXf::Zero(n_frames));
 
   return flatness;
 }
@@ -349,15 +358,27 @@ std::vector<float> zero_crossing_rate(const Audio& audio, int frame_length, int 
 
 std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, int frame_length,
                                       int hop_length) {
-  SONARE_CHECK(samples != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_samples == 0 || samples != nullptr, ErrorCode::InvalidParameter);
+
+  // Empty input: no zero crossings to count. Return a single zero-rate frame so
+  // downstream callers always get a defined, non-empty result (and we never
+  // index into the empty padded buffer below).
+  if (n_samples == 0) {
+    return std::vector<float>(1, 0.0f);
+  }
 
   std::vector<float> padded = pad_for_centered_zcr(samples, n_samples, frame_length);
   const float* padded_samples = padded.data();
   size_t padded_length = padded.size();
 
-  int n_frames =
-      1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
+  // Guard the unsigned subtraction below: if the padded signal is shorter than
+  // one frame, fall back to a single frame instead of wrapping to a huge count.
+  int n_frames = 1;
+  if (padded_length >= static_cast<size_t>(frame_length)) {
+    n_frames = 1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) /
+                                    static_cast<size_t>(hop_length));
+  }
   if (n_frames <= 0) {
     n_frames = 1;
   }

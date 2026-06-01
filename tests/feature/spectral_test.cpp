@@ -254,6 +254,38 @@ TEST_CASE("spectral_flatness squares magnitude like librosa", "[spectral]") {
   REQUIRE_THAT(flatness[0], WithinAbs(0.1980198f, 1e-6f));
 }
 
+TEST_CASE("spectral_flatness silent frame returns zero", "[spectral][edge]") {
+  // A fully-silent (all-zero) frame is tonally undefined; librosa returns 0
+  // flatness for it rather than the maximally-flat 1.0 the floored
+  // geometric/arithmetic ratio would otherwise produce.
+  std::vector<float> silent(8, 0.0f);
+  std::vector<float> silent_flatness = spectral_flatness(silent.data(), 8, 1);
+  REQUIRE(silent_flatness.size() == 1);
+  REQUIRE_THAT(silent_flatness[0], WithinAbs(0.0f, 1e-12f));
+
+  // A broadband (flat, nonzero) frame should yield a clearly higher value.
+  std::vector<float> broadband(8, 1.0f);
+  std::vector<float> broadband_flatness = spectral_flatness(broadband.data(), 8, 1);
+  REQUIRE(broadband_flatness.size() == 1);
+  REQUIRE(broadband_flatness[0] > silent_flatness[0]);
+  REQUIRE(broadband_flatness[0] > 0.5f);
+}
+
+TEST_CASE("zero_crossing_rate handles empty input", "[spectral][zcr][edge]") {
+  // Empty input must not crash and must return a single defined zero-rate frame
+  // so downstream callers always get a non-empty result.
+  std::vector<float> empty;
+  std::vector<float> zcr = zero_crossing_rate(empty.data(), empty.size(), 2048, 512);
+  REQUIRE(zcr.size() == 1);
+  REQUIRE(zcr[0] == 0.0f);
+
+  // The Audio overload of an empty signal behaves the same way.
+  Audio empty_audio = Audio::from_vector(std::vector<float>{}, 22050);
+  std::vector<float> zcr_audio = zero_crossing_rate(empty_audio);
+  REQUIRE(zcr_audio.size() == 1);
+  REQUIRE(zcr_audio[0] == 0.0f);
+}
+
 TEST_CASE("spectral_contrast basic", "[spectral]") {
   Audio audio = create_sine_audio(1000.0f);
   int sr = audio.sample_rate();

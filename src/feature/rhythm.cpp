@@ -31,8 +31,12 @@ std::vector<float> pad_envelope(const std::vector<float>& env, int pad, bool cen
 
 }  // namespace
 
-std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
+std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
                              const TempogramConfig& config) {
+  // The autocorrelation tempogram operates purely on the onset envelope and its
+  // hop/window config; sr is kept only for API symmetry with the BPM-axis
+  // helpers (tempogram_ratio, plp) that do need it.
+  (void)sr;
   if (config.win_length <= 1) {
     throw SonareException(ErrorCode::InvalidParameter, "tempogram: win_length must be > 1");
   }

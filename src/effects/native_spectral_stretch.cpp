@@ -6,6 +6,7 @@
 
 #include "core/resample.h"
 #include "effects/phase_vocoder.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -15,8 +16,8 @@ Audio native_spectral_time_stretch(const Audio& audio, float rate) {
   SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
 
   StftConfig stft_config;
-  stft_config.n_fft = 2048;
-  stft_config.hop_length = 512;
+  stft_config.n_fft = constants::kDefaultNFft;
+  stft_config.hop_length = constants::kDefaultHopLength;
   stft_config.window = WindowType::Hann;
   stft_config.center = true;
 

@@ -301,13 +301,19 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   int sr = audio.sample_rate();
   std::vector<float> padded;
   const float* data = audio.data();
-  int signal_samples = static_cast<int>(audio.size());
+  size_t signal_samples = audio.size();
   if (config.center) {
     padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
     data = padded.data();
-    signal_samples = static_cast<int>(padded.size());
+    signal_samples = padded.size();
   }
-  int n_frames = 1 + (signal_samples - config.frame_length) / config.hop_length;
+  // Compute the frame count in size_t to avoid int overflow / unsigned wrap for
+  // long signals; guard the case where the signal is shorter than one frame.
+  if (signal_samples < static_cast<size_t>(config.frame_length)) {
+    return PitchResult();
+  }
+  int n_frames = 1 + static_cast<int>((signal_samples - static_cast<size_t>(config.frame_length)) /
+                                      static_cast<size_t>(config.hop_length));
 
   if (n_frames <= 0) {
     return PitchResult();
@@ -345,13 +351,19 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   int sr = audio.sample_rate();
   std::vector<float> padded;
   const float* data = audio.data();
-  int signal_samples = static_cast<int>(audio.size());
+  size_t signal_samples = audio.size();
   if (config.center) {
     padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
     data = padded.data();
-    signal_samples = static_cast<int>(padded.size());
+    signal_samples = padded.size();
   }
-  int n_frames = 1 + (signal_samples - config.frame_length) / config.hop_length;
+  // Compute the frame count in size_t to avoid int overflow / unsigned wrap for
+  // long signals; guard the case where the signal is shorter than one frame.
+  if (signal_samples < static_cast<size_t>(config.frame_length)) {
+    return PitchResult();
+  }
+  int n_frames = 1 + static_cast<int>((signal_samples - static_cast<size_t>(config.frame_length)) /
+                                      static_cast<size_t>(config.hop_length));
 
   if (n_frames <= 0) {
     return PitchResult();

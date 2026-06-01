@@ -48,10 +48,14 @@ struct VqtKernelCacheKeyHash {
 using EigenKernelMatrix =
     Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-/// @brief Cached kernel with Eigen matrix
+/// @brief Cached kernel with Eigen matrix.
+/// @details Holds an iterator pointing back into the LRU list so cache hits
+/// can splice the key to the most-recently-used end in O(1) instead of doing
+/// an O(n) `lru.remove(key)`.
 struct CachedVqtKernel {
   std::shared_ptr<VqtKernel> kernel;
   std::shared_ptr<EigenKernelMatrix> eigen_matrix;
+  std::list<VqtKernelCacheKey>::iterator lru_it;
 };
 
 /// @brief Maximum number of cached VQT kernels
@@ -82,9 +86,9 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   std::lock_guard<std::mutex> lock(cache.mutex);
   auto it = cache.map.find(key);
   if (it != cache.map.end()) {
-    // Move to front of LRU list (most recently used)
-    cache.lru.remove(key);
-    cache.lru.push_front(key);
+    // O(1) MRU update: splice the existing list node to the front instead of
+    // searching with `lru.remove(key)` (was O(n) while holding the mutex).
+    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
     return it->second;
   }
 
@@ -110,9 +114,10 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
     cache.map.erase(oldest_key);
   }
 
-  CachedVqtKernel cached{std::shared_ptr<VqtKernel>(std::move(kernel)), eigen_matrix};
-  cache.map[key] = cached;
   cache.lru.push_front(key);
+  CachedVqtKernel cached{std::shared_ptr<VqtKernel>(std::move(kernel)), eigen_matrix,
+                         cache.lru.begin()};
+  cache.map[key] = cached;
   return cached;
 }
 

@@ -128,7 +128,9 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
   }
   if (n_samples == 0 || config.n_filters == 0) return {};
 
-  const double tuning_factor = std::pow(2.0, static_cast<double>(config.tuning) / 12.0);
+  const double tuning_factor =
+      std::pow(2.0, static_cast<double>(config.tuning) /
+                        static_cast<double>(constants::kSemitonesPerOctave));
   const double sr = static_cast<double>(config.sr);
   const double nyquist = 0.5 * sr;
 
@@ -137,7 +139,8 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
   for (int i = 0; i < config.n_filters; ++i) {
     double midi = static_cast<double>(config.midi_start + i);
     centers[i] = static_cast<double>(constants::kA4Hz) *
-                 std::pow(2.0, (midi - static_cast<double>(constants::kMidiA4)) / 12.0) *
+                 std::pow(2.0, (midi - static_cast<double>(constants::kMidiA4)) /
+                                   static_cast<double>(constants::kSemitonesPerOctave)) *
                  tuning_factor;
   }
 

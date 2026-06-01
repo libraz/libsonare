@@ -54,7 +54,11 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
       hop_length_(hop_length),
       sample_rate_(sample_rate),
       win_length_(win_length > 0 ? win_length : n_fft),
-      center_(center) {}
+      center_(center) {
+  // A real STFT frame needs at least a 2-point FFT; smaller sizes make the
+  // n_fft/2 center-trim degenerate. Guards to_audio() against tiny-n_fft input.
+  SONARE_CHECK(n_fft >= 2, ErrorCode::InvalidParameter);
+}
 
 Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
                                  SpectrogramProgressCallback progress_callback) {
@@ -158,7 +162,14 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
                                       int n_fft, int hop_length, int sample_rate, bool center,
                                       int win_length) {
-  std::vector<std::complex<float>> spectrum(data, data + n_bins * n_frames);
+  SONARE_CHECK(data != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  // Compute the element count in size_t so the multiply cannot overflow int;
+  // reject sizes that would not fit in a vector index.
+  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
+  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
+               ErrorCode::InvalidParameter);
+  std::vector<std::complex<float>> spectrum(data, data + total);
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate,
                      win_length, center);
 }
@@ -323,6 +334,15 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     std::vector<float> trimmed(output.begin() + trim_start,
                                output.begin() + std::min(trim_end, full_length));
     return Audio::from_vector(std::move(trimmed), sample_rate_);
+  }
+
+  // Centered reconstruction whose valid region is empty (e.g. a single frame
+  // where n_fft/2 of padding is trimmed from both ends): the centered signal
+  // contributed no samples, so return an empty Audio rather than leaking the
+  // padded buffer. The non-centered path always satisfies trim_start < trim_end
+  // above and is unaffected.
+  if (center_) {
+    return Audio::from_vector(std::vector<float>(), sample_rate_);
   }
 
   return Audio::from_vector(std::move(output), sample_rate_);

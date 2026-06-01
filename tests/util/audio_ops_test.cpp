@@ -70,6 +70,20 @@ TEST_CASE("lpc on AR(2) recovers approximate coefficients", "[audio_ops][util]")
   REQUIRE_THAT(coeffs[2], WithinAbs(a2, 0.1f));
 }
 
+TEST_CASE("lpc deterministic order-1 matches reference", "[audio_ops][util]") {
+  // Deterministic order-1 Burg LPC of {1,2,3,4}. With fwd = y[1:], bwd = y[:-1]:
+  //   dot = 1*2 + 2*3 + 3*4 = 20
+  //   den = (4+9+16) + (1+4+9) = 43
+  //   a_1 = -2*dot/den = -40/43 = -0.93023256
+  // Verified against librosa.lpc([1,2,3,4], order=1) -> [1, -0.93023256].
+  // Locks in the index-offset refactor: the result must be unchanged.
+  std::vector<float> y{1.0f, 2.0f, 3.0f, 4.0f};
+  auto coeffs = lpc(y, 1);
+  REQUIRE(coeffs.size() == 2);
+  REQUIRE(coeffs[0] == 1.0f);
+  REQUIRE_THAT(coeffs[1], WithinAbs(-0.93023256f, 1e-6f));
+}
+
 TEST_CASE("lpc rejects invalid order", "[audio_ops][util][edge]") {
   std::vector<float> y(8, 1.0f);
   REQUIRE_THROWS_AS(lpc(y, 0), SonareException);

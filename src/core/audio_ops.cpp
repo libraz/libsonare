@@ -116,7 +116,12 @@ std::vector<float> autocorrelate(const float* y, std::size_t n, int max_size) {
 
   // FFT path. Zero-pad to next power of two of (2n - 1) so that the circular
   // autocorrelation of the padded signal equals the linear autocorrelation
-  // restricted to non-negative lags.
+  // restricted to non-negative lags. Reject sizes so large that 2n-1 or the
+  // power-of-two padding would overflow the int FFT length.
+  constexpr std::size_t kMaxAutocorrN = (static_cast<std::size_t>(1) << 29);
+  if (n > kMaxAutocorrN) {
+    throw SonareException(ErrorCode::InvalidParameter, "autocorrelate: input too large");
+  }
   std::size_t n_pad = 1;
   while (n_pad < 2 * n - 1) n_pad *= 2;
 
@@ -168,14 +173,25 @@ std::vector<float> lpc(const float* y, std::size_t n, int order) {
   ar_coeffs[0] = 1.0;
   ar_coeffs_prev[0] = 1.0;
 
-  // fwd_pred_error = y[1:], bwd_pred_error = y[:-1]
+  // fwd_pred_error = y[1:], bwd_pred_error = y[:-1].
+  // Rather than erase the front of `fwd` / pop the back of `bwd` each iteration
+  // (an O(n) shift per step -> O(n^2) overall), keep the buffers intact and walk
+  // the active window with index offsets: active forward errors are
+  // fwd[fwd_start .. fwd_start + active_len - 1] and active backward errors are
+  // bwd[0 .. active_len - 1]. Dropping the forward front is `++fwd_start`;
+  // dropping the backward back is `--active_len`. This keeps results identical
+  // while making the loop O(n * order).
   std::vector<double> fwd(y_d.begin() + 1, y_d.end());
   std::vector<double> bwd(y_d.begin(), y_d.end() - 1);
+  std::size_t fwd_start = 0;
+  std::size_t active_len = fwd.size();
 
   // den = sum(fwd^2 + bwd^2)
   double den = 0.0;
-  for (std::size_t i = 0; i < fwd.size(); ++i) {
-    den += fwd[i] * fwd[i] + bwd[i] * bwd[i];
+  for (std::size_t k = 0; k < active_len; ++k) {
+    const double f = fwd[fwd_start + k];
+    const double b = bwd[k];
+    den += f * f + b * b;
   }
 
   // tiny / epsilon for stability (librosa uses util.tiny - the smallest normal).
@@ -184,8 +200,8 @@ std::vector<float> lpc(const float* y, std::size_t n, int order) {
   for (int i = 0; i < order; ++i) {
     // reflect_coeff = -2 * sum(bwd * fwd) / (den + epsilon)
     double dot = 0.0;
-    for (std::size_t k = 0; k < fwd.size(); ++k) {
-      dot += bwd[k] * fwd[k];
+    for (std::size_t k = 0; k < active_len; ++k) {
+      dot += bwd[k] * fwd[fwd_start + k];
     }
     double reflect_coeff = -2.0 * dot / (den + epsilon);
 
@@ -198,25 +214,30 @@ std::vector<float> lpc(const float* y, std::size_t n, int order) {
       ar_coeffs[j] = ar_coeffs_prev[j] + reflect_coeff * ar_coeffs_prev[i - j + 1];
     }
 
-    // Update forward and backward prediction errors.
-    std::vector<double> fwd_tmp(fwd);
-    for (std::size_t k = 0; k < fwd.size(); ++k) {
-      fwd[k] = fwd_tmp[k] + reflect_coeff * bwd[k];
-      bwd[k] = bwd[k] + reflect_coeff * fwd_tmp[k];
+    // Update forward and backward prediction errors in place over the active
+    // window. fwd_prev = fwd before the update; computed sample-by-sample so no
+    // separate copy of the whole buffer is needed.
+    for (std::size_t k = 0; k < active_len; ++k) {
+      const double fwd_prev = fwd[fwd_start + k];
+      const double bwd_prev = bwd[k];
+      fwd[fwd_start + k] = fwd_prev + reflect_coeff * bwd_prev;
+      bwd[k] = bwd_prev + reflect_coeff * fwd_prev;
     }
 
     // Compute new den via recursion (eqn 17):
     //   q = 1 - reflect_coeff^2
     //   den = q * den - bwd[-1]^2 - fwd[0]^2
-    if (!fwd.empty()) {
+    if (active_len > 0) {
       const double q = 1.0 - reflect_coeff * reflect_coeff;
-      den = q * den - bwd.back() * bwd.back() - fwd.front() * fwd.front();
+      const double bwd_back = bwd[active_len - 1];
+      const double fwd_front = fwd[fwd_start];
+      den = q * den - bwd_back * bwd_back - fwd_front * fwd_front;
     }
 
-    // Shift up forward error / down backward error.
-    if (!fwd.empty()) {
-      fwd.erase(fwd.begin());
-      bwd.pop_back();
+    // Shift up forward error (drop front) / down backward error (drop back).
+    if (active_len > 0) {
+      ++fwd_start;
+      --active_len;
     }
   }
 
