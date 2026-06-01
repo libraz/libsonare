@@ -344,35 +344,26 @@ SonareError sonare_tempogram_ratio(const float* tempogram_data, size_t length, i
 
 SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sr);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sr);
-  metering::LufsResult result = metering::lufs(audio);
-  out->integrated_lufs = result.integrated_lufs;
-  out->momentary_lufs = result.momentary_lufs;
-  out->short_term_lufs = result.short_term_lufs;
-  out->loudness_range = result.loudness_range;
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+    metering::LufsResult result = metering::lufs(audio);
+    out->integrated_lufs = result.integrated_lufs;
+    out->momentary_lufs = result.momentary_lufs;
+    out->short_term_lufs = result.short_term_lufs;
+    out->loudness_range = result.loudness_range;
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, float** out,
                                   size_t* out_length) {
-  SonareError err = validate_audio_params(samples, length, sr);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sr);
-  return copy_float_vector(metering::momentary_lufs(audio), out, out_length);
-  SONARE_C_CATCH
+  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+    return copy_float_vector(metering::momentary_lufs(audio), out, out_length);
+  });
 }
 
 SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, float** out,
                                    size_t* out_length) {
-  SonareError err = validate_audio_params(samples, length, sr);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sr);
-  return copy_float_vector(metering::short_term_lufs(audio), out, out_length);
-  SONARE_C_CATCH
+  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+    return copy_float_vector(metering::short_term_lufs(audio), out, out_length);
+  });
 }

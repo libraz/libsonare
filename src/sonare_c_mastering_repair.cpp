@@ -171,17 +171,14 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
                                             size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = sonare::mastering::repair::declick(audio, to_cpp_declick_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result = sonare::mastering::repair::declick(audio, to_cpp_declick_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
@@ -190,21 +187,19 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       float** out, size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = sonare::mastering::repair::denoise_classical(audio, to_cpp_denoise_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result =
+        sonare::mastering::repair::denoise_classical(audio, to_cpp_denoise_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
@@ -212,17 +207,14 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
                                            size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
@@ -230,17 +222,14 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
                                               size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result = sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
@@ -248,17 +237,14 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
                                           size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = sonare::mastering::repair::dehum(audio, to_cpp_dehum_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result = sonare::mastering::repair::dehum(audio, to_cpp_dehum_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
@@ -267,8 +253,6 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        float** out, size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0 || config->hop_length > config->n_fft) {
@@ -276,15 +260,14 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
     }
   }
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result =
-      sonare::mastering::repair::dereverb_classical(audio, to_cpp_dereverb_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result =
+        sonare::mastering::repair::dereverb_classical(audio, to_cpp_dereverb_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
@@ -293,15 +276,13 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
                                                  size_t* out_length) {
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  Audio result = sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config));
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result =
+        sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config));
+    *out_length = result.size();
+    *out = new float[result.size()];
+    std::memcpy(*out, result.data(), result.size() * sizeof(float));
+    return SONARE_OK;
+  });
 }

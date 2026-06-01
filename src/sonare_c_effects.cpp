@@ -15,29 +15,26 @@ using namespace sonare_c_detail;
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
                         int kernel_percussive, SonareHpssResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
   out->harmonic = nullptr;
   out->percussive = nullptr;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  HpssConfig config;
-  config.kernel_size_harmonic = kernel_harmonic;
-  config.kernel_size_percussive = kernel_percussive;
-  HpssAudioResult result = hpss(audio, config);
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    HpssConfig config;
+    config.kernel_size_harmonic = kernel_harmonic;
+    config.kernel_size_percussive = kernel_percussive;
+    HpssAudioResult result = hpss(audio, config);
 
-  out->length = result.harmonic.size();
-  out->sample_rate = result.harmonic.sample_rate();
-  std::unique_ptr<float[]> harmonic(new float[out->length]);
-  std::unique_ptr<float[]> percussive(new float[out->length]);
-  std::memcpy(harmonic.get(), result.harmonic.data(), out->length * sizeof(float));
-  std::memcpy(percussive.get(), result.percussive.data(), out->length * sizeof(float));
-  out->harmonic = release_array(harmonic);
-  out->percussive = release_array(percussive);
-  return SONARE_OK;
-  SONARE_C_CATCH
+    out->length = result.harmonic.size();
+    out->sample_rate = result.harmonic.sample_rate();
+    std::unique_ptr<float[]> harmonic(new float[out->length]);
+    std::unique_ptr<float[]> percussive(new float[out->length]);
+    std::memcpy(harmonic.get(), result.harmonic.data(), out->length * sizeof(float));
+    std::memcpy(percussive.get(), result.percussive.data(), out->length * sizeof(float));
+    out->harmonic = release_array(harmonic);
+    out->percussive = release_array(percussive);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,

@@ -19,8 +19,6 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
   out->samples = nullptr;
   out->length = 0;
@@ -30,21 +28,20 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
   out->applied_gain_db = 0.0f;
   out->latency_samples = 0;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  auto result = sonare::mastering::maximizer::loudness_optimize(audio, to_cpp_config(config));
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    auto result = sonare::mastering::maximizer::loudness_optimize(audio, to_cpp_config(config));
 
-  out->length = result.audio.size();
-  out->sample_rate = result.audio.sample_rate();
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
+    out->length = result.audio.size();
+    out->sample_rate = result.audio.sample_rate();
+    out->input_lufs = result.input_lufs;
+    out->output_lufs = result.output_lufs;
+    out->applied_gain_db = result.applied_gain_db;
 
-  std::unique_ptr<float[]> processed(new float[out->length]);
-  std::memcpy(processed.get(), result.audio.data(), out->length * sizeof(float));
-  out->samples = release_array(processed);
-  return SONARE_OK;
-  SONARE_C_CATCH
+    std::unique_ptr<float[]> processed(new float[out->length]);
+    std::memcpy(processed.get(), result.audio.data(), out->length * sizeof(float));
+    out->samples = release_array(processed);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_apply_processor(const char* processor_name, const float* samples,

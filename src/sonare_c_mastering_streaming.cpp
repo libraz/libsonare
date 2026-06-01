@@ -18,28 +18,25 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                const SonareStreamingPlatform* platforms,
                                                size_t platform_count, char** json_out) {
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
 
-  SONARE_C_TRY
-  std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
-  cpp_platforms.reserve(platform_count);
-  for (size_t index = 0; index < platform_count; ++index) {
-    if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
-    cpp_platforms.push_back(
-        {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
-  }
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
+    cpp_platforms.reserve(platform_count);
+    for (size_t index = 0; index < platform_count; ++index) {
+      if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
+      cpp_platforms.push_back(
+          {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
+    }
 
-  const Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  const auto results = platform_count == 0
-                           ? sonare::mastering::maximizer::streaming_preview(audio)
-                           : sonare::mastering::maximizer::streaming_preview(audio, cpp_platforms);
+    const auto results =
+        platform_count == 0 ? sonare::mastering::maximizer::streaming_preview(audio)
+                            : sonare::mastering::maximizer::streaming_preview(audio, cpp_platforms);
 
-  *json_out = copy_string(sonare::mastering::maximizer::streaming_preview_to_json(results));
-  return SONARE_OK;
-  SONARE_C_CATCH
+    *json_out = copy_string(sonare::mastering::maximizer::streaming_preview_to_json(results));
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,

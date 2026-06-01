@@ -33,96 +33,78 @@ bool is_power_of_two(int v) { return v > 0 && (v & (v - 1)) == 0; }
 SonareError sonare_metering_peak_db(const float* samples, size_t length, int sample_rate,
                                     float* out_db) {
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  *out_db = metering::peak_db(audio);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_db = metering::peak_db(audio);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_metering_rms_db(const float* samples, size_t length, int sample_rate,
                                    float* out_db) {
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  *out_db = metering::rms_db(audio);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_db = metering::rms_db(audio);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_metering_crest_factor_db(const float* samples, size_t length, int sample_rate,
                                             float* out_db) {
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  *out_db = metering::crest_factor_db(audio);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_db = metering::crest_factor_db(audio);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_metering_dc_offset(const float* samples, size_t length, int sample_rate,
                                       float* out_value) {
   if (!out_value) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  *out_value = metering::dc_offset(audio);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_value = metering::dc_offset(audio);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_metering_true_peak_db(const float* samples, size_t length, int sample_rate,
                                          int oversample_factor, float* out_db) {
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   int factor = oversample_factor == 0 ? 4 : oversample_factor;
   if (factor < 1 || factor > 16 || !is_power_of_two(factor)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  *out_db = metering::true_peak_db(audio, factor);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_db = metering::true_peak_db(audio, factor);
+    return SONARE_OK;
+  });
 }
 
 SonareError sonare_metering_detect_clipping(const float* samples, size_t length, int sample_rate,
                                             float threshold, size_t min_region_samples,
                                             SonareClippingResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   std::memset(out, 0, sizeof(*out));
   float effective_threshold = threshold <= 0.0f ? 0.999f : threshold;
   size_t effective_min = min_region_samples == 0 ? 1u : min_region_samples;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  metering::ClippingResult result =
-      metering::detect_clipping(audio, effective_threshold, effective_min);
-  out->clipped_samples = result.clipped_samples;
-  out->clipping_ratio = result.clipping_ratio;
-  out->max_clipped_peak = result.max_clipped_peak;
-  out->region_count = result.regions.size();
-  if (!result.regions.empty()) {
-    std::unique_ptr<SonareClippingRegion[]> tmp(new SonareClippingRegion[result.regions.size()]);
-    for (size_t i = 0; i < result.regions.size(); ++i) {
-      tmp[i].start_sample = result.regions[i].start_sample;
-      tmp[i].end_sample = result.regions[i].end_sample;
-      tmp[i].length = result.regions[i].length;
-      tmp[i].peak = result.regions[i].peak;
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    metering::ClippingResult result =
+        metering::detect_clipping(audio, effective_threshold, effective_min);
+    out->clipped_samples = result.clipped_samples;
+    out->clipping_ratio = result.clipping_ratio;
+    out->max_clipped_peak = result.max_clipped_peak;
+    out->region_count = result.regions.size();
+    if (!result.regions.empty()) {
+      std::unique_ptr<SonareClippingRegion[]> tmp(new SonareClippingRegion[result.regions.size()]);
+      for (size_t i = 0; i < result.regions.size(); ++i) {
+        tmp[i].start_sample = result.regions[i].start_sample;
+        tmp[i].end_sample = result.regions[i].end_sample;
+        tmp[i].length = result.regions[i].length;
+        tmp[i].peak = result.regions[i].peak;
+      }
+      out->regions = release_array(tmp);
     }
-    out->regions = release_array(tmp);
-  }
-  return SONARE_OK;
-  SONARE_C_CATCH
+    return SONARE_OK;
+  });
 }
 
 void sonare_free_clipping_result(SonareClippingResult* result) {
@@ -136,8 +118,6 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
                                           float window_sec, float hop_sec, float low_percentile,
                                           float high_percentile, SonareDynamicRangeResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   std::memset(out, 0, sizeof(*out));
   metering::DynamicRangeConfig cfg;
   if (window_sec > 0.0f) cfg.window_sec = window_sec;
@@ -147,21 +127,20 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
   if (cfg.low_percentile >= cfg.high_percentile) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
-  out->dynamic_range_db = result.dynamic_range_db;
-  out->low_percentile_db = result.low_percentile_db;
-  out->high_percentile_db = result.high_percentile_db;
-  out->window_count = result.window_rms_db.size();
-  if (!result.window_rms_db.empty()) {
-    std::unique_ptr<float[]> tmp(new float[result.window_rms_db.size()]);
-    std::memcpy(tmp.get(), result.window_rms_db.data(),
-                result.window_rms_db.size() * sizeof(float));
-    out->window_rms_db = release_array(tmp);
-  }
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
+    out->dynamic_range_db = result.dynamic_range_db;
+    out->low_percentile_db = result.low_percentile_db;
+    out->high_percentile_db = result.high_percentile_db;
+    out->window_count = result.window_rms_db.size();
+    if (!result.window_rms_db.empty()) {
+      std::unique_ptr<float[]> tmp(new float[result.window_rms_db.size()]);
+      std::memcpy(tmp.get(), result.window_rms_db.data(),
+                  result.window_rms_db.size() * sizeof(float));
+      out->window_rms_db = release_array(tmp);
+    }
+    return SONARE_OK;
+  });
 }
 
 void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result) {
@@ -268,8 +247,6 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
                                      int n_fft, int apply_octave_smoothing, int octave_fraction,
                                      float db_ref, float db_amin, SonareSpectrumResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
   std::memset(out, 0, sizeof(*out));
   metering::SpectrumConfig cfg;
   if (n_fft > 0) cfg.n_fft = n_fft;
@@ -278,28 +255,27 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
   if (octave_fraction > 0) cfg.octave_fraction = octave_fraction;
   if (db_ref > 0.0f) cfg.db_ref = db_ref;
   if (db_amin > 0.0f) cfg.db_amin = db_amin;
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  metering::SpectrumResult result = metering::spectrum(audio, cfg);
-  out->n_fft = result.n_fft;
-  out->sample_rate = result.sample_rate;
-  out->bin_count = result.frequencies.size();
-  if (out->bin_count == 0) return SONARE_OK;
-  const size_t bytes = out->bin_count * sizeof(float);
-  std::unique_ptr<float[]> freq(new float[out->bin_count]);
-  std::unique_ptr<float[]> mag(new float[out->bin_count]);
-  std::unique_ptr<float[]> pwr(new float[out->bin_count]);
-  std::unique_ptr<float[]> db(new float[out->bin_count]);
-  std::memcpy(freq.get(), result.frequencies.data(), bytes);
-  std::memcpy(mag.get(), result.magnitude.data(), bytes);
-  std::memcpy(pwr.get(), result.power.data(), bytes);
-  std::memcpy(db.get(), result.db.data(), bytes);
-  out->frequencies = release_array(freq);
-  out->magnitude = release_array(mag);
-  out->power = release_array(pwr);
-  out->db = release_array(db);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    metering::SpectrumResult result = metering::spectrum(audio, cfg);
+    out->n_fft = result.n_fft;
+    out->sample_rate = result.sample_rate;
+    out->bin_count = result.frequencies.size();
+    if (out->bin_count == 0) return SONARE_OK;
+    const size_t bytes = out->bin_count * sizeof(float);
+    std::unique_ptr<float[]> freq(new float[out->bin_count]);
+    std::unique_ptr<float[]> mag(new float[out->bin_count]);
+    std::unique_ptr<float[]> pwr(new float[out->bin_count]);
+    std::unique_ptr<float[]> db(new float[out->bin_count]);
+    std::memcpy(freq.get(), result.frequencies.data(), bytes);
+    std::memcpy(mag.get(), result.magnitude.data(), bytes);
+    std::memcpy(pwr.get(), result.power.data(), bytes);
+    std::memcpy(db.get(), result.db.data(), bytes);
+    out->frequencies = release_array(freq);
+    out->magnitude = release_array(mag);
+    out->power = release_array(pwr);
+    out->db = release_array(db);
+    return SONARE_OK;
+  });
 }
 
 void sonare_free_spectrum_result(SonareSpectrumResult* result) {

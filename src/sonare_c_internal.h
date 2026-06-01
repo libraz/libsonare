@@ -124,6 +124,42 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
   }
 }
 
+/// @brief Runs an offline analysis body against a validated mono C buffer.
+/// @details Folds the validate_audio_params -> Audio::from_buffer -> try/catch
+///          boilerplate shared by every offline analysis/feature wrapper. The
+///          body receives the constructed Audio and returns the SonareError to
+///          propagate (normally SONARE_OK). Per-function out-pointer null checks,
+///          extra parameter validation, and out-struct zero-initialization must
+///          still happen at the call site BEFORE invoking this (they early-return
+///          without constructing an Audio). @p body must return SonareError.
+template <typename Fn>
+SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn body) {
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  try {
+    Audio audio = Audio::from_buffer(samples, length, sample_rate);
+    return body(audio);
+  } catch (const sonare::SonareException& e) {
+    set_last_error(e.what());
+    return map_sonare_exception(e);
+  } catch (const std::bad_alloc& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_OUT_OF_MEMORY;
+  } catch (const std::invalid_argument& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_PARAMETER;
+  } catch (const std::logic_error& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_STATE;
+  } catch (const std::exception& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_UNKNOWN;
+  } catch (...) {
+    set_last_error("Unknown C++ exception (non-std::exception type)");
+    return SONARE_ERROR_UNKNOWN;
+  }
+}
+
 }  // namespace sonare_c_detail
 
 #define SONARE_C_TRY try {

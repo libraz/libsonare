@@ -225,21 +225,18 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                                          size_t* out_length) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  editing::pitch_editor::PitchCorrector corrector;
-  editing::pitch_editor::F0Track track;
-  track.sample_rate = sample_rate;
-  track.hop_length = 512;
-  track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
-  track.voiced = {true};
-  track.voiced_prob = {1.0f};
-  Audio result = corrector.correct_to_midi(audio, track, target_midi);
-  return copy_audio_result(result, out, out_length);
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::pitch_editor::PitchCorrector corrector;
+    editing::pitch_editor::F0Track track;
+    track.sample_rate = sample_rate;
+    track.hop_length = 512;
+    track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
+    track.voiced = {true};
+    track.voiced_prob = {1.0f};
+    Audio result = corrector.correct_to_midi(audio, track, target_midi);
+    return copy_audio_result(result, out, out_length);
+  });
 #else
   (void)samples;
   (void)length;
@@ -948,18 +945,15 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                                 float** out, size_t* out_length) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  editing::pitch_editor::NoteRegion region;
-  region.onset_sample = onset_sample;
-  region.offset_sample = offset_sample;
-  editing::pitch_editor::NoteEditor editor;
-  Audio result = editor.stretch_note(audio, region, stretch_ratio);
-  return copy_audio_result(result, out, out_length);
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::pitch_editor::NoteRegion region;
+    region.onset_sample = onset_sample;
+    region.offset_sample = offset_sample;
+    editing::pitch_editor::NoteEditor editor;
+    Audio result = editor.stretch_note(audio, region, stretch_ratio);
+    return copy_audio_result(result, out, out_length);
+  });
 #else
   (void)samples;
   (void)length;
@@ -978,18 +972,15 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
                                 size_t* out_length) {
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
 
-  SONARE_C_TRY
-  Audio audio = Audio::from_buffer(samples, length, sample_rate);
-  editing::voice_changer::VoiceChangerConfig config;
-  config.pitch_semitones = pitch_semitones;
-  config.formant_factor = formant_factor;
-  editing::voice_changer::VoiceChanger changer(config);
-  Audio result = changer.process(audio);
-  return copy_audio_result(result, out, out_length);
-  SONARE_C_CATCH
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::voice_changer::VoiceChangerConfig config;
+    config.pitch_semitones = pitch_semitones;
+    config.formant_factor = formant_factor;
+    editing::voice_changer::VoiceChanger changer(config);
+    Audio result = changer.process(audio);
+    return copy_audio_result(result, out, out_length);
+  });
 #else
   SONARE_VC_STUB(samples, length, sample_rate, pitch_semitones, formant_factor, out, out_length);
 #endif
