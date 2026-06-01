@@ -23,6 +23,23 @@ namespace sonare {
 using sonare::constants::kEpsilon;
 using namespace streaming_detail;
 
+/// @brief Compile-time guard against drift between the bar-vote table size and
+///        the ChordQuality enum cardinality.
+/// @details The bar-vote table is indexed as
+///          @c root * kNumChordQualities + quality , so every enumerator added
+///          to ChordQuality must be accompanied by a bump of
+///          kNumChordQualities. Without this assertion an enum expansion
+///          would silently truncate qualities whose index exceeds the old
+///          fixed array size and quietly drop those chords from the bar
+///          progression — exactly the P0 bug this whole module is designed
+///          to prevent. If this fires, raise kNumChordQualities in
+///          stream_analyzer.h to match the enum in util/types.h.
+static_assert(StreamAnalyzer::kBarVoteSlots == 12 * kNumChordQualities,
+              "StreamAnalyzer::kBarVoteSlots must equal 12 * kNumChordQualities");
+static_assert(static_cast<int>(ChordQuality::Sus2Add4) < kNumChordQualities,
+              "kNumChordQualities must cover every ChordQuality enumerator; "
+              "bump it in stream_analyzer.h when adding a new quality");
+
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// Determine if resampling is needed for high sample rates
   if (config_.sample_rate > kMaxDirectSampleRate) {
@@ -558,9 +575,12 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       int root = static_cast<int>(frame_chord.root);
       int quality = static_cast<int>(frame_chord.quality);
 
-      /// Index: root * 4 + quality (12 roots × 4 qualities = 48)
-      int vote_idx = root * 4 + quality;
-      if (vote_idx >= 0 && vote_idx < 48) {
+      /// Index: root * kNumChordQualities + quality.
+      /// Sized to cover every ChordQuality enumerator so 7ths / sus / extended
+      /// chords are no longer silently dropped when the underlying template
+      /// set grows beyond simple triads.
+      int vote_idx = root * kNumChordQualities + quality;
+      if (vote_idx >= 0 && vote_idx < StreamAnalyzer::kBarVoteSlots) {
         ++bar_chord_votes_[vote_idx];
         ++bar_vote_count_;
       }
@@ -572,15 +592,15 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     if (bar_vote_count_ > 0) {
       int best_idx = 0;
       int best_votes = bar_chord_votes_[0];
-      for (int i = 1; i < 48; ++i) {
+      for (int i = 1; i < StreamAnalyzer::kBarVoteSlots; ++i) {
         if (bar_chord_votes_[i] > best_votes) {
           best_votes = bar_chord_votes_[i];
           best_idx = i;
         }
       }
 
-      int best_root = best_idx / 4;
-      int best_quality = best_idx % 4;
+      int best_root = best_idx / kNumChordQualities;
+      int best_quality = best_idx % kNumChordQualities;
       float confidence = static_cast<float>(best_votes) / static_cast<float>(bar_vote_count_);
 
       /// Add to bar chord progression
@@ -634,8 +654,11 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     int start_frame = bar * frames_per_bar;
     int end_frame = std::min(start_frame + frames_per_bar, retroactive_frames);
 
-    /// Vote for chord using frames in this bar
-    std::array<int, 48> votes = {};
+    /// Vote for chord using frames in this bar.
+    /// Sized to (12 pitch classes * kNumChordQualities) — see kBarVoteSlots
+    /// in stream_analyzer.h. Must stay in lockstep with the live-tracking
+    /// table above; the static_assert near the top of this file enforces it.
+    std::array<int, StreamAnalyzer::kBarVoteSlots> votes = {};
     int vote_count = 0;
 
     for (int f = start_frame; f < end_frame; ++f) {
@@ -660,8 +683,9 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
       /// Detect chord
       auto [chord, corr] = find_best_chord(smoothed.data(), chord_templates_);
       if (corr >= kChordConfidenceThreshold) {
-        int idx = static_cast<int>(chord.root) * 4 + static_cast<int>(chord.quality);
-        if (idx >= 0 && idx < 48) {
+        int idx =
+            static_cast<int>(chord.root) * kNumChordQualities + static_cast<int>(chord.quality);
+        if (idx >= 0 && idx < StreamAnalyzer::kBarVoteSlots) {
           ++votes[idx];
           ++vote_count;
         }
@@ -671,15 +695,15 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     /// Find best chord
     int best_idx = 0;
     int best_votes = votes[0];
-    for (int i = 1; i < 48; ++i) {
+    for (int i = 1; i < StreamAnalyzer::kBarVoteSlots; ++i) {
       if (votes[i] > best_votes) {
         best_votes = votes[i];
         best_idx = i;
       }
     }
 
-    int best_root = best_idx / 4;
-    int best_quality = best_idx % 4;
+    int best_root = best_idx / kNumChordQualities;
+    int best_quality = best_idx % kNumChordQualities;
     float confidence = (vote_count > 0) ? static_cast<float>(best_votes) / vote_count : 0.0f;
 
     /// Create bar chord entry
@@ -720,15 +744,16 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
 
   /// For each position in the pattern, vote across all repetitions
   for (int pos = 0; pos < pattern_length; ++pos) {
-    /// Collect votes: chord index -> (total confidence, count)
-    std::array<float, 48> confidence_sum = {};
-    std::array<int, 48> vote_count = {};
+    /// Collect votes: chord index -> (total confidence, count).
+    /// Sized to (12 pitch classes * kNumChordQualities); see kBarVoteSlots.
+    std::array<float, StreamAnalyzer::kBarVoteSlots> confidence_sum = {};
+    std::array<int, StreamAnalyzer::kBarVoteSlots> vote_count = {};
 
     /// Go through all bars at this pattern position
     for (size_t bar_idx = pos; bar_idx < bars.size(); bar_idx += pattern_length) {
       const auto& bar = bars[bar_idx];
-      int chord_idx = bar.root * 4 + bar.quality;
-      if (chord_idx >= 0 && chord_idx < 48) {
+      int chord_idx = bar.root * kNumChordQualities + bar.quality;
+      if (chord_idx >= 0 && chord_idx < StreamAnalyzer::kBarVoteSlots) {
         confidence_sum[chord_idx] += bar.confidence;
         ++vote_count[chord_idx];
       }
@@ -743,15 +768,15 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     float best_score = 0.0f;
     int total_votes = 0;
 
-    for (int i = 0; i < 48; ++i) {
+    for (int i = 0; i < StreamAnalyzer::kBarVoteSlots; ++i) {
       total_votes += vote_count[i];
 
       float score = confidence_sum[i];
       if (score < 0.01f) continue;
 
       /// Apply diatonic bonus: +15% if chord is diatonic to detected key
-      int chord_root = i / 4;
-      int chord_quality = i % 4;
+      int chord_root = i / kNumChordQualities;
+      int chord_quality = i % kNumChordQualities;
       int relative_root = (chord_root - detected_key + 12) % 12;
 
       for (const auto& [diatonic_degree, diatonic_quality] : diatonic_chords) {
@@ -770,8 +795,8 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     /// Create voted pattern entry
     BarChord& voted = current_estimate_.voted_pattern[pos];
     voted.bar_index = pos;
-    voted.root = best_idx / 4;
-    voted.quality = best_idx % 4;
+    voted.root = best_idx / kNumChordQualities;
+    voted.quality = best_idx % kNumChordQualities;
     voted.start_time = 0.0f;  ///< Not meaningful for pattern
 
     /// Confidence = ratio of votes for this chord
@@ -836,7 +861,7 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
       } else if (are_chords_confusable(voted_root, voted_quality, expected_root,
                                        expected_quality)) {
         ++confusable_matches;
-        corrections.emplace_back(pos, expected_root * 4 + expected_quality);
+        corrections.emplace_back(pos, expected_root * kNumChordQualities + expected_quality);
       }
     }
 

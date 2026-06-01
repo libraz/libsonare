@@ -18,6 +18,17 @@ namespace sonare {
 // Forward declarations
 class FFT;
 
+/// @brief Number of enumerators in ChordQuality.
+/// @details Companion constant for the ChordQuality enum in util/types.h. The
+///          enum itself lives in util/ (out of streaming/'s edit scope for the
+///          current change), so the cardinality is mirrored here next to the
+///          only consumer that needs a fixed-size table indexed by quality
+///          (the streaming bar-synchronized chord vote table). A static_assert
+///          in stream_analyzer.cpp validates that the value still fits every
+///          ChordQuality::Sus2Add4-or-earlier enumerator. When a new quality
+///          is added to ChordQuality, bump this constant in lockstep.
+inline constexpr int kNumChordQualities = 17;
+
 /// @brief Streaming audio analyzer for real-time visualization.
 /// @details Processes audio in chunks, maintaining overlap state between calls.
 /// Produces StreamFrame objects with timestamp and features.
@@ -168,6 +179,12 @@ class StreamAnalyzer {
   /// @brief Returns current time position (seconds).
   float current_time() const;
 
+  /// @brief Number of bar-vote slots: 12 pitch classes * every ChordQuality.
+  /// @details Exposed so a translation-unit-level static_assert can pin this
+  ///          value to the ChordQuality enum cardinality. Indexed as
+  ///          @c root * kNumChordQualities + quality .
+  static constexpr int kBarVoteSlots = 12 * kNumChordQualities;
+
  private:
   StreamConfig config_;
 
@@ -254,9 +271,12 @@ class StreamAnalyzer {
   float bar_duration_ = 0.0f;                             ///< Duration of one bar in seconds
   int current_bar_index_ = -1;                            ///< Current bar index (0-based)
   float bar_start_time_ = 0.0f;                           ///< Start time of current bar
-  // Chord voting within bar (alternative to chroma averaging)
-  std::array<int, 48> bar_chord_votes_;  ///< Vote counts per chord (12 roots × 4 qualities)
-  int bar_vote_count_ = 0;               ///< Total votes in current bar
+  // Chord voting within bar (alternative to chroma averaging).
+  // Sized for 12 pitch classes * every ChordQuality enumerator so qualities
+  // beyond the basic triads (e.g. Dominant7, Sus4) are not silently dropped
+  // from the bar progression. Bounds-check accordingly.
+  std::array<int, kBarVoteSlots> bar_chord_votes_;
+  int bar_vote_count_ = 0;  ///< Total votes in current bar
 
   // Pattern locking (once detected with high confidence, don't change)
   bool pattern_locked_ = false;     ///< True if pattern is locked

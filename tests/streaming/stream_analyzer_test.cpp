@@ -702,3 +702,73 @@ TEST_CASE("StreamAnalyzer integration: all output formats", "[streaming][integra
     REQUIRE(soa_buffer.n_frames > 0);
   }
 }
+
+// ============================================================================
+// P0-E regression test: extended ChordQuality enumerators in bar-vote table
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer kBarVoteSlots constant pins kNumChordQualities cardinality",
+          "[streaming][chord]") {
+  // Compile-time regression guard for P0-E. Before the fix, kBarVoteSlots was
+  // 12 * 4 = 48 (only covering Major/Minor/Diminished/Augmented), so any
+  // ChordQuality >= 4 would compute a vote-table index of
+  //   root * 4 + quality  (wrong)
+  // that could alias into a neighbour's slot or exceed the array bounds.
+  //
+  // After the fix, kBarVoteSlots = 12 * kNumChordQualities = 204, and vote
+  // indices use `root * kNumChordQualities + quality`.  We pin the expected
+  // value so that a future reduction of kNumChordQualities (which would
+  // reintroduce the bug) fails the build.
+  static_assert(sonare::kNumChordQualities == 17,
+                "kNumChordQualities changed — update kBarVoteSlots and this test");
+  static_assert(sonare::StreamAnalyzer::kBarVoteSlots == 12 * 17,
+                "kBarVoteSlots must equal 12 * kNumChordQualities");
+
+  // The Sus2Add4 enumerator (index 16) is the highest-numbered quality; its
+  // vote-table index for root=11 (B) would be 11 * 17 + 16 = 203, which is
+  // exactly kBarVoteSlots - 1. Verify it is strictly less than kBarVoteSlots
+  // (i.e., in-bounds).
+  constexpr int kLastQualityIdx = static_cast<int>(sonare::ChordQuality::Sus2Add4);
+  constexpr int kHighestVoteIdx = 11 * sonare::kNumChordQualities + kLastQualityIdx;
+  static_assert(kHighestVoteIdx < sonare::StreamAnalyzer::kBarVoteSlots,
+                "Vote index for Sus2Add4 with root=B exceeds kBarVoteSlots — array OOB");
+
+  // Runtime check: a StreamAnalyzer driven through enough audio to emit chord
+  // frames must not crash, and the per-frame chord_quality values must be
+  // representable within the extended quality range (0 .. kNumChordQualities-1).
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+
+  StreamAnalyzer analyzer(config);
+
+  // Synthesise a G dominant-7 chord: G(392Hz) + B(494Hz) + D(587Hz) + F(698Hz).
+  // This gives the analyser the best chance of detecting a non-triad quality.
+  constexpr int kSr = 22050;
+  constexpr int kDuration = kSr * 8;  // 8 seconds
+  std::vector<float> audio(static_cast<size_t>(kDuration), 0.0f);
+  constexpr float kAmp = 0.25f;
+  const float freqs[] = {392.0f, 494.0f, 587.0f, 698.0f};
+  for (int i = 0; i < kDuration; ++i) {
+    float sample = 0.0f;
+    for (float f : freqs) {
+      sample += kAmp * std::sin(kTwoPi * f * static_cast<float>(i) / kSr);
+    }
+    audio[static_cast<size_t>(i)] = sample;
+  }
+
+  analyzer.process(audio.data(), audio.size());
+
+  auto frames = analyzer.read_frames(1000);
+  REQUIRE(frames.size() > 0);
+
+  // Every per-frame chord_quality must be within the now-correct range.
+  // Before the fix, extended-quality indices could wrap into invalid slots;
+  // after the fix they are all in [0, kNumChordQualities).
+  for (const auto& frame : frames) {
+    REQUIRE(frame.chord_quality >= 0);
+    REQUIRE(frame.chord_quality < sonare::kNumChordQualities);
+  }
+}
