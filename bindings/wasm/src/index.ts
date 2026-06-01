@@ -56,6 +56,7 @@ import type {
   PairAnalysis,
   PairProcessor,
   PanLaw,
+  PanMode,
   PitchResult,
   RealtimeVoiceChangerConfigInput,
   Section,
