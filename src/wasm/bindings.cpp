@@ -103,9 +103,11 @@
 #include "sonare.h"
 #include "sonare_c.h"
 #include "streaming/stream_analyzer.h"
+#include "util/exception.h"
 #include "util/frame.h"
 #include "util/padding.h"
 #include "util/peak.h"
+#include "util/types.h"
 #include "util/vector_normalize.h"
 
 using namespace emscripten;
@@ -1676,9 +1678,9 @@ class RealtimeVoiceChangerWrapper {
     }
     if (mono_input_.size() < static_cast<size_t>(num_samples) ||
         mono_output_.size() < static_cast<size_t>(num_samples)) {
-      throw std::logic_error(
-          "RealtimeVoiceChanger.processPreparedMono: getMonoInputBuffer/"
-          "getMonoOutputBuffer must be called first");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.processPreparedMono: getMonoInputBuffer/"
+                                    "getMonoOutputBuffer must be called first");
     }
     changer_.process_block(mono_input_.data(), mono_output_.data(), num_samples);
   }
@@ -1725,7 +1727,8 @@ class RealtimeVoiceChangerWrapper {
     const size_t length = frames * channel_count;
     if (interleaved_input_.size() < length || interleaved_output_.size() < length ||
         planar_.size() < channel_count) {
-      throw std::logic_error(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.processPreparedInterleaved: getInterleavedInputBuffer/"
           "getInterleavedOutputBuffer must be called first with matching dims");
     }
@@ -1780,13 +1783,15 @@ class RealtimeVoiceChangerWrapper {
     }
     const size_t channel_count = static_cast<size_t>(prepared_channels_);
     if (planar_.size() < channel_count) {
-      throw std::logic_error(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.processPreparedPlanar: getPlanarChannelBuffer must be called for "
           "each channel before processing");
     }
     for (size_t ch = 0; ch < channel_count; ++ch) {
       if (planar_[ch].size() < static_cast<size_t>(num_frames)) {
-        throw std::logic_error(
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidParameter,
             "RealtimeVoiceChanger.processPreparedPlanar: planar buffer too small for requested "
             "frames");
       }
@@ -1821,7 +1826,9 @@ class RealtimeVoiceChangerWrapper {
 
   void require_prepared() const {
     if (!prepared_) {
-      throw std::logic_error("RealtimeVoiceChanger.prepare() must be called before processing");
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "RealtimeVoiceChanger.prepare() must be called before processing");
     }
   }
 
