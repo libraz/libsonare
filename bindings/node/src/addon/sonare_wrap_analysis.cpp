@@ -1191,6 +1191,13 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
   }
   *root = info[0].As<Napi::Number>().Int32Value();
   int mask_int = info[1].As<Napi::Number>().Int32Value();
+  // modeMask is a 12-bit pitch-class set (one bit per semitone). Validate the
+  // range explicitly: the narrowing cast to uint16_t would otherwise turn -1
+  // into 0xFFFF and any value > 4095 into an unrelated mask.
+  if (mask_int < 0 || mask_int > 4095) {
+    Napi::RangeError::New(info.Env(), "modeMask must be in [0, 4095]").ThrowAsJavaScriptException();
+    return false;
+  }
   *mode_mask = static_cast<uint16_t>(mask_int);
   *midi = info[2].As<Napi::Number>().FloatValue();
   *reference_midi =
@@ -1207,6 +1214,7 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
   float ref = 0.0f;
   float midi = 0.0f;
   if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) {
+    if (env.IsExceptionPending()) return env.Undefined();
     Napi::TypeError::New(env, "scaleQuantizeMidi: expected (root, modeMask, midi, referenceMidi?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
@@ -1227,6 +1235,7 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
   float ref = 0.0f;
   float midi = 0.0f;
   if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) {
+    if (env.IsExceptionPending()) return env.Undefined();
     Napi::TypeError::New(
         env, "scaleCorrectionSemitones: expected (root, modeMask, midi, referenceMidi?)")
         .ThrowAsJavaScriptException();

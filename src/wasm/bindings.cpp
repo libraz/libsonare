@@ -174,6 +174,20 @@ std::vector<float> float32ArrayToVector(val arr) {
   return result;
 }
 
+// Int32 sibling of float32ArrayToVector. Used where a JS Int32Array carries
+// integer sample indices (e.g. remix interval boundaries) that must not be
+// round-tripped through float32 — values above 2^24 lose precision as float.
+// The typed_memory_view<int32_t> wraps the destination vector's storage so the
+// single boundary crossing (view.set(arr)) copies the raw 32-bit integers.
+std::vector<int32_t> int32ArrayToVector(val arr) {
+  const size_t n = arr["length"].as<size_t>();
+  std::vector<int32_t> result(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, result.data()));
+  view.call<void>("set", arr);
+  return result;
+}
+
 std::vector<mastering::api::Param> masteringParamsFromObject(val object) {
   std::vector<mastering::api::Param> params;
   if (object.isNull() || object.isUndefined()) {
@@ -909,16 +923,18 @@ val js_nn_filter(val s, int n_features, int n_frames, std::string aggregate, int
 // is a flat Int32Array of (start, end) pairs.
 val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
   std::vector<float> data = float32ArrayToVector(samples);
-  std::vector<float> interval_floats = float32ArrayToVector(intervals);
-  if (interval_floats.size() % 2 != 0) {
+  // Sample indices must survive as exact integers: converting through float32
+  // would round any boundary above 2^24 (16,777,216) and silently misalign the
+  // slice. Read the Int32Array straight into int32 storage instead.
+  std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
+  if (interval_ints.size() % 2 != 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "remix intervals must be (start, end) pairs");
   }
   std::vector<std::pair<int, int>> pairs;
-  pairs.reserve(interval_floats.size() / 2);
-  for (size_t i = 0; i + 1 < interval_floats.size(); i += 2) {
-    pairs.emplace_back(static_cast<int>(interval_floats[i]),
-                       static_cast<int>(interval_floats[i + 1]));
+  pairs.reserve(interval_ints.size() / 2);
+  for (size_t i = 0; i + 1 < interval_ints.size(); i += 2) {
+    pairs.emplace_back(static_cast<int>(interval_ints[i]), static_cast<int>(interval_ints[i + 1]));
   }
   // sample_rate is validated for API symmetry with the C ABI but not consumed
   // by the time-domain remix itself.
@@ -5647,6 +5663,80 @@ uint32_t js_engine_abi_version() { return sonare::rt::kEngineAbiVersion; }
 
 uint32_t js_voice_changer_abi_version() { return editing::voice_changer::kVoiceChangerAbiVersion; }
 
+// POD-flat ↔ nested C++ field bridge for the realtime voice-changer config.
+// X(cpp_path, pod_field) — cpp_path is the dotted member on the C++
+// RealtimeVoiceChangerConfig; pod_field is the flat key exposed to JS (matching
+// the Python/C-ABI POD mirror). Calling the C++ accessors directly keeps this
+// binding self-contained: the C-ABI translation unit is not linked into WASM.
+#define SONARE_WASM_VC_FIELDS(X)                          \
+  X(input_gain_db, input_gain_db)                         \
+  X(output_gain_db, output_gain_db)                       \
+  X(wet_mix, wet_mix)                                     \
+  X(retune.semitones, retune_semitones)                   \
+  X(retune.mix, retune_mix)                               \
+  X(retune.grain_size, retune_grain_size)                 \
+  X(formant.factor, formant_factor)                       \
+  X(formant.amount, formant_amount)                       \
+  X(formant.body, formant_body)                           \
+  X(formant.brightness, formant_brightness)               \
+  X(formant.nasal, formant_nasal)                         \
+  X(eq.highpass_hz, eq_highpass_hz)                       \
+  X(eq.body_db, eq_body_db)                               \
+  X(eq.presence_db, eq_presence_db)                       \
+  X(eq.air_db, eq_air_db)                                 \
+  X(gate.threshold_db, gate_threshold_db)                 \
+  X(gate.attack_ms, gate_attack_ms)                       \
+  X(gate.release_ms, gate_release_ms)                     \
+  X(gate.range_db, gate_range_db)                         \
+  X(compressor.threshold_db, compressor_threshold_db)     \
+  X(compressor.ratio, compressor_ratio)                   \
+  X(compressor.attack_ms, compressor_attack_ms)           \
+  X(compressor.release_ms, compressor_release_ms)         \
+  X(compressor.makeup_gain_db, compressor_makeup_gain_db) \
+  X(deesser.frequency_hz, deesser_frequency_hz)           \
+  X(deesser.threshold_db, deesser_threshold_db)           \
+  X(deesser.ratio, deesser_ratio)                         \
+  X(deesser.range_db, deesser_range_db)                   \
+  X(reverb.mix, reverb_mix)                               \
+  X(reverb.time_ms, reverb_time_ms)                       \
+  X(reverb.damping, reverb_damping)                       \
+  X(reverb.seed, reverb_seed)                             \
+  X(limiter.ceiling_db, limiter_ceiling_db)               \
+  X(limiter.release_ms, limiter_release_ms)
+
+// Validates a preset ordinal against the C++ VoiceCharacterPreset enum range.
+// The C-ABI and C++ enumerators share an identical ordering, so the integer
+// ordinal exposed to JS maps straight onto the C++ enum.
+bool vc_preset_in_range(int preset) {
+  return preset >= 0 &&
+         preset <= static_cast<int>(editing::voice_changer::VoiceCharacterPreset::DarkVillain);
+}
+
+// Maps a voice-character preset ordinal to its canonical id string (e.g.
+// "bright-idol"). Returns null for an out-of-range / unknown ordinal.
+val js_voice_character_preset_id(int preset) {
+  if (!vc_preset_in_range(preset)) return val::null();
+  const char* id = editing::voice_changer::realtime_voice_changer_preset_id(
+      static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
+  if (id == nullptr || id[0] == '\0') return val::null();
+  return val(std::string(id));
+}
+
+// Returns the voice-changer config for a preset ordinal as a JS object. Field
+// names match the Python/C-ABI POD mirror exactly. Null for an out-of-range
+// ordinal.
+val js_realtime_voice_changer_preset_config(int preset) {
+  if (!vc_preset_in_range(preset)) return val::null();
+  const auto cfg = editing::voice_changer::realtime_voice_changer_preset(
+      static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
+  val out = val::object();
+#define X(cpp_path, pod_field) out.set(#pod_field, cfg.cpp_path);
+  SONARE_WASM_VC_FIELDS(X)
+#undef X
+  return out;
+}
+#undef SONARE_WASM_VC_FIELDS
+
 // ============================================================================
 // Embind Registrations
 // ============================================================================
@@ -5727,6 +5817,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("version", &js_version);
   function("engineAbiVersion", &js_engine_abi_version);
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);
+  function("voiceCharacterPresetId", &js_voice_character_preset_id);
+  function("realtimeVoiceChangerPresetConfig", &js_realtime_voice_changer_preset_config);
 
   // Effects
   function("hpss", &js_hpss);

@@ -373,6 +373,9 @@ from .analyzer import (
     voice_change_realtime as voice_change_realtime,
 )
 from .analyzer import (
+    voice_character_preset_id as voice_character_preset_id,
+)
+from .analyzer import (
     vqt as vqt,
 )
 from .analyzer import (

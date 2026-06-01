@@ -20,8 +20,10 @@ import {
   pitchTuning,
   pitchYin,
   polyFeatures,
+  realtimeVoiceChangerPresetConfig,
   remix,
   spectralContrast,
+  voiceCharacterPresetId,
   zeroCrossings,
 } from '../src/index';
 
@@ -121,6 +123,61 @@ describe('newly exposed WASM functions', () => {
     const out = remix(x, new Int32Array([half, x.length, 0, half]));
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
+  });
+
+  it('remix slices at an exact large integer boundary (>2^24)', () => {
+    // A boundary above 2^24 (16,777,216) is not representable losslessly as a
+    // float32. The signal is a counter (sample i has value i) so the first
+    // remixed sample reveals the exact start index the native side used. The
+    // Int32 path must preserve `boundary` exactly; the old float32 path would
+    // round it (16,777,217 -> 16,777,216) and slice one sample early.
+    const boundary = 16_777_217; // 2^24 + 1
+    const length = boundary + 4;
+    const x = new Float32Array(length);
+    // Beyond 2^24, consecutive integers are not all representable as float32, so
+    // only mark the boundary-relevant samples with sentinel values that round-
+    // trip exactly (they are small integers stored at large indices).
+    x[boundary] = 1; // first sample of the [boundary, length) slice
+    x[boundary - 1] = 2; // last sample that must be excluded
+    const out = remix(x, new Int32Array([boundary, length]));
+    expect(out.length).toBe(length - boundary);
+    // Exact boundary => first output sample is x[boundary] (1), not x[boundary-1] (2).
+    expect(out[0]).toBe(1);
+  });
+
+  it('voiceCharacterPresetId maps a known ordinal to its canonical id', () => {
+    // Ordinal 1 == SONARE_VC_PRESET_BRIGHT_IDOL.
+    expect(voiceCharacterPresetId(1)).toBe('bright-idol');
+    expect(voiceCharacterPresetId(0)).toBe('neutral-monitor');
+    // Out-of-range ordinal yields null.
+    expect(voiceCharacterPresetId(999)).toBeNull();
+  });
+
+  it('realtimeVoiceChangerPresetConfig returns a POD object with expected fields', () => {
+    const cfg = realtimeVoiceChangerPresetConfig('bright-idol');
+    expect(cfg).not.toBeNull();
+    if (cfg === null) return;
+    const expectedFields = [
+      'input_gain_db',
+      'output_gain_db',
+      'wet_mix',
+      'retune_semitones',
+      'retune_mix',
+      'retune_grain_size',
+      'formant_factor',
+      'eq_highpass_hz',
+      'gate_threshold_db',
+      'compressor_threshold_db',
+      'deesser_frequency_hz',
+      'reverb_mix',
+      'reverb_seed',
+      'limiter_ceiling_db',
+      'limiter_release_ms',
+    ] as const;
+    for (const field of expectedFields) {
+      expect(cfg).toHaveProperty(field);
+      expect(Number.isFinite(cfg[field])).toBe(true);
+    }
   });
 
   it('phaseVocoder time-scales the signal', () => {

@@ -2032,6 +2032,8 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     ]
     lib.sonare_realtime_voice_changer_preset_names.restype = ctypes.c_char_p
     lib.sonare_realtime_voice_changer_preset_names.argtypes = []
+    lib.sonare_voice_character_preset_id.restype = ctypes.c_char_p
+    lib.sonare_voice_character_preset_id.argtypes = [ctypes.c_int]
     lib.sonare_realtime_voice_changer_preset_json.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_preset_json.argtypes = [
         ctypes.c_char_p,

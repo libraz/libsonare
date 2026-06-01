@@ -59,6 +59,7 @@ import type {
   PanMode,
   PitchResult,
   RealtimeVoiceChangerConfigInput,
+  RealtimeVoiceChangerPodConfig,
   Section,
   SectionType,
   SendTiming,
@@ -457,6 +458,53 @@ export function voiceChangerAbiVersion(): number {
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.voiceChangerAbiVersion();
+}
+
+// Canonical ordinal order of the built-in voice-character presets, matching the
+// C ABI SonareVoiceCharacterPreset enum and SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS.
+const VOICE_PRESET_ORDINALS: readonly VoicePresetId[] = [
+  'neutral-monitor',
+  'bright-idol',
+  'soft-whisper',
+  'deep-narrator',
+  'robot-mascot',
+  'dark-villain',
+];
+
+function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
+  if (typeof preset === 'number') {
+    return preset;
+  }
+  const ordinal = VOICE_PRESET_ORDINALS.indexOf(preset);
+  if (ordinal < 0) {
+    throw new Error(`Unknown voice character preset: ${preset}`);
+  }
+  return ordinal;
+}
+
+/**
+ * Map a voice-character preset ordinal (or canonical id) to its canonical id
+ * string (e.g. `'bright-idol'`). Returns `null` for an out-of-range ordinal.
+ */
+export function voiceCharacterPresetId(preset: VoicePresetId | number): string | null {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.voiceCharacterPresetId(resolveVoicePresetOrdinal(preset));
+}
+
+/**
+ * Return the canonical (normalized) flat POD config for a built-in voice
+ * preset, skipping the JSON round-trip. Accepts a canonical preset id or its
+ * integer ordinal. Returns `null` for an out-of-range ordinal.
+ */
+export function realtimeVoiceChangerPresetConfig(
+  preset: VoicePresetId | number,
+): RealtimeVoiceChangerPodConfig | null {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.realtimeVoiceChangerPresetConfig(resolveVoicePresetOrdinal(preset));
 }
 
 export function engineCapabilities(): EngineCapabilities {
@@ -3369,14 +3417,20 @@ export function nnFilter(
  */
 export function remix(
   samples: Float32Array,
-  intervals: Int32Array,
+  intervals: Int32Array | ArrayLike<number>,
   sampleRate = 22050,
   alignZeros = false,
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.remix(samples, intervals, sampleRate, alignZeros);
+  // Sample indices must reach the native side as exact 32-bit integers. Passing
+  // a Float32Array (or a number[] holding fractional/large values) would round
+  // boundaries above 2^24 and misalign the slice. Coerce to an Int32Array,
+  // truncating toward zero, so callers can hand us any numeric array safely.
+  const intervalsI32 =
+    intervals instanceof Int32Array ? intervals : Int32Array.from(intervals, (v) => Math.trunc(v));
+  return module.remix(samples, intervalsI32, sampleRate, alignZeros);
 }
 
 /**

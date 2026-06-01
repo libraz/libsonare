@@ -43,6 +43,48 @@ export interface RealtimeVoiceChangerOptions {
   preset?: RealtimeVoiceChangerConfigInput;
 }
 
+/**
+ * Flat (normalized) realtime-voice-changer configuration, mirroring the
+ * `SonareRealtimeVoiceChangerConfig` POD returned by
+ * `realtimeVoiceChangerPresetConfig`.
+ */
+export interface RealtimeVoiceChangerConfig {
+  inputGainDb: number;
+  outputGainDb: number;
+  wetMix: number;
+  retuneSemitones: number;
+  retuneMix: number;
+  retuneGrainSize: number;
+  formantFactor: number;
+  formantAmount: number;
+  formantBody: number;
+  formantBrightness: number;
+  formantNasal: number;
+  eqHighpassHz: number;
+  eqBodyDb: number;
+  eqPresenceDb: number;
+  eqAirDb: number;
+  gateThresholdDb: number;
+  gateAttackMs: number;
+  gateReleaseMs: number;
+  gateRangeDb: number;
+  compressorThresholdDb: number;
+  compressorRatio: number;
+  compressorAttackMs: number;
+  compressorReleaseMs: number;
+  compressorMakeupGainDb: number;
+  deesserFrequencyHz: number;
+  deesserThresholdDb: number;
+  deesserRatio: number;
+  deesserRangeDb: number;
+  reverbMix: number;
+  reverbTimeMs: number;
+  reverbDamping: number;
+  reverbSeed: number;
+  limiterCeilingDb: number;
+  limiterReleaseMs: number;
+}
+
 export type KeyProfile =
   | 'ks'
   | 'krumhansl'

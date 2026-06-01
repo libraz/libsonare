@@ -1893,6 +1893,68 @@ std::vector<int> EffectsIntVectorFromValue(const Napi::Value& value) {
 
 }  // namespace
 
+Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (presetOrdinal)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int ordinal = info[0].As<Napi::Number>().Int32Value();
+  const char* id =
+      sonare_voice_character_preset_id(static_cast<SonareVoiceCharacterPreset>(ordinal));
+  if (id == nullptr || id[0] == '\0') return env.Null();
+  return Napi::String::New(env, id);
+}
+
+Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (presetOrdinal)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int ordinal = info[0].As<Napi::Number>().Int32Value();
+  SonareRealtimeVoiceChangerConfig config{};
+  SonareError err = sonare_realtime_voice_changer_preset_config(
+      static_cast<SonareVoiceCharacterPreset>(ordinal), &config);
+  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("inputGainDb", Napi::Number::New(env, config.input_gain_db));
+  out.Set("outputGainDb", Napi::Number::New(env, config.output_gain_db));
+  out.Set("wetMix", Napi::Number::New(env, config.wet_mix));
+  out.Set("retuneSemitones", Napi::Number::New(env, config.retune_semitones));
+  out.Set("retuneMix", Napi::Number::New(env, config.retune_mix));
+  out.Set("retuneGrainSize", Napi::Number::New(env, config.retune_grain_size));
+  out.Set("formantFactor", Napi::Number::New(env, config.formant_factor));
+  out.Set("formantAmount", Napi::Number::New(env, config.formant_amount));
+  out.Set("formantBody", Napi::Number::New(env, config.formant_body));
+  out.Set("formantBrightness", Napi::Number::New(env, config.formant_brightness));
+  out.Set("formantNasal", Napi::Number::New(env, config.formant_nasal));
+  out.Set("eqHighpassHz", Napi::Number::New(env, config.eq_highpass_hz));
+  out.Set("eqBodyDb", Napi::Number::New(env, config.eq_body_db));
+  out.Set("eqPresenceDb", Napi::Number::New(env, config.eq_presence_db));
+  out.Set("eqAirDb", Napi::Number::New(env, config.eq_air_db));
+  out.Set("gateThresholdDb", Napi::Number::New(env, config.gate_threshold_db));
+  out.Set("gateAttackMs", Napi::Number::New(env, config.gate_attack_ms));
+  out.Set("gateReleaseMs", Napi::Number::New(env, config.gate_release_ms));
+  out.Set("gateRangeDb", Napi::Number::New(env, config.gate_range_db));
+  out.Set("compressorThresholdDb", Napi::Number::New(env, config.compressor_threshold_db));
+  out.Set("compressorRatio", Napi::Number::New(env, config.compressor_ratio));
+  out.Set("compressorAttackMs", Napi::Number::New(env, config.compressor_attack_ms));
+  out.Set("compressorReleaseMs", Napi::Number::New(env, config.compressor_release_ms));
+  out.Set("compressorMakeupGainDb", Napi::Number::New(env, config.compressor_makeup_gain_db));
+  out.Set("deesserFrequencyHz", Napi::Number::New(env, config.deesser_frequency_hz));
+  out.Set("deesserThresholdDb", Napi::Number::New(env, config.deesser_threshold_db));
+  out.Set("deesserRatio", Napi::Number::New(env, config.deesser_ratio));
+  out.Set("deesserRangeDb", Napi::Number::New(env, config.deesser_range_db));
+  out.Set("reverbMix", Napi::Number::New(env, config.reverb_mix));
+  out.Set("reverbTimeMs", Napi::Number::New(env, config.reverb_time_ms));
+  out.Set("reverbDamping", Napi::Number::New(env, config.reverb_damping));
+  out.Set("reverbSeed", Napi::Number::New(env, config.reverb_seed));
+  out.Set("limiterCeilingDb", Napi::Number::New(env, config.limiter_ceiling_db));
+  out.Set("limiterReleaseMs", Napi::Number::New(env, config.limiter_release_ms));
+  return out;
+}
+
 Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
@@ -2012,14 +2074,13 @@ Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[2].IsNumber()) {
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, rate, nFft?, hopLength?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = info[1].As<Napi::Number>().Int32Value();
   float rate = info[2].As<Napi::Number>().FloatValue();
   int n_fft =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 2048;

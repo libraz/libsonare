@@ -874,6 +874,48 @@ export interface RealtimeVoiceChangerPreset {
 
 export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
 
+/**
+ * Flat (POD) realtime voice-changer configuration. Field names mirror the
+ * C ABI `SonareRealtimeVoiceChangerConfig` / Python POD exactly (snake_case),
+ * so a config can be round-tripped across bindings without renaming.
+ */
+export interface RealtimeVoiceChangerPodConfig {
+  input_gain_db: number;
+  output_gain_db: number;
+  wet_mix: number;
+  retune_semitones: number;
+  retune_mix: number;
+  retune_grain_size: number;
+  formant_factor: number;
+  formant_amount: number;
+  formant_body: number;
+  formant_brightness: number;
+  formant_nasal: number;
+  eq_highpass_hz: number;
+  eq_body_db: number;
+  eq_presence_db: number;
+  eq_air_db: number;
+  gate_threshold_db: number;
+  gate_attack_ms: number;
+  gate_release_ms: number;
+  gate_range_db: number;
+  compressor_threshold_db: number;
+  compressor_ratio: number;
+  compressor_attack_ms: number;
+  compressor_release_ms: number;
+  compressor_makeup_gain_db: number;
+  deesser_frequency_hz: number;
+  deesser_threshold_db: number;
+  deesser_ratio: number;
+  deesser_range_db: number;
+  reverb_mix: number;
+  reverb_time_ms: number;
+  reverb_damping: number;
+  reverb_seed: number;
+  limiter_ceiling_db: number;
+  limiter_release_ms: number;
+}
+
 /** Options for {@link StreamingEqualizer.match}. */
 export interface EqMatchOptions {
   sampleRate?: number;

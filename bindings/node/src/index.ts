@@ -52,6 +52,7 @@ import type {
   PairProcessor,
   PanLaw,
   PitchResult,
+  RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerOptions,
   RhythmResult,
@@ -1164,6 +1165,40 @@ export function validateRealtimeVoiceChangerPresetJson(json: string): {
   error?: string;
 } {
   return addon.validateRealtimeVoiceChangerPresetJson(json);
+}
+
+// Ordinals mirror the SonareVoiceCharacterPreset enum (sonare_c_types.h).
+const VOICE_PRESET_ORDINALS: Record<VoicePresetId, number> = {
+  'neutral-monitor': 0,
+  'bright-idol': 1,
+  'soft-whisper': 2,
+  'deep-narrator': 3,
+  'robot-mascot': 4,
+  'dark-villain': 5,
+};
+
+function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
+  return typeof preset === 'number' ? preset : VOICE_PRESET_ORDINALS[preset];
+}
+
+/**
+ * Returns the canonical preset id for a voice-character preset ordinal (or id),
+ * or `null` when the ordinal is out of range.
+ */
+export function voiceCharacterPresetId(preset: VoicePresetId | number): VoicePresetId | null {
+  return addon.voiceCharacterPresetId(resolveVoicePresetOrdinal(preset)) as VoicePresetId | null;
+}
+
+/**
+ * Returns the flat (normalized) realtime-voice-changer config for a built-in
+ * preset, skipping the JSON round-trip.
+ */
+export function realtimeVoiceChangerPresetConfig(
+  preset: VoicePresetId | number,
+): RealtimeVoiceChangerConfig {
+  return addon.realtimeVoiceChangerPresetConfig(
+    resolveVoicePresetOrdinal(preset),
+  ) as RealtimeVoiceChangerConfig;
 }
 
 export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 0.0): Float32Array {

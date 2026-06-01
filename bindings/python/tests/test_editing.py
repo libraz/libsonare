@@ -88,6 +88,22 @@ def test_realtime_voice_changer_function_and_class() -> None:
     assert libsonare.validate_realtime_voice_changer_preset_json("{}")["ok"] is False
 
 
+def test_voice_character_preset_id_round_trips() -> None:
+    from libsonare._effects import _VC_PRESET_NAME_TO_ORDINAL
+
+    # Every canonical name maps to an ordinal that resolves back to the same id.
+    for name, ordinal in _VC_PRESET_NAME_TO_ORDINAL.items():
+        assert libsonare.voice_character_preset_id(ordinal) == name
+
+    # Spot-check the documented example explicitly.
+    bright_ordinal = _VC_PRESET_NAME_TO_ORDINAL["bright-idol"]
+    assert libsonare.voice_character_preset_id(bright_ordinal) == "bright-idol"
+
+    # Out-of-range ordinals resolve to None per the wrapper contract.
+    assert libsonare.voice_character_preset_id(-1) is None
+    assert libsonare.voice_character_preset_id(len(_VC_PRESET_NAME_TO_ORDINAL)) is None
+
+
 def test_realtime_voice_changer_stereo_interleaved() -> None:
     sr = 22050
     # Two channels interleaved (LRLR…); same sine on both so output is symmetric.

@@ -12,8 +12,11 @@ import {
   pitchTuning,
   pitchYin,
   polyFeatures,
+  realtimeVoiceChangerPresetConfig,
   remix,
+  scaleQuantizeMidi,
   spectralContrast,
+  voiceCharacterPresetId,
   zeroCrossings,
 } from '../src/index';
 
@@ -147,6 +150,42 @@ describe('newly exposed Node functions', () => {
 
     const filled = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
     expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
+  });
+
+  it('voiceCharacterPresetId maps a known ordinal to its id', () => {
+    expect(voiceCharacterPresetId(1)).toBe('bright-idol');
+    expect(voiceCharacterPresetId('neutral-monitor')).toBe('neutral-monitor');
+    // Out-of-range ordinal returns null.
+    expect(voiceCharacterPresetId(99)).toBeNull();
+  });
+
+  it('realtimeVoiceChangerPresetConfig returns a config object with expected fields', () => {
+    const cfg = realtimeVoiceChangerPresetConfig('bright-idol');
+    for (const key of [
+      'inputGainDb',
+      'outputGainDb',
+      'wetMix',
+      'retuneSemitones',
+      'retuneGrainSize',
+      'formantFactor',
+      'compressorThresholdDb',
+      'reverbSeed',
+      'limiterCeilingDb',
+      'limiterReleaseMs',
+    ]) {
+      expect(typeof (cfg as Record<string, number>)[key]).toBe('number');
+      expect(Number.isFinite((cfg as Record<string, number>)[key])).toBe(true);
+    }
+  });
+
+  it('scaleQuantizeMidi rejects an out-of-range modeMask', () => {
+    expect(() => scaleQuantizeMidi(0, -1, 69)).toThrow();
+    expect(() => scaleQuantizeMidi(0, 5000, 69)).toThrow();
+  });
+
+  it('phaseVocoder rejects a non-number sampleRate', () => {
+    const x = sine(0.1, 440);
+    expect(() => phaseVocoder(x, 2.0, 'bad' as unknown as number)).toThrow();
   });
 
   it('analyzeTimbre exposes timbreOverTime', () => {

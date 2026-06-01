@@ -93,6 +93,7 @@ from ._effects import (
     validate_realtime_voice_changer_preset_json,
     voice_change,
     voice_change_realtime,
+    voice_character_preset_id,
 )
 from ._features import (
     chroma,
@@ -207,6 +208,7 @@ __all__ = [
     "realtime_voice_changer_preset_names",
     "realtime_voice_changer_preset_pod",
     "validate_realtime_voice_changer_preset_json",
+    "voice_character_preset_id",
     "StreamingEqualizer",
     "StreamingMasteringChain",
     "master_audio",
