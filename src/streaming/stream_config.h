@@ -36,8 +36,14 @@ struct StreamConfig {
   bool compute_magnitude = true;  ///< Compute magnitude spectrum
   bool compute_mel = true;        ///< Compute mel spectrogram
   bool compute_chroma = true;     ///< Compute chromagram
-  bool compute_onset = true;      ///< Compute onset strength
-  bool compute_spectral = true;   ///< Compute spectral features
+  /// @brief Compute onset strength (spectral flux of the log-mel spectrum).
+  /// @details Onset strength — and the progressive BPM estimate built on top of
+  ///          it — is derived from the mel path. When @c compute_onset is true
+  ///          the StreamAnalyzer constructor force-enables @c compute_mel (the
+  ///          coercion is visible via StreamAnalyzer::config()); otherwise onset
+  ///          would be identically 0 and BPM would never converge.
+  bool compute_onset = true;
+  bool compute_spectral = true;  ///< Compute spectral features
 
   // Mel configuration
   int n_mels = 128;   ///< Number of mel bands

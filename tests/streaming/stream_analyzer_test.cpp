@@ -25,6 +25,27 @@ std::vector<float> generate_sine(int samples, float freq, int sr) {
   return result;
 }
 
+/// Generate a click train at a known tempo: a short decaying 1 kHz sine burst
+/// at each beat. Mirrors the rhythmic synthetic signal used by the existing
+/// BPM tests so onset detection has clear, periodic energy spikes.
+std::vector<float> generate_click_train(int total_samples, float bpm, int sr) {
+  std::vector<float> audio(static_cast<size_t>(std::max(total_samples, 0)), 0.0f);
+  const float beat_interval_samples = 60.0f * static_cast<float>(sr) / bpm;
+  const int n_beats = static_cast<int>(total_samples / beat_interval_samples);
+  for (int beat = 0; beat <= n_beats; ++beat) {
+    const int beat_start = static_cast<int>(beat * beat_interval_samples);
+    const int click_len = std::min(220, total_samples - beat_start);  // ~10ms
+    for (int i = 0; i < click_len; ++i) {
+      const int idx = beat_start + i;
+      if (idx >= 0 && idx < total_samples) {
+        const float decay = std::exp(-static_cast<float>(i) / 50.0f);
+        audio[static_cast<size_t>(idx)] = decay * std::sin(kTwoPi * 1000.0f * i / sr);
+      }
+    }
+  }
+  return audio;
+}
+
 }  // namespace
 
 TEST_CASE("StreamConfig helpers", "[streaming]") {
@@ -770,6 +791,122 @@ TEST_CASE("StreamAnalyzer kBarVoteSlots constant pins kNumChordQualities cardina
   for (const auto& frame : frames) {
     REQUIRE(frame.chord_quality >= 0);
     REQUIRE(frame.chord_quality < sonare::kNumChordQualities);
+  }
+}
+
+// ============================================================================
+// H7 regression: onset_accumulator_ must stay bounded over long streams
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer onset accumulator is bounded over a long stream", "[streaming][bpm]") {
+  // Before the fix, every valid onset frame was push_back'd into
+  // onset_accumulator_ and only ever cleared on reset(). For a multi-minute
+  // track the accumulator grew to ~10k entries and every BPM update re-scanned
+  // the whole history, so memory and CPU grew monotonically. The fix bounds it
+  // to a sliding window (kOnsetWindowSeconds of onset frames). This test feeds
+  // far more than that window and asserts the size stays capped, while BPM is
+  // still estimated correctly for the known tempo after the cap is hit.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_onset = true;
+  config.compute_mel = true;
+  config.bpm_update_interval_sec = 5.0f;
+
+  StreamAnalyzer analyzer(config);
+
+  const size_t cap = analyzer.onset_window_frames_for_test();
+  REQUIRE(cap > 0);
+
+  // Stream ~90 seconds of a 120 BPM click train, which produces far more onset
+  // frames than the ~60 s window. Feed in chunks so trimming happens
+  // incrementally across many process() calls, like a real stream.
+  const int sr = 22050;
+  const int duration_sec = 90;
+  const int total_samples = sr * duration_sec;
+  const float bpm = 120.0f;
+  std::vector<float> audio = generate_click_train(total_samples, bpm, sr);
+
+  const size_t chunk = 4096;
+  for (size_t off = 0; off < audio.size(); off += chunk) {
+    const size_t n = std::min(chunk, audio.size() - off);
+    analyzer.process(audio.data() + off, n);
+    analyzer.read_frames(10000);  // Drain output so it does not dominate memory.
+
+    // Invariant must hold at every step, not just at the end.
+    REQUIRE(analyzer.onset_accumulator_size_for_test() <= cap);
+  }
+
+  // Total onset frames produced (~ total_samples / hop) vastly exceeds the cap,
+  // so the accumulator must actually be at its bound, proving trimming engaged.
+  const size_t approx_total_onset_frames =
+      static_cast<size_t>((total_samples - config.n_fft) / config.hop_length);
+  REQUIRE(approx_total_onset_frames > cap);
+  REQUIRE(analyzer.onset_accumulator_size_for_test() == cap);
+
+  // Trimming must not break BPM: the known-tempo signal still resolves to a
+  // plausible tempo with non-zero confidence after the cap is hit.
+  auto stats = analyzer.stats();
+  REQUIRE(stats.estimate.bpm >= 60.0f);
+  REQUIRE(stats.estimate.bpm <= 200.0f);
+  REQUIRE(stats.estimate.bpm_confidence > 0.0f);
+  // Expect the estimate near 120 BPM (or its 60/240 octave); allow the half/
+  // double-tempo ambiguity autocorrelation is prone to.
+  const float b = stats.estimate.bpm;
+  const bool near_tempo = std::abs(b - 120.0f) < 8.0f || std::abs(b - 60.0f) < 8.0f ||
+                          std::abs(b - 80.0f) < 8.0f || std::abs(b - 180.0f) < 8.0f;
+  REQUIRE(near_tempo);
+}
+
+// ============================================================================
+// H8 regression: compute_onset without compute_mel must not silently break BPM
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer onset auto-enables mel so BPM is not silently zero", "[streaming][bpm]") {
+  // Before the fix, requesting compute_onset=true with compute_mel=false caused
+  // compute_onset() to early-return 0 before marking has_prev_frame_, so onset
+  // strength was always 0, onset_valid never became true, the accumulator
+  // stayed empty, and BPM was stuck at 0/confidence 0 forever — with no
+  // diagnostic. The constructor now force-enables mel when onset is requested.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_onset = true;
+  config.compute_mel = false;  // Intentionally off — must be coerced on.
+  config.bpm_update_interval_sec = 5.0f;
+
+  StreamAnalyzer analyzer(config);
+
+  SECTION("constructor coerces compute_mel on and it is observable") {
+    REQUIRE(analyzer.config().compute_mel);
+  }
+
+  SECTION("onset becomes valid and BPM is computed on a rhythmic signal") {
+    const int sr = 22050;
+    const int duration_sec = 15;
+    std::vector<float> audio = generate_click_train(sr * duration_sec, 120.0f, sr);
+    analyzer.process(audio.data(), audio.size());
+
+    // onset_valid is now true for non-first frames (the silent-failure mode is
+    // gone).
+    auto frames = analyzer.read_frames(10000);
+    REQUIRE(frames.size() > 1);
+    bool any_onset_valid = false;
+    bool any_onset_nonzero = false;
+    for (const auto& f : frames) {
+      if (f.onset_valid) any_onset_valid = true;
+      if (f.onset_strength > 0.0f) any_onset_nonzero = true;
+    }
+    REQUIRE(any_onset_valid);
+    REQUIRE(any_onset_nonzero);
+
+    // BPM is now actually estimated instead of being stuck at 0.
+    auto stats = analyzer.stats();
+    REQUIRE(stats.estimate.bpm_candidate_count > 0);
+    REQUIRE(stats.estimate.bpm > 0.0f);
+    REQUIRE(stats.estimate.bpm_confidence > 0.0f);
   }
 }
 

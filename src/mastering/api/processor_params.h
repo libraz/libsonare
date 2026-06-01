@@ -47,6 +47,10 @@
 #include "mastering/maximizer/soft_knee_max.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/crossover.h"
+#include "mastering/multiband/multiband_compressor.h"
+#include "mastering/multiband/multiband_expander.h"
+#include "mastering/multiband/multiband_limiter.h"
+#include "mastering/multiband/multiband_saturation.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -291,6 +295,65 @@ inline multiband::CrossoverConfig crossover_config(const ParamMap& params) {
   config.mode = static_cast<multiband::CrossoverMode>(i(params, "mode", 0));
   config.fir_kernel_size = i(params, "firKernelSize", config.fir_kernel_size);
   return config;
+}
+
+// ---------------------------------------------------------------------------
+// Multiband per-band population
+//
+// Each multiband processor exposes its sub-bands through a `band{i}.<field>`
+// flat-key convention (matching multiband_exciter_config()). The crossover
+// config decides how many bands exist; these helpers iterate the already-sized
+// `bands` vector and overlay any caller-supplied per-band fields onto the
+// factory defaults so they are not silently ignored.
+// ---------------------------------------------------------------------------
+
+inline void populate_compressor_bands(multiband::MultibandCompressorConfig& config,
+                                      const ParamMap& params) {
+  for (size_t index = 0; index < config.bands.size(); ++index) {
+    const std::string prefix = "band" + std::to_string(index) + ".";
+    auto& band = config.bands[index];
+    band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+    band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
+    band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
+    band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
+    band.knee_db = f(params, (prefix + "kneeDb").c_str(), band.knee_db);
+    band.makeup_gain_db = f(params, (prefix + "makeupGainDb").c_str(), band.makeup_gain_db);
+  }
+}
+
+inline void populate_expander_bands(multiband::MultibandExpanderConfig& config,
+                                    const ParamMap& params) {
+  for (size_t index = 0; index < config.bands.size(); ++index) {
+    const std::string prefix = "band" + std::to_string(index) + ".";
+    auto& band = config.bands[index];
+    band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+    band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
+    band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
+    band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
+    band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
+  }
+}
+
+inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
+                                   const ParamMap& params) {
+  for (size_t index = 0; index < config.bands.size(); ++index) {
+    const std::string prefix = "band" + std::to_string(index) + ".";
+    auto& band = config.bands[index];
+    band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+    band.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
+    band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
+  }
+}
+
+inline void populate_saturation_bands(multiband::MultibandSaturationConfig& config,
+                                      const ParamMap& params) {
+  for (size_t index = 0; index < config.bands.size(); ++index) {
+    const std::string prefix = "band" + std::to_string(index) + ".";
+    auto& band = config.bands[index];
+    band.drive_db = f(params, (prefix + "driveDb").c_str(), band.drive_db);
+    band.mix = f(params, (prefix + "mix").c_str(), band.mix);
+    band.output_gain_db = f(params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
+  }
 }
 
 // ---------------------------------------------------------------------------

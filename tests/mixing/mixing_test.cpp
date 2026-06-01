@@ -20,6 +20,7 @@
 #include "mixing/meter.h"
 #include "sonare_c.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
@@ -1496,6 +1497,65 @@ TEST_CASE("MeterProcessor optionally publishes true peak", "[mixing]") {
   REQUIRE_THAT(snapshot.true_peak_db[0], WithinAbs(snapshot.max_true_peak_db, 0.0001f));
   REQUIRE_THAT(snapshot.true_peak_db[1], WithinAbs(sonare::constants::kFloorDb, 0.001f));
   REQUIRE(snapshot.max_true_peak_db > -3.0f);
+}
+
+TEST_CASE("MeterProcessor true peak is consistent across block sizes (boundary history)",
+          "[mixing]") {
+  // Regression for the stateless true-peak path: it reconstructed ~half-a-tap
+  // worth of samples against zeros at the start AND end of every block and kept
+  // no cross-block history, so the measured true peak depended on the block
+  // size and phase. The history-preserving path must measure (nearly) the same
+  // true peak whether the signal is fed in one block or in many small blocks,
+  // and must still see the inter-sample over.
+  constexpr int kSampleRate = 48000;
+  constexpr int kN = 1020;  // multiple of the 6-sample pattern below
+  // A repeating half-band pattern near full scale has a strong inter-sample
+  // peak: its bandlimited reconstruction overshoots well above the sample
+  // values (same family as the existing "bandlimited inter-sample overs" test).
+  const std::array<float, 6> pattern{0.0f, 0.95f, 0.95f, 0.0f, -0.95f, -0.95f};
+  std::vector<float> signal(static_cast<size_t>(kN));
+  for (int i = 0; i < kN; ++i) {
+    signal[static_cast<size_t>(i)] = pattern[static_cast<size_t>(i % 6)];
+  }
+  const float sample_peak = 0.95f;
+
+  auto measure = [&](int block) {
+    sonare::mixing::MeterConfig config;
+    config.measure_lufs = false;
+    config.measure_true_peak = true;
+    config.true_peak_oversample = 4;
+    sonare::mixing::MeterProcessor meter(config);
+    meter.prepare(static_cast<double>(kSampleRate), block);
+
+    float max_tp_db = sonare::constants::kFloorDb;
+    for (int offset = 0; offset < kN; offset += block) {
+      const int n = std::min(block, kN - offset);
+      float* chan = signal.data() + offset;
+      float* channels[] = {chan};
+      meter.process(channels, 1, n);
+      max_tp_db = std::max(max_tp_db, meter.snapshot().max_true_peak_db);
+    }
+    return max_tp_db;
+  };
+
+  const float tp_one_block = measure(kN);
+  const float tp_small_blocks = measure(64);  // 15 full + a 60-sample tail block
+  const float tp_tiny_blocks = measure(13);   // ragged blocks, many boundaries
+
+  // The inter-sample over must be detected (true peak strictly above the sample
+  // peak) regardless of block size.
+  const float sample_peak_db = sonare::linear_to_db(sample_peak);
+  REQUIRE(tp_one_block > sample_peak_db);
+  REQUIRE(tp_small_blocks > sample_peak_db);
+  REQUIRE(tp_tiny_blocks > sample_peak_db);
+
+  // And the result must be block-size independent within a tight tolerance. The
+  // old stateless path zero-padded the FIR at every block edge and kept no
+  // history, so this measurement drifted with the block size; the cross-block
+  // history path makes the small/tiny-block runs track the single-block
+  // reference closely.
+  REQUIRE_THAT(tp_small_blocks, WithinAbs(tp_one_block, 0.3f));
+  REQUIRE_THAT(tp_tiny_blocks, WithinAbs(tp_one_block, 0.3f));
 }
 
 TEST_CASE("GoniometerBuffer returns latest scope points", "[mixing]") {

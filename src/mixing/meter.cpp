@@ -27,14 +27,23 @@ float MeterProcessor::energy_to_lufs(double energy) const noexcept {
   return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
 }
 
-void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
+void MeterProcessor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
+  max_block_size_ = std::max(0, max_block_size);
   if (config_.measure_true_peak) {
     // ITU-R BS.1770-4 mandates at least 4x oversampling for true-peak
     // measurement; clamp anything below 4 up to 4 while still honoring 8x.
     const int requested = config_.true_peak_oversample;
     const int oversample = requested >= 8 ? 8 : 4;
-    true_peak_filter_ = rt::TruePeakFilter(2, oversample);
+    true_peak_filter_ = rt::TruePeakFilter(kTruePeakChannels, oversample);
+    // Pre-size the filter's cross-block history + scratch so the per-block
+    // upsample path is allocation-free, and preallocate our own oversampled
+    // output scratch (one buffer per meter channel).
+    true_peak_filter_.prepare(kTruePeakChannels, max_block_size_);
+    const size_t oversampled_capacity =
+        static_cast<size_t>(max_block_size_) * static_cast<size_t>(oversample);
+    for (auto& buffer : true_peak_oversampled_) buffer.assign(oversampled_capacity, 0.0f);
+    true_peak_zero_in_.assign(static_cast<size_t>(max_block_size_), 0.0f);
   }
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {
@@ -70,6 +79,9 @@ void MeterProcessor::reset() {
   // (prepare() calls reset() after installing them).
   for (auto& s : k_state_pre_) s.reset();
   for (auto& s : k_state_rlb_) s.reset();
+  // Clear the true-peak filter's cross-block history so a fresh run does not
+  // see stale tail samples from a previous stream (no reallocation).
+  true_peak_filter_.reset();
   std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0);
   ring_pos_ = 0;
   filled_ = 0;
@@ -119,19 +131,43 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   }
 
   if (config_.measure_true_peak) {
+    // History-preserving RT-safe path: upsample each meter channel through the
+    // filter's internal cross-block history (sized in prepare()) into the
+    // preallocated oversampled scratch, then take max(|sample|). This keeps the
+    // measurement block-size- and phase-independent and catches inter-sample
+    // peaks that straddle block boundaries (the stateless path zero-padded the
+    // taps at every block edge and kept no history). Bounded to kTruePeak
+    // channels — exactly the channels whose true-peak is reported below.
+    const int tp_channels = std::min(meters, kTruePeakChannels);
+    // Guard against a block larger than the prepared capacity (would otherwise
+    // grow the scratch and allocate on the audio thread); clamp instead.
+    const int tp_samples = std::min(num_samples, max_block_size_);
     float max_true_peak = 0.0f;
-    for (int ch = 0; ch < num_channels; ++ch) {
+    for (int ch = 0; ch < tp_channels; ++ch) {
+      const size_t c = static_cast<size_t>(ch);
+      // A null meter channel is fed silence so the filter's positional history
+      // stays aligned to each channel slot (the upsampler rejects null inputs).
+      true_peak_in_ptrs_[c] = channels[ch] != nullptr ? channels[ch] : true_peak_zero_in_.data();
+      true_peak_out_ptrs_[c] = true_peak_oversampled_[c].data();
+    }
+    if (tp_samples > 0) {
+      // Upsample all meter channels in one allocation-free call.
+      true_peak_filter_.upsample_with_history(true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(),
+                                              tp_channels, tp_samples);
+    }
+    const int oversample = true_peak_filter_.factor();
+    const size_t oversampled = static_cast<size_t>(tp_samples) * static_cast<size_t>(oversample);
+    for (int ch = 0; ch < tp_channels; ++ch) {
       if (channels[ch] == nullptr) {
         continue;
       }
-      const float* mono[] = {channels[ch]};
-      const float sample_peak = ch < meters ? sample_peaks[static_cast<size_t>(ch)] : 0.0f;
-      const float true_peak =
-          std::max(sample_peak, true_peak_filter_.process(mono, 1, num_samples));
-      if (ch < meters) {
-        next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(true_peak);
+      const auto& os = true_peak_oversampled_[static_cast<size_t>(ch)];
+      float peak = sample_peaks[static_cast<size_t>(ch)];
+      for (size_t i = 0; i < oversampled; ++i) {
+        peak = std::max(peak, std::abs(os[i]));
       }
-      max_true_peak = std::max(max_true_peak, true_peak);
+      next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
+      max_true_peak = std::max(max_true_peak, peak);
     }
     next.max_true_peak_db = linear_to_db(max_true_peak);
   }

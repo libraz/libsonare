@@ -185,6 +185,15 @@ class StreamAnalyzer {
   ///          @c root * kNumChordQualities + quality .
   static constexpr int kBarVoteSlots = 12 * kNumChordQualities;
 
+  /// @brief Test-only accessor for the current onset accumulator size.
+  /// @details Exposes the size of the bounded onset history so regression tests
+  ///          can assert the sliding-window cap holds over long streams. Not
+  ///          part of the public streaming API; intended for white-box tests.
+  size_t onset_accumulator_size_for_test() const { return onset_accumulator_.size(); }
+
+  /// @brief Test-only accessor for the onset accumulator's frame cap.
+  size_t onset_window_frames_for_test() const { return onset_window_frames_; }
+
  private:
   StreamConfig config_;
 
@@ -246,8 +255,29 @@ class StreamAnalyzer {
   std::vector<float> mel_log_;                 // [n_mels]
   std::vector<float> chroma_buffer_;           // [12] - L2 normalized
 
-  // Progressive estimation accumulators
-  std::vector<float> onset_accumulator_;
+  // Progressive estimation accumulators.
+  //
+  // onset_accumulator_ holds the most-recent onset-strength frames consumed by
+  // the progressive BPM autocorrelation. It is bounded to a sliding window of
+  // onset_window_frames_ (≈ kOnsetWindowSeconds of audio): once it exceeds the
+  // cap the oldest frames are dropped from the front so memory and the
+  // per-BPM-update autocorrelation cost stay O(1) over an arbitrarily long
+  // stream. The window is sized to comfortably exceed the maximum
+  // autocorrelation lag (bpm_to_lag(kBpmMin) ≈ 86 frames at 44.1 kHz / hop 512),
+  // so trimming never removes lags the BPM estimator needs — it only discards
+  // ancient onsets that no longer reflect the current tempo. Declared as a
+  // deque so front-trimming is O(1) instead of an O(N) vector erase per frame.
+  std::deque<float> onset_accumulator_;
+
+  /// @brief Seconds of onset history retained by onset_accumulator_.
+  /// @details Far larger than the BPM autocorrelation's maximum lag (~1 s at
+  ///          kBpmMin = 60 BPM), so the sliding window keeps every lag the
+  ///          tempo estimator inspects while still bounding memory/CPU.
+  static constexpr float kOnsetWindowSeconds = 60.0f;
+
+  /// @brief Cap on onset_accumulator_ size, in frames (computed at construction
+  ///        from the internal sample rate and hop length).
+  size_t onset_window_frames_ = 0;
   std::array<float, 12> chroma_sum_;
   int chroma_frame_count_ = 0;
   float last_key_update_time_ = 0.0f;

@@ -338,6 +338,7 @@ void configure_processor(const std::string& name, const ParamMap& params,
     config.clip_threshold = f(params, "clipThreshold", config.clip_threshold);
     config.lpc_order = i(params, "lpcOrder", config.lpc_order);
     config.iterations = i(params, "iterations", config.iterations);
+    config.lpc_blend = f(params, "lpcBlend", config.lpc_blend);
     auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
     auto out = repair::declip(audio, config);
     samples.assign(out.data(), out.data() + out.size());
@@ -496,16 +497,19 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "multiband.compressor") {
     multiband::MultibandCompressorConfig config;
     config.crossover = crossover_config(map);
+    detail::populate_compressor_bands(config, map);
     multiband::MultibandCompressor p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "multiband.expander") {
     multiband::MultibandExpanderConfig config;
     config.crossover = crossover_config(map);
+    detail::populate_expander_bands(config, map);
     multiband::MultibandExpander p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "multiband.limiter") {
     multiband::MultibandLimiterConfig config;
     config.crossover = crossover_config(map);
+    detail::populate_limiter_bands(config, map);
     multiband::MultibandLimiter p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "multiband.imager") {
@@ -516,6 +520,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "multiband.saturation") {
     multiband::MultibandSaturationConfig config;
     config.crossover = crossover_config(map);
+    detail::populate_saturation_bands(config, map);
     multiband::MultibandSaturation p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "multiband.dynamicEq") {

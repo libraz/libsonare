@@ -18,6 +18,13 @@ using sonare::constants::kTwoPi;
 
 namespace {
 
+/// @brief Snaps a float key field to a fixed grid so bitwise-different but
+/// logically-equal UI inputs (e.g. 32.70 vs 32.7000007) collapse to the same
+/// value before the key is hashed/compared. Quantizing at key construction is
+/// what lets us keep strict `==` in the key (so the equal/hash contract holds)
+/// while still getting cache hits for near-equal inputs.
+float quantize(float value, float grid) { return std::round(value / grid) * grid; }
+
 /// @brief Cache key for VQT kernel
 struct VqtKernelCacheKey {
   int sample_rate;
@@ -28,13 +35,36 @@ struct VqtKernelCacheKey {
   float gamma;
   WindowType window;
 
+  // Exact equality so the equal/hash contract holds: the hash mixes the raw
+  // float bits of fmin/gamma, so a fuzzy operator== would let two
+  // logically-"equal" keys hash to different buckets and silently miss the
+  // cache — triggering a redundant (expensive) wavelet + per-bin FFT rebuild —
+  // and, on a bucket collision, could even return the wrong cached kernel. The
+  // float fields are quantized at construction (see make_key), so exact
+  // comparison still produces cache hits for near-equal inputs.
   bool operator==(const VqtKernelCacheKey& other) const {
     return sample_rate == other.sample_rate && hop_length == other.hop_length &&
-           std::abs(fmin - other.fmin) < 0.01f && n_bins == other.n_bins &&
-           bins_per_octave == other.bins_per_octave && std::abs(gamma - other.gamma) < 0.01f &&
+           fmin == other.fmin && n_bins == other.n_bins &&
+           bins_per_octave == other.bins_per_octave && gamma == other.gamma &&
            window == other.window;
   }
 };
+
+/// @brief Builds a VQT cache key with float fields snapped to fixed grids.
+/// @details fmin is in Hz; gamma is in Hz (the VQT bandwidth offset). Both use
+/// a 0.001 grid: fine enough to resolve real config changes, coarse enough to
+/// absorb UI float noise.
+VqtKernelCacheKey make_key(int sr, const VqtConfig& config) {
+  constexpr float kFminGrid = 0.001f;   // Hz
+  constexpr float kGammaGrid = 0.001f;  // Hz
+  return VqtKernelCacheKey{sr,
+                           config.hop_length,
+                           quantize(config.fmin, kFminGrid),
+                           config.n_bins,
+                           config.bins_per_octave,
+                           quantize(config.gamma, kGammaGrid),
+                           config.window};
+}
 
 struct VqtKernelCacheKeyHash {
   size_t operator()(const VqtKernelCacheKey& k) const {
@@ -79,9 +109,7 @@ VqtKernelCache& vqt_kernel_cache() {
 
 /// @brief Get or create cached VQT kernel with Eigen matrix
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
-  VqtKernelCacheKey key{
-      sr,           config.hop_length, config.fmin, config.n_bins, config.bins_per_octave,
-      config.gamma, config.window};
+  VqtKernelCacheKey key = make_key(sr, config);
 
   VqtKernelCache& cache = vqt_kernel_cache();
   std::lock_guard<std::mutex> lock(cache.mutex);

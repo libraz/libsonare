@@ -152,6 +152,18 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
   add_field(params, "dynamics.compressor.makeupGainDb",
             cfg.dynamics.compressor.config.makeup_gain_db);
   add_field(params, "dynamics.compressor.autoMakeup", cfg.dynamics.compressor.config.auto_makeup);
+  // `detector` is an enum (Peak=0, Rms=1, LogRms=2) serialized as its integer
+  // value (the parser side restores it via static_cast in chain_params.cpp), so
+  // emit a number — not a bool — to keep the dump -> parse round-trip lossless.
+  add_field(params, "dynamics.compressor.detector",
+            static_cast<int>(cfg.dynamics.compressor.config.detector));
+  add_field(params, "dynamics.compressor.sidechainHpfEnabled",
+            cfg.dynamics.compressor.config.sidechain_hpf_enabled);
+  add_field(params, "dynamics.compressor.sidechainHpfHz",
+            cfg.dynamics.compressor.config.sidechain_hpf_hz);
+  add_field(params, "dynamics.compressor.pdrTimeMs", cfg.dynamics.compressor.config.pdr_time_ms);
+  add_field(params, "dynamics.compressor.pdrReleaseScale",
+            cfg.dynamics.compressor.config.pdr_release_scale);
 
   add_field(params, "dynamics.multibandComp.enabled", cfg.dynamics.multiband_comp.enabled);
   if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2) {

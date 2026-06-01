@@ -331,16 +331,19 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
   if (name == "multiband.compressor") {
     multiband::MultibandCompressorConfig config;
     config.crossover = crossover_config(params);
+    detail::populate_compressor_bands(config, params);
     return make<multiband::MultibandCompressor>(config);
   }
   if (name == "multiband.expander") {
     multiband::MultibandExpanderConfig config;
     config.crossover = crossover_config(params);
+    detail::populate_expander_bands(config, params);
     return make<multiband::MultibandExpander>(config);
   }
   if (name == "multiband.limiter") {
     multiband::MultibandLimiterConfig config;
     config.crossover = crossover_config(params);
+    detail::populate_limiter_bands(config, params);
     return make<multiband::MultibandLimiter>(config);
   }
   if (name == "multiband.imager") {
@@ -351,6 +354,7 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
   if (name == "multiband.saturation") {
     multiband::MultibandSaturationConfig config;
     config.crossover = crossover_config(params);
+    detail::populate_saturation_bands(config, params);
     return make<multiband::MultibandSaturation>(config);
   }
   if (name == "multiband.dynamicEq") {

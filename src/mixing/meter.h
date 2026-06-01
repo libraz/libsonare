@@ -66,6 +66,19 @@ class MeterProcessor : public rt::ProcessorBase {
   std::atomic<float> gain_reduction_db_{0.0f};
   rt::TruePeakFilter true_peak_filter_{2, 4};
 
+  // True-peak oversample scratch, preallocated in prepare() so the per-block
+  // path never allocates. The filter keeps cross-block history internally
+  // (set up via TruePeakFilter::prepare()), so inter-sample peaks straddling
+  // block boundaries are measured consistently regardless of block size.
+  static constexpr int kTruePeakChannels = 2;
+  std::array<std::vector<float>, kTruePeakChannels> true_peak_oversampled_{};
+  std::array<float*, kTruePeakChannels> true_peak_in_ptrs_{};
+  std::array<float*, kTruePeakChannels> true_peak_out_ptrs_{};
+  // Silent stand-in fed to the upsampler for a null meter channel so the
+  // filter's positional cross-block history stays aligned to each channel slot.
+  std::vector<float> true_peak_zero_in_{};
+  int max_block_size_ = 0;
+
   // Seqlock: odd guard_ means a write is in progress; readers retry until it is even and stable.
   alignas(64) std::atomic<uint32_t> guard_{0};
   MeterSnapshot snapshot_{};

@@ -14,6 +14,13 @@ namespace sonare {
 
 namespace {
 
+/// @brief Snaps a float key field to a fixed grid so bitwise-different but
+/// logically-equal UI inputs (e.g. 32.70 vs 32.7000007) collapse to the same
+/// value before the key is hashed/compared. Quantizing at key construction is
+/// what lets us keep strict `==` in the key (so the equal/hash contract holds)
+/// while still getting cache hits for near-equal inputs.
+float quantize(float value, float grid) { return std::round(value / grid) * grid; }
+
 /// @brief Cache key for Chroma filterbank.
 struct ChromaFilterbankCacheKey {
   int sample_rate;
@@ -24,12 +31,34 @@ struct ChromaFilterbankCacheKey {
   int n_octaves;
   ChromaFilterNorm norm;
 
+  // Exact equality so the equal/hash contract holds: the hash mixes the raw
+  // float bits of tuning/fmin, so a fuzzy operator== would let two
+  // logically-"equal" keys hash to different buckets and silently miss the
+  // cache (and, on a bucket collision, could even return the wrong entry). The
+  // float fields are quantized at construction (see make_key), so exact
+  // comparison still produces cache hits for near-equal inputs.
   bool operator==(const ChromaFilterbankCacheKey& other) const {
     return sample_rate == other.sample_rate && n_fft == other.n_fft && n_chroma == other.n_chroma &&
-           n_octaves == other.n_octaves && norm == other.norm &&
-           std::abs(tuning - other.tuning) < 1e-4f && std::abs(fmin - other.fmin) < 1e-4f;
+           n_octaves == other.n_octaves && norm == other.norm && tuning == other.tuning &&
+           fmin == other.fmin;
   }
 };
+
+/// @brief Builds a Chroma cache key with float fields snapped to fixed grids.
+/// @details tuning is in fractions of a chroma bin; fmin is in Hz. Grids match
+/// the historical fuzzy tolerances (1e-4) so previously-distinct keys stay
+/// distinct while float noise collapses.
+ChromaFilterbankCacheKey make_key(int sr, int n_fft, const ChromaFilterConfig& config) {
+  constexpr float kTuningGrid = 1e-4f;  // fractions of a chroma bin
+  constexpr float kFminGrid = 1e-4f;    // Hz
+  return ChromaFilterbankCacheKey{sr,
+                                  n_fft,
+                                  config.n_chroma,
+                                  quantize(config.tuning, kTuningGrid),
+                                  quantize(config.fmin, kFminGrid),
+                                  config.n_octaves,
+                                  config.norm};
+}
 
 struct ChromaFilterbankCacheKeyHash {
   size_t operator()(const ChromaFilterbankCacheKey& k) const {
@@ -169,8 +198,7 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
 
 const std::vector<float>& get_chroma_filterbank_cached(int sr, int n_fft,
                                                        const ChromaFilterConfig& config) {
-  ChromaFilterbankCacheKey key{
-      sr, n_fft, config.n_chroma, config.tuning, config.fmin, config.n_octaves, config.norm};
+  ChromaFilterbankCacheKey key = make_key(sr, n_fft, config);
 
   ChromaFilterbankCache& cache = chroma_filterbank_cache();
   {

@@ -218,6 +218,77 @@ TEST_CASE("PitchCorrector retune_amount scales correction strength", "[pitch_edi
   REQUIRE(half < full);
 }
 
+TEST_CASE("PitchCorrector preserves duration for a constant pitch shift", "[pitch_editor]") {
+  // Regression for TD-PSOLA duration drift: a sustained voiced region corrected
+  // by a constant amount must keep its length and onset timing. Previously the
+  // synthesis loop advanced the output epoch by period_out while the source
+  // epoch advanced by period_in, time-compressing voiced regions by 1/ratio.
+  constexpr int sample_rate = 48000;
+  constexpr float f0_hz = 150.0f;
+  constexpr int n_samples = 9600;  // 200 ms of steady, continuously voiced tone
+  constexpr int hop_length = 256;
+  const int n_frames = n_samples / hop_length + 2;
+
+  // Steady 150 Hz tone with a Gaussian amplitude burst as a timing marker. The
+  // burst is an envelope feature (not a pitch change), so PSOLA must leave its
+  // position in time unchanged even as the carrier pitch is shifted.
+  constexpr int marker_center = 6000;  // known input time of the envelope peak
+  constexpr float marker_sigma = 400.0f;
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i);
+    const float carrier = static_cast<float>(
+        std::sin(sonare::constants::kTwoPiD * f0_hz * static_cast<double>(i) / sample_rate));
+    const float d = (t - static_cast<float>(marker_center)) / marker_sigma;
+    const float env = 0.3f + 0.6f * std::exp(-0.5f * d * d);
+    samples[static_cast<size_t>(i)] = env * carrier;
+  }
+  const sonare::Audio audio = sonare::Audio::from_vector(std::vector<float>(samples), sample_rate);
+  const F0Track track = constant_track(f0_hz, sample_rate, hop_length, n_frames);
+
+  // Constant +2 semitone correction => ratio = 2^(2/12) ~= 1.122 throughout.
+  const float detected_midi = PitchCorrector::hz_to_midi(f0_hz);
+  PitchCorrectionConfig corrector_config;
+  corrector_config.retune_speed_ms = 0.0f;  // instant snap, constant correction
+  corrector_config.vibrato_threshold_cents = 0.0f;
+  PitchCorrector corrector(corrector_config);
+  const sonare::Audio corrected = corrector.correct_to_midi(audio, track, detected_midi + 2.0f);
+
+  // Duration must be preserved exactly (output buffer matches input length).
+  REQUIRE(corrected.size() == audio.size());
+
+  // Temporal alignment: locate the envelope peak of the corrected signal via a
+  // smoothed magnitude and confirm it stayed near the input marker time. If the
+  // old drift bug were present the marker would land near marker_center/ratio
+  // (~5347), far outside this tolerance.
+  auto envelope_peak = [&](const sonare::Audio& signal) {
+    constexpr int win = 256;  // moving-average window over |x| (a few periods)
+    int best_index = 0;
+    float best_value = -1.0f;
+    float acc = 0.0f;
+    const int len = static_cast<int>(signal.size());
+    for (int i = 0; i < len; ++i) {
+      acc += std::abs(signal[static_cast<size_t>(i)]);
+      if (i >= win) {
+        acc -= std::abs(signal[static_cast<size_t>(i - win)]);
+      }
+      if (i >= win && acc > best_value) {
+        best_value = acc;
+        best_index = i - win / 2;  // center of the averaging window
+      }
+    }
+    return best_index;
+  };
+
+  const int input_peak = envelope_peak(audio);
+  const int output_peak = envelope_peak(corrected);
+  // Sanity: the input marker is recovered near its known location.
+  REQUIRE(std::abs(input_peak - marker_center) < 300);
+  // The corrected marker must stay aligned with the input marker (within ~6 ms),
+  // NOT shifted by the pitch ratio.
+  REQUIRE(std::abs(output_peak - input_peak) < 300);
+}
+
 TEST_CASE("NoteEditor moves note region with edge fades", "[pitch_editor]") {
   constexpr int sample_rate = 1000;
   std::vector<float> samples(1000, 0.0f);

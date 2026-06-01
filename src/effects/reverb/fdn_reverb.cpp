@@ -52,7 +52,10 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
     return;
   }
   float* left = channels[0];
-  float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
+  const bool stereo = num_channels > 1 && channels[1] != nullptr;
+  // For mono, alias right to left for reading the (identical) input, but only
+  // one output write is performed below so the left result is not clobbered.
+  float* right = stereo ? channels[1] : channels[0];
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
 
@@ -79,8 +82,16 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
     state_[2] = delays_[2].process(input + 0.5f * h2);
     state_[3] = delays_[3].process(input + 0.5f * h3);
 
-    left[i] = dry * in_l + wet * (state_[0] - state_[2]);
-    right[i] = dry * in_r + wet * (state_[1] - state_[3]);
+    const float out_l = state_[0] - state_[2];
+    const float out_r = state_[1] - state_[3];
+    if (stereo) {
+      left[i] = dry * in_l + wet * out_l;
+      right[i] = dry * in_r + wet * out_r;
+    } else {
+      // Mono: collapse both output taps into the single channel so the lone
+      // output buffer is not written twice with different values.
+      left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
+    }
   }
 
   dc_blocker_.process(channels, num_channels, num_samples);

@@ -19,6 +19,13 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+/// @brief Snaps a float key field to a fixed grid so bitwise-different but
+/// logically-equal UI inputs (e.g. 32.70 vs 32.7000007) collapse to the same
+/// value before the key is hashed/compared. Quantizing at key construction is
+/// what lets us keep strict `==` in the key (so the equal/hash contract holds)
+/// while still getting cache hits for near-equal inputs.
+float quantize(float value, float grid) { return std::round(value / grid) * grid; }
+
 /// @brief Cache key for CQT kernel
 struct CqtKernelCacheKey {
   int sample_rate;
@@ -29,13 +36,36 @@ struct CqtKernelCacheKey {
   float filter_scale;
   WindowType window;
 
+  // Exact equality so the equal/hash contract holds: the hash mixes the raw
+  // float bits of fmin/filter_scale, so a fuzzy operator== would let two
+  // logically-"equal" keys hash to different buckets and silently miss the
+  // cache — triggering a redundant (expensive) wavelet + per-bin FFT rebuild —
+  // and, on a bucket collision, could even return the wrong cached kernel. The
+  // float fields are quantized at construction (see make_key), so exact
+  // comparison still produces cache hits for near-equal inputs.
   bool operator==(const CqtKernelCacheKey& other) const {
     return sample_rate == other.sample_rate && hop_length == other.hop_length &&
-           std::abs(fmin - other.fmin) < 0.01f && n_bins == other.n_bins &&
-           bins_per_octave == other.bins_per_octave &&
-           std::abs(filter_scale - other.filter_scale) < 1e-4f && window == other.window;
+           fmin == other.fmin && n_bins == other.n_bins &&
+           bins_per_octave == other.bins_per_octave && filter_scale == other.filter_scale &&
+           window == other.window;
   }
 };
+
+/// @brief Builds a CQT cache key with float fields snapped to fixed grids.
+/// @details fmin is in Hz (0.001 Hz grid: fine enough to resolve real config
+/// changes, coarse enough to absorb UI float noise); filter_scale is
+/// dimensionless (1e-4 grid, matching the historical fuzzy tolerance).
+CqtKernelCacheKey make_key(int sr, const CqtConfig& config) {
+  constexpr float kFminGrid = 0.001f;        // Hz
+  constexpr float kFilterScaleGrid = 1e-4f;  // dimensionless
+  return CqtKernelCacheKey{sr,
+                           config.hop_length,
+                           quantize(config.fmin, kFminGrid),
+                           config.n_bins,
+                           config.bins_per_octave,
+                           quantize(config.filter_scale, kFilterScaleGrid),
+                           config.window};
+}
 
 struct CqtKernelCacheKeyHash {
   size_t operator()(const CqtKernelCacheKey& k) const {
@@ -80,13 +110,7 @@ CqtKernelCache& cqt_kernel_cache() {
 
 /// @brief Get or create cached CQT kernel with Eigen matrix
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
-  CqtKernelCacheKey key{sr,
-                        config.hop_length,
-                        config.fmin,
-                        config.n_bins,
-                        config.bins_per_octave,
-                        config.filter_scale,
-                        config.window};
+  CqtKernelCacheKey key = make_key(sr, config);
 
   CqtKernelCache& cache = cqt_kernel_cache();
   std::lock_guard<std::mutex> lock(cache.mutex);

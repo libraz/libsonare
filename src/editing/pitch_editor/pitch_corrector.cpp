@@ -221,42 +221,58 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   std::vector<float> out(static_cast<size_t>(n_samples), 0.0f);
   std::vector<float> norm(static_cast<size_t>(n_samples), 0.0f);
 
-  // TD-PSOLA over voiced regions. We walk input epochs spaced by the local
-  // period and place Hann-windowed two-period grains at output epochs whose
-  // spacing is shortened/lengthened by the interpolated correction.
-  float input_epoch = 0.0f;
+  // TD-PSOLA over voiced regions, driven by the SYNTHESIS (output) timeline.
+  //
+  // The output epoch is the master clock: it advances by the (pitch-shifted)
+  // local period_out each grain. The source/analysis center is taken from a
+  // separately tracked analysis pointer that advances by period_in only as the
+  // synthesis position catches up to it, so synthesis time stays aligned with
+  // input time (analysis_epoch ~= output_epoch). This is standard PSOLA grain
+  // duplication when ratio > 1 (output period shorter, so the same source epoch
+  // feeds several grains) and grain skipping when ratio < 1 (output period
+  // longer, so the analysis pointer steps over epochs). The result is
+  // duration-preserving: a region of input duration D maps to output duration D,
+  // only the pitch changes. Each grain reads its period/correction from the
+  // analysis center so the output stays time-locked to the input pitch contour.
   float output_epoch = 0.0f;
+  float analysis_epoch = 0.0f;
   bool have_psola = false;
 
-  while (input_epoch < static_cast<float>(n_samples)) {
-    const int center = static_cast<int>(std::lround(input_epoch));
+  while (output_epoch < static_cast<float>(n_samples)) {
+    // Keep the analysis pointer time-aligned with the synthesis position: it
+    // marks the input sample whose pitch period we are about to reproduce.
+    const int center = static_cast<int>(std::lround(analysis_epoch));
     if (!sample_voiced(center)) {
-      // Skip ahead one default hop worth; unvoiced handled separately below.
-      input_epoch += hop;
-      output_epoch = input_epoch;  // keep timelines aligned across gaps
+      // Unvoiced/silence is handled by the fallback pass below; advance both
+      // timelines together (no pitch change) so they re-sync across the gap.
+      output_epoch += hop;
+      analysis_epoch += hop;
       continue;
     }
-    const float f0 = sample_f0(input_epoch);
+    const float f0 = sample_f0(analysis_epoch);
     if (f0 <= 0.0f) {
-      input_epoch += hop;
-      output_epoch = input_epoch;
+      output_epoch += hop;
+      analysis_epoch += hop;
       continue;
     }
     const float period_in = sr_f / f0;
-    const float delta = interp_frame(smooth_deltas, input_epoch);
+    const float delta = interp_frame(smooth_deltas, analysis_epoch);
 
-    // Large shifts: leave to the spectral fallback pass (skip here).
+    // Large shifts: leave to the spectral fallback pass (skip here). Advance
+    // both timelines in lock-step so the region stays time-aligned.
     if (std::abs(delta) > kPsolaMaxSemitones) {
-      input_epoch += period_in;
       output_epoch += period_in;
+      analysis_epoch += period_in;
       continue;
     }
     have_psola = true;
 
     const float ratio = std::pow(2.0f, delta / kSemitonesPerOctave);
-    const float period_out = period_in / ratio;  // higher pitch -> shorter period
+    const float period_out = std::max(1.0f, period_in / ratio);  // higher pitch -> shorter period
 
-    // Two-period Hann grain centered at the input epoch.
+    // Two-period Hann grain copied from the analysis center to the output
+    // epoch. Source and destination share the same half-width so the grain is
+    // pitch-shifted (spacing changes) but not time-stretched.
     const int half = std::max(1, static_cast<int>(std::lround(period_in)));
     const int grain_len = 2 * half + 1;
     const int out_center = static_cast<int>(std::lround(output_epoch));
@@ -274,8 +290,32 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       norm[static_cast<size_t>(dst)] += w;
     }
 
-    input_epoch += period_in;
-    output_epoch += std::max(1.0f, period_out);
+    // Output advances by the synthesis period; the analysis pointer advances by
+    // input periods only while it lags the synthesis clock. When ratio > 1 the
+    // output period is shorter, so several output grains may reuse one analysis
+    // epoch before it steps (grain duplication); when ratio < 1 the analysis
+    // pointer skips epochs to keep pace (grain skipping). Either way the two
+    // timelines track each other, preserving duration.
+    output_epoch += period_out;
+    for (;;) {
+      const float next_f0 = sample_f0(analysis_epoch);
+      if (next_f0 <= 0.0f) {
+        break;  // next epoch is unvoiced: let the outer hop logic re-sync.
+      }
+      const float next_period_in = sr_f / next_f0;
+      // Map the synthesis epoch to the NEAREST analysis pitch mark, not the
+      // floor. Stepping only while the next mark stays at least half a period
+      // below the synthesis clock keeps |analysis_epoch - output_epoch| within
+      // half a period, so each grain is time-centred on the synthesis position
+      // with no systematic bias. A floor comparison (analysis + period >
+      // output) would leave the source up to a full period behind the output,
+      // shifting envelope features forward by ~half a period and reintroducing
+      // duration drift.
+      if (analysis_epoch + 0.5f * next_period_in >= output_epoch) {
+        break;  // nearest analysis mark reached; advancing would overshoot.
+      }
+      analysis_epoch += next_period_in;
+    }
   }
 
   // Normalize the PSOLA overlap-add result.

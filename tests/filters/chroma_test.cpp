@@ -202,6 +202,37 @@ TEST_CASE("get_chroma_filterbank_cached returns same matrix for same key", "[chr
   }
 }
 
+TEST_CASE("get_chroma_filterbank_cached hits on bitwise-different but equal fmin",
+          "[chroma][cache]") {
+  // Regression for the cache hash/equality invariant (H9/H10): the key hash
+  // mixes the raw float bits of fmin/tuning, so the key MUST use strict `==`
+  // (a==b => hash(a)==hash(b)) and quantize the float fields at construction.
+  // Two fmin values that differ only in float noise below the quantization grid
+  // (1e-4 Hz) must collapse to the same key and return the SAME cached matrix —
+  // otherwise we silently miss the cache and rebuild redundantly.
+  int sr = 22050;
+  int n_fft = 2048;
+
+  ChromaFilterConfig a;
+  a.n_chroma = 12;
+  a.fmin = 32.70f;
+
+  ChromaFilterConfig b = a;
+  b.fmin = 32.70000005f;  // logically equal (UI-derived float noise)
+
+  const std::vector<float>& fb_a = get_chroma_filterbank_cached(sr, n_fft, a);
+  const std::vector<float>& fb_b = get_chroma_filterbank_cached(sr, n_fft, b);
+
+  // Same cached object: a cache HIT, not a redundant rebuild.
+  REQUIRE(fb_a.data() == fb_b.data());
+
+  // A near-equal tuning (below the 1e-4 grid) must also hit the same entry.
+  ChromaFilterConfig c = a;
+  c.tuning = 0.000001f;
+  const std::vector<float>& fb_c = get_chroma_filterbank_cached(sr, n_fft, c);
+  REQUIRE(fb_a.data() == fb_c.data());
+}
+
 TEST_CASE("get_chroma_filterbank_cached distinguishes different keys", "[chroma][cache]") {
   int sr = 22050;
   int n_fft = 2048;

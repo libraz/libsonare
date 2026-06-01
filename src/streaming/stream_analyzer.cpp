@@ -48,6 +48,17 @@ static_assert(static_cast<int>(ChordQuality::Sus2Add4) < kNumChordQualities,
               "bump it in stream_analyzer.h when adding a new quality");
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
+  /// Onset strength (and therefore progressive BPM) is derived from the
+  /// frame-to-frame difference of the log-mel spectrum (see compute_onset()).
+  /// If a caller requests onset/BPM but disables the mel path, onset would be
+  /// identically 0 forever and BPM would never leave its initial 0 / confidence
+  /// 0 state — a silent failure. Enforce the dependency by auto-enabling mel
+  /// whenever onset is requested. This coercion is observable through config()
+  /// so the caller can see that mel was turned on for them.
+  if (config_.compute_onset && !config_.compute_mel) {
+    config_.compute_mel = true;
+  }
+
   /// Determine if resampling is needed for high sample rates
   if (config_.sample_rate > kMaxDirectSampleRate) {
     needs_resampling_ = true;
@@ -60,6 +71,21 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   }
 
   int n_bins = config_.n_bins();
+
+  /// Size the bounded onset history window. Frames-per-second is
+  /// internal_sample_rate_ / hop_length; multiply by kOnsetWindowSeconds to get
+  /// the retained frame count. Floor it at a few times the maximum
+  /// autocorrelation lag (bpm_to_lag(kBpmMin)) so the BPM estimator always has
+  /// enough lags even for unusually large hop lengths.
+  {
+    const int hop = std::max(config_.hop_length, 1);
+    const size_t window_from_seconds = static_cast<size_t>(
+        kOnsetWindowSeconds * static_cast<float>(internal_sample_rate_) / static_cast<float>(hop));
+    const int max_lag = streaming_detail::bpm_to_lag(streaming_detail::kBpmMin,
+                                                     internal_sample_rate_, config_.hop_length);
+    const size_t min_window = static_cast<size_t>(std::max(max_lag, 1)) * 4;
+    onset_window_frames_ = std::max(window_from_seconds, min_window);
+  }
 
   /// Initialize FFT
   fft_ = std::make_unique<FFT>(config_.n_fft);
@@ -307,9 +333,17 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
     frame.onset_strength = compute_onset();
     frame.onset_valid = had_prev_frame;
 
-    /// Accumulate for BPM estimation
+    /// Accumulate for BPM estimation, bounded to a sliding window. Without this
+    /// cap the accumulator grew once per valid onset frame for the whole stream
+    /// (~10k entries for a 4-minute track) and every BPM update re-scanned the
+    /// entire history, so memory and CPU grew monotonically. Trimming from the
+    /// front keeps the most-recent onset_window_frames_ frames, which still far
+    /// exceeds the autocorrelation's maximum lag.
     if (frame.onset_valid) {
       onset_accumulator_.push_back(frame.onset_strength);
+      while (onset_accumulator_.size() > onset_window_frames_) {
+        onset_accumulator_.pop_front();
+      }
     }
   }
 
@@ -525,8 +559,13 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       max_lag = std::min(max_lag, n_onset - 1);
 
       if (max_lag > 2) {
-        /// Compute autocorrelation
-        auto autocorr = compute_autocorrelation_streaming(onset_accumulator_, max_lag);
+        /// Compute autocorrelation over the bounded onset window. Copy the
+        /// deque into a contiguous vector for the (vectorized) autocorrelation;
+        /// this runs only on the throttled BPM-update cadence and over a
+        /// window-bounded length, so it stays O(1) per stream rather than
+        /// growing with total duration.
+        std::vector<float> onset_window(onset_accumulator_.begin(), onset_accumulator_.end());
+        auto autocorr = compute_autocorrelation_streaming(onset_window, max_lag);
 
         /// Find best tempo (use internal sample rate)
         auto [bpm, rel_confidence] =

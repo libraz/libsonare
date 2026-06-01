@@ -171,6 +171,7 @@ if(BUILD_MASTERING)
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
     mastering/multiband_test.cpp
+    mastering/param_wiring_test.cpp
     mastering/repair_test.cpp
     mastering/saturation_test.cpp
     mastering/set_parameter_test.cpp
@@ -221,6 +222,7 @@ endif()
 
 if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/creative_fx_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/fdn_reverb_test.cpp)
   if(NOT BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_fx)
   endif()

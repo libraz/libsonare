@@ -64,6 +64,11 @@ void TruePeakFilter::prepare(int num_channels, int max_block_size) {
   internal_scratch_.assign(channels, std::vector<float>(extended_size, 0.0f));
 }
 
+void TruePeakFilter::reset() noexcept {
+  for (auto& channel : internal_history_) std::fill(channel.begin(), channel.end(), 0.0f);
+  for (auto& channel : internal_scratch_) std::fill(channel.begin(), channel.end(), 0.0f);
+}
+
 float TruePeakFilter::process(const float* const* input, int num_channels, int num_samples) const {
   validate_buffers(input, num_channels, num_samples);
   float peak = 0.0f;

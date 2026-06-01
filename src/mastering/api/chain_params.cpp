@@ -325,8 +325,6 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
 // ---- eq.tilt + dynamics.* (deesser, transientShaper, compressor, multibandComp) ----
 bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, double v, float vf,
                              int vi, StageFlagsSet& flags) {
-  (void)vi;
-
   // ---- eq.tilt ----
   if (key == "eq.tilt.enabled") {
     mark_enabled(flags.tilt, v);
@@ -477,6 +475,33 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
   }
   if (key == "dynamics.compressor.autoMakeup") {
     cfg.dynamics.compressor.config.auto_makeup = v != 0.0;
+    mark_field(flags.compressor);
+    return true;
+  }
+  // `detector` is an enum (Peak=0, Rms=1, LogRms=2) serialized as its integer
+  // value, mirroring the enum handling used for repair.denoise.mode.
+  if (key == "dynamics.compressor.detector") {
+    cfg.dynamics.compressor.config.detector = static_cast<dynamics::DetectorMode>(vi);
+    mark_field(flags.compressor);
+    return true;
+  }
+  if (key == "dynamics.compressor.sidechainHpfEnabled") {
+    cfg.dynamics.compressor.config.sidechain_hpf_enabled = v != 0.0;
+    mark_field(flags.compressor);
+    return true;
+  }
+  if (key == "dynamics.compressor.sidechainHpfHz") {
+    cfg.dynamics.compressor.config.sidechain_hpf_hz = vf;
+    mark_field(flags.compressor);
+    return true;
+  }
+  if (key == "dynamics.compressor.pdrTimeMs") {
+    cfg.dynamics.compressor.config.pdr_time_ms = vf;
+    mark_field(flags.compressor);
+    return true;
+  }
+  if (key == "dynamics.compressor.pdrReleaseScale") {
+    cfg.dynamics.compressor.config.pdr_release_scale = vf;
     mark_field(flags.compressor);
     return true;
   }

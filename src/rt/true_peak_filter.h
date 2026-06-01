@@ -22,6 +22,11 @@ class TruePeakFilter {
   /// the prepared bounds.
   void prepare(int num_channels, int max_block_size);
 
+  /// Zero the internal cross-block history used by the internal-history
+  /// upsample overload, without reallocating. Safe to call from a control/reset
+  /// path; leaves the prepared buffer capacities intact.
+  void reset() noexcept;
+
   float process(const float* const* input, int num_channels, int num_samples) const;
   void upsample(const float* const* input, float* const* output_oversampled, int num_channels,
                 int num_samples) const;
