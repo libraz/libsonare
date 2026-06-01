@@ -23,10 +23,10 @@
 #include "mastering/final/dither.h"
 #endif
 #include "rt/command.h"
+#include "rt/gain_processor.h"
 #include "rt/processor_base.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
-#include "util/db.h"
 
 #if defined(SONARE_WITH_GRAPH)
 #include "graph/connection.h"
@@ -88,43 +88,12 @@ inline void ignore_args(const T&...) noexcept {}
 #if defined(SONARE_WITH_GRAPH)
 namespace {
 
-class EnginePassProcessor final : public rt::ProcessorBase {
- public:
-  void prepare(double, int) override {}
-  void process(float* const*, int, int) override {}
-  void reset() override {}
-};
-
-class EngineGainProcessor final : public rt::ProcessorBase {
- public:
-  explicit EngineGainProcessor(float gain_db) : gain_(db_to_linear(gain_db)) {}
-  void prepare(double, int) override {}
-  void process(float* const* channels, int num_channels, int num_samples) override {
-    if (!channels || num_channels <= 0 || num_samples <= 0) return;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (!channels[ch]) continue;
-      for (int i = 0; i < num_samples; ++i) {
-        channels[ch][i] *= gain_;
-      }
-    }
-  }
-  void reset() override {}
-  bool set_parameter(unsigned int, float value) override {
-    gain_ = db_to_linear(value);
-    return true;
-  }
-  bool parameter_is_realtime_safe(unsigned int) const noexcept override { return true; }
-
- private:
-  float gain_ = 1.0f;
-};
-
 std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphNode& node) {
   switch (node.type) {
     case 0:
-      return std::make_unique<EnginePassProcessor>();
+      return std::make_unique<rt::PassProcessor>();
     case 1:
-      return std::make_unique<EngineGainProcessor>(node.gain_db);
+      return std::make_unique<rt::GainProcessor>(node.gain_db);
     default:
       return nullptr;
   }

@@ -100,6 +100,7 @@
 #include "mixing/channel_strip.h"
 #include "quick.h"
 #include "rt/command.h"
+#include "rt/gain_processor.h"
 #include "rt/processor_base.h"
 #include "sonare.h"
 #include "sonare_c.h"
@@ -4658,44 +4659,14 @@ sonare::automation::CurveType automationCurveFromInt(int curve) {
 int automationCurveToInt(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
 
 #if defined(SONARE_WITH_GRAPH)
-class WasmPassProcessor final : public rt::ProcessorBase {
- public:
-  void prepare(double, int) override {}
-  void process(float* const*, int, int) override {}
-  void reset() override {}
-};
-
-class WasmGainProcessor final : public rt::ProcessorBase {
- public:
-  explicit WasmGainProcessor(float gain_db) : gain_(db_to_linear(gain_db)) {}
-  void prepare(double, int) override {}
-  void process(float* const* channels, int num_channels, int num_samples) override {
-    if (!channels || num_channels <= 0 || num_samples <= 0) return;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (!channels[ch]) continue;
-      for (int i = 0; i < num_samples; ++i) {
-        channels[ch][i] *= gain_;
-      }
-    }
-  }
-  void reset() override {}
-  bool set_parameter(unsigned int, float value) override {
-    gain_ = db_to_linear(value);
-    return true;
-  }
-  bool parameter_is_realtime_safe(unsigned int) const noexcept override { return true; }
-
- private:
-  float gain_ = 1.0f;
-};
 
 std::unique_ptr<rt::ProcessorBase> makeWasmGraphProcessor(val node) {
   const int type = intProperty(node, "type", 0);
   switch (type) {
     case 0:
-      return std::make_unique<WasmPassProcessor>();
+      return std::make_unique<rt::PassProcessor>();
     case 1:
-      return std::make_unique<WasmGainProcessor>(floatProperty(node, "gainDb", 0.0f));
+      return std::make_unique<rt::GainProcessor>(floatProperty(node, "gainDb", 0.0f));
     default:
       return nullptr;
   }
