@@ -154,7 +154,7 @@ if(ENABLE_COVERAGE)
       COMMAND ctest --output-on-failure --parallel
       COMMAND ${LCOV_PATH} --directory . --capture --output-file ${CMAKE_BINARY_DIR}/coverage/coverage.info
       COMMAND ${LCOV_PATH} --extract ${CMAKE_BINARY_DIR}/coverage/coverage.info
-        '${CMAKE_SOURCE_DIR}/src/*'
+        '${PROJECT_SOURCE_DIR}/src/*'
         --output-file ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
       COMMAND ${GENHTML_PATH} ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
         --output-directory ${CMAKE_BINARY_DIR}/coverage/html

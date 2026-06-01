@@ -7,8 +7,8 @@ import math
 import pytest
 
 from libsonare import (
+    AutomationCurve,
     AutomationPoint,
-    AutomationPointCurve,
     EngineBounceOptions,
     EngineClip,
     EngineFreezeOptions,
@@ -52,7 +52,7 @@ def test_engine_transport_state_and_live_parameters() -> None:
                 max_value=12.0,
                 default_value=0.0,
                 rt_safe=True,
-                default_curve=AutomationPointCurve.LINEAR,
+                default_curve=AutomationCurve.LINEAR,
             )
         )
         engine.set_parameter(3, 1.5)
@@ -118,7 +118,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
                 max_value=12.0,
                 default_value=0.0,
                 rt_safe=True,
-                default_curve=AutomationPointCurve.LINEAR,
+                default_curve=AutomationCurve.LINEAR,
             )
         )
         assert engine.parameter_count() == 1
@@ -130,7 +130,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
             7,
             [
                 AutomationPoint(0.0, 0.0),
-                AutomationPoint(1.0, 6.0205999, AutomationPointCurve.LINEAR),
+                AutomationPoint(1.0, 6.0205999, AutomationCurve.LINEAR),
             ],
         )
         assert engine.automation_lane_count() == 1

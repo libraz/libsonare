@@ -10,14 +10,13 @@
 #include <cstdint>
 #include <vector>
 
+#include "util/automation_curve.h"
+
 namespace sonare::mixing {
 
-enum class AutomationCurveType {
-  Linear,
-  Exponential,
-  Hold,
-  SCurve,
-};
+/// Alias for the canonical curve enum. Spelled `AutomationCurveType` here for
+/// historical reasons (the sample-accurate mixer lane was the first consumer).
+using AutomationCurveType = ::sonare::AutomationCurve;
 
 enum class AutomationTargetKind {
   Fader,

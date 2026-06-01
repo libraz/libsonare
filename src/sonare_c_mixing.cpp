@@ -23,16 +23,11 @@
 namespace {
 
 // Pin the sample-accurate mixing automation curve ordinal mapping used by
-// sonare_strip_schedule_*_automation. A reorder of
-// sonare::mixing::AutomationCurveType in src/mixing/automation_lane.h would
-// silently remap every queued strip-automation curve without these asserts.
-// IMPORTANT: this scheme (0=Linear, 1=Exponential, 2=Hold, 3=SCurve) is
-// intentionally DIFFERENT from the PPQ-domain scheme used by
-// SonareAutomationPoint.curve_to_next in sonare_c_daw.cpp
-// (which maps 0=Hold, 1=Linear, 2=Exponential, 3=SCurve onto the unrelated
-// automation::CurveType enum). The two C APIs target different C++
-// subsystems and the divergence is documented at each API surface; do NOT
-// unify them without an ABI break.
+// sonare_strip_schedule_*_automation. As of the AutomationCurve unification
+// this canonical scheme (0=Linear, 1=Exponential, 2=Hold, 3=SCurve) is shared
+// with the engine PPQ-domain SonareAutomationPoint.curve_to_next path and with
+// the Node / Python / WASM AutomationCurve enums. The canonical enum lives at
+// sonare::AutomationCurve in src/util/automation_curve.h.
 static_assert(static_cast<int>(sonare::mixing::AutomationCurveType::Linear) == 0,
               "sonare::mixing::AutomationCurveType::Linear must be ordinal 0 to keep "
               "sonare_strip_schedule_*_automation curve ABI stable");
@@ -47,22 +42,11 @@ bool parse_automation_curve(int curve, sonare::mixing::AutomationCurveType* out)
   if (!out) {
     return false;
   }
-  switch (curve) {
-    case 0:
-      *out = sonare::mixing::AutomationCurveType::Linear;
-      return true;
-    case 1:
-      *out = sonare::mixing::AutomationCurveType::Exponential;
-      return true;
-    case 2:
-      *out = sonare::mixing::AutomationCurveType::Hold;
-      return true;
-    case 3:
-      *out = sonare::mixing::AutomationCurveType::SCurve;
-      return true;
-    default:
-      return false;
+  if (curve < 0 || curve > 3) {
+    return false;
   }
+  *out = static_cast<sonare::mixing::AutomationCurveType>(curve);
+  return true;
 }
 
 sonare::mixing::PanMode to_pan_mode(int mode) {

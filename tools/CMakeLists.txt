@@ -24,7 +24,7 @@ endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 
 target_include_directories(sonare PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 
 # Profiling build option

@@ -1587,7 +1587,7 @@ describe('SonareWorkletProcessor', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 0,
+        defaultCurve: 2, // canonical AutomationCurve::Hold (preserve original semantic)
       });
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',

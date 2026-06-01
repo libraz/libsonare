@@ -200,14 +200,14 @@ describe('Sonare WASM Module', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 1,
+        defaultCurve: 0, // canonical AutomationCurve::Linear
       });
       expect(engine.parameterCount()).toBe(1);
       expect(engine.parameterInfo(7).name).toBe('gain');
       expect(engine.parameterInfoByIndex(0).unit).toBe('dB');
       engine.setAutomationLane(7, [
         { ppq: 0, value: 0 },
-        { ppq: 1, value: 6.0205999, curveToNext: 1 },
+        { ppq: 1, value: 6.0205999, curveToNext: 0 }, // Linear
       ]);
       expect(engine.automationLaneCount()).toBe(1);
       engine.setGraph({

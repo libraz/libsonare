@@ -222,9 +222,9 @@ TEST_CASE("RealtimeEngine applies automation at sub-block boundaries", "[engine]
 
   CaptureProcessor processor;
   sonare::automation::AutomationLane lane(7);
-  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::kLinear},
-                   {64.0 / 24000.0, 0.5f, sonare::automation::CurveType::kLinear},
-                   {128.0 / 24000.0, 1.0f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {64.0 / 24000.0, 0.5f, sonare::automation::CurveType::Linear},
+                   {128.0 / 24000.0, 1.0f, sonare::automation::CurveType::Linear}});
   engine.automation().set_lanes({lane});
   engine.automation().bind_target(7, &processor);
 

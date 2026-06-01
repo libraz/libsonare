@@ -6,8 +6,8 @@ import ctypes
 from collections.abc import Sequence
 
 from ._runtime import (
+    AutomationCurve,
     AutomationPoint,
-    AutomationPointCurve,
     EngineBounceOptions,
     EngineBounceResult,
     EngineCaptureStatus,
@@ -172,7 +172,7 @@ class RealtimeEngine:
         raw.max_value = float(info.max_value)
         raw.default_value = float(info.default_value)
         raw.rt_safe = int(info.rt_safe)
-        raw.default_curve = int(AutomationPointCurve(info.default_curve))
+        raw.default_curve = int(AutomationCurve(info.default_curve))
         _check(_get_lib().sonare_engine_add_parameter(self._require_handle(), ctypes.byref(raw)))
 
     def parameter_count(self) -> int:
@@ -204,7 +204,7 @@ class RealtimeEngine:
                 SonareAutomationPoint(
                     float(point.ppq),
                     float(point.value),
-                    int(AutomationPointCurve(point.curve_to_next)),
+                    int(AutomationCurve(point.curve_to_next)),
                 )
                 for point in points
             ]
@@ -578,7 +578,7 @@ def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:
         max_value=float(raw.max_value),
         default_value=float(raw.default_value),
         rt_safe=bool(raw.rt_safe),
-        default_curve=AutomationPointCurve(int(raw.default_curve)),
+        default_curve=AutomationCurve(int(raw.default_curve)),
     )
 
 

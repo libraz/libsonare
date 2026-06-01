@@ -153,15 +153,6 @@ class EngineTelemetryError(IntEnum):
     SMOOTHED_PARAMETER_CAPACITY = 13
 
 
-class AutomationPointCurve(IntEnum):
-    """Breakpoint curve type used by engine automation lanes."""
-
-    HOLD = 0
-    LINEAR = 1
-    EXPONENTIAL = 2
-    S_CURVE = 3
-
-
 class KeyProfile(IntEnum):
     """Key-profile family used by profile-correlation key detection."""
 
@@ -796,7 +787,7 @@ class ParameterInfo:
     max_value: float
     default_value: float
     rt_safe: bool
-    default_curve: AutomationPointCurve
+    default_curve: AutomationCurve
 
 
 @dataclass(frozen=True, slots=True)
@@ -805,7 +796,7 @@ class AutomationPoint:
 
     ppq: float
     value: float
-    curve_to_next: AutomationPointCurve = AutomationPointCurve.LINEAR
+    curve_to_next: AutomationCurve = AutomationCurve.LINEAR
 
 
 @dataclass(frozen=True, slots=True)

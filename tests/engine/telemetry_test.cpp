@@ -147,7 +147,7 @@ TEST_CASE("RealtimeEngine records non realtime-safe automation rejection", "[eng
   NonRtProcessor processor;
 
   sonare::automation::AutomationLane lane(4);
-  lane.set_points({{0.0, 1.0f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 1.0f, sonare::automation::CurveType::Linear}});
   engine.automation().set_lanes({lane});
   engine.automation().bind_target(4, &processor);
 
@@ -195,7 +195,7 @@ TEST_CASE("RealtimeEngine records stale automation lane diagnostics", "[engine][
   engine.prepare(48000.0, 128);
 
   sonare::automation::AutomationLane lane(7);
-  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
   engine.automation().set_lanes({lane});
 
   sonare::transport::TransportState state{};

@@ -87,12 +87,6 @@ class EngineTelemetryError(IntEnum):
     STALE_AUTOMATION_LANES: EngineTelemetryError
     SMOOTHED_PARAMETER_CAPACITY: EngineTelemetryError
 
-class AutomationPointCurve(IntEnum):
-    HOLD: AutomationPointCurve
-    LINEAR: AutomationPointCurve
-    EXPONENTIAL: AutomationPointCurve
-    S_CURVE: AutomationPointCurve
-
 class Key:
     root: PitchClass
     mode: Mode
@@ -677,7 +671,7 @@ class ParameterInfo:
     max_value: float
     default_value: float
     rt_safe: bool
-    default_curve: AutomationPointCurve
+    default_curve: AutomationCurve
     def __init__(
         self,
         id: int,
@@ -687,18 +681,18 @@ class ParameterInfo:
         max_value: float,
         default_value: float,
         rt_safe: bool,
-        default_curve: AutomationPointCurve,
+        default_curve: AutomationCurve,
     ) -> None: ...
 
 class AutomationPoint:
     ppq: float
     value: float
-    curve_to_next: AutomationPointCurve
+    curve_to_next: AutomationCurve
     def __init__(
         self,
         ppq: float,
         value: float,
-        curve_to_next: AutomationPointCurve = AutomationPointCurve.LINEAR,
+        curve_to_next: AutomationCurve = AutomationCurve.LINEAR,
     ) -> None: ...
 
 class EngineMarker:

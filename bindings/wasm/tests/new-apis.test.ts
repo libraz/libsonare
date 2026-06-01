@@ -466,7 +466,7 @@ describe('v1.2 feature additions (WASM)', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 1,
+        defaultCurve: 0, // canonical AutomationCurve::Linear
       });
 
       // Sample-accurate + smoothed parameter changes queue without throwing.

@@ -37,23 +37,23 @@ class CaptureProcessor final : public sonare::rt::ProcessorBase {
 TEST_CASE("AutomationLane evaluates hold linear exponential and s-curve breakpoints",
           "[automation]") {
   sonare::automation::AutomationLane hold(1);
-  hold.set_points({{0.0, 0.25f, sonare::automation::CurveType::kHold},
-                   {1.0, 0.75f, sonare::automation::CurveType::kLinear}});
+  hold.set_points({{0.0, 0.25f, sonare::automation::CurveType::Hold},
+                   {1.0, 0.75f, sonare::automation::CurveType::Linear}});
   REQUIRE_THAT(hold.value_at(0.5), WithinAbs(0.25f, 1.0e-6f));
 
   sonare::automation::AutomationLane linear(2);
-  linear.set_points({{0.0, 0.0f, sonare::automation::CurveType::kLinear},
-                     {1.0, 1.0f, sonare::automation::CurveType::kLinear}});
+  linear.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                     {1.0, 1.0f, sonare::automation::CurveType::Linear}});
   REQUIRE_THAT(linear.value_at(0.25), WithinAbs(0.25f, 1.0e-6f));
 
   sonare::automation::AutomationLane exponential(3);
-  exponential.set_points({{0.0, 1.0f, sonare::automation::CurveType::kExponential},
-                          {1.0, 4.0f, sonare::automation::CurveType::kLinear}});
+  exponential.set_points({{0.0, 1.0f, sonare::automation::CurveType::Exponential},
+                          {1.0, 4.0f, sonare::automation::CurveType::Linear}});
   REQUIRE_THAT(exponential.value_at(0.5), WithinAbs(2.0f, 1.0e-5f));
 
   sonare::automation::AutomationLane s_curve(4);
-  s_curve.set_points({{0.0, 0.0f, sonare::automation::CurveType::kSCurve},
-                      {1.0, 1.0f, sonare::automation::CurveType::kLinear}});
+  s_curve.set_points({{0.0, 0.0f, sonare::automation::CurveType::SCurve},
+                      {1.0, 1.0f, sonare::automation::CurveType::Linear}});
   REQUIRE_THAT(s_curve.value_at(0.5), WithinAbs(0.5f, 1.0e-6f));
   REQUIRE(s_curve.next_breakpoint_after(0.25) == 1.0);
 }
@@ -64,8 +64,8 @@ TEST_CASE("AutomationEngine applies lane values through ProcessorBase set_parame
   tempo.prepare(48000.0);
 
   sonare::automation::AutomationLane lane(7);
-  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::kLinear},
-                   {1.0, 1.0f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {1.0, 1.0f, sonare::automation::CurveType::Linear}});
 
   CaptureProcessor processor;
   sonare::automation::AutomationEngine engine;
@@ -88,7 +88,7 @@ TEST_CASE("AutomationEngine skips non realtime-safe parameters", "[automation]")
   tempo.prepare(48000.0);
 
   sonare::automation::AutomationLane lane(99);
-  lane.set_points({{0.0, 0.1f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 0.1f, sonare::automation::CurveType::Linear}});
 
   CaptureProcessor processor;
   sonare::automation::AutomationEngine engine;
@@ -121,7 +121,7 @@ TEST_CASE("AutomationEngine reports apply before lane acquisition", "[automation
   tempo.prepare(48000.0);
 
   sonare::automation::AutomationLane lane(7);
-  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
 
   sonare::automation::AutomationEngine engine;
   engine.prepare(48000.0, &tempo);
@@ -138,12 +138,12 @@ TEST_CASE("AutomationEngine reports apply before lane acquisition", "[automation
 
 TEST_CASE("AutomationEngine collects breakpoint boundaries", "[automation]") {
   sonare::automation::AutomationLane first(1);
-  first.set_points({{0.0, 0.0f, sonare::automation::CurveType::kLinear},
-                    {1.0, 1.0f, sonare::automation::CurveType::kLinear},
-                    {2.0, 0.0f, sonare::automation::CurveType::kLinear}});
+  first.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                    {1.0, 1.0f, sonare::automation::CurveType::Linear},
+                    {2.0, 0.0f, sonare::automation::CurveType::Linear}});
   sonare::automation::AutomationLane second(2);
-  second.set_points({{0.5, 0.0f, sonare::automation::CurveType::kLinear},
-                     {1.0, 0.5f, sonare::automation::CurveType::kLinear}});
+  second.set_points({{0.5, 0.0f, sonare::automation::CurveType::Linear},
+                     {1.0, 0.5f, sonare::automation::CurveType::Linear}});
 
   sonare::automation::AutomationEngine engine;
   engine.set_lanes({first, second});
@@ -162,9 +162,9 @@ TEST_CASE("AutomationEngine collects breakpoint boundaries", "[automation]") {
 TEST_CASE("ParameterRegistry enumerates stable metadata", "[automation]") {
   sonare::automation::ParameterRegistry registry;
   REQUIRE(registry.add(
-      {20, "gain", "dB", -60.0f, 12.0f, 0.0f, true, sonare::automation::CurveType::kLinear}));
-  REQUIRE(registry.add(
-      {10, "mode", "", 0.0f, 3.0f, 0.0f, false, sonare::automation::CurveType::kHold}));
+      {20, "gain", "dB", -60.0f, 12.0f, 0.0f, true, sonare::automation::CurveType::Linear}));
+  REQUIRE(
+      registry.add({10, "mode", "", 0.0f, 3.0f, 0.0f, false, sonare::automation::CurveType::Hold}));
 
   REQUIRE(registry.parameter_count() == 2);
   sonare::automation::ParameterInfo info{};

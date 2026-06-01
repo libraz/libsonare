@@ -185,14 +185,13 @@ typedef struct {
   double ppq;
   float value;
   /* PPQ-domain curve to the next breakpoint. Used by
-     sonare_engine_set_automation_lane. The ordinal mapping is:
-       0 = Hold, 1 = Linear (default), 2 = Exponential, 3 = SCurve
-     IMPORTANT: this is a DIFFERENT ordinal scheme from the sample-accurate
-     sonare_strip_schedule_*_automation curves in sonare_c_mixing.h
-     (where 0 = Linear, 1 = Exponential, 2 = Hold, 3 = SCurve). The two
-     paths target different C++ subsystems (automation::CurveType vs
-     mixing::AutomationCurveType) and are kept distinct for ABI stability.
-     Verify the ordinal table for the API you are calling. */
+     sonare_engine_set_automation_lane. The canonical ordinal mapping is:
+       0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
+     This matches the sample-accurate mixer curves accepted by
+     sonare_strip_schedule_*_automation in sonare_c_mixing.h and the
+     AutomationCurve enums in the Node / Python / WASM bindings. The
+     mapping is pinned by static_assert against sonare::AutomationCurve
+     in src/util/automation_curve.h. */
   int curve_to_next;
 } SonareAutomationPoint;
 

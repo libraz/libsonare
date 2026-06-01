@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -140,6 +141,22 @@ TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
     SonareAudio* audio = nullptr;
     SonareError err = sonare_audio_from_buffer(&sample, 0, 22050, &audio);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("returns error for non-finite samples") {
+    std::array<float, 3> samples{0.0f, std::numeric_limits<float>::quiet_NaN(), 1.0f};
+    SonareAudio* audio = nullptr;
+
+    SonareError err = sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio);
+
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(audio == nullptr);
+
+    samples[1] = std::numeric_limits<float>::infinity();
+    err = sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio);
+
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(audio == nullptr);
   }
 
   SECTION("returns error for null output") {
@@ -2457,7 +2474,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   parameter.max_value = 12.0f;
   parameter.default_value = 0.0f;
   parameter.rt_safe = 1;
-  parameter.default_curve = 1;
+  parameter.default_curve = 0;  // canonical AutomationCurve::Linear
   REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
   size_t parameter_count = 0;
   REQUIRE(sonare_engine_parameter_count(engine, &parameter_count) == SONARE_OK);
@@ -2467,7 +2484,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(parameter_out.id == 7);
   REQUIRE(std::strcmp(parameter_out.name, "gain") == 0);
 
-  const SonareAutomationPoint points[] = {{0.0, 0.0f, 1}, {1.0, 6.0205999f, 1}};
+  const SonareAutomationPoint points[] = {{0.0, 0.0f, 0}, {1.0, 6.0205999f, 0}};
   REQUIRE(sonare_engine_set_automation_lane(engine, 7, points, 2) == SONARE_OK);
   size_t lane_count = 0;
   REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);

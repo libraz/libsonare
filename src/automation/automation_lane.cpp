@@ -12,18 +12,18 @@ float interpolate(const Breakpoint& a, const Breakpoint& b, double ppq) noexcept
   if (span <= 0.0) return b.value;
   double t = std::clamp((ppq - a.ppq) / span, 0.0, 1.0);
   switch (a.curve_to_next) {
-    case CurveType::kHold:
+    case CurveType::Hold:
       return a.value;
-    case CurveType::kExponential:
+    case CurveType::Exponential:
       if (a.value > 0.0f && b.value > 0.0f) {
         return static_cast<float>(
             std::exp(std::log(a.value) + (std::log(b.value) - std::log(a.value)) * t));
       }
       return static_cast<float>(a.value + (b.value - a.value) * t);
-    case CurveType::kSCurve:
+    case CurveType::SCurve:
       t = t * t * (3.0 - 2.0 * t);
       return static_cast<float>(a.value + (b.value - a.value) * t);
-    case CurveType::kLinear:
+    case CurveType::Linear:
     default:
       return static_cast<float>(a.value + (b.value - a.value) * t);
   }

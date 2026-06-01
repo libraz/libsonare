@@ -7,14 +7,13 @@
 #include <cstdint>
 #include <vector>
 
+#include "util/automation_curve.h"
+
 namespace sonare::automation {
 
-enum class CurveType {
-  kHold,
-  kLinear,
-  kExponential,
-  kSCurve,
-};
+/// Alias for the canonical curve enum. Spelled `CurveType` here for historical
+/// reasons (the engine PPQ-domain automation API was the first consumer).
+using CurveType = ::sonare::AutomationCurve;
 
 struct ParameterInfo {
   uint32_t id = 0;
@@ -24,7 +23,7 @@ struct ParameterInfo {
   float max_value = 1.0f;
   float default_value = 0.0f;
   bool rt_safe = true;
-  CurveType default_curve = CurveType::kLinear;
+  CurveType default_curve = CurveType::Linear;
 };
 
 class ParameterRegistry {

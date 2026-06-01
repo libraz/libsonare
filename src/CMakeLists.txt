@@ -1,10 +1,10 @@
 # KissFFT library (third-party, warnings disabled)
 add_library(kissfft STATIC
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
 )
 set_target_properties(kissfft PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(kissfft SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/third_party/kissfft)
+target_include_directories(kissfft SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/third_party/kissfft)
 target_compile_definitions(kissfft PRIVATE KISS_FFT_FIXED=0)
 # Disable warnings for third-party code
 if(MSVC)
@@ -166,10 +166,10 @@ target_include_directories(sonare_core_objects PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_include_directories(sonare_core_objects SYSTEM PUBLIC
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft
-  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-  ${CMAKE_SOURCE_DIR}/third_party/minimp3
-  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft
+  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+  ${PROJECT_SOURCE_DIR}/third_party/minimp3
+  ${PROJECT_SOURCE_DIR}/third_party/r8brain
 )
 target_link_libraries(sonare_core_objects PUBLIC Eigen3::Eigen)
 target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
@@ -180,10 +180,10 @@ target_include_directories(sonare_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_include_directories(sonare_core SYSTEM PUBLIC
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft
-  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-  ${CMAKE_SOURCE_DIR}/third_party/minimp3
-  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft
+  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+  ${PROJECT_SOURCE_DIR}/third_party/minimp3
+  ${PROJECT_SOURCE_DIR}/third_party/r8brain
 )
 
 target_link_libraries(sonare_core PUBLIC Eigen3::Eigen kissfft)
@@ -195,6 +195,7 @@ if(NOT BUILD_WASM)
 endif()
 
 if(SONARE_FFMPEG_ENABLED)
+  target_link_libraries(sonare_core_objects PUBLIC PkgConfig::FFMPEG)
   target_link_libraries(sonare_core PUBLIC PkgConfig::FFMPEG)
   target_compile_definitions(sonare_core_objects PUBLIC SONARE_WITH_FFMPEG=1)
   target_compile_definitions(sonare_core PUBLIC SONARE_WITH_FFMPEG=1)
@@ -218,10 +219,10 @@ target_include_directories(sonare_rt PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_include_directories(sonare_rt SYSTEM PUBLIC
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft
-  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-  ${CMAKE_SOURCE_DIR}/third_party/minimp3
-  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft
+  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+  ${PROJECT_SOURCE_DIR}/third_party/minimp3
+  ${PROJECT_SOURCE_DIR}/third_party/r8brain
 )
 target_link_libraries(sonare_rt PUBLIC sonare_core)
 target_compile_options(sonare_rt PRIVATE ${SONARE_WARNING_FLAGS})
@@ -236,10 +237,10 @@ target_include_directories(sonare_automation PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_include_directories(sonare_automation SYSTEM PUBLIC
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft
-  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-  ${CMAKE_SOURCE_DIR}/third_party/minimp3
-  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft
+  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+  ${PROJECT_SOURCE_DIR}/third_party/minimp3
+  ${PROJECT_SOURCE_DIR}/third_party/r8brain
 )
 target_link_libraries(sonare_automation PUBLIC sonare_rt)
 target_compile_options(sonare_automation PRIVATE ${SONARE_WARNING_FLAGS})
@@ -346,10 +347,10 @@ if(BUILD_MASTERING)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_mastering SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_mastering PUBLIC sonare_rt)
   if(BUILD_FX)
@@ -382,10 +383,10 @@ if(BUILD_MIXING)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_mixing SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_mixing PUBLIC sonare_rt sonare_mastering)
   target_compile_options(sonare_mixing PRIVATE ${SONARE_WARNING_FLAGS})
@@ -401,10 +402,10 @@ if(BUILD_GRAPH)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_graph SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_graph PUBLIC sonare_rt)
   target_compile_options(sonare_graph PRIVATE ${SONARE_WARNING_FLAGS})
@@ -435,10 +436,10 @@ target_include_directories(sonare_engine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_include_directories(sonare_engine SYSTEM PUBLIC
-  ${CMAKE_SOURCE_DIR}/third_party/kissfft
-  ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-  ${CMAKE_SOURCE_DIR}/third_party/minimp3
-  ${CMAKE_SOURCE_DIR}/third_party/r8brain
+  ${PROJECT_SOURCE_DIR}/third_party/kissfft
+  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+  ${PROJECT_SOURCE_DIR}/third_party/minimp3
+  ${PROJECT_SOURCE_DIR}/third_party/r8brain
 )
 target_link_libraries(sonare_engine PUBLIC sonare_rt sonare_automation)
 if(BUILD_GRAPH)
@@ -469,10 +470,10 @@ if(BUILD_FX)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_fx SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_fx PUBLIC sonare_rt)
   target_compile_options(sonare_fx PRIVATE ${SONARE_WARNING_FLAGS})
@@ -491,10 +492,10 @@ if(BUILD_PITCH_EDITOR)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_pitch_editor SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_pitch_editor PUBLIC sonare_core)
   target_compile_options(sonare_pitch_editor PRIVATE ${SONARE_WARNING_FLAGS})
@@ -519,10 +520,10 @@ if(BUILD_VOICE_CHANGER)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_voice_changer SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_voice_changer PUBLIC sonare_core sonare_pitch_editor)
   target_compile_options(sonare_voice_changer PRIVATE ${SONARE_WARNING_FLAGS})
@@ -557,10 +558,10 @@ if(BUILD_SHARED)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   target_include_directories(sonare_shared SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dr_libs
-    ${CMAKE_SOURCE_DIR}/third_party/minimp3
-    ${CMAKE_SOURCE_DIR}/third_party/r8brain
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen)
   if(BUILD_MASTERING AND NOT BUILD_MIXING)
@@ -690,9 +691,9 @@ if(BUILD_WASM)
 
   # Copy output to bindings/wasm/dist directory
   add_custom_command(TARGET sonare POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bindings/wasm/dist
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare.wasm ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_SOURCE_DIR}/bindings/wasm/dist
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare.wasm ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
     COMMENT "Copying WASM files to bindings/wasm/dist/"
   )
 
@@ -720,9 +721,9 @@ if(BUILD_WASM)
     -sAUDIO_WORKLET=1
   )
   add_custom_command(TARGET sonare-rt POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bindings/wasm/dist
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare-rt> ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare-rt.wasm ${CMAKE_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_SOURCE_DIR}/bindings/wasm/dist
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare-rt> ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare-rt.wasm ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
     COMMENT "Copying realtime WASM files to bindings/wasm/dist/"
   )
 endif()

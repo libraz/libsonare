@@ -13,7 +13,7 @@ namespace sonare::automation {
 struct Breakpoint {
   double ppq = 0.0;
   float value = 0.0f;
-  CurveType curve_to_next = CurveType::kLinear;
+  CurveType curve_to_next = CurveType::Linear;
 };
 
 class AutomationLane {

@@ -361,9 +361,6 @@ from .types import (
     AutomationPoint as AutomationPoint,
 )
 from .types import (
-    AutomationPointCurve as AutomationPointCurve,
-)
-from .types import (
     BpmAnalysisResult as BpmAnalysisResult,
 )
 from .types import (

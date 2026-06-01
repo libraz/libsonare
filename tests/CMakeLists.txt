@@ -178,13 +178,13 @@ if(BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_mastering)
   endif()
   target_sources(sonare_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_apply.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_chain.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_dynamics.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_eq.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_preset.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_repair.cpp
-    ${CMAKE_SOURCE_DIR}/src/sonare_c_mastering_streaming.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_apply.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_chain.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_dynamics.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_eq.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_preset.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_repair.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_streaming.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
@@ -203,7 +203,7 @@ if(BUILD_MIXING)
     mixing/no_alloc_test.cpp
     mixing/routing_test.cpp
   )
-  target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_mixing.cpp)
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_mixing.cpp)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
 endif()
 
@@ -234,7 +234,7 @@ endif()
 if(BUILD_VOICE_CHANGER)
   target_sources(sonare_tests PRIVATE editing/voice_changer_test.cpp)
   target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
-  target_sources(sonare_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/sonare_c_daw.cpp)
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_daw.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare_tests PRIVATE
     SONARE_WITH_PITCH_EDITOR=1
@@ -251,4 +251,4 @@ endif()
 
 include(CTest)
 include(Catch)
-catch_discover_tests(sonare_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+catch_discover_tests(sonare_tests WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})

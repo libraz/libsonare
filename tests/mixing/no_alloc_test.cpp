@@ -246,8 +246,8 @@ TEST_CASE("AutomationEngine apply performs no heap allocation after prepare", "[
   tempo.prepare(48000.0);
 
   sonare::automation::AutomationLane lane(7);
-  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::kLinear},
-                   {1.0, 1.0f, sonare::automation::CurveType::kLinear}});
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {1.0, 1.0f, sonare::automation::CurveType::Linear}});
 
   ParameterCaptureProcessor processor;
   sonare::automation::AutomationEngine engine;

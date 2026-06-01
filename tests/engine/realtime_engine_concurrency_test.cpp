@@ -78,8 +78,8 @@ static void run_concurrent_mutation(int blocks) {
 
       sonare::automation::AutomationLane lane(11);
       lane.set_points(
-          {{0.0, 0.0f, sonare::automation::CurveType::kLinear},
-           {1.0, static_cast<float>((i % 10) * 0.1f), sonare::automation::CurveType::kLinear}});
+          {{0.0, 0.0f, sonare::automation::CurveType::Linear},
+           {1.0, static_cast<float>((i % 10) * 0.1f), sonare::automation::CurveType::Linear}});
       engine.automation().set_lanes({lane});
 
       // Pace the control thread so it stays well within the 64-generation

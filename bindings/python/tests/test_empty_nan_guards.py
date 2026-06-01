@@ -128,16 +128,19 @@ class TestNanInfGuards:
 
 class TestValidateFalseSkipsNan:
     def test_lufs_validate_false(self):
-        # Should NOT raise the NaN/Inf guard error.
+        # Should NOT raise the Python-side NaN/Inf guard error. The C layer
+        # may still reject NaN input with its own SonareException (surfaced as
+        # RuntimeError), which is acceptable — we only assert that the
+        # Python-side guard message did not fire.
         try:
             lufs(_with_nan(), SR, validate=False)
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             assert "contains NaN or Inf" not in str(e)
 
     def test_mastering_dynamics_compressor_validate_false(self):
         try:
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             assert "contains NaN or Inf" not in str(e)
 
 

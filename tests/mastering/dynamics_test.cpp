@@ -885,17 +885,42 @@ void run_rt_safe_race(PublishFn publish_one, ProcessFn process_one_block_returns
   std::atomic<bool> stop{false};
   std::atomic<int> finite_blocks{0};
   std::atomic<int> nonfinite_blocks{0};
+  auto total_blocks = [&] {
+    return finite_blocks.load(std::memory_order_relaxed) +
+           nonfinite_blocks.load(std::memory_order_relaxed);
+  };
   std::thread audio_thread([&] {
     while (!stop.load(std::memory_order_acquire)) {
       const bool finite = process_one_block_returns_finite();
       (finite ? finite_blocks : nonfinite_blocks).fetch_add(1, std::memory_order_relaxed);
     }
   });
+  bool audio_thread_started = false;
+  for (int spin = 0; spin < 10000; ++spin) {
+    if (total_blocks() > 0) {
+      audio_thread_started = true;
+      break;
+    }
+    std::this_thread::yield();
+  }
   for (int i = 0; i < 2000; ++i) {
     publish_one(i);
+    if ((i & 0x0f) == 0) {
+      std::this_thread::yield();
+    }
+  }
+  bool observed_concurrent_blocks = false;
+  for (int spin = 0; spin < 10000; ++spin) {
+    if (total_blocks() > 1) {
+      observed_concurrent_blocks = true;
+      break;
+    }
+    std::this_thread::yield();
   }
   stop.store(true, std::memory_order_release);
   audio_thread.join();
+  REQUIRE(audio_thread_started);
+  REQUIRE(observed_concurrent_blocks);
   REQUIRE(finite_blocks.load() > 0);
   REQUIRE(nonfinite_blocks.load() == 0);
 }

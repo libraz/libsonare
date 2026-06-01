@@ -1,5 +1,7 @@
 #include "sonare_c_internal.h"
 
+#include <cmath>
+
 namespace sonare_c_detail {
 
 std::string& last_error_storage() {
@@ -36,6 +38,9 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (length > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t i = 0; i < length; ++i) {
+    if (!std::isfinite(samples[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
   return SONARE_OK;
 }
 

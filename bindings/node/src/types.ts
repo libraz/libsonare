@@ -698,6 +698,11 @@ export interface EngineTransportState {
   sampleRate: number;
 }
 
+/**
+ * Engine automation breakpoint curve as an integer code.
+ * Canonical ordinals (matches mixer `AutomationCurve`):
+ *   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve.
+ */
 export type EngineAutomationPointCurve = 0 | 1 | 2 | 3;
 
 export interface EngineParameterInfo {

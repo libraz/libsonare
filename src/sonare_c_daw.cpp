@@ -134,54 +134,36 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
 
 namespace {
 
-// Pin the PPQ-domain automation curve ordinal mapping used by
+// Pin the automation curve ordinal mapping used by
 // sonare_engine_set_automation_lane (via SonareAutomationPoint.curve_to_next).
-// A reorder of automation::CurveType in src/automation/parameter.h would
-// silently re-map every persisted SonareAutomationPoint without these asserts.
-// IMPORTANT: this scheme (0=Hold, 1=Linear, 2=Exponential, 3=SCurve) is
-// intentionally DIFFERENT from the sample-accurate scheme used by
-// sonare_strip_schedule_*_automation in sonare_c_mixing.cpp
-// (which maps 0=Linear, 1=Exponential, 2=Hold, 3=SCurve onto the unrelated
-// mixing::AutomationCurveType enum). The two C APIs target different C++
-// subsystems and the divergence is documented at each API surface; do NOT
-// unify them without an ABI break.
-static_assert(static_cast<int>(automation::CurveType::kHold) == 0,
-              "automation::CurveType::kHold must be ordinal 0 to keep "
+// As of the AutomationCurve unification this scheme matches the sample-accurate
+// mixer API (sonare_strip_schedule_*_automation), so a single canonical
+// ordinal set covers both subsystems and all four bindings.
+static_assert(static_cast<int>(automation::CurveType::Linear) == 0,
+              "automation::CurveType::Linear must be ordinal 0 to keep "
               "SonareAutomationPoint.curve_to_next ABI stable");
-static_assert(static_cast<int>(automation::CurveType::kLinear) == 1,
-              "automation::CurveType::kLinear must be ordinal 1");
-static_assert(static_cast<int>(automation::CurveType::kExponential) == 2,
-              "automation::CurveType::kExponential must be ordinal 2");
-static_assert(static_cast<int>(automation::CurveType::kSCurve) == 3,
-              "automation::CurveType::kSCurve must be ordinal 3");
+static_assert(static_cast<int>(automation::CurveType::Exponential) == 1,
+              "automation::CurveType::Exponential must be ordinal 1");
+static_assert(static_cast<int>(automation::CurveType::Hold) == 2,
+              "automation::CurveType::Hold must be ordinal 2");
+static_assert(static_cast<int>(automation::CurveType::SCurve) == 3,
+              "automation::CurveType::SCurve must be ordinal 3");
 
 automation::CurveType curve_from_int(int curve) {
   switch (curve) {
-    case 0:
-      return automation::CurveType::kHold;
-    case 2:
-      return automation::CurveType::kExponential;
-    case 3:
-      return automation::CurveType::kSCurve;
     case 1:
+      return automation::CurveType::Exponential;
+    case 2:
+      return automation::CurveType::Hold;
+    case 3:
+      return automation::CurveType::SCurve;
+    case 0:
     default:
-      return automation::CurveType::kLinear;
+      return automation::CurveType::Linear;
   }
 }
 
-int curve_to_int(automation::CurveType curve) {
-  switch (curve) {
-    case automation::CurveType::kHold:
-      return 0;
-    case automation::CurveType::kLinear:
-      return 1;
-    case automation::CurveType::kExponential:
-      return 2;
-    case automation::CurveType::kSCurve:
-      return 3;
-  }
-  return 1;
-}
+int curve_to_int(automation::CurveType curve) { return static_cast<int>(curve); }
 
 void copy_text(char* dest, size_t capacity, const char* src) {
   if (!dest || capacity == 0) return;

@@ -4649,33 +4649,16 @@ class StreamAnalyzerWrapper {
   std::unique_ptr<StreamAnalyzer> analyzer_;
 };
 
+// Canonical AutomationCurve ordinals (Linear=0, Exp=1, Hold=2, SCurve=3) are
+// shared with the C ABI and other bindings; conversion is a direct cast.
 sonare::automation::CurveType automationCurveFromInt(int curve) {
-  switch (curve) {
-    case 0:
-      return sonare::automation::CurveType::kHold;
-    case 2:
-      return sonare::automation::CurveType::kExponential;
-    case 3:
-      return sonare::automation::CurveType::kSCurve;
-    case 1:
-    default:
-      return sonare::automation::CurveType::kLinear;
+  if (curve < 0 || curve > 3) {
+    return sonare::automation::CurveType::Linear;
   }
+  return static_cast<sonare::automation::CurveType>(curve);
 }
 
-int automationCurveToInt(sonare::automation::CurveType curve) {
-  switch (curve) {
-    case sonare::automation::CurveType::kHold:
-      return 0;
-    case sonare::automation::CurveType::kLinear:
-      return 1;
-    case sonare::automation::CurveType::kExponential:
-      return 2;
-    case sonare::automation::CurveType::kSCurve:
-      return 3;
-  }
-  return 1;
-}
+int automationCurveToInt(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
 
 #if defined(SONARE_WITH_GRAPH)
 class WasmPassProcessor final : public rt::ProcessorBase {
