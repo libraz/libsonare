@@ -228,10 +228,10 @@ void Crossover::reset() {
   for (auto& split_states : states_) {
     for (auto& channel_states : split_states) {
       for (auto& stage : channel_states.lowpass) {
-        stage.reset_state();
+        stage.reset();
       }
       for (auto& stage : channel_states.highpass) {
-        stage.reset_state();
+        stage.reset();
       }
     }
   }
@@ -239,7 +239,7 @@ void Crossover::reset() {
     for (auto& channel_states : band_states) {
       for (auto& split_states : channel_states.allpass_by_split) {
         for (auto& stage : split_states) {
-          stage.reset_state();
+          stage.reset();
         }
       }
     }
@@ -345,11 +345,7 @@ std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope 
 void Crossover::install_coefficients() {
   const auto sections = filter_sections(config_.slope, config_.mode);
   const auto assign_biquad = [](Biquad& target, const rt::BiquadCoeffs& coeffs) {
-    target.b0 = coeffs.b0;
-    target.b1 = coeffs.b1;
-    target.b2 = coeffs.b2;
-    target.a1 = coeffs.a1;
-    target.a2 = coeffs.a2;
+    target.c = coeffs;
   };
 
   for (size_t split_index = 0; split_index < states_.size(); ++split_index) {

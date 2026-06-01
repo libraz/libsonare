@@ -15,18 +15,10 @@ using sonare::constants::kFloorDb;
 
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
   const size_t c = static_cast<size_t>(channel);
-  // Pre-filter (high shelf), Direct Form II transposed.
-  BiquadState& s0 = k_state_pre_[c];
-  const double y0 = k_pre_.b0 * x + s0.z1;
-  s0.z1 = k_pre_.b1 * x - k_pre_.a1 * y0 + s0.z2;
-  s0.z2 = k_pre_.b2 * x - k_pre_.a2 * y0;
-
-  // RLB high-pass.
-  BiquadState& s1 = k_state_rlb_[c];
-  const double y1 = k_rlb_.b0 * y0 + s1.z1;
-  s1.z1 = k_rlb_.b1 * y0 - k_rlb_.a1 * y1 + s1.z2;
-  s1.z2 = k_rlb_.b2 * y0 - k_rlb_.a2 * y1;
-  return y1;
+  // Pre-filter (high shelf) then RLB high-pass, both Direct Form II transposed
+  // with externally-owned coefficients (set in prepare()).
+  const double y0 = k_state_pre_[c].process(x);
+  return k_state_rlb_[c].process(y0);
 }
 
 float MeterProcessor::energy_to_lufs(double energy) const noexcept {
@@ -47,8 +39,12 @@ void MeterProcessor::prepare(double sample_rate, int /*max_block_size*/) {
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {
     const auto coeffs = rt::k_weighting_coefficients(sample_rate_);
-    k_pre_ = {coeffs.pre.b0, coeffs.pre.b1, coeffs.pre.b2, coeffs.pre.a1, coeffs.pre.a2};
-    k_rlb_ = {coeffs.rlb.b0, coeffs.rlb.b1, coeffs.rlb.b2, coeffs.rlb.a1, coeffs.rlb.a2};
+    const rt::BiquadCoeffsD pre{coeffs.pre.b0, coeffs.pre.b1, coeffs.pre.b2, coeffs.pre.a1,
+                                coeffs.pre.a2};
+    const rt::BiquadCoeffsD rlb{coeffs.rlb.b0, coeffs.rlb.b1, coeffs.rlb.b2, coeffs.rlb.a1,
+                                coeffs.rlb.a2};
+    for (auto& s : k_state_pre_) s.set(pre);
+    for (auto& s : k_state_rlb_) s.set(rlb);
 
     momentary_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.400 * sample_rate_)));
     short_term_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(3.0 * sample_rate_)));
@@ -69,8 +65,11 @@ void MeterProcessor::reset() {
   seq_ = 0;
   gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 
-  k_state_pre_ = {};
-  k_state_rlb_ = {};
+  // Clear only the filter delay state; the K-weighting coefficients are owned by
+  // the BiquadStateD instances and set in prepare(), so they must survive reset()
+  // (prepare() calls reset() after installing them).
+  for (auto& s : k_state_pre_) s.reset();
+  for (auto& s : k_state_rlb_) s.reset();
   std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0);
   ring_pos_ = 0;
   filled_ = 0;

@@ -6,8 +6,8 @@
 #include <memory>
 #include <vector>
 
-#include "mastering/common/biquad.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/biquad_design.h"
 #include "rt/envelope_follower.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
@@ -84,7 +84,7 @@ class DeEsser : public rt::ProcessorBase {
   ///        always publishes an initial snapshot).
   const DeEsserConfig* adopt_snapshot_for_block() noexcept;
 
-  using Biquad = common::Biquad;
+  using Biquad = rt::BiquadState;
 
   DeEsserConfig config_{};
   /// @brief Lock-free single-producer (config thread) / single-consumer (audio

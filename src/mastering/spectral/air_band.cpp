@@ -17,22 +17,17 @@ using sonare::constants::kPiD;
 AirBand::Biquad make_highpass(double frequency_hz, double sample_rate, double q) {
   const float w0 = static_cast<float>(
       2.0 * kPiD * std::clamp(frequency_hz, 20.0, sample_rate * 0.49) / sample_rate);
-  const auto coeffs = rt::rbj_highpass(w0, static_cast<float>(q));
   AirBand::Biquad b;
-  b.b0 = coeffs.b0;
-  b.b1 = coeffs.b1;
-  b.b2 = coeffs.b2;
-  b.a1 = coeffs.a1;
-  b.a2 = coeffs.a2;
+  b.c = rt::rbj_highpass(w0, static_cast<float>(q));
   return b;
 }
 
 void assign_biquad(AirBand::Biquad& b, const rt::BiquadCoeffsD& coeffs) {
-  b.b0 = static_cast<float>(coeffs.b0);
-  b.b1 = static_cast<float>(coeffs.b1);
-  b.b2 = static_cast<float>(coeffs.b2);
-  b.a1 = static_cast<float>(coeffs.a1);
-  b.a2 = static_cast<float>(coeffs.a2);
+  b.c.b0 = static_cast<float>(coeffs.b0);
+  b.c.b1 = static_cast<float>(coeffs.b1);
+  b.c.b2 = static_cast<float>(coeffs.b2);
+  b.c.a1 = static_cast<float>(coeffs.a1);
+  b.c.a2 = static_cast<float>(coeffs.a2);
 }
 
 AirBand::Biquad make_high_shelf(double frequency_hz, double sample_rate, float gain_db) {
@@ -119,11 +114,7 @@ bool AirBand::set_parameter(unsigned int param_id, float value) {
       for (auto& filter : detector_) {
         const Biquad updated = make_highpass(config_.shelf_frequency_hz, sample_rate_,
                                              sonare::constants::kButterworthQD);
-        filter.b0 = updated.b0;
-        filter.b1 = updated.b1;
-        filter.b2 = updated.b2;
-        filter.a1 = updated.a1;
-        filter.a2 = updated.a2;
+        filter.c = updated.c;
       }
       return true;
     }

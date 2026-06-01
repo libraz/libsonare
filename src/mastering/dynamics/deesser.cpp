@@ -215,12 +215,7 @@ void DeEsser::update_coefficients(const DeEsserConfig& config) {
   const float cutoff = std::clamp(config.frequency_hz, 10.0f, nyquist * 0.98f);
   const float q = std::max(1.0e-3f, config.bandpass_q);
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
-  const auto coeffs = rt::rbj_bandpass(w0, q);
-  filter_coeffs_.b0 = coeffs.b0;
-  filter_coeffs_.b1 = coeffs.b1;
-  filter_coeffs_.b2 = coeffs.b2;
-  filter_coeffs_.a1 = coeffs.a1;
-  filter_coeffs_.a2 = coeffs.a2;
+  filter_coeffs_.c = rt::rbj_bandpass(w0, q);
   for (auto& filter : bandpass_) {
     const float z1 = filter.z1;
     const float z2 = filter.z2;

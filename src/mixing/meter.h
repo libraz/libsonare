@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 #include "rt/true_peak_filter.h"
 #include "util/constants.h"
@@ -57,19 +58,6 @@ class MeterProcessor : public rt::ProcessorBase {
   void set_gain_reduction_db(float db) noexcept;
 
  private:
-  // Second-order section evaluated in Direct Form II transposed (double state).
-  struct Biquad {
-    double b0 = 1.0;
-    double b1 = 0.0;
-    double b2 = 0.0;
-    double a1 = 0.0;
-    double a2 = 0.0;
-  };
-  struct BiquadState {
-    double z1 = 0.0;
-    double z2 = 0.0;
-  };
-
   double filter_sample(int channel, double x) noexcept;
   float energy_to_lufs(double energy) const noexcept;
   void publish(const MeterSnapshot& next) noexcept;
@@ -83,12 +71,11 @@ class MeterProcessor : public rt::ProcessorBase {
   MeterSnapshot snapshot_{};
   uint64_t seq_ = 0;
 
-  // LUFS streaming state.
+  // LUFS streaming state. The two ITU-R BS.1770 K-weighting sections are
+  // evaluated in Direct Form II transposed (double precision) per channel.
   double sample_rate_ = 0.0;
-  Biquad k_pre_{};
-  Biquad k_rlb_{};
-  std::array<BiquadState, 2> k_state_pre_{};
-  std::array<BiquadState, 2> k_state_rlb_{};
+  std::array<rt::BiquadStateD, 2> k_state_pre_{};
+  std::array<rt::BiquadStateD, 2> k_state_rlb_{};
 
   // Ring buffer of per-sample combined K-weighted squared energy (sized to the short-term window).
   std::vector<double> energy_ring_;

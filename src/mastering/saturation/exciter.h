@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -38,17 +39,7 @@ class Exciter : public rt::ProcessorBase {
   void update_coeff();
   void update_coeff_preserving_state();
   void ensure_state(int num_channels);
-  struct Biquad {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-    float process(float x);
-    void reset();
-  };
+  using Biquad = rt::BiquadState;
 
   ExciterConfig config_{};
   double sample_rate_ = 48000.0;

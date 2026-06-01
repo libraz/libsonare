@@ -16,13 +16,8 @@ using sonare::constants::kPiD;
 PresenceEnhancer::Biquad make_bandpass(double frequency_hz, double sample_rate, double q) {
   const float w0 = static_cast<float>(
       2.0 * kPiD * std::clamp(frequency_hz, 20.0, sample_rate * 0.49) / sample_rate);
-  const auto coeffs = rt::rbj_bandpass(w0, static_cast<float>(q));
   PresenceEnhancer::Biquad b;
-  b.b0 = coeffs.b0;
-  b.b1 = coeffs.b1;
-  b.b2 = coeffs.b2;
-  b.a1 = coeffs.a1;
-  b.a2 = coeffs.a2;
+  b.c = rt::rbj_bandpass(w0, static_cast<float>(q));
   return b;
 }
 
@@ -90,11 +85,7 @@ bool PresenceEnhancer::set_parameter(unsigned int param_id, float value) {
       // channel's filter state (z1/z2).
       for (auto& filter : bandpass_) {
         const Biquad updated = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
-        filter.b0 = updated.b0;
-        filter.b1 = updated.b1;
-        filter.b2 = updated.b2;
-        filter.a1 = updated.a1;
-        filter.a2 = updated.a2;
+        filter.c = updated.c;
       }
       return true;
     }

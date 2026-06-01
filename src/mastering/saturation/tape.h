@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
+#include "rt/biquad_design.h"
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 
@@ -66,17 +67,7 @@ class Tape : public rt::ProcessorBase {
   void ensure_state(int num_channels);
   void update_filters(double sample_rate);
 
-  struct Biquad {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-    float process(float x);
-    void reset();
-  };
+  using Biquad = rt::BiquadState;
 
   TapeConfig config_{};
   common::JilesAtherton hysteresis_;

@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::multiband {
@@ -90,27 +91,7 @@ class Crossover {
   int num_bands() const { return static_cast<int>(config_.cutoffs_hz.size()) + 1; }
 
  private:
-  struct Biquad {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-
-    float process(float x) {
-      const float y = b0 * x + z1;
-      z1 = b1 * x - a1 * y + z2;
-      z2 = b2 * x - a2 * y;
-      return y;
-    }
-
-    void reset_state() {
-      z1 = 0.0f;
-      z2 = 0.0f;
-    }
-  };
+  using Biquad = rt::BiquadState;
 
   static void validate_config(const CrossoverConfig& config, double sample_rate = 0.0);
   static int filter_order(CrossoverSlope slope, CrossoverMode mode);

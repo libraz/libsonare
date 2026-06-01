@@ -131,6 +131,29 @@ struct BiquadCoeffsD {
   double a2 = 0.0;
 };
 
+/// @brief Transposed Direct Form II biquad runtime state (double precision).
+/// @details Double-precision counterpart of @ref BiquadState, used by filters
+///          that need accumulation precision (K-weighting, dynamic-EQ
+///          detectors). Coefficients are owned externally (in @c c) so callers
+///          can update them between blocks (RT-safe scalar math only).
+struct BiquadStateD {
+  BiquadCoeffsD c;
+  double z1 = 0.0;
+  double z2 = 0.0;
+
+  void set(BiquadCoeffsD coeffs) noexcept { c = coeffs; }
+  void reset() noexcept {
+    z1 = 0.0;
+    z2 = 0.0;
+  }
+  double process(double x) noexcept {
+    const double y = c.b0 * x + z1;
+    z1 = c.b1 * x - c.a1 * y + z2;
+    z2 = c.b2 * x - c.a2 * y;
+    return y;
+  }
+};
+
 struct RawBiquadCoeffsD {
   double b0 = 1.0;
   double b1 = 0.0;

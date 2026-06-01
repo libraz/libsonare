@@ -16,18 +16,6 @@ namespace {
 using sonare::constants::kPiD;
 }
 
-float Exciter::Biquad::process(float x) {
-  const float y = b0 * x + z1;
-  z1 = b1 * x - a1 * y + z2;
-  z2 = b2 * x - a2 * y;
-  return y;
-}
-
-void Exciter::Biquad::reset() {
-  z1 = 0.0f;
-  z2 = 0.0f;
-}
-
 Exciter::Exciter(ExciterConfig config) : config_(config) { validate_config(config_); }
 
 void Exciter::prepare(double sample_rate, int max_block_size) {
@@ -93,16 +81,12 @@ void Exciter::compute_coeffs() {
       std::clamp(config_.frequency_hz, 10.0f, static_cast<float>(sample_rate_ * 0.49));
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
   const auto coeffs = rt::rbj_bandpass(w0, config_.q);
-  bandpass_coeffs_.b0 = coeffs.b0;
-  bandpass_coeffs_.b1 = coeffs.b1;
-  bandpass_coeffs_.b2 = coeffs.b2;
-  bandpass_coeffs_.a1 = coeffs.a1;
-  bandpass_coeffs_.a2 = coeffs.a2;
-  allpass_coeffs_.b0 = coeffs.a2;
-  allpass_coeffs_.b1 = coeffs.a1;
-  allpass_coeffs_.b2 = 1.0f;
-  allpass_coeffs_.a1 = coeffs.a1;
-  allpass_coeffs_.a2 = coeffs.a2;
+  bandpass_coeffs_.c = coeffs;
+  allpass_coeffs_.c.b0 = coeffs.a2;
+  allpass_coeffs_.c.b1 = coeffs.a1;
+  allpass_coeffs_.c.b2 = 1.0f;
+  allpass_coeffs_.c.a1 = coeffs.a1;
+  allpass_coeffs_.c.a2 = coeffs.a2;
 }
 
 void Exciter::update_coeff() {
@@ -143,18 +127,10 @@ void Exciter::update_coeff_preserving_state() {
   // untouched. No allocation, so this is safe to call from the audio thread.
   compute_coeffs();
   for (auto& filter : bandpass_) {
-    filter.b0 = bandpass_coeffs_.b0;
-    filter.b1 = bandpass_coeffs_.b1;
-    filter.b2 = bandpass_coeffs_.b2;
-    filter.a1 = bandpass_coeffs_.a1;
-    filter.a2 = bandpass_coeffs_.a2;
+    filter.c = bandpass_coeffs_.c;
   }
   for (auto& filter : allpass_) {
-    filter.b0 = allpass_coeffs_.b0;
-    filter.b1 = allpass_coeffs_.b1;
-    filter.b2 = allpass_coeffs_.b2;
-    filter.a1 = allpass_coeffs_.a1;
-    filter.a2 = allpass_coeffs_.a2;
+    filter.c = allpass_coeffs_.c;
   }
 }
 

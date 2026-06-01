@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "mastering/common/biquad.h"
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
@@ -32,7 +32,7 @@ class AirBand : public rt::ProcessorBase {
   //   3 = dynamic_range_db (clamped to >= 0)
   bool set_parameter(unsigned int param_id, float value) override;
 
-  using Biquad = common::Biquad;
+  using Biquad = rt::BiquadState;
 
  private:
   static void validate_config(const AirBandConfig& config);
