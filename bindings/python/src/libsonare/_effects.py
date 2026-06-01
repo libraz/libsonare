@@ -825,18 +825,18 @@ _VC_PRESET_NAME_TO_ORDINAL: dict[str, int] = {
 }
 
 
-def voice_character_preset_id(ordinal: int) -> str | None:
+def voice_character_preset_id(preset: int) -> str | None:
     """Map a voice-character preset enum ordinal to its canonical id string.
 
     Args:
-        ordinal: A ``SONARE_VC_PRESET_*`` enum value.
+        preset: A ``SONARE_VC_PRESET_*`` enum value.
 
     Returns:
         The canonical preset id (e.g. ``"bright-idol"``) or ``None`` when the
         ordinal is out of range. This is the reverse of
         :data:`_VC_PRESET_NAME_TO_ORDINAL`.
     """
-    raw = _get_lib().sonare_voice_character_preset_id(ctypes.c_int(ordinal))
+    raw = _get_lib().sonare_voice_character_preset_id(ctypes.c_int(preset))
     if not raw:
         return None
     return raw.decode("utf-8")
