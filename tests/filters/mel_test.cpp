@@ -247,3 +247,46 @@ TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel
   const void* first_ptr_after = get_mel_filterbank_cached(sr, n_fft, first).data();
   REQUIRE(first_ptr_after != first_ptr);
 }
+
+TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]") {
+  // Verify the cache implements *true* LRU rather than plain FIFO: a key that
+  // is re-touched after insertion must survive an eviction wave that would
+  // otherwise reach it. We:
+  //   1) insert key A,
+  //   2) fill the cache to capacity with B..H (8 distinct entries including A),
+  //   3) re-fetch A (must move A to MRU),
+  //   4) insert one more distinct key (E_new) → eviction triggers,
+  //   5) re-fetch A — its pointer must be unchanged (still cached).
+  // If the cache were FIFO it would evict A in step 4.
+  int sr = 22050;
+  int n_fft = 1024;
+
+  // Step 1: insert A
+  MelFilterConfig a;
+  a.n_mels = 16;
+  const void* a_ptr = get_mel_filterbank_cached(sr, n_fft, a).data();
+
+  // Step 2: fill the remaining cache slots with 7 more distinct keys.
+  // kMaxMelCacheSize is 8 today; we touch exactly cap-1 entries so A is the
+  // oldest in insertion order but the cache is full.
+  constexpr int kFill = 7;
+  for (int i = 0; i < kFill; ++i) {
+    MelFilterConfig c;
+    c.n_mels = 17 + i;
+    (void)get_mel_filterbank_cached(sr, n_fft, c);
+  }
+
+  // Step 3: re-touch A → splice to front of LRU.
+  const void* a_ptr_promoted = get_mel_filterbank_cached(sr, n_fft, a).data();
+  REQUIRE(a_ptr_promoted == a_ptr);  // still the same storage
+
+  // Step 4: insert one new key. Under FIFO this would evict A; under true LRU
+  // it evicts whichever of the kFill keys is now the oldest (n_mels == 17).
+  MelFilterConfig new_key;
+  new_key.n_mels = 17 + kFill;  // distinct from everything inserted so far
+  (void)get_mel_filterbank_cached(sr, n_fft, new_key);
+
+  // Step 5: A must still be cached → same pointer.
+  const void* a_ptr_after = get_mel_filterbank_cached(sr, n_fft, a).data();
+  REQUIRE(a_ptr_after == a_ptr);
+}

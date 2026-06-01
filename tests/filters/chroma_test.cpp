@@ -247,3 +247,38 @@ TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[
   const void* first_ptr_after = get_chroma_filterbank_cached(sr, n_fft, first).data();
   REQUIRE(first_ptr_after != first_ptr);
 }
+
+TEST_CASE("get_chroma_filterbank_cached promotes on hit (true LRU)", "[chroma][cache]") {
+  // Mirrors the mel-cache "true LRU" test. A key re-touched after insertion
+  // must survive an eviction wave that would otherwise reach it under FIFO.
+  int sr = 22050;
+  int n_fft = 1024;
+
+  // Pick distinct keys via `tuning` deltas so we don't change filterbank shape.
+  ChromaFilterConfig a;
+  a.n_chroma = 12;
+  a.tuning = 0.0f;
+  const void* a_ptr = get_chroma_filterbank_cached(sr, n_fft, a).data();
+
+  // Fill the remaining slots (cap-1 = 7 today).
+  constexpr int kFill = 7;
+  for (int i = 0; i < kFill; ++i) {
+    ChromaFilterConfig c;
+    c.n_chroma = 12;
+    c.tuning = 0.01f * static_cast<float>(i + 1);
+    (void)get_chroma_filterbank_cached(sr, n_fft, c);
+  }
+
+  // Re-touch A → must splice to MRU.
+  const void* a_ptr_promoted = get_chroma_filterbank_cached(sr, n_fft, a).data();
+  REQUIRE(a_ptr_promoted == a_ptr);
+
+  // Insert one new key → eviction triggers; under true LRU A survives.
+  ChromaFilterConfig new_key;
+  new_key.n_chroma = 12;
+  new_key.tuning = 0.01f * static_cast<float>(kFill + 1);
+  (void)get_chroma_filterbank_cached(sr, n_fft, new_key);
+
+  const void* a_ptr_after = get_chroma_filterbank_cached(sr, n_fft, a).data();
+  REQUIRE(a_ptr_after == a_ptr);
+}

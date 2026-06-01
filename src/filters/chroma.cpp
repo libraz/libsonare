@@ -43,10 +43,19 @@ struct ChromaFilterbankCacheKeyHash {
 /// @brief Maximum number of cached Chroma filterbanks.
 constexpr size_t kMaxChromaCacheSize = 8;
 
+/// @brief Cached filterbank with a back-pointer into the LRU list.
+/// @details The stored iterator lets cache hits and evictions touch the LRU
+/// queue in O(1) (via `splice`/`erase`) instead of doing an O(n)
+/// `lru.remove(key)` while holding the mutex.
+struct CachedChromaFilterbank {
+  std::vector<float> filterbank;
+  std::list<ChromaFilterbankCacheKey>::iterator lru_it;
+};
+
 /// @brief Chroma filterbank cache state with LRU eviction.
 struct ChromaFilterbankCache {
   std::mutex mutex;
-  std::unordered_map<ChromaFilterbankCacheKey, std::vector<float>, ChromaFilterbankCacheKeyHash>
+  std::unordered_map<ChromaFilterbankCacheKey, CachedChromaFilterbank, ChromaFilterbankCacheKeyHash>
       map;
   std::list<ChromaFilterbankCacheKey> lru;
 };
@@ -163,9 +172,10 @@ const std::vector<float>& get_chroma_filterbank_cached(int sr, int n_fft,
     std::lock_guard<std::mutex> lock(cache.mutex);
     auto it = cache.map.find(key);
     if (it != cache.map.end()) {
-      cache.lru.remove(key);
-      cache.lru.push_front(key);
-      return it->second;
+      // O(1) MRU update: splice the existing list node to the front instead of
+      // searching with `lru.remove(key)` (was O(n) while holding the mutex).
+      cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
+      return it->second.filterbank;
     }
   }
 
@@ -175,18 +185,17 @@ const std::vector<float>& get_chroma_filterbank_cached(int sr, int n_fft,
   std::lock_guard<std::mutex> lock(cache.mutex);
   auto it = cache.map.find(key);
   if (it != cache.map.end()) {
-    cache.lru.remove(key);
-    cache.lru.push_front(key);
-    return it->second;
+    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
+    return it->second.filterbank;
   }
   while (cache.map.size() >= kMaxChromaCacheSize && !cache.lru.empty()) {
-    auto oldest = cache.lru.back();
-    cache.lru.pop_back();
-    cache.map.erase(oldest);
+    auto oldest_it = std::prev(cache.lru.end());
+    cache.map.erase(*oldest_it);
+    cache.lru.erase(oldest_it);
   }
-  auto [ins, _] = cache.map.emplace(key, std::move(fb));
   cache.lru.push_front(key);
-  return ins->second;
+  auto [ins, _] = cache.map.emplace(key, CachedChromaFilterbank{std::move(fb), cache.lru.begin()});
+  return ins->second.filterbank;
 }
 
 std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n_frames,
