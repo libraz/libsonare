@@ -11,15 +11,6 @@
 #include "util/exception.h"
 
 namespace sonare::mastering::spectral {
-namespace {
-
-float smoothing_coeff(double sample_rate, float time_ms) {
-  if (time_ms <= 0.0f) return 1.0f;
-  if (sample_rate <= 0.0) return 0.0f;
-  return 1.0f - time_to_coefficient(sample_rate, time_ms);
-}
-
-}  // namespace
 
 SpectralShaper::SpectralShaper(SpectralShaperConfig config) : config_(config) {
   validate_config(config_);
@@ -60,8 +51,8 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
 
   const float low_alpha = rt::one_pole_lowpass_alpha(config_.frequency_hz, sample_rate_);
   const float high_alpha = rt::one_pole_lowpass_alpha(config_.high_frequency_hz, sample_rate_);
-  const float attack_coeff = smoothing_coeff(sample_rate_, config_.attack_ms);
-  const float release_coeff = smoothing_coeff(sample_rate_, config_.release_ms);
+  const float attack_coeff = time_to_attack_release_rate_f(sample_rate_, config_.attack_ms);
+  const float release_coeff = time_to_attack_release_rate_f(sample_rate_, config_.release_ms);
   float min_gain = 1.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     float low = low_state_[static_cast<size_t>(ch)];

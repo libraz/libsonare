@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "rt/biquad_design.h"
+#include "util/db.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -68,7 +69,7 @@ void StreamingReverb::set_config(const StreamingReverbConfig& config, int channe
     // Feedback gain chosen so each comb decays by ~60 dB in roughly time_ms.
     const double db_per_sec = -60.0 / time_sec;
     const double db_per_loop = db_per_sec * (static_cast<double>(delay_samples) / sample_rate_);
-    comb_fb_[i] = static_cast<float>(std::pow(10.0, db_per_loop / 20.0));
+    comb_fb_[i] = static_cast<float>(db_to_linear(db_per_loop));
     comb_fb_[i] = std::clamp(comb_fb_[i], 0.0f, 0.97f);
   }
   // Damping: damping=0 -> ~12 kHz LP (bright), damping=1 -> ~1 kHz LP (dark).

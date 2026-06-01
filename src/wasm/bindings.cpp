@@ -104,6 +104,7 @@
 #include "sonare.h"
 #include "sonare_c.h"
 #include "streaming/stream_analyzer.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/frame.h"
 #include "util/padding.h"
@@ -293,7 +294,7 @@ float integratedLufs(const std::vector<float>& samples, int sample_rate) {
 }
 
 void applyGainDb(std::vector<float>& left, std::vector<float>& right, float gain_db) {
-  const float gain = std::pow(10.0f, gain_db / 20.0f);
+  const float gain = db_to_linear(gain_db);
   for (size_t i = 0; i < left.size(); ++i) {
     left[i] *= gain;
     right[i] *= gain;
@@ -2668,10 +2669,6 @@ class MixerWasm {
 MixerWasm* createMixerFromSceneJson(std::string json, int sample_rate, int block_size) {
   return MixerWasm::fromSceneJson(std::move(json), sample_rate, block_size);
 }
-
-std::string js_mixer_preset_json(std::string name) {
-  return MixerWasm::presetJson(std::move(name));
-}
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
 
 namespace {
@@ -4670,7 +4667,7 @@ class WasmPassProcessor final : public rt::ProcessorBase {
 
 class WasmGainProcessor final : public rt::ProcessorBase {
  public:
-  explicit WasmGainProcessor(float gain_db) : gain_(std::pow(10.0f, gain_db / 20.0f)) {}
+  explicit WasmGainProcessor(float gain_db) : gain_(db_to_linear(gain_db)) {}
   void prepare(double, int) override {}
   void process(float* const* channels, int num_channels, int num_samples) override {
     if (!channels || num_channels <= 0 || num_samples <= 0) return;
@@ -4683,7 +4680,7 @@ class WasmGainProcessor final : public rt::ProcessorBase {
   }
   void reset() override {}
   bool set_parameter(unsigned int, float value) override {
-    gain_ = std::pow(10.0f, value / 20.0f);
+    gain_ = db_to_linear(value);
     return true;
   }
   bool parameter_is_realtime_safe(unsigned int) const noexcept override { return true; }
@@ -5620,7 +5617,6 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("vcaGroupCount", &MixerWasm::vcaGroupCount)
       .function("toSceneJson", &MixerWasm::toSceneJson);
   function("createMixerFromSceneJson", &createMixerFromSceneJson, allow_raw_pointers());
-  function("mixerPresetJson", &js_mixer_preset_json);
 #endif
   function("trim", &js_trim);
 

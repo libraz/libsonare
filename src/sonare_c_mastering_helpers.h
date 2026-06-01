@@ -3,7 +3,6 @@
 
 #include <cstring>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -90,22 +89,6 @@ inline void set_mastering_result(const sonare::mastering::api::MonoResult& resul
   out->samples = sonare_c_detail::release_array(processed);
 }
 
-inline char* copy_string(const std::string& value) {
-  std::unique_ptr<char[]> out(new char[value.size() + 1]);
-  std::memcpy(out.get(), value.c_str(), value.size() + 1);
-  return out.release();
-}
-
-inline const char* join_names(const std::vector<std::string>& values, std::string& storage) {
-  std::ostringstream stream;
-  for (size_t index = 0; index < values.size(); ++index) {
-    if (index > 0) stream << '\n';
-    stream << values[index];
-  }
-  storage = stream.str();
-  return storage.c_str();
-}
-
 inline char** copy_stage_array(const std::vector<std::string>& stages) {
   if (stages.empty()) return nullptr;
   std::unique_ptr<char*[]> out(new char*[stages.size()]);
@@ -113,7 +96,7 @@ inline char** copy_stage_array(const std::vector<std::string>& stages) {
     out[i] = nullptr;
   }
   for (size_t i = 0; i < stages.size(); ++i) {
-    out[i] = copy_string(stages[i]);
+    out[i] = sonare_c_detail::copy_string(stages[i]);
   }
   return out.release();
 }

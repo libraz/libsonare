@@ -2,7 +2,6 @@
 #include <array>
 #include <cstring>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -131,24 +130,6 @@ sonare::mixing::api::SendTiming to_api_send_timing(int timing) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "unknown mixing send timing");
   }
-}
-
-char* copy_string(const std::string& value) {
-  std::unique_ptr<char[]> out(new char[value.size() + 1]);
-  std::memcpy(out.get(), value.c_str(), value.size() + 1);
-  return out.release();
-}
-
-const char* join_names(const std::vector<std::string>& values, std::string& storage) {
-  std::ostringstream stream;
-  for (size_t index = 0; index < values.size(); ++index) {
-    if (index > 0) {
-      stream << '\n';
-    }
-    stream << values[index];
-  }
-  storage = stream.str();
-  return storage.c_str();
 }
 
 // Graph wrapper that exposes a ChannelStrip's main path and its aux send taps
@@ -1192,7 +1173,7 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
     scene_strip.channel_delay_samples = strip->strip.channel_delay_samples();
     scene.strips.push_back(std::move(scene_strip));
   }
-  *json_out = copy_string(sonare::mixing::api::scene_to_json(scene));
+  *json_out = sonare_c_detail::copy_string(sonare::mixing::api::scene_to_json(scene));
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -1256,7 +1237,7 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
 
 const char* sonare_mixing_scene_preset_names(void) {
   static std::string storage;
-  return join_names(sonare::mixing::api::scene_preset_names(), storage);
+  return sonare_c_detail::join_names(sonare::mixing::api::scene_preset_names(), storage);
 }
 
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out) {
@@ -1267,7 +1248,7 @@ SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json
   *json_out = nullptr;
   const auto preset = sonare::mixing::api::scene_preset_from_string(preset_name);
   const auto scene = sonare::mixing::api::scene_preset(preset);
-  *json_out = copy_string(sonare::mixing::api::scene_to_json(scene));
+  *json_out = sonare_c_detail::copy_string(sonare::mixing::api::scene_to_json(scene));
   return SONARE_OK;
   SONARE_C_CATCH
 }

@@ -1347,7 +1347,6 @@ export interface SonareModule {
 
   // Mixing - scene-based Mixer
   createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
-  mixerPresetJson: (presetName: string) => string;
 }
 
 export interface WasmStreamingMasteringChain {

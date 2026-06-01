@@ -35,6 +35,20 @@ inline double time_to_attack_release_rate(double sample_rate, float time_ms) noe
   return 1.0 - std::exp(-1.0 / samples);
 }
 
+/// @brief `float` overload of @ref time_to_attack_release_rate.
+/// @details Computes the same leaky-integrator "new sample weight" as the
+///   `double` version (`1 - exp(-1 / max(sample_rate * time_ms / 1000, 1))`)
+///   but returns it as `float`. Returns 1.0f (instantaneous follow) for
+///   time_ms <= 0 or sample_rate <= 0, so callers do not need their own
+///   degenerate-input guards before invoking it.
+inline float time_to_attack_release_rate_f(double sample_rate, float time_ms) noexcept {
+  if (time_ms <= 0.0f || sample_rate <= 0.0) {
+    return 1.0f;
+  }
+  const double samples = std::max(sample_rate * static_cast<double>(time_ms) * 0.001, 1.0);
+  return static_cast<float>(1.0 - std::exp(-1.0 / samples));
+}
+
 /// @brief Root mean square of a contiguous sample buffer.
 inline float rms(const float* data, size_t n) noexcept {
   if (data == nullptr || n == 0) {

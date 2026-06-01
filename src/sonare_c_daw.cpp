@@ -26,6 +26,7 @@
 #include "rt/processor_base.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
+#include "util/db.h"
 
 #if defined(SONARE_WITH_GRAPH)
 #include "graph/connection.h"
@@ -96,7 +97,7 @@ class EnginePassProcessor final : public rt::ProcessorBase {
 
 class EngineGainProcessor final : public rt::ProcessorBase {
  public:
-  explicit EngineGainProcessor(float gain_db) : gain_(std::pow(10.0f, gain_db / 20.0f)) {}
+  explicit EngineGainProcessor(float gain_db) : gain_(db_to_linear(gain_db)) {}
   void prepare(double, int) override {}
   void process(float* const* channels, int num_channels, int num_samples) override {
     if (!channels || num_channels <= 0 || num_samples <= 0) return;
@@ -109,7 +110,7 @@ class EngineGainProcessor final : public rt::ProcessorBase {
   }
   void reset() override {}
   bool set_parameter(unsigned int, float value) override {
-    gain_ = std::pow(10.0f, value / 20.0f);
+    gain_ = db_to_linear(value);
     return true;
   }
   bool parameter_is_realtime_safe(unsigned int) const noexcept override { return true; }

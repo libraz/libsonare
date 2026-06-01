@@ -454,7 +454,7 @@ namespace {
 // gain-normalisation condition of the shelving filter.
 BiquadCoeffsD deman_high_shelf_d(double frequency, double sample_rate, double gain_db, double q) {
   const double k = std::tan(kPiD * frequency / sample_rate);
-  const double vh = std::pow(10.0, gain_db / 20.0);
+  const double vh = db_to_linear(gain_db);
   // vb = vh^0.499666774155: Deman parametric-EQ gain exponent (see note above)
   const double vb = std::pow(vh, 0.499666774155);
   const double a0 = 1.0 + k / q + k * k;

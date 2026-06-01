@@ -35,12 +35,7 @@ float ParamSmoother::process() {
 
 void ParamSmoother::update_coefficient() {
   const float clamped_ms = std::max(time_ms_, 0.0f);
-  if (clamped_ms == 0.0f || sample_rate_ <= 0.0) {
-    coefficient_ = 1.0f;
-    return;
-  }
-
-  coefficient_ = 1.0f - time_to_coefficient(sample_rate_, clamped_ms);
+  coefficient_ = time_to_attack_release_rate_f(sample_rate_, clamped_ms);
 }
 
 }  // namespace sonare::rt

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstring>
 #include <deque>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -49,6 +51,27 @@ SonareChordQuality to_c_chord_quality(ChordQuality quality);
 template <typename T>
 T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();
+}
+
+/// @brief Allocates a NUL-terminated heap copy of @p value (caller frees via
+///        sonare_free_string). Canonical owner of the C-string copy helper
+///        shared by all C API translation units.
+inline char* copy_string(const std::string& value) {
+  std::unique_ptr<char[]> out(new char[value.size() + 1]);
+  std::memcpy(out.get(), value.c_str(), value.size() + 1);
+  return out.release();
+}
+
+/// @brief Joins @p values with '\n' into @p storage and returns a borrowed
+///        pointer to the stored string's buffer (valid while @p storage lives).
+inline const char* join_names(const std::vector<std::string>& values, std::string& storage) {
+  std::ostringstream stream;
+  for (size_t index = 0; index < values.size(); ++index) {
+    if (index > 0) stream << '\n';
+    stream << values[index];
+  }
+  storage = stream.str();
+  return storage.c_str();
 }
 
 /// @brief Runs an Audio → Audio DSP function against a mono C buffer and
