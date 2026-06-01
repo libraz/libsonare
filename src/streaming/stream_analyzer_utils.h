@@ -16,6 +16,11 @@ constexpr float kBpmMin = 60.0f;
 constexpr float kBpmMax = 200.0f;
 constexpr int kMinOnsetFrames = 100;
 
+// Minimum frequency for the streaming chroma filterbank (~C2). Skips very low
+// bass / sub-bass so low-frequency noise does not smear the chroma estimate.
+// Derived as one octave above C1 (kC1Hz * 2 ≈ 65.41 Hz = C2).
+constexpr float kStreamingChromaFminHz = sonare::constants::kC1Hz * 2.0f;
+
 std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft);
 float compute_centroid_frame(const float* magnitude, int n_bins, const float* frequencies);
 float compute_flatness_frame(const float* magnitude, int n_bins);

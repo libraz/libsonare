@@ -23,6 +23,13 @@ namespace sonare {
 using sonare::constants::kEpsilon;
 using namespace streaming_detail;
 
+/// @brief Seconds over which progressive key/BPM confidence ramps to full.
+/// @details Confidence is scaled by min(1, current_time / kConfidenceRampSeconds)
+///          so early (data-starved) estimates report lower confidence and
+///          saturate once enough audio has been observed. Used by both the key
+///          and BPM progressive-estimate paths.
+constexpr float kConfidenceRampSeconds = 30.0f;
+
 /// @brief Compile-time guard against drift between the bar-vote table size and
 ///        the ChordQuality enum cardinality.
 /// @details The bar-vote table is indexed as
@@ -79,9 +86,9 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     /// Positive tuning means audio is sharp, so we subtract to correct
     chroma_config.tuning =
         constants::kSemitonesPerOctave * std::log2(config_.tuning_ref_hz / constants::kA4Hz);
-    /// Use C3 (~130 Hz) as minimum frequency to skip very low bass
-    /// This helps avoid interference from sub-bass and low-frequency noise
-    chroma_config.fmin = 65.0f;
+    /// Use C2 (~65 Hz) as minimum frequency to skip very low bass.
+    /// This helps avoid interference from sub-bass and low-frequency noise.
+    chroma_config.fmin = streaming_detail::kStreamingChromaFminHz;
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, config_.n_fft, chroma_config);
   }
@@ -199,6 +206,22 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     overlap_buffer_.erase(overlap_buffer_.begin(),
                           overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
     overlap_read_pos_ = 0;
+  }
+
+  /// Capacity guard (safety net): after compaction the unconsumed tail is
+  /// normally < n_fft, because the frame loop above drains every complete frame
+  /// whenever the buffer reaches n_fft samples. A pathological caller, however,
+  /// could feed sub-frame chunks (each smaller than n_fft) for a very long time
+  /// in a config where a frame is never completed, letting overlap_buffer_ grow
+  /// without an upper bound. Cap it at a generous multiple of n_fft and drop the
+  /// oldest excess so a long-running session cannot leak. Under correct
+  /// frame-sized operation this branch is never taken, so normal behavior is
+  /// unchanged.
+  const size_t kMaxOverlapSamples = static_cast<size_t>(config_.n_fft) * 10;
+  if (overlap_buffer_.size() > kMaxOverlapSamples) {
+    const size_t drop = overlap_buffer_.size() - kMaxOverlapSamples;
+    overlap_buffer_.erase(overlap_buffer_.begin(),
+                          overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(drop));
   }
 }
 
@@ -424,7 +447,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       current_estimate_.key_minor = key_match.minor;
 
       /// Confidence based on correlation strength and time
-      float time_factor = std::min(1.0f, current_time / 30.0f);
+      float time_factor = std::min(1.0f, current_time / kConfidenceRampSeconds);
       float corr_factor = (key_match.correlation + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
       current_estimate_.key_confidence = corr_factor * time_factor;
 
@@ -512,8 +535,8 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         current_estimate_.bpm = bpm;
 
         /// Combine relative confidence with time-based confidence
-        /// Time factor: confidence increases as we get more data (up to 30 seconds)
-        float time_factor = std::min(1.0f, current_time / 30.0f);
+        /// Time factor: confidence increases as we get more data (up to the ramp)
+        float time_factor = std::min(1.0f, current_time / kConfidenceRampSeconds);
         current_estimate_.bpm_confidence = rel_confidence * time_factor;
 
         last_bpm_update_time_ = current_time;
@@ -881,8 +904,13 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   // Apply correction if we found a good match (at least 75% match score)
   if (best_match_score >= 0.75f && !best_correction.empty()) {
     for (const auto& [pos, chord_idx] : best_correction) {
-      voted[pos].root = chord_idx / 4;
-      voted[pos].quality = chord_idx % 4;
+      /// chord_idx was encoded as expected_root * kNumChordQualities +
+      /// expected_quality (see the corrections.emplace_back above), so it MUST
+      /// be decoded with kNumChordQualities — not a hardcoded 4. Using /4 / %4
+      /// corrupted every pattern-corrected chord whose encoding spanned more
+      /// than four qualities.
+      voted[pos].root = chord_idx / kNumChordQualities;
+      voted[pos].quality = chord_idx % kNumChordQualities;
       // Keep original confidence but mark as corrected
       // (confidence remains from voting, but chord is corrected)
     }

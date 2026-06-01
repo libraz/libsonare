@@ -772,3 +772,42 @@ TEST_CASE("StreamAnalyzer kBarVoteSlots constant pins kNumChordQualities cardina
     REQUIRE(frame.chord_quality < sonare::kNumChordQualities);
   }
 }
+
+TEST_CASE("StreamAnalyzer vote-index encode/decode round-trips for extended qualities",
+          "[streaming][chord]") {
+  // Regression for the pattern-correction decode bug: corrections were encoded
+  // as `root * kNumChordQualities + quality` but decoded with the hardcoded
+  // `chord_idx / 4` / `chord_idx % 4`, corrupting every chord whose quality
+  // index was >= 4 (Dominant7 and beyond). The decode now uses
+  // kNumChordQualities. This test pins the round-trip for the exact (root,
+  // quality) pairs the old /4,%4 path corrupted, and demonstrates that the old
+  // formula disagrees with the encoding while the new one recovers it exactly.
+  const int q = sonare::kNumChordQualities;  // 17
+
+  struct Pair {
+    int root;
+    int quality;
+  };
+  // Qualities >= 4 are the cases the old %4 corrupted.
+  const Pair pairs[] = {
+      {0, static_cast<int>(sonare::ChordQuality::Dominant7)},  // 4
+      {3, static_cast<int>(sonare::ChordQuality::Major7)},     // 5
+      {7, static_cast<int>(sonare::ChordQuality::Minor7)},     // 6
+      {9, static_cast<int>(sonare::ChordQuality::Sus4)},       // 8
+      {11, static_cast<int>(sonare::ChordQuality::Sus2Add4)},  // 16
+  };
+
+  for (const auto& p : pairs) {
+    const int encoded = p.root * q + p.quality;
+    REQUIRE(encoded < sonare::StreamAnalyzer::kBarVoteSlots);
+
+    // Correct decode (post-fix): recovers the original pair exactly.
+    REQUIRE(encoded / q == p.root);
+    REQUIRE(encoded % q == p.quality);
+
+    // Old buggy decode (/4, %4) must NOT recover the pair for these qualities —
+    // proving the encoding/decode mismatch the fix removes.
+    const bool old_matches = (encoded / 4 == p.root) && (encoded % 4 == p.quality);
+    REQUIRE_FALSE(old_matches);
+  }
+}

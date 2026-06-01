@@ -28,7 +28,9 @@ Audio prepare_audio(const float* samples, size_t size, int sample_rate) {
 }  // namespace
 
 float detect_bpm(const float* samples, size_t size, int sample_rate) {
-  Audio audio = Audio::from_buffer(samples, size, sample_rate);
+  /// Downsample high-rate input to 22050 Hz like the other quick:: functions.
+  /// Skipping this made 44.1k/48k/96k input produce wrong onset frames / BPM.
+  Audio audio = prepare_audio(samples, size, sample_rate);
   return sonare::detect_bpm(audio);
 }
 

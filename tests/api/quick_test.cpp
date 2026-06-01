@@ -67,6 +67,30 @@ TEST_CASE("quick::detect_bpm", "[quick][api]") {
     bool close_to_70 = std::abs(bpm - 70.0f) < 5.0f;
     REQUIRE((close_to_140 || close_to_70));
   }
+
+  // Regression: detect_bpm previously used Audio::from_buffer directly and
+  // skipped the 22050 Hz downsample that every other quick:: function performs.
+  // A 44100 Hz click track therefore produced onset frames at the wrong hop
+  // spacing and a wrong BPM. After the fix it routes through prepare_audio() and
+  // must land in the same ballpark as the 22050 Hz version.
+  SECTION("detects BPM from non-22050 (44100 Hz) click track") {
+    const float kBpm = 120.0f;
+    auto samples_44k = generate_clicks(kBpm, 44100, 6.0f);
+    float bpm_44k = sonare::quick::detect_bpm(samples_44k.data(), samples_44k.size(), 44100);
+
+    bool close_to_120 = std::abs(bpm_44k - 120.0f) < 8.0f;
+    bool close_to_60 = std::abs(bpm_44k - 60.0f) < 8.0f;
+    bool close_to_240 = std::abs(bpm_44k - 240.0f) < 12.0f;
+    REQUIRE((close_to_120 || close_to_60 || close_to_240));
+
+    // The resampled 44.1k result should agree with the same beat synthesized at
+    // 22050 Hz (within a half/double-tempo relationship).
+    auto samples_22k = generate_clicks(kBpm, 22050, 6.0f);
+    float bpm_22k = sonare::quick::detect_bpm(samples_22k.data(), samples_22k.size(), 22050);
+    bool agree = std::abs(bpm_44k - bpm_22k) < 8.0f || std::abs(bpm_44k - 2.0f * bpm_22k) < 12.0f ||
+                 std::abs(2.0f * bpm_44k - bpm_22k) < 12.0f;
+    REQUIRE(agree);
+  }
 }
 
 TEST_CASE("quick::detect_key", "[quick][api]") {
