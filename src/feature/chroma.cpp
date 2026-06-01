@@ -268,11 +268,9 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   }
 
   if (config.normalize_frames && n_frames > 0) {
-    // L2 per-frame normalization to align with libsonare's STFT chroma path
-    // (Chroma::from_spectrogram). Note: librosa.feature.chroma_cqt defaults to
-    // L-inf (norm=np.inf), so this deliberately diverges from librosa's default
-    // for cross-pipeline consistency within libsonare.
-    chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::L2);
+    // L-inf per-frame normalization matches librosa.feature.chroma_cqt's
+    // default norm=np.inf; librosa parity is the source of truth for defaults.
+    chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);
   }
 
   return Chroma(std::move(chroma), config.n_chroma, n_frames, audio.sample_rate(),

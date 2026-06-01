@@ -1,6 +1,7 @@
 /// @file chroma_cqt_test.cpp
-/// @brief Smoke tests for chroma_cqt / chroma_cens (no librosa parity).
+/// @brief Smoke + default-normalization tests for chroma_cqt / chroma_cens.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
@@ -57,9 +58,11 @@ TEST_CASE("chroma_cens produces 12-bin output", "[chroma_cqt][unit][smoke]") {
   REQUIRE(c.n_frames() > 0);
 }
 
-TEST_CASE("chroma_cqt frames are L2-normalized by default", "[chroma_cqt][unit][normalize]") {
-  // Verifies each chroma frame has unit L2 norm (or is all-zero) when
-  // normalize_frames=true, matching Chroma::from_spectrogram behaviour.
+TEST_CASE("chroma_cqt frames are L-inf-normalized by default",
+          "[chroma_cqt][unit][normalize][librosa-parity]") {
+  // librosa.feature.chroma_cqt defaults to norm=np.inf — each frame's
+  // max magnitude must be 1 (or the frame is all-zero). Cf. CLAUDE.md
+  // librosa-parity rule for defaults.
   Audio audio = make_c_major_chord(22050, 1.0f);
   ChromaCqtConfig cfg;
   cfg.normalize_frames = true;
@@ -73,13 +76,11 @@ TEST_CASE("chroma_cqt frames are L2-normalized by default", "[chroma_cqt][unit][
   const int n_frames = c.n_frames();
 
   for (int t = 0; t < n_frames; ++t) {
-    float sum_sq = 0.0f;
+    float max_abs = 0.0f;
     for (int cidx = 0; cidx < n_chroma; ++cidx) {
-      const float value = data[cidx * n_frames + t];
-      sum_sq += value * value;
+      max_abs = std::max(max_abs, std::abs(data[cidx * n_frames + t]));
     }
-    const float norm = std::sqrt(sum_sq);
-    // Either unit L2 norm (active frame) or zero (silent frame).
-    REQUIRE((norm < 1e-6f || std::abs(norm - 1.0f) < 1e-4f));
+    // Either unit L-inf norm (active frame) or zero (silent frame).
+    REQUIRE((max_abs < 1e-6f || std::abs(max_abs - 1.0f) < 1e-4f));
   }
 }

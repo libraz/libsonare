@@ -46,7 +46,7 @@ struct ChromaCqtConfig {
   int n_chroma = 12;
   float tuning = 0.0f;     ///< Tuning deviation in fractional semitones/chroma bins.
   float threshold = 0.0f;  ///< Magnitudes below this fraction of the per-frame max are zeroed.
-  bool normalize_frames = true;  ///< L2 normalize per frame (matches Chroma::from_spectrogram).
+  bool normalize_frames = true;  ///< L-inf normalize per frame (matches librosa default).
 };
 
 /// @brief Configuration for chroma_cens (Energy Normalized Statistics).
@@ -74,8 +74,8 @@ class Chroma;  // forward declaration; full definition below.
 /// @brief Computes a chromagram from a Constant-Q Transform of the audio.
 /// @details Implements `librosa.feature.chroma_cqt`. The signal is mapped to
 /// CQT, magnitudes are wrapped to chroma classes, optionally thresholded, then
-/// L2 normalized per frame (matching libsonare's STFT chroma path;
-/// librosa's default uses L-inf — this is a deliberate divergence).
+/// L-inf normalized per frame (matches `librosa.feature.chroma_cqt`'s default
+/// `norm=np.inf`).
 Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config = ChromaCqtConfig());
 
 /// @brief Computes CENS (Chroma Energy Normalized Statistics).
