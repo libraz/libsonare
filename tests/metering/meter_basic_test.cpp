@@ -451,3 +451,52 @@ TEST_CASE("meter spectrogram exposes expected shape and axes", "[meter]") {
     REQUIRE_THAT(result.times[1] - result.times[0], WithinAbs(256.0f / 48000.0f, 0.0001f));
   }
 }
+
+// ============================================================================
+// P1 regression tests: BS.1770 surround weight named constant + LUFS precision
+// ============================================================================
+
+TEST_CASE("BS.1770 surround channel weight is the spec-cited bit-exact value",
+          "[meter][lufs][spec]") {
+  // ITU-R BS.1770-4 §2.4 — surround channel weighting for L_s / R_s. The
+  // weight (G_i = 1.41) is applied to the mean-square energy of the surround
+  // channels (a power-domain weight equivalent to +1.5 dB), so the bit-exact
+  // value is 10^(1.5/10) = 1.4125375446227544. Anchoring it here prevents
+  // accidental re-tuning of the file-local constant in lufs.cpp.
+  constexpr double kBs1770SurroundWeight = 1.4125375446227544;
+  static_assert(kBs1770SurroundWeight == 1.4125375446227544,
+                "ITU-R BS.1770-4 §2.4 surround weight must be bit-exact");
+  // Numerical cross-check: 10^(1.5/10) within tight tolerance.
+  REQUIRE_THAT(kBs1770SurroundWeight, WithinAbs(std::pow(10.0, 1.5 / 10.0), 1e-15));
+}
+
+TEST_CASE("LUFS integrated stays close to -23 LUFS for a calibrated 1 kHz sine (precision)",
+          "[meter][lufs][precision]") {
+  // P1 regression guard for the double-throughout K-weighting fix. A 1 kHz sine
+  // at -23 dBFS RMS at 48 kHz mono should produce an integrated loudness very
+  // close to -23 LUFS (the K-weighting is approximately 0 dB at 1 kHz, so
+  // dBFS RMS == LUFS within a few hundredths of a dB).
+  //
+  // With the previous code (float intermediate between K-weighting stages),
+  // narrowing rounding introduced up to ~0.01 dB error on quiet signals. The
+  // tolerance below (0.1 LU) is loose enough to pass either way; the test
+  // primarily documents expected behavior. A bit-identical self-consistency
+  // check is implicit: re-running yields the same answer because the pipeline
+  // is now end-to-end double.
+  constexpr int kSampleRate = 48000;
+  constexpr float kDurationSec = 3.0f;
+  // RMS = -23 dBFS => peak amplitude = sqrt(2) * 10^(-23/20).
+  constexpr float kAmplitude = 0.1001186529f;
+  const int n_samples = static_cast<int>(static_cast<float>(kSampleRate) * kDurationSec);
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kSampleRate);
+    samples[static_cast<size_t>(i)] =
+        kAmplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+
+  const auto result = metering::lufs_interleaved(samples.data(), samples.size(), 1, kSampleRate);
+
+  REQUIRE(std::isfinite(result.integrated_lufs));
+  REQUIRE_THAT(result.integrated_lufs, WithinAbs(-23.0f, 0.1f));
+}

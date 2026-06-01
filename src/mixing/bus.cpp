@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "rt/scoped_no_denormals.h"
+
 namespace sonare::mixing {
 
 BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inputs_(max_inputs) {}
@@ -18,6 +20,10 @@ void BusProcessor::prepare(double sample_rate, int max_block_size) {
 }
 
 void BusProcessor::process(float* const* channels, int num_channels, int num_samples) {
+  // IIR-based inserts (EQ, compressor, limiter) can accumulate denormals during
+  // silence, which causes 10-100x CPU spikes on x86 without DAZ/FTZ. Mirror the
+  // mastering processors and voice changer guard at the process-block boundary.
+  rt::ScopedNoDenormals no_denormals;
   for (size_t index = 0; index < inserts_.size(); ++index) {
     const InsertSidechain* key =
         index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;

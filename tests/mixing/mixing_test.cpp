@@ -1921,3 +1921,45 @@ TEST_CASE("ChannelStrip discards stale send automation even when send is not mix
   strip.process_at(channels, 2, 1, 2048);
   REQUIRE(strip.schedule_send_automation(send, 2048, -3.0f));
 }
+
+// ============================================================================
+// P1 regression test: ScopedNoDenormals guard on BusProcessor::process
+// ============================================================================
+
+TEST_CASE("BusProcessor silent input through IIR insert produces exact-zero output",
+          "[mixing][bus][rt-safety]") {
+  // Regression guard for the P1 fix that wraps BusProcessor::process in
+  // rt::ScopedNoDenormals. An IIR insert (parametric low-shelf EQ here) fed a
+  // long block of silence must produce an exact-zero output rather than
+  // accumulating denormal floats — denormals would manifest as tiny non-zero
+  // tail samples on x86 without DAZ/FTZ, and 10-100x CPU spikes in audio
+  // callbacks. Mirrors the C-1 test for the voice changer (commit 4d34bbe).
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 4096;
+
+  auto eq = std::make_unique<sonare::mastering::eq::ParametricEq>();
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::LowShelf;
+  band.frequency_hz = 100.0f;
+  band.gain_db = 6.0f;
+  band.q = sonare::constants::kButterworthQ;
+  band.enabled = true;
+  eq->set_band(0, band);
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.add_insert(std::move(eq));
+  bus.prepare(static_cast<double>(kSampleRate), kBlockSize);
+
+  std::array<float, kBlockSize> left{};
+  std::array<float, kBlockSize> right{};
+  left.fill(0.0f);
+  right.fill(0.0f);
+  float* channels[] = {left.data(), right.data()};
+
+  bus.process(channels, 2, kBlockSize);
+
+  for (int i = 0; i < kBlockSize; ++i) {
+    REQUIRE(left[static_cast<size_t>(i)] == 0.0f);
+    REQUIRE(right[static_cast<size_t>(i)] == 0.0f);
+  }
+}

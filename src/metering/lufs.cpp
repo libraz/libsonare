@@ -20,6 +20,12 @@ using Biquad = rt::BiquadCoeffsD;
 // keep the full double dynamic range when the input is genuinely quiet.
 constexpr double kEnergyFloor = 1e-15;
 
+// ITU-R BS.1770-4 §2.4 — surround channel weighting for L_s / R_s when
+// computing the weighted loudness sum. Applied to the mean-square energy (power
+// domain, equivalent to +1.5 dB): 10^(1.5/10) = 1.4125375446227544.
+// Spec-mandated bit-exact value; do not round.
+constexpr double kBs1770SurroundWeight = 1.4125375446227544;
+
 float energy_to_lufs(double energy) {
   if (energy < kEnergyFloor) return -std::numeric_limits<float>::infinity();
   return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
@@ -30,8 +36,12 @@ std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
   return {coeffs.pre, coeffs.rlb};
 }
 
-std::vector<float> apply_biquad_double(const float* input, size_t size, const Biquad& coeffs) {
-  std::vector<float> output(size);
+// Keep the K-weighted intermediate signal in `double` for the duration of the
+// two-stage filter. Narrowing to `float` between stages introduces ~0.01 dB
+// rounding on quiet signals and contradicts the project's "double for
+// K-weighting" precision contract.
+std::vector<double> apply_biquad_double(const double* input, size_t size, const Biquad& coeffs) {
+  std::vector<double> output(size);
   double z1 = 0.0;
   double z2 = 0.0;
   for (size_t i = 0; i < size; ++i) {
@@ -39,30 +49,40 @@ std::vector<float> apply_biquad_double(const float* input, size_t size, const Bi
     const double y = coeffs.b0 * x + z1;
     z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
     z2 = coeffs.b2 * x - coeffs.a2 * y;
-    output[i] = static_cast<float>(y);
+    output[i] = y;
   }
   return output;
 }
 
-std::vector<float> k_weighted(const Audio& audio) {
+std::vector<double> to_double(const float* input, size_t size) {
+  std::vector<double> output(size);
+  for (size_t i = 0; i < size; ++i) {
+    output[i] = static_cast<double>(input[i]);
+  }
+  return output;
+}
+
+std::vector<double> k_weighted(const Audio& audio) {
   if (audio.empty()) return {};
 
   const auto [pre, rlb] = k_weighting_filters(audio.sample_rate());
 
-  std::vector<float> filtered = apply_biquad_double(audio.data(), audio.size(), pre);
+  const std::vector<double> input_d = to_double(audio.data(), audio.size());
+  std::vector<double> filtered = apply_biquad_double(input_d.data(), input_d.size(), pre);
   return apply_biquad_double(filtered.data(), filtered.size(), rlb);
 }
 
-std::vector<float> k_weighted_channel(const float* interleaved, size_t frames, int channels,
-                                      int channel, int sample_rate) {
-  std::vector<float> mono(frames);
+std::vector<double> k_weighted_channel(const float* interleaved, size_t frames, int channels,
+                                       int channel, int sample_rate) {
+  std::vector<double> mono(frames);
   for (size_t frame = 0; frame < frames; ++frame) {
-    mono[frame] = interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
+    mono[frame] = static_cast<double>(
+        interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)]);
   }
 
   const auto [pre, rlb] = k_weighting_filters(sample_rate);
 
-  std::vector<float> filtered = apply_biquad_double(mono.data(), mono.size(), pre);
+  std::vector<double> filtered = apply_biquad_double(mono.data(), mono.size(), pre);
   return apply_biquad_double(filtered.data(), filtered.size(), rlb);
 }
 
@@ -72,21 +92,21 @@ double bs1770_channel_weight(int channel, int channels) {
   // Surround channels are weighted +1.5 dB in BS.1770.
   if ((channels == 5 && (channel == 3 || channel == 4)) ||
       (channels == 6 && (channel == 4 || channel == 5))) {
-    return 1.4125375446227544;
+    return kBs1770SurroundWeight;
   }
   return 1.0;
 }
 
-double mean_square(const float* data, size_t start, size_t length) {
+double mean_square(const double* data, size_t start, size_t length) {
   if (length == 0) return 0.0;
   double sum_sq = 0.0;
   for (size_t i = start; i < start + length; ++i) {
-    sum_sq += static_cast<double>(data[i]) * static_cast<double>(data[i]);
+    sum_sq += data[i] * data[i];
   }
   return sum_sq / static_cast<double>(length);
 }
 
-std::vector<double> block_energies(const std::vector<float>& samples, int sample_rate,
+std::vector<double> block_energies(const std::vector<double>& samples, int sample_rate,
                                    float duration_sec, float overlap) {
   if (samples.empty()) return {};
   const size_t block_size =
@@ -106,9 +126,9 @@ std::vector<double> block_energies(const std::vector<float>& samples, int sample
   return energies;
 }
 
-std::vector<std::vector<float>> k_weighted_channels(const float* interleaved, size_t frames,
-                                                    int channels, int sample_rate) {
-  std::vector<std::vector<float>> weighted_channels;
+std::vector<std::vector<double>> k_weighted_channels(const float* interleaved, size_t frames,
+                                                     int channels, int sample_rate) {
+  std::vector<std::vector<double>> weighted_channels;
   weighted_channels.reserve(static_cast<size_t>(channels));
   for (int channel = 0; channel < channels; ++channel) {
     weighted_channels.push_back(
@@ -118,7 +138,7 @@ std::vector<std::vector<float>> k_weighted_channels(const float* interleaved, si
 }
 
 std::vector<double> block_energies_weighted_channels(
-    const std::vector<std::vector<float>>& weighted_channels, size_t frames, int channels,
+    const std::vector<std::vector<double>>& weighted_channels, size_t frames, int channels,
     int sample_rate, float duration_sec, float overlap) {
   if (weighted_channels.empty() || frames == 0) return {};
 
@@ -274,7 +294,7 @@ float ebur128_loudness_range(const Audio& audio) {
   constexpr double kWindowSec = 3.0;
   constexpr double kHopSec = 0.1;
   const int sample_rate = audio.sample_rate();
-  const std::vector<float> weighted = k_weighted(audio);
+  const std::vector<double> weighted = k_weighted(audio);
   if (weighted.empty()) return 0.0f;
 
   const size_t block_size =
@@ -326,7 +346,7 @@ std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) 
 
   // ITU-R BS.1770-4 Annex 2: momentary uses a fixed 75% overlap (100 ms hop @ 400 ms),
   // independent of `config.block_overlap`.
-  const std::vector<float> weighted = k_weighted(audio);
+  const std::vector<double> weighted = k_weighted(audio);
   return energies_to_lufs(block_energies(weighted, audio.sample_rate(),
                                          config.momentary_duration_sec, kLufsMomentaryOverlap));
 }
@@ -334,7 +354,7 @@ std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) 
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config) {
   validate_config(config);
 
-  const std::vector<float> weighted = k_weighted(audio);
+  const std::vector<double> weighted = k_weighted(audio);
   return energies_to_lufs(
       block_energies(weighted, audio.sample_rate(), config.short_term_duration_sec,
                      short_term_overlap_for(audio.sample_rate(), config.short_term_duration_sec)));
