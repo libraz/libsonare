@@ -79,6 +79,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(SONARE_WARNING_FLAGS
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4244 /wd4267 /wd4305 /wd4324 /external:W0>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
+  # GCC's -Wmaybe-uninitialized produces well-known false positives on
+  # std::variant move/construction once optimisations are on (e.g. our
+  # util::json::Value in -O2/Release builds). Keep the warning visible but do
+  # not let it fail the build; Clang/MSVC are unaffected and still enforce it.
+  $<$<CXX_COMPILER_ID:GNU>:-Wno-error=maybe-uninitialized>
 )
 
 # Coverage settings
