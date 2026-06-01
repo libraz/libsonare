@@ -202,7 +202,7 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DBUILD_CLI=OFF \
             -DBUILD_SHARED=ON
-          cmake --build build-shared --parallel --target sonare
+          cmake --build build-shared --parallel --target sonare_shared
       - name: Type-check Python stubs
         working-directory: bindings/python
         run: |

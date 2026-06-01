@@ -29,7 +29,7 @@ chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     chroma_method="nnls",
 )
 cyclic_frames, cyclic_data = libsonare.cyclic_tempogram(samples)
-mastered: libsonare.MasteringChainResult = libsonare.master_audio(samples, preset="aiMusic")
+mastered: libsonare.MasteringChainResult = libsonare.master_audio(samples, preset_name="aiMusic")
 
 assert_type(bpm, float)
 assert_type(downbeats, list[float])

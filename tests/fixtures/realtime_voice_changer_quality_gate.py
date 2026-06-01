@@ -102,10 +102,12 @@ def main() -> int:
                 output: list[float] = []
                 for pos in range(0, len(samples), block):
                     output.extend(changer.process_mono(samples[pos : pos + block]))
-                latency = changer.latency_samples()
+                latency = int(changer.latency_samples())
             elapsed = time.perf_counter() - start
-            integrated = libsonare.lufs(output, sample_rate=sample_rate).integrated_lufs
-            peak = max(abs(x) for x in output)
+            # The binding returns numpy float32 scalars; coerce to native floats
+            # so the strict JSON report below stays serialisable.
+            integrated = float(libsonare.lufs(output, sample_rate=sample_rate).integrated_lufs)
+            peak = float(max(abs(x) for x in output))
             realtime_ratio = elapsed / seconds
             preset_report[fixture_name] = {
                 "integratedLufs": integrated,
