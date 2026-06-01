@@ -1,33 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### Bindings & API
-
-- Added `fill_na` / `fillNa` to YIN and pYIN pitch APIs across the C ABI,
-  Python, Node, and WASM. The default keeps unvoiced frames as `NaN`; enabling
-  the option returns `0` for unvoiced `f0` frames.
-- Added time-varying timbre output to `analyze_timbre` / `analyzeTimbre`.
-  Results now include per-window brightness, warmth, density, roughness, and
-  complexity entries via `timbre_over_time` / `timbreOverTime`.
-- Exposed additional librosa-compatible feature, decomposition, effect, and
-  loudness APIs across the C ABI, Python, Node, and WASM: spectral contrast,
-  polynomial spectral features, zero-crossing indices, pitch tuning, tuning
-  estimation, NMF decomposition, nearest-neighbour filtering, interval remix,
-  phase-vocoder time scaling, HPSS with residual, multichannel LUFS, and
-  EBU R128 loudness range.
-
-### Fixes
-
-- Preserved mixer pan mode when serialising scenes after `sonare_strip_set_pan`.
-- Removed a per-call allocation from latest goniometer reads.
-
-### Tooling & internal
-
-- Updated Node/WASM package tooling versions and adjusted parity normalisation
-  so digit runs in names such as `ebur128` match C naming.
-
-## v1.2.2 (2026-06-01)
+## v1.2.2 (2026-06-02)
 
 ### Breaking changes
 
@@ -53,17 +26,60 @@
 - Added an FFT null guard and beat-tracker frame-bounds checks, a bus denormal
   guard, BS.1770 surround weighting, and denormal flushing in the voice changer.
 - Added the missing `<cstdint>` include so `streaming_reverb` builds under GCC.
+- TD-PSOLA now preserves duration: the output-epoch-driven synthesis loop maps
+  each grain to the nearest analysis pitch mark, so a constant pitch shift no
+  longer time-compresses sustained voiced regions.
+- Fixed mono fold-down for FDN reverb, velvet reverb, chorus, and flanger, which
+  previously wrote two wet signals to the same aliased output buffer.
+- The true-peak meter uses the history-preserving (RT-safe) upsample path,
+  fixing block-size-dependent inter-sample peak misses.
+- HPSS soft masking applies the margin before the power (`margin^power`) to match
+  the reference, and `hybrid_cqt` rescales the pseudo-CQT half to the full-CQT
+  amplitude convention, removing the magnitude step at the split bin.
+- VQT (`gamma>0`) builds the analytic sinusoid with the same `+sin` convention as
+  CQT/reference, so its complex phase is no longer conjugated.
+- Restored the `a==b => hash(a)==hash(b)` invariant for the chroma/CQT/VQT kernel
+  caches (strict float equality with quantized keys), ending silent cache misses
+  and rare wrong hits.
+- Corrected the KeyAnalyzer profile normalization no-op, slash-chord bass
+  detection, `iirt` frame-count off-by-one, and the metronome click step
+  discontinuity (now fades in and decays to zero).
+- GraphicEq clamps band centers below Nyquist so high bands no longer throw at
+  low sample rates; stereo width uses the standard M/S law so widening no longer
+  attenuates the center/mono component.
+- `ChordChange` records the completed chord's own held confidence; streaming
+  `compute_onset` now coerces `compute_mel` so BPM is no longer silently zero;
+  short-term LUFS uses the spec 100 ms hop.
+- Mastering tape/exciter color stages engage only when they would actually color
+  the signal (explicit `enabled` wins; otherwise drive/saturation/amount above
+  zero), instead of running at zero strength whenever merely mentioned.
+- Hardened degenerate inputs: DynamicsAnalyzer floors the loudness window/hop to
+  >=1 sample, the phase-vocoder helper rejects `n_bins<2`/zero hop/zero rate,
+  `BoundaryList::clear()` resets the overflow flag, and the C-API
+  `spectral_flatness`/`zero_crossing_rate`/`onset_strength` zero their
+  out-parameters on the error path.
 
 ### Real-time safety
 
 - Fixed RT thread-safety across the engine, graph, mixing, transport, and
   automation modules; capped insert vectors and documented the `AutomationLane`
   SPSC contract.
+- Tape oversampling and AdaptiveRelease no longer allocate on the audio thread
+  (preallocated scratch; in-place release update), and
+  `RealtimeEngine::bind_mixing_strip` is no longer `noexcept` since it allocates
+  on the control thread.
+- `monitor_runtime` size is now atomic with acquire/release ordering;
+  `send_automation` returns `OUT_OF_MEMORY`/`INVALID_PARAMETER` consistently and
+  `validate_stereo_pair` validates both channels.
 
 ### Performance
 
 - Replaced the O(N) LRU promotion with an O(1) splice in the mel/chroma filter
   caches and optimised additional hot paths while hardening API boundaries.
+- Streaming onset and full-chroma histories use a sliding-window deque (O(1)
+  trim, bounded memory on long sessions), the graph plugin-delay-compensation
+  pass is O(V+E), the DCT reuses its cached matrix, and `spectrum` `to_db` uses
+  the single-allocation overload.
 
 ### Bindings & API
 
@@ -71,6 +87,31 @@
   hand-written offline effects/dynamics bindings for Node and Python, offline
   dynamics TypeScript typings for WASM, and backfilled Python `.pyi` stubs for
   runtime-exposed analyzer functions.
+- Added `fill_na` / `fillNa` to YIN and pYIN pitch APIs across the C ABI,
+  Python, Node, and WASM. The default keeps unvoiced frames as `NaN`; enabling
+  the option returns `0` for unvoiced `f0` frames.
+- Added time-varying timbre output to `analyze_timbre` / `analyzeTimbre`.
+  Results now include per-window brightness, warmth, density, roughness, and
+  complexity entries via `timbre_over_time` / `timbreOverTime`.
+- Exposed additional librosa-compatible feature, decomposition, effect, and
+  loudness APIs across the C ABI, Python, Node, and WASM: spectral contrast,
+  polynomial spectral features, zero-crossing indices, pitch tuning, tuning
+  estimation, NMF decomposition, nearest-neighbour filtering, interval remix,
+  phase-vocoder time scaling, HPSS with residual, multichannel LUFS, and
+  EBU R128 loudness range.
+- Surfaced voice-character preset accessors (`voice_character_preset_id`,
+  `realtime_voice_changer_preset_config`) across Python, Node, and WASM, with a
+  consistent `preset` parameter name.
+- Wired previously ignored mastering chain parameters through the named-processor
+  and JSON paths (`repair.declip` `lpcBlend`, `multiband.*` per-band params,
+  compressor detector/sidechain-HPF/PDR), and round-tripped the realtime
+  voice-changer ISP limiter enable flag and dBTP ceiling through JSON presets.
+- Hardened binding inputs: WASM `remix` reads interval boundaries as exact
+  integer sample indices (no float truncation of large indices), Node
+  `scaleQuantizeMidi`/`scaleCorrectionSemitones` reject a `modeMask` outside
+  `[0, 4095]`, and Node time-stretch requires an explicit numeric `sampleRate`.
+- Preserved mixer pan mode when serialising scenes after `sonare_strip_set_pan`
+  and removed a per-call allocation from latest goniometer reads.
 
 ### Tooling & internal
 
@@ -81,6 +122,15 @@
   units, folded offline-analysis boilerplate into a `run_offline` helper, and
   commonised biquad state, `db_to_linear`, and pass/gain processors into `rt/`.
 - Added thread-safety contracts to the RT/mixing/engine Doxygen headers.
+- Extracted the four mel/chroma/CQT/VQT cache copies into a single
+  `util/lru_cache.h` template, and centralised every mastering processor's
+  parameter list into shared X-macro field tables driving both the chain JSON
+  serializer and parser (one definition site per parameter).
+- Deduplicated next-power-of-two callers and the `copy_audio_result` / C-API stub
+  helpers, and adjusted parity normalisation so digit runs in names such as
+  `ebur128` match C naming.
+- Generate the gitignored K-weighting reference fixture before `ctest` in CI and
+  hardened the Compressor concurrency test against runner scheduling jitter.
 
 ## v1.2.1 (2026-05-27)
 
