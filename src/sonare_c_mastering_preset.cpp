@@ -49,12 +49,7 @@ SonareError sonare_master_audio(const char* preset_name, const float* samples, s
   out->stages_count = 0;
 
   SONARE_C_TRY
-  sonare::mastering::api::Preset preset;
-  try {
-    preset = sonare::mastering::api::preset_from_string(preset_name);
-  } catch (const std::invalid_argument&) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  const auto preset = sonare::mastering::api::preset_from_string(preset_name);
   auto cpp_overrides = to_params(overrides, override_count);
   auto result = sonare::mastering::api::master_audio_mono(
       preset, samples, length, sample_rate, cpp_overrides.data(), cpp_overrides.size());
@@ -84,12 +79,7 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
   out->stages_count = 0;
 
   SONARE_C_TRY
-  sonare::mastering::api::Preset preset;
-  try {
-    preset = sonare::mastering::api::preset_from_string(preset_name);
-  } catch (const std::invalid_argument&) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  const auto preset = sonare::mastering::api::preset_from_string(preset_name);
   auto cpp_overrides = to_params(overrides, override_count);
   auto result = sonare::mastering::api::master_audio_stereo(
       preset, left, right, length, sample_rate, cpp_overrides.data(), cpp_overrides.size());
@@ -119,12 +109,7 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
   out->stages_count = 0;
 
   SONARE_C_TRY
-  sonare::mastering::api::Preset preset;
-  try {
-    preset = sonare::mastering::api::preset_from_string(preset_name);
-  } catch (const std::invalid_argument&) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  const auto preset = sonare::mastering::api::preset_from_string(preset_name);
   auto config = sonare::mastering::api::preset_config(preset);
   auto cpp_overrides = to_params(overrides, override_count);
   if (!cpp_overrides.empty()) {
@@ -165,12 +150,7 @@ SonareError sonare_master_audio_stereo_with_progress(
   out->stages_count = 0;
 
   SONARE_C_TRY
-  sonare::mastering::api::Preset preset;
-  try {
-    preset = sonare::mastering::api::preset_from_string(preset_name);
-  } catch (const std::invalid_argument&) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  const auto preset = sonare::mastering::api::preset_from_string(preset_name);
   auto config = sonare::mastering::api::preset_config(preset);
   auto cpp_overrides = to_params(overrides, override_count);
   if (!cpp_overrides.empty()) {

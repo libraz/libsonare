@@ -1,9 +1,9 @@
 #include "mastering/multiband/multiband_limiter.h"
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::multiband {
 
@@ -15,10 +15,10 @@ MultibandLimiter::MultibandLimiter(MultibandLimiterConfig config)
 
 void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -38,17 +38,18 @@ void MultibandLimiter::process(float* const* channels, int num_channels, int num
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MultibandLimiter");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -117,7 +118,8 @@ bool MultibandLimiter::set_parameter(unsigned int param_id, float value) {
 void MultibandLimiter::validate_config(const MultibandLimiterConfig& config) {
   const size_t expected_bands = config.crossover.cutoffs_hz.size() + 1;
   if (config.bands.size() != expected_bands) {
-    throw std::invalid_argument("multiband limiter band count must match crossover");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "multiband limiter band count must match crossover");
   }
 }
 

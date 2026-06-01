@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/lpc.h"
 
 namespace sonare::mastering::repair {
@@ -82,10 +82,10 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
 }  // namespace
 
 Audio declick(const Audio& audio, const DeclickConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (!(config.threshold > 0.0f) || !(config.neighbor_ratio > 0.0f) ||
       config.max_click_samples == 0 || config.lpc_order < 0 || !(config.residual_ratio > 0.0f)) {
-    throw std::invalid_argument("invalid declick configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid declick configuration");
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   std::vector<float> output = samples;

@@ -71,7 +71,7 @@ inline void run_processor_stereo(common::ProcessorBase& processor, std::vector<f
     return;
   }
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw SonareException(ErrorCode::InvalidParameter, "stereo channel lengths must match");
   }
   const int n = static_cast<int>(left.size());
   processor.prepare(sample_rate, n);

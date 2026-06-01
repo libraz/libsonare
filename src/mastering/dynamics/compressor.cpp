@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/biquad_design.h"
@@ -11,6 +10,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -53,10 +53,10 @@ Compressor::Compressor(CompressorConfig config)
 
 void Compressor::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
@@ -97,17 +97,18 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Compressor");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -119,7 +120,8 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
   if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
       static_cast<size_t>(num_channels) > hpf_y1_.size()) {
-    throw std::invalid_argument("num_channels exceeds prepared Compressor state");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared Compressor state");
   }
 
   const float inv_channels = 1.0f / static_cast<float>(num_channels);
@@ -232,12 +234,13 @@ bool Compressor::set_parameter(unsigned int param_id, float value) {
 
 void Compressor::validate_config(const CompressorConfig& config) {
   if (!(config.ratio >= 1.0f)) {
-    throw std::invalid_argument("compressor ratio must be at least 1");
+    throw SonareException(ErrorCode::InvalidParameter, "compressor ratio must be at least 1");
   }
   if (config.attack_ms < 0.0f || config.release_ms < 0.0f || config.knee_db < 0.0f ||
       config.sidechain_hpf_hz <= 0.0f || config.pdr_time_ms < 0.0f ||
       config.pdr_release_scale < 1.0f) {
-    throw std::invalid_argument("compressor timing and knee values must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "compressor timing and knee values must be non-negative");
   }
 }
 

@@ -89,7 +89,8 @@ std::vector<Param> parse_insert_params_json(const std::string& json_params) {
     // duplicate key would silently shadow the earlier value, which is almost
     // certainly a caller bug worth surfacing.
     const auto root = sonare::util::json::parse_strict(json_params);
-    if (!root.is_object()) throw std::invalid_argument("expected JSON object");
+    if (!root.is_object())
+      throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
     std::vector<Param> params;
     params.reserve(root.as_object().size());
     for (const auto& [key, value] : root.as_object()) {
@@ -98,7 +99,8 @@ std::vector<Param> parse_insert_params_json(const std::string& json_params) {
       } else if (value.is_number()) {
         params.push_back(Param{key, value.as_number()});
       } else {
-        throw std::invalid_argument("JSON params values must be numbers or booleans");
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "JSON params values must be numbers or booleans");
       }
     }
     return params;

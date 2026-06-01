@@ -2,12 +2,12 @@
 
 #include <cmath>
 #include <complex>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::repair {
 namespace {
@@ -68,14 +68,14 @@ Audio legacy_tail_attenuate(const Audio& audio, const DereverbClassicalConfig& c
 }  // namespace
 
 Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (!(config.threshold >= 0.0f) || !(config.attenuation >= 0.0f && config.attenuation <= 1.0f) ||
       !is_power_of_two(config.n_fft) || config.hop_length <= 0 ||
       config.hop_length > config.n_fft || !(config.t60_sec > 0.0f) || config.late_delay_ms < 0.0f ||
       config.over_subtraction < 0.0f || config.spectral_floor < 0.0f ||
       config.spectral_floor > 1.0f || config.wpe_iterations < 1 || config.wpe_taps < 1 ||
       config.wpe_strength < 0.0f || config.wpe_strength > 1.0f) {
-    throw std::invalid_argument("invalid dereverb configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dereverb configuration");
   }
 
   if (static_cast<int>(audio.size()) < config.n_fft) {

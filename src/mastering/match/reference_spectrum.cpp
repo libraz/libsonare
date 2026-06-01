@@ -4,12 +4,12 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <stdexcept>
 #include <utility>
 
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/fractional_octave.h"
 
 namespace sonare::mastering::match {
@@ -28,10 +28,10 @@ std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
 
 ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrumConfig& config) {
   if (audio.empty()) {
-    throw std::invalid_argument("audio must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
   if (config.n_fft <= 0 || config.hop_length <= 0 || config.octave_fraction <= 0) {
-    throw std::invalid_argument("invalid reference spectrum configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid reference spectrum configuration");
   }
 
   FFT fft(config.n_fft);

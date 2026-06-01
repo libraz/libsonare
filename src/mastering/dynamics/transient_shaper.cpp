@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 namespace {
@@ -30,10 +30,10 @@ TransientShaper::TransientShaper(TransientShaperConfig config)
 
 void TransientShaper::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -82,13 +82,14 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "TransientShaper");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   // Adopt the latest published configuration once per block. The returned
@@ -100,7 +101,7 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
   float largest_abs_gain = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
 
     auto& fast = fast_followers_[static_cast<size_t>(ch)];
@@ -198,7 +199,7 @@ void TransientShaper::validate_config(const TransientShaperConfig& config) {
   if (config.fast_attack_ms < 0.0f || config.fast_release_ms < 0.0f ||
       config.slow_attack_ms < 0.0f || config.slow_release_ms < 0.0f || config.sensitivity < 0.0f ||
       config.max_gain_db < 0.0f || config.gain_smoothing_ms < 0.0f || config.lookahead_ms < 0.0f) {
-    throw std::invalid_argument("invalid transient shaper configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid transient shaper configuration");
   }
 }
 
@@ -208,7 +209,8 @@ void TransientShaper::ensure_followers(int num_channels) {
       static_cast<size_t>(num_channels) > gain_state_db_.size() ||
       static_cast<size_t>(num_channels) > lookahead_.size() ||
       static_cast<size_t>(num_channels) > lookahead_index_.size()) {
-    throw std::invalid_argument("num_channels exceeds prepared TransientShaper state");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared TransientShaper state");
   }
 }
 

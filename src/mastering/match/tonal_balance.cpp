@@ -2,16 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::match {
 namespace {
 
 float average_band(const ReferenceSpectrum& spectrum, float low_hz, float high_hz) {
   if (spectrum.frequencies.size() != spectrum.db.size() || spectrum.frequencies.empty()) {
-    throw std::invalid_argument("invalid spectrum");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid spectrum");
   }
   float sum = 0.0f;
   int count = 0;
@@ -29,7 +29,7 @@ float average_band(const ReferenceSpectrum& spectrum, float low_hz, float high_h
 std::vector<TonalBalanceBand> tonal_balance(const ReferenceSpectrum& source,
                                             const ReferenceSpectrum& reference) {
   if (source.sample_rate != reference.sample_rate) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
   const std::vector<TonalBalanceBand> ranges = {
       {20.0f, 250.0f, 0.0f, 0.0f, 0.0f},
@@ -53,10 +53,11 @@ std::vector<TonalBalanceBand> tonal_balance_log_bands(const ReferenceSpectrum& s
                                                       int bands_per_octave, float low_hz,
                                                       float high_hz) {
   if (source.sample_rate != reference.sample_rate) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
   if (bands_per_octave <= 0 || !(low_hz > 0.0f) || !(high_hz > low_hz)) {
-    throw std::invalid_argument("invalid tonal balance log band configuration");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "invalid tonal balance log band configuration");
   }
 
   const double ratio = std::pow(2.0, 1.0 / static_cast<double>(bands_per_octave));

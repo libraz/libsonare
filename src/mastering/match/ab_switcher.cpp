@@ -1,11 +1,11 @@
 #include "mastering/match/ab_switcher.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::match {
 
@@ -13,10 +13,10 @@ namespace {
 
 void validate_pair(const Audio& a, const Audio& b) {
   if (a.empty() || b.empty()) {
-    throw std::invalid_argument("audio must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
   if (a.sample_rate() != b.sample_rate()) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
 }
 
@@ -30,7 +30,7 @@ Audio ab_switch(const Audio& a, const Audio& b, ABSelection selection) {
 Audio ab_crossfade(const Audio& a, const Audio& b, float mix) {
   validate_pair(a, b);
   if (!(mix >= 0.0f && mix <= 1.0f)) {
-    throw std::invalid_argument("mix must be in [0, 1]");
+    throw SonareException(ErrorCode::InvalidParameter, "mix must be in [0, 1]");
   }
   const size_t size = std::min(a.size(), b.size());
   std::vector<float> samples(size);

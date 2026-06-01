@@ -233,7 +233,7 @@ std::vector<Mode> modesFromVal(val modes) {
   for (int i = 0; i < length; ++i) {
     const int mode = modes[i].as<int>();
     if (mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
-      throw std::invalid_argument("invalid key mode");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid key mode");
     }
     out.push_back(static_cast<Mode>(mode));
   }
@@ -277,7 +277,8 @@ void processStereo(mastering::common::ProcessorBase& processor, std::vector<floa
 
 std::vector<float> monoMix(const std::vector<float>& left, const std::vector<float>& right) {
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
   std::vector<float> mono(left.size());
   for (size_t i = 0; i < left.size(); ++i) {
@@ -1134,7 +1135,8 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_ra
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
@@ -1187,7 +1189,8 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
@@ -1241,7 +1244,8 @@ class StreamingMasteringChainWrapper {
     std::vector<float> left = float32ArrayToVector(left_samples);
     std::vector<float> right = float32ArrayToVector(right_samples);
     if (left.size() != right.size()) {
-      throw std::invalid_argument("stereo channel lengths must match");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "stereo channel lengths must match");
     }
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
@@ -1295,14 +1299,16 @@ mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
   if (value == "Notch" || value == "notch") return EqBandType::Notch;
   if (value == "TiltShelf" || value == "tiltShelf") return EqBandType::TiltShelf;
   if (value == "FlatTilt" || value == "flatTilt") return EqBandType::FlatTilt;
-  throw std::invalid_argument("unknown EQ band type: " + value);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown EQ band type: " + value);
 }
 
 mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
   using mastering::eq::BiquadCoeffMode;
   if (value == "Rbj" || value == "RBJ" || value == "rbj") return BiquadCoeffMode::Rbj;
   if (value == "Vicanek" || value == "vicanek") return BiquadCoeffMode::Vicanek;
-  throw std::invalid_argument("unknown EQ coefficient mode: " + value);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown EQ coefficient mode: " + value);
 }
 
 mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
@@ -1312,7 +1318,8 @@ mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
   if (value == "Right" || value == "right") return StereoPlacement::Right;
   if (value == "Mid" || value == "mid") return StereoPlacement::Mid;
   if (value == "Side" || value == "side") return StereoPlacement::Side;
-  throw std::invalid_argument("unknown EQ placement: " + value);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown EQ placement: " + value);
 }
 
 mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
@@ -1321,7 +1328,8 @@ mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
   if (value == "ZeroLatency" || value == "zeroLatency") return PhaseMode::ZeroLatency;
   if (value == "NaturalPhase" || value == "naturalPhase") return PhaseMode::NaturalPhase;
   if (value == "LinearPhase" || value == "linearPhase") return PhaseMode::LinearPhase;
-  throw std::invalid_argument("unknown EQ band phase mode: " + value);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown EQ band phase mode: " + value);
 }
 
 mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
@@ -1334,7 +1342,7 @@ mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
     case 3:
       return PhaseMode::LinearPhase;
     default:
-      throw std::invalid_argument("unknown EQ phase mode");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ phase mode");
   }
 }
 
@@ -1414,7 +1422,8 @@ class EqualizerWrapper {
     sidechain_left_ = float32ArrayToVector(left_samples);
     sidechain_right_ = float32ArrayToVector(right_samples);
     if (sidechain_left_.size() != sidechain_right_.size()) {
-      throw std::invalid_argument("sidechain channel lengths must match");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "sidechain channel lengths must match");
     }
     if (sidechain_left_.empty()) {
       processor_.clear_sidechain();
@@ -1447,7 +1456,8 @@ class EqualizerWrapper {
     std::vector<float> left = float32ArrayToVector(left_samples);
     std::vector<float> right = float32ArrayToVector(right_samples);
     if (left.size() != right.size()) {
-      throw std::invalid_argument("stereo channel lengths must match");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "stereo channel lengths must match");
     }
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
@@ -1629,7 +1639,8 @@ class RealtimeVoiceChangerWrapper {
     require_prepared();
     const int length = samples["length"].as<int>();
     if (output["length"].as<int>() < length) {
-      throw std::invalid_argument("output buffer is too small");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "output buffer is too small");
     }
     ensure_mono_capacity(static_cast<size_t>(length));
     copyFloat32Array(samples, mono_input_, static_cast<size_t>(length));
@@ -1649,10 +1660,12 @@ class RealtimeVoiceChangerWrapper {
     require_prepared();
     const int length = samples["length"].as<int>();
     if (channels <= 0 || length % channels != 0) {
-      throw std::invalid_argument("invalid interleaved channel count");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid interleaved channel count");
     }
     if (output["length"].as<int>() < length) {
-      throw std::invalid_argument("output buffer is too small");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "output buffer is too small");
     }
     const size_t frames = static_cast<size_t>(length / channels);
     ensure_interleaved_capacity(frames, channels);
@@ -1681,7 +1694,8 @@ class RealtimeVoiceChangerWrapper {
   val getMonoInputBuffer(int num_samples) {
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
-      throw std::invalid_argument("RealtimeVoiceChanger.getMonoInputBuffer: out-of-range length");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.getMonoInputBuffer: out-of-range length");
     }
     ensure_mono_capacity(static_cast<size_t>(num_samples));
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_input_.data()));
@@ -1690,7 +1704,9 @@ class RealtimeVoiceChangerWrapper {
   val getMonoOutputBuffer(int num_samples) {
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
-      throw std::invalid_argument("RealtimeVoiceChanger.getMonoOutputBuffer: out-of-range length");
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "RealtimeVoiceChanger.getMonoOutputBuffer: out-of-range length");
     }
     ensure_mono_capacity(static_cast<size_t>(num_samples));
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_output_.data()));
@@ -1699,7 +1715,9 @@ class RealtimeVoiceChangerWrapper {
   void processPreparedMono(int num_samples) {
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
-      throw std::invalid_argument("RealtimeVoiceChanger.processPreparedMono: out-of-range length");
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "RealtimeVoiceChanger.processPreparedMono: out-of-range length");
     }
     if (mono_input_.size() < static_cast<size_t>(num_samples) ||
         mono_output_.size() < static_cast<size_t>(num_samples)) {
@@ -1713,10 +1731,12 @@ class RealtimeVoiceChangerWrapper {
   val getInterleavedInputBuffer(int num_frames, int num_channels) {
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw std::invalid_argument("RealtimeVoiceChanger.getInterleavedInputBuffer: bad dims");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.getInterleavedInputBuffer: bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw std::invalid_argument(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.getInterleavedInputBuffer: frames exceed max block size");
     }
     ensure_interleaved_capacity(static_cast<size_t>(num_frames), num_channels);
@@ -1727,10 +1747,12 @@ class RealtimeVoiceChangerWrapper {
   val getInterleavedOutputBuffer(int num_frames, int num_channels) {
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw std::invalid_argument("RealtimeVoiceChanger.getInterleavedOutputBuffer: bad dims");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.getInterleavedOutputBuffer: bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw std::invalid_argument(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.getInterleavedOutputBuffer: frames exceed max block size");
     }
     ensure_interleaved_capacity(static_cast<size_t>(num_frames), num_channels);
@@ -1741,10 +1763,12 @@ class RealtimeVoiceChangerWrapper {
   void processPreparedInterleaved(int num_frames, int num_channels) {
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw std::invalid_argument("RealtimeVoiceChanger.processPreparedInterleaved: bad dims");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.processPreparedInterleaved: bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw std::invalid_argument(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.processPreparedInterleaved: frames exceed max block size");
     }
     const size_t frames = static_cast<size_t>(num_frames);
@@ -1782,14 +1806,17 @@ class RealtimeVoiceChangerWrapper {
   val getPlanarChannelBuffer(int channel, int num_frames) {
     require_prepared();
     if (num_frames <= 0) {
-      throw std::invalid_argument("RealtimeVoiceChanger.getPlanarChannelBuffer: bad frames");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.getPlanarChannelBuffer: bad frames");
     }
     if (num_frames > max_block_size_) {
-      throw std::invalid_argument(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.getPlanarChannelBuffer: frames exceed max block size");
     }
     if (channel < 0 || channel >= prepared_channels_) {
-      throw std::invalid_argument(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.getPlanarChannelBuffer: channel out of range");
     }
     ensure_interleaved_capacity(static_cast<size_t>(num_frames), prepared_channels_);
@@ -1800,10 +1827,12 @@ class RealtimeVoiceChangerWrapper {
   void processPreparedPlanar(int num_frames) {
     require_prepared();
     if (num_frames <= 0) {
-      throw std::invalid_argument("RealtimeVoiceChanger.processPreparedPlanar: bad frames");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger.processPreparedPlanar: bad frames");
     }
     if (num_frames > max_block_size_) {
-      throw std::invalid_argument(
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.processPreparedPlanar: frames exceed max block size");
     }
     const size_t channel_count = static_cast<size_t>(prepared_channels_);
@@ -1961,7 +1990,8 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
   auto preset = mastering::api::preset_from_string(preset_name);
   auto overrides_vec = masteringParamsFromObject(overrides);
@@ -2022,7 +2052,8 @@ val js_master_audio_stereo_with_progress(std::string preset_name, val left_sampl
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
   auto preset = mastering::api::preset_from_string(preset_name);
   auto config = mastering::api::preset_config(preset);
@@ -2084,7 +2115,8 @@ class MixerWasm {
   MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
       : mixer_(mixer), sample_rate_(sample_rate), block_size_(block_size) {
     if (block_size_ <= 0) {
-      throw std::invalid_argument("mixer block size must be positive");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "mixer block size must be positive");
     }
     const size_t strip_count = sonare_mixer_strip_count(mixer_);
     left_scratch_.resize(strip_count);
@@ -2114,8 +2146,9 @@ class MixerWasm {
   static MixerWasm* fromSceneJson(std::string json, int sample_rate, int block_size) {
     SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), sample_rate, block_size);
     if (mixer == nullptr) {
-      throw std::runtime_error(std::string("failed to build mixer from scene JSON: ") +
-                               sonare_last_error_message());
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to build mixer from scene JSON: ") + sonare_last_error_message());
     }
     return new MixerWasm(mixer, sample_rate, block_size);
   }
@@ -2124,8 +2157,9 @@ class MixerWasm {
     char* json = nullptr;
     SonareError err = sonare_mixing_scene_preset_json(name.c_str(), &json);
     if (err != SONARE_OK || json == nullptr) {
-      throw std::runtime_error(std::string("failed to get mixing scene preset JSON: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to get mixing scene preset JSON: ") + sonare_error_message(err));
     }
     std::string out(json);
     sonare_free_string(json);
@@ -2135,8 +2169,9 @@ class MixerWasm {
   void compile() {
     SonareError err = sonare_mixer_compile(mixer_);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to compile mixer graph: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to compile mixer graph: ") + sonare_error_message(err));
     }
   }
 
@@ -2151,13 +2186,15 @@ class MixerWasm {
                                 unsigned int param_id, double sample_pos, float value, int curve) {
     SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
     if (strip == nullptr) {
-      throw std::runtime_error("mixer strip index out of range");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "mixer strip index out of range");
     }
     SonareError err = sonare_strip_schedule_insert_automation(
         strip, insert_index, param_id, static_cast<int64_t>(sample_pos), value, curve);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to schedule insert automation: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to schedule insert automation: ") + sonare_error_message(err));
     }
   }
 
@@ -2166,7 +2203,8 @@ class MixerWasm {
   SonareStrip* stripAt(unsigned int strip_index) {
     SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
     if (strip == nullptr) {
-      throw std::runtime_error("mixer strip index out of range");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "mixer strip index out of range");
     }
     return strip;
   }
@@ -2354,14 +2392,17 @@ class MixerWasm {
     SonareError err =
         sonare_mixer_add_bus(mixer_, id.c_str(), role.empty() ? nullptr : role.c_str());
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to add bus: ") + sonare_error_message(err));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    std::string("failed to add bus: ") + sonare_error_message(err));
     }
   }
 
   void removeBus(std::string id) {
     SonareError err = sonare_mixer_remove_bus(mixer_, id.c_str());
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to remove bus: ") + sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to remove bus: ") + sonare_error_message(err));
     }
   }
 
@@ -2369,8 +2410,9 @@ class MixerWasm {
     size_t count = 0;
     SonareError err = sonare_mixer_bus_count(mixer_, &count);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to read bus count: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to read bus count: ") + sonare_error_message(err));
     }
     return count;
   }
@@ -2395,16 +2437,18 @@ class MixerWasm {
                                                  member_ptrs.empty() ? nullptr : member_ptrs.data(),
                                                  member_ptrs.size());
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to add VCA group: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to add VCA group: ") + sonare_error_message(err));
     }
   }
 
   void removeVcaGroup(std::string id) {
     SonareError err = sonare_mixer_remove_vca_group(mixer_, id.c_str());
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to remove VCA group: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to remove VCA group: ") + sonare_error_message(err));
     }
   }
 
@@ -2412,8 +2456,9 @@ class MixerWasm {
     size_t count = 0;
     SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("failed to read VCA group count: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to read VCA group count: ") + sonare_error_message(err));
     }
     return count;
   }
@@ -2422,8 +2467,9 @@ class MixerWasm {
     char* json = nullptr;
     SonareError err = sonare_mixer_to_scene_json(mixer_, &json);
     if (err != SONARE_OK || json == nullptr) {
-      throw std::runtime_error(std::string("failed to serialize mixer scene: ") +
-                               sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to serialize mixer scene: ") + sonare_error_message(err));
     }
     std::string out(json);
     sonare_free_string(json);
@@ -2433,7 +2479,8 @@ class MixerWasm {
   val processStereo(val left_channels, val right_channels) {
     const int count = left_channels["length"].as<int>();
     if (count < 0 || right_channels["length"].as<int>() != count) {
-      throw std::invalid_argument("leftChannels and rightChannels must have the same length");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "leftChannels and rightChannels must have the same length");
     }
 
     std::vector<std::vector<float>> left_inputs;
@@ -2446,16 +2493,19 @@ class MixerWasm {
       left_inputs.push_back(float32ArrayToVector(left_channels[index]));
       right_inputs.push_back(float32ArrayToVector(right_channels[index]));
       if (left_inputs.back().size() != right_inputs.back().size()) {
-        throw std::invalid_argument("left and right channel lengths must match");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "left and right channel lengths must match");
       }
       if (index == 0) {
         length = left_inputs.back().size();
       } else if (left_inputs.back().size() != length) {
-        throw std::invalid_argument("all strips must have the same length");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "all strips must have the same length");
       }
     }
     if (length > static_cast<size_t>(block_size_)) {
-      throw std::invalid_argument("block length exceeds the mixer's configured block size");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "block length exceeds the mixer's configured block size");
     }
 
     std::vector<const float*> left_ptrs(static_cast<size_t>(count));
@@ -2471,7 +2521,9 @@ class MixerWasm {
         mixer_, count > 0 ? left_ptrs.data() : nullptr, count > 0 ? right_ptrs.data() : nullptr,
         static_cast<size_t>(count), out_left.data(), out_right.data(), length);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("mixer process failed: ") + sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("mixer process failed: ") + sonare_error_message(err));
     }
 
     val out = val::object();
@@ -2484,26 +2536,31 @@ class MixerWasm {
   void processStereoInto(val left_channels, val right_channels, val out_left, val out_right) {
     const int count = left_channels["length"].as<int>();
     if (count < 0 || right_channels["length"].as<int>() != count) {
-      throw std::invalid_argument("leftChannels and rightChannels must have the same length");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "leftChannels and rightChannels must have the same length");
     }
     if (static_cast<size_t>(count) != left_scratch_.size()) {
-      throw std::invalid_argument("input channel count must match the mixer's strip count");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "input channel count must match the mixer's strip count");
     }
 
     const int length_i = out_left["length"].as<int>();
     if (length_i <= 0 || out_right["length"].as<int>() != length_i) {
-      throw std::invalid_argument("output channels must have the same non-zero length");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "output channels must have the same non-zero length");
     }
     const size_t length = static_cast<size_t>(length_i);
     if (length > static_cast<size_t>(block_size_)) {
-      throw std::invalid_argument("block length exceeds the mixer's configured block size");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "block length exceeds the mixer's configured block size");
     }
 
     for (int index = 0; index < count; ++index) {
       val left = left_channels[index];
       val right = right_channels[index];
       if (left["length"].as<int>() != length_i || right["length"].as<int>() != length_i) {
-        throw std::invalid_argument("all input and output channels must have the same length");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "all input and output channels must have the same length");
       }
       auto& left_dest = left_scratch_[static_cast<size_t>(index)];
       auto& right_dest = right_scratch_[static_cast<size_t>(index)];
@@ -2517,7 +2574,9 @@ class MixerWasm {
         mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
         static_cast<size_t>(count), out_scratch_left_.data(), out_scratch_right_.data(), length);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("mixer process failed: ") + sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("mixer process failed: ") + sonare_error_message(err));
     }
     for (size_t sample = 0; sample < length; ++sample) {
       out_left.set(sample, out_scratch_left_[sample]);
@@ -2527,14 +2586,16 @@ class MixerWasm {
 
   val inputLeftView(size_t index) {
     if (index >= left_scratch_.size()) {
-      throw std::invalid_argument("mixer input index out of range");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "mixer input index out of range");
     }
     return val(typed_memory_view(static_cast<size_t>(block_size_), left_scratch_[index].data()));
   }
 
   val inputRightView(size_t index) {
     if (index >= right_scratch_.size()) {
-      throw std::invalid_argument("mixer input index out of range");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "mixer input index out of range");
     }
     return val(typed_memory_view(static_cast<size_t>(block_size_), right_scratch_[index].data()));
   }
@@ -2549,21 +2610,25 @@ class MixerWasm {
 
   void processPreparedStereo(size_t num_samples) {
     if (num_samples == 0 || num_samples > static_cast<size_t>(block_size_)) {
-      throw std::invalid_argument("invalid prepared mixer block length");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid prepared mixer block length");
     }
     const size_t count = left_scratch_.size();
     SonareError err = sonare_mixer_process_stereo(
         mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
         count, out_scratch_left_.data(), out_scratch_right_.data(), num_samples);
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string("mixer process failed: ") + sonare_error_message(err));
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("mixer process failed: ") + sonare_error_message(err));
     }
   }
 
  private:
   static void checkStripError(SonareError err, const char* what) {
     if (err != SONARE_OK) {
-      throw std::runtime_error(std::string(what) + ": " + sonare_error_message(err));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    std::string(what) + ": " + sonare_error_message(err));
     }
   }
 
@@ -2676,7 +2741,8 @@ val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
 val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val options) {
   const int count = left_channels["length"].as<int>();
   if (count <= 0 || right_channels["length"].as<int>() != count) {
-    throw std::invalid_argument(
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
         "leftChannels and rightChannels must have the same non-zero length");
   }
 
@@ -2690,12 +2756,14 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     left_inputs.push_back(float32ArrayToVector(left_channels[index]));
     right_inputs.push_back(float32ArrayToVector(right_channels[index]));
     if (left_inputs.back().size() != right_inputs.back().size()) {
-      throw std::invalid_argument("left and right channel lengths must match");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "left and right channel lengths must match");
     }
     if (index == 0) {
       length = left_inputs.back().size();
     } else if (left_inputs.back().size() != length) {
-      throw std::invalid_argument("all strips must have the same length");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "all strips must have the same length");
     }
   }
 
@@ -2887,7 +2955,8 @@ std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(v
     return out;
   }
   if (!val::global("Array").call<bool>("isArray", platforms)) {
-    throw std::invalid_argument("platforms must be an array");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "platforms must be an array");
   }
   const int length = platforms["length"].as<int>();
   out.reserve(static_cast<size_t>(length));
@@ -3542,14 +3611,16 @@ TempogramMode tempogramModeFromValue(val mode) {
     const int mode_id = mode.as<int>();
     if (mode_id == SONARE_TEMPOGRAM_AUTOCORRELATION) return TempogramMode::kAutocorrelation;
     if (mode_id == SONARE_TEMPOGRAM_COSINE) return TempogramMode::kCosine;
-    throw std::invalid_argument("tempogram mode must be 'autocorrelation' or 'cosine'");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "tempogram mode must be 'autocorrelation' or 'cosine'");
   }
   const std::string value = mode.as<std::string>();
   if (value == "autocorrelation" || value == "auto" || value == "ac") {
     return TempogramMode::kAutocorrelation;
   }
   if (value == "cosine") return TempogramMode::kCosine;
-  throw std::invalid_argument("tempogram mode must be 'autocorrelation' or 'cosine'");
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "tempogram mode must be 'autocorrelation' or 'cosine'");
 }
 
 val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode) {
@@ -3721,7 +3792,8 @@ val js_metering_dynamic_range(val samples, int sample_rate, float window_sec, fl
   if (low_percentile > 0.0f) cfg.low_percentile = low_percentile;
   if (high_percentile > 0.0f) cfg.high_percentile = high_percentile;
   if (cfg.low_percentile >= cfg.high_percentile) {
-    throw std::invalid_argument(
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
         "meteringDynamicRange: lowPercentile must be smaller than highPercentile");
   }
   metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
@@ -3742,13 +3814,15 @@ namespace {
 void ensureStereoPair(const val& left, const val& right, int sample_rate, const char* fn_label,
                       std::vector<float>* out_left, std::vector<float>* out_right) {
   if (sample_rate <= 0) {
-    throw std::invalid_argument(std::string(fn_label) + ": sampleRate must be positive");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(fn_label) + ": sampleRate must be positive");
   }
   *out_left = float32ArrayToVector(left);
   *out_right = float32ArrayToVector(right);
   if (out_left->size() != out_right->size()) {
-    throw std::invalid_argument(std::string(fn_label) +
-                                ": left and right must have the same length");
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        std::string(fn_label) + ": left and right must have the same length");
   }
 }
 
@@ -3838,7 +3912,8 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw std::invalid_argument("meteringSpectrum: nFft must be a power of two");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "meteringSpectrum: nFft must be a power of two");
   }
   metering::SpectrumResult result = metering::spectrum(audio, cfg);
   val out = val::object();
@@ -3869,7 +3944,8 @@ val js_mastering_repair_declick(val samples, int sample_rate, val options) {
     if (options.hasOwnProperty("maxClickSamples")) {
       const int v = options["maxClickSamples"].as<int>();
       if (v <= 0) {
-        throw std::invalid_argument("masteringRepairDeclick: maxClickSamples must be positive");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "masteringRepairDeclick: maxClickSamples must be positive");
       }
       cfg.max_click_samples = static_cast<size_t>(v);
     }
@@ -3901,7 +3977,8 @@ mastering::repair::DenoiseMode parseDenoiseMode(const std::string& name,
   if (s == "spectralsubtraction" || s == "spectral_subtraction" || s == "ss") {
     return mastering::repair::DenoiseMode::SpectralSubtraction;
   }
-  throw std::invalid_argument("unknown denoise mode: " + name);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown denoise mode: " + name);
 }
 
 mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(
@@ -3912,7 +3989,8 @@ mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(
   if (s == "quantile") return mastering::repair::DenoiseNoiseEstimator::Quantile;
   if (s == "mcra") return mastering::repair::DenoiseNoiseEstimator::Mcra;
   if (s == "imcra") return mastering::repair::DenoiseNoiseEstimator::Imcra;
-  throw std::invalid_argument("unknown denoise noise estimator: " + name);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown denoise noise estimator: " + name);
 }
 
 }  // namespace
@@ -3950,11 +4028,13 @@ val js_mastering_repair_denoise_classical(val samples, int sample_rate, val opti
     }
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw std::invalid_argument(
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
         "masteringRepairDenoiseClassical: nFft must be a positive power of two");
   }
   if (cfg.hop_length <= 0) {
-    throw std::invalid_argument("masteringRepairDenoiseClassical: hopLength must be positive");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "masteringRepairDenoiseClassical: hopLength must be positive");
   }
   Audio result = mastering::repair::denoise_classical(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -3989,7 +4069,8 @@ mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name,
   if (s == "waveletshrinkage" || s == "wavelet_shrinkage" || s == "wavelet") {
     return mastering::repair::DecrackleMode::WaveletShrinkage;
   }
-  throw std::invalid_argument("unknown decrackle mode: " + name);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown decrackle mode: " + name);
 }
 
 mastering::repair::TrimSilenceMode parseTrimSilenceMode(
@@ -4001,7 +4082,8 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(
   if (s == "lufsgated" || s == "lufs_gated" || s == "lufs") {
     return mastering::repair::TrimSilenceMode::LufsGated;
   }
-  throw std::invalid_argument("unknown trim silence mode: " + name);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown trim silence mode: " + name);
 }
 
 }  // namespace
@@ -4080,11 +4162,14 @@ val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val opt
     }
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw std::invalid_argument(
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
         "masteringRepairDereverbClassical: nFft must be a positive power of two");
   }
   if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
-    throw std::invalid_argument("masteringRepairDereverbClassical: hopLength must be in (0, nFft]");
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDereverbClassical: hopLength must be in (0, nFft]");
   }
   Audio result = mastering::repair::dereverb_classical(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -4100,7 +4185,8 @@ val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) 
     if (options.hasOwnProperty("paddingSamples")) {
       const int v = options["paddingSamples"].as<int>();
       if (v < 0) {
-        throw std::invalid_argument(
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidParameter,
             "masteringRepairTrimSilence: paddingSamples must be non-negative");
       }
       cfg.padding_samples = static_cast<size_t>(v);
@@ -4135,7 +4221,8 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
       case 2:
         return mastering::dynamics::DetectorMode::LogRms;
       default:
-        throw std::invalid_argument("masteringDynamicsCompressor: unknown detector code");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "masteringDynamicsCompressor: unknown detector code");
     }
   }
   if (type == "string") {
@@ -4145,7 +4232,8 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
     if (s == "peak") return mastering::dynamics::DetectorMode::Peak;
     if (s == "rms") return mastering::dynamics::DetectorMode::Rms;
     if (s == "log_rms" || s == "logrms") return mastering::dynamics::DetectorMode::LogRms;
-    throw std::invalid_argument("masteringDynamicsCompressor: unknown detector mode: " + s);
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "masteringDynamicsCompressor: unknown detector mode: " + s);
   }
   return fallback;
 }
@@ -4277,10 +4365,12 @@ namespace {
 editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_mask,
                                                             float reference_midi) {
   if (root < 0 || root > 11) {
-    throw std::invalid_argument("scaleQuantizer: root must be in [0, 11]");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "scaleQuantizer: root must be in [0, 11]");
   }
   if (mode_mask == 0) {
-    throw std::invalid_argument("scaleQuantizer: modeMask must be non-zero");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "scaleQuantizer: modeMask must be non-zero");
   }
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
@@ -4303,7 +4393,8 @@ float js_scale_correction_semitones(int root, int mode_mask, float midi, float r
 
 bool js_scale_pitch_class_enabled(int root, int mode_mask, int pitch_class) {
   if (pitch_class < 0 || pitch_class > 11) {
-    throw std::invalid_argument("scalePitchClassEnabled: pitchClass must be in [0, 11]");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "scalePitchClassEnabled: pitchClass must be in [0, 11]");
   }
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, 0.0f));
   return q.pitch_class_enabled(pitch_class);
@@ -4650,7 +4741,8 @@ class RealtimeEngineWasm {
     command.type = sonare::rt::CommandType::kTransportPlay;
     command.sample_time = render_frame;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue play command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue play command");
     }
   }
 
@@ -4659,7 +4751,8 @@ class RealtimeEngineWasm {
     command.type = sonare::rt::CommandType::kTransportStop;
     command.sample_time = render_frame;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue stop command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue stop command");
     }
   }
 
@@ -4669,7 +4762,8 @@ class RealtimeEngineWasm {
     command.sample_time = render_frame;
     command.arg.i = timeline_sample;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue seek command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue seek command");
     }
   }
 
@@ -4682,7 +4776,8 @@ class RealtimeEngineWasm {
     // float slot of the union would surface as garbage. Match the C API.
     command.arg.d = ppq;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue seek command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue seek command");
     }
   }
 
@@ -4697,7 +4792,8 @@ class RealtimeEngineWasm {
   void addParameter(val info) {
     const uint32_t id = static_cast<uint32_t>(intProperty(info, "id", 0));
     if (id == 0) {
-      throw std::invalid_argument("parameter id must be non-zero");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "parameter id must be non-zero");
     }
     parameter_strings_.push_back(stringProperty(info, "name", ""));
     parameter_strings_.push_back(stringProperty(info, "unit", ""));
@@ -4711,7 +4807,7 @@ class RealtimeEngineWasm {
     parameter.rt_safe = boolProperty(info, "rtSafe", true);
     parameter.default_curve = automationCurveFromInt(intProperty(info, "defaultCurve", 1));
     if (!parameters_.add(parameter)) {
-      throw std::invalid_argument("duplicate parameter id");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "duplicate parameter id");
     }
   }
 
@@ -4728,14 +4824,15 @@ class RealtimeEngineWasm {
   val parameterInfo(int id) const {
     sonare::automation::ParameterInfo info{};
     if (!parameters_.parameter_info(static_cast<uint32_t>(id), &info)) {
-      throw std::invalid_argument("unknown parameter id");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown parameter id");
     }
     return parameterToVal(info);
   }
 
   void setAutomationLane(int param_id, val points) {
     if (!parameters_.parameter_is_realtime_safe(static_cast<uint32_t>(param_id))) {
-      throw std::invalid_argument("parameter is not realtime safe");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "parameter is not realtime safe");
     }
     sonare::automation::AutomationLane lane(static_cast<uint32_t>(param_id));
     std::vector<sonare::automation::Breakpoint> breakpoints;
@@ -4792,7 +4889,7 @@ class RealtimeEngineWasm {
   val marker(int id) const {
     sonare::transport::Marker marker{};
     if (!engine_.marker_by_id(static_cast<uint32_t>(id), &marker)) {
-      throw std::invalid_argument("unknown marker id");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown marker id");
     }
     return markerToVal(marker);
   }
@@ -4806,7 +4903,8 @@ class RealtimeEngineWasm {
     command.target_id = static_cast<uint32_t>(id);
     command.sample_time = render_frame;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue seek marker command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue seek marker command");
     }
   }
 
@@ -4817,7 +4915,8 @@ class RealtimeEngineWasm {
     command.sample_time = render_frame;
     command.arg.f = value;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue set parameter command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue set parameter command");
     }
   }
 
@@ -4828,7 +4927,8 @@ class RealtimeEngineWasm {
     command.sample_time = render_frame;
     command.arg.f = value;
     if (!engine_.push_command(command)) {
-      throw std::runtime_error("failed to queue set parameter command");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue set parameter command");
     }
   }
 
@@ -4850,7 +4950,7 @@ class RealtimeEngineWasm {
   void setLoopFromMarkers(int start_marker_id, int end_marker_id) {
     if (!engine_.set_loop_from_markers(static_cast<uint32_t>(start_marker_id),
                                        static_cast<uint32_t>(end_marker_id))) {
-      throw std::invalid_argument("unknown loop marker id");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown loop marker id");
     }
   }
 
@@ -4883,19 +4983,22 @@ class RealtimeEngineWasm {
     val nodes = spec["nodes"];
     const int node_count = nodes["length"].as<int>();
     if (node_count <= 0) {
-      throw std::invalid_argument("graph nodes must not be empty");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "graph nodes must not be empty");
     }
     const int num_channels = intProperty(spec, "numChannels", 2);
     for (int i = 0; i < node_count; ++i) {
       val node = nodes[i];
       auto processor = makeWasmGraphProcessor(node);
       if (!processor) {
-        throw std::invalid_argument("unsupported graph node type");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "unsupported graph node type");
       }
       const std::string id = stringProperty(node, "id", "");
       const int ports = intProperty(node, "numPorts", num_channels);
       if (!graph->add_node(id, std::move(processor), ports)) {
-        throw std::invalid_argument("failed to add graph node");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "failed to add graph node");
       }
     }
     val connections = spec["connections"];
@@ -4911,11 +5014,12 @@ class RealtimeEngineWasm {
                                  ? sonare::graph::Connection::Mix::Replace
                                  : sonare::graph::Connection::Mix::Add;
       if (!graph->connect(std::move(graph_connection))) {
-        throw std::invalid_argument("failed to connect graph");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "failed to connect graph");
       }
     }
     if (!graph->compile()) {
-      throw std::invalid_argument("failed to compile graph");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to compile graph");
     }
     const auto state = engine_.transport().snapshot();
     graph->prepare(state.sample_rate, engine_.max_block_size());
@@ -4923,7 +5027,7 @@ class RealtimeEngineWasm {
     const std::string output_node = stringProperty(spec, "outputNode", "");
     if (!engine_.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(),
                             num_channels)) {
-      throw std::invalid_argument("failed to swap graph");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to swap graph");
     }
     if (hasProperty(spec, "parameterBindings")) {
       val bindings = spec["parameterBindings"];
@@ -4932,13 +5036,14 @@ class RealtimeEngineWasm {
         val binding = bindings[i];
         if (!engine_.bind_graph_parameter(static_cast<uint32_t>(intProperty(binding, "paramId", 0)),
                                           stringProperty(binding, "nodeId", "").c_str())) {
-          throw std::invalid_argument("failed to bind graph parameter");
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "failed to bind graph parameter");
         }
       }
     }
 #else
     (void)spec;
-    throw std::runtime_error("graph support is not enabled");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "graph support is not enabled");
 #endif
   }
 
@@ -4972,7 +5077,8 @@ class RealtimeEngineWasm {
       val channels_val = clip_val["channels"];
       const int channel_count = channels_val["length"].as<int>();
       if (channel_count <= 0) {
-        throw std::invalid_argument("clip channels must not be empty");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "clip channels must not be empty");
       }
       clip_storage_.emplace_back();
       clip_ptrs_.emplace_back();
@@ -4986,10 +5092,12 @@ class RealtimeEngineWasm {
         if (ch == 0) {
           num_samples = static_cast<int64_t>(channel.size());
           if (num_samples <= 0) {
-            throw std::invalid_argument("clip channels must not be empty");
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                          "clip channels must not be empty");
           }
         } else if (static_cast<int64_t>(channel.size()) != num_samples) {
-          throw std::invalid_argument("all clip channels must have the same length");
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "all clip channels must have the same length");
         }
         storage.push_back(std::move(channel));
         pointers.push_back(storage.back().data());
@@ -5016,7 +5124,8 @@ class RealtimeEngineWasm {
 
   void setCaptureBuffer(int num_channels, int capacity_frames) {
     if (num_channels <= 0 || capacity_frames <= 0) {
-      throw std::invalid_argument("capture buffer dimensions must be positive");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "capture buffer dimensions must be positive");
     }
     capture_storage_.assign(static_cast<size_t>(num_channels),
                             std::vector<float>(static_cast<size_t>(capacity_frames), 0.0f));
@@ -5096,7 +5205,7 @@ class RealtimeEngineWasm {
     const int target_sample_rate = intProperty(options_val, "targetSampleRate", 48000);
     if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || source_sample_rate <= 0 ||
         target_sample_rate <= 0) {
-      throw std::invalid_argument("invalid bounce options");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
     }
 
     std::vector<std::vector<float>> channels(static_cast<size_t>(num_channels),
@@ -5163,7 +5272,7 @@ class RealtimeEngineWasm {
     const int block_size = intProperty(options_val, "blockSize", 128);
     const int num_channels = intProperty(options_val, "numChannels", 2);
     if (total_frames <= 0 || block_size <= 0 || num_channels <= 0) {
-      throw std::invalid_argument("invalid freeze options");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid freeze options");
     }
 
     std::vector<std::vector<float>> frozen(static_cast<size_t>(num_channels),
@@ -5267,7 +5376,8 @@ class RealtimeEngineWasm {
   static ChannelBlock readChannels(val channels_val) {
     const int count = channels_val["length"].as<int>();
     if (count <= 0) {
-      throw std::invalid_argument("channels must not be empty");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "channels must not be empty");
     }
     ChannelBlock block;
     block.storage.reserve(static_cast<size_t>(count));
@@ -5277,10 +5387,12 @@ class RealtimeEngineWasm {
       if (ch == 0) {
         block.frames = static_cast<int>(channel.size());
         if (block.frames <= 0) {
-          throw std::invalid_argument("channels must not be empty");
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "channels must not be empty");
         }
       } else if (static_cast<int>(channel.size()) != block.frames) {
-        throw std::invalid_argument("all channels must have the same length");
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "all channels must have the same length");
       }
       block.storage.push_back(std::move(channel));
     }

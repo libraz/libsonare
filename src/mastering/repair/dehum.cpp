@@ -2,12 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::repair {
 
@@ -104,11 +104,11 @@ float estimate_fundamental(const std::vector<float>& samples, size_t begin, size
 }  // namespace
 
 Audio dehum(const Audio& audio, const DehumConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (!(config.fundamental_hz > 0.0f) || config.harmonics < 1 || !(config.q > 0.0f) ||
       config.search_range_hz < 0.0f || config.adaptation < 0.0f || config.adaptation > 1.0f ||
       config.frame_size < 16 || config.pll_bandwidth < 0.0f) {
-    throw std::invalid_argument("invalid dehum configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dehum configuration");
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   if (config.adaptive) {

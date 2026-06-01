@@ -1,8 +1,7 @@
 #include "mastering/stereo/mid_side.h"
 
-#include <stdexcept>
-
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::stereo {
 
@@ -15,7 +14,7 @@ void validate_buffers(const float* a, const float* b, float* c, float* d, size_t
     return;
   }
   if (a == nullptr || b == nullptr || c == nullptr || d == nullptr) {
-    throw std::invalid_argument("mid/side buffers must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "mid/side buffers must not be null");
   }
 }
 

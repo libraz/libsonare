@@ -1,10 +1,10 @@
 /// @file chain_params.cpp
 /// @brief Flat-parameter bridge for the high-level mastering chain.
 
-#include <stdexcept>
 #include <string>
 
 #include "mastering/api/chain.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -782,7 +782,7 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   if (apply_saturation_param(cfg, key, v, vf, flags)) return;
   if (apply_spectral_stereo_param(cfg, key, v, vf, flags)) return;
   if (apply_maximizer_loudness_param(cfg, key, v, vf, vi, flags)) return;
-  throw std::invalid_argument("unknown chain config key: " + key);
+  throw SonareException(ErrorCode::InvalidParameter, "unknown chain config key: " + key);
 }
 
 }  // namespace

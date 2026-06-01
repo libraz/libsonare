@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <sstream>
-#include <stdexcept>
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
@@ -81,6 +80,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -380,7 +380,7 @@ void configure_processor(const std::string& name, const ParamMap& params,
     auto out = final::output_chain(audio, config);
     samples.assign(out.data(), out.data() + out.size());
   } else {
-    throw std::invalid_argument("unknown mastering processor: " + name);
+    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
   }
 }
 
@@ -487,7 +487,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     configure_processor(name, map, result.left, sample_rate, left_latency, left_gain_db);
     configure_processor(name, map, result.right, sample_rate, right_latency, right_gain_db);
     if (result.left.size() != result.right.size()) {
-      throw std::invalid_argument("stereo processor produced mismatched channel lengths: " + name);
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "stereo processor produced mismatched channel lengths: " + name);
     }
     result.latency_samples = std::max(left_latency, right_latency);
     result.applied_gain_db += 0.5f * (left_gain_db + right_gain_db);
@@ -532,7 +533,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
     out = ::sonare::mastering::match::ab_crossfade(source_audio, reference_audio,
                                                    f(map, "mix", 0.5f));
   } else {
-    throw std::invalid_argument("unknown mastering pair processor: " + name);
+    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair processor: " + name);
   }
 
   MonoResult result;
@@ -601,7 +602,7 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
         source_audio, reference_audio, i(map, "maxAbsDelay", 4096));
     json << "\"delaySamples\":" << delay;
   } else {
-    throw std::invalid_argument("unknown mastering pair analysis: " + name);
+    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair analysis: " + name);
   }
   json << "}";
   return json.str();
@@ -632,7 +633,8 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
     }
     json << "]";
   } else {
-    throw std::invalid_argument("unknown mastering stereo analysis: " + name);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown mastering stereo analysis: " + name);
   }
   json << "}";
   return json.str();

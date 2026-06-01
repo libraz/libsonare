@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -31,10 +31,10 @@ SidechainRouter::SidechainRouter(SidechainRouterConfig config)
 
 void SidechainRouter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -85,13 +85,14 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SidechainRouter");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   // Adopt the latest published configuration once per block. The returned
@@ -106,7 +107,7 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   float max_reduction = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
 
     auto& follower = followers_[static_cast<size_t>(ch)];
@@ -151,18 +152,19 @@ void SidechainRouter::reset() {
 void SidechainRouter::set_sidechain(const float* const* channels, int num_channels,
                                     int num_samples) {
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("sidechain dimensions must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "sidechain dimensions must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     clear_sidechain();
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("sidechain channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "sidechain channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("sidechain channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "sidechain channel buffer must not be null");
     }
   }
 
@@ -220,7 +222,7 @@ void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
   if (!(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
       config.range_db < 0.0f || config.lookahead_ms < 0.0f ||
       (config.sidechain_hpf_enabled && config.sidechain_hpf_hz <= 0.0f)) {
-    throw std::invalid_argument("invalid sidechain router configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid sidechain router configuration");
   }
 }
 

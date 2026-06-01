@@ -1,13 +1,13 @@
 /// @file chain_json.cpp
 /// @brief JSON serialization for MasteringChainConfig.
 
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
 
@@ -235,21 +235,24 @@ class JsonParamParser {
       // like an `additionalProperties: false` schema and rejects both unknown
       // and ambiguous fields up front.
       const auto root = sonare::util::json::parse_strict(text_);
-      if (!root.is_object()) throw std::invalid_argument("expected chain config JSON object");
+      if (!root.is_object())
+        throw SonareException(ErrorCode::InvalidParameter, "expected chain config JSON object");
       std::string allowed_keys_error;
       if (!sonare::util::json::schema::has_allowed_keys(root, {"version", "params"}, "$",
                                                         &allowed_keys_error)) {
-        throw std::invalid_argument(allowed_keys_error);
+        throw SonareException(ErrorCode::InvalidParameter, allowed_keys_error);
       }
       const auto* version = root.find("version");
       const auto* params_value = root.find("params");
       if (!version || !params_value) {
-        throw std::invalid_argument("chain config JSON requires version and params");
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "chain config JSON requires version and params");
       }
       if (!version->is_number() || static_cast<int>(version->as_number()) != 1) {
-        throw std::invalid_argument("unsupported chain config JSON version");
+        throw SonareException(ErrorCode::InvalidParameter, "unsupported chain config JSON version");
       }
-      if (!params_value->is_object()) throw std::invalid_argument("params must be a JSON object");
+      if (!params_value->is_object())
+        throw SonareException(ErrorCode::InvalidParameter, "params must be a JSON object");
       std::vector<Param> params;
       params.reserve(params_value->as_object().size());
       for (const auto& [key, value] : params_value->as_object()) {
@@ -258,12 +261,13 @@ class JsonParamParser {
         } else if (value.is_number()) {
           params.push_back(Param{key, value.as_number()});
         } else {
-          throw std::invalid_argument("params values must be numbers or booleans");
+          throw SonareException(ErrorCode::InvalidParameter,
+                                "params values must be numbers or booleans");
         }
       }
       return params;
     } catch (const sonare::util::json::JsonError& e) {
-      throw std::invalid_argument(e.what());
+      throw SonareException(ErrorCode::InvalidParameter, e.what());
     }
   }
 

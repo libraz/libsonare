@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -24,10 +24,10 @@ VocalRider::VocalRider(VocalRiderConfig config)
 
 void VocalRider::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -67,13 +67,14 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "VocalRider");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   ensure_followers(num_channels);
@@ -85,7 +86,8 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
 
   float largest_abs_gain = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
   const float smoothing = time_to_coefficient(sample_rate_, cfg.gain_smoothing_ms);
   if (cfg.linked_detection) {
@@ -190,7 +192,7 @@ bool VocalRider::set_parameter(unsigned int param_id, float value) {
 void VocalRider::validate_config(const VocalRiderConfig& config) {
   if (config.max_boost_db < 0.0f || config.max_cut_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {
-    throw std::invalid_argument("invalid vocal rider configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid vocal rider configuration");
   }
 }
 

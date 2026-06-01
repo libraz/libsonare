@@ -4,10 +4,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
-#include <stdexcept>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -50,7 +50,7 @@ TEST_CASE("parse_chain_config_params builds nested config from flat params", "[m
 
 TEST_CASE("parse_chain_config_params rejects unknown keys", "[mastering][chain]") {
   Param params[] = {{"nonexistent.key", 0.0}};
-  REQUIRE_THROWS_AS(parse_chain_config_params(params, 1), std::invalid_argument);
+  REQUIRE_THROWS_AS(parse_chain_config_params(params, 1), sonare::SonareException);
 }
 
 TEST_CASE("parse_chain_config_params honors explicit enabled=false", "[mastering][chain]") {
@@ -101,13 +101,13 @@ TEST_CASE("Named stereo fallback processes mono processors per channel", "[maste
 TEST_CASE("StreamingMasteringChain throws if denoise enabled", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.repair.denoise.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), std::invalid_argument);
+  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
 }
 
 TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.loudness.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), std::invalid_argument);
+  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
 }
 
 TEST_CASE("StreamingMasteringChain processes mono blocks", "[mastering][chain][streaming]") {
@@ -172,8 +172,8 @@ TEST_CASE("StreamingMasteringChain rejects bad num_channels", "[mastering][chain
   MasteringChainConfig config;
   config.eq.tilt.enabled = true;
   StreamingMasteringChain chain(std::move(config));
-  REQUIRE_THROWS_AS(chain.prepare(44100.0, 512, 0), std::invalid_argument);
-  REQUIRE_THROWS_AS(chain.prepare(44100.0, 512, 3), std::invalid_argument);
+  REQUIRE_THROWS_AS(chain.prepare(44100.0, 512, 0), sonare::SonareException);
+  REQUIRE_THROWS_AS(chain.prepare(44100.0, 512, 3), sonare::SonareException);
 }
 
 TEST_CASE("StreamingMasteringChain rejects oversized block", "[mastering][chain][streaming]") {
@@ -183,7 +183,7 @@ TEST_CASE("StreamingMasteringChain rejects oversized block", "[mastering][chain]
   chain.prepare(44100.0, 256, 1);
   std::vector<float> block(512, 0.1f);
   float* channels[] = {block.data()};
-  REQUIRE_THROWS_AS(chain.process_block(channels, 1, 512), std::invalid_argument);
+  REQUIRE_THROWS_AS(chain.process_block(channels, 1, 512), sonare::SonareException);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,13 +240,13 @@ TEST_CASE("MasteringChain applies new dynamics stages", "[mastering][chain]") {
 TEST_CASE("StreamingMasteringChain rejects declick", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.repair.declick.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), std::invalid_argument);
+  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
 }
 
 TEST_CASE("StreamingMasteringChain rejects dereverb", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.repair.dereverb.enabled = true;
-  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), std::invalid_argument);
+  REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
 }
 
 TEST_CASE("StreamingMasteringChain supports new dynamics stages", "[mastering][chain][streaming]") {

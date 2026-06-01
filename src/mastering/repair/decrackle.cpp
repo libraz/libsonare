@@ -4,9 +4,10 @@
 #include <array>
 #include <cmath>
 #include <numeric>
-#include <stdexcept>
 #include <utility>
 #include <vector>
+
+#include "util/exception.h"
 
 namespace sonare::mastering::repair {
 namespace {
@@ -100,9 +101,9 @@ void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
 }  // namespace
 
 Audio decrackle(const Audio& audio, const DecrackleConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (!(config.threshold > 0.0f) || config.levels < 1) {
-    throw std::invalid_argument("invalid decrackle configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid decrackle configuration");
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   if (config.mode == DecrackleMode::WaveletShrinkage) {

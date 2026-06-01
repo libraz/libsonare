@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::maximizer {
 namespace {
@@ -20,8 +20,10 @@ AdaptiveRelease::AdaptiveRelease(AdaptiveReleaseConfig config) : config_(config)
 }
 
 void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   current_release_ms_ = config_.min_release_ms;
@@ -37,13 +39,15 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AdaptiveRelease");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     limiter_.process(channels, num_channels, num_samples);
     return;
   }
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
 
   current_crest_factor_ = compute_crest_factor(channels, num_channels, num_samples);
 
@@ -119,7 +123,7 @@ void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
       config.max_release_ms < config.min_release_ms || config.crest_window_ms <= 0.0f ||
       config.crest_low <= 0.0f || config.crest_high <= config.crest_low ||
       config.release_smoothing_ms < 0.0f) {
-    throw std::invalid_argument("invalid adaptive release configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid adaptive release configuration");
   }
 }
 

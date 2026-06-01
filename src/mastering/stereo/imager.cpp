@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "mastering/stereo/mid_side.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::stereo {
 
@@ -26,10 +26,10 @@ Imager::Imager(ImagerConfig config) : config_(config) { validate_config(config_)
 
 void Imager::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   allpass_[0].coefficient = 0.63f;
   allpass_[1].coefficient = -0.51f;
@@ -43,17 +43,18 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Imager");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
   if (num_channels < 2) {
@@ -118,7 +119,7 @@ bool Imager::set_parameter(unsigned int param_id, float value) {
 void Imager::validate_config(const ImagerConfig& config) {
   if (config.width < 0.0f || config.decorrelation_amount < 0.0f ||
       config.decorrelation_amount > 1.0f) {
-    throw std::invalid_argument("imager width must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
   }
 }
 

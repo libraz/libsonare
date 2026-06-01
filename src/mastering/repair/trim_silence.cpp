@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 #include <vector>
 
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::repair {
 namespace {
@@ -30,9 +30,11 @@ bool is_active_sample(const Audio& audio, size_t index, const TrimSilenceConfig&
 }  // namespace
 
 Audio trim_silence(const Audio& audio, const TrimSilenceConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
-  if (!(config.threshold >= 0.0f)) throw std::invalid_argument("threshold must be non-negative");
-  if (!(config.window_ms > 0.0f)) throw std::invalid_argument("window_ms must be positive");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  if (!(config.threshold >= 0.0f))
+    throw SonareException(ErrorCode::InvalidParameter, "threshold must be non-negative");
+  if (!(config.window_ms > 0.0f))
+    throw SonareException(ErrorCode::InvalidParameter, "window_ms must be positive");
 
   const size_t loudness_radius =
       std::max<size_t>(1, static_cast<size_t>(audio.sample_rate() * config.window_ms * 0.0005f));

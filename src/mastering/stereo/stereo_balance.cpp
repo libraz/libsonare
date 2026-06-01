@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::stereo {
 
@@ -22,10 +22,10 @@ StereoBalance::StereoBalance(StereoBalanceConfig config) : config_(config) {
 
 void StereoBalance::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   prepared_ = true;
 }
@@ -34,17 +34,18 @@ void StereoBalance::process(float* const* channels, int num_channels, int num_sa
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "StereoBalance");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
   if (num_channels < 2) {
@@ -79,7 +80,7 @@ bool StereoBalance::set_parameter(unsigned int param_id, float value) {
 
 void StereoBalance::validate_config(const StereoBalanceConfig& config) {
   if (config.balance < -1.0f || config.balance > 1.0f) {
-    throw std::invalid_argument("stereo balance must be in [-1, 1]");
+    throw SonareException(ErrorCode::InvalidParameter, "stereo balance must be in [-1, 1]");
   }
 }
 

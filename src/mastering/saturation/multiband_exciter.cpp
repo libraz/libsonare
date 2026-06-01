@@ -1,10 +1,10 @@
 #include "mastering/saturation/multiband_exciter.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::saturation {
 
@@ -15,8 +15,10 @@ MultibandExciter::MultibandExciter(MultibandExciterConfig config)
 }
 
 void MultibandExciter::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
@@ -28,11 +30,14 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size) {
 void MultibandExciter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MultibandExciter");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
   auto split = crossover_.split(channels, num_channels, num_samples);
@@ -79,7 +84,8 @@ bool MultibandExciter::set_parameter(unsigned int param_id, float value) {
 
 void MultibandExciter::validate_config(const MultibandExciterConfig& config) {
   if (config.bands.size() != config.crossover.cutoffs_hz.size() + 1) {
-    throw std::invalid_argument("multiband exciter band count must match crossover");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "multiband exciter band count must match crossover");
   }
 }
 

@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 #include <vector>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "mastering/common/sliding_max.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::maximizer {
 namespace {
@@ -29,8 +29,10 @@ TruePeakLimiter::TruePeakLimiter(TruePeakLimiterConfig config)
 }
 
 void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
@@ -64,11 +66,14 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
 
 void TruePeakLimiter::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "TruePeakLimiter");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
   // All supported oversampling factors (2, 4, 8) use the sample-accurate
@@ -244,7 +249,8 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
 
 void TruePeakLimiter::set_release_ms(float release_ms) {
   if (release_ms < 0.0f) {
-    throw std::invalid_argument("true peak limiter release must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "true peak limiter release must be non-negative");
   }
   config_.release_ms = release_ms;
   update_time_constants();
@@ -281,7 +287,7 @@ void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
       (config.oversample_factor != 2 && config.oversample_factor != 4 &&
        config.oversample_factor != 8)) {
-    throw std::invalid_argument("invalid true peak limiter configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid true peak limiter configuration");
   }
 }
 

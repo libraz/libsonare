@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::stereo {
 
@@ -14,10 +14,10 @@ HaasEnhancer::HaasEnhancer(HaasEnhancerConfig config) : config_(config) {
 
 void HaasEnhancer::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
@@ -28,17 +28,18 @@ void HaasEnhancer::process(float* const* channels, int num_channels, int num_sam
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "HaasEnhancer");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
   if (num_channels < 2 || delay_samples_ == 0 || config_.mix == 0.0f) {
@@ -92,7 +93,7 @@ bool HaasEnhancer::parameter_is_realtime_safe(unsigned int param_id) const noexc
 
 void HaasEnhancer::validate_config(const HaasEnhancerConfig& config) {
   if (config.delay_ms < 0.0f || config.mix < 0.0f || config.mix > 1.0f) {
-    throw std::invalid_argument("invalid Haas enhancer configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid Haas enhancer configuration");
   }
 }
 

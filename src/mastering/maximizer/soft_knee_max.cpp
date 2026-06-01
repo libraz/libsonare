@@ -2,18 +2,20 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::maximizer {
 
 SoftKneeMax::SoftKneeMax(SoftKneeMaxConfig config) : config_(config) { validate_config(config_); }
 
 void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   maximizer_.set_config({0.0f, config_.ceiling_db, 1.0f, config_.release_ms});
@@ -24,13 +26,16 @@ void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
 void SoftKneeMax::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SoftKneeMax");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   const float drive = db_to_linear(config_.input_gain_db);
   const float knee = db_to_linear(config_.ceiling_db - config_.knee_db);
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) {
       float x = channels[ch][i] * drive;
       const float ax = std::abs(x);
@@ -88,7 +93,7 @@ bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexce
 
 void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
   if (config.knee_db < 0.0f || config.release_ms < 0.0f) {
-    throw std::invalid_argument("invalid soft knee maximizer configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid soft knee maximizer configuration");
   }
 }
 

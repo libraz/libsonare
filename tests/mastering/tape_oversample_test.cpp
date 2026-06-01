@@ -7,6 +7,7 @@
 #include "core/fft.h"
 #include "mastering/saturation/tape.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using sonare::mastering::saturation::Tape;
 using sonare::mastering::saturation::TapeConfig;
@@ -104,5 +105,5 @@ TEST_CASE("Tape oversample_factor=1 is deterministic and matches default path",
 TEST_CASE("Tape rejects invalid oversample_factor", "[mastering][saturation]") {
   TapeConfig config{};
   config.oversample_factor = 3;
-  REQUIRE_THROWS_AS(Tape(config), std::invalid_argument);
+  REQUIRE_THROWS_AS(Tape(config), sonare::SonareException);
 }

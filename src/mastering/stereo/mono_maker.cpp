@@ -1,9 +1,9 @@
 #include "mastering/stereo/mono_maker.h"
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::stereo {
 
@@ -11,10 +11,10 @@ MonoMaker::MonoMaker(MonoMakerConfig config) : config_(config) { validate_config
 
 void MonoMaker::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   prepared_ = true;
 }
@@ -23,17 +23,18 @@ void MonoMaker::process(float* const* channels, int num_channels, int num_sample
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MonoMaker");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
   if (num_channels < 2 || config_.amount == 0.0f) {
@@ -66,7 +67,7 @@ bool MonoMaker::set_parameter(unsigned int param_id, float value) {
 
 void MonoMaker::validate_config(const MonoMakerConfig& config) {
   if (config.amount < 0.0f || config.amount > 1.0f) {
-    throw std::invalid_argument("mono maker amount must be in [0, 1]");
+    throw SonareException(ErrorCode::InvalidParameter, "mono maker amount must be in [0, 1]");
   }
 }
 

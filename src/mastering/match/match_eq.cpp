@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -12,6 +11,7 @@
 #include "mastering/common/partitioned_convolver.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -20,10 +20,10 @@ using sonare::constants::kPiD;
 
 float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   if (spectrum.frequencies.empty() || spectrum.db.empty()) {
-    throw std::invalid_argument("spectrum must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, "spectrum must not be empty");
   }
   if (spectrum.frequencies.size() != spectrum.db.size()) {
-    throw std::invalid_argument("spectrum size mismatch");
+    throw SonareException(ErrorCode::InvalidParameter, "spectrum size mismatch");
   }
   if (frequency_hz <= spectrum.frequencies.front()) {
     return spectrum.db.front();
@@ -175,13 +175,13 @@ MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpec
   if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
       !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f) ||
       config.smoothing_bins < 0) {
-    throw std::invalid_argument("invalid match EQ configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ configuration");
   }
   if (source.sample_rate != reference.sample_rate) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
   if (source.frequencies.empty() || source.frequencies.size() != source.db.size()) {
-    throw std::invalid_argument("invalid source spectrum");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid source spectrum");
   }
 
   MatchEqCurve curve;
@@ -202,12 +202,12 @@ MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpec
 std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rate,
                                        const MatchEqFirConfig& config) {
   if (curve.frequencies.empty() || curve.frequencies.size() != curve.gain_db.size()) {
-    throw std::invalid_argument("invalid match EQ curve");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ curve");
   }
   if (sample_rate <= 0 || !is_power_of_two(config.fft_size) || config.kernel_size <= 0 ||
       config.kernel_size > config.fft_size || (config.kernel_size % 2) == 0 ||
       config.partition_size < 0) {
-    throw std::invalid_argument("invalid match EQ FIR configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ FIR configuration");
   }
 
   FFT fft(config.fft_size);
@@ -245,9 +245,9 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
 Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
                      const ReferenceSpectrum& reference, const MatchEqConfig& match_config,
                      const MatchEqFirConfig& fir_config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (audio.sample_rate() != source.sample_rate || source.sample_rate != reference.sample_rate) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
 
   const MatchEqCurve curve = match_eq_curve(source, reference, match_config);
@@ -262,13 +262,13 @@ Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
 float estimate_reference_delay_samples(const Audio& source, const Audio& reference,
                                        int max_abs_delay) {
   if (source.empty() || reference.empty()) {
-    throw std::invalid_argument("audio must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
   if (source.sample_rate() != reference.sample_rate()) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
   if (max_abs_delay < 0) {
-    throw std::invalid_argument("max_abs_delay must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_abs_delay must be non-negative");
   }
 
   const size_t length = std::min(source.size(), reference.size());
@@ -349,14 +349,14 @@ std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
                                        const ReferenceSpectrum& reference,
                                        const MatchEqConfig& config) {
   if (config.max_bands == 0 || config.max_bands > eq::ParametricEq::kMaxBands) {
-    throw std::invalid_argument("invalid match EQ band count");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ band count");
   }
   if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
       !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f)) {
-    throw std::invalid_argument("invalid match EQ configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ configuration");
   }
   if (source.sample_rate != reference.sample_rate) {
-    throw std::invalid_argument("sample rates must match");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
 
   const MatchEqCurve curve = match_eq_curve(source, reference, config);
@@ -366,14 +366,14 @@ std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
 std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
                                                   const MatchEqConfig& config) {
   if (config.max_bands == 0 || config.max_bands > eq::EqualizerProcessor::kMaxBands) {
-    throw std::invalid_argument("invalid match EQ band count");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ band count");
   }
   if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
       !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f)) {
-    throw std::invalid_argument("invalid match EQ configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ configuration");
   }
   if (curve.frequencies.size() != curve.gain_db.size()) {
-    throw std::invalid_argument("invalid match EQ curve");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ curve");
   }
   if (curve.frequencies.empty()) {
     return {};

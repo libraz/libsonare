@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::saturation {
 
@@ -39,8 +39,10 @@ Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(conf
 }
 
 void Tape::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   update_filters(sample_rate_);
   if (config_.oversample_factor > 1) {
@@ -53,13 +55,16 @@ void Tape::prepare(double sample_rate, int max_block_size) {
 void Tape::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Tape");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
 
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
   if (config_.oversample_factor <= 1) {
@@ -152,11 +157,11 @@ void Tape::validate_config(const TapeConfig& config) {
   if (config.saturation < 0.0f || config.saturation > 1.0f || config.hysteresis < 0.0f ||
       config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||
       config.gap_loss < 0.0f || config.gap_loss > 1.0f) {
-    throw std::invalid_argument("invalid tape configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid tape configuration");
   }
   if (config.oversample_factor != 1 && config.oversample_factor != 2 &&
       config.oversample_factor != 4) {
-    throw std::invalid_argument("tape oversample_factor must be 1, 2, or 4");
+    throw SonareException(ErrorCode::InvalidParameter, "tape oversample_factor must be 1, 2, or 4");
   }
 }
 

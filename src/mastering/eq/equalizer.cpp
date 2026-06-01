@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/eq/spectrum_registry.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
@@ -19,7 +19,8 @@ EqualizerProcessor::EqualizerProcessor(EqualizerProcessorConfig config)
       mid_fir_(config_.linear_phase_config),
       side_fir_(config_.linear_phase_config) {
   if (config_.max_channels < 0) {
-    throw std::invalid_argument("EqualizerProcessor max_channels must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor max_channels must be non-negative");
   }
 }
 
@@ -31,10 +32,11 @@ EqualizerProcessor::~EqualizerProcessor() {
 
 void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) {
-    throw std::invalid_argument("EqualizerProcessor max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor max_block_size must be non-negative");
   }
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
@@ -71,10 +73,12 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   ensure_prepared(prepared_, "EqualizerProcessor");
   validate_process_args(channels, num_channels, num_samples);
   if (num_channels > config_.max_channels) {
-    throw std::invalid_argument("EqualizerProcessor num_channels exceeds prepared max_channels");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor num_channels exceeds prepared max_channels");
   }
   if (num_samples > max_block_size_) {
-    throw std::invalid_argument("EqualizerProcessor num_samples exceeds prepared max_block_size");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor num_samples exceeds prepared max_block_size");
   }
   validate_sidechain(num_samples);
   EqualizerSpectrumSnapshot pre_snapshot;
@@ -96,7 +100,8 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   }
   if (has_mid_side_linear_bands_) {
     if (num_channels != 2) {
-      throw std::invalid_argument("EqualizerProcessor Mid/Side placement requires stereo input");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "EqualizerProcessor Mid/Side placement requires stereo input");
     }
     for (int i = 0; i < num_samples; ++i) {
       const float left = channels[0][i];
@@ -124,7 +129,8 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
 
   if (has_mid_side_bands_) {
     if (num_channels != 2) {
-      throw std::invalid_argument("EqualizerProcessor Mid/Side placement requires stereo input");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "EqualizerProcessor Mid/Side placement requires stereo input");
     }
     for (int i = 0; i < num_samples; ++i) {
       const float left = channels[0][i];
@@ -245,7 +251,8 @@ int EqualizerProcessor::latency_samples() const noexcept {
 
 void EqualizerProcessor::set_phase_mode(PhaseMode mode) {
   if (mode == PhaseMode::Inherit) {
-    throw std::invalid_argument("EqualizerProcessor global phase mode cannot be Inherit");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor global phase mode cannot be Inherit");
   }
   for (const auto& band : bands_) {
     validate_supported_band(band, mode);
@@ -319,7 +326,8 @@ void EqualizerProcessor::clear() {
 
 void EqualizerProcessor::set_gain_scale(float scale) {
   if (!std::isfinite(scale) || scale < 0.0f || scale > 2.0f) {
-    throw std::invalid_argument("EqualizerProcessor gain scale must be in 0..2");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor gain scale must be in 0..2");
   }
   gain_scale_ = scale;
   if (prepared_) {
@@ -329,14 +337,16 @@ void EqualizerProcessor::set_gain_scale(float scale) {
 
 void EqualizerProcessor::set_output_gain_db(float gain_db) {
   if (!std::isfinite(gain_db)) {
-    throw std::invalid_argument("EqualizerProcessor output gain must be finite");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor output gain must be finite");
   }
   output_gain_db_ = gain_db;
 }
 
 void EqualizerProcessor::set_output_pan(float pan) {
   if (!std::isfinite(pan) || pan < -1.0f || pan > 1.0f) {
-    throw std::invalid_argument("EqualizerProcessor output pan must be in -1..1");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor output pan must be in -1..1");
   }
   output_pan_ = pan;
 }
@@ -349,18 +359,18 @@ const EqBand& EqualizerProcessor::band(size_t index) const {
 void EqualizerProcessor::set_sidechain(const float* const* channels, int num_channels,
                                        int num_samples) {
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("sidechain dimensions must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "sidechain dimensions must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     clear_sidechain();
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("sidechain channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "sidechain channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("sidechain channel must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "sidechain channel must not be null");
     }
   }
   sidechain_channels_ = channels;

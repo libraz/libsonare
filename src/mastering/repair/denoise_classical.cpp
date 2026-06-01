@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "core/spectrum.h"
 #include "mastering/common/noise_tracker.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::repair {
 
@@ -19,25 +19,28 @@ using sonare::constants::kPiD;
 
 void validate(const DenoiseClassicalConfig& config) {
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
-    throw std::invalid_argument("denoise n_fft must be a positive power of two");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "denoise n_fft must be a positive power of two");
   }
   if (config.hop_length <= 0 || config.hop_length > config.n_fft) {
-    throw std::invalid_argument("denoise hop_length must be in (0, n_fft]");
+    throw SonareException(ErrorCode::InvalidParameter, "denoise hop_length must be in (0, n_fft]");
   }
   if (!(config.dd_alpha >= 0.0f) || config.dd_alpha >= 1.0f) {
-    throw std::invalid_argument("denoise dd_alpha must be in [0, 1)");
+    throw SonareException(ErrorCode::InvalidParameter, "denoise dd_alpha must be in [0, 1)");
   }
   if (!(config.gain_floor >= 0.0f) || config.gain_floor > 1.0f) {
-    throw std::invalid_argument("denoise gain_floor must be in [0, 1]");
+    throw SonareException(ErrorCode::InvalidParameter, "denoise gain_floor must be in [0, 1]");
   }
   if (!(config.over_subtraction >= 0.0f) || config.over_subtraction > 16.0f) {
-    throw std::invalid_argument("denoise over_subtraction must be in [0, 16]");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "denoise over_subtraction must be in [0, 16]");
   }
   if (!(config.spectral_floor >= 0.0f) || config.spectral_floor > 1.0f) {
-    throw std::invalid_argument("denoise spectral_floor must be in [0, 1]");
+    throw SonareException(ErrorCode::InvalidParameter, "denoise spectral_floor must be in [0, 1]");
   }
   if (!(config.noise_estimation_quantile > 0.0f) || config.noise_estimation_quantile > 1.0f) {
-    throw std::invalid_argument("denoise noise_estimation_quantile must be in (0, 1]");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "denoise noise_estimation_quantile must be in (0, 1]");
   }
 }
 
@@ -307,7 +310,7 @@ Audio denoise_berouti(const Audio& audio, const Spectrogram& spec,
 }  // namespace
 
 Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   validate(config);
 
   if (static_cast<int>(audio.size()) < config.n_fft) {

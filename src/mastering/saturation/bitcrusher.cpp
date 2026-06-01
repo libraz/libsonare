@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::saturation {
 namespace {
@@ -17,8 +17,10 @@ constexpr std::array<float, 9> kNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f, 
 BitCrusher::BitCrusher(BitCrusherConfig config) : config_(config) { validate_config(config_); }
 
 void BitCrusher::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   prepared_ = true;
   reset();
 }
@@ -26,12 +28,15 @@ void BitCrusher::prepare(double sample_rate, int max_block_size) {
 void BitCrusher::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "BitCrusher");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) {
       if (counters_[static_cast<size_t>(ch)] == 0) {
         held_[static_cast<size_t>(ch)] = quantize(channels[ch][i], config_.bit_depth, ch);
@@ -77,7 +82,7 @@ bool BitCrusher::set_parameter(unsigned int param_id, float value) {
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
   if (config.bit_depth < 1 || config.bit_depth > 24 || config.downsample_factor < 1 ||
       config.mix < 0.0f || config.mix > 1.0f) {
-    throw std::invalid_argument("invalid bitcrusher configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid bitcrusher configuration");
   }
 }
 

@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/stereo_metrics.h"
 
 namespace sonare::mastering::stereo {
@@ -17,7 +17,8 @@ using sonare::constants::kPiD;
 MonoCompatResult mono_compat_check(const float* left, const float* right, size_t length,
                                    float correlation_threshold) {
   if (length == 0 || left == nullptr || right == nullptr) {
-    throw std::invalid_argument("mono compatibility buffers must not be empty or null");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mono compatibility buffers must not be empty or null");
   }
 
   MonoCompatResult result;
@@ -41,11 +42,13 @@ std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left,
                                                               int bands_per_octave, float low_hz,
                                                               float high_hz) {
   if (length == 0 || left == nullptr || right == nullptr) {
-    throw std::invalid_argument("mono compatibility buffers must not be empty or null");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mono compatibility buffers must not be empty or null");
   }
   if (!(sample_rate > 0.0) || bands_per_octave <= 0 || !(low_hz > 0.0f) || !(high_hz > low_hz) ||
       high_hz >= static_cast<float>(sample_rate * 0.5)) {
-    throw std::invalid_argument("invalid mono compatibility band configuration");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "invalid mono compatibility band configuration");
   }
 
   const double ratio = std::pow(2.0, 1.0 / static_cast<double>(bands_per_octave));

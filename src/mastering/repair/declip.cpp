@@ -3,11 +3,11 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/lpc.h"
 
 namespace sonare::mastering::repair {
@@ -173,10 +173,10 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
 }  // namespace
 
 Audio declip(const Audio& audio, const DeclipConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (!(config.clip_threshold > 0.0f && config.clip_threshold <= 1.0f) || config.lpc_order < 0 ||
       config.iterations < 0) {
-    throw std::invalid_argument("invalid declip threshold");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid declip threshold");
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   size_t i = 0;

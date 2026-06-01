@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 namespace {
@@ -55,17 +55,17 @@ int slope_db_oct(CutFilterSlope slope) {
     case CutFilterSlope::Brickwall:
       return 0;
   }
-  throw std::invalid_argument("unsupported cut filter slope");
+  throw SonareException(ErrorCode::InvalidParameter, "unsupported cut filter slope");
 }
 
 }  // namespace
 
 void CutFilter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   sample_rate_ = sample_rate;
   brickwall_.prepare(sample_rate, max_block_size);
@@ -77,7 +77,7 @@ void CutFilter::prepare(double sample_rate, int max_block_size) {
 
 void CutFilter::prepare_channels(int num_channels) {
   if (num_channels < 0) {
-    throw std::invalid_argument("num_channels must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
   num_channels_ = num_channels;
   for (auto& states : high_pass_states_) {
@@ -93,18 +93,19 @@ void CutFilter::process(float* const* channels, int num_channels, int num_sample
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "CutFilter");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   ensure_channel_state(num_channels);
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
     process_stage(high_pass_sections_, high_pass_states_, channels[ch], ch, num_samples);
     process_stage(low_pass_sections_, low_pass_states_, channels[ch], ch, num_samples);

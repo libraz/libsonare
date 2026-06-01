@@ -2,7 +2,6 @@
 /// @brief Streaming implementation of the high-level mastering chain.
 
 #include <memory>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -19,6 +18,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 
@@ -33,25 +33,32 @@ struct StreamingMasteringChain::Impl {
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
   if (config_.repair.declick.enabled) {
-    throw std::invalid_argument("StreamingMasteringChain does not support repair.declick");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.declick");
   }
   if (config_.repair.declip.enabled) {
-    throw std::invalid_argument("StreamingMasteringChain does not support repair.declip");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.declip");
   }
   if (config_.repair.decrackle.enabled) {
-    throw std::invalid_argument("StreamingMasteringChain does not support repair.decrackle");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.decrackle");
   }
   if (config_.repair.dehum.enabled) {
-    throw std::invalid_argument("StreamingMasteringChain does not support repair.dehum");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.dehum");
   }
   if (config_.repair.dereverb.enabled) {
-    throw std::invalid_argument("StreamingMasteringChain does not support repair.dereverb");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.dereverb");
   }
   if (config_.repair.denoise.enabled) {
-    throw std::invalid_argument("StreamingMasteringChain does not support repair.denoise");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.denoise");
   }
   if (config_.loudness.enabled) {
-    throw std::invalid_argument(
+    throw SonareException(
+        ErrorCode::InvalidParameter,
         "StreamingMasteringChain does not support loudness (whole-signal LUFS required)");
   }
 }
@@ -63,13 +70,13 @@ StreamingMasteringChain& StreamingMasteringChain::operator=(StreamingMasteringCh
 
 void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, int num_channels) {
   if (num_channels != 1 && num_channels != 2) {
-    throw std::invalid_argument("num_channels must be 1 or 2");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be 1 or 2");
   }
   if (max_block_size <= 0) {
-    throw std::invalid_argument("max_block_size must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be > 0");
   }
   if (sample_rate <= 0.0) {
-    throw std::invalid_argument("sample_rate must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be > 0");
   }
 
   impl_->processors.clear();
@@ -159,14 +166,17 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
 void StreamingMasteringChain::process_block(float* const* channels, int num_channels,
                                             int num_samples) {
   if (prepared_channels_ == 0) {
-    throw std::logic_error("StreamingMasteringChain::process_block called before prepare()");
+    throw SonareException(ErrorCode::InvalidState,
+                          "StreamingMasteringChain::process_block called before prepare()");
   }
   if (num_channels != prepared_channels_) {
-    throw std::invalid_argument(
+    throw SonareException(
+        ErrorCode::InvalidParameter,
         "StreamingMasteringChain::process_block num_channels mismatch with prepare()");
   }
   if (num_samples < 0 || num_samples > max_block_size_) {
-    throw std::invalid_argument(
+    throw SonareException(
+        ErrorCode::InvalidParameter,
         "StreamingMasteringChain::process_block num_samples exceeds max_block_size from prepare()");
   }
   if (num_samples == 0) {

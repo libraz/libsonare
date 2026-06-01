@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "core/window.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::multiband {
 
@@ -79,10 +79,10 @@ Crossover::Crossover(CrossoverConfig config) : config_(std::move(config)) {
 
 void Crossover::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   validate_config(config_, sample_rate);
@@ -105,20 +105,21 @@ namespace {
 
 void validate_split_args(bool prepared, float* const* channels, int num_channels, int num_samples) {
   if (!prepared) {
-    throw std::logic_error("Crossover must be prepared before processing");
+    throw SonareException(ErrorCode::InvalidState, "Crossover must be prepared before processing");
   }
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 }
@@ -146,11 +147,11 @@ CrossoverOutput Crossover::split(float* const* channels, int num_channels, int n
 void Crossover::prepare_scratch(CrossoverScratch& scratch, int num_channels,
                                 int max_samples) const {
   if (num_channels < 0) {
-    throw std::invalid_argument("num_channels must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
   const int sample_capacity = max_samples >= 0 ? max_samples : max_block_size_;
   if (sample_capacity < 0) {
-    throw std::invalid_argument("max_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_samples must be non-negative");
   }
   const size_t bands = static_cast<size_t>(num_bands());
   const size_t channels = static_cast<size_t>(num_channels);
@@ -182,7 +183,8 @@ void Crossover::split_into(float* const* channels, int num_channels, int num_sam
   }
   if (scratch.num_bands() != num_bands() || scratch.num_channels() != num_channels ||
       scratch.capacity_samples() < num_samples) {
-    throw std::logic_error("CrossoverScratch must be prepared for this channel/band/block size");
+    throw SonareException(ErrorCode::InvalidState,
+                          "CrossoverScratch must be prepared for this channel/band/block size");
   }
   if (config_.mode == CrossoverMode::FirLinearPhase) {
     process_block_fir(channels, num_channels, num_samples, scratch.bands);
@@ -268,18 +270,20 @@ void Crossover::set_config(const CrossoverConfig& config) {
 void Crossover::validate_config(const CrossoverConfig& config, double sample_rate) {
   for (size_t i = 0; i < config.cutoffs_hz.size(); ++i) {
     if (!(config.cutoffs_hz[i] > 0.0f)) {
-      throw std::invalid_argument("crossover cutoffs must be positive");
+      throw SonareException(ErrorCode::InvalidParameter, "crossover cutoffs must be positive");
     }
     if (i > 0 && !(config.cutoffs_hz[i] > config.cutoffs_hz[i - 1])) {
-      throw std::invalid_argument("crossover cutoffs must be strictly ascending");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "crossover cutoffs must be strictly ascending");
     }
     if (sample_rate > 0.0 && !(config.cutoffs_hz[i] < static_cast<float>(sample_rate * 0.5))) {
-      throw std::invalid_argument("crossover cutoffs must be below Nyquist");
+      throw SonareException(ErrorCode::InvalidParameter, "crossover cutoffs must be below Nyquist");
     }
   }
   if (config.mode == CrossoverMode::FirLinearPhase &&
       (config.fir_kernel_size < 3 || config.fir_kernel_size % 2 == 0)) {
-    throw std::invalid_argument("linear-phase crossover FIR kernel size must be odd and >= 3");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "linear-phase crossover FIR kernel size must be odd and >= 3");
   }
 }
 

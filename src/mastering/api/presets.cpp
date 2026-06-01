@@ -11,11 +11,11 @@
 
 #include "mastering/api/presets.h"
 
-#include <stdexcept>
 #include <string>
 #include <utility>
 
 #include "mastering/api/chain.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -466,7 +466,7 @@ Preset preset_from_string(const std::string& name) {
   if (name == "kpop") return Preset::KPop;
   if (name == "trance") return Preset::Trance;
   if (name == "gameOst") return Preset::GameOst;
-  throw std::invalid_argument("unknown mastering preset: " + name);
+  throw SonareException(ErrorCode::InvalidParameter, "unknown mastering preset: " + name);
 }
 
 const char* preset_to_string(Preset preset) noexcept {

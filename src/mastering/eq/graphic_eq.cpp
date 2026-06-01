@@ -5,6 +5,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "util/exception.h"
+
 namespace sonare::mastering::eq {
 namespace {
 
@@ -75,7 +77,7 @@ float GraphicEq::center_frequency(size_t index) const {
 
 size_t GraphicEq::nearest_band(float frequency_hz) const {
   if (!(frequency_hz > 0.0f)) {
-    throw std::invalid_argument("frequency_hz must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
   }
 
   size_t best_index = 0;

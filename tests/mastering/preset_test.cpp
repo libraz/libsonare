@@ -2,13 +2,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
-#include <stdexcept>
 #include <vector>
 
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -95,7 +95,7 @@ TEST_CASE("preset_from_string maps known names", "[mastering][preset]") {
   REQUIRE(preset_from_string("kpop") == Preset::KPop);
   REQUIRE(preset_from_string("trance") == Preset::Trance);
   REQUIRE(preset_from_string("gameOst") == Preset::GameOst);
-  REQUIRE_THROWS_AS(preset_from_string("invalid"), std::invalid_argument);
+  REQUIRE_THROWS_AS(preset_from_string("invalid"), sonare::SonareException);
 }
 
 TEST_CASE("preset_to_string round-trips", "[mastering][preset]") {
@@ -116,12 +116,13 @@ TEST_CASE("preset chain configs round-trip through JSON", "[mastering][preset][j
 }
 
 TEST_CASE("chain config JSON rejects malformed input", "[mastering][preset][json]") {
-  REQUIRE_THROWS_AS(chain_config_from_json("{}"), std::invalid_argument);
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{}}"), std::invalid_argument);
+  REQUIRE_THROWS_AS(chain_config_from_json("{}"), sonare::SonareException);
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{}}"),
+                    sonare::SonareException);
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{\"unknown.key\":1}}"),
-                    std::invalid_argument);
+                    sonare::SonareException);
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{\"eq.tilt.enabled\":}}"),
-                    std::invalid_argument);
+                    sonare::SonareException);
 }
 
 TEST_CASE("chain config JSON rejects unknown top-level keys", "[mastering][preset][json]") {
@@ -129,7 +130,7 @@ TEST_CASE("chain config JSON rejects unknown top-level keys", "[mastering][prese
   // check to util::json::schema::has_allowed_keys, which surfaces the offending
   // field name in the error so callers can act on it.
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{},\"extra\":1}"),
-                    std::invalid_argument);
+                    sonare::SonareException);
   // Legitimate documents must still parse cleanly — guards against an over-tight
   // allowlist regression.
   REQUIRE_NOTHROW(chain_config_from_json("{\"version\":1,\"params\":{}}"));
@@ -140,9 +141,9 @@ TEST_CASE("chain config JSON rejects duplicate top-level keys", "[mastering][pre
   // the last-write value and could hide a bumped/incompatible version in the
   // first occurrence. Fail fast instead.
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"version\":2,\"params\":{}}"),
-                    std::invalid_argument);
+                    sonare::SonareException);
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{},\"params\":{}}"),
-                    std::invalid_argument);
+                    sonare::SonareException);
 }
 
 TEST_CASE("preset_config(Pop) has expected enabled stages", "[mastering][preset]") {

@@ -5,6 +5,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
@@ -154,7 +155,8 @@ void EqualizerProcessor::validate_sidechain(int expected_samples) const {
     return;
   }
   if (sidechain_num_samples_ != expected_samples) {
-    throw std::invalid_argument("sidechain length must match process block length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sidechain length must match process block length");
   }
 }
 

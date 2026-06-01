@@ -1,9 +1,9 @@
 #include "mastering/dynamics/ducking_processor.h"
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -12,7 +12,7 @@ DuckingProcessor::DuckingProcessor(DuckingConfig config)
 
 void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   sample_rate_ = sample_rate;
   router_.prepare(sample_rate_, max_block_size);
@@ -70,7 +70,7 @@ bool DuckingProcessor::set_parameter(unsigned int param_id, float value) {
 
 SidechainRouterConfig DuckingProcessor::to_router_config(const DuckingConfig& config) {
   if (config.lookahead_ms < 0.0f) {
-    throw std::invalid_argument("ducking lookahead must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "ducking lookahead must be non-negative");
   }
   SidechainRouterConfig router_config;
   router_config.threshold_db = config.threshold_db;

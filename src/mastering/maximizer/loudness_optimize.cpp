@@ -2,19 +2,20 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::maximizer {
 
 LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptimizeConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
-  if (config.true_peak_oversample < 1) throw std::invalid_argument("oversample must be positive");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  if (config.true_peak_oversample < 1)
+    throw SonareException(ErrorCode::InvalidParameter, "oversample must be positive");
 
   const float input_lufs = common::measure_lufs(audio);
   float gain_db = std::isfinite(input_lufs) ? config.target_lufs - input_lufs : 0.0f;

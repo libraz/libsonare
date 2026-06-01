@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -24,10 +24,10 @@ Limiter::Limiter(LimiterConfig config)
 
 void Limiter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -70,19 +70,20 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Limiter");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   prepare_buffers(num_channels);
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -139,7 +140,7 @@ void Limiter::set_config(const LimiterConfig& config) {
 
 void Limiter::set_release_ms(float release_ms) {
   if (release_ms < 0.0f) {
-    throw std::invalid_argument("limiter release must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "limiter release must be non-negative");
   }
   config_.release_ms = release_ms;
   // Re-publish so the audio thread picks up the new release time via the
@@ -168,7 +169,8 @@ bool Limiter::set_parameter(unsigned int param_id, float value) {
 
 void Limiter::validate_config(const LimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
-    throw std::invalid_argument("limiter timing values must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "limiter timing values must be non-negative");
   }
 }
 

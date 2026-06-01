@@ -9,6 +9,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
@@ -16,7 +17,8 @@ using sonare::constants::kFloorDb;
 using sonare::constants::kTwoPiD;
 
 void DynamicEq::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   sample_rate_ = sample_rate;
   eq_.prepare(sample_rate, max_block_size);
   prepared_ = true;
@@ -27,17 +29,18 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "DynamicEq");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -109,15 +112,17 @@ float DynamicEq::last_band_detector_db(size_t index) const {
 
 void DynamicEq::set_sidechain(const float* const* channels, int num_channels, int num_samples) {
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("sidechain dimensions must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "sidechain dimensions must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     clear_sidechain();
     return;
   }
-  if (channels == nullptr) throw std::invalid_argument("sidechain channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "sidechain channels must not be null");
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("sidechain channel must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "sidechain channel must not be null");
   }
   sidechain_channels_ = channels;
   sidechain_num_channels_ = num_channels;
@@ -199,18 +204,19 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
     return;
   }
   if (!(band.frequency_hz > 0.0f)) {
-    throw std::invalid_argument("frequency_hz must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
   }
   if (!(band.q > 0.0f)) {
-    throw std::invalid_argument("Q must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "Q must be positive");
   }
   if (!(band.ratio >= 1.0f)) {
-    throw std::invalid_argument("ratio must be at least 1");
+    throw SonareException(ErrorCode::InvalidParameter, "ratio must be at least 1");
   }
   if (!(band.sidechain_q > 0.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
       band.lookahead_ms < 0.0f ||
       (band.sidechain_freq_hz != -1.0f && band.sidechain_freq_hz <= 0.0f)) {
-    throw std::invalid_argument("invalid dynamic EQ sidechain configuration");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "invalid dynamic EQ sidechain configuration");
   }
 }
 
@@ -332,7 +338,8 @@ void DynamicEq::rebuild(int num_samples) {
 void DynamicEq::validate_sidechain(int expected_samples) const {
   if (sidechain_channels_ == nullptr) return;
   if (sidechain_num_samples_ != expected_samples) {
-    throw std::invalid_argument("sidechain length must match process block length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sidechain length must match process block length");
   }
 }
 

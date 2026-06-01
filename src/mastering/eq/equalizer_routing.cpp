@@ -1,10 +1,10 @@
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/eq/equalizer.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
@@ -19,7 +19,8 @@ int cut_order(int slope_db_oct) {
     return 0;
   }
   if (slope_db_oct < 6 || slope_db_oct > 96 || (slope_db_oct % 6) != 0) {
-    throw std::invalid_argument("cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
   }
   return slope_db_oct / 6;
 }
@@ -123,7 +124,8 @@ void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
     }
     auto add_to = [&](ParametricEq& backend, size_t& index) {
       if (index >= ParametricEq::kMaxBands) {
-        throw std::invalid_argument("EqualizerProcessor IIR backend band capacity exceeded");
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "EqualizerProcessor IIR backend band capacity exceeded");
       }
       backend.set_band(index++, routed);
     };
@@ -247,7 +249,8 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
     }
     auto add_to = [&](ParametricEq& backend, size_t& index) {
       if (index >= ParametricEq::kMaxBands) {
-        throw std::invalid_argument("EqualizerProcessor IIR backend band capacity exceeded");
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "EqualizerProcessor IIR backend band capacity exceeded");
       }
       backend.set_band(index++, routed);
     };
@@ -279,7 +282,8 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
     routed.dyn.enabled = false;
     auto add_to = [&](LinearPhaseEq& backend, size_t& index) {
       if (index >= LinearPhaseEq::kMaxBands) {
-        throw std::invalid_argument("EqualizerProcessor FIR backend band capacity exceeded");
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "EqualizerProcessor FIR backend band capacity exceeded");
       }
       backend.set_band(index++, routed);
       has_linear_bands_ = true;

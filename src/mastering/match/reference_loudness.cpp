@@ -1,15 +1,15 @@
 #include "mastering/match/reference_loudness.h"
 
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/loudness_measure.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::match {
 
 ReferenceLoudness reference_loudness(const Audio& source, const Audio& reference) {
   if (source.empty() || reference.empty()) {
-    throw std::invalid_argument("audio must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
   const float source_lufs = common::measure_lufs(source);
   const float reference_lufs = common::measure_lufs(reference);

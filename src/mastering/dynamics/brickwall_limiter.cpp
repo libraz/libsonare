@@ -4,11 +4,11 @@
 #include <cmath>
 #include <limits>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 namespace {
@@ -35,10 +35,10 @@ BrickwallLimiter::BrickwallLimiter(BrickwallLimiterConfig config)
 
 void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -84,17 +84,18 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "BrickwallLimiter");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -157,7 +158,8 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
 
 void BrickwallLimiter::set_release_ms(float release_ms) {
   if (release_ms < 0.0f) {
-    throw std::invalid_argument("brickwall limiter release must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "brickwall limiter release must be non-negative");
   }
   config_.release_ms = release_ms;
   limiter_.set_release_ms(release_ms);
@@ -187,7 +189,8 @@ bool BrickwallLimiter::set_parameter(unsigned int param_id, float value) {
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
   if (!std::isfinite(config.ceiling_db) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
-    throw std::invalid_argument("brickwall limiter timing values must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "brickwall limiter timing values must be non-negative");
   }
 }
 

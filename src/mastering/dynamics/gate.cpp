@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -25,10 +25,10 @@ Gate::Gate(GateConfig config)
 
 void Gate::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -70,12 +70,14 @@ const GateConfig* Gate::adopt_snapshot_for_block() noexcept {
 void Gate::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Gate");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
       static_cast<size_t>(num_channels) > hpf_y1_.size()) {
-    throw std::invalid_argument("num_channels exceeds prepared Gate state");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Gate state");
   }
 
   // Adopt the latest published configuration once per block. The returned
@@ -91,7 +93,8 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   for (int i = 0; i < num_samples; ++i) {
     float detector = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+      if (channels[ch] == nullptr)
+        throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
       float s = channels[ch][i];
       if (cfg.key_hpf_hz > 0.0f) {
         const auto idx = static_cast<size_t>(ch);
@@ -170,7 +173,7 @@ void Gate::validate_config(const GateConfig& config) {
   if (config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db > 0.0f ||
       config.hold_ms < 0.0f || config.key_hpf_hz < 0.0f ||
       config.close_threshold_db > config.threshold_db) {
-    throw std::invalid_argument("invalid gate configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid gate configuration");
   }
 }
 
