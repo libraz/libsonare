@@ -1,6 +1,7 @@
 #include "graph/node.h"
 
 #include <algorithm>
+#include <cassert>
 #include <utility>
 
 #include "util/exception.h"
@@ -37,9 +38,12 @@ void Node::reset() {
   processor_->reset();
 }
 
-void Node::clear_inputs(int num_samples) {
+void Node::clear_inputs(int num_samples) noexcept {
+  // Audio-thread path: silently no-op on out-of-range rather than throw (a
+  // throw here would propagate through the noexcept GraphRuntime::process
+  // chain and call std::terminate).
   if (num_samples < 0 || num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_samples out of prepared range");
+    return;
   }
   for (int port = 0; port < num_ports_; ++port) {
     float* data = input_port(port);
@@ -47,9 +51,10 @@ void Node::clear_inputs(int num_samples) {
   }
 }
 
-void Node::process_block(int num_samples) {
+void Node::process_block(int num_samples) noexcept {
+  // Audio-thread path: silently no-op on out-of-range rather than throw.
   if (num_samples < 0 || num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_samples out of prepared range");
+    return;
   }
   for (int port = 0; port < num_ports_; ++port) {
     float* input = input_port(port);
@@ -60,24 +65,29 @@ void Node::process_block(int num_samples) {
   processor_->process(process_channels_.data(), num_ports_, num_samples);
 }
 
-float* Node::input_port(int port) { return port_data(input_, port); }
+float* Node::input_port(int port) noexcept { return port_data(input_, port); }
 
-const float* Node::input_port(int port) const { return port_data(input_, port); }
+const float* Node::input_port(int port) const noexcept { return port_data(input_, port); }
 
-float* Node::output_port(int port) { return port_data(output_, port); }
+float* Node::output_port(int port) noexcept { return port_data(output_, port); }
 
-const float* Node::output_port(int port) const { return port_data(output_, port); }
+const float* Node::output_port(int port) const noexcept { return port_data(output_, port); }
 
-float* Node::port_data(std::vector<float>& storage, int port) {
+float* Node::port_data(std::vector<float>& storage, int port) noexcept {
+  // Hottest per-sample path: assert in debug, clamp to port 0 in release so a
+  // bad index can never throw (which would terminate the noexcept audio chain)
+  // nor index out of bounds.
+  assert(port >= 0 && port < num_ports_ && max_block_size_ > 0);
   if (port < 0 || port >= num_ports_ || max_block_size_ <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "node port out of range");
+    return storage.data();
   }
   return storage.data() + static_cast<size_t>(port * max_block_size_);
 }
 
-const float* Node::port_data(const std::vector<float>& storage, int port) const {
+const float* Node::port_data(const std::vector<float>& storage, int port) const noexcept {
+  assert(port >= 0 && port < num_ports_ && max_block_size_ > 0);
   if (port < 0 || port >= num_ports_ || max_block_size_ <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "node port out of range");
+    return storage.data();
   }
   return storage.data() + static_cast<size_t>(port * max_block_size_);
 }

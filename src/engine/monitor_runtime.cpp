@@ -51,33 +51,33 @@ bool MonitorRuntime::contains(mixing::ChannelStrip* strip) const noexcept {
 
 void MonitorRuntime::set_mute(size_t index, bool muted) noexcept {
   if (!valid_index(index)) return;
-  strips_[index].muted = muted;
+  strips_[index].muted.store(muted, std::memory_order_release);
   update_target(strips_[index]);
 }
 
 void MonitorRuntime::set_solo(size_t index, bool soloed) noexcept {
   if (!valid_index(index)) return;
-  strips_[index].soloed = soloed;
+  strips_[index].soloed.store(soloed, std::memory_order_release);
   recompute_solo_mutes();
 }
 
 void MonitorRuntime::set_exclusive_solo(size_t index, bool soloed) noexcept {
   if (!valid_index(index)) return;
   for (size_t i = 0; i < size_; ++i) {
-    strips_[i].soloed = (i == index) && soloed;
+    strips_[i].soloed.store((i == index) && soloed, std::memory_order_release);
   }
   recompute_solo_mutes();
 }
 
 void MonitorRuntime::set_solo_safe(size_t index, bool solo_safe) noexcept {
   if (!valid_index(index)) return;
-  strips_[index].solo_safe = solo_safe;
+  strips_[index].solo_safe.store(solo_safe, std::memory_order_release);
   recompute_solo_mutes();
 }
 
 void MonitorRuntime::set_monitor_mode(size_t index, MonitorMode mode) noexcept {
   if (!valid_index(index)) return;
-  strips_[index].monitor = mode;
+  strips_[index].monitor.store(mode, std::memory_order_release);
 }
 
 void MonitorRuntime::process_strip(size_t index, float* const* channels, int num_channels,
@@ -86,7 +86,8 @@ void MonitorRuntime::process_strip(size_t index, float* const* channels, int num
   if (!valid_index(index) || !channels || num_channels <= 0 || num_samples <= 0) return;
   StripState& state = strips_[index];
 
-  if (monitor_out && state.monitor == MonitorMode::kPfl) {
+  const MonitorMode monitor = state.monitor.load(std::memory_order_acquire);
+  if (monitor_out && monitor == MonitorMode::kPfl) {
     for (int ch = 0; ch < num_channels; ++ch) {
       if (!channels[ch] || !monitor_out[ch]) continue;
       for (int i = 0; i < num_samples; ++i) {
@@ -106,7 +107,7 @@ void MonitorRuntime::process_strip(size_t index, float* const* channels, int num
     }
   }
 
-  if (monitor_out && state.monitor == MonitorMode::kAfl) {
+  if (monitor_out && monitor == MonitorMode::kAfl) {
     for (int ch = 0; ch < num_channels; ++ch) {
       if (!channels[ch] || !monitor_out[ch]) continue;
       for (int i = 0; i < num_samples; ++i) {
@@ -117,38 +118,42 @@ void MonitorRuntime::process_strip(size_t index, float* const* channels, int num
 }
 
 bool MonitorRuntime::muted(size_t index) const noexcept {
-  return valid_index(index) && strips_[index].muted;
+  return valid_index(index) && strips_[index].muted.load(std::memory_order_acquire);
 }
 
 bool MonitorRuntime::soloed(size_t index) const noexcept {
-  return valid_index(index) && strips_[index].soloed;
+  return valid_index(index) && strips_[index].soloed.load(std::memory_order_acquire);
 }
 
 bool MonitorRuntime::solo_safe(size_t index) const noexcept {
-  return valid_index(index) && strips_[index].solo_safe;
+  return valid_index(index) && strips_[index].solo_safe.load(std::memory_order_acquire);
 }
 
 bool MonitorRuntime::implied_mute(size_t index) const noexcept {
-  return valid_index(index) && strips_[index].implied_mute;
+  return valid_index(index) && strips_[index].implied_mute.load(std::memory_order_acquire);
 }
 
 MonitorMode MonitorRuntime::monitor_mode(size_t index) const noexcept {
-  return valid_index(index) ? strips_[index].monitor : MonitorMode::kOff;
+  return valid_index(index) ? strips_[index].monitor.load(std::memory_order_acquire)
+                            : MonitorMode::kOff;
 }
 
 void MonitorRuntime::recompute_solo_mutes() noexcept {
   bool any_solo = false;
   for (size_t i = 0; i < size_; ++i) {
-    any_solo = any_solo || strips_[i].soloed;
+    any_solo = any_solo || strips_[i].soloed.load(std::memory_order_relaxed);
   }
   for (size_t i = 0; i < size_; ++i) {
-    strips_[i].implied_mute = any_solo && !strips_[i].soloed && !strips_[i].solo_safe;
+    const bool implied = any_solo && !strips_[i].soloed.load(std::memory_order_relaxed) &&
+                         !strips_[i].solo_safe.load(std::memory_order_relaxed);
+    strips_[i].implied_mute.store(implied, std::memory_order_release);
     update_target(strips_[i]);
   }
 }
 
 void MonitorRuntime::update_target(StripState& state) noexcept {
-  const bool effectively_muted = state.muted || state.implied_mute;
+  const bool effectively_muted = state.muted.load(std::memory_order_relaxed) ||
+                                 state.implied_mute.load(std::memory_order_relaxed);
   state.mute_gain.set_target(effectively_muted ? 0.0f : 1.0f);
 }
 

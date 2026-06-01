@@ -17,13 +17,16 @@ class Node {
 
   void prepare(double sample_rate, int max_block_size);
   void reset();
-  void clear_inputs(int num_samples);
-  void process_block(int num_samples);
+  // Audio-thread path: must be noexcept so the noexcept GraphRuntime::process
+  // chain never hits std::terminate. Out-of-range / unprepared inputs are
+  // handled by early return rather than throwing.
+  void clear_inputs(int num_samples) noexcept;
+  void process_block(int num_samples) noexcept;
 
-  float* input_port(int port);
-  const float* input_port(int port) const;
-  float* output_port(int port);
-  const float* output_port(int port) const;
+  float* input_port(int port) noexcept;
+  const float* input_port(int port) const noexcept;
+  float* output_port(int port) noexcept;
+  const float* output_port(int port) const noexcept;
 
   const std::string& id() const noexcept { return id_; }
   rt::ProcessorBase& processor() noexcept { return *processor_; }
@@ -32,8 +35,8 @@ class Node {
   int max_block_size() const noexcept { return max_block_size_; }
 
  private:
-  float* port_data(std::vector<float>& storage, int port);
-  const float* port_data(const std::vector<float>& storage, int port) const;
+  float* port_data(std::vector<float>& storage, int port) noexcept;
+  const float* port_data(const std::vector<float>& storage, int port) const noexcept;
 
   std::string id_;
   std::unique_ptr<rt::ProcessorBase> processor_;

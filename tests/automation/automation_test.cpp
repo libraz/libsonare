@@ -159,6 +159,40 @@ TEST_CASE("AutomationEngine collects breakpoint boundaries", "[automation]") {
   REQUIRE_FALSE(boundaries.overflowed);
 }
 
+TEST_CASE("AutomationEngine resolves targets bound after an interior gap",
+          "[automation][regression]") {
+  // Regression: target_for() used to stop scanning at the first null/cleared
+  // slot. After unbinding an interior target (leaving bound_count_ untouched),
+  // a parameter bound to a slot AFTER the gap must still be resolved/applied.
+  CaptureProcessor p10;
+  CaptureProcessor p20;
+  CaptureProcessor p30;
+
+  sonare::automation::AutomationEngine engine;
+  REQUIRE(engine.bind_target(10, &p10));
+  REQUIRE(engine.bind_target(20, &p20));
+  REQUIRE(engine.bind_target(30, &p30));
+
+  // Punch an interior gap at the slot that held param 20.
+  REQUIRE(engine.unbind_target(20));
+
+  const uint32_t unknown_before = engine.unknown_target_count();
+
+  // Param 30 lives in a slot after the gap; it must still be resolved/applied.
+  REQUIRE(engine.set_parameter(30, 0.42f));
+  REQUIRE(p30.set_count == 1);
+  REQUIRE(p30.last_param == 30);
+  REQUIRE_THAT(p30.last_value, WithinAbs(0.42f, 1.0e-6f));
+
+  // Resolving the target must not have been counted as unknown.
+  REQUIRE(engine.unknown_target_count() == unknown_before);
+
+  // The cleared slot's param genuinely no longer resolves.
+  REQUIRE_FALSE(engine.set_parameter(20, 0.5f));
+  REQUIRE(p20.set_count == 0);
+  REQUIRE(engine.unknown_target_count() == unknown_before + 1);
+}
+
 TEST_CASE("ParameterRegistry enumerates stable metadata", "[automation]") {
   sonare::automation::ParameterRegistry registry;
   REQUIRE(registry.add(

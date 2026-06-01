@@ -36,6 +36,22 @@ class AutomationEngine {
   bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
   void clear_targets() noexcept;
 
+  // Unbind the slot currently holding @p param_id, leaving bound_count_
+  // untouched so the slot becomes an interior gap that target_for() must skip
+  // over (not stop at). Returns true if a matching bound slot was found. Useful
+  // for selectively removing a single automation target without disturbing the
+  // others' slot assignments.
+  bool unbind_target(uint32_t param_id) noexcept {
+    const size_t bound = bound_count_.load(std::memory_order_relaxed);
+    for (size_t i = 0; i < bound; ++i) {
+      if (targets_[i].processor != nullptr && targets_[i].param_id == param_id) {
+        targets_[i] = {};
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Adopt the latest published lane set on the audio thread. Call once at
   /// block start before apply / collect_boundaries. RT-safe, no alloc.
   void acquire_lanes() noexcept { lanes_.acquire(); }
@@ -78,6 +94,12 @@ class AutomationEngine {
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};
   std::array<Target, 128> targets_{};
+  // Number of slots in targets_ that have ever been bound (highest occupied
+  // index + 1). target_for() scans [0, bound_count_) and *skips* null/cleared
+  // slots rather than terminating at the first one, so a target bound to a slot
+  // after an earlier cleared slot is still resolved. Published with release on
+  // bind/clear, read with acquire on the audio thread.
+  std::atomic<size_t> bound_count_{0};
   std::atomic<uint32_t> unknown_target_count_{0};
   std::atomic<uint32_t> non_realtime_safe_rejection_count_{0};
   std::atomic<uint32_t> bind_target_overflow_count_{0};

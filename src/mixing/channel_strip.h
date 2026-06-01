@@ -234,6 +234,14 @@ class ChannelStrip : public rt::ProcessorBase {
   std::vector<std::unique_ptr<SendProcessor>> sends_;
   std::vector<std::unique_ptr<AutomationLane>> send_automation_;
   std::vector<InsertAutomationLane> insert_automation_;
+  // Number of constructed lanes in insert_automation_ visible to the audio
+  // thread. The control thread (schedule_insert_automation) fully constructs a
+  // new lane into the reserved slot, THEN publishes the new size with
+  // memory_order_release. The audio thread reads it with memory_order_acquire
+  // and iterates [0, size) by index -- never via range-for over the vector,
+  // whose size_ member is not atomic. Capacity is reserved up-front so the
+  // backing storage never reallocates.
+  std::atomic<size_t> insert_automation_size_{0};
   AutomationLane fader_automation_;
   AutomationLane pan_automation_;
   AutomationLane width_automation_;

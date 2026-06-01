@@ -4,6 +4,7 @@
 /// @brief Engine-side solo/mute and PFL/AFL monitoring for ChannelStrip tracks.
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
@@ -44,14 +45,38 @@ class MonitorRuntime {
   MonitorMode monitor_mode(size_t index) const noexcept;
 
  private:
+  // Solo/mute flags and monitor mode are written by the control thread
+  // (set_mute / set_solo / ... / recompute_solo_mutes) and read by the audio
+  // thread in process_strip(), so they are atomic to avoid torn reads. Writes
+  // use release ordering and reads use acquire ordering. The atomics make the
+  // struct non-copyable, so add_strip / remove_strip move the plain fields and
+  // copy the atomics through load/store via the helpers below.
   struct StripState {
     mixing::ChannelStrip* strip = nullptr;
     rt::ParamSmoother mute_gain;
-    bool muted = false;
-    bool soloed = false;
-    bool solo_safe = false;
-    bool implied_mute = false;
-    MonitorMode monitor = MonitorMode::kOff;
+    std::atomic<bool> muted{false};
+    std::atomic<bool> soloed{false};
+    std::atomic<bool> solo_safe{false};
+    std::atomic<bool> implied_mute{false};
+    std::atomic<MonitorMode> monitor{MonitorMode::kOff};
+
+    StripState() = default;
+
+    // Snapshots all atomic flags with relaxed ordering; used only on the
+    // control thread when compacting the array (remove_strip) or clearing a
+    // slot (add_strip / remove_strip), never concurrently with the audio
+    // thread's acquire reads.
+    StripState& operator=(const StripState& other) noexcept {
+      strip = other.strip;
+      mute_gain = other.mute_gain;
+      muted.store(other.muted.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      soloed.store(other.soloed.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      solo_safe.store(other.solo_safe.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      implied_mute.store(other.implied_mute.load(std::memory_order_relaxed),
+                         std::memory_order_relaxed);
+      monitor.store(other.monitor.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      return *this;
+    }
   };
 
   void recompute_solo_mutes() noexcept;

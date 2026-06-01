@@ -122,6 +122,78 @@ TEST_CASE("RealtimeEngine survives concurrent control mutation while processing"
   run_concurrent_mutation(256);
 }
 
+#if defined(SONARE_WITH_MIXING)
+#include "engine/monitor_runtime.h"
+#include "mixing/channel_strip.h"
+
+// TSan-friendly smoke test: one thread renders audio while another toggles
+// transport loop state and monitor mute/solo flags. Asserts no crash/UB and
+// that final atomic state reads back consistently. Bounded and joinable.
+TEST_CASE("RealtimeEngine handles concurrent loop and monitor toggles while processing",
+          "[engine][realtime][concurrency][monitor]") {
+  constexpr int kFrames = 128;
+  constexpr int kIterations = 2000;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  sonare::mixing::ChannelStrip strip_a({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  sonare::mixing::ChannelStrip strip_b({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip_a.prepare(48000.0, kFrames);
+  strip_b.prepare(48000.0, kFrames);
+  REQUIRE(engine.add_monitor_strip(&strip_a));
+  REQUIRE(engine.add_monitor_strip(&strip_b));
+  engine.set_monitoring_enabled(true);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::atomic<bool> done{false};
+  std::atomic<bool> bad_output{false};
+
+  std::thread control([&] {
+    for (int i = 0; i < kIterations; ++i) {
+      engine.set_loop(0.0, static_cast<double>(1 + (i % 8)), (i % 2 == 0));
+      engine.monitor().set_mute(0, (i % 3 == 0));
+      engine.monitor().set_solo(1, (i % 5 == 0));
+      std::this_thread::sleep_for(std::chrono::microseconds(10));
+    }
+    // Deterministic terminal state for the read-back assertions below.
+    engine.set_loop(0.0, 4.0, true);
+    engine.monitor().set_mute(0, false);
+    engine.monitor().set_solo(1, true);
+    done.store(true, std::memory_order_release);
+  });
+
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  float* io[] = {left.data(), right.data()};
+  int blocks_processed = 0;
+  while (!done.load(std::memory_order_acquire)) {
+    engine.process(io, 2, kFrames);
+    ++blocks_processed;
+    if (!all_finite(left.data(), kFrames) || !all_finite(right.data(), kFrames)) {
+      bad_output.store(true, std::memory_order_relaxed);
+      break;
+    }
+  }
+  // Drain any toggles published after the last process() above.
+  engine.process(io, 2, kFrames);
+
+  control.join();
+
+  REQUIRE_FALSE(bad_output.load(std::memory_order_relaxed));
+  REQUIRE(blocks_processed > 0);
+  REQUIRE(all_finite(left.data(), kFrames));
+  REQUIRE(all_finite(right.data(), kFrames));
+  // Final state reads back exactly as the control thread last published it.
+  REQUIRE_FALSE(engine.monitor().muted(0));
+  REQUIRE(engine.monitor().soloed(1));
+}
+#endif  // SONARE_WITH_MIXING
+
 // Hidden ([.stress]) long-running soak: same paced body with many more blocks.
 // Not run by the default CI/ctest pass; invoke explicitly via the [.stress] tag.
 TEST_CASE("RealtimeEngine concurrent control mutation soak",

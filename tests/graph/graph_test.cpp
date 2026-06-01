@@ -8,6 +8,9 @@
 #include <memory>
 #include <vector>
 
+#ifdef SONARE_WITH_GRAPH
+#include "engine/graph_runtime.h"
+#endif
 #ifdef SONARE_WITH_MIXING
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"
@@ -117,6 +120,36 @@ TEST_CASE("Graph compiles acyclic routing in topological order", "[graph]") {
   REQUIRE_THAT(output[0], WithinAbs(2.0f, 0.0001f));
   REQUIRE_THAT(output[3], WithinAbs(8.0f, 0.0001f));
 }
+
+TEST_CASE("Graph audio-thread methods are no-ops on an uncompiled graph", "[graph][noexcept]") {
+  // Regression: process_block() and clear_inputs() are noexcept and must
+  // early-return harmlessly when the graph has not been compiled, so a throw
+  // never escapes into the noexcept GraphRuntime::process chain.
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("input", pass(), 1));
+  REQUIRE_FALSE(graph.compiled());
+
+  graph.prepare(48000.0, 8);
+  REQUIRE_NOTHROW(graph.clear_inputs(8));
+  REQUIRE_NOTHROW(graph.process_block(8));
+}
+
+#ifdef SONARE_WITH_GRAPH
+TEST_CASE("GraphRuntime refuses to swap in an uncompiled graph", "[graph][noexcept]") {
+  // The swap boundary must reject a non-compiled topology so it can never be
+  // published to the audio thread.
+  sonare::graph::Graph uncompiled;
+  REQUIRE(uncompiled.add_node("in", pass(), 1));
+  REQUIRE(uncompiled.add_node("out", pass(), 1));
+  REQUIRE(uncompiled.connect({"in", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE_FALSE(uncompiled.compiled());
+
+  sonare::engine::GraphRuntime runtime;
+  REQUIRE_FALSE(runtime.bind(&uncompiled, "in", "out", 1));
+  REQUIRE(runtime.swap(&uncompiled, "in", "out", 1) == nullptr);
+  REQUIRE(runtime.active_graph() == nullptr);
+}
+#endif
 
 TEST_CASE("Graph rejects feedback cycles", "[graph]") {
   sonare::graph::Graph graph;

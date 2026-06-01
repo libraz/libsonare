@@ -4,6 +4,7 @@
 /// @brief Sample-accurate playback clock for render and musical timelines.
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 
 #include "transport/marker.h"
@@ -54,14 +55,28 @@ class Transport {
   int64_t sample_position() const noexcept { return sample_position_; }
 
  private:
+  // Consistent snapshot of the loop region. set_loop (control thread) publishes
+  // all three fields atomically via the seqlock guard below; the audio thread
+  // (advance / collect_loop_boundaries / snapshot) reads a torn-free copy.
+  struct LoopState {
+    double start_ppq = 0.0;
+    double end_ppq = 0.0;
+    bool enabled = false;
+  };
+
+  // Seqlock: an odd guard means a write is in progress; readers retry until the
+  // guard is even and unchanged across the copy. Mirrors the pattern in
+  // mixing/meter.cpp. No locks are taken on the audio thread.
+  LoopState read_loop_state() const noexcept;
+  void write_loop_state(const LoopState& state) noexcept;
+
   const TempoMap* tempo_map_ = nullptr;
   double sample_rate_ = 48000.0;
   bool playing_ = false;
-  bool looping_ = false;
   int64_t render_frame_ = 0;
   int64_t sample_position_ = 0;
-  double loop_start_ppq_ = 0.0;
-  double loop_end_ppq_ = 0.0;
+  LoopState loop_state_{};
+  mutable std::atomic<uint32_t> loop_guard_{0};
 };
 
 }  // namespace sonare::transport

@@ -45,20 +45,43 @@ void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
 
 bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept {
   if (param_id == 0 || processor == nullptr) return false;  // 0 is reserved as invalid/none.
-  for (Target& target : targets_) {
-    if (target.param_id == param_id || target.processor == nullptr) {
-      target.param_id = param_id;
-      target.processor = processor;
+  const size_t bound = bound_count_.load(std::memory_order_relaxed);
+  // Reuse an existing slot for the same param_id, or the first free slot within
+  // the bound range, so a rebind after a clear lands deterministically and does
+  // not grow bound_count_ unnecessarily.
+  for (size_t i = 0; i < bound; ++i) {
+    if (targets_[i].param_id == param_id) {
+      targets_[i].processor = processor;
       return true;
     }
   }
-  bind_target_overflow_count_.fetch_add(1, std::memory_order_relaxed);
-  return false;
+  for (size_t i = 0; i < bound; ++i) {
+    if (targets_[i].processor == nullptr) {
+      targets_[i].param_id = param_id;
+      targets_[i].processor = processor;
+      return true;
+    }
+  }
+  if (bound >= targets_.size()) {
+    bind_target_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+    return false;
+  }
+  // Append a new slot: fully populate it, then publish the grown count with
+  // release so the audio thread (acquire load in target_for) only observes it
+  // once the slot is complete.
+  targets_[bound].param_id = param_id;
+  targets_[bound].processor = processor;
+  bound_count_.store(bound + 1, std::memory_order_release);
+  return true;
 }
 
 void AutomationEngine::clear_targets() noexcept {
-  for (Target& target : targets_) {
-    target = {};
+  // Clear slot contents but keep bound_count_ so target_for() keeps scanning
+  // the full range and skips the cleared (null) slots instead of stopping at
+  // the first one; freshly bound targets reuse the cleared slots.
+  const size_t bound = bound_count_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < bound; ++i) {
+    targets_[i] = {};
   }
 }
 
@@ -139,9 +162,16 @@ size_t AutomationEngine::lane_count() const noexcept {
 
 rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcept {
   if (param_id == 0) return nullptr;  // 0 is reserved as the invalid/none id.
-  for (const Target& target : targets_) {
-    if (target.param_id == param_id) return target.processor;
-    if (target.processor == nullptr) return nullptr;
+  // Scan the full bound range and SKIP null/cleared slots instead of stopping
+  // at the first one. Stopping early silently dropped any target bound after a
+  // cleared earlier slot (e.g. after a clear+rebind). bound_count_ is read with
+  // acquire to pair with bind_target's release publish.
+  const size_t bound = bound_count_.load(std::memory_order_acquire);
+  for (size_t i = 0; i < bound; ++i) {
+    const Target& target = targets_[i];
+    if (target.processor != nullptr && target.param_id == param_id) {
+      return target.processor;
+    }
   }
   return nullptr;
 }

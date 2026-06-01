@@ -27,17 +27,33 @@ void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
   render_frame_ = 0;
   sample_position_ = 0;
   playing_ = false;
-  looping_ = false;
-  loop_start_ppq_ = 0.0;
-  loop_end_ppq_ = 0.0;
+  write_loop_state({});
+}
+
+Transport::LoopState Transport::read_loop_state() const noexcept {
+  for (;;) {
+    const uint32_t g1 = loop_guard_.load(std::memory_order_acquire);
+    if (g1 & 1u) continue;  // writer mid-update
+    LoopState copy = loop_state_;
+    std::atomic_thread_fence(std::memory_order_acquire);
+    const uint32_t g2 = loop_guard_.load(std::memory_order_acquire);
+    if (g1 == g2) return copy;
+  }
+}
+
+void Transport::write_loop_state(const LoopState& state) noexcept {
+  loop_guard_.fetch_add(1, std::memory_order_release);  // now odd: write in progress
+  loop_state_ = state;
+  loop_guard_.fetch_add(1, std::memory_order_release);  // now even: write complete
 }
 
 TransportState Transport::snapshot() const noexcept {
   const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
   const double ppq = map.sample_to_ppq(sample_position_);
   const TimeSignature sig = map.time_signature_at_ppq(ppq);
+  const LoopState loop = read_loop_state();
   return {playing_,
-          looping_,
+          loop.enabled,
           render_frame_,
           sample_position_,
           ppq,
@@ -45,8 +61,8 @@ TransportState Transport::snapshot() const noexcept {
           map.bar_start_ppq(ppq),
           map.ppq_to_bar_beat(ppq).bar,
           sig,
-          loop_start_ppq_,
-          loop_end_ppq_,
+          loop.start_ppq,
+          loop.end_ppq,
           sample_rate_};
 }
 
@@ -58,10 +74,11 @@ void Transport::advance(int num_frames) noexcept {
   sample_position_ += frames;
 
   const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
-  if (!looping_ || loop_end_ppq_ <= loop_start_ppq_) return;
+  const LoopState loop = read_loop_state();
+  if (!loop.enabled || loop.end_ppq <= loop.start_ppq) return;
 
-  const int64_t loop_start = map.ppq_to_sample(loop_start_ppq_);
-  const int64_t loop_end = map.ppq_to_sample(loop_end_ppq_);
+  const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
+  const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
   const int64_t loop_len = loop_end - loop_start;
   if (loop_len <= 0) return;
 
@@ -80,9 +97,7 @@ void Transport::seek_ppq(double ppq) noexcept {
 }
 
 void Transport::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
-  loop_start_ppq_ = start_ppq;
-  loop_end_ppq_ = end_ppq;
-  looping_ = enabled && end_ppq > start_ppq;
+  write_loop_state({start_ppq, end_ppq, enabled && end_ppq > start_ppq});
 }
 
 bool Transport::seek_marker(uint32_t marker_id, const MarkerMap& markers) noexcept {
@@ -107,13 +122,14 @@ bool Transport::set_loop_from_markers(uint32_t start_marker_id, uint32_t end_mar
 bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const noexcept {
   if (!out) return false;
   out->clear();
-  if (!playing_ || !looping_ || num_frames <= 0 || loop_end_ppq_ <= loop_start_ppq_) {
+  const LoopState loop = read_loop_state();
+  if (!playing_ || !loop.enabled || num_frames <= 0 || loop.end_ppq <= loop.start_ppq) {
     return false;
   }
 
   const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
-  const int64_t loop_start = map.ppq_to_sample(loop_start_ppq_);
-  const int64_t loop_end = map.ppq_to_sample(loop_end_ppq_);
+  const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
+  const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
   const int64_t loop_len = loop_end - loop_start;
   if (loop_len <= 0) return false;
 

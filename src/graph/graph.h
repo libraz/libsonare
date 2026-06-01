@@ -25,9 +25,12 @@ class Graph {
   bool compile();
   void prepare(double sample_rate, int max_block_size);
   void reset();
-  void clear_inputs(int num_samples);
+  // Audio-thread path: noexcept so a throw never escapes into the noexcept
+  // GraphRuntime::process chain (which would call std::terminate). An
+  // uncompiled graph or out-of-range size is a safe no-op.
+  void clear_inputs(int num_samples) noexcept;
   void set_input(const std::string& node_id, int port, const float* samples, int num_samples);
-  void process_block(int num_samples);
+  void process_block(int num_samples) noexcept;
 
   const float* output(const std::string& node_id, int port) const;
   Node* node(const std::string& id);

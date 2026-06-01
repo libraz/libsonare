@@ -46,11 +46,19 @@ namespace sonare::engine {
 ///   @c process, @c process_with_monitor, @c push_command (lock-free SPSC
 ///   producer; control-thread is the sole writer in normal flow but the
 ///   underlying queue is wait-free), @c pop_telemetry, @c pop_meter_telemetry,
-///   @c set_loop, @c set_metronome_config, @c set_capture_*, @c reset_capture,
+///   @c set_loop (publishes the loop region through a seqlock so the audio
+///   thread reads a torn-free {start, end, enabled} snapshot),
+///   @c set_capture_*, @c reset_capture,
 ///   @c marker_by_index/id, @c seek_marker, @c set_loop_from_markers,
 ///   @c set_mixing_enabled, @c set_monitoring_enabled,
 ///   @c set_param_smoothing_ms, @c set_graph_latency_samples_q8,
 ///   @c transport, @c automation accessors, all @c *_count noexcept getters.
+/// - **Control-thread-preferred (lock-free but NOT torn-read-safe):**
+///   @c set_metronome_config replaces the metronome config with a plain
+///   non-atomic struct copy that the audio thread reads field-by-field. It is
+///   noexcept and allocation-free, but a concurrent audio-thread read may
+///   observe a partially-updated config for one block; call it from the
+///   control thread between blocks, or route changes through @c push_command.
 /// - **Control-thread-only (NOT RT-safe; may allocate or take time):**
 ///   @c prepare, @c render_offline (offline use), @c set_tempo,
 ///   @c set_time_signature, @c set_markers, @c set_clips,

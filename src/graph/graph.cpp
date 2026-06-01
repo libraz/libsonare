@@ -216,7 +216,7 @@ void Graph::reset() {
   }
 }
 
-void Graph::clear_inputs(int num_samples) {
+void Graph::clear_inputs(int num_samples) noexcept {
   for (auto& node_ptr : nodes_) {
     node_ptr->clear_inputs(num_samples);
   }
@@ -232,12 +232,13 @@ void Graph::set_input(const std::string& node_id, int port, const float* samples
   std::copy(samples, samples + num_samples, dest);
 }
 
-void Graph::process_block(int num_samples) {
-  if (!compiled_) {
-    throw SonareException(ErrorCode::InvalidState, "graph must be compiled before processing");
-  }
-  if (num_samples < 0 || num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_samples out of prepared range");
+void Graph::process_block(int num_samples) noexcept {
+  // Audio-thread path: an uncompiled graph or out-of-range size is a safe
+  // no-op rather than a throw. GraphRuntime guarantees only compiled graphs
+  // ever reach the audio thread (see GraphRuntime::swap), so this is purely
+  // defensive against misuse.
+  if (!compiled_ || num_samples < 0 || num_samples > max_block_size_) {
+    return;
   }
 
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {

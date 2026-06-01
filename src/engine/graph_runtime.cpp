@@ -22,6 +22,11 @@ bool GraphRuntime::bind(graph::Graph* graph, const char* input_node_id, const ch
 
 bool GraphRuntime::swap(std::shared_ptr<graph::Graph> graph, const char* input_node_id,
                         const char* output_node_id, int num_channels) {
+  // Refuse a non-compiled graph here so an uncompiled topology can never be
+  // published to the audio thread. Graph::process_block() is a no-op on an
+  // uncompiled graph (it is noexcept and cannot throw), but rejecting at the
+  // swap boundary keeps the audio thread from ever rendering silence from a
+  // half-built graph.
   if (!graph || !graph->compiled() || !input_node_id || !output_node_id || num_channels <= 0) {
     return false;
   }

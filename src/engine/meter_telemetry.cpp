@@ -70,14 +70,12 @@ void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot,
     return;
   }
 
-  MeterTelemetryRecord dropped{};
-  if (telemetry_.pop(dropped)) {
-    ++dropped_records_;
-    record.dropped_records = dropped_records_;
-    (void)telemetry_.push(record);
-  } else {
-    ++dropped_records_;
-  }
+  // Queue full: just account for the drop. The producer (audio thread) must
+  // never pop -- pop() is the consumer role owned by the host via
+  // pop_meter_telemetry(), and a producer-side pop would race the consumer on
+  // the queue tail. The running dropped_records_ count is propagated to the
+  // host on the next record that pushes successfully.
+  ++dropped_records_;
 }
 
 void MeterTelemetryTap::push_goniometer(float* const* channels, int num_channels,

@@ -185,7 +185,12 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   const size_t width_count =
       consume_events(width_automation_, block_start, num_samples, width_events);
   size_t insert_count = 0;
-  for (auto& lane : insert_automation_) {
+  // Audio thread: read the published lane count with acquire ordering and
+  // iterate by index over [0, lanes_size). Range-for would read the vector's
+  // non-atomic size_ member, which races with the control thread's push_back.
+  const size_t lanes_size = insert_automation_size_.load(std::memory_order_acquire);
+  for (size_t li = 0; li < lanes_size; ++li) {
+    InsertAutomationLane& lane = insert_automation_[li];
     if (!lane.lane) continue;
     lane.lane->consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
       if (insert_count < insert_events.size()) {
@@ -535,19 +540,28 @@ bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigne
   event.target.kind = AutomationTargetKind::InsertParameter;
   event.target.insert_index = insert_index;
   event.target.param_id = param_id;
-  for (auto& lane : insert_automation_) {
+  // Control thread is the sole writer; only the published slots may already be
+  // visible to the audio thread, so scan [0, published) for an existing lane.
+  const size_t published = insert_automation_size_.load(std::memory_order_relaxed);
+  for (size_t li = 0; li < published; ++li) {
+    InsertAutomationLane& lane = insert_automation_[li];
     if (lane.target == event.target && lane.lane) {
       return lane.lane->push(event);
     }
   }
-  // Hard cap: push_back below MUST NOT reallocate, because the audio thread
-  // may concurrently iterate insert_automation_ in process_at(). Capacity is
+  // Hard cap: the push_back below MUST NOT reallocate, because the audio thread
+  // may concurrently index insert_automation_ in process_at(). Capacity is
   // reserved up-front in the constructor (kMaxInsertAutomationLanes).
-  if (insert_automation_.size() >= kMaxInsertAutomationLanes) {
+  if (published >= kMaxInsertAutomationLanes) {
     return false;
   }
+  // Fully construct the new lane into the reserved slot, then publish the new
+  // size with release ordering so the audio thread only observes a complete
+  // element. The reader pairs this with an acquire load.
   insert_automation_.push_back({event.target, std::make_unique<AutomationLane>()});
-  return insert_automation_.back().lane->push(event);
+  const bool pushed = insert_automation_.back().lane->push(event);
+  insert_automation_size_.store(insert_automation_.size(), std::memory_order_release);
+  return pushed;
 }
 
 void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept {
@@ -625,11 +639,12 @@ void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor)
 void ChannelStrip::set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                                         int num_channels, int num_samples) {
   const size_t index = insert_index;
-  if (index >= pre_inserts_.size() + post_inserts_.size()) {
+  // insert_sidechains_ is sized by add_pre_insert / add_post_insert (control
+  // thread). Never resize here: the audio thread iterates insert_sidechains_ in
+  // process_insert_chain(), and a resize could reallocate or grow it under the
+  // reader. An index past the current sidechain count is treated as a no-op.
+  if (index >= insert_sidechains_.size()) {
     return;
-  }
-  if (insert_sidechains_.size() < pre_inserts_.size() + post_inserts_.size()) {
-    insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
   }
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     insert_sidechains_[index] = {{}, 0, 0, true};
