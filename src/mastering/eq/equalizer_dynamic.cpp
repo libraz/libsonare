@@ -5,6 +5,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::eq {
@@ -58,14 +59,8 @@ float EqualizerProcessor::band_detector_db(const float* const* channels, int num
   prototype.a1 = coeffs.a1;
   prototype.a2 = coeffs.a2;
 
-  const double attack =
-      band.dyn.attack_ms <= 0.0f
-          ? 1.0
-          : 1.0 - std::exp(-1.0 / std::max(sample_rate * band.dyn.attack_ms * 0.001, 1.0));
-  const double release =
-      band.dyn.release_ms <= 0.0f
-          ? 1.0
-          : 1.0 - std::exp(-1.0 / std::max(sample_rate * band.dyn.release_ms * 0.001, 1.0));
+  const double attack = sonare::time_to_attack_release_rate(sample_rate, band.dyn.attack_ms);
+  const double release = sonare::time_to_attack_release_rate(sample_rate, band.dyn.release_ms);
   const int lookahead_samples =
       static_cast<int>(std::round(sample_rate * band.dyn.lookahead_ms * 0.001));
 

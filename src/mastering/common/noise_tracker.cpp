@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare::mastering::common {
 namespace {
@@ -19,13 +20,13 @@ float clamp_probability(float value) { return std::clamp(value, 0.0f, 1.0f); }
 NoiseTracker::NoiseTracker(int n_bins, int sample_rate, Mode mode, int hop_length)
     : n_bins_(n_bins), sample_rate_(sample_rate), hop_length_(hop_length), mode_(mode) {
   if (n_bins_ <= 0) {
-    throw std::invalid_argument("n_bins must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "n_bins must be positive");
   }
   if (sample_rate_ <= 0) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (hop_length_ <= 0) {
-    throw std::invalid_argument("hop_length must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "hop_length must be positive");
   }
   // Scale the minimum-tracking window to roughly 0.5 s of frames so the noise
   // floor adapts on a fixed time scale regardless of hop size / sample rate.
@@ -111,7 +112,7 @@ void NoiseTracker::reset() {
 
 void NoiseTracker::validate_power(const float* power_spectrum) const {
   if (power_spectrum == nullptr) {
-    throw std::invalid_argument("power_spectrum must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "power_spectrum must not be null");
   }
 }
 

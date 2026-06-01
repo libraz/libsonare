@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare::mastering::common {
 
@@ -79,7 +80,7 @@ void JilesAtherton::validate_config(const JilesAthertonConfig& config) {
   if (!(config.saturation_magnetization > 0.0f) || !(config.anhysteretic_shape > 0.0f) ||
       !(config.coercivity > 0.0f) || config.mean_field_coupling < 0.0f ||
       config.reversibility < 0.0f || config.reversibility > 1.0f) {
-    throw std::invalid_argument("invalid Jiles-Atherton configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid Jiles-Atherton configuration");
   }
 }
 

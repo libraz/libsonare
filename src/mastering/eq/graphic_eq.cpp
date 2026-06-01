@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <stdexcept>
 
 #include "util/exception.h"
 
@@ -118,7 +117,7 @@ void GraphicEq::rebuild_band(size_t index) {
 
 void GraphicEq::validate_index(size_t index) {
   if (index >= kNumBands) {
-    throw std::out_of_range("graphic EQ band index out of range");
+    throw SonareException(ErrorCode::InvalidParameter, "graphic EQ band index out of range");
   }
 }
 

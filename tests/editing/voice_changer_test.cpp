@@ -25,6 +25,7 @@
 #include "metering/true_peak.h"
 #include "sonare_c.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 using Catch::Matchers::WithinRel;
@@ -1667,34 +1668,34 @@ TEST_CASE("RealtimeVoiceChanger gate attenuates signal below threshold",
 }
 
 // ===================================================================
-// prepare() rejects invalid arguments with std::invalid_argument.
+// prepare() rejects invalid arguments with SonareException(InvalidParameter).
 // ===================================================================
 TEST_CASE("RealtimeVoiceChanger prepare rejects invalid arguments",
           "[voice_changer][prepare][safety]") {
   // Negative sample rate
   {
     RealtimeVoiceChanger changer;
-    REQUIRE_THROWS_AS(changer.prepare(-1.0, 128, 1), std::invalid_argument);
+    REQUIRE_THROWS_AS(changer.prepare(-1.0, 128, 1), sonare::SonareException);
   }
   // Zero sample rate
   {
     RealtimeVoiceChanger changer;
-    REQUIRE_THROWS_AS(changer.prepare(0.0, 128, 1), std::invalid_argument);
+    REQUIRE_THROWS_AS(changer.prepare(0.0, 128, 1), sonare::SonareException);
   }
   // Negative max_block_size
   {
     RealtimeVoiceChanger changer;
-    REQUIRE_THROWS_AS(changer.prepare(48000.0, -1, 1), std::invalid_argument);
+    REQUIRE_THROWS_AS(changer.prepare(48000.0, -1, 1), sonare::SonareException);
   }
   // Zero channels
   {
     RealtimeVoiceChanger changer;
-    REQUIRE_THROWS_AS(changer.prepare(48000.0, 128, 0), std::invalid_argument);
+    REQUIRE_THROWS_AS(changer.prepare(48000.0, 128, 0), sonare::SonareException);
   }
   // Too many channels
   {
     RealtimeVoiceChanger changer;
-    REQUIRE_THROWS_AS(changer.prepare(48000.0, 128, 3), std::invalid_argument);
+    REQUIRE_THROWS_AS(changer.prepare(48000.0, 128, 3), sonare::SonareException);
   }
   // Valid args must not throw
   {

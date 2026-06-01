@@ -2,12 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::spectral {
 namespace {
@@ -48,7 +48,7 @@ AirBand::AirBand(AirBandConfig config) : config_(config) { validate_config(confi
 
 void AirBand::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0) || max_block_size < 0) {
-    throw std::invalid_argument("invalid prepare arguments");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
@@ -58,9 +58,11 @@ void AirBand::prepare(double sample_rate, int max_block_size) {
 void AirBand::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AirBand");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
   // Frequency terms of the shelf depend only on config/sample rate, so compute
   // them once per block; only the gain-dependent coefficients are refreshed per
@@ -70,7 +72,8 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
   const auto shelf_design =
       rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, 1.0 / std::sqrt(2.0));
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     float previous = previous_[static_cast<size_t>(ch)];
     float envelope = envelope_[static_cast<size_t>(ch)];
     Biquad& shelf = shelf_[static_cast<size_t>(ch)];
@@ -138,7 +141,7 @@ bool AirBand::set_parameter(unsigned int param_id, float value) {
 void AirBand::validate_config(const AirBandConfig& config) {
   if (!(config.amount >= 0.0f && config.amount <= 1.0f) || !(config.shelf_frequency_hz > 0.0f) ||
       config.dynamic_range_db < 0.0f) {
-    throw std::invalid_argument("invalid air band configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid air band configuration");
   }
 }
 

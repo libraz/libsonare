@@ -21,6 +21,20 @@ inline float time_to_coefficient(double sample_rate, float time_ms) noexcept {
   return static_cast<float>(std::exp(-1.0 / samples));
 }
 
+/// @brief Convert a time constant in milliseconds to a leaky-integrator rate.
+/// @details Returns `1 - exp(-1 / max(sample_rate * time_ms / 1000, 1))`. This
+///   is the "new sample weight" used in attack/release envelope followers of
+///   the form `y[n] = y[n-1] + rate * (x[n] - y[n-1])`. The denominator is
+///   floored at one sample so sub-sample time constants don't blow up the
+///   exponent. Returns 1.0 (instantaneous follow) for time_ms <= 0.
+inline double time_to_attack_release_rate(double sample_rate, float time_ms) noexcept {
+  if (time_ms <= 0.0f) {
+    return 1.0;
+  }
+  const double samples = std::max(sample_rate * static_cast<double>(time_ms) * 0.001, 1.0);
+  return 1.0 - std::exp(-1.0 / samples);
+}
+
 /// @brief Root mean square of a contiguous sample buffer.
 inline float rms(const float* data, size_t n) noexcept {
   if (data == nullptr || n == 0) {

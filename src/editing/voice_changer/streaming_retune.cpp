@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "util/constants.h"
-// <stdexcept> is retained for prepare()'s argument validation; process_block
+#include "util/exception.h"
+// Argument validation in prepare() throws SonareException; process_block
 // is noexcept by contract and must not throw — see below.
 
 namespace sonare::editing::voice_changer {
@@ -38,10 +38,10 @@ void StreamingRetune::update_ratio() noexcept {
 
 void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

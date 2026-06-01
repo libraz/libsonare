@@ -1,5 +1,4 @@
 #include <cstring>
-#include <stdexcept>
 #include <vector>
 
 #include "mastering/dynamics/compressor.h"
@@ -7,6 +6,7 @@
 #include "mastering/dynamics/transient_shaper.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -22,7 +22,8 @@ sonare::mastering::dynamics::DetectorMode to_cpp_detector_mode(int mode) {
     case SONARE_COMPRESSOR_DETECTOR_LOG_RMS:
       return sonare::mastering::dynamics::DetectorMode::LogRms;
   }
-  throw std::invalid_argument("unknown compressor detector mode");
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown compressor detector mode");
 }
 
 sonare::mastering::dynamics::CompressorConfig to_cpp_compressor_config(

@@ -1,5 +1,3 @@
-#include <stdexcept>
-
 #include "mastering/eq/equalizer.h"
 #include "util/exception.h"
 
@@ -56,7 +54,8 @@ void EqualizerProcessor::validate_process_args(float* const* channels, int num_c
 
 void EqualizerProcessor::validate_band_index(size_t index) {
   if (index >= kMaxBands) {
-    throw std::out_of_range("EqualizerProcessor band index out of range");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor band index out of range");
   }
 }
 

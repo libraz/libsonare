@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::eq {
@@ -195,7 +195,7 @@ bool DynamicEq::set_parameter(unsigned int param_id, float value) {
 
 void DynamicEq::validate_index(size_t index) {
   if (index >= kMaxBands) {
-    throw std::out_of_range("dynamic EQ band index out of range");
+    throw SonareException(ErrorCode::InvalidParameter, "dynamic EQ band index out of range");
   }
 }
 
@@ -267,14 +267,8 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
   prototype.a1 = coeffs.a1;
   prototype.a2 = coeffs.a2;
 
-  const double attack =
-      band.attack_ms <= 0.0f
-          ? 1.0
-          : 1.0 - std::exp(-1.0 / std::max(sample_rate * band.attack_ms * 0.001, 1.0));
-  const double release =
-      band.release_ms <= 0.0f
-          ? 1.0
-          : 1.0 - std::exp(-1.0 / std::max(sample_rate * band.release_ms * 0.001, 1.0));
+  const double attack = sonare::time_to_attack_release_rate(sample_rate, band.attack_ms);
+  const double release = sonare::time_to_attack_release_rate(sample_rate, band.release_ms);
   const int lookahead_samples =
       static_cast<int>(std::round(sample_rate * band.lookahead_ms * 0.001));
   double sum = 0.0;

@@ -4816,7 +4816,8 @@ class RealtimeEngineWasm {
   val parameterInfoByIndex(int index) const {
     sonare::automation::ParameterInfo info{};
     if (index < 0 || !parameters_.parameter_info_by_index(static_cast<size_t>(index), &info)) {
-      throw std::out_of_range("parameter index out of range");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "parameter index out of range");
     }
     return parameterToVal(info);
   }
@@ -4881,7 +4882,8 @@ class RealtimeEngineWasm {
   val markerByIndex(int index) const {
     sonare::transport::Marker marker{};
     if (index < 0 || !engine_.marker_by_index(static_cast<size_t>(index), &marker)) {
-      throw std::out_of_range("marker index out of range");
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "marker index out of range");
     }
     return markerToVal(marker);
   }

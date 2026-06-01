@@ -1,18 +1,18 @@
 #include "mastering/eq/tilt.h"
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
 void TiltEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -38,7 +38,7 @@ void TiltEq::set_tilt_db(float tilt_db) {
 
 void TiltEq::set_pivot_hz(float pivot_hz) {
   if (!(pivot_hz > 0.0f)) {
-    throw std::invalid_argument("pivot_hz must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "pivot_hz must be positive");
   }
   pivot_hz_ = pivot_hz;
   if (prepared_) {

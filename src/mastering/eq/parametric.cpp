@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
@@ -16,7 +15,7 @@ using sonare::constants::kPiD;
 
 float safe_q(float q) {
   if (!(q > 0.0f)) {
-    throw std::invalid_argument("EQ band Q must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "EQ band Q must be positive");
   }
   return std::max(q, 1.0e-6f);
 }
@@ -25,10 +24,10 @@ float safe_q(float q) {
 
 void ParametricEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -43,7 +42,7 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
 
 void ParametricEq::prepare_channels(int num_channels) {
   if (num_channels < 0) {
-    throw std::invalid_argument("num_channels must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
   num_channels_ = num_channels;
   for (auto& band_states : states_) {
@@ -55,13 +54,14 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared();
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   if (num_channels_ < num_channels) {
@@ -75,7 +75,7 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -168,10 +168,11 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
     return {};
   }
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (!(band.frequency_hz > 0.0f) || !(band.frequency_hz < static_cast<float>(sample_rate * 0.5))) {
-    throw std::invalid_argument("EQ band frequency must be between 0 Hz and Nyquist");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EQ band frequency must be between 0 Hz and Nyquist");
   }
 
   const double q = safe_q(band.q);
@@ -242,7 +243,7 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
 
     case EqBandType::TiltShelf:
     case EqBandType::FlatTilt:
-      throw std::invalid_argument("unsupported EQ band type");
+      throw SonareException(ErrorCode::InvalidParameter, "unsupported EQ band type");
   }
 
   return {};
@@ -255,7 +256,7 @@ void ParametricEq::update_coefficients(size_t index) {
 
 void ParametricEq::validate_band_index(size_t index) {
   if (index >= kMaxBands) {
-    throw std::out_of_range("EQ band index out of range");
+    throw SonareException(ErrorCode::InvalidParameter, "EQ band index out of range");
   }
 }
 

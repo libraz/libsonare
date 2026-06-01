@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
@@ -15,10 +16,10 @@ StreamingFormant::StreamingFormant(StreamingFormantConfig config) : config_(conf
 
 void StreamingFormant::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

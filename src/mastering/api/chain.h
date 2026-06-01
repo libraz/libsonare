@@ -321,7 +321,7 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
 /// @brief Apply flat-params on top of an existing config (in-place).
 /// Same key schema as parse_chain_config_params. Setting any field under a
 /// module also implicitly enables that module unless "<module>.enabled" is
-/// also set to 0. Unknown keys throw std::invalid_argument.
+/// also set to 0. Unknown keys throw SonareException(InvalidParameter).
 void apply_chain_config_overrides(MasteringChainConfig& config, const Param* params,
                                   std::size_t count);
 

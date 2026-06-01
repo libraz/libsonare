@@ -973,7 +973,7 @@ TEST_CASE("ChannelStrip schedule_insert_automation enforces kMaxInsertAutomation
 TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safety]") {
   // Regression guard for P0-D: pre_inserts_ and post_inserts_ are reserved
   // to kMaxInserts in the constructor.  add_pre_insert / add_post_insert
-  // must throw std::length_error on the N+1th insert rather than triggering
+  // must throw SonareException(InvalidState) on the N+1th insert rather than triggering
   // a push_back that reallocates behind the audio thread.
   sonare::mixing::ChannelStrip strip;
 

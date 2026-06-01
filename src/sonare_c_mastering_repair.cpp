@@ -1,6 +1,5 @@
 #include <cstring>
 #include <memory>
-#include <stdexcept>
 
 #include "core/audio.h"
 #include "mastering/repair/declick.h"
@@ -12,6 +11,7 @@
 #include "mastering/repair/trim_silence.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -38,7 +38,7 @@ sonare::mastering::repair::DenoiseMode to_cpp_denoise_mode(int mode) {
     case SONARE_DENOISE_MODE_LOG_MMSE:
       return sonare::mastering::repair::DenoiseMode::LogMmse;
   }
-  throw std::invalid_argument("unknown denoise mode");
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown denoise mode");
 }
 
 sonare::mastering::repair::DenoiseNoiseEstimator to_cpp_denoise_noise_estimator(int estimator) {
@@ -50,7 +50,8 @@ sonare::mastering::repair::DenoiseNoiseEstimator to_cpp_denoise_noise_estimator(
     case SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE:
       return sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
   }
-  throw std::invalid_argument("unknown denoise noise estimator");
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown denoise noise estimator");
 }
 
 sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
@@ -88,7 +89,7 @@ sonare::mastering::repair::DecrackleMode to_cpp_decrackle_mode(int mode) {
     case SONARE_DECRACKLE_MODE_MEDIAN:
       return sonare::mastering::repair::DecrackleMode::Median;
   }
-  throw std::invalid_argument("unknown decrackle mode");
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown decrackle mode");
 }
 
 sonare::mastering::repair::DecrackleConfig to_cpp_decrackle_config(
@@ -141,7 +142,7 @@ sonare::mastering::repair::TrimSilenceMode to_cpp_trim_silence_mode(int mode) {
     case SONARE_TRIM_SILENCE_MODE_PEAK:
       return sonare::mastering::repair::TrimSilenceMode::Peak;
   }
-  throw std::invalid_argument("unknown trim silence mode");
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown trim silence mode");
 }
 
 sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(

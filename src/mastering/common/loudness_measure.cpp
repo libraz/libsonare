@@ -4,10 +4,9 @@
 
 #include "mastering/common/loudness_measure.h"
 
-#include <stdexcept>
-
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::common {
 
@@ -21,7 +20,8 @@ float measure_lufs(const float* samples, std::size_t length, int sample_rate) {
     return metering::lufs(audio).integrated_lufs;
   }
   if (samples == nullptr) {
-    throw std::invalid_argument("measure_lufs: samples pointer is null with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "measure_lufs: samples pointer is null with non-zero length");
   }
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   return metering::lufs(audio).integrated_lufs;

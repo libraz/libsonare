@@ -2,13 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::spectral {
 namespace {
@@ -27,7 +27,7 @@ SpectralShaper::SpectralShaper(SpectralShaperConfig config) : config_(config) {
 
 void SpectralShaper::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0) || max_block_size < 0) {
-    throw std::invalid_argument("invalid prepare arguments");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
   }
   sample_rate_ = sample_rate;
   for (auto& envelope : envelopes_)
@@ -39,9 +39,11 @@ void SpectralShaper::prepare(double sample_rate, int max_block_size) {
 void SpectralShaper::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SpectralShaper");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   if (low_state_.size() != static_cast<size_t>(num_channels)) {
     low_state_.assign(static_cast<size_t>(num_channels), 0.0f);
     band_low_state_.assign(static_cast<size_t>(num_channels), 0.0f);
@@ -52,7 +54,8 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
     }
   }
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
   const float low_alpha = rt::one_pole_lowpass_alpha(config_.frequency_hz, sample_rate_);
@@ -156,7 +159,7 @@ void SpectralShaper::validate_config(const SpectralShaperConfig& config) {
   if (!(config.threshold >= 0.0f) || !(config.amount >= 0.0f && config.amount <= 1.0f) ||
       !(config.frequency_hz > 0.0f) || !(config.high_frequency_hz > config.frequency_hz) ||
       config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db < 0.0f) {
-    throw std::invalid_argument("invalid spectral shaper configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid spectral shaper configuration");
   }
 }
 

@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <stdexcept>
 
 #include "core/fft.h"
 #include "core/window.h"
@@ -105,7 +104,7 @@ common::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) 
       return common::rbj_notch(omega, q);
     case EqBandType::TiltShelf:
     case EqBandType::FlatTilt:
-      throw std::invalid_argument("unsupported EQ band type");
+      throw SonareException(ErrorCode::InvalidParameter, "unsupported EQ band type");
   }
 
   return {};
@@ -120,7 +119,8 @@ int cut_order(int slope_db_oct) {
     return 0;
   }
   if (slope_db_oct < 6 || slope_db_oct > 96 || (slope_db_oct % 6) != 0) {
-    throw std::invalid_argument("cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
   }
   return slope_db_oct / 6;
 }
@@ -172,10 +172,10 @@ LinearPhaseEq::LinearPhaseEq(LinearPhaseEqConfig config) : config_(resolve_resol
 
 void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
-    throw std::invalid_argument("max_block_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
   sample_rate_ = sample_rate;
@@ -189,20 +189,21 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "LinearPhaseEq");
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (channels == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   ensure_channel_state(num_channels);
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
-      throw std::invalid_argument("channel buffer must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
 
@@ -235,10 +236,11 @@ void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
   if (band.enabled) {
     if (!(band.frequency_hz > 0.0f) ||
         !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
-      throw std::invalid_argument("EQ band frequency must be between 0 Hz and Nyquist");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "EQ band frequency must be between 0 Hz and Nyquist");
     }
     if (!(band.q > 0.0f)) {
-      throw std::invalid_argument("EQ band Q must be positive");
+      throw SonareException(ErrorCode::InvalidParameter, "EQ band Q must be positive");
     }
   }
 
@@ -350,7 +352,7 @@ void LinearPhaseEq::rebuild_kernel() {
 
 void LinearPhaseEq::ensure_channel_state(int num_channels) {
   if (num_channels < 0) {
-    throw std::invalid_argument("num_channels must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
   if (kernel_.empty()) {
     return;
@@ -414,22 +416,25 @@ int LinearPhaseEq::active_partition_size() const noexcept {
 
 void LinearPhaseEq::validate_config() const {
   if (!is_power_of_two(config_.fft_size)) {
-    throw std::invalid_argument("LinearPhaseEq fft_size must be a power of two");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "LinearPhaseEq fft_size must be a power of two");
   }
   if (config_.kernel_size <= 0 || config_.kernel_size > config_.fft_size) {
-    throw std::invalid_argument("LinearPhaseEq kernel_size must be between 1 and fft_size");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "LinearPhaseEq kernel_size must be between 1 and fft_size");
   }
   if ((config_.kernel_size % 2) == 0) {
-    throw std::invalid_argument("LinearPhaseEq kernel_size must be odd");
+    throw SonareException(ErrorCode::InvalidParameter, "LinearPhaseEq kernel_size must be odd");
   }
   if (config_.partition_size < 0) {
-    throw std::invalid_argument("LinearPhaseEq partition_size must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "LinearPhaseEq partition_size must be non-negative");
   }
 }
 
 void LinearPhaseEq::validate_band_index(size_t index) {
   if (index >= kMaxBands) {
-    throw std::out_of_range("EQ band index out of range");
+    throw SonareException(ErrorCode::InvalidParameter, "EQ band index out of range");
   }
 }
 

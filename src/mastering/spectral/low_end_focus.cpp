@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "rt/biquad_design.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::spectral {
 
@@ -13,7 +13,7 @@ LowEndFocus::LowEndFocus(LowEndFocusConfig config) : config_(config) { validate_
 
 void LowEndFocus::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0) || max_block_size < 0) {
-    throw std::invalid_argument("invalid prepare arguments");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
@@ -23,9 +23,11 @@ void LowEndFocus::prepare(double sample_rate, int max_block_size) {
 void LowEndFocus::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "LowEndFocus");
-  if (num_channels < 0 || num_samples < 0) throw std::invalid_argument("invalid dimensions");
+  if (num_channels < 0 || num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) throw std::invalid_argument("channels must not be null");
+  if (channels == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   if (low_state_.size() != static_cast<size_t>(num_channels)) {
     const auto size = static_cast<size_t>(num_channels);
     low_state_.assign(size, 0.0f);
@@ -35,7 +37,8 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
     divider_polarity_.assign(size, 1.0f);
   }
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) throw std::invalid_argument("channel buffer must not be null");
+    if (channels[ch] == nullptr)
+      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
   const float low_alpha = rt::one_pole_lowpass_alpha(config_.cutoff_hz, sample_rate_);
@@ -109,7 +112,7 @@ void LowEndFocus::validate_config(const LowEndFocusConfig& config) {
   if (!(config.cutoff_hz > 0.0f) || !(config.width >= 0.0f && config.width <= 2.0f) ||
       !(config.subharmonic_amount >= 0.0f && config.subharmonic_amount <= 1.0f) ||
       !(config.transient_tightness >= 0.0f && config.transient_tightness <= 1.0f)) {
-    throw std::invalid_argument("invalid low end focus configuration");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid low end focus configuration");
   }
 }
 

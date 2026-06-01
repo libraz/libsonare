@@ -1,8 +1,7 @@
 #include "mastering/eq/mid_side_eq.h"
 
-#include <stdexcept>
-
 #include "mastering/common/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
@@ -18,16 +17,17 @@ void MidSideEq::prepare(double sample_rate, int max_block_size) {
 void MidSideEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::mastering::common::ScopedNoDenormals guard;
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("num_channels and num_samples must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels and num_samples must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (num_channels != 2) {
-    throw std::invalid_argument("MidSideEq requires exactly two channels");
+    throw SonareException(ErrorCode::InvalidParameter, "MidSideEq requires exactly two channels");
   }
   if (channels == nullptr || channels[0] == nullptr || channels[1] == nullptr) {
-    throw std::invalid_argument("channels must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   ensure_buffers(num_samples);

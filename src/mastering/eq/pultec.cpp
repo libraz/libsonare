@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
@@ -14,7 +14,7 @@ using sonare::constants::kTwoPi;
 
 void PultecEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
-    throw std::invalid_argument("sample_rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   sample_rate_ = sample_rate;
   eq_.prepare(sample_rate, max_block_size);
@@ -82,7 +82,7 @@ void PultecEq::set_component_model(PultecComponentModel model) {
 
 void PultecEq::set_output_drive(float drive) {
   if (drive < 0.0f) {
-    throw std::invalid_argument("Pultec output drive must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "Pultec output drive must be non-negative");
   }
   output_drive_ = std::min(drive, 10.0f);
 }
@@ -171,7 +171,7 @@ float PultecEq::clamp_amount(float amount) { return std::clamp(amount, 0.0f, 10.
 
 float PultecEq::validate_frequency(float frequency_hz) {
   if (!(frequency_hz > 0.0f)) {
-    throw std::invalid_argument("frequency_hz must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
   }
   return frequency_hz;
 }

@@ -3,8 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
-#include <stdexcept>
 #include <utility>
+
+#include "util/exception.h"
 
 namespace sonare::graph {
 
@@ -177,7 +178,7 @@ bool Graph::compile() {
 
 void Graph::prepare(double sample_rate, int max_block_size) {
   if (max_block_size <= 0) {
-    throw std::invalid_argument("max_block_size must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be positive");
   }
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   max_block_size_ = max_block_size;
@@ -190,7 +191,8 @@ void Graph::prepare(double sample_rate, int max_block_size) {
   // the per-connection delay lines because max_block_size_ is now set.
   if (!compiled_) {
     if (!compile()) {
-      throw std::runtime_error("graph topology could not be compiled (cycle or invalid edge)");
+      throw SonareException(ErrorCode::InvalidState,
+                            "graph topology could not be compiled (cycle or invalid edge)");
     }
   } else {
     for (RuntimeConnection& runtime_connection : runtime_connections_) {
@@ -224,7 +226,7 @@ void Graph::set_input(const std::string& node_id, int port, const float* samples
   Node* target = node(node_id);
   if (target == nullptr || samples == nullptr || num_samples < 0 ||
       num_samples > target->max_block_size()) {
-    throw std::invalid_argument("invalid graph input");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid graph input");
   }
   float* dest = target->input_port(port);
   std::copy(samples, samples + num_samples, dest);
@@ -232,10 +234,10 @@ void Graph::set_input(const std::string& node_id, int port, const float* samples
 
 void Graph::process_block(int num_samples) {
   if (!compiled_) {
-    throw std::runtime_error("graph must be compiled before processing");
+    throw SonareException(ErrorCode::InvalidState, "graph must be compiled before processing");
   }
   if (num_samples < 0 || num_samples > max_block_size_) {
-    throw std::invalid_argument("num_samples out of prepared range");
+    throw SonareException(ErrorCode::InvalidParameter, "num_samples out of prepared range");
   }
 
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
@@ -291,14 +293,14 @@ const Node* Graph::node(const std::string& id) const {
 
 int Graph::connection_delay_samples(size_t connection_index) const {
   if (connection_index >= runtime_connections_.size()) {
-    throw std::out_of_range("connection index out of range");
+    throw SonareException(ErrorCode::InvalidParameter, "connection index out of range");
   }
   return runtime_connections_[connection_index].delay_samples;
 }
 
 int Graph::connection_delay_samples_q8(size_t connection_index) const {
   if (connection_index >= runtime_connections_.size()) {
-    throw std::out_of_range("connection index out of range");
+    throw SonareException(ErrorCode::InvalidParameter, "connection index out of range");
   }
   return runtime_connections_[connection_index].delay_samples_q8;
 }

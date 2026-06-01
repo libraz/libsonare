@@ -9,11 +9,11 @@
 #include <limits>
 #include <locale>
 #include <sstream>
-#include <stdexcept>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
 
@@ -390,10 +390,12 @@ RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
 }
 
 void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int num_channels) {
-  if (!(sample_rate > 0.0)) throw std::invalid_argument("sample_rate must be positive");
-  if (max_block_size < 0) throw std::invalid_argument("max_block_size must be non-negative");
+  if (!(sample_rate > 0.0))
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (max_block_size < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   if (num_channels < 1 || num_channels > 2)
-    throw std::invalid_argument("num_channels must be 1 or 2");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be 1 or 2");
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
@@ -894,7 +896,7 @@ VoiceCharacterPreset realtime_voice_changer_preset_from_id(std::string_view id) 
   for (const auto& row : kPresetMetadata) {
     if (row.id == id) return row.preset;
   }
-  throw std::invalid_argument("unknown realtime voice changer preset");
+  throw SonareException(ErrorCode::InvalidParameter, "unknown realtime voice changer preset");
 }
 
 std::vector<std::string> realtime_voice_changer_preset_names() {

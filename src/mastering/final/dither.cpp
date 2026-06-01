@@ -4,9 +4,10 @@
 #include <array>
 #include <cmath>
 #include <random>
-#include <stdexcept>
 #include <utility>
 #include <vector>
+
+#include "util/exception.h"
 
 namespace sonare::mastering::final {
 
@@ -22,9 +23,9 @@ constexpr std::array<float, 9> kLvNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f
 }  // namespace
 
 Audio dither(const Audio& audio, const DitherConfig& config) {
-  if (audio.empty()) throw std::invalid_argument("audio must not be empty");
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (config.target_bits < 2 || config.target_bits > 32) {
-    throw std::invalid_argument("target_bits must be in [2, 32]");
+    throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   if (config.type == DitherType::None) {
