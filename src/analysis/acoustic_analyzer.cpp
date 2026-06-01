@@ -815,6 +815,13 @@ AcousticParameters analyze_band(const float* samples, size_t size, int sample_ra
   return result;
 }
 
+// NOTE: octave / third-octave band filtering uses a single 2nd-order biquad
+// bandpass (Q ~= 1.4) applied zero-phase via filtfilt. The resulting skirts are
+// shallow, so adjacent-band energy leaks more than an IEC 61260 class filter
+// would. A 4th-order Butterworth bandpass (two cascaded biquads) would sharpen
+// the response, but it shifts every per-band RT60/EDT/clarity value and the
+// existing acoustic tests / golden manifests are calibrated against this single
+// section. The single-section approximation is intentional and kept stable.
 std::vector<float> filter_octave_band(const Audio& ir, float center_hz) {
   const float lower_hz = center_hz / kSqrt2;
   const float upper_hz = center_hz * kSqrt2;

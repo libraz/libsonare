@@ -256,35 +256,30 @@ PitchClass ChordAnalyzer::estimate_bass_pitch_class(int start_frame, int end_fra
     }
   }
 
+  // The chroma index c is an octave-folded pitch class, not a true pitch height,
+  // so any index-linear weight (e.g. energy[c] * (1 - k*c)) biases the result
+  // toward low pitch classes (C) regardless of the actual bass register. Compare
+  // the raw folded bass-band energy instead; the low-register emphasis already
+  // comes from bass_chroma_'s low-frequency CQT front-end.
   int best = static_cast<int>(chord.root);
   int best_non_root = -1;
   for (int c = 0; c < 12; ++c) {
     if (chord.pattern[c] <= 0.0f) {
       continue;
     }
-    const float current =
-        has_bass_source ? energy[c] * (1.0f - 0.025f * static_cast<float>(c)) : energy[c];
-    const float previous =
-        has_bass_source ? energy[best] * (1.0f - 0.025f * static_cast<float>(best)) : energy[best];
-    if (current > previous) {
+    if (energy[c] > energy[best]) {
       best = c;
     }
     if (c != static_cast<int>(chord.root)) {
-      const float non_root_previous =
-          best_non_root < 0
-              ? -1.0f
-              : (has_bass_source
-                     ? energy[best_non_root] * (1.0f - 0.025f * static_cast<float>(best_non_root))
-                     : energy[best_non_root]);
-      if (current > non_root_previous) {
+      const float non_root_previous = best_non_root < 0 ? -1.0f : energy[best_non_root];
+      if (energy[c] > non_root_previous) {
         best_non_root = c;
       }
     }
   }
   if (has_bass_source && best == static_cast<int>(chord.root) && best_non_root >= 0) {
-    const float root_score = energy[best] * (1.0f - 0.025f * static_cast<float>(best));
-    const float non_root_score =
-        energy[best_non_root] * (1.0f - 0.025f * static_cast<float>(best_non_root));
+    const float root_score = energy[best];
+    const float non_root_score = energy[best_non_root];
     if (non_root_score >= root_score * 0.70f) {
       best = best_non_root;
     }
@@ -298,9 +293,8 @@ PitchClass ChordAnalyzer::estimate_bass_pitch_class(int start_frame, int end_fra
           : (static_cast<int>(chord.root) + 3) % 12;
   if (has_bass_source && best != static_cast<int>(chord.root) &&
       chord.pattern[major_or_minor_third] > 0.0f) {
-    const float third_score =
-        energy[major_or_minor_third] * (1.0f - 0.025f * static_cast<float>(major_or_minor_third));
-    const float best_score = energy[best] * (1.0f - 0.025f * static_cast<float>(best));
+    const float third_score = energy[major_or_minor_third];
+    const float best_score = energy[best];
     if (third_score >= best_score * 0.75f) {
       best = major_or_minor_third;
     }

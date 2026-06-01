@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "mastering/api/presets.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mastering/assistant/suggester.h"
 
@@ -210,4 +211,21 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   auto repair_result = assistant::suggest_chain(profile, offline_repair);
   REQUIRE(repair_result.config.repair.declick.enabled);
   REQUIRE(repair_result.config.repair.denoise.enabled);
+}
+
+TEST_CASE("Assistant suggester loudness config matches preset true-peak oversampling",
+          "[mastering][assistant]") {
+  // The suggester's set_loudness() must produce the same true_peak_oversample as
+  // api::enable_loudness() (presets.cpp). Both are expected to use 4x oversampling;
+  // asserting equality guards against the two paths drifting apart in future.
+  assistant::AudioProfile profile;
+  profile.genre_candidates = {{"pop", 0.9f}};
+
+  assistant::AssistantConfig cfg;
+  auto suggested = assistant::suggest_chain(profile, cfg);
+
+  const auto preset = sonare::mastering::api::preset_config(sonare::mastering::api::Preset::Pop);
+  REQUIRE(suggested.config.loudness.enabled);
+  REQUIRE(suggested.config.loudness.true_peak_oversample == preset.loudness.true_peak_oversample);
+  REQUIRE(suggested.config.loudness.true_peak_oversample == 4);
 }

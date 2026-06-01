@@ -12,19 +12,6 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
-namespace {
-
-#if defined(SONARE_WITH_PITCH_EDITOR)
-SonareError copy_audio_result(const Audio& result, float** out, size_t* out_length) {
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-}
-#endif
-
-}  // namespace
-
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length) {
@@ -43,14 +30,8 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
     return copy_audio_result(result, out, out_length);
   });
 #else
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)current_midi;
-  (void)target_midi;
-  (void)out;
-  (void)out_length;
-  return SONARE_ERROR_NOT_SUPPORTED;
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, current_midi, target_midi, out,
+                              out_length);
 #endif
 }
 
@@ -69,14 +50,7 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
     return copy_audio_result(result, out, out_length);
   });
 #else
-  (void)samples;
-  (void)length;
-  (void)sample_rate;
-  (void)onset_sample;
-  (void)offset_sample;
-  (void)stretch_ratio;
-  (void)out;
-  (void)out_length;
-  return SONARE_ERROR_NOT_SUPPORTED;
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, onset_sample, offset_sample,
+                              stretch_ratio, out, out_length);
 #endif
 }

@@ -15,6 +15,7 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 
@@ -212,6 +213,45 @@ TEST_CASE("phase_vocoder short-signal regression preserves frame count and magni
   REQUIRE(ratio < 1.2);
 
   for (float v : out_mag) REQUIRE(std::isfinite(v));
+}
+
+TEST_CASE("compute_instantaneous_frequency rejects degenerate parameters",
+          "[phase_vocoder][validation]") {
+  /// n_bins == 1 implies n_fft = (n_bins - 1) * 2 = 0, which would divide the
+  /// bin-frequency formula by zero and emit NaN. sample_rate == 0 divides the
+  /// time-step by zero. Both must be rejected with InvalidParameter rather than
+  /// silently producing non-finite output.
+  const std::vector<float> phase{0.1f, 0.2f, 0.3f};
+  const std::vector<float> prev{0.0f, 0.1f, 0.2f};
+
+  /// n_bins == 1 (n_fft would be 0).
+  REQUIRE_THROWS_AS(compute_instantaneous_frequency(phase.data(), prev.data(), 1, 512, 22050),
+                    SonareException);
+
+  /// sample_rate == 0 (time-step divide by zero).
+  REQUIRE_THROWS_AS(compute_instantaneous_frequency(phase.data(), prev.data(), 3, 512, 0),
+                    SonareException);
+
+  /// Error code is specifically InvalidParameter for both cases.
+  try {
+    compute_instantaneous_frequency(phase.data(), prev.data(), 1, 512, 22050);
+    FAIL("expected SonareException for n_bins == 1");
+  } catch (const SonareException& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+  }
+  try {
+    compute_instantaneous_frequency(phase.data(), prev.data(), 3, 512, 0);
+    FAIL("expected SonareException for sample_rate == 0");
+  } catch (const SonareException& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+  }
+
+  /// A valid call (n_bins >= 2, sample_rate > 0, hop_length > 0) still succeeds
+  /// and returns finite values.
+  std::vector<float> freq =
+      compute_instantaneous_frequency(phase.data(), prev.data(), 3, 512, 22050);
+  REQUIRE(freq.size() == 3);
+  for (float v : freq) REQUIRE(std::isfinite(v));
 }
 
 TEST_CASE("phase_vocoder short-signal rate change still produces finite output",

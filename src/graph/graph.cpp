@@ -130,13 +130,26 @@ bool Graph::compile() {
     return false;
   }
 
+  // Build the per-destination incoming-edge adjacency list once, keyed by the
+  // destination's topo position, indexing into connections_. connections_ and
+  // runtime_connections_ are populated 1:1 in the same order, so these same
+  // indices address runtime_connections_ below and drive process_block().
+  // Building it here lets the plugin-delay-compensation (PDC) longest-path pass
+  // visit only each node's incoming edges (O(V + E)) instead of re-scanning
+  // every connection for every node (O(V * E)).
+  incoming_by_topo_.assign(topo_order_.size(), {});
+  for (size_t connection_index = 0; connection_index < connections_.size(); ++connection_index) {
+    const std::string& dest_id = connections_[connection_index].dest_node;
+    incoming_by_topo_[static_cast<size_t>(topo_index_.at(dest_id))].push_back(
+        static_cast<int>(connection_index));
+  }
+
   std::unordered_map<std::string, int> latency_to_node_q8;
-  for (Node* current : topo_order_) {
+  for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
+    Node* current = topo_order_[topo_position];
     int max_incoming_latency_q8 = 0;
-    for (const Connection& connection : connections_) {
-      if (connection.dest_node != current->id()) {
-        continue;
-      }
+    for (const int connection_index : incoming_by_topo_[topo_position]) {
+      const Connection& connection = connections_[static_cast<size_t>(connection_index)];
       const Node* source = node_map_.at(connection.source_node);
       const int path_latency_q8 =
           latency_to_node_q8[connection.source_node] +
@@ -163,15 +176,9 @@ bool Graph::compile() {
     runtime_connections_.push_back(std::move(runtime_connection));
   }
 
-  // Build the per-destination adjacency list keyed by the destination's topo
-  // position so process_block() can iterate only the edges feeding each node.
-  incoming_by_topo_.assign(topo_order_.size(), {});
-  for (size_t connection_index = 0; connection_index < runtime_connections_.size();
-       ++connection_index) {
-    const std::string& dest_id = runtime_connections_[connection_index].connection.dest_node;
-    incoming_by_topo_[static_cast<size_t>(topo_index_.at(dest_id))].push_back(
-        static_cast<int>(connection_index));
-  }
+  // incoming_by_topo_ was already built (above the PDC pass) from connections_,
+  // which is populated 1:1 with runtime_connections_ in the same order, so the
+  // stored indices also address runtime_connections_ for process_block().
 
   compiled_ = true;
   return true;

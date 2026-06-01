@@ -292,6 +292,39 @@ TEST_CASE("KeyAnalyzer mean_chroma", "[key_analyzer]") {
   }
 }
 
+TEST_CASE("KeyAnalyzer auto profile selection unaffected by profile normalization",
+          "[key_analyzer]") {
+  // profile_correlation is Pearson, which is invariant to positive scaling of the
+  // profile. Dropping the redundant normalize_profile() step in candidate scoring
+  // must therefore leave auto profile/key selection unchanged. Exercise the auto
+  // path and confirm it still produces a coherent, confident result.
+  Audio audio = create_c_major_scale();
+
+  KeyConfig config;
+  config.genre_hint = "auto";
+  config.n_fft = 4096;
+
+  KeyAnalyzer analyzer(audio, config);
+  Key key = analyzer.key();
+
+  // C major scale resolves to C major or a closely related key.
+  bool is_c_major = (key.root == PitchClass::C && key.mode == Mode::Major);
+  bool is_g_major = (key.root == PitchClass::G && key.mode == Mode::Major);
+  bool is_a_minor = (key.root == PitchClass::A && key.mode == Mode::Minor);
+  REQUIRE((is_c_major || is_g_major || is_a_minor));
+
+  REQUIRE(analyzer.all_candidates().size() == 24);
+  REQUIRE(key.confidence > 0.0f);
+
+  // Candidate correlations must remain sorted (scoring is well-defined without
+  // the redundant profile normalization).
+  const auto candidates = analyzer.candidates(5);
+  REQUIRE(candidates.size() == 5);
+  for (size_t i = 1; i < candidates.size(); ++i) {
+    REQUIRE(candidates[0].correlation >= candidates[i].correlation);
+  }
+}
+
 TEST_CASE("detect_key quick function", "[key_analyzer]") {
   Audio audio = create_c_major_scale();
 

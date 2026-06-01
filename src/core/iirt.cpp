@@ -190,7 +190,13 @@ std::vector<float> frame_rms(const std::vector<double>& band, int win_length, in
 
 int frame_count_for_iirt(size_t n_samples, int win_length, int hop_length, bool center) {
   const int n = static_cast<int>(n_samples);
-  const int pad = center ? win_length : 0;
+  // Mirror frame_rms exactly: it pads win_length/2 on each side when centered,
+  // so the total padded length is 2*(win_length/2), which differs from
+  // win_length for odd win_length. Using the same expression here keeps this
+  // predicted frame count identical to what frame_rms actually produces (no
+  // off-by-one for odd win_length).
+  const int half = win_length / 2;
+  const int pad = center ? 2 * half : 0;
   const int total = n + pad;
   return (total >= win_length) ? 1 + (total - win_length) / hop_length : 1;
 }

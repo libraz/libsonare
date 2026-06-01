@@ -177,11 +177,14 @@ MasteringChainConfig make_speech() {
 }
 
 MasteringChainConfig make_streaming() {
-  // The streaming target (-14 LUFS, -1 dBTP) is identical to the pop preset's
-  // loudness configuration, so make_pop() already establishes it. Re-calling
-  // enable_loudness() with the same numbers would be a no-op; we keep the
-  // alias explicit instead. If a distinct streaming voicing is desired later,
-  // override stages here.
+  // INTENTIONAL ALIAS of make_pop(). The generic "streaming" target
+  // (-14 LUFS, -1 dBTP) coincides exactly with the pop preset's loudness and
+  // voicing, so this preset is deliberately identical rather than a
+  // contrived variant with invented DSP deviations. Platform-specific masters
+  // (youtube, broadcast, podcast, ...) carry their own distinct configs; this
+  // entry exists as a discoverable, neutral default for the generic streaming
+  // use case. If a genuinely distinct streaming voicing is ever desired,
+  // override stages here instead of returning make_pop().
   return make_pop();
 }
 
@@ -437,6 +440,8 @@ MasteringChainConfig make_game_ost() {
 }  // namespace
 
 std::vector<std::string> preset_names() {
+  // Note: "streaming" is an intentional alias of "pop" (see make_streaming).
+  // It is listed as its own discoverable name, not as an independent voicing.
   return {"pop",     "edm",       "acoustic",    "hipHop",    "aiMusic", "speech", "streaming",
           "youtube", "broadcast", "podcast",     "audiobook", "cinema",  "jpop",   "ambient",
           "lofi",    "classical", "drumAndBass", "techno",    "metal",   "trap",   "rnb",

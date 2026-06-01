@@ -194,6 +194,15 @@ class StreamAnalyzer {
   /// @brief Test-only accessor for the onset accumulator's frame cap.
   size_t onset_window_frames_for_test() const { return onset_window_frames_; }
 
+  /// @brief Test-only accessor for the current full chroma history size.
+  /// @details Exposes the size of the bounded retroactive-bar chroma history so
+  ///          regression tests can assert the front-trim cap holds. The history
+  ///          is a deque (O(1) front-pop); not part of the public streaming API.
+  size_t full_chroma_history_size_for_test() const { return full_chroma_history_.size(); }
+
+  /// @brief Test-only accessor for the full chroma history frame cap.
+  static constexpr size_t full_chroma_history_cap_for_test() { return kMaxChromaHistoryFrames; }
+
  private:
   StreamConfig config_;
 
@@ -320,9 +329,13 @@ class StreamAnalyzer {
   bool pattern_locked_ = false;     ///< True if pattern is locked
   float expected_duration_ = 0.0f;  ///< Expected total duration (0 = unknown)
 
-  // Full chroma history for retroactive bar chord detection
-  static constexpr size_t kMaxChromaHistoryFrames = 3000;   ///< ~35s at default settings
-  std::vector<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
+  // Full chroma history for retroactive bar chord detection.
+  // Declared as a deque (not a vector) so trimming the oldest frame once the
+  // cap is reached is an O(1) pop_front instead of a vector erase(begin())
+  // (an O(N) memmove of ~kMaxChromaHistoryFrames * 12 floats every frame). The
+  // retained chroma content is identical; only the container changes.
+  static constexpr size_t kMaxChromaHistoryFrames = 3000;  ///< ~35s at default settings
+  std::deque<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
 
   // Internal methods
   void compute_retroactive_bar_chords();

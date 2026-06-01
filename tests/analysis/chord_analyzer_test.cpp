@@ -175,6 +175,33 @@ TEST_CASE("ChordAnalyzer uses low-frequency bass chroma for inversion detection"
   REQUIRE(most_common.bass == PitchClass::E);
 }
 
+TEST_CASE("ChordAnalyzer inversion bass is not C-biased for a high pitch-class bass",
+          "[chord_analyzer]") {
+  // G major over a low B bass (first inversion, G/B). B is pitch class 11, the
+  // index most heavily penalized by the old energy[c]*(1-0.025*c) weighting,
+  // which biased the bass estimate toward low indices (C). With that bogus
+  // per-index bias removed, the raw bass-band energy must recover B as the bass.
+  Audio audio = create_chord({47.0f, 55.0f, 59.0f, 62.0f}, 22050, 1.0f);  // B2, G3, B3, D4
+
+  ChordConfig config;
+  config.use_triads_only = true;
+  config.chroma_method = ChromaMethod::NNLS;
+  config.use_beat_sync = false;
+  config.detect_inversions = true;
+  config.smoothing_window = 0.5f;
+  config.min_duration = 0.0f;
+
+  ChordAnalyzer analyzer(audio, config);
+  REQUIRE(analyzer.count() >= 1);
+
+  const Chord most_common = analyzer.most_common_chord();
+  REQUIRE(most_common.root == PitchClass::G);
+  REQUIRE(most_common.quality == ChordQuality::Major);
+  // The bass must not collapse to C purely from the removed index bias.
+  REQUIRE(most_common.bass != PitchClass::C);
+  REQUIRE(most_common.bass == PitchClass::B);
+}
+
 TEST_CASE("ChordAnalyzer A minor detection", "[chord_analyzer]") {
   Audio audio = create_a_minor(22050, 2.0f);
 

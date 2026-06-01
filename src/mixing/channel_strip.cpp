@@ -287,7 +287,13 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   pre_meter_.set_gain_reduction_db(pre_gain_reduction_db);
   pre_meter_.process(pre_meter_channels, meter_rows, clamped_samples);
   post_meter_.set_gain_reduction_db(post_gain_reduction_db);
-  post_meter_.process(channels, num_channels, num_samples);
+  // Drive the post-fader meter over the SAME window length as the pre-fader
+  // meter. The pre-fader meter reads pre_tap_, which is only max_block_size_
+  // wide, so it can integrate at most clamped_samples. Feeding the post meter
+  // the full num_samples when num_samples > max_block_size_ would make the two
+  // meters integrate different lengths, so their RMS/LUFS readings would
+  // disagree for the same block. Clamp the post meter to match.
+  post_meter_.process(channels, num_channels, clamped_samples);
 }
 
 void ChannelStrip::process_unsegmented(float* const* channels, int num_channels, int num_samples) {

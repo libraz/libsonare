@@ -57,8 +57,11 @@ std::vector<KeyCandidate> build_key_candidates(const std::array<float, 12>& mean
 
     for (Mode mode : candidate_modes) {
       const KeyProfileBoosts& boosts = (mode == Mode::Major) ? major_boosts : minor_boosts;
+      // profile_correlation is Pearson, which is invariant to positive scaling and
+      // offset of either operand. normalize_profile only rescales the profile by a
+      // positive constant (1/sum), so it has no effect on the resulting correlation
+      // and is intentionally omitted here.
       auto profile = get_boosted_mode_profile(pc, mode, boosts, profile_type);
-      profile = normalize_profile(profile);
 
       KeyCandidate candidate;
       candidate.key.root = pc;

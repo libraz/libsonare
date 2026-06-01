@@ -26,7 +26,10 @@ class BoundaryList {
   bool add(Boundary boundary) noexcept;
   size_t size() const noexcept { return size_; }
   const Boundary& operator[](size_t index) const noexcept { return items_[index]; }
-  void clear() noexcept { size_ = 0; }
+  void clear() noexcept {
+    size_ = 0;
+    overflowed_ = false;
+  }
   bool overflowed() const noexcept { return overflowed_; }
 
  private:

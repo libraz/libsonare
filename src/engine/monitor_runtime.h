@@ -37,7 +37,7 @@ class MonitorRuntime {
   void process_strip(size_t index, float* const* channels, int num_channels, int num_samples,
                      int64_t timeline_sample, float* const* monitor_out = nullptr) noexcept;
 
-  size_t size() const noexcept { return size_; }
+  size_t size() const noexcept { return size_.load(std::memory_order_acquire); }
   bool muted(size_t index) const noexcept;
   bool soloed(size_t index) const noexcept;
   bool solo_safe(size_t index) const noexcept;
@@ -81,10 +81,18 @@ class MonitorRuntime {
 
   void recompute_solo_mutes() noexcept;
   void update_target(StripState& state) noexcept;
-  bool valid_index(size_t index) const noexcept { return index < size_; }
+  bool valid_index(size_t index) const noexcept {
+    return index < size_.load(std::memory_order_acquire);
+  }
 
   std::array<StripState, kMaxStrips> strips_{};
-  size_t size_ = 0;
+  // Number of active strips. Written only by the control thread (add_strip /
+  // remove_strip) and read by the audio thread via size() / valid_index() in
+  // process_strip(). The control thread publishes a newly written slot with a
+  // release store and the audio thread observes it with an acquire load, so a
+  // process_strip() that sees the new count is guaranteed to see the fully
+  // initialized slot. Consistent with the StripState flag atomics above.
+  std::atomic<size_t> size_{0};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   float smoothing_ms_ = 5.0f;

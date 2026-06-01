@@ -54,6 +54,52 @@ TEST_CASE("MonitorRuntime smooths mute gain instead of hard muting", "[engine][m
   REQUIRE(left[kBlock - 1] > 0.0f);
 }
 
+TEST_CASE("MonitorRuntime publishes strip count consistently across add and remove",
+          "[engine][monitor_runtime]") {
+  // Regression for the size_ data race fix: add_strip publishes the new count
+  // with a release store after the slot is initialized and remove_strip shrinks
+  // the count before clearing the tail. The published size() and valid_index
+  // (exercised via the per-index queries) must stay consistent with the active
+  // strips at every step.
+  sonare::mixing::ChannelStrip a({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  sonare::mixing::ChannelStrip b({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  sonare::mixing::ChannelStrip c({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+
+  sonare::engine::MonitorRuntime runtime;
+  runtime.prepare(48000.0, 32, 1.0f);
+  REQUIRE(runtime.size() == 0);
+
+  REQUIRE(runtime.add_strip(&a));
+  REQUIRE(runtime.size() == 1);
+  REQUIRE(runtime.add_strip(&b));
+  REQUIRE(runtime.size() == 2);
+  REQUIRE(runtime.add_strip(&c));
+  REQUIRE(runtime.size() == 3);
+
+  // A flag set on the last-added strip must be visible at its published index,
+  // proving the slot is fully initialized before the incremented size is read.
+  runtime.set_mute(2, true);
+  REQUIRE(runtime.muted(2));
+
+  // Out-of-range queries (index >= published size) are rejected by valid_index.
+  REQUIRE_FALSE(runtime.muted(3));
+
+  // Removing the middle strip compacts the array and shrinks the count.
+  REQUIRE(runtime.remove_strip(&b));
+  REQUIRE(runtime.size() == 2);
+  REQUIRE(runtime.contains(&a));
+  REQUIRE(runtime.contains(&c));
+  REQUIRE_FALSE(runtime.contains(&b));
+  // The mute flag followed strip c down to its new index after compaction.
+  REQUIRE(runtime.muted(1));
+  // The former tail index is now out of range.
+  REQUIRE_FALSE(runtime.muted(2));
+
+  REQUIRE(runtime.remove_strip(&a));
+  REQUIRE(runtime.remove_strip(&c));
+  REQUIRE(runtime.size() == 0);
+}
+
 TEST_CASE("MonitorRuntime PFL and AFL taps are taken at different stages",
           "[engine][monitor_runtime]") {
   constexpr int kBlock = 8;

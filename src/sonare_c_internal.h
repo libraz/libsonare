@@ -62,6 +62,12 @@ T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();
 }
 
+/// @brief Variadic no-op used by SONARE_C_STUB_NOT_SUPPORTED to swallow unused
+///        parameters in out-of-feature build configurations without resorting
+///        to per-parameter (void) casts.
+template <typename... T>
+inline void ignore_args(const T&...) noexcept {}
+
 /// @brief Allocates a NUL-terminated heap copy of @p value (caller frees via
 ///        sonare_free_string). Canonical owner of the C-string copy helper
 ///        shared by all C API translation units.
@@ -69,6 +75,16 @@ inline char* copy_string(const std::string& value) {
   std::unique_ptr<char[]> out(new char[value.size() + 1]);
   std::memcpy(out.get(), value.c_str(), value.size() + 1);
   return out.release();
+}
+
+/// @brief Copies an Audio result into a freshly heap-allocated float array
+///        owned by the caller (freed via sonare_free_array). Shared by the
+///        offline Audio -> Audio wrappers (pitch editor / voice changer TUs).
+inline SonareError copy_audio_result(const Audio& result, float** out, size_t* out_length) {
+  *out_length = result.size();
+  *out = new float[result.size()];
+  std::memcpy(*out, result.data(), result.size() * sizeof(float));
+  return SONARE_OK;
 }
 
 /// @brief Joins @p values with '\n' into @p storage and returns a borrowed
@@ -170,6 +186,17 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
 }
 
 }  // namespace sonare_c_detail
+
+// Stubs out a C API function body when an optional module is not compiled in:
+// swallows the (otherwise unused) parameters via ignore_args and returns
+// SONARE_ERROR_NOT_SUPPORTED. Shared by the optional-module translation units
+// (voice changer / pitch editor) so they suppress unused-parameter warnings the
+// same way instead of hand-rolling (void) casts.
+#define SONARE_C_STUB_NOT_SUPPORTED(...)       \
+  do {                                         \
+    sonare_c_detail::ignore_args(__VA_ARGS__); \
+    return SONARE_ERROR_NOT_SUPPORTED;         \
+  } while (false)
 
 #define SONARE_C_TRY try {
 #define SONARE_C_CATCH                                                                  \

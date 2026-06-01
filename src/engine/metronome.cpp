@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::engine {
+
+using sonare::constants::kPiD;
 
 // Floating-point fuzz for the inclusive PPQ beat-boundary comparison.
 constexpr double kPpqEpsilon = 1.0e-9;
@@ -58,11 +62,34 @@ void Metronome::process(float* const* channels, int num_channels, int num_frames
       config_.click_samples > 0
           ? config_.click_samples
           : std::max(1, static_cast<int>(std::lround(config_.click_seconds * sample_rate_)));
+  // Short raised-cosine attack so the click ramps up from silence instead of
+  // stepping 0 -> peak, plus an exponential decay forced to exactly zero at the
+  // final sample. This removes the start/end discontinuities that caused an
+  // audible "tick" artifact while keeping the click transient and roughly the
+  // same peak loudness as before.
+  const int attack = std::max(1, std::min(click_len / 4, click_len));
+  // Decay constant chosen so the exponential reaches ~exp(-6) (about -52 dB) by
+  // the end of the click; the explicit zero at the final sample removes any
+  // residual tail.
+  constexpr double kDecayDecades = 6.0;
   for (size_t e = 0; e < events.size; ++e) {
     const MetronomeEvent& event = events.events[e];
     const float gain = event.accent ? config_.accent_gain : config_.beat_gain;
     for (int i = 0; i < click_len && event.offset + i < num_frames; ++i) {
-      const float env = 1.0f - static_cast<float>(i) / static_cast<float>(click_len);
+      float env;
+      if (i == click_len - 1) {
+        // Guarantee the click ends exactly at zero (no hard step at the tail).
+        env = 0.0f;
+      } else if (i < attack) {
+        // Raised-cosine fade-in from 0 to the peak over the attack window.
+        const double phase = static_cast<double>(i + 1) / static_cast<double>(attack + 1);
+        env = static_cast<float>(0.5 - 0.5 * std::cos(kPiD * phase));
+      } else {
+        // Exponential decay from the peak back toward zero.
+        const double t =
+            static_cast<double>(i - attack) / static_cast<double>(std::max(click_len - attack, 1));
+        env = static_cast<float>(std::exp(-kDecayDecades * t));
+      }
       const float value = gain * env;
       for (int ch = 0; ch < num_channels; ++ch) {
         if (channels[ch]) channels[ch][event.offset + i] += value;

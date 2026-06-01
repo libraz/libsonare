@@ -212,6 +212,104 @@ TEST_CASE("Graph latency compensation aligns parallel paths", "[graph]") {
   REQUIRE_THAT(output[2], WithinAbs(2.0f, 0.0001f));
 }
 
+TEST_CASE("Graph PDC delays are unchanged after the O(V+E) incoming-list pass", "[graph]") {
+  // The plugin-delay-compensation longest-path pass now visits each node's
+  // incoming edges via a prebuilt adjacency list (O(V+E)) instead of rescanning
+  // every connection for every node (O(V*E)). The computed per-connection
+  // delays must be byte-for-byte identical. This pins the delays for a graph
+  // with multiple convergent paths of differing latency so any regression in
+  // the longest-path computation is caught.
+  sonare::graph::Graph graph;
+
+  // Topology (latencies in samples):
+  //   in --> a(10) --> sum
+  //   in --> b(30) --> sum
+  //   in -------------> sum   (direct, 0)
+  // Longest path into sum is via b: 30. So:
+  //   in->a delay = 30 - (0)        ... no, alignment is per *destination*.
+  // Each connection's delay aligns its source-path latency up to the dest's
+  // max incoming latency.
+  REQUIRE(graph.add_node("in", pass(), 1));
+  REQUIRE(graph.add_node("a", std::make_unique<FixedLatencyProcessor>(10), 1));
+  REQUIRE(graph.add_node("b", std::make_unique<FixedLatencyProcessor>(30), 1));
+  REQUIRE(graph.add_node("sum", pass(), 1));
+  REQUIRE(graph.connect({"in", 0, "a", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"in", 0, "b", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"a", 0, "sum", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"b", 0, "sum", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"in", 0, "sum", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+
+  // Connection order matches insertion order. Max incoming latency at sum is 30
+  // (the a-path contributes 10, the b-path 30, the direct in-path 0).
+  //   conn0 in->a : both endpoints at 0 incoming, source latency irrelevant -> 0
+  //   conn1 in->b : 0
+  //   conn2 a->sum: source path latency 10, align to 30 -> delay 20
+  //   conn3 b->sum: source path latency 30, align to 30 -> delay 0
+  //   conn4 in->sum: source path latency 0, align to 30 -> delay 30
+  REQUIRE(graph.connection_delay_samples(0) == 0);
+  REQUIRE(graph.connection_delay_samples(1) == 0);
+  REQUIRE(graph.connection_delay_samples(2) == 20);
+  REQUIRE(graph.connection_delay_samples(3) == 0);
+  REQUIRE(graph.connection_delay_samples(4) == 30);
+
+  // Recompiling must yield identical delays (idempotent, no stale adjacency).
+  REQUIRE(graph.compile());
+  REQUIRE(graph.connection_delay_samples(2) == 20);
+  REQUIRE(graph.connection_delay_samples(4) == 30);
+}
+
+TEST_CASE("Graph PDC computes correctly on a larger chained-and-parallel graph", "[graph]") {
+  // A larger graph exercises the O(V+E) pass over many nodes/edges and confirms
+  // the longest-path alignment still holds end-to-end. A chain of latency nodes
+  // feeds a sum alongside a zero-latency bypass; the bypass edge must be delayed
+  // by the full accumulated chain latency so both arrive aligned.
+  sonare::graph::Graph graph;
+
+  REQUIRE(graph.add_node("src", pass(), 1));
+  // Chain: src -> c0(5) -> c1(7) -> c2(11) -> sink
+  REQUIRE(graph.add_node("c0", std::make_unique<FixedLatencyProcessor>(5), 1));
+  REQUIRE(graph.add_node("c1", std::make_unique<FixedLatencyProcessor>(7), 1));
+  REQUIRE(graph.add_node("c2", std::make_unique<FixedLatencyProcessor>(11), 1));
+  REQUIRE(graph.add_node("sink", pass(), 1));
+
+  REQUIRE(graph.connect({"src", 0, "c0", 0, sonare::graph::Connection::Mix::Add}));   // 0
+  REQUIRE(graph.connect({"c0", 0, "c1", 0, sonare::graph::Connection::Mix::Add}));    // 1
+  REQUIRE(graph.connect({"c1", 0, "c2", 0, sonare::graph::Connection::Mix::Add}));    // 2
+  REQUIRE(graph.connect({"c2", 0, "sink", 0, sonare::graph::Connection::Mix::Add}));  // 3
+  // Parallel bypass straight from src to sink (0 latency on this path).
+  REQUIRE(graph.connect({"src", 0, "sink", 0, sonare::graph::Connection::Mix::Add}));  // 4
+
+  REQUIRE(graph.compile());
+
+  // Accumulated chain latency into sink along the c-path is 5+7+11 = 23. The
+  // chain edge (conn3) already carries the full path latency, so it needs no
+  // extra delay; the bypass edge (conn4) must be delayed by 23 to align.
+  REQUIRE(graph.connection_delay_samples(3) == 0);
+  REQUIRE(graph.connection_delay_samples(4) == 23);
+  // Intermediate chain links are on the single longest path, so no padding.
+  REQUIRE(graph.connection_delay_samples(0) == 0);
+  REQUIRE(graph.connection_delay_samples(1) == 0);
+  REQUIRE(graph.connection_delay_samples(2) == 0);
+
+  // End-to-end: an impulse on src must emerge aligned at sink. The bypass copy
+  // and the chained copy both land at sample 23 (summed to 2.0), proving the
+  // compensation delays are applied consistently with the computed values.
+  graph.prepare(48000.0, 32);
+  std::array<float, 32> impulse{};
+  impulse[0] = 1.0f;
+  graph.clear_inputs(32);
+  graph.set_input("src", 0, impulse.data(), 32);
+  graph.process_block(32);
+
+  const float* out = graph.output("sink", 0);
+  REQUIRE(out != nullptr);
+  for (int i = 0; i < 23; ++i) {
+    REQUIRE_THAT(out[i], WithinAbs(0.0f, 0.0001f));
+  }
+  REQUIRE_THAT(out[23], WithinAbs(2.0f, 0.0001f));
+}
+
 TEST_CASE("Graph exposes Q8 connection delay compensation", "[graph]") {
   sonare::graph::Graph graph;
 

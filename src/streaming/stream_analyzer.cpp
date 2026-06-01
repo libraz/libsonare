@@ -300,10 +300,12 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
         chroma_history_.pop_front();
       }
 
-      /// Store to full chroma history for retroactive bar detection
+      /// Store to full chroma history for retroactive bar detection. Trim the
+      /// oldest frame with an O(1) deque pop_front instead of an O(N) vector
+      /// erase(begin()) memmove; the retained content is identical.
       full_chroma_history_.push_back(current_chroma);
-      if (full_chroma_history_.size() > kMaxChromaHistoryFrames) {
-        full_chroma_history_.erase(full_chroma_history_.begin());
+      while (full_chroma_history_.size() > kMaxChromaHistoryFrames) {
+        full_chroma_history_.pop_front();
       }
 
       /// Compute median-filtered chroma (more robust to noise than averaging)

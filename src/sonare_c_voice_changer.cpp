@@ -18,15 +18,6 @@ using namespace sonare_c_detail;
 namespace {
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
-SonareError copy_audio_result(const Audio& result, float** out, size_t* out_length) {
-  *out_length = result.size();
-  *out = new float[result.size()];
-  std::memcpy(*out, result.data(), result.size() * sizeof(float));
-  return SONARE_OK;
-}
-#endif
-
-#if defined(SONARE_WITH_VOICE_CHANGER)
 char* copy_c_string(const std::string& value) {
   char* out = new char[value.size() + 1];
   std::memcpy(out, value.c_str(), value.size() + 1);
@@ -48,22 +39,6 @@ struct SonareRealtimeVoiceChanger {
 };
 #endif
 
-namespace {
-// Variadic no-op used by SONARE_VC_STUB to swallow unused parameters in the
-// out-of-feature build configuration without per-parameter (void) casts.
-template <typename... T>
-inline void ignore_args(const T&...) noexcept {}
-}  // namespace
-
-// Helper macro for stubbing out C API functions when the optional voice
-// changer module is not compiled in. Suppresses unused-parameter warnings and
-// returns SONARE_ERROR_NOT_SUPPORTED.
-#define SONARE_VC_STUB(...)            \
-  do {                                 \
-    ignore_args(__VA_ARGS__);          \
-    return SONARE_ERROR_NOT_SUPPORTED; \
-  } while (false)
-
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length) {
@@ -79,7 +54,8 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
     return copy_audio_result(result, out, out_length);
   });
 #else
-  SONARE_VC_STUB(samples, length, sample_rate, pitch_semitones, formant_factor, out, out_length);
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, pitch_semitones, formant_factor, out,
+                              out_length);
 #endif
 }
 
@@ -189,7 +165,7 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(preset, out);
+  SONARE_C_STUB_NOT_SUPPORTED(preset, out);
 #endif
 }
 
@@ -237,7 +213,7 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(config, sample_rate, max_block_size, num_channels, out);
+  SONARE_C_STUB_NOT_SUPPORTED(config, sample_rate, max_block_size, num_channels, out);
 #endif
 }
 
@@ -256,7 +232,7 @@ SonareError sonare_realtime_voice_changer_set_config(
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, config);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, config);
 #endif
 }
 
@@ -269,7 +245,7 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, out);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, out);
 #endif
 }
 
@@ -307,7 +283,8 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(preset_or_config_json, sample_rate, max_block_size, num_channels, out);
+  SONARE_C_STUB_NOT_SUPPORTED(preset_or_config_json, sample_rate, max_block_size, num_channels,
+                              out);
 #endif
 }
 
@@ -327,7 +304,7 @@ SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* hand
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle);
+  SONARE_C_STUB_NOT_SUPPORTED(handle);
 #endif
 }
 
@@ -341,7 +318,7 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, preset_or_config_json);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, preset_or_config_json);
 #endif
 }
 
@@ -360,7 +337,7 @@ SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChange
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, input, output, num_samples);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, input, output, num_samples);
 #endif
 }
 
@@ -396,7 +373,7 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, input, output, num_frames, num_channels);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, input, output, num_frames, num_channels);
 #endif
 }
 
@@ -421,7 +398,7 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, left, right, num_frames);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, left, right, num_frames);
 #endif
 }
 
@@ -432,7 +409,7 @@ SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVo
   *out_latency_samples = handle->changer.latency_samples();
   return SONARE_OK;
 #else
-  SONARE_VC_STUB(handle, out_latency_samples);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, out_latency_samples);
 #endif
 }
 
@@ -447,7 +424,7 @@ SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceC
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(handle, out_json);
+  SONARE_C_STUB_NOT_SUPPORTED(handle, out_json);
 #endif
 }
 
@@ -503,7 +480,7 @@ SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** o
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_VC_STUB(name, out_json);
+  SONARE_C_STUB_NOT_SUPPORTED(name, out_json);
 #endif
 }
 
@@ -529,6 +506,6 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 #else
-  SONARE_VC_STUB(json, out_normalized_json, out_error);
+  SONARE_C_STUB_NOT_SUPPORTED(json, out_normalized_json, out_error);
 #endif
 }

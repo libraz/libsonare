@@ -10,6 +10,7 @@
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 #include "util/reflect_padding.h"
 
 namespace sonare {
@@ -76,14 +77,6 @@ std::vector<float> librosa_yin_cmndf(const float* frame, int frame_length, int m
   return cmndf;
 }
 
-int next_power_of_two(int value) {
-  int power = 1;
-  while (power < value) {
-    power <<= 1;
-  }
-  return power;
-}
-
 }  // namespace
 
 float PitchResult::median_f0() const {
@@ -136,7 +129,7 @@ std::vector<float> yin_difference(const float* frame, int frame_length, int max_
   }
 
   const int comparison_length = std::min(frame_length, window + available_lags - 1);
-  const int n_fft = next_power_of_two(window + comparison_length - 1);
+  const int n_fft = next_power_of_2(window + comparison_length - 1);
   std::vector<float> reference(static_cast<size_t>(n_fft), 0.0f);
   std::vector<float> comparison(static_cast<size_t>(n_fft), 0.0f);
 

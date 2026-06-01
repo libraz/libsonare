@@ -7,6 +7,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -71,12 +72,6 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
 
 namespace {
 
-int next_pow2(int n) {
-  int p = 1;
-  while (p < n) p <<= 1;
-  return p;
-}
-
 // Replicates Python's floor-division semantics for floats: `floor(x / 2)`.
 int python_floordiv_by2(float x) { return static_cast<int>(std::floor(x * 0.5f)); }
 
@@ -106,7 +101,7 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
   size_t n_fft = 0;
   if (pad_fft) {
     const int max_ceil = std::max(1, static_cast<int>(std::ceil(max_ilen)));
-    n_fft = static_cast<size_t>(next_pow2(max_ceil));
+    n_fft = static_cast<size_t>(next_power_of_2(max_ceil));
   }
   const size_t per_kernel = pad_fft ? n_fft : 0;
 

@@ -40,6 +40,7 @@ double wrap_phase(double phase) {
 std::vector<float> compute_instantaneous_frequency(const float* phase, const float* prev_phase,
                                                    int n_bins, int hop_length, int sample_rate) {
   SONARE_CHECK(phase != nullptr && prev_phase != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_bins >= 2 && sample_rate > 0 && hop_length > 0, ErrorCode::InvalidParameter);
 
   std::vector<float> inst_freq(n_bins);
 

@@ -286,6 +286,7 @@ SonareError sonare_onset_strength(const float* samples, size_t length, int sr, i
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = nullptr;
+  *out_length = 0;
 
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
     MelConfig mel_config;
@@ -421,6 +422,8 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count) {
   if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
@@ -439,6 +442,8 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
                                       int frame_length, int hop_length, float** out,
                                       size_t* out_count) {
   if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);

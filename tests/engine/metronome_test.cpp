@@ -1,7 +1,9 @@
 #include "engine/metronome.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <iterator>
 
 TEST_CASE("Metronome collects beat clicks at sample-accurate offsets", "[engine][metronome]") {
   sonare::transport::TempoMap tempo;
@@ -53,10 +55,50 @@ TEST_CASE("Metronome process renders accented and regular clicks", "[engine][met
   float* channels[] = {left.data()};
   metro.process(channels, 1, static_cast<int>(left.size()), 0);
 
-  REQUIRE(left[0] == 0.75f);
-  REQUIRE(left[1] < left[0]);
-  REQUIRE(left[24000] == 0.25f);
-  REQUIRE(left[23999] == 0.0f);
+  // The accented click on beat 1 ramps up from silence (no hard 0 -> peak step)
+  // and the regular click on the next beat is quieter than the accent peak.
+  REQUIRE(left[0] > 0.0f);
+  REQUIRE(left[0] < 0.75f);
+  const float accent_peak = *std::max_element(left.begin(), left.begin() + 4);
+  const float beat_peak = *std::max_element(left.begin() + 24000, left.begin() + 24004);
+  REQUIRE(accent_peak > beat_peak);
+  // Both clicks decay to exactly zero at their final sample (no tail step).
+  REQUIRE(left[3] == 0.0f);
+  REQUIRE(left[24003] == 0.0f);
+}
+
+TEST_CASE("Metronome click envelope ramps up and decays to zero", "[engine][metronome]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  constexpr int kClickLen = 64;
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+  metro.set_config({true, 0.25f, 0.75f, kClickLen});
+
+  std::array<float, 256> left{};
+  float* channels[] = {left.data()};
+  metro.process(channels, 1, static_cast<int>(left.size()), 0);
+
+  // No instantaneous onset: the first sample starts near zero.
+  REQUIRE(left[0] >= 0.0f);
+  REQUIRE(left[0] < 0.1f);
+  // The envelope ramps up to an interior peak (not at the very first sample).
+  const auto peak_it = std::max_element(left.begin(), left.begin() + kClickLen);
+  const float peak = *peak_it;
+  const auto peak_index = std::distance(left.begin(), peak_it);
+  REQUIRE(peak > 0.5f);
+  REQUIRE(peak_index > 0);
+  REQUIRE(peak <= 0.75f);
+  // Strictly increasing through the attack: the first sample is below the peak.
+  REQUIRE(left[0] < peak);
+  // The click decays back to exactly zero at its final sample and stays silent
+  // afterwards (no hard step at the tail boundary).
+  REQUIRE(left[kClickLen - 1] == 0.0f);
+  REQUIRE(left[kClickLen] == 0.0f);
+  // The sample just before the end is small (decayed), proving the tail trends
+  // to zero rather than ending mid-amplitude.
+  REQUIRE(left[kClickLen - 2] < 0.1f);
 }
 
 TEST_CASE("Metronome count-in ends at requested bar boundary", "[engine][metronome]") {

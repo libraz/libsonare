@@ -1266,7 +1266,12 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
 }
 
 const char* sonare_mixing_scene_preset_names(void) {
-  static std::string storage;
+  // thread_local (not plain static): each call reassigns the storage and returns
+  // a borrowed pointer into it. A plain static would let a concurrent caller
+  // reassign the string and invalidate another thread's returned pointer. Per
+  // the C-ABI contract this pointer is borrowed (callers must not free it) and
+  // is valid until the next call ON THE SAME THREAD.
+  static thread_local std::string storage;
   return sonare_c_detail::join_names(sonare::mixing::api::scene_preset_names(), storage);
 }
 

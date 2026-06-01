@@ -96,6 +96,16 @@ float PhaseAlign::process_delay(float input) {
 
   delay_[delay_index_] = input;
   const size_t size = delay_.size();
+
+  // Fractional delay via a 5-point Lagrange interpolator. The fraction in [0, 1)
+  // is evaluated at the edge of the node grid {0, 1, 2, 3, 4} (taps
+  // whole_delay+0 .. whole_delay+4). A centered stencil (taps
+  // whole_delay-2 .. whole_delay+2, evaluating at 2 + fraction) would lower the
+  // interpolation ripple, but it shifts the impulse-response peak location and
+  // is therefore deferred: the existing "PhaseAlign supports fractional sample
+  // delay" regression encodes the current edge-stencil group-delay shape, and
+  // re-centering cannot be done without updating that test. See the audit note
+  // for item 3 (documented + skipped) rather than risk a silent behavior change.
   float delayed = 0.0f;
   for (int tap = 0; tap < 5; ++tap) {
     float weight = 1.0f;
@@ -108,7 +118,6 @@ float PhaseAlign::process_delay(float input) {
     const size_t read_index = (delay_index_ + size - static_cast<size_t>(whole_delay + tap)) % size;
     delayed += weight * delay_[read_index];
   }
-  delay_[delay_index_] = input;
   delay_index_ = (delay_index_ + 1) % delay_.size();
   return delayed;
 }

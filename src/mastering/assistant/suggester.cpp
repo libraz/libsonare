@@ -38,6 +38,10 @@ void set_loudness(api::MasteringChainConfig& chain, float target_lufs, float cei
   chain.loudness.enabled = true;
   chain.loudness.target_lufs = target_lufs;
   chain.loudness.ceiling_db = ceiling_db;
+  // Match api::enable_loudness (presets.cpp): keep 4x true-peak oversampling
+  // explicit so the suggester and preset loudness configs stay in lock-step even
+  // if the struct default ever changes.
+  chain.loudness.true_peak_oversample = 4;
 }
 
 void explain(std::vector<std::string>& out, std::string text) { out.push_back(std::move(text)); }

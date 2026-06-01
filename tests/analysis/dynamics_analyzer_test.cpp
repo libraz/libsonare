@@ -200,6 +200,33 @@ TEST_CASE("DynamicsAnalyzer loudness histogram", "[dynamics_analyzer]") {
   REQUIRE(total > 0);
 }
 
+TEST_CASE("DynamicsAnalyzer handles degenerate sub-sample window", "[dynamics_analyzer]") {
+  // A tiny window_sec at a tiny sample rate truncates window_samples to zero
+  // without the std::max(1, ...) floor, producing a 0/0 NaN in the loudness
+  // curve. Verify the output stays finite for such pathological inputs.
+  constexpr int sr = 8;
+  std::vector<float> samples(sr, 0.0f);
+  for (int i = 0; i < sr; ++i) {
+    samples[i] = 0.25f * std::sin(2.0f * sonare::constants::kPiD * static_cast<float>(i));
+  }
+
+  DynamicsConfig config;
+  config.window_sec = 1.0e-4f;  // 0.0001 s * 8 Hz = 0.0008 samples -> truncates to 0
+  config.hop_length = 1;
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  DynamicsAnalyzer analyzer(audio, config);
+
+  REQUIRE(std::isfinite(analyzer.peak_db()));
+  REQUIRE(std::isfinite(analyzer.rms_db()));
+  REQUIRE(std::isfinite(analyzer.crest_factor()));
+  REQUIRE(std::isfinite(analyzer.dynamic_range_db()));
+
+  for (float rms : analyzer.loudness_curve().rms_db) {
+    REQUIRE(std::isfinite(rms));
+  }
+}
+
 TEST_CASE("DynamicsAnalyzer accessors", "[dynamics_analyzer]") {
   Audio audio = create_constant_sine(0.7f);
 

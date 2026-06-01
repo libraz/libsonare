@@ -249,7 +249,7 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // not the truncated integer length.
     float norm = (win_sum > 0.0f) ? (raw_length * inv_n_fft) / win_sum : 0.0f;
 
-    // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*idx/sr).
+    // Generate time-domain kernel: windowed complex sinusoid exp(+j*2*pi*f*idx/sr).
     //
     // The kernel must be *centered* inside the fft_length window, exactly like
     // the CQT path (filters::wavelet pad-centers each kernel and references the
@@ -268,8 +268,12 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     for (int n = 0; n < length; ++n) {
       float phase = kTwoPi * freq * (phase_start + n) / sr;
       float scaled_win = window[n] * norm;
+      // Use exp(+j*phase) (cos, +sin) to match the CQT kernel convention in
+      // filters/wavelet.cpp and librosa. Both paths store conj(FFT(kernel)), so
+      // a sign flip here would conjugate the complex VQT response relative to
+      // librosa (magnitude/chroma are unaffected, but phase consumers invert).
       complex_time_kernel[slot_offset + n] =
-          std::complex<float>(scaled_win * std::cos(phase), -scaled_win * std::sin(phase));
+          std::complex<float>(scaled_win * std::cos(phase), scaled_win * std::sin(phase));
     }
 
     // Complex FFT of kernel

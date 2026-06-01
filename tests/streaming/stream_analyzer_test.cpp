@@ -911,6 +911,69 @@ TEST_CASE("StreamAnalyzer onset auto-enables mel so BPM is not silently zero", "
   }
 }
 
+// ============================================================================
+// Perf/container regression: full_chroma_history_ must stay bounded with O(1)
+// front-trimming (deque), and the downstream chroma-derived result must be
+// unchanged by the container switch.
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer full chroma history stays bounded over a long stream",
+          "[streaming][chord]") {
+  // full_chroma_history_ feeds retroactive bar-chord detection and is capped at
+  // kMaxChromaHistoryFrames. It used to be a std::vector trimmed with
+  // erase(begin()) every frame (an O(N) memmove of ~kMaxChromaHistoryFrames*12
+  // floats per frame); it is now a std::deque trimmed with an O(1) pop_front.
+  // The retained chroma CONTENT is identical — only the container/perf changes.
+  // This test feeds far more than the cap and asserts the history never exceeds
+  // it (the front-trim engaged) while the chroma-derived key estimate is still
+  // the expected, stable value for the known signal.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+  config.key_update_interval_sec = 3.0f;
+
+  StreamAnalyzer analyzer(config);
+
+  const size_t cap = StreamAnalyzer::full_chroma_history_cap_for_test();
+  REQUIRE(cap > 0);
+
+  // A frame is emitted every hop_length samples, so producing more than `cap`
+  // chroma frames requires > cap * hop_length samples. Feed comfortably past
+  // that so the front-trim is exercised many times. Use a sustained A (440 Hz)
+  // so the downstream key estimate is deterministic (pitch class 9 = A).
+  const int sr = 22050;
+  const size_t target_frames = cap + 600;
+  const int total_samples =
+      static_cast<int>((target_frames + 4) * static_cast<size_t>(config.hop_length));
+  std::vector<float> audio = generate_sine(total_samples, 440.0f, sr);
+
+  // Stream in chunks so trimming happens incrementally across many process()
+  // calls, like a real stream, and assert the invariant at every step.
+  const size_t chunk = 8192;
+  for (size_t off = 0; off < audio.size(); off += chunk) {
+    const size_t n = std::min(chunk, audio.size() - off);
+    analyzer.process(audio.data() + off, n);
+    analyzer.read_frames(100000);  // Drain output so it does not dominate memory.
+    REQUIRE(analyzer.full_chroma_history_size_for_test() <= cap);
+  }
+
+  // Many more chroma frames than the cap were produced, so the history must be
+  // pinned exactly at its bound — proving the front-trim actually engaged
+  // (a never-trimmed container would be far larger).
+  REQUIRE(analyzer.full_chroma_history_size_for_test() == cap);
+
+  // Downstream result unchanged: the sustained-A signal still resolves to key A.
+  auto stats = analyzer.stats();
+  REQUIRE(stats.estimate.key == 9);
+  REQUIRE(stats.estimate.key_confidence > 0.0f);
+
+  // reset() must clear the bounded history (deque::clear), like the old vector.
+  analyzer.reset();
+  REQUIRE(analyzer.full_chroma_history_size_for_test() == 0);
+}
+
 TEST_CASE("StreamAnalyzer vote-index encode/decode round-trips for extended qualities",
           "[streaming][chord]") {
   // Regression for the pattern-correction decode bug: corrections were encoded

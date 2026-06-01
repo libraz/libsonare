@@ -248,6 +248,16 @@ TEST_CASE("all 25 presets process a deterministic fixture with valid output",
   }
 }
 
+TEST_CASE("preset_config(Streaming) is an intentional alias of Pop", "[mastering][preset]") {
+  // make_streaming() deliberately returns make_pop() (see presets.cpp). This
+  // test documents that contract: the two configs must be byte-for-byte equal
+  // (compared via their canonical JSON form). If a genuinely distinct streaming
+  // voicing is introduced, this assertion is the intended trip-wire to update.
+  const auto streaming = preset_config(Preset::Streaming);
+  const auto pop = preset_config(Preset::Pop);
+  REQUIRE(chain_config_to_json(streaming) == chain_config_to_json(pop));
+}
+
 TEST_CASE("master_audio_mono runs Pop preset on dummy signal", "[mastering][preset]") {
   std::vector<float> samples(44100, 0.1f);
   auto result = master_audio_mono(Preset::Pop, samples.data(), samples.size(), 44100);

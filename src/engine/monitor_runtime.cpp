@@ -15,26 +15,37 @@ void MonitorRuntime::prepare(double sample_rate, int max_block_size, float smoot
 }
 
 bool MonitorRuntime::add_strip(mixing::ChannelStrip* strip) noexcept {
-  if (!strip || size_ >= strips_.size()) return false;
-  for (size_t i = 0; i < size_; ++i) {
+  // Control thread is the sole writer of size_, so relaxed loads suffice for
+  // reading the current count here; the new count is published with a release
+  // store below.
+  const size_t count = size_.load(std::memory_order_relaxed);
+  if (!strip || count >= strips_.size()) return false;
+  for (size_t i = 0; i < count; ++i) {
     if (strips_[i].strip == strip) return false;
   }
-  StripState& state = strips_[size_++];
+  StripState& state = strips_[count];
   state = {};
   state.strip = strip;
   state.mute_gain.prepare(sample_rate_, smoothing_ms_);
   state.mute_gain.reset(1.0f);
+  // Publish the fully initialized slot before the audio thread can observe the
+  // incremented count via an acquire load.
+  size_.store(count + 1, std::memory_order_release);
   recompute_solo_mutes();
   return true;
 }
 
 bool MonitorRuntime::remove_strip(mixing::ChannelStrip* strip) noexcept {
-  for (size_t i = 0; i < size_; ++i) {
+  const size_t count = size_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < count; ++i) {
     if (strips_[i].strip != strip) continue;
-    for (size_t j = i + 1; j < size_; ++j) {
+    for (size_t j = i + 1; j < count; ++j) {
       strips_[j - 1] = strips_[j];
     }
-    strips_[--size_] = {};
+    // Shrink the published count first so the audio thread stops touching the
+    // tail slot, then clear it.
+    size_.store(count - 1, std::memory_order_release);
+    strips_[count - 1] = {};
     recompute_solo_mutes();
     return true;
   }
@@ -43,7 +54,8 @@ bool MonitorRuntime::remove_strip(mixing::ChannelStrip* strip) noexcept {
 
 bool MonitorRuntime::contains(mixing::ChannelStrip* strip) const noexcept {
   if (!strip) return false;
-  for (size_t i = 0; i < size_; ++i) {
+  const size_t count = size_.load(std::memory_order_acquire);
+  for (size_t i = 0; i < count; ++i) {
     if (strips_[i].strip == strip) return true;
   }
   return false;
@@ -63,7 +75,8 @@ void MonitorRuntime::set_solo(size_t index, bool soloed) noexcept {
 
 void MonitorRuntime::set_exclusive_solo(size_t index, bool soloed) noexcept {
   if (!valid_index(index)) return;
-  for (size_t i = 0; i < size_; ++i) {
+  const size_t count = size_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < count; ++i) {
     strips_[i].soloed.store((i == index) && soloed, std::memory_order_release);
   }
   recompute_solo_mutes();
@@ -139,11 +152,12 @@ MonitorMode MonitorRuntime::monitor_mode(size_t index) const noexcept {
 }
 
 void MonitorRuntime::recompute_solo_mutes() noexcept {
+  const size_t count = size_.load(std::memory_order_relaxed);
   bool any_solo = false;
-  for (size_t i = 0; i < size_; ++i) {
+  for (size_t i = 0; i < count; ++i) {
     any_solo = any_solo || strips_[i].soloed.load(std::memory_order_relaxed);
   }
-  for (size_t i = 0; i < size_; ++i) {
+  for (size_t i = 0; i < count; ++i) {
     const bool implied = any_solo && !strips_[i].soloed.load(std::memory_order_relaxed) &&
                          !strips_[i].solo_safe.load(std::memory_order_relaxed);
     strips_[i].implied_mute.store(implied, std::memory_order_release);

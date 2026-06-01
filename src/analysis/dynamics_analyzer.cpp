@@ -54,9 +54,11 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   dynamics_.rms_db = 20.0f * std::log10(std::max(rms, eps));
   dynamics_.crest_factor = dynamics_.peak_db - dynamics_.rms_db;
 
-  // Compute loudness curve using prefix sum for O(n) complexity
-  int window_samples = static_cast<int>(config_.window_sec * sr);
-  int hop_length = config_.hop_length;
+  // Compute loudness curve using prefix sum for O(n) complexity.
+  // Floor the window to at least one sample: a tiny window_sec or sample_rate
+  // would otherwise truncate to zero and produce a 0/0 NaN in the per-window RMS.
+  int window_samples = std::max(1, static_cast<int>(config_.window_sec * sr));
+  int hop_length = std::max(1, config_.hop_length);
 
   // Build prefix sum of squared samples: prefix_sum[i] = sum(data[0..i-1]^2)
   std::vector<double> prefix_sum(n_samples + 1);

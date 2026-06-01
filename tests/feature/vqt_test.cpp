@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <vector>
 
@@ -349,8 +350,11 @@ TEST_CASE("VQT phase correctness", "[vqt]") {
   REQUIRE(target_bin >= 0);
 
   // For a pure tone, the phase difference between consecutive frames should be
-  // approximately -2*pi*freq*hop_length/sr (modulo 2*pi).
-  float expected_phase_diff = -2.0f * sonare::constants::kPiD * freq * config.hop_length / sr;
+  // approximately +2*pi*freq*hop_length/sr (modulo 2*pi). The VQT kernel uses a
+  // positive-phasor sinusoid exp(+jω n), matching the CQT path (filters/wavelet)
+  // and librosa, so the bin phase advances by +ω·hop/sr per frame (the same sign
+  // as the "CQT phase correctness" test).
+  float expected_phase_diff = 2.0f * sonare::constants::kPiD * freq * config.hop_length / sr;
 
   // Normalize expected_phase_diff to [-pi, pi]
   while (expected_phase_diff > sonare::constants::kPiD)
@@ -389,6 +393,70 @@ TEST_CASE("VQT phase correctness", "[vqt]") {
   // At least 80% of frames should have correct phase progression
   REQUIRE(total_count > 0);
   REQUIRE(static_cast<float>(match_count) / total_count >= 0.8f);
+}
+
+TEST_CASE("vqt gamma>0 complex phase matches the CQT/librosa convention", "[vqt]") {
+  // Regression: the gamma>0 VQT kernel previously built exp(-j*phase) while the
+  // CQT path (filters/wavelet.cpp) and librosa build exp(+j*phase). Since both
+  // store conj(FFT(kernel)), the sign flip conjugated the VQT complex response
+  // relative to librosa (magnitudes were unaffected, but phase/complex consumers
+  // were inverted). This test pins the corrected convention: the per-frame phase
+  // advance of the dominant bin must be POSITIVE (+ω·hop/sr), matching the
+  // "VQT phase correctness" and "CQT phase correctness" tests, not negated.
+  const float freq = 440.0f;
+  const int sr = 22050;
+  Audio audio = generate_sine(freq, 1.0f, sr);
+
+  VqtConfig config;
+  config.fmin = 65.4f;
+  config.n_bins = 48;
+  config.hop_length = 512;
+  config.gamma = 24.0f;  // gamma>0 -> exercises the custom VQT kernel path
+
+  VqtResult result = vqt(audio, config);
+
+  // Bin closest to 440 Hz.
+  int target_bin = -1;
+  float min_diff = std::numeric_limits<float>::max();
+  for (int k = 0; k < result.n_bins(); ++k) {
+    float diff = std::abs(result.frequencies()[k] - freq);
+    if (diff < min_diff) {
+      min_diff = diff;
+      target_bin = k;
+    }
+  }
+  REQUIRE(target_bin >= 0);
+
+  // Expected per-frame phase advance with the positive-phasor convention.
+  float expected = 2.0f * sonare::constants::kPiD * freq * config.hop_length / sr;
+  while (expected > sonare::constants::kPiD) expected -= 2.0f * sonare::constants::kPiD;
+  while (expected < -sonare::constants::kPiD) expected += 2.0f * sonare::constants::kPiD;
+
+  // Accumulate the average steady-state inter-frame phase difference via complex
+  // unit vectors (avoids wrap-bias when averaging angles directly).
+  const int start_frame = result.n_frames() / 4;
+  const int end_frame = 3 * result.n_frames() / 4;
+  std::complex<double> accum(0.0, 0.0);
+  int count = 0;
+  for (int t = start_frame; t < end_frame - 1; ++t) {
+    std::complex<float> c0 = result.at(target_bin, t);
+    std::complex<float> c1 = result.at(target_bin, t + 1);
+    if (std::abs(c0) < 1e-6f || std::abs(c1) < 1e-6f) continue;
+    // c1 * conj(c0) has argument equal to the inter-frame phase difference.
+    std::complex<double> step = std::complex<double>(c1) * std::conj(std::complex<double>(c0));
+    double m = std::abs(step);
+    if (m > 0.0) accum += step / m;
+    ++count;
+  }
+  REQUIRE(count > 0);
+
+  const float observed = static_cast<float>(std::arg(accum));
+
+  // The observed advance must be positive (sign of the librosa/CQT convention),
+  // and must NOT match the negated (old) convention.
+  REQUIRE(observed > 0.0f);
+  REQUIRE(std::abs(observed - expected) < 0.5f);
+  REQUIRE(std::abs(observed - (-expected)) > 0.5f);
 }
 
 TEST_CASE("vqt empty audio throws", "[vqt]") {

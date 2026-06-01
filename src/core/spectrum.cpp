@@ -5,11 +5,11 @@
 #include <cmath>
 #include <random>
 
+#include "core/db_convert.h"
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 #include "util/reflect_padding.h"
 
 namespace sonare {
@@ -229,9 +229,11 @@ const std::vector<float>& Spectrogram::power() const {
 
 std::vector<float> Spectrogram::to_db(float ref, float amin, float top_db) const {
   const std::vector<float>& pwr = power();
-  std::vector<float> db(pwr.size());
-  power_to_db(pwr.data(), pwr.size(), ref, amin, top_db, db.data());
-  return db;
+  // Call the canonical vector-returning power_to_db directly (single
+  // allocation). The math_utils out-pointer overload would allocate its own
+  // vector and copy it into ours, so going straight to the source avoids the
+  // redundant allocation + copy while keeping the result numerically identical.
+  return sonare::power_to_db(pwr.data(), pwr.size(), ref, amin, top_db);
 }
 
 const std::complex<float>& Spectrogram::at(int bin, int frame) const {

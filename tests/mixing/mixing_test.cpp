@@ -2077,3 +2077,66 @@ TEST_CASE("BusProcessor silent input through IIR insert produces exact-zero outp
     REQUIRE(right[static_cast<size_t>(i)] == 0.0f);
   }
 }
+
+TEST_CASE("ChannelStrip segmented pre and post meters integrate the same window", "[mixing]") {
+  // Regression: in the segmented automation path of process_at(), the pre-fader
+  // meter was driven with clamped_samples (min(num_samples, max_block_size_))
+  // while the post-fader meter was driven with the full num_samples. When
+  // num_samples > max_block_size_ the two meters integrated different lengths,
+  // so their RMS/LUFS readings disagreed for the SAME block. The fix clamps the
+  // post meter to the same window as the pre meter (pre_tap_ is only
+  // max_block_size_ wide, so the pre meter can never see more than that).
+  //
+  // Build a block that is LOUD only over the first max_block_size_ samples and
+  // SILENT afterward. RMS depends on the integration window, so:
+  //   - pre meter integrates clamped_samples (the loud region) -> rms = loud
+  //   - post meter, when consistent, integrates the same window -> rms = loud
+  // If the post meter instead integrated the full num_samples (loud + silence)
+  // its RMS would be measurably LOWER. Asserting pre.rms_db == post.rms_db
+  // therefore proves both meters use the same window length.
+  constexpr int kMaxBlock = 64;
+  constexpr int kNumSamples = 256;  // > kMaxBlock, so the windows differed pre-fix.
+  static_assert(kNumSamples > kMaxBlock, "test requires num_samples > max_block_size_");
+
+  // Unity strip: 0 dB fader, center Linear0dB pan, width 1 — so the post-fader
+  // output equals the pre-fader tap sample-for-sample and the two meters see the
+  // same signal. Any window mismatch is then the ONLY source of an RMS gap.
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kMaxBlock);
+
+  std::vector<float> left(kNumSamples, 0.0f);
+  std::vector<float> right(kNumSamples, 0.0f);
+  constexpr float kLoud = 0.5f;
+  for (int i = 0; i < kMaxBlock; ++i) {
+    left[static_cast<size_t>(i)] = kLoud;
+    right[static_cast<size_t>(i)] = kLoud;
+  }
+  float* channels[] = {left.data(), right.data()};
+
+  // Force the segmented path with a no-op fader automation event (target equals
+  // the current 0 dB value, so the gain stays unity and the signal is unchanged)
+  // scheduled within the block.
+  REQUIRE(strip.schedule_fader_automation(0, 0.0f));
+  strip.process_at(channels, 2, kNumSamples, 0);
+
+  const auto pre = strip.meter_snapshot(sonare::mixing::TapPoint::PreFader);
+  const auto post = strip.meter_snapshot(sonare::mixing::TapPoint::PostFader);
+  REQUIRE(pre.seq == 1);
+  REQUIRE(post.seq == 1);
+
+  // The pre meter reflects the loud region only (it can never integrate more
+  // than max_block_size_). The expected RMS of a constant kLoud over its window
+  // is exactly kLoud.
+  const float expected_rms_db = 20.0f * std::log10(kLoud);
+  REQUIRE_THAT(pre.rms_db[0], WithinAbs(expected_rms_db, 0.01f));
+  REQUIRE_THAT(pre.rms_db[1], WithinAbs(expected_rms_db, 0.01f));
+
+  // Same window: the post meter must report the same RMS. (Pre-fix it would have
+  // been ~6 dB lower because the silent tail diluted the full-block average.)
+  REQUIRE_THAT(post.rms_db[0], WithinAbs(pre.rms_db[0], 0.01f));
+  REQUIRE_THAT(post.rms_db[1], WithinAbs(pre.rms_db[1], 0.01f));
+
+  // Peak is window-length insensitive here (the loud region dominates), so it
+  // matches on both meters as a sanity check that the signals are identical.
+  REQUIRE_THAT(post.peak_db[0], WithinAbs(pre.peak_db[0], 0.01f));
+}
