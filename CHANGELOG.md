@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+## v1.2.2 (2026-06-01)
+
+### Breaking changes
+
+- Replaced stdlib exceptions (`std::invalid_argument`, `std::logic_error`,
+  etc.) with `SonareException` across the C API, RT, EQ, mixing, mastering, and
+  WASM surfaces so all failures throw a single, catchable type.
+- Unified the `AutomationCurve` enum across the engine and mixing modules; code
+  referencing the previous per-module enums must use the shared definition.
+- Aligned binding facade parameter names to the canonical C API and aligned the
+  melody/section/acoustic analyzer defaults to the documented values, which
+  changes keyword-argument names and default behaviour for existing callers.
+- Unified the `bounceOffline` LUFS default between the C API and WASM bindings.
+
+### DSP & analysis correctness
+
+- Fixed EQ/saturation, stereo-image, gate, de-esser, maximizer, and formant DSP
+  in the mastering and editing engines.
+- Switched the `chroma_cqt` default norm to L-infinity and corrected the chroma
+  `fmin`, chord decoding, and overlap growth in the streaming analyzer for
+  librosa parity.
+- Hardened numerical robustness in feature/core paths, replacing remaining raw
+  constants with the centralised `util/constants.h` values.
+- Added an FFT null guard and beat-tracker frame-bounds checks, a bus denormal
+  guard, BS.1770 surround weighting, and denormal flushing in the voice changer.
+- Added the missing `<cstdint>` include so `streaming_reverb` builds under GCC.
+
+### Real-time safety
+
+- Fixed RT thread-safety across the engine, graph, mixing, transport, and
+  automation modules; capped insert vectors and documented the `AutomationLane`
+  SPSC contract.
+
+### Performance
+
+- Replaced the O(N) LRU promotion with an O(1) splice in the mel/chroma filter
+  caches and optimised additional hot paths while hardening API boundaries.
+
+### Bindings & API
+
+- Added imperative `Mixer` strip setters and planar-stereo voice processing,
+  hand-written offline effects/dynamics bindings for Node and Python, offline
+  dynamics TypeScript typings for WASM, and backfilled Python `.pyi` stubs for
+  runtime-exposed analyzer functions.
+
+### Tooling & internal
+
+- Added a cross-binding parity checker (`tools/parity`) that detects default,
+  constant/enum, and parameter-name drift between the C++ core and bindings, and
+  a realtime voice-changer quality gate in CI.
+- Split the monolithic `sonare_c.h` and `sonare_c_daw.cpp` into per-domain
+  units, folded offline-analysis boilerplate into a `run_offline` helper, and
+  commonised biquad state, `db_to_linear`, and pass/gain processors into `rt/`.
+- Added thread-safety contracts to the RT/mixing/engine Doxygen headers.
+
 ## v1.2.1 (2026-05-27)
 
 ### Bindings & API

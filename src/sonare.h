@@ -7,8 +7,8 @@
 // Version information
 #define SONARE_VERSION_MAJOR 1
 #define SONARE_VERSION_MINOR 2
-#define SONARE_VERSION_PATCH 1
-#define SONARE_VERSION_STRING "1.2.1"
+#define SONARE_VERSION_PATCH 2
+#define SONARE_VERSION_STRING "1.2.2"
 
 // Utility
 #include "util/exception.h"
