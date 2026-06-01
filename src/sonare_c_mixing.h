@@ -171,6 +171,12 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
 // addresses the strip's sends in add order. See the schedulers above for timeline
 // and @c curve semantics (same sample-accurate mixing ordinal scheme:
 // 0 = Linear, 1 = Exponential, 2 = Hold, 3 = SCurve).
+//
+// Returns @c SONARE_OK on success, @c SONARE_ERROR_INVALID_PARAMETER if strip is
+// NULL, curve is unknown, or @c send_index is out of range, or
+// @c SONARE_ERROR_OUT_OF_MEMORY if the send's event lane is full (matching the
+// fader/pan/width schedulers, so callers can distinguish a bad argument from a
+// capacity condition).
 SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t send_index,
                                                   int64_t sample_pos, float db, int curve);
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);

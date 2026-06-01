@@ -517,8 +517,11 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
             static_cast<float>(config_.hop_length) / static_cast<float>(internal_sample_rate_);
 
         if (new_root == prev_chord_root_ && new_quality == prev_chord_quality_) {
-          /// Same chord - accumulate stable time
+          /// Same chord - accumulate stable time and track the held chord's
+          /// peak confidence so the eventual ChordChange reports this chord's
+          /// own strength, not the next chord's.
           chord_stable_time_ += frame_duration;
+          prev_chord_confidence_ = std::max(prev_chord_confidence_, new_confidence);
         } else {
           /// Chord changed - check if previous chord was stable long enough
           if (prev_chord_root_ >= 0 && chord_stable_time_ >= kChordMinDuration) {
@@ -533,15 +536,19 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
               change.root = prev_chord_root_;
               change.quality = prev_chord_quality_;
               change.start_time = chord_start;
-              change.confidence = new_confidence;
+              /// Use the *completed* chord's accumulated peak confidence, not
+              /// new_confidence (which belongs to the chord that triggered the
+              /// transition).
+              change.confidence = prev_chord_confidence_;
               current_estimate_.chord_progression.push_back(change);
             }
           }
 
-          /// Reset for new chord
+          /// Reset for new chord, seeding its confidence with this first frame.
           prev_chord_root_ = new_root;
           prev_chord_quality_ = new_quality;
           chord_stable_time_ = frame_duration;
+          prev_chord_confidence_ = new_confidence;
         }
       }
     }

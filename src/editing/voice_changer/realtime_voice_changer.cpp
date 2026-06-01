@@ -70,6 +70,12 @@ int object_int(const sonare::util::json::Value& object, const char* key, int fal
   return static_cast<int>(n);
 }
 
+bool object_bool(const sonare::util::json::Value& object, const char* key, bool fallback) {
+  const auto* value = object.find(key);
+  if (!value || !value->is_bool()) return fallback;
+  return value->as_bool();
+}
+
 void dump_number(std::ostringstream& out, float value) {
   // max_digits10 (17 for IEEE-754 double) ensures lossless roundtrip — matches
   // util/json::dump_value. Stream's locale is classic (imbued by the callers),
@@ -85,6 +91,11 @@ void dump_field(std::ostringstream& out, const char* key, float value, bool last
 
 void dump_int_field(std::ostringstream& out, const char* key, int value, bool last = false) {
   out << '"' << key << "\":" << value;
+  if (!last) out << ',';
+}
+
+void dump_bool_field(std::ostringstream& out, const char* key, bool value, bool last = false) {
+  out << '"' << key << "\":" << (value ? "true" : "false");
   if (!last) out << ',';
 }
 
@@ -131,7 +142,9 @@ void dump_dsp_section(std::ostringstream& out, const RealtimeVoiceChangerConfig&
   dump_int_field(out, "seed", c.reverb.seed, true);
   out << "},\"limiter\":{";
   dump_field(out, "ceilingDb", c.limiter.ceiling_db);
-  dump_field(out, "releaseMs", c.limiter.release_ms, true);
+  dump_field(out, "releaseMs", c.limiter.release_ms);
+  dump_bool_field(out, "enableIspLimiter", c.limiter.enable_isp_limiter);
+  dump_field(out, "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp, true);
   out << "}}";
 }
 
@@ -333,7 +346,13 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   }
 
   const auto& limiter = *dsp.find("limiter");
-  if (!has_allowed_keys(limiter, {"ceilingDb", "releaseMs"}, "dsp.limiter", error)) return false;
+  // enableIspLimiter / ispCeilingDbtp are optional: presets authored before the
+  // ISP stage was added omit them and fall back to the POD defaults (enabled,
+  // -1.0 dBTP). When present they are validated below.
+  if (!has_allowed_keys(limiter, {"ceilingDb", "releaseMs", "enableIspLimiter", "ispCeilingDbtp"},
+                        "dsp.limiter", error)) {
+    return false;
+  }
   for (const char* key : {"ceilingDb", "releaseMs"}) {
     if (!require_key(limiter, key, "dsp.limiter", error)) return false;
   }
@@ -343,6 +362,18 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   // can later relax this.
   if (!require_number(limiter, "ceilingDb", -12.0, -1.0, "dsp.limiter", error)) return false;
   if (!require_number(limiter, "releaseMs", 1.0, 500.0, "dsp.limiter", error)) return false;
+  if (const auto* isp = limiter.find("enableIspLimiter")) {
+    if (!isp->is_bool()) {
+      if (error) *error = "field must be a boolean: dsp.limiter.enableIspLimiter";
+      return false;
+    }
+  }
+  // The ISP stage detects inter-sample peaks via 4x oversampling, so its ceiling
+  // may legitimately reach 0.0 dBTP (no extra headroom needed) unlike the
+  // sample-domain ceilingDb above.
+  if (limiter.find("ispCeilingDbtp") != nullptr) {
+    if (!require_number(limiter, "ispCeilingDbtp", -12.0, 0.0, "dsp.limiter", error)) return false;
+  }
   return true;
 }
 
@@ -373,7 +404,8 @@ bool config_is_finite(const RealtimeVoiceChangerConfig& c, std::string* error) {
          check("reverb.mix", c.reverb.mix) && check("reverb.timeMs", c.reverb.time_ms) &&
          check("reverb.damping", c.reverb.damping) &&
          check("limiter.ceilingDb", c.limiter.ceiling_db) &&
-         check("limiter.releaseMs", c.limiter.release_ms);
+         check("limiter.releaseMs", c.limiter.release_ms) &&
+         check("limiter.ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
 }
 
 }  // namespace
@@ -968,6 +1000,9 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
   if (const auto* v = object.find("limiter")) {
     c.limiter.ceiling_db = object_number(*v, "ceilingDb", c.limiter.ceiling_db);
     c.limiter.release_ms = object_number(*v, "releaseMs", c.limiter.release_ms);
+    c.limiter.enable_isp_limiter =
+        object_bool(*v, "enableIspLimiter", c.limiter.enable_isp_limiter);
+    c.limiter.isp_ceiling_dbtp = object_number(*v, "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
   }
   return normalize_realtime_voice_changer_config(c);
 }

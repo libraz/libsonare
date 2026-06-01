@@ -45,6 +45,9 @@ class GraphicEq : public rt::ProcessorBase {
   ParametricEq low_eq_;
   ParametricEq high_eq_;
   std::array<float, kNumBands> gains_db_{};
+  // Captured in prepare(); used to clamp fixed ISO center frequencies to the
+  // open (0 Hz, Nyquist) interval so bands above Nyquist do not throw.
+  double sample_rate_ = 44100.0;
 };
 
 }  // namespace sonare::mastering::eq

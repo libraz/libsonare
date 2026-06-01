@@ -165,6 +165,13 @@ void BrickwallLimiter::set_release_ms(float release_ms) {
   limiter_.set_release_ms(release_ms);
 }
 
+void BrickwallLimiter::set_release_ms_in_place(float release_ms) noexcept {
+  // RT-safe: forward to the inner limiter's in-place setter (scalar coefficient
+  // recompute, no publish, no allocation). config_ and the published snapshot
+  // are intentionally left unchanged.
+  limiter_.set_release_ms_in_place(release_ms);
+}
+
 bool BrickwallLimiter::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:

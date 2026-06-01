@@ -1617,7 +1617,7 @@ TEST_CASE("StereoWidthProcessor converges to steady-state mid/side", "[mixing]")
     REQUIRE_THAT(right[kN - 1], WithinAbs(mid0, 0.001f));
   }
 
-  SECTION("width=2 doubles the side after convergence") {
+  SECTION("width=2 doubles the side and preserves the mid after convergence") {
     std::vector<float> left(kN, kL0);
     std::vector<float> right(kN, kR0);
     float* channels[] = {left.data(), right.data()};
@@ -1626,22 +1626,43 @@ TEST_CASE("StereoWidthProcessor converges to steady-state mid/side", "[mixing]")
     width.prepare(48000.0, kN);
     width.process(channels, 2, kN);
 
-    const float compensation = 0.5f;
-    REQUIRE_THAT(left[kN - 1], WithinAbs((mid0 + 2.0f * side0) * compensation, 0.001f));
-    REQUIRE_THAT(right[kN - 1], WithinAbs((mid0 - 2.0f * side0) * compensation, 0.001f));
+    // Standard M/S width law: mid is left untouched, only the side scales with width.
+    REQUIRE_THAT(left[kN - 1], WithinAbs(mid0 + 2.0f * side0, 0.001f));
+    REQUIRE_THAT(right[kN - 1], WithinAbs(mid0 - 2.0f * side0, 0.001f));
+
+    // The recovered mid (channel sum / 2) must equal the input mid: widening must
+    // not attenuate the center/mono component.
+    const float out_mid = 0.5f * (left[kN - 1] + right[kN - 1]);
+    REQUIRE_THAT(out_mid, WithinAbs(mid0, 0.001f));
   }
 
-  SECTION("width=2 compensates pure side gain") {
-    std::vector<float> left(kN, 1.0f);
-    std::vector<float> right(kN, -1.0f);
+  SECTION("width does not attenuate a centered/mono source") {
+    constexpr float kCenter = 0.7f;
+    std::vector<float> left(kN, kCenter);
+    std::vector<float> right(kN, kCenter);  // mono: side == 0
     float* channels[] = {left.data(), right.data()};
 
     sonare::mixing::StereoWidthProcessor width(2.0f);
     width.prepare(48000.0, kN);
     width.process(channels, 2, kN);
 
-    REQUIRE_THAT(std::abs(left[kN - 1]), WithinAbs(1.0f, 0.001f));
-    REQUIRE_THAT(std::abs(right[kN - 1]), WithinAbs(1.0f, 0.001f));
+    // With side == 0, raising width must leave a mono source completely unchanged.
+    REQUIRE_THAT(left[kN - 1], WithinAbs(kCenter, 0.001f));
+    REQUIRE_THAT(right[kN - 1], WithinAbs(kCenter, 0.001f));
+  }
+
+  SECTION("width=2 doubles a pure side signal") {
+    std::vector<float> left(kN, 1.0f);
+    std::vector<float> right(kN, -1.0f);  // mid == 0, side == 1
+    float* channels[] = {left.data(), right.data()};
+
+    sonare::mixing::StereoWidthProcessor width(2.0f);
+    width.prepare(48000.0, kN);
+    width.process(channels, 2, kN);
+
+    // Pure side scales directly with width: |L| = |R| = side * w = 1 * 2 = 2.
+    REQUIRE_THAT(std::abs(left[kN - 1]), WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(std::abs(right[kN - 1]), WithinAbs(2.0f, 0.001f));
   }
 }
 

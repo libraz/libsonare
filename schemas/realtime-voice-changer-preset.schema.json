@@ -128,7 +128,9 @@
           "required": ["ceilingDb", "releaseMs"],
           "properties": {
             "ceilingDb": { "type": "number", "minimum": -12.0, "maximum": -1.0 },
-            "releaseMs": { "type": "number", "minimum": 1.0, "maximum": 500.0 }
+            "releaseMs": { "type": "number", "minimum": 1.0, "maximum": 500.0 },
+            "enableIspLimiter": { "type": "boolean" },
+            "ispCeilingDbtp": { "type": "number", "minimum": -12.0, "maximum": 0.0 }
           }
         }
       }

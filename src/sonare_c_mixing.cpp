@@ -1065,8 +1065,17 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
   if (!parse_automation_curve(curve, &curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (!strip->strip.schedule_send_automation(send_index, sample_pos, db, curve_enum)) {
+  // Validate the send index up front so a bad argument is reported distinctly
+  // from a capacity condition (mirrors the insert-automation convention above).
+  if (send_index >= strip->strip.num_sends()) {
     return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // After the index bound above, a false return is dominated by the capacity
+  // condition (the send lane is full): map it to OUT_OF_MEMORY so callers can
+  // distinguish "lane full" from a bad argument, matching the fader/pan/width
+  // automation functions.
+  if (!strip->strip.schedule_send_automation(send_index, sample_pos, db, curve_enum)) {
+    return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_OK;
 }

@@ -269,6 +269,16 @@ void TruePeakLimiter::set_release_ms(float release_ms) {
   limiter_.set_release_ms(release_ms);
 }
 
+void TruePeakLimiter::set_release_ms_in_place(float release_ms) noexcept {
+  // RT-safe: update the scalar release time used by the polyphase gain envelope
+  // (config_.release_ms feeds adaptive_release_coeff() and release_coeff_) and
+  // forward to the inner brickwall limiter's in-place setter. No publish, no
+  // allocation. set_config / the published snapshot are left untouched.
+  config_.release_ms = std::max(0.0f, release_ms);
+  release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
+  limiter_.set_release_ms_in_place(config_.release_ms);
+}
+
 bool TruePeakLimiter::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:

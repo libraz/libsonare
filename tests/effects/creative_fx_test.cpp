@@ -352,3 +352,132 @@ TEST_CASE("Flanger buffer accommodates full LFO depth without plateauing", "[fx]
   }
   REQUIRE(channel_diff > 1e-2);
 }
+
+// Regression for the mono output-clobber bug: when num_channels == 1 the lone
+// output buffer must receive the fold of both wet signals, not just the second
+// (right) one written over the first. We verify mono == 0.5 * (stereoL + stereoR)
+// from a reference stereo pass driven with identical L == R input, and confirm
+// the stereo channels actually differ so the bug would have been observable.
+namespace {
+
+// Fills a buffer with a 220 Hz sine at the given sample rate.
+std::vector<float> sine_input(int n, double sample_rate) {
+  std::vector<float> x(static_cast<size_t>(n));
+  const double w = 2.0 * sonare::constants::kPiD * 220.0 / sample_rate;
+  for (int i = 0; i < n; ++i) {
+    x[static_cast<size_t>(i)] = static_cast<float>(std::sin(w * static_cast<double>(i)));
+  }
+  return x;
+}
+
+}  // namespace
+
+TEST_CASE("Chorus mono output folds both voices instead of clobbering", "[fx]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 4096;
+  const sonare::effects::modulation::ChorusConfig config{1.5f, 4.0f, 12.0f, 1.0f};
+
+  // Stereo reference with identical input on both channels.
+  std::vector<float> left = sine_input(kSamples, kSampleRate);
+  std::vector<float> right = left;
+  float* stereo[] = {left.data(), right.data()};
+  sonare::effects::modulation::Chorus stereo_fx(config);
+  stereo_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  stereo_fx.process(stereo, 2, kSamples);
+
+  // Mono pass with the same input.
+  std::vector<float> mono = sine_input(kSamples, kSampleRate);
+  float* mono_ch[] = {mono.data()};
+  sonare::effects::modulation::Chorus mono_fx(config);
+  mono_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  mono_fx.process(mono_ch, 1, kSamples);
+
+  double fold_err = 0.0;
+  double right_only_diff = 0.0;
+  double channel_diff = 0.0;
+  for (int i = 0; i < kSamples; ++i) {
+    const auto l = static_cast<double>(left[static_cast<size_t>(i)]);
+    const auto r = static_cast<double>(right[static_cast<size_t>(i)]);
+    const auto m = static_cast<double>(mono[static_cast<size_t>(i)]);
+    fold_err += std::abs(m - 0.5 * (l + r));
+    right_only_diff += std::abs(m - r);
+    channel_diff += std::abs(l - r);
+  }
+  REQUIRE(all_finite(mono));
+  REQUIRE(channel_diff > 1e-2);     // L and R genuinely differ.
+  REQUIRE(fold_err < 1e-3);         // Mono is the fold of both voices.
+  REQUIRE(right_only_diff > 1e-2);  // Not just the (buggy) right channel.
+}
+
+TEST_CASE("Flanger mono output folds both voices instead of clobbering", "[fx]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 4096;
+  const sonare::effects::modulation::FlangerConfig config{0.5f, 2.0f, 3.0f, 0.5f, 1.0f};
+
+  std::vector<float> left = sine_input(kSamples, kSampleRate);
+  std::vector<float> right = left;
+  float* stereo[] = {left.data(), right.data()};
+  sonare::effects::modulation::Flanger stereo_fx(config);
+  stereo_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  stereo_fx.process(stereo, 2, kSamples);
+
+  std::vector<float> mono = sine_input(kSamples, kSampleRate);
+  float* mono_ch[] = {mono.data()};
+  sonare::effects::modulation::Flanger mono_fx(config);
+  mono_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  mono_fx.process(mono_ch, 1, kSamples);
+
+  double fold_err = 0.0;
+  double right_only_diff = 0.0;
+  double channel_diff = 0.0;
+  for (int i = 0; i < kSamples; ++i) {
+    const auto l = static_cast<double>(left[static_cast<size_t>(i)]);
+    const auto r = static_cast<double>(right[static_cast<size_t>(i)]);
+    const auto m = static_cast<double>(mono[static_cast<size_t>(i)]);
+    fold_err += std::abs(m - 0.5 * (l + r));
+    right_only_diff += std::abs(m - r);
+    channel_diff += std::abs(l - r);
+  }
+  REQUIRE(all_finite(mono));
+  REQUIRE(channel_diff > 1e-2);
+  REQUIRE(fold_err < 1e-3);
+  REQUIRE(right_only_diff > 1e-2);
+}
+
+TEST_CASE("VelvetReverb mono output folds both tap tables instead of clobbering", "[fx]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 8192;
+  sonare::effects::reverb::VelvetReverbConfig config;
+  config.dry_wet = 1.0f;
+
+  std::vector<float> left(kSamples, 0.0f);
+  left[0] = 1.0f;  // impulse
+  std::vector<float> right = left;
+  float* stereo[] = {left.data(), right.data()};
+  sonare::effects::reverb::VelvetReverb stereo_fx(config);
+  stereo_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  stereo_fx.process(stereo, 2, kSamples);
+
+  std::vector<float> mono(kSamples, 0.0f);
+  mono[0] = 1.0f;
+  float* mono_ch[] = {mono.data()};
+  sonare::effects::reverb::VelvetReverb mono_fx(config);
+  mono_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  mono_fx.process(mono_ch, 1, kSamples);
+
+  double fold_err = 0.0;
+  double right_only_diff = 0.0;
+  double channel_diff = 0.0;
+  for (int i = 0; i < kSamples; ++i) {
+    const auto l = static_cast<double>(left[static_cast<size_t>(i)]);
+    const auto r = static_cast<double>(right[static_cast<size_t>(i)]);
+    const auto m = static_cast<double>(mono[static_cast<size_t>(i)]);
+    fold_err += std::abs(m - 0.5 * (l + r));
+    right_only_diff += std::abs(m - r);
+    channel_diff += std::abs(l - r);
+  }
+  REQUIRE(all_finite(mono));
+  REQUIRE(channel_diff > 1e-2);     // The two tap tables decorrelate L and R.
+  REQUIRE(fold_err < 1e-3);         // Mono is the fold of both tap tables.
+  REQUIRE(right_only_diff > 1e-2);  // Not just the (buggy) right tap table.
+}

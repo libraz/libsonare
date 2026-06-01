@@ -23,17 +23,27 @@ std::vector<float> Oversampler::upsample(const float* input, size_t size) const 
   SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
 
   std::vector<float> output(size * static_cast<size_t>(factor_));
+  upsample_to(input, size, output.data(), output.size());
+  return output;
+}
+
+std::vector<float> Oversampler::upsample(const std::vector<float>& input) const {
+  return upsample(input.data(), input.size());
+}
+
+void Oversampler::upsample_to(const float* input, size_t size, float* output,
+                              size_t output_size) const {
+  if (size == 0) return;
+  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(output != nullptr, ErrorCode::InvalidParameter);
+  const size_t out_size = size * static_cast<size_t>(factor_);
+  SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
   for (size_t i = 0; i < size; ++i) {
     for (int phase = 0; phase < factor_; ++phase) {
       output[i * static_cast<size_t>(factor_) + static_cast<size_t>(phase)] =
           interpolate_polyphase_sample(input, size, i, phase, fir_);
     }
   }
-  return output;
-}
-
-std::vector<float> Oversampler::upsample(const std::vector<float>& input) const {
-  return upsample(input.data(), input.size());
 }
 
 std::vector<float> Oversampler::downsample(const float* input, size_t size) const {

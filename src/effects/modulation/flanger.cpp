@@ -41,6 +41,7 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
   }
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
+  const bool stereo = right != left;
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const float fb = std::clamp(config_.feedback, -0.95f, 0.95f);
@@ -54,8 +55,14 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
     const float wet_l = delays_[0].process(in_l + fb * feedback_[0], delay_l);
     const float wet_r = delays_[1].process(in_r + fb * feedback_[1], delay_r);
     feedback_ = {wet_l, wet_r};
-    left[i] = dry * in_l + wet * wet_l;
-    right[i] = dry * in_r + wet * wet_r;
+    if (stereo) {
+      left[i] = dry * in_l + wet * wet_l;
+      right[i] = dry * in_r + wet * wet_r;
+    } else {
+      // Mono: collapse the two LFO-modulated voices into the single output
+      // buffer so it is not written twice with different values.
+      left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
+    }
   }
 }
 

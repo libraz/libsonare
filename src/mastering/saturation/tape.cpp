@@ -32,10 +32,19 @@ void Tape::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
+  max_block_size_ = max_block_size;
   update_filters(sample_rate_);
   if (config_.oversample_factor > 1) {
     oversampler_.set_factor(config_.oversample_factor);
   }
+  // Preallocate the oversampling scratch up front so the audio-thread process()
+  // path never allocates. Sized to the worst case (max block * factor); the
+  // factor==1 path leaves these empty. Blocks wider than max_block_size_ throw
+  // instead of resizing on the audio thread.
+  const size_t scratch = static_cast<size_t>(std::max(0, max_block_size_)) *
+                         static_cast<size_t>(std::max(1, config_.oversample_factor));
+  up_scratch_.assign(scratch, 0.0f);
+  down_scratch_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
   prepared_ = true;
   reset();
 }
@@ -70,16 +79,26 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
   }
 
   // Oversample only the stateful J-A core to reduce aliasing at high drive.
-  // head_bump and gap_loss stay at base rate.
+  // head_bump and gap_loss stay at base rate. Reuse the preallocated scratch
+  // buffers (sized in prepare()) so this audio-thread path never allocates;
+  // reject blocks wider than the prepared size instead of resizing here.
+  const size_t os_samples =
+      static_cast<size_t>(num_samples) * static_cast<size_t>(config_.oversample_factor);
+  if (os_samples > up_scratch_.size() || static_cast<size_t>(num_samples) > down_scratch_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared Tape oversampling scratch");
+  }
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
-    std::vector<float> os = oversampler_.upsample(channels[ch], static_cast<size_t>(num_samples));
-    for (auto& sample : os) {
-      sample = process_sample(state, sample);
+    oversampler_.upsample_to(channels[ch], static_cast<size_t>(num_samples), up_scratch_.data(),
+                             up_scratch_.size());
+    for (size_t i = 0; i < os_samples; ++i) {
+      up_scratch_[i] = process_sample(state, up_scratch_[i]);
     }
-    std::vector<float> ja = oversampler_.downsample(os);
+    oversampler_.downsample_to(up_scratch_.data(), os_samples, down_scratch_.data(),
+                               down_scratch_.size());
     for (int i = 0; i < num_samples; ++i) {
-      float y = ja[static_cast<size_t>(i)];
+      float y = down_scratch_[static_cast<size_t>(i)];
       y += head_bump_[static_cast<size_t>(ch)].process(y);
       auto& gap = gap_state_[static_cast<size_t>(ch)];
       gap += gap_loss_coeff_ * (y - gap);
@@ -103,7 +122,16 @@ void Tape::set_config(const TapeConfig& config) {
   if (config_.oversample_factor > 1) {
     oversampler_.set_factor(config_.oversample_factor);
   }
-  if (prepared_) update_filters(sample_rate_);
+  if (prepared_) {
+    update_filters(sample_rate_);
+    // oversample_factor may have changed; resize the scratch on this
+    // control-thread path (allocation here is acceptable, never on the audio
+    // thread). Matches the sizing done in prepare().
+    const size_t scratch = static_cast<size_t>(std::max(0, max_block_size_)) *
+                           static_cast<size_t>(std::max(1, config_.oversample_factor));
+    up_scratch_.assign(scratch, 0.0f);
+    down_scratch_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
+  }
 }
 
 bool Tape::set_parameter(unsigned int param_id, float value) {

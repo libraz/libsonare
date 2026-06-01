@@ -350,3 +350,23 @@ TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realt
   REQUIRE(realtime.transport().render_frame() == offline.transport().render_frame());
   REQUIRE(realtime.transport().sample_position() == offline.transport().sample_position());
 }
+
+TEST_CASE("RealtimeEngine::bind_mixing_strip is not noexcept and binds successfully",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  sonare::mixing::ChannelStrip strip;
+
+  // bind_mixing_strip re-prepares the strip on a successful bind, which
+  // allocates on the control thread. That allocation may throw under OOM, so
+  // the function must NOT be declared noexcept; otherwise a propagating
+  // std::bad_alloc would call std::terminate. Document the contract here so a
+  // re-added noexcept fails the build.
+  static_assert(!noexcept(engine.bind_mixing_strip(&strip)),
+                "bind_mixing_strip allocates on the control thread and must not be noexcept");
+
+  // Functional regression: a successful bind still works and the strip is
+  // bound into the mixing runtime.
+  REQUIRE(engine.bind_mixing_strip(&strip));
+  REQUIRE(engine.mixing().strip() == &strip);
+}

@@ -611,6 +611,47 @@ TEST_CASE("spectrum windows and averages across the whole signal", "[meter]") {
   REQUIRE(std::isfinite(result.db[peak_index]));
 }
 
+TEST_CASE("LUFS short-term uses the spec 100 ms hop, not 150 ms", "[meter][lufs][spec]") {
+  // EBU R128 / ITU-R BS.1770-4 fix the short-term hop at 100 ms over a 3 s
+  // window. Previously the short-term overlap was clamped to 0.95, which for a
+  // 3 s window at 48 kHz (block = 144000 samples) rounded the hop up to
+  //   round(144000 * 0.05) = 7200 samples = 150 ms,
+  // instead of the spec 100 ms = 4800 samples. That non-compliant hop also made
+  // the interleaved short-term path inconsistent with the explicit-100 ms-hop
+  // ebur128_loudness_range(). This test pins the block count to the value implied
+  // by a 100 ms hop so a regression to 150 ms (fewer blocks) is caught.
+  const int sample_rate = 48000;
+  const float duration_sec = 8.0f;
+  const int n_samples = static_cast<int>(static_cast<float>(sample_rate) * duration_sec);
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(i)] =
+        0.25f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  const auto short_term = metering::short_term_lufs(audio);
+  REQUIRE(!short_term.empty());
+
+  // block = 3 s = 144000 samples; spec hop = 100 ms = 4800 samples.
+  const size_t block = static_cast<size_t>(3.0f * sample_rate);
+  const size_t spec_hop = static_cast<size_t>(metering::kLufsShortTermHopSec * sample_rate);
+  REQUIRE(spec_hop == 4800);
+  const size_t expected_blocks =
+      (static_cast<size_t>(n_samples) - block) / spec_hop + 1;  // 51 at 100 ms hop
+
+  // A 150 ms hop (the old clamped behaviour) would yield 34 blocks; require the
+  // exact 100 ms-hop count so either regression direction fails.
+  REQUIRE(short_term.size() == expected_blocks);
+
+  // Cross-check spacing directly: the number of complete blocks corresponds to a
+  // 100 ms hop, never the larger 150 ms hop.
+  const size_t bad_hop = static_cast<size_t>(0.150f * sample_rate);  // 7200
+  const size_t bad_blocks = (static_cast<size_t>(n_samples) - block) / bad_hop + 1;
+  REQUIRE(short_term.size() != bad_blocks);
+}
+
 TEST_CASE("true peak supports 16x oversampling without degrading", "[meter]") {
   // A bandlimited inter-sample over: 16x must resolve a peak above the raw sample
   // peak, and at least as high as 8x (it is a strictly finer reconstruction).

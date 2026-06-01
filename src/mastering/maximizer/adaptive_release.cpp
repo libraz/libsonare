@@ -66,7 +66,11 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
                             static_cast<float>(sample_rate_ * smoothing_seconds));
   current_release_ms_ += smoothing * (target_release_ms - current_release_ms_);
 
-  limiter_.set_release_ms(current_release_ms_);
+  // Per-block release automation runs on the audio thread, so use the
+  // allocation-free in-place setter (set_release_ms() would publish a new
+  // config snapshot, allocating a shared_ptr every block). Same coefficient
+  // math, no malloc.
+  limiter_.set_release_ms_in_place(current_release_ms_);
   limiter_.process(channels, num_channels, num_samples);
 }
 

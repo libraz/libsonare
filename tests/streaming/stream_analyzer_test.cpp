@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 using namespace sonare;
@@ -947,4 +948,113 @@ TEST_CASE("StreamAnalyzer vote-index encode/decode round-trips for extended qual
     const bool old_matches = (encoded / 4 == p.root) && (encoded % 4 == p.quality);
     REQUIRE_FALSE(old_matches);
   }
+}
+
+// ============================================================================
+// Regression: ChordChange::confidence must reflect the *completed* chord, not
+// the chord that triggered the transition.
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chord",
+          "[streaming][chord]") {
+  // Before the fix, when a chord transition was detected the recorded
+  // ChordChange stored `new_confidence` — the per-frame confidence of the NEW
+  // chord that triggered the change — even though root/quality belonged to the
+  // chord that just *ended*. Consumers therefore saw a different chord's
+  // confidence than the chord whose root/quality was reported.
+  //
+  // The fix accumulates the held chord's running-max confidence over its stable
+  // span (prev_chord_confidence_) and uses THAT at the transition. This test
+  // streams two sustained chords with clearly different detection confidences
+  // (a clean triad followed by a noise-contaminated triad) and asserts the
+  // first (completed) progression entry's confidence tracks the first chord's
+  // own held confidence — not the noisier second chord's.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+
+  StreamAnalyzer analyzer(config);
+
+  const int sr = 22050;
+  const float chord_sec = 4.0f;  // Each chord well past kChordMinDuration (0.3s).
+  const int chord_samples = static_cast<int>(chord_sec * sr);
+  const float amp = 0.3f;
+
+  // First chord: clean C major triad — C(261.63) + E(329.63) + G(392.00).
+  const float c_major[] = {261.63f, 329.63f, 392.00f};
+  // Second chord: G major triad — G(392.00) + B(493.88) + D(587.33) — but with
+  // additive broadband noise so its detection confidence is clearly lower than
+  // the clean first chord. A simple deterministic LCG keeps the test
+  // reproducible without <random> bringing in platform variation.
+  const float g_major[] = {392.00f, 493.88f, 587.33f};
+
+  std::vector<float> audio(static_cast<size_t>(2 * chord_samples), 0.0f);
+
+  // Clean first chord.
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : c_major) {
+      s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    }
+    audio[static_cast<size_t>(i)] = s;
+  }
+
+  // Noisy second chord.
+  uint32_t lcg = 0x12345678u;
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : g_major) {
+      s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    }
+    // Deterministic uniform noise in [-1, 1], scaled to clearly degrade the
+    // chroma match without masking the chord entirely.
+    lcg = lcg * 1664525u + 1013904223u;
+    const float noise = (static_cast<float>(lcg) / 4294967295.0f) * 2.0f - 1.0f;
+    s += 0.25f * noise;
+    audio[static_cast<size_t>(chord_samples + i)] = s;
+  }
+
+  analyzer.process(audio.data(), audio.size());
+
+  // Collect the per-frame confidences observed while the FIRST chord was held,
+  // so we can compare the recorded progression confidence against the first
+  // chord's own confidence range rather than a hardcoded magnitude.
+  auto frames = analyzer.read_frames(100000);
+  REQUIRE(frames.size() > 1);
+
+  const float first_chord_boundary = chord_sec;  // seconds
+  float first_chord_max_conf = 0.0f;
+  float second_chord_max_conf = 0.0f;
+  for (const auto& f : frames) {
+    if (f.timestamp < first_chord_boundary) {
+      first_chord_max_conf = std::max(first_chord_max_conf, f.chord_confidence);
+    } else {
+      second_chord_max_conf = std::max(second_chord_max_conf, f.chord_confidence);
+    }
+  }
+
+  // Sanity: the two chords must hold clearly DIFFERENT confidences, otherwise
+  // the test cannot tell whether the completed entry recorded the first chord's
+  // value or the second's. (Which one is larger is incidental and signal
+  // dependent; only their separation matters for discrimination.)
+  REQUIRE(first_chord_max_conf > 0.0f);
+  REQUIRE(second_chord_max_conf > 0.0f);
+  REQUIRE(std::abs(first_chord_max_conf - second_chord_max_conf) > 0.05f);
+
+  auto stats = analyzer.stats();
+  const auto& prog = stats.estimate.chord_progression;
+  REQUIRE_FALSE(prog.empty());
+
+  // The first progression entry corresponds to the COMPLETED first chord. Its
+  // recorded confidence must reflect the first chord's own held confidence
+  // (running-max over its stable span), i.e. close to first_chord_max_conf.
+  const ChordChange& completed = prog.front();
+  REQUIRE_THAT(completed.confidence, WithinAbs(first_chord_max_conf, 1e-3f));
+
+  // The pre-fix bug stored the second (triggering) chord's confidence here.
+  // Since the two chords hold clearly separated confidences (asserted above),
+  // matching the first proves it did NOT record the second's value.
+  REQUIRE(std::abs(completed.confidence - second_chord_max_conf) > 0.05f);
 }

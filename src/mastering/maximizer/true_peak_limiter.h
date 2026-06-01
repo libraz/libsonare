@@ -38,6 +38,14 @@ class TruePeakLimiter : public rt::ProcessorBase {
   void reset() override;
   void set_config(const TruePeakLimiterConfig& config);
   void set_release_ms(float release_ms);
+  /// @brief Realtime-safe release update for per-block automation.
+  /// @details Recomputes the scalar release time constant in place and forwards
+  ///          to the inner brickwall limiter's in-place setter, without
+  ///          publishing any configuration snapshot (no allocation). Safe to
+  ///          call once per block from the audio thread. Uses the same
+  ///          release-coefficient math as @ref set_release_ms; negative inputs
+  ///          are clamped to zero rather than throwing.
+  void set_release_ms_in_place(float release_ms) noexcept;
   const TruePeakLimiterConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
   int latency_samples() const noexcept override;

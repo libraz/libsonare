@@ -21,6 +21,11 @@ class Oversampler {
   std::vector<float> upsample(const std::vector<float>& input) const;
   std::vector<float> downsample(const float* input, size_t size) const;
   std::vector<float> downsample(const std::vector<float>& input) const;
+  /// @brief Allocation-free upsample into a caller-provided buffer.
+  /// @details @p output must hold at least @c size*factor() samples. Lets the
+  ///          audio thread reuse preallocated scratch instead of allocating a
+  ///          fresh vector per block.
+  void upsample_to(const float* input, size_t size, float* output, size_t output_size) const;
   void downsample_to(const float* input, size_t size, float* output, size_t output_size) const;
 
  private:

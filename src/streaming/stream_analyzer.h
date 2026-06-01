@@ -287,7 +287,15 @@ class StreamAnalyzer {
   // Chord progression tracking
   int prev_chord_root_ = -1;
   int prev_chord_quality_ = -1;
-  float chord_stable_time_ = 0.0f;                  ///< Time chord has been stable
+  float chord_stable_time_ = 0.0f;  ///< Time chord has been stable
+  /// Running-max confidence of the chord currently being held (prev_chord_*).
+  /// Accumulated each frame the chord persists so that, at a transition, the
+  /// ChordChange records the *completed* chord's own confidence rather than the
+  /// new chord's. Max (not mean) is used because the per-frame chord confidence
+  /// is a correlation score that dips on the noisy boundary frames where the
+  /// smoothing window straddles two chords; the peak best reflects how strongly
+  /// the held chord was identified during its stable span.
+  float prev_chord_confidence_ = 0.0f;
   static constexpr float kChordMinDuration = 0.3f;  ///< Min duration to register change
   static constexpr int kChordSmoothingFrames =
       12;  ///< Number of frames to smooth (~0.25s at default settings)

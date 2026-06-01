@@ -20,7 +20,9 @@ struct HpssConfig {
   float power = 2.0f;               ///< Exponent for mask computation (typically 1.0-2.0)
   float margin_harmonic = 1.0f;     ///< Weight for harmonic mask (> 1.0 favors harmonic)
   float margin_percussive = 1.0f;   ///< Weight for percussive mask (> 1.0 favors percussive)
-                                    ///< Soft mask formula: H / (H*margin_h + P*margin_p)
+                                    ///< Soft mask (librosa parity, margin applied before the
+                                    ///< power): mask_harm = H^p / (H^p + (margin_h * P)^p),
+                                    ///< mask_perc = P^p / (P^p + (margin_p * H)^p)
   bool use_soft_mask = true;        ///< true = soft masks (smooth blend),
                                     ///< false = hard masks (binary assignment)
 };

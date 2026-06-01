@@ -113,8 +113,11 @@ class RealtimeEngine {
 
   // Mixing channel-strip insert stage. bind_mixing_strip binds a control-thread
   // ChannelStrip whose process_at runs per sub-block when mixing is enabled.
+  // A successful bind re-prepares the strip, which allocates on the control
+  // thread, so this is intentionally NOT noexcept (a throwing allocation
+  // propagates rather than terminating the process).
 #if defined(SONARE_WITH_MIXING)
-  bool bind_mixing_strip(mixing::ChannelStrip* strip) noexcept;
+  bool bind_mixing_strip(mixing::ChannelStrip* strip);
   void set_mixing_enabled(bool enabled) noexcept { mixing_enabled_ = enabled; }
   bool mixing_enabled() const noexcept { return mixing_enabled_; }
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }

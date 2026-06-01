@@ -288,13 +288,17 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
   Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
 
   if (config.use_soft_mask) {
-    /// Soft mask with margins
-    Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
-    Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
-    Eigen::ArrayXf total = h_margin + p_margin + kEpsilon;
+    /// Soft masks matching librosa: the margin is applied to the *opposing*
+    /// component before the power, i.e.
+    ///   mask_harm = H^p / (H^p + (margin_h * P)^p)
+    ///   mask_perc = P^p / (P^p + (margin_p * H)^p)
+    /// Since margin is inside the power, it contributes margin^power (not the
+    /// margin^1 that a post-power multiply would give).
+    const float mh_p = std::pow(config.margin_harmonic, config.power);
+    const float mp_p = std::pow(config.margin_percussive, config.power);
 
-    h_mask = h_margin / total;
-    p_mask = p_margin / total;
+    h_mask = h_pow / (h_pow + mh_p * p_pow + kEpsilon);
+    p_mask = p_pow / (p_pow + mp_p * h_pow + kEpsilon);
   } else {
     /// Hard mask: h >= p -> harmonic=1, else percussive=1
     h_mask = (h_pow >= p_pow).cast<float>();
@@ -388,15 +392,16 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   Eigen::Map<Eigen::ArrayXf> r_mask(residual_mask.data(), total_size);
 
   if (config.use_soft_mask) {
-    /// Soft masks with margins
-    Eigen::ArrayXf h_margin = h_pow * config.margin_harmonic;
-    Eigen::ArrayXf p_margin = p_pow * config.margin_percussive;
-    Eigen::ArrayXf total = h_margin + p_margin + kEpsilon;
+    /// Soft masks matching librosa: the margin is applied to the *opposing*
+    /// component before the power (see hpss() above for the derivation), so the
+    /// margin contributes margin^power rather than margin^1.
+    const float mh_p = std::pow(config.margin_harmonic, config.power);
+    const float mp_p = std::pow(config.margin_percussive, config.power);
 
-    h_mask = h_margin / total;
-    p_mask = p_margin / total;
+    h_mask = h_pow / (h_pow + mh_p * p_pow + kEpsilon);
+    p_mask = p_pow / (p_pow + mp_p * h_pow + kEpsilon);
 
-    /// Residual is 1 - sum when margins < 1
+    /// Residual is 1 - sum when margins push both masks below their full share
     Eigen::ArrayXf mask_sum = h_mask + p_mask;
     r_mask = (1.0f - mask_sum).max(0.0f);
 

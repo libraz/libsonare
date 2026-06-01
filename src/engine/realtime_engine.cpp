@@ -547,7 +547,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 }
 
 #if defined(SONARE_WITH_MIXING)
-bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) noexcept {
+bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
   if (strip != nullptr && monitor_runtime_.contains(strip)) {
     return false;
   }

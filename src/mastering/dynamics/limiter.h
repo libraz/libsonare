@@ -48,6 +48,16 @@ class Limiter : public rt::ProcessorBase {
   ///          never partway).
   void set_config(const LimiterConfig& config);
   void set_release_ms(float release_ms);
+  /// @brief Realtime-safe release update for per-block automation.
+  /// @details Recomputes @c release_coeff_ in place from @p release_ms without
+  ///          publishing a new configuration snapshot (so no @c shared_ptr
+  ///          allocation occurs). Safe to call from the audio thread once per
+  ///          block. The control-thread @c config_ mirror is NOT updated and
+  ///          the published snapshot is untouched, so a later snapshot adoption
+  ///          will overwrite the in-place coefficient — call this only on the
+  ///          audio thread driving the per-block release. Uses the same
+  ///          release-coefficient math as @ref set_release_ms.
+  void set_release_ms_in_place(float release_ms) noexcept;
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread.
   /// @details NOT realtime-safe and NOT safe to call concurrently with

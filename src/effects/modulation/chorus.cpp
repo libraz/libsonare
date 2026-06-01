@@ -38,6 +38,7 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
   }
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
+  const bool stereo = right != left;
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   for (int i = 0; i < num_samples; ++i) {
@@ -47,8 +48,16 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
                           0.001f * static_cast<float>(sample_rate_);
     const float delay_r = (config_.center_delay_ms + config_.depth_ms * lfos_[1].process()) *
                           0.001f * static_cast<float>(sample_rate_);
-    left[i] = dry * in_l + wet * delays_[0].process(in_l, delay_l);
-    right[i] = dry * in_r + wet * delays_[1].process(in_r, delay_r);
+    const float wet_l = delays_[0].process(in_l, delay_l);
+    const float wet_r = delays_[1].process(in_r, delay_r);
+    if (stereo) {
+      left[i] = dry * in_l + wet * wet_l;
+      right[i] = dry * in_r + wet * wet_r;
+    } else {
+      // Mono: collapse the two LFO-modulated voices into the single output
+      // buffer so it is not written twice with different values.
+      left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
+    }
   }
 }
 

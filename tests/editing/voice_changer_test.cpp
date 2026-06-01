@@ -2471,3 +2471,33 @@ TEST_CASE("FormantWarp does not hard-clip a hot signal", "[voice_changer][forman
     ref_peak = std::max(ref_peak, std::abs(ref[static_cast<size_t>(i)]));
   REQUIRE(ref_peak > 1.0f);
 }
+
+TEST_CASE("RealtimeVoiceChanger JSON round-trips the ISP limiter fields", "[voice_changer]") {
+  // Regression: the JSON path used to serialize only ceilingDb/releaseMs and
+  // dropped enableIspLimiter / ispCeilingDbtp, so a preset that disabled the ISP
+  // stage or set a custom dBTP silently reverted to the POD defaults (enabled,
+  // -1.0 dBTP) — diverging from the memcpy-based POD round-trip.
+  SECTION("disabled ISP with a custom ceiling survives the round-trip") {
+    RealtimeVoiceChangerConfig config;
+    config.limiter.enable_isp_limiter = false;
+    config.limiter.isp_ceiling_dbtp = -3.0f;
+
+    const std::string json = realtime_voice_changer_config_to_json(config);
+    const auto roundtrip = realtime_voice_changer_config_from_json(json);
+
+    REQUIRE(roundtrip.limiter.enable_isp_limiter == false);
+    REQUIRE(roundtrip.limiter.isp_ceiling_dbtp == -3.0f);
+  }
+
+  SECTION("enabled ISP with a custom ceiling survives the round-trip") {
+    RealtimeVoiceChangerConfig config;
+    config.limiter.enable_isp_limiter = true;
+    config.limiter.isp_ceiling_dbtp = -6.0f;
+
+    const std::string json = realtime_voice_changer_config_to_json(config);
+    const auto roundtrip = realtime_voice_changer_config_from_json(json);
+
+    REQUIRE(roundtrip.limiter.enable_isp_limiter == true);
+    REQUIRE(roundtrip.limiter.isp_ceiling_dbtp == -6.0f);
+  }
+}

@@ -73,12 +73,19 @@ class Tape : public rt::ProcessorBase {
   common::JilesAtherton hysteresis_;
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
   Biquad head_bump_coeffs_;
   float gap_loss_coeff_ = 0.0f;
   std::vector<common::JilesAthertonState> states_;
   std::vector<Biquad> head_bump_;
   std::vector<float> gap_state_;
   sonare::rt::Oversampler oversampler_;
+  // Preallocated oversampling scratch (sized max_block_size_*oversample_factor
+  // in prepare()) so the oversampled process() path never allocates on the
+  // audio thread. up_scratch_ holds the upsampled J-A input/output; down_scratch_
+  // holds the decimated base-rate result.
+  std::vector<float> up_scratch_;
+  std::vector<float> down_scratch_;
 };
 
 }  // namespace sonare::mastering::saturation

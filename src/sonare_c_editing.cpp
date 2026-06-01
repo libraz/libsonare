@@ -155,7 +155,12 @@ namespace {
 SonareError validate_stereo_pair(const float* left, const float* right, size_t length,
                                  int sample_rate) {
   if (!left || !right) return SONARE_ERROR_INVALID_PARAMETER;
-  return validate_audio_params(left, length, sample_rate);
+  // Validate both channels symmetrically: validate_audio_params checks the
+  // pointer, length bounds, sample rate, and NaN/Inf samples. Checking only the
+  // left channel would let bad right-channel data reach the metering callers.
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  return validate_audio_params(right, length, sample_rate);
 }
 
 }  // namespace

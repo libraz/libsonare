@@ -156,6 +156,14 @@ void Limiter::set_release_ms(float release_ms) {
   config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
 }
 
+void Limiter::set_release_ms_in_place(float release_ms) noexcept {
+  // RT-safe: only recompute the scalar smoothing coefficient. No publish, no
+  // allocation. Negative inputs are clamped (this path cannot throw because it
+  // runs on the audio thread). The control-thread config_ mirror and the
+  // published snapshot are intentionally left unchanged.
+  release_coeff_ = time_to_coefficient(sample_rate_, std::max(0.0f, release_ms));
+}
+
 bool Limiter::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:

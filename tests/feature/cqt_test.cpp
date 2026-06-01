@@ -548,3 +548,99 @@ TEST_CASE("icqt round-trip SNR is positive for a clean tone", "[cqt][icqt][regre
 #elif defined(_MSC_VER)
 #pragma warning(pop)
 #endif
+
+// Parity regression: hybrid_cqt joins a full-CQT low half (librosa scale=True,
+// per-bin 1/sqrt(length)) with a pseudo-CQT high half. Before the fix the
+// pseudo half was a row-stochastic Gaussian average of |STFT| with NO length
+// scaling, so the two halves were on different amplitude conventions and
+// concatenation left a magnitude *step* at the split bin. After matching the
+// pseudo bins to the scale=True convention (multiplying by 1/sqrt(length)), the
+// magnitude profile must be continuous across the split for a broadband input.
+//
+// The assertion is intentionally coarse-but-deterministic: on a flat-ish
+// multi-tone signal that spans the split, the average bin energy in a window
+// just above the split must not differ from the window just below by more than
+// a generous factor. A raw convention mismatch produces a step of one to two
+// orders of magnitude (1/sqrt(length) at low-hundreds-of-samples lengths),
+// which this bound catches while still tolerating the genuine spectral tilt of
+// the test signal and pseudo-vs-full modelling error.
+TEST_CASE("hybrid_cqt has no amplitude step across the split bin", "[cqt][hybrid][regression]") {
+  const int sr = 22050;
+
+  // Broadband, roughly flat input: equal-amplitude tones on a dense semitone
+  // grid spanning the bins around the split so both halves see real energy.
+  std::vector<float> tone_freqs;
+  for (float f = 130.0f; f < 4000.0f; f *= std::pow(2.0f, 1.0f / 12.0f)) {
+    tone_freqs.push_back(f);
+  }
+  Audio audio = generate_chord(tone_freqs, 1.0f, sr);
+
+  CqtConfig config;
+  config.fmin = 65.4f;  // C2
+  config.n_bins = 84;   // 7 octaves
+  config.bins_per_octave = 12;
+  config.hop_length = 512;
+
+  CqtResult result = hybrid_cqt(audio, config);
+  REQUIRE(!result.empty());
+  REQUIRE(result.n_bins() == 84);
+  REQUIRE(result.n_frames() > 0);
+
+  const int n_bins = result.n_bins();
+  const int n_frames = result.n_frames();
+  const auto& mag = result.magnitude();
+
+  // Time-averaged magnitude per bin.
+  std::vector<double> bin_mean(n_bins, 0.0);
+  for (int k = 0; k < n_bins; ++k) {
+    double acc = 0.0;
+    for (int t = 0; t < n_frames; ++t) {
+      acc += mag[k * n_frames + t];
+    }
+    bin_mean[k] = acc / n_frames;
+  }
+
+  // Recompute the split bin with the same rule used by hybrid_cqt(): the first
+  // bin whose CQT filter length <= max(256, 2*hop). Below this is full CQT;
+  // at/above it is the pseudo half.
+  const float Q = 1.0f / (std::pow(2.0f, 1.0f / config.bins_per_octave) - 1.0f);
+  auto freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+  const int short_threshold = std::max(256, 2 * config.hop_length);
+  int n_split = config.n_bins;
+  for (int k = 0; k < config.n_bins; ++k) {
+    const int len = static_cast<int>(std::ceil(Q * sr / std::max(freqs[k], 1.0f)));
+    if (len <= short_threshold) {
+      n_split = k;
+      break;
+    }
+  }
+
+  // The split must fall in the interior so both halves are exercised.
+  REQUIRE(n_split > 4);
+  REQUIRE(n_split < n_bins - 4);
+
+  // Compare a small window of bins just below vs. just above the split. Use the
+  // mean magnitude over the window to suppress per-tone ripple.
+  const int win = 3;
+  double below = 0.0;
+  double above = 0.0;
+  for (int i = 1; i <= win; ++i) {
+    below += bin_mean[n_split - i];
+    above += bin_mean[n_split + i - 1];
+  }
+  below /= win;
+  above /= win;
+
+  REQUIRE(below > 0.0);
+  REQUIRE(above > 0.0);
+
+  const double ratio = above / below;
+  CAPTURE(n_split, below, above, ratio);
+
+  // No order-of-magnitude jump at the seam. A raw convention mismatch left the
+  // pseudo half larger than the full half by ~sqrt(length) (length ~ a few
+  // hundred samples near the split), i.e. a ratio well above 5x; the matched
+  // scaling keeps the seam within a small factor either way.
+  REQUIRE(ratio < 5.0);
+  REQUIRE(ratio > 1.0 / 5.0);
+}

@@ -461,3 +461,79 @@ TEST_CASE("hpss_with_residual hard mask", "[hpss]") {
   REQUIRE(!result.percussive.empty());
   REQUIRE(!result.residual.empty());
 }
+
+// Regression for the soft-mask margin-domain bug. librosa applies the margin
+// *before* the power: mask_harm = H^p / (H^p + (margin_h * P)^p), so the margin
+// contributes margin^power. The previous code multiplied by the margin *after*
+// the power (contributing only margin^1).
+//
+// With a uniform-magnitude spectrogram, both the horizontal and vertical median
+// filters return that same constant, so at interior bins H == P. The harmonic
+// mask there reduces to 1 / (1 + margin_h^power), which is directly observable
+// as (harmonic output magnitude) / (input magnitude).
+TEST_CASE("HPSS soft mask applies margin before the power (librosa parity)", "[hpss]") {
+  constexpr int kBins = 9;
+  constexpr int kFrames = 9;
+  constexpr float kAmp = 1.0f;
+  std::vector<std::complex<float>> data(static_cast<size_t>(kBins * kFrames),
+                                        std::complex<float>(kAmp, 0.0f));
+  Spectrogram spec = Spectrogram::from_complex(data.data(), kBins, kFrames, /*n_fft=*/16,
+                                               /*hop_length=*/8, /*sample_rate=*/22050);
+
+  HpssConfig config;
+  config.use_soft_mask = true;
+  config.power = 2.0f;
+  config.margin_harmonic = 3.0f;
+  config.margin_percussive = 3.0f;
+  // Keep kernels small so the interior stays uniform under both median filters.
+  config.kernel_size_harmonic = 3;
+  config.kernel_size_percussive = 3;
+
+  HpssSpectrogramResult result = hpss(spec, config);
+
+  // Interior bin/frame, away from median-filter edge effects.
+  const int idx = 4 * kFrames + 4;
+  const float harm_mag = result.harmonic.magnitude()[static_cast<size_t>(idx)];
+  const float perc_mag = result.percussive.magnitude()[static_cast<size_t>(idx)];
+
+  // Corrected (librosa) mask: margin contributes margin^power.
+  const float expected = 1.0f / (1.0f + std::pow(config.margin_harmonic, config.power));  // 1/10
+  // The buggy formula applied the margin after the power -> 1 / (1 + margin).
+  const float buggy = 1.0f / (1.0f + config.margin_harmonic);  // 1/4
+
+  REQUIRE_THAT(harm_mag, WithinAbs(kAmp * expected, 1e-4f));
+  REQUIRE_THAT(perc_mag, WithinAbs(kAmp * expected, 1e-4f));
+  // Guard that the assertion would actually catch the old behavior.
+  REQUIRE(std::abs(harm_mag - kAmp * buggy) > 0.1f);
+}
+
+// Asymmetric margins must follow the per-side margin^power law independently.
+TEST_CASE("HPSS soft mask honors asymmetric margins with margin^power", "[hpss]") {
+  constexpr int kBins = 9;
+  constexpr int kFrames = 9;
+  std::vector<std::complex<float>> data(static_cast<size_t>(kBins * kFrames),
+                                        std::complex<float>(1.0f, 0.0f));
+  Spectrogram spec = Spectrogram::from_complex(data.data(), kBins, kFrames, /*n_fft=*/16,
+                                               /*hop_length=*/8, /*sample_rate=*/22050);
+
+  HpssConfig config;
+  config.use_soft_mask = true;
+  config.power = 2.0f;
+  config.margin_harmonic = 2.0f;
+  config.margin_percussive = 4.0f;
+  config.kernel_size_harmonic = 3;
+  config.kernel_size_percussive = 3;
+
+  HpssSpectrogramResult result = hpss(spec, config);
+
+  const int idx = 4 * kFrames + 4;
+  const float harm_mag = result.harmonic.magnitude()[static_cast<size_t>(idx)];
+  const float perc_mag = result.percussive.magnitude()[static_cast<size_t>(idx)];
+
+  const float expected_h = 1.0f / (1.0f + std::pow(config.margin_harmonic, config.power));  // 1/5
+  const float expected_p =
+      1.0f / (1.0f + std::pow(config.margin_percussive, config.power));  // 1/17
+
+  REQUIRE_THAT(harm_mag, WithinAbs(expected_h, 1e-4f));
+  REQUIRE_THAT(perc_mag, WithinAbs(expected_p, 1e-4f));
+}

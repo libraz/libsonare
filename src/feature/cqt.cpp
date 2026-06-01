@@ -647,14 +647,32 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
     high.n_bins = config.n_bins - n_split;
     high.fmin = freqs[n_split];
     CqtResult high_result = pseudo_cqt(audio, high);
+
+    // Amplitude-match the pseudo (high) half to the full-CQT (low) half before
+    // concatenation. Our `pseudo_cqt` returns a row-stochastic Gaussian average
+    // of |STFT| (each projection row sums to 1, with no length scaling), whereas
+    // the full CQT in `cqt()` is on librosa's `scale=True` convention and so
+    // carries a per-bin 1/sqrt(length) factor. Concatenating the two unmatched
+    // halves leaves a magnitude step at the split bin. librosa.hybrid_cqt keeps
+    // both halves on the same scale because its pseudo_cqt applies the very same
+    // scale=True normalisation; we reproduce that here by applying the per-bin
+    // 1/sqrt(length) factor to the pseudo bins. `length` is librosa's
+    // `wavelet_lengths` (bpo-based) evaluated at the full hybrid frequency grid,
+    // so the scaling is continuous across `n_split`.
+    std::vector<float> hybrid_lengths = wavelet_lengths(freqs, sr, config.filter_scale);
+
     if (n_frames == 0) {
       n_frames = high_result.n_frames();
       data.assign(static_cast<size_t>(config.n_bins) * n_frames, std::complex<float>(0.0f, 0.0f));
     }
     const int copy_n = std::min(n_frames, high_result.n_frames());
     for (int k = n_split; k < config.n_bins; ++k) {
+      float scale = 1.0f;
+      if (k < static_cast<int>(hybrid_lengths.size()) && hybrid_lengths[k] > 0.0f) {
+        scale = 1.0f / std::sqrt(hybrid_lengths[k]);
+      }
       for (int t = 0; t < copy_n; ++t) {
-        data[k * n_frames + t] = high_result.at(k - n_split, t);
+        data[k * n_frames + t] = high_result.at(k - n_split, t) * scale;
       }
     }
   }

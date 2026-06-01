@@ -112,7 +112,10 @@ std::vector<double> block_energies(const std::vector<double>& samples, int sampl
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
   const size_t clamped_block = std::min(block_size, samples.size());
-  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.95f);
+  // Ceiling is 0.99 (not 0.95) so the short-term 100 ms hop @ 3 s window
+  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives the clamp. A 0.95
+  // ceiling would round the hop up to 150 ms and break EBU R128 short-term/LRA.
+  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
   const size_t hop = std::max<size_t>(
       1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
 
@@ -145,7 +148,10 @@ std::vector<double> block_energies_weighted_channels(
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
   const size_t clamped_block = std::min(block_size, frames);
-  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.95f);
+  // Ceiling is 0.99 (not 0.95) so the short-term 100 ms hop @ 3 s window
+  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives the clamp. A 0.95
+  // ceiling would round the hop up to 150 ms and break EBU R128 short-term/LRA.
+  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
   const size_t hop = std::max<size_t>(
       1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
 
@@ -217,7 +223,9 @@ float short_term_overlap_for(int sample_rate, float duration_sec) {
   const float block = duration_sec * static_cast<float>(sample_rate);
   const float hop =
       std::max(1.0f, std::round(kLufsShortTermHopSec * static_cast<float>(sample_rate)));
-  return std::clamp(1.0f - hop / block, 0.0f, 0.95f);
+  // Ceiling matches block_energies* (0.99) so the derived overlap reproduces the
+  // exact 100 ms short-term hop instead of being truncated to a 150 ms hop.
+  return std::clamp(1.0f - hop / block, 0.0f, 0.99f);
 }
 
 void validate_config(const LufsConfig& config) {

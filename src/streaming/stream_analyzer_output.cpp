@@ -154,6 +154,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   prev_chord_root_ = -1;
   prev_chord_quality_ = -1;
   chord_stable_time_ = 0.0f;
+  prev_chord_confidence_ = 0.0f;
   chroma_history_.clear();
   full_chroma_history_.clear();
 

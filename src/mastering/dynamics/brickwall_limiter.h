@@ -44,6 +44,14 @@ class BrickwallLimiter : public rt::ProcessorBase {
   ///          (validation happens before publish, never partway).
   void set_config(const BrickwallLimiterConfig& config);
   void set_release_ms(float release_ms);
+  /// @brief Realtime-safe release update for per-block automation.
+  /// @details Forwards to @ref Limiter::set_release_ms_in_place on the inner
+  ///          limiter, recomputing the release coefficient in place without
+  ///          publishing a configuration snapshot (no allocation). Safe to call
+  ///          once per block from the audio thread. Does NOT update the
+  ///          control-thread @c config_ mirror or the published snapshot. Uses
+  ///          the same release-coefficient math as @ref set_release_ms.
+  void set_release_ms_in_place(float release_ms) noexcept;
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread.
   /// @details NOT realtime-safe and NOT safe to call concurrently with

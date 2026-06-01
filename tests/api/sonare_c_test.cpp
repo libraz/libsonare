@@ -2739,3 +2739,69 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(audio == nullptr);
   }
 }
+
+TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 512);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
+  REQUIRE(strip != nullptr);
+
+  size_t send_index = 0;
+  REQUIRE(sonare_strip_add_send(strip, "send0", "bus0", -6.0f, 0, &send_index) == SONARE_OK);
+
+  SECTION("out-of-range send_index -> INVALID_PARAMETER") {
+    // A bad argument must be reported distinctly from a capacity condition.
+    REQUIRE(sonare_strip_schedule_send_automation(strip, send_index + 1, 0, -3.0f, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("full send lane -> OUT_OF_MEMORY") {
+    // Fill the lane to its ring-buffer capacity (default 1024 usable slots).
+    // Use a non-decreasing sample_pos so push() is not rejected for ordering.
+    SonareError err = SONARE_OK;
+    int pushed = 0;
+    for (int i = 0; i < 100000; ++i) {
+      err = sonare_strip_schedule_send_automation(strip, send_index, i, -3.0f, 0);
+      if (err != SONARE_OK) {
+        break;
+      }
+      ++pushed;
+    }
+    // The lane should accept many events, then fail with OUT_OF_MEMORY (capacity)
+    // rather than INVALID_PARAMETER, mirroring the fader/pan/width schedulers.
+    REQUIRE(pushed > 0);
+    REQUIRE(err == SONARE_ERROR_OUT_OF_MEMORY);
+  }
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing]") {
+  const int sr = 48000;
+  auto left = generate_sine(440.0f, sr, 0.25f);
+  std::vector<float> right = left;
+
+  SECTION("right channel NaN is rejected") {
+    std::vector<float> bad_right = right;
+    bad_right[bad_right.size() / 2] = std::numeric_limits<float>::quiet_NaN();
+    float c = 0.0f;
+    REQUIRE(sonare_metering_stereo_correlation(left.data(), bad_right.data(), left.size(), sr,
+                                               &c) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("right channel Inf is rejected") {
+    std::vector<float> bad_right = right;
+    bad_right[0] = std::numeric_limits<float>::infinity();
+    float c = 0.0f;
+    REQUIRE(sonare_metering_stereo_correlation(left.data(), bad_right.data(), left.size(), sr,
+                                               &c) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("left channel NaN is rejected (parity)") {
+    std::vector<float> bad_left = left;
+    bad_left[bad_left.size() / 2] = std::numeric_limits<float>::quiet_NaN();
+    float c = 0.0f;
+    REQUIRE(sonare_metering_stereo_correlation(bad_left.data(), right.data(), left.size(), sr,
+                                               &c) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
