@@ -2312,3 +2312,71 @@ TEST_CASE("RealtimeVoiceChanger ISP limiter leaves quiet signals untouched",
   }
   REQUIRE(peak_out < 0.5f);
 }
+
+// ============================================================================
+// P0-C regression tests: ScopedNoDenormals guard and null-channel continue fix
+// ============================================================================
+
+TEST_CASE("RealtimeVoiceChanger silent input produces silent output (denormal regression guard)",
+          "[voice_changer][rt-safety]") {
+  // Regression guard for P0-C: ScopedNoDenormals at the top of process_block.
+  // A silent input must yield a silent, finite output — no NaN/Inf and no
+  // runaway denormal accumulation from filter tail-off.
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 512;
+  constexpr int kNumBlocks = 2;
+
+  RealtimeVoiceChanger changer;
+  changer.prepare(kSampleRate, kBlockSize, 1);
+
+  std::vector<float> input(kBlockSize, 0.0f);
+  std::vector<float> output(kBlockSize, 0.0f);
+
+  for (int b = 0; b < kNumBlocks; ++b) {
+    std::fill(output.begin(), output.end(), 0.0f);
+    changer.process_block(input.data(), output.data(), kBlockSize);
+    for (int i = 0; i < kBlockSize; ++i) {
+      REQUIRE(std::isfinite(output[static_cast<size_t>(i)]));
+      REQUIRE(std::abs(output[static_cast<size_t>(i)]) < 1e-6f);
+    }
+  }
+}
+
+TEST_CASE(
+    "RealtimeVoiceChanger multi-channel process_block with null right channel still processes left",
+    "[voice_changer][rt-safety]") {
+  // Regression guard for P0-C: the `return → continue` fix ensures that a null
+  // channel pointer skips only that channel rather than aborting the whole call.
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 256;
+
+  RealtimeVoiceChanger changer;
+  changer.prepare(kSampleRate, kBlockSize, 2);
+
+  std::vector<float> left(static_cast<size_t>(kBlockSize));
+  for (int i = 0; i < kBlockSize; ++i) {
+    left[static_cast<size_t>(i)] =
+        0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 440.0 * i / kSampleRate));
+  }
+  const std::vector<float> left_original = left;
+
+  // Right channel pointer is null — must not crash and must not abort left processing.
+  float* channels[] = {left.data(), nullptr};
+  REQUIRE_NOTHROW(changer.process_block(channels, 2, kBlockSize));
+
+  // At least one left sample must have been modified by the processing chain
+  // (wet/dry mix, EQ, gain stages introduce numerical change).
+  bool any_differs = false;
+  for (int i = 0; i < kBlockSize; ++i) {
+    if (left[static_cast<size_t>(i)] != left_original[static_cast<size_t>(i)]) {
+      any_differs = true;
+      break;
+    }
+  }
+  REQUIRE(any_differs);
+
+  // All processed left samples must be finite.
+  for (int i = 0; i < kBlockSize; ++i) {
+    REQUIRE(std::isfinite(left[static_cast<size_t>(i)]));
+  }
+}

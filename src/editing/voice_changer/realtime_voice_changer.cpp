@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/json.h"
@@ -634,6 +635,7 @@ void RealtimeVoiceChanger::ensure_scratch(int num_samples) noexcept {
 
 void RealtimeVoiceChanger::process_block(const float* input, float* output,
                                          int num_samples) noexcept {
+  rt::ScopedNoDenormals no_denormals;
   // Pre-condition violations are silent no-ops to keep this RT-safe (no throw,
   // no allocation). When sample_rate_ is unset we still zero-fill the output
   // so callers observe a defined buffer state rather than uninitialised memory.
@@ -658,6 +660,7 @@ void RealtimeVoiceChanger::process_block(const float* input, float* output,
 
 void RealtimeVoiceChanger::process_block(float* const* channels, int num_channels,
                                          int num_samples) noexcept {
+  rt::ScopedNoDenormals no_denormals;
   // Pre-condition violations are silent no-ops; caller-owned planar buffers
   // are left untouched (we do not know their channel layout to safely zero).
   if (num_samples <= 0) return;
@@ -673,7 +676,10 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
   // (the audio thread keeps owning the previously-adopted one).
   const RealtimeVoiceChangerConfig& config = adopt_snapshot_for_block();
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) return;
+    // Skip null channel pointers (caller's responsibility) rather than aborting
+    // the whole block: a null right pointer must not leave the left output
+    // buffer untouched / undefined.
+    if (channels[ch] == nullptr) continue;
     auto& channel = channels_[static_cast<std::size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
       scratch_[i] = process_input_stage(channel, config, channels[ch][i]);
