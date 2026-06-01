@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/param_field_tables.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
@@ -37,6 +38,13 @@ template <typename Int,
           typename = std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>>>
 void add_field(sonare::util::json::Object& params, const char* key, Int value) {
   params.emplace(key, JsonValue(static_cast<double>(value)));
+}
+
+// Enum config fields serialize as their underlying integer value (the parser
+// restores them via static_cast). Keeps the dump -> parse round-trip lossless.
+template <typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>, typename = void>
+void add_field(sonare::util::json::Object& params, const char* key, Enum value) {
+  params.emplace(key, JsonValue(static_cast<double>(static_cast<int>(value))));
 }
 
 sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
@@ -109,61 +117,29 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
   add_field(params, "repair.denoise.gainSmoothing", cfg.repair.denoise.config.gain_smoothing);
 
   add_field(params, "eq.tilt.enabled", cfg.eq.tilt.enabled);
-  add_field(params, "eq.tilt.tiltDb", cfg.eq.tilt.tilt_db);
-  add_field(params, "eq.tilt.pivotHz", cfg.eq.tilt.pivot_hz);
+#define X(key, member) add_field(params, "eq.tilt." key, cfg.eq.tilt.member);
+  SONARE_FIELDS_EQ_TILT(X)
+#undef X
 
   add_field(params, "dynamics.deesser.enabled", cfg.dynamics.deesser.enabled);
-  add_field(params, "dynamics.deesser.frequencyHz", cfg.dynamics.deesser.config.frequency_hz);
-  add_field(params, "dynamics.deesser.thresholdDb", cfg.dynamics.deesser.config.threshold_db);
-  add_field(params, "dynamics.deesser.ratio", cfg.dynamics.deesser.config.ratio);
-  add_field(params, "dynamics.deesser.attackMs", cfg.dynamics.deesser.config.attack_ms);
-  add_field(params, "dynamics.deesser.releaseMs", cfg.dynamics.deesser.config.release_ms);
-  add_field(params, "dynamics.deesser.rangeDb", cfg.dynamics.deesser.config.range_db);
-  add_field(params, "dynamics.deesser.bandpassQ", cfg.dynamics.deesser.config.bandpass_q);
+#define X(key, member) \
+  add_field(params, "dynamics.deesser." key, cfg.dynamics.deesser.config.member);
+  SONARE_FIELDS_DEESSER(X)
+#undef X
 
   add_field(params, "dynamics.transientShaper.enabled", cfg.dynamics.transient_shaper.enabled);
-  add_field(params, "dynamics.transientShaper.attackGainDb",
-            cfg.dynamics.transient_shaper.config.attack_gain_db);
-  add_field(params, "dynamics.transientShaper.sustainGainDb",
-            cfg.dynamics.transient_shaper.config.sustain_gain_db);
-  add_field(params, "dynamics.transientShaper.fastAttackMs",
-            cfg.dynamics.transient_shaper.config.fast_attack_ms);
-  add_field(params, "dynamics.transientShaper.fastReleaseMs",
-            cfg.dynamics.transient_shaper.config.fast_release_ms);
-  add_field(params, "dynamics.transientShaper.slowAttackMs",
-            cfg.dynamics.transient_shaper.config.slow_attack_ms);
-  add_field(params, "dynamics.transientShaper.slowReleaseMs",
-            cfg.dynamics.transient_shaper.config.slow_release_ms);
-  add_field(params, "dynamics.transientShaper.sensitivity",
-            cfg.dynamics.transient_shaper.config.sensitivity);
-  add_field(params, "dynamics.transientShaper.maxGainDb",
-            cfg.dynamics.transient_shaper.config.max_gain_db);
-  add_field(params, "dynamics.transientShaper.gainSmoothingMs",
-            cfg.dynamics.transient_shaper.config.gain_smoothing_ms);
-  add_field(params, "dynamics.transientShaper.lookaheadMs",
-            cfg.dynamics.transient_shaper.config.lookahead_ms);
+#define X(key, member) \
+  add_field(params, "dynamics.transientShaper." key, cfg.dynamics.transient_shaper.config.member);
+  SONARE_FIELDS_TRANSIENT_SHAPER(X)
+#undef X
 
+  // `detector` is an enum serialized as its integer value via the enum add_field
+  // overload; the parser restores it with static_cast in chain_params.cpp.
   add_field(params, "dynamics.compressor.enabled", cfg.dynamics.compressor.enabled);
-  add_field(params, "dynamics.compressor.thresholdDb", cfg.dynamics.compressor.config.threshold_db);
-  add_field(params, "dynamics.compressor.ratio", cfg.dynamics.compressor.config.ratio);
-  add_field(params, "dynamics.compressor.attackMs", cfg.dynamics.compressor.config.attack_ms);
-  add_field(params, "dynamics.compressor.releaseMs", cfg.dynamics.compressor.config.release_ms);
-  add_field(params, "dynamics.compressor.kneeDb", cfg.dynamics.compressor.config.knee_db);
-  add_field(params, "dynamics.compressor.makeupGainDb",
-            cfg.dynamics.compressor.config.makeup_gain_db);
-  add_field(params, "dynamics.compressor.autoMakeup", cfg.dynamics.compressor.config.auto_makeup);
-  // `detector` is an enum (Peak=0, Rms=1, LogRms=2) serialized as its integer
-  // value (the parser side restores it via static_cast in chain_params.cpp), so
-  // emit a number — not a bool — to keep the dump -> parse round-trip lossless.
-  add_field(params, "dynamics.compressor.detector",
-            static_cast<int>(cfg.dynamics.compressor.config.detector));
-  add_field(params, "dynamics.compressor.sidechainHpfEnabled",
-            cfg.dynamics.compressor.config.sidechain_hpf_enabled);
-  add_field(params, "dynamics.compressor.sidechainHpfHz",
-            cfg.dynamics.compressor.config.sidechain_hpf_hz);
-  add_field(params, "dynamics.compressor.pdrTimeMs", cfg.dynamics.compressor.config.pdr_time_ms);
-  add_field(params, "dynamics.compressor.pdrReleaseScale",
-            cfg.dynamics.compressor.config.pdr_release_scale);
+#define X(key, member) \
+  add_field(params, "dynamics.compressor." key, cfg.dynamics.compressor.config.member);
+  SONARE_FIELDS_COMPRESSOR(X)
+#undef X
 
   add_field(params, "dynamics.multibandComp.enabled", cfg.dynamics.multiband_comp.enabled);
   if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2) {
@@ -191,59 +167,44 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
   }
 
   add_field(params, "saturation.tape.enabled", cfg.saturation.tape.enabled);
-  add_field(params, "saturation.tape.driveDb", cfg.saturation.tape.config.drive_db);
-  add_field(params, "saturation.tape.saturation", cfg.saturation.tape.config.saturation);
-  add_field(params, "saturation.tape.hysteresis", cfg.saturation.tape.config.hysteresis);
-  add_field(params, "saturation.tape.outputGainDb", cfg.saturation.tape.config.output_gain_db);
-  add_field(params, "saturation.tape.speedIps", cfg.saturation.tape.config.speed_ips);
-  add_field(params, "saturation.tape.headBumpDb", cfg.saturation.tape.config.head_bump_db);
-  add_field(params, "saturation.tape.bias", cfg.saturation.tape.config.bias);
-  add_field(params, "saturation.tape.gapLoss", cfg.saturation.tape.config.gap_loss);
+#define X(key, member) add_field(params, "saturation.tape." key, cfg.saturation.tape.config.member);
+  SONARE_FIELDS_TAPE(X)
+#undef X
 
   add_field(params, "saturation.exciter.enabled", cfg.saturation.exciter.enabled);
-  add_field(params, "saturation.exciter.frequencyHz", cfg.saturation.exciter.config.frequency_hz);
-  add_field(params, "saturation.exciter.driveDb", cfg.saturation.exciter.config.drive_db);
-  add_field(params, "saturation.exciter.amount", cfg.saturation.exciter.config.amount);
-  add_field(params, "saturation.exciter.q", cfg.saturation.exciter.config.q);
-  add_field(params, "saturation.exciter.evenOddMix", cfg.saturation.exciter.config.even_odd_mix);
+#define X(key, member) \
+  add_field(params, "saturation.exciter." key, cfg.saturation.exciter.config.member);
+  SONARE_FIELDS_EXCITER(X)
+#undef X
 
   add_field(params, "spectral.airBand.enabled", cfg.spectral.air_band.enabled);
-  add_field(params, "spectral.airBand.amount", cfg.spectral.air_band.config.amount);
-  add_field(params, "spectral.airBand.shelfFrequencyHz",
-            cfg.spectral.air_band.config.shelf_frequency_hz);
-  add_field(params, "spectral.airBand.dynamicThresholdDb",
-            cfg.spectral.air_band.config.dynamic_threshold_db);
-  add_field(params, "spectral.airBand.dynamicRangeDb",
-            cfg.spectral.air_band.config.dynamic_range_db);
+#define X(key, member) \
+  add_field(params, "spectral.airBand." key, cfg.spectral.air_band.config.member);
+  SONARE_FIELDS_AIR_BAND(X)
+#undef X
 
   add_field(params, "stereo.imager.enabled", cfg.stereo.imager.enabled);
-  add_field(params, "stereo.imager.width", cfg.stereo.imager.config.width);
-  add_field(params, "stereo.imager.outputGainDb", cfg.stereo.imager.config.output_gain_db);
-  add_field(params, "stereo.imager.decorrelationAmount",
-            cfg.stereo.imager.config.decorrelation_amount);
-  add_field(params, "stereo.imager.preserveEnergy", cfg.stereo.imager.config.preserve_energy);
+#define X(key, member) add_field(params, "stereo.imager." key, cfg.stereo.imager.config.member);
+  SONARE_FIELDS_IMAGER(X)
+#undef X
 
   add_field(params, "stereo.monoMaker.enabled", cfg.stereo.mono_maker.enabled);
-  add_field(params, "stereo.monoMaker.amount", cfg.stereo.mono_maker.config.amount);
+#define X(key, member) \
+  add_field(params, "stereo.monoMaker." key, cfg.stereo.mono_maker.config.member);
+  SONARE_FIELDS_MONO_MAKER(X)
+#undef X
 
   add_field(params, "maximizer.truePeakLimiter.enabled", cfg.maximizer.true_peak_limiter.enabled);
-  add_field(params, "maximizer.truePeakLimiter.ceilingDb",
-            cfg.maximizer.true_peak_limiter.config.ceiling_db);
-  add_field(params, "maximizer.truePeakLimiter.lookaheadMs",
-            cfg.maximizer.true_peak_limiter.config.lookahead_ms);
-  add_field(params, "maximizer.truePeakLimiter.releaseMs",
-            cfg.maximizer.true_peak_limiter.config.release_ms);
-  add_field(params, "maximizer.truePeakLimiter.oversampleFactor",
-            cfg.maximizer.true_peak_limiter.config.oversample_factor);
-  add_field(params, "maximizer.truePeakLimiter.applyGainAtInputRate",
-            cfg.maximizer.true_peak_limiter.config.apply_gain_at_input_rate);
+#define X(key, member)                                \
+  add_field(params, "maximizer.truePeakLimiter." key, \
+            cfg.maximizer.true_peak_limiter.config.member);
+  SONARE_FIELDS_TRUE_PEAK_LIMITER(X)
+#undef X
 
   add_field(params, "loudness.enabled", cfg.loudness.enabled);
-  add_field(params, "loudness.targetLufs", cfg.loudness.target_lufs);
-  add_field(params, "loudness.ceilingDb", cfg.loudness.ceiling_db);
-  add_field(params, "loudness.truePeakOversample", cfg.loudness.true_peak_oversample);
-  add_field(params, "loudness.releaseMs", cfg.loudness.release_ms);
-  add_field(params, "loudness.applyGainAtInputRate", cfg.loudness.apply_gain_at_input_rate);
+#define X(key, member) add_field(params, "loudness." key, cfg.loudness.member);
+  SONARE_FIELDS_LOUDNESS(X)
+#undef X
 
   return params;
 }

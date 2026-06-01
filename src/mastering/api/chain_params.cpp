@@ -4,6 +4,7 @@
 #include <string>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/param_field_tables.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
@@ -65,8 +66,12 @@ struct StageFlagsSet {
 // C1061 ("blocks nested too deeply") that a long else-if chain triggers.
 
 // ---- repair.* (declick, declip, decrackle, dehum, dereverb, denoise) ----
-bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, double v, float vf,
-                        int vi, StageFlagsSet& flags) {
+bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, double v,
+                        StageFlagsSet& flags) {
+  // Repair stages keep bespoke parsing (size_t / enum-clamping quirks), so they
+  // still need the float / int views of the value.
+  const float vf = static_cast<float>(v);
+  const int vi = static_cast<int>(v);
   // ---- repair.declick ----
   if (key == "repair.declick.enabled") {
     mark_enabled(flags.declick, v);
@@ -323,190 +328,69 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
 }
 
 // ---- eq.tilt + dynamics.* (deesser, transientShaper, compressor, multibandComp) ----
-bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, double v, float vf,
-                             int vi, StageFlagsSet& flags) {
+bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, double v,
+                             StageFlagsSet& flags) {
   // ---- eq.tilt ----
   if (key == "eq.tilt.enabled") {
     mark_enabled(flags.tilt, v);
     return true;
   }
-  if (key == "eq.tilt.tiltDb") {
-    cfg.eq.tilt.tilt_db = vf;
-    mark_field(flags.tilt);
-    return true;
+#define X(jkey, member)                          \
+  if (key == "eq.tilt." jkey) {                  \
+    detail::assign_field(cfg.eq.tilt.member, v); \
+    mark_field(flags.tilt);                      \
+    return true;                                 \
   }
-  if (key == "eq.tilt.pivotHz") {
-    cfg.eq.tilt.pivot_hz = vf;
-    mark_field(flags.tilt);
-    return true;
-  }
+  SONARE_FIELDS_EQ_TILT(X)
+#undef X
 
   // ---- dynamics.deesser ----
   if (key == "dynamics.deesser.enabled") {
     mark_enabled(flags.deesser, v);
     return true;
   }
-  if (key == "dynamics.deesser.frequencyHz") {
-    cfg.dynamics.deesser.config.frequency_hz = vf;
-    mark_field(flags.deesser);
-    return true;
+#define X(jkey, member)                                          \
+  if (key == "dynamics.deesser." jkey) {                         \
+    detail::assign_field(cfg.dynamics.deesser.config.member, v); \
+    mark_field(flags.deesser);                                   \
+    return true;                                                 \
   }
-  if (key == "dynamics.deesser.thresholdDb") {
-    cfg.dynamics.deesser.config.threshold_db = vf;
-    mark_field(flags.deesser);
-    return true;
-  }
-  if (key == "dynamics.deesser.ratio") {
-    cfg.dynamics.deesser.config.ratio = vf;
-    mark_field(flags.deesser);
-    return true;
-  }
-  if (key == "dynamics.deesser.attackMs") {
-    cfg.dynamics.deesser.config.attack_ms = vf;
-    mark_field(flags.deesser);
-    return true;
-  }
-  if (key == "dynamics.deesser.releaseMs") {
-    cfg.dynamics.deesser.config.release_ms = vf;
-    mark_field(flags.deesser);
-    return true;
-  }
-  if (key == "dynamics.deesser.rangeDb") {
-    cfg.dynamics.deesser.config.range_db = vf;
-    mark_field(flags.deesser);
-    return true;
-  }
-  if (key == "dynamics.deesser.bandpassQ") {
-    cfg.dynamics.deesser.config.bandpass_q = vf;
-    mark_field(flags.deesser);
-    return true;
-  }
+  SONARE_FIELDS_DEESSER(X)
+#undef X
 
   // ---- dynamics.transientShaper ----
   if (key == "dynamics.transientShaper.enabled") {
     mark_enabled(flags.transient_shaper, v);
     return true;
   }
-  if (key == "dynamics.transientShaper.attackGainDb") {
-    cfg.dynamics.transient_shaper.config.attack_gain_db = vf;
-    mark_field(flags.transient_shaper);
-    return true;
+#define X(jkey, member)                                                   \
+  if (key == "dynamics.transientShaper." jkey) {                          \
+    detail::assign_field(cfg.dynamics.transient_shaper.config.member, v); \
+    mark_field(flags.transient_shaper);                                   \
+    return true;                                                          \
   }
-  if (key == "dynamics.transientShaper.sustainGainDb") {
-    cfg.dynamics.transient_shaper.config.sustain_gain_db = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.fastAttackMs") {
-    cfg.dynamics.transient_shaper.config.fast_attack_ms = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.fastReleaseMs") {
-    cfg.dynamics.transient_shaper.config.fast_release_ms = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.slowAttackMs") {
-    cfg.dynamics.transient_shaper.config.slow_attack_ms = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.slowReleaseMs") {
-    cfg.dynamics.transient_shaper.config.slow_release_ms = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.sensitivity") {
-    cfg.dynamics.transient_shaper.config.sensitivity = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.maxGainDb") {
-    cfg.dynamics.transient_shaper.config.max_gain_db = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.gainSmoothingMs") {
-    cfg.dynamics.transient_shaper.config.gain_smoothing_ms = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
-  if (key == "dynamics.transientShaper.lookaheadMs") {
-    cfg.dynamics.transient_shaper.config.lookahead_ms = vf;
-    mark_field(flags.transient_shaper);
-    return true;
-  }
+  SONARE_FIELDS_TRANSIENT_SHAPER(X)
+#undef X
 
   // ---- dynamics.compressor ----
+  // `detector` is an enum restored via the enum assign_field overload, matching
+  // the integer it was serialized as.
   if (key == "dynamics.compressor.enabled") {
     mark_enabled(flags.compressor, v);
     return true;
   }
-  if (key == "dynamics.compressor.thresholdDb") {
-    cfg.dynamics.compressor.config.threshold_db = vf;
-    mark_field(flags.compressor);
-    return true;
+#define X(jkey, member)                                             \
+  if (key == "dynamics.compressor." jkey) {                         \
+    detail::assign_field(cfg.dynamics.compressor.config.member, v); \
+    mark_field(flags.compressor);                                   \
+    return true;                                                    \
   }
-  if (key == "dynamics.compressor.ratio") {
-    cfg.dynamics.compressor.config.ratio = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.attackMs") {
-    cfg.dynamics.compressor.config.attack_ms = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.releaseMs") {
-    cfg.dynamics.compressor.config.release_ms = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.kneeDb") {
-    cfg.dynamics.compressor.config.knee_db = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.makeupGainDb") {
-    cfg.dynamics.compressor.config.makeup_gain_db = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.autoMakeup") {
-    cfg.dynamics.compressor.config.auto_makeup = v != 0.0;
-    mark_field(flags.compressor);
-    return true;
-  }
-  // `detector` is an enum (Peak=0, Rms=1, LogRms=2) serialized as its integer
-  // value, mirroring the enum handling used for repair.denoise.mode.
-  if (key == "dynamics.compressor.detector") {
-    cfg.dynamics.compressor.config.detector = static_cast<dynamics::DetectorMode>(vi);
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.sidechainHpfEnabled") {
-    cfg.dynamics.compressor.config.sidechain_hpf_enabled = v != 0.0;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.sidechainHpfHz") {
-    cfg.dynamics.compressor.config.sidechain_hpf_hz = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.pdrTimeMs") {
-    cfg.dynamics.compressor.config.pdr_time_ms = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
-  if (key == "dynamics.compressor.pdrReleaseScale") {
-    cfg.dynamics.compressor.config.pdr_release_scale = vf;
-    mark_field(flags.compressor);
-    return true;
-  }
+  SONARE_FIELDS_COMPRESSOR(X)
+#undef X
 
   // ---- dynamics.multibandComp ----
+  // Bespoke: per-band fields write into bounds-checked crossover/bands vectors.
+  const float vf = static_cast<float>(v);
   if (key == "dynamics.multibandComp.enabled") {
     mark_enabled(flags.multiband_comp, v);
     return true;
@@ -614,234 +498,128 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
 }
 
 // ---- saturation.* (tape, exciter) ----
-bool apply_saturation_param(MasteringChainConfig& cfg, const std::string& key, double v, float vf,
+bool apply_saturation_param(MasteringChainConfig& cfg, const std::string& key, double v,
                             StageFlagsSet& flags) {
   // ---- saturation.tape ----
   if (key == "saturation.tape.enabled") {
     mark_enabled(flags.tape, v);
     return true;
   }
-  if (key == "saturation.tape.driveDb") {
-    cfg.saturation.tape.config.drive_db = vf;
-    mark_field(flags.tape);
-    return true;
+#define X(jkey, member)                                         \
+  if (key == "saturation.tape." jkey) {                         \
+    detail::assign_field(cfg.saturation.tape.config.member, v); \
+    mark_field(flags.tape);                                     \
+    return true;                                                \
   }
-  if (key == "saturation.tape.saturation") {
-    cfg.saturation.tape.config.saturation = vf;
-    mark_field(flags.tape);
-    return true;
-  }
-  if (key == "saturation.tape.hysteresis") {
-    cfg.saturation.tape.config.hysteresis = vf;
-    mark_field(flags.tape);
-    return true;
-  }
-  if (key == "saturation.tape.outputGainDb") {
-    cfg.saturation.tape.config.output_gain_db = vf;
-    mark_field(flags.tape);
-    return true;
-  }
-  if (key == "saturation.tape.speedIps") {
-    cfg.saturation.tape.config.speed_ips = vf;
-    mark_field(flags.tape);
-    return true;
-  }
-  if (key == "saturation.tape.headBumpDb") {
-    cfg.saturation.tape.config.head_bump_db = vf;
-    mark_field(flags.tape);
-    return true;
-  }
-  if (key == "saturation.tape.bias") {
-    cfg.saturation.tape.config.bias = vf;
-    mark_field(flags.tape);
-    return true;
-  }
-  if (key == "saturation.tape.gapLoss") {
-    cfg.saturation.tape.config.gap_loss = vf;
-    mark_field(flags.tape);
-    return true;
-  }
+  SONARE_FIELDS_TAPE(X)
+#undef X
 
   // ---- saturation.exciter ----
   if (key == "saturation.exciter.enabled") {
     mark_enabled(flags.exciter, v);
     return true;
   }
-  if (key == "saturation.exciter.frequencyHz") {
-    cfg.saturation.exciter.config.frequency_hz = vf;
-    mark_field(flags.exciter);
-    return true;
+#define X(jkey, member)                                            \
+  if (key == "saturation.exciter." jkey) {                         \
+    detail::assign_field(cfg.saturation.exciter.config.member, v); \
+    mark_field(flags.exciter);                                     \
+    return true;                                                   \
   }
-  if (key == "saturation.exciter.driveDb") {
-    cfg.saturation.exciter.config.drive_db = vf;
-    mark_field(flags.exciter);
-    return true;
-  }
-  if (key == "saturation.exciter.amount") {
-    cfg.saturation.exciter.config.amount = vf;
-    mark_field(flags.exciter);
-    return true;
-  }
-  if (key == "saturation.exciter.q") {
-    cfg.saturation.exciter.config.q = vf;
-    mark_field(flags.exciter);
-    return true;
-  }
-  if (key == "saturation.exciter.evenOddMix") {
-    cfg.saturation.exciter.config.even_odd_mix = vf;
-    mark_field(flags.exciter);
-    return true;
-  }
+  SONARE_FIELDS_EXCITER(X)
+#undef X
 
   return false;
 }
 
 // ---- spectral.airBand + stereo.* (imager, monoMaker) ----
 bool apply_spectral_stereo_param(MasteringChainConfig& cfg, const std::string& key, double v,
-                                 float vf, StageFlagsSet& flags) {
+                                 StageFlagsSet& flags) {
   // ---- spectral.airBand ----
   if (key == "spectral.airBand.enabled") {
     mark_enabled(flags.air_band, v);
     return true;
   }
-  if (key == "spectral.airBand.amount") {
-    cfg.spectral.air_band.config.amount = vf;
-    mark_field(flags.air_band);
-    return true;
+#define X(jkey, member)                                           \
+  if (key == "spectral.airBand." jkey) {                          \
+    detail::assign_field(cfg.spectral.air_band.config.member, v); \
+    mark_field(flags.air_band);                                   \
+    return true;                                                  \
   }
-  if (key == "spectral.airBand.shelfFrequencyHz") {
-    cfg.spectral.air_band.config.shelf_frequency_hz = vf;
-    mark_field(flags.air_band);
-    return true;
-  }
-  if (key == "spectral.airBand.dynamicThresholdDb") {
-    cfg.spectral.air_band.config.dynamic_threshold_db = vf;
-    mark_field(flags.air_band);
-    return true;
-  }
-  if (key == "spectral.airBand.dynamicRangeDb") {
-    cfg.spectral.air_band.config.dynamic_range_db = vf;
-    mark_field(flags.air_band);
-    return true;
-  }
+  SONARE_FIELDS_AIR_BAND(X)
+#undef X
 
   // ---- stereo.imager ----
   if (key == "stereo.imager.enabled") {
     mark_enabled(flags.imager, v);
     return true;
   }
-  if (key == "stereo.imager.width") {
-    cfg.stereo.imager.config.width = vf;
-    mark_field(flags.imager);
-    return true;
+#define X(jkey, member)                                       \
+  if (key == "stereo.imager." jkey) {                         \
+    detail::assign_field(cfg.stereo.imager.config.member, v); \
+    mark_field(flags.imager);                                 \
+    return true;                                              \
   }
-  if (key == "stereo.imager.outputGainDb") {
-    cfg.stereo.imager.config.output_gain_db = vf;
-    mark_field(flags.imager);
-    return true;
-  }
-  if (key == "stereo.imager.decorrelationAmount") {
-    cfg.stereo.imager.config.decorrelation_amount = vf;
-    mark_field(flags.imager);
-    return true;
-  }
-  if (key == "stereo.imager.preserveEnergy") {
-    cfg.stereo.imager.config.preserve_energy = v != 0.0;
-    mark_field(flags.imager);
-    return true;
-  }
+  SONARE_FIELDS_IMAGER(X)
+#undef X
 
   // ---- stereo.monoMaker ----
   if (key == "stereo.monoMaker.enabled") {
     mark_enabled(flags.mono_maker, v);
     return true;
   }
-  if (key == "stereo.monoMaker.amount") {
-    cfg.stereo.mono_maker.config.amount = vf;
-    mark_field(flags.mono_maker);
-    return true;
+#define X(jkey, member)                                           \
+  if (key == "stereo.monoMaker." jkey) {                          \
+    detail::assign_field(cfg.stereo.mono_maker.config.member, v); \
+    mark_field(flags.mono_maker);                                 \
+    return true;                                                  \
   }
+  SONARE_FIELDS_MONO_MAKER(X)
+#undef X
 
   return false;
 }
 
 // ---- maximizer.truePeakLimiter + loudness ----
 bool apply_maximizer_loudness_param(MasteringChainConfig& cfg, const std::string& key, double v,
-                                    float vf, int vi, StageFlagsSet& flags) {
+                                    StageFlagsSet& flags) {
   // ---- maximizer.truePeakLimiter ----
   if (key == "maximizer.truePeakLimiter.enabled") {
     mark_enabled(flags.true_peak, v);
     return true;
   }
-  if (key == "maximizer.truePeakLimiter.ceilingDb") {
-    cfg.maximizer.true_peak_limiter.config.ceiling_db = vf;
-    mark_field(flags.true_peak);
-    return true;
+#define X(jkey, member)                                                     \
+  if (key == "maximizer.truePeakLimiter." jkey) {                           \
+    detail::assign_field(cfg.maximizer.true_peak_limiter.config.member, v); \
+    mark_field(flags.true_peak);                                            \
+    return true;                                                            \
   }
-  if (key == "maximizer.truePeakLimiter.lookaheadMs") {
-    cfg.maximizer.true_peak_limiter.config.lookahead_ms = vf;
-    mark_field(flags.true_peak);
-    return true;
-  }
-  if (key == "maximizer.truePeakLimiter.releaseMs") {
-    cfg.maximizer.true_peak_limiter.config.release_ms = vf;
-    mark_field(flags.true_peak);
-    return true;
-  }
-  if (key == "maximizer.truePeakLimiter.oversampleFactor") {
-    cfg.maximizer.true_peak_limiter.config.oversample_factor = vi;
-    mark_field(flags.true_peak);
-    return true;
-  }
-  if (key == "maximizer.truePeakLimiter.applyGainAtInputRate") {
-    cfg.maximizer.true_peak_limiter.config.apply_gain_at_input_rate = v != 0.0;
-    mark_field(flags.true_peak);
-    return true;
-  }
+  SONARE_FIELDS_TRUE_PEAK_LIMITER(X)
+#undef X
 
   // ---- loudness ----
   if (key == "loudness.enabled") {
     mark_enabled(flags.loudness, v);
     return true;
   }
-  if (key == "loudness.targetLufs") {
-    cfg.loudness.target_lufs = vf;
-    mark_field(flags.loudness);
-    return true;
+#define X(jkey, member)                           \
+  if (key == "loudness." jkey) {                  \
+    detail::assign_field(cfg.loudness.member, v); \
+    mark_field(flags.loudness);                   \
+    return true;                                  \
   }
-  if (key == "loudness.ceilingDb") {
-    cfg.loudness.ceiling_db = vf;
-    mark_field(flags.loudness);
-    return true;
-  }
-  if (key == "loudness.truePeakOversample") {
-    cfg.loudness.true_peak_oversample = vi;
-    mark_field(flags.loudness);
-    return true;
-  }
-  if (key == "loudness.releaseMs") {
-    cfg.loudness.release_ms = vf;
-    mark_field(flags.loudness);
-    return true;
-  }
-  if (key == "loudness.applyGainAtInputRate") {
-    cfg.loudness.apply_gain_at_input_rate = v != 0.0;
-    mark_field(flags.loudness);
-    return true;
-  }
+  SONARE_FIELDS_LOUDNESS(X)
+#undef X
 
   return false;
 }
 
 void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key, double v,
                                StageFlagsSet& flags) {
-  const float vf = static_cast<float>(v);
-  const int vi = static_cast<int>(v);
-  if (apply_repair_param(cfg, key, v, vf, vi, flags)) return;
-  if (apply_eq_dynamics_param(cfg, key, v, vf, vi, flags)) return;
-  if (apply_saturation_param(cfg, key, v, vf, flags)) return;
-  if (apply_spectral_stereo_param(cfg, key, v, vf, flags)) return;
-  if (apply_maximizer_loudness_param(cfg, key, v, vf, vi, flags)) return;
+  if (apply_repair_param(cfg, key, v, flags)) return;
+  if (apply_eq_dynamics_param(cfg, key, v, flags)) return;
+  if (apply_saturation_param(cfg, key, v, flags)) return;
+  if (apply_spectral_stereo_param(cfg, key, v, flags)) return;
+  if (apply_maximizer_loudness_param(cfg, key, v, flags)) return;
   throw SonareException(ErrorCode::InvalidParameter, "unknown chain config key: " + key);
 }
 

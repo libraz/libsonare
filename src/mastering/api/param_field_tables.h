@@ -306,3 +306,20 @@ inline void assign_field(Enum& dst, double value) {
   X("crestLow", crest_low)                \
   X("crestHigh", crest_high)              \
   X("releaseSmoothingMs", release_smoothing_ms)
+
+// --- Chain-only stages ---
+// These do not have a processor_params.h config builder, but their flat-key
+// round trip (chain_json.cpp <-> chain_params.cpp) benefits from the same shared
+// table. Their fields live directly on the chain stage struct (no .config
+// member), so the chain consumers supply the matching accessor.
+
+#define SONARE_FIELDS_EQ_TILT(X) \
+  X("tiltDb", tilt_db)           \
+  X("pivotHz", pivot_hz)
+
+#define SONARE_FIELDS_LOUDNESS(X)               \
+  X("targetLufs", target_lufs)                  \
+  X("ceilingDb", ceiling_db)                    \
+  X("truePeakOversample", true_peak_oversample) \
+  X("releaseMs", release_ms)                    \
+  X("applyGainAtInputRate", apply_gain_at_input_rate)
