@@ -193,6 +193,14 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
     cfg.sidechain_hpf_hz = 80.0f + static_cast<float>(i % 200);
     compressor.set_config(cfg);
   }
+  // On a heavily loaded CI runner the control loop above can finish before the
+  // audio thread is scheduled even once; wait for at least one processed block
+  // so the concurrency assertions below have something to observe.
+  while (finite_blocks.load(std::memory_order_relaxed) +
+             nonfinite_blocks.load(std::memory_order_relaxed) ==
+         0) {
+    std::this_thread::yield();
+  }
   stop.store(true, std::memory_order_release);
   audio_thread.join();
 
