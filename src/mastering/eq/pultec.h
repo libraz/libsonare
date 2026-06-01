@@ -7,7 +7,6 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
-#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -81,9 +80,11 @@ class PultecEq : public rt::ProcessorBase {
   float high_attenuation_ = 0.0f;
   PultecComponentModel component_model_ = PultecComponentModel::CurveOnly;
   float output_drive_ = 0.0f;
-  float low_component_alpha_ =
-      sonare::constants::kTwoPi * 60.0f / static_cast<float>(kDefaultSampleRate);
-  float high_component_alpha_ = 0.75f;
+  // Seeded with the prewarped one-pole coefficient (alpha = 1 - exp(-2*pi*f/fs))
+  // for the default corners; prepare()/update_component_coefficients() recompute
+  // these against the actual sample rate.
+  float low_component_alpha_ = 0.00785f;  // ~60 Hz at 48 kHz
+  float high_component_alpha_ = 0.73f;    // ~10 kHz at 48 kHz
 };
 
 }  // namespace sonare::mastering::eq

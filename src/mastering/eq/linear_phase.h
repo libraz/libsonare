@@ -71,6 +71,11 @@ class LinearPhaseEq : public rt::ProcessorBase {
   };
 
   void rebuild_kernel();
+  // Non-destructive band/parameter reconfiguration: recomputes the FIR taps and
+  // refreshes each convolver without zeroing the FIR history, so a change does
+  // not introduce a ~kernel-length silence gap. (All params are non-realtime;
+  // these mutators are prepare-time/offline.)
+  void reconfigure();
   void ensure_channel_state(int num_channels);
   void process_direct(float* samples, int num_samples, ChannelState& state) const;
   int active_partition_size() const noexcept;

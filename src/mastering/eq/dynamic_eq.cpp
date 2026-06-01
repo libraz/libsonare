@@ -52,14 +52,70 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
       sidechain_channels_ != nullptr ? sidechain_num_channels_ : num_channels;
   last_detector_db_ = detector_db(detector_channels, detector_num_channels, num_samples);
   for (size_t i = 0; i < kMaxBands; ++i) {
-    last_band_detector_db_[i] = bands_[i].enabled
-                                    ? band_detector_db(detector_channels, detector_num_channels,
-                                                       num_samples, sample_rate_, bands_[i])
-                                    : kFloorDb;
+    last_band_detector_db_[i] =
+        bands_[i].enabled
+            ? band_detector_db(detector_channels, detector_num_channels, num_samples, i)
+            : kFloorDb;
   }
-  rebuild(num_samples);
-  eq_.process(channels, num_channels, num_samples);
+
+  // Compute each band's target gain (static + dynamic delta) once per block, then
+  // evolve the applied gain toward that target at SAMPLE rate inside the loop and
+  // refresh the biquad coefficients every kCoeffUpdateInterval samples. Disabled
+  // bands clear their EQ slot and contribute nothing.
+  const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
+  const float per_sample_coeff =
+      prepared_ ? static_cast<float>(1.0 - std::exp(-1.0 / smoothing_samples)) : 1.0f;
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    const auto& dynamic_band = bands_[i];
+    if (!dynamic_band.enabled) {
+      eq_.clear_band(i);
+      last_applied_gain_db_[i] = 0.0f;
+      target_gain_db_[i] = 0.0f;
+      continue;
+    }
+    target_gain_db_[i] =
+        dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, last_band_detector_db_[i]);
+  }
+
+  // Reusable view buffer for the sub-block pointers (resized at most once per
+  // channel-count change; no per-sub-block allocation on the audio thread).
+  if (sub_channels_.size() != static_cast<size_t>(num_channels)) {
+    sub_channels_.assign(static_cast<size_t>(num_channels), nullptr);
+  }
+  for (int offset = 0; offset < num_samples; offset += kCoeffUpdateInterval) {
+    const int chunk = std::min(kCoeffUpdateInterval, num_samples - offset);
+    for (size_t i = 0; i < kMaxBands; ++i) {
+      if (!bands_[i].enabled) {
+        continue;
+      }
+      // Advance the smoothed gain by `chunk` per-sample one-pole steps toward the
+      // target using the closed form so the sub-block update matches sample-rate
+      // smoothing exactly: g += (1 - (1-c)^chunk) * (target - g).
+      const float decay = std::pow(1.0f - per_sample_coeff, static_cast<float>(chunk));
+      smoothed_gain_db_[i] += (1.0f - decay) * (target_gain_db_[i] - smoothed_gain_db_[i]);
+      apply_band_gain(i, smoothed_gain_db_[i]);
+    }
+    for (int ch = 0; ch < num_channels; ++ch) {
+      sub_channels_[static_cast<size_t>(ch)] = channels[ch] + offset;
+    }
+    eq_.process(sub_channels_.data(), num_channels, chunk);
+  }
+
   clear_sidechain();
+}
+
+void DynamicEq::apply_band_gain(size_t index, float gain_db) {
+  const auto& dynamic_band = bands_[index];
+  last_applied_gain_db_[index] = gain_db;
+  // Steady state: skip the biquad recompute when the gain has not moved enough
+  // to matter, avoiding needless coefficient design on the audio thread.
+  if (std::abs(gain_db - last_applied_coeff_gain_db_[index]) < kGainEpsilonDb &&
+      eq_.band(index).enabled) {
+    return;
+  }
+  last_applied_coeff_gain_db_[index] = gain_db;
+  eq_.set_band(index,
+               {dynamic_band.type, dynamic_band.frequency_hz, gain_db, dynamic_band.q, true});
 }
 
 void DynamicEq::reset() {
@@ -68,6 +124,13 @@ void DynamicEq::reset() {
   last_band_detector_db_.fill(kFloorDb);
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
+  target_gain_db_.fill(0.0f);
+  // Force the next apply to reprogram every band's coefficients (the steady-
+  // state skip must never compare against a stale value across a reset).
+  last_applied_coeff_gain_db_.fill(std::numeric_limits<float>::quiet_NaN());
+  for (auto& detector : detectors_) {
+    for (auto& channel : detector.channels) channel.reset();
+  }
   clear_sidechain();
 }
 
@@ -233,55 +296,122 @@ float DynamicEq::detector_db(const float* const* channels, int num_channels, int
   return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
 }
 
-float DynamicEq::band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                  double sample_rate, const DynamicEqBand& band) {
-  if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
-  struct Biquad {
-    double b0 = 1.0;
-    double b1 = 0.0;
-    double b2 = 0.0;
-    double a1 = 0.0;
-    double a2 = 0.0;
-    double z1 = 0.0;
-    double z2 = 0.0;
+void DynamicEq::ensure_detector(size_t index, int num_channels) {
+  DetectorState& state = detectors_[index];
+  const DynamicEqBand& band = bands_[index];
 
-    double process(double x) {
-      const double y = b0 * x + z1;
-      z1 = b1 * x - a1 * y + z2;
-      z2 = b2 * x - a2 * y;
-      return y;
-    }
-  };
-
-  const double detector_frequency =
-      band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz : band.frequency_hz;
-  const double frequency =
-      std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate * 0.5 - 1.0);
-  const auto coeffs =
-      rt::rbj_bandpass(static_cast<float>(kTwoPiD * frequency / sample_rate),
-                       static_cast<float>(std::max(static_cast<double>(band.sidechain_q), 1.0e-6)));
-  Biquad prototype;
-  prototype.b0 = coeffs.b0;
-  prototype.b1 = coeffs.b1;
-  prototype.b2 = coeffs.b2;
-  prototype.a1 = coeffs.a1;
-  prototype.a2 = coeffs.a2;
-
-  const double attack = sonare::time_to_attack_release_rate(sample_rate, band.attack_ms);
-  const double release = sonare::time_to_attack_release_rate(sample_rate, band.release_ms);
   const int lookahead_samples =
-      static_cast<int>(std::round(sample_rate * band.lookahead_ms * 0.001));
+      std::max(0, static_cast<int>(std::round(sample_rate_ * band.lookahead_ms * 0.001)));
+
+  // (Re)design the bandpass prototype and timing only when the relevant band
+  // fields change — coefficient design is double-precision and not free.
+  const bool design_changed =
+      state.frequency_hz != band.frequency_hz ||
+      state.sidechain_freq_hz != band.sidechain_freq_hz || state.sidechain_q != band.sidechain_q ||
+      state.attack_ms != band.attack_ms || state.release_ms != band.release_ms;
+  if (design_changed) {
+    const double detector_frequency =
+        band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz : band.frequency_hz;
+    const double frequency =
+        std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate_ * 0.5 - 1.0);
+    const auto coeffs = rt::rbj_bandpass(
+        static_cast<float>(kTwoPiD * frequency / sample_rate_),
+        static_cast<float>(std::max(static_cast<double>(band.sidechain_q), 1.0e-6)));
+    state.prototype.b0 = coeffs.b0;
+    state.prototype.b1 = coeffs.b1;
+    state.prototype.b2 = coeffs.b2;
+    state.prototype.a1 = coeffs.a1;
+    state.prototype.a2 = coeffs.a2;
+    state.attack = sonare::time_to_attack_release_rate(sample_rate_, band.attack_ms);
+    state.release = sonare::time_to_attack_release_rate(sample_rate_, band.release_ms);
+    state.frequency_hz = band.frequency_hz;
+    state.sidechain_freq_hz = band.sidechain_freq_hz;
+    state.sidechain_q = band.sidechain_q;
+    state.attack_ms = band.attack_ms;
+    state.release_ms = band.release_ms;
+  }
+
+  const bool channels_changed = static_cast<int>(state.channels.size()) != num_channels;
+  const bool lookahead_changed =
+      state.lookahead_ms != band.lookahead_ms || state.lookahead_samples != lookahead_samples;
+  if (channels_changed) {
+    state.channels.assign(static_cast<size_t>(num_channels), {});
+  }
+  if (lookahead_changed) {
+    state.lookahead_samples = lookahead_samples;
+    state.lookahead_ms = band.lookahead_ms;
+  }
+
+  // Propagate fresh coefficients (and resize the lookahead ring) only when
+  // something relevant changed; the per-sample filter state (z1/z2) and ring
+  // contents are otherwise preserved across blocks for continuity.
+  if (design_changed || channels_changed || lookahead_changed) {
+    for (auto& channel : state.channels) {
+      const auto copy = [&](DetectorBiquad& f) {
+        f.b0 = state.prototype.b0;
+        f.b1 = state.prototype.b1;
+        f.b2 = state.prototype.b2;
+        f.a1 = state.prototype.a1;
+        f.a2 = state.prototype.a2;
+      };
+      copy(channel.filter_a);
+      copy(channel.filter_b);
+      if (channel.look_ring.size() != static_cast<size_t>(lookahead_samples)) {
+        channel.look_ring.assign(static_cast<size_t>(lookahead_samples), 0.0f);
+        channel.look_pos = 0;
+      }
+    }
+  }
+}
+
+float DynamicEq::band_detector_db(const float* const* channels, int num_channels, int num_samples,
+                                  size_t index) {
+  if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
+  ensure_detector(index, num_channels);
+  DetectorState& state = detectors_[index];
+  const int look = state.lookahead_samples;
+
+  // Detector-history continuity fix (NOT true zero-latency lookahead). The
+  // bandpass filters and envelope follower are persistent across blocks, and a
+  // per-channel ring (look_ring) carries the last `look` input samples from the
+  // previous block into this one. The detector therefore processes a CONTINUOUS
+  // input stream — `[carried tail] ++ [this block minus its own tail]` — instead
+  // of the previous code's `min(num_samples-1, i+look)` which repeated the final
+  // sample for the last `look` positions of every block and systematically
+  // under-detected at each boundary.
+  //
+  // Trade-off: because the audio path stays latency-free, the detection horizon
+  // effectively LAGS by up to `look` samples rather than leading; a transient at
+  // a block boundary is still detected (within ~look samples), just not ahead of
+  // time. True lookahead would require delaying the audio, which this processor
+  // intentionally does not do.
   double sum = 0.0;
   for (int ch = 0; ch < num_channels; ++ch) {
-    Biquad filter_a = prototype;
-    Biquad filter_b = prototype;
-    double envelope = 0.0;
+    DetectorChannel& dc = state.channels[static_cast<size_t>(ch)];
+    auto step = [&](float sample) {
+      const double rectified = std::abs(dc.filter_b.process(dc.filter_a.process(sample)));
+      const double coeff = rectified > dc.envelope ? state.attack : state.release;
+      dc.envelope += coeff * (rectified - dc.envelope);
+      sum += dc.envelope * dc.envelope;
+    };
+    // Continuous stream: the carried tail (oldest first) feeds the detector,
+    // followed by the current block. The detector consumes exactly num_samples
+    // inputs per channel (look carried + (num_samples - look) fresh), so the RMS
+    // count below stays num_channels * num_samples. After processing, the ring is
+    // a plain FIFO holding the most recent `look` input samples for the next
+    // call. No per-block allocation: the ring is sized once in ensure_detector().
     for (int i = 0; i < num_samples; ++i) {
-      const int src = std::min(num_samples - 1, i + std::max(lookahead_samples, 0));
-      const double rectified = std::abs(filter_b.process(filter_a.process(channels[ch][src])));
-      const double coeff = rectified > envelope ? attack : release;
-      envelope += coeff * (rectified - envelope);
-      sum += envelope * envelope;
+      if (look > 0) {
+        // FIFO: emit the oldest stored sample, then store the new input in its
+        // slot. This delays each input by exactly `look` samples, giving the
+        // continuous stream described above.
+        const float oldest = dc.look_ring[dc.look_pos];
+        dc.look_ring[dc.look_pos] = channels[ch][i];
+        dc.look_pos = (dc.look_pos + 1) % dc.look_ring.size();
+        step(oldest);
+      } else {
+        step(channels[ch][i]);
+      }
     }
   }
   const double count = static_cast<double>(num_channels) * static_cast<double>(num_samples);
@@ -301,31 +431,31 @@ float DynamicEq::dynamic_gain_delta(const DynamicEqBand& band, float detector_db
   return band.range_db < 0.0f ? -amount : amount;
 }
 
-void DynamicEq::rebuild(int num_samples) {
+void DynamicEq::rebuild(int /*num_samples*/) {
+  // Immediate (non-process) reconfiguration path used by set_band/set_parameter:
+  // recompute each band's static target gain and program the biquad now without
+  // smoothing (no audio is flowing). The per-sample smoothing during process()
+  // then evolves from this seed. Dynamic deltas are recomputed each block in
+  // process(), so here we seed with the static gain plus the last known
+  // detector-driven delta to avoid a jump on the first processed block.
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& dynamic_band = bands_[i];
     if (!dynamic_band.enabled) {
       eq_.clear_band(i);
       last_applied_gain_db_[i] = 0.0f;
+      last_applied_coeff_gain_db_[i] = std::numeric_limits<float>::quiet_NaN();
+      smoothed_gain_db_[i] = 0.0f;
+      target_gain_db_[i] = 0.0f;
       continue;
     }
-
-    const float detector = last_band_detector_db_[i];
     const float target_gain =
-        dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, detector);
-    float applied_gain = target_gain;
-    if (prepared_ && num_samples > 0) {
-      const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
-      const float coeff =
-          static_cast<float>(1.0 - std::exp(-static_cast<double>(num_samples) / smoothing_samples));
-      smoothed_gain_db_[i] += coeff * (target_gain - smoothed_gain_db_[i]);
-      applied_gain = smoothed_gain_db_[i];
-    } else {
-      smoothed_gain_db_[i] = target_gain;
-    }
-    last_applied_gain_db_[i] = applied_gain;
-    eq_.set_band(
-        i, {dynamic_band.type, dynamic_band.frequency_hz, applied_gain, dynamic_band.q, true});
+        dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, last_band_detector_db_[i]);
+    smoothed_gain_db_[i] = target_gain;
+    target_gain_db_[i] = target_gain;
+    last_applied_gain_db_[i] = target_gain;
+    last_applied_coeff_gain_db_[i] = target_gain;
+    eq_.set_band(i,
+                 {dynamic_band.type, dynamic_band.frequency_hz, target_gain, dynamic_band.q, true});
   }
 }
 

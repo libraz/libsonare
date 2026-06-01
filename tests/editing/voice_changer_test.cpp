@@ -2381,3 +2381,93 @@ TEST_CASE(
     REQUIRE(std::isfinite(left[static_cast<size_t>(i)]));
   }
 }
+
+// ===================================================================
+// Regression (FormantWarp no hard-clip): the OLA-normalised output is no
+// longer clamped to [-1, 1]. Formant warping reshapes the spectral
+// envelope; it is not a limiter, so clamping added nonlinear distortion
+// (a flat-topped plateau at exactly +/-1.0) to any frame whose output
+// legitimately exceeded unity. Scale the input so the warped output runs
+// hot and assert: (1) the output is NOT flat-topped at exactly +/-1.0,
+// (2) peaks exceed 1.0, and (3) there are no NaNs.
+// ===================================================================
+TEST_CASE("FormantWarp does not hard-clip a hot signal", "[voice_changer][formant]") {
+  constexpr int sample_rate = 22050;
+  constexpr int n = sample_rate / 2;
+  constexpr float f0 = 150.0f;
+  // Vowel-like source with a formant peak near 900 Hz, scaled hot so the
+  // reconstructed (near-neutral warp) output legitimately exceeds 1.0.
+  std::vector<float> samples(static_cast<size_t>(n), 0.0f);
+  constexpr float formant_hz = 900.0f;
+  constexpr float bandwidth_hz = 600.0f;
+  for (int h = 1; h * f0 < static_cast<float>(n); ++h) {
+    const float harm_hz = h * f0;
+    const float env = 1.0f / (1.0f + std::pow((harm_hz - formant_hz) / bandwidth_hz, 2.0f));
+    for (int i = 0; i < n; ++i) {
+      samples[static_cast<size_t>(i)] +=
+          1.6f * env *
+          static_cast<float>(std::sin(sonare::constants::kTwoPiD * harm_hz *
+                                      static_cast<double>(i) / sample_rate));
+    }
+  }
+  float input_peak = 0.0f;
+  for (float s : samples) input_peak = std::max(input_peak, std::abs(s));
+  REQUIRE(input_peak > 1.0f);  // sanity: input itself is hot.
+
+  const sonare::Audio audio = sonare::Audio::from_vector(std::vector<float>(samples), sample_rate);
+  // Near-neutral warp: the spectral envelope is barely shifted, so this isolates
+  // the OLA reconstruction path where a clamp would have flat-topped the output.
+  FormantWarp warp({1.02f, 12, 1.0f});
+  const sonare::Audio warped = warp.process(audio);
+
+  REQUIRE(warped.size() == audio.size());
+  std::vector<float> out(warped.data(), warped.data() + warped.size());
+  for (float s : out) REQUIRE(std::isfinite(s));
+
+  // Peaks must exceed 1.0 (no clamp), measured in the steady interior away
+  // from the OLA edge ramps.
+  const int lo = n / 4;
+  const int hi = 3 * n / 4;
+  float out_peak = 0.0f;
+  for (int i = lo; i < hi; ++i)
+    out_peak = std::max(out_peak, std::abs(out[static_cast<size_t>(i)]));
+  REQUIRE(out_peak > 1.0f);
+
+  // No flat-topped plateau: count samples pinned at exactly +/-1.0. A clamp
+  // would create many consecutive samples sitting on the ceiling; an unclamped
+  // warp essentially never lands on exactly 1.0f.
+  int pinned = 0;
+  for (int i = lo; i < hi; ++i) {
+    if (std::abs(std::abs(out[static_cast<size_t>(i)]) - 1.0f) < 1.0e-6f) ++pinned;
+  }
+  REQUIRE(pinned == 0);
+
+  // Reconstruction stability: a strictly-neutral warp (factor = 1.0) and the
+  // near-neutral warp produce essentially the same output (the warp itself does
+  // not collapse or explode the signal; the only difference is the tiny envelope
+  // shift). NOTE: FormantWarp re-colours the whitened LPC residual, so its
+  // absolute output level is NOT unity-gain relative to the input by design --
+  // we therefore compare against the neutral warp, not the raw input.
+  FormantWarp neutral({1.0f, 12, 1.0f});
+  const sonare::Audio neutral_warped = neutral.process(audio);
+  std::vector<float> ref(neutral_warped.data(), neutral_warped.data() + neutral_warped.size());
+  for (float s : ref) REQUIRE(std::isfinite(s));
+
+  double ref_sq = 0.0;
+  double out_sq = 0.0;
+  for (int i = lo; i < hi; ++i) {
+    ref_sq += static_cast<double>(ref[static_cast<size_t>(i)]) * ref[static_cast<size_t>(i)];
+    out_sq += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
+  }
+  const double ref_rms = std::sqrt(ref_sq / (hi - lo));
+  const double out_rms = std::sqrt(out_sq / (hi - lo));
+  REQUIRE(ref_rms > 0.0);
+  REQUIRE(out_rms > ref_rms * 0.5);
+  REQUIRE(out_rms < ref_rms * 2.0);
+  // The neutral warp also runs hot (peaks > 1.0): proves the no-clamp behaviour
+  // is not specific to a single factor.
+  float ref_peak = 0.0f;
+  for (int i = lo; i < hi; ++i)
+    ref_peak = std::max(ref_peak, std::abs(ref[static_cast<size_t>(i)]));
+  REQUIRE(ref_peak > 1.0f);
+}

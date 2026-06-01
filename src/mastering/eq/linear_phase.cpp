@@ -13,7 +13,6 @@
 
 namespace sonare::mastering::eq {
 
-using sonare::constants::kTwoPi;
 namespace {
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
@@ -52,8 +51,9 @@ double clamp_frequency(double frequency_hz, double sample_rate) {
 
 sonare::rt::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_rate) {
   const double center = clamp_frequency(band.frequency_hz, sample_rate);
+  // Biquad-design corner uses the double-precision two-pi (filter design path).
   const float omega =
-      static_cast<float>(sonare::constants::kTwoPi * center / static_cast<double>(sample_rate));
+      static_cast<float>(sonare::constants::kTwoPiD * center / static_cast<double>(sample_rate));
   const float q = std::max(band.q, 1.0e-6f);
 
   if (band.coeff_mode == BiquadCoeffMode::Vicanek) {
@@ -245,8 +245,7 @@ void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
 
   bands_[index] = band;
   if (prepared_) {
-    rebuild_kernel();
-    reset();
+    reconfigure();
   }
 }
 
@@ -275,10 +274,7 @@ bool LinearPhaseEq::set_parameter(unsigned int param_id, float value) {
 
   bands_[band_index] = updated;
   if (prepared_) {
-    // Recompute the FIR kernel (latency may change) and clear filter history;
-    // FIR history is invalid once the kernel changes.
-    rebuild_kernel();
-    reset();
+    reconfigure();
   }
   return true;
 }
@@ -292,8 +288,7 @@ void LinearPhaseEq::clear_band(size_t index) {
   validate_band_index(index);
   bands_[index] = {};
   if (prepared_) {
-    rebuild_kernel();
-    reset();
+    reconfigure();
   }
 }
 
@@ -302,8 +297,7 @@ void LinearPhaseEq::clear() {
     band = {};
   }
   if (prepared_) {
-    rebuild_kernel();
-    reset();
+    reconfigure();
   }
 }
 
@@ -347,6 +341,32 @@ void LinearPhaseEq::rebuild_kernel() {
     state.convolver_kernel_current = false;
   }
   ensure_channel_state(static_cast<int>(states_.size()));
+}
+
+void LinearPhaseEq::reconfigure() {
+  // Non-destructive reconfiguration for band/parameter changes. Only the FIR
+  // coefficients (kernel_) change; kernel_size — and therefore the FIR history
+  // length and latency — is fixed for a given instance by the resolution/custom
+  // config, so the existing per-channel FIR history (and the partitioned
+  // convolver's internal ring) remain valid. rebuild_kernel() recomputes the
+  // taps and pushes the fresh impulse response into each convolver via
+  // ensure_channel_state WITHOUT resetting the convolver, so there is no
+  // ~kernel-length silence gap on a change.
+  //
+  // Note: parameter_is_realtime_safe() returns false for all params — these
+  // mutators are intended as prepare-time / offline reconfiguration. Preserving
+  // history here simply avoids dumping a block of valid output to silence when
+  // a host changes a band between (non-realtime) reconfigurations.
+  const size_t previous_history = states_.empty() ? 0 : states_.front().history.size();
+  rebuild_kernel();
+  // Defensive: kernel_size is config-fixed, so the history length must be
+  // unchanged. If a future change ever altered it, fall back to a clean reset
+  // (a documented size change is the only case where a silence gap is
+  // unavoidable) rather than reading a stale-length history.
+  if (!states_.empty() && states_.front().history.size() != previous_history &&
+      previous_history != 0) {
+    reset();
+  }
 }
 
 void LinearPhaseEq::ensure_channel_state(int num_channels) {

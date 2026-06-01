@@ -1,6 +1,7 @@
 #include "mastering/saturation/waveshaper.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
@@ -109,6 +110,15 @@ void Waveshaper::ensure_state(int num_channels) {
 }
 
 float Waveshaper::shape_sample(float sample, int channel) {
+  // ADAA1 (first-order antiderivative anti-aliasing) is only implemented for the
+  // odd Tanh/Arctan curves. The Asymmetric curve has no ADAA antiderivative
+  // here, so even when Adaa1 is requested it falls back to direct evaluation and
+  // may alias at high drive / low sample rate. This is an intentional,
+  // documented limitation rather than a silent no-op.
+  assert((config_.curve != WaveshaperCurve::Asymmetric ||
+          config_.aliasing != sonare::rt::AliasingControl::Adaa1) &&
+         "ADAA1 is not implemented for the Asymmetric waveshaper curve; it falls "
+         "back to direct (aliasing-prone) evaluation");
   if (config_.aliasing != sonare::rt::AliasingControl::Adaa1 ||
       config_.curve == WaveshaperCurve::Asymmetric) {
     return shape(sample, config_);

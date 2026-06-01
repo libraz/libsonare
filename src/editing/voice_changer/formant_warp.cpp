@@ -86,13 +86,19 @@ Audio FormantWarp::process(const Audio& audio) const {
 
     const auto model = sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order);
 
-    // Degenerate frame: pass the windowed signal through OLA unchanged.
+    // Degenerate frame: pass the raw signal through OLA unchanged. Apply the
+    // synthesis window ONCE to the raw sample (out += s * win), matching the
+    // main path which accumulates time_frame[i] * win. Using `windowed[i]`
+    // (already s * hann[i]) here would double-window to s * hann^2 and create a
+    // weighting discontinuity at the boundary between degenerate and normal
+    // frames.
     if (model.variance < kEpsilon || model.ar.size() < 2 || model.ar[0] == 0.0f) {
       for (int i = 0; i < kFrameSize; ++i) {
         const long idx = start + i;
         if (idx < 0 || idx >= static_cast<long>(n)) continue;
+        const float s = x[idx];
         const float win = hann[static_cast<size_t>(i)];
-        out[static_cast<size_t>(idx)] += windowed[static_cast<size_t>(i)] * win;
+        out[static_cast<size_t>(idx)] += s * win;
         norm[static_cast<size_t>(idx)] += win * win;
       }
       continue;
@@ -150,9 +156,12 @@ Audio FormantWarp::process(const Audio& audio) const {
     }
   }
 
+  // OLA normalization only. Do NOT clamp to [-1, 1]: formant warping reshapes
+  // the spectral envelope, it is not a limiter, and hard-clipping here would add
+  // nonlinear distortion to any frame whose normalized output legitimately
+  // exceeds unity. Downstream limiting (if desired) is a separate stage.
   for (size_t i = 0; i < n; ++i) {
-    const float g = norm[i] > kSpectrumEpsilon ? out[i] / norm[i] : out[i];
-    out[i] = std::clamp(g, -1.0f, 1.0f);
+    out[i] = norm[i] > kSpectrumEpsilon ? out[i] / norm[i] : out[i];
   }
 
   return Audio::from_vector(std::move(out), sr);

@@ -10,7 +10,25 @@
 
 namespace sonare::mastering::eq {
 
-using sonare::constants::kTwoPi;
+using sonare::constants::kTwoPiD;
+
+namespace {
+
+// One-pole low-pass smoothing coefficient: alpha = 1 - exp(-2*pi*f/fs).
+// Computed in double precision (filter design) and clamped to a sane
+// sub-Nyquist corner before the formula so a high/aliased frequency cannot
+// produce alpha > 1 (which would make the one-pole unstable). The previous
+// implementation used the raw digital radian frequency (2*pi*f/fs) directly as
+// the coefficient, which diverges badly from the intended corner at high
+// frequencies.
+float one_pole_alpha(float frequency_hz, double sample_rate) {
+  const double max_frequency = sample_rate * 0.49;
+  const double clamped =
+      std::clamp(static_cast<double>(frequency_hz), 1.0, std::max(max_frequency, 1.0));
+  return static_cast<float>(1.0 - std::exp(-kTwoPiD * clamped / sample_rate));
+}
+
+}  // namespace
 
 void PultecEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -177,10 +195,8 @@ float PultecEq::validate_frequency(float frequency_hz) {
 }
 
 void PultecEq::update_component_coefficients() {
-  low_component_alpha_ =
-      std::clamp(kTwoPi * low_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.25f);
-  high_component_alpha_ = std::clamp(
-      kTwoPi * high_attenuation_frequency_hz_ / static_cast<float>(sample_rate_), 0.0001f, 0.75f);
+  low_component_alpha_ = one_pole_alpha(low_frequency_hz_, sample_rate_);
+  high_component_alpha_ = one_pole_alpha(high_attenuation_frequency_hz_, sample_rate_);
 }
 
 void PultecEq::prepare_component_state(int num_channels) {

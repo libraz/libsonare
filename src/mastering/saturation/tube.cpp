@@ -12,6 +12,19 @@ namespace sonare::mastering::saturation {
 
 namespace {
 
+// Operating-point and gain-staging constants for the triode model. These are
+// circuit/voltage quantities specific to this processor (not universal math
+// constants), so they live here rather than in util/constants.h.
+// Fixed plate (anode) supply voltage, in volts, used as the operating point for
+// the Dempwolf 12AX7 current law.
+constexpr float kPlateVoltageV = 250.0f;
+// Maps the normalized input sample (after drive) into the grid-voltage swing
+// the triode model expects.
+constexpr float kGridDriveScaleV = 1.2f;
+// Shaping factor applied to the plate-current delta before the tanh soft clip;
+// sets how quickly the harmonic stage saturates.
+constexpr float kPlateClipShaping = 2.5f;
+
 struct Dempwolf12Ax7 {
   // Dempwolf & Zoelzer, "A Physically-motivated Triode Model for Circuit
   // Simulations", DAFx-11, equations (10)-(12), Table 1 first fitted 12AX7
@@ -118,11 +131,11 @@ void Tube::reset() {
 float Tube::process_model(float sample, const TubeConfig& config) {
   const float drive = db_to_linear(config.drive_db);
   const float grid_bias_v = config.bias_v + config.bias * 2.0f;
-  const float grid_signal_v = sample * drive * 1.2f;
-  const float plate_v = 250.0f;
+  const float grid_signal_v = sample * drive * kGridDriveScaleV;
+  const float plate_v = kPlateVoltageV;
   const float idle = plate_current_ma(grid_bias_v, plate_v);
   const float current_delta = plate_current_ma(grid_bias_v + grid_signal_v, plate_v) - idle;
-  const float clipped = std::tanh(current_delta * 2.5f);
+  const float clipped = std::tanh(current_delta * kPlateClipShaping);
   return config.harmonic_drive * clipped + (1.0f - config.harmonic_drive) * current_delta;
 }
 
