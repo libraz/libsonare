@@ -66,6 +66,8 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/sonare_c_mastering_streaming.cpp
   ${SONARE_ROOT}/src/sonare_c_mixing.cpp
   ${SONARE_ROOT}/src/sonare_c_daw.cpp
+  ${SONARE_ROOT}/src/sonare_c_engine.cpp
+  ${SONARE_ROOT}/src/sonare_c_voice_changer.cpp
 )
 
 add_library(${PROJECT_NAME} SHARED

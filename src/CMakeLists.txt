@@ -547,6 +547,8 @@ if(BUILD_SHARED)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
   endif()
   list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
+  list(APPEND SONARE_SHARED_SOURCES sonare_c_engine.cpp)
+  list(APPEND SONARE_SHARED_SOURCES sonare_c_voice_changer.cpp)
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
