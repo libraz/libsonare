@@ -1055,7 +1055,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   }
   if (hasProperty(repair, "declick")) {
     val declick = objectProperty(repair, "declick");
-    out.repair.declick.enabled = true;
+    out.repair.declick.enabled = boolProperty(declick, "enabled", true);
     auto& dc = out.repair.declick.config;
     dc.threshold = floatProperty(declick, "threshold", dc.threshold);
     dc.neighbor_ratio = floatProperty(declick, "neighborRatio", dc.neighbor_ratio);
@@ -1066,7 +1066,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   }
   if (hasProperty(repair, "dereverb")) {
     val dereverb = objectProperty(repair, "dereverb");
-    out.repair.dereverb.enabled = true;
+    out.repair.dereverb.enabled = boolProperty(dereverb, "enabled", true);
     auto& rc = out.repair.dereverb.config;
     rc.threshold = floatProperty(dereverb, "threshold", rc.threshold);
     rc.attenuation = floatProperty(dereverb, "attenuation", rc.attenuation);
@@ -1092,7 +1092,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   val dynamics = objectProperty(config, "dynamics");
   if (hasProperty(dynamics, "compressor")) {
     val compressor = objectProperty(dynamics, "compressor");
-    out.dynamics.compressor.enabled = true;
+    out.dynamics.compressor.enabled = boolProperty(compressor, "enabled", true);
     auto& cc = out.dynamics.compressor.config;
     cc.threshold_db = floatProperty(compressor, "thresholdDb", cc.threshold_db);
     cc.ratio = floatProperty(compressor, "ratio", cc.ratio);
@@ -1104,7 +1104,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   }
   if (hasProperty(dynamics, "deesser")) {
     val deesser = objectProperty(dynamics, "deesser");
-    out.dynamics.deesser.enabled = true;
+    out.dynamics.deesser.enabled = boolProperty(deesser, "enabled", true);
     auto& dc = out.dynamics.deesser.config;
     dc.frequency_hz = floatProperty(deesser, "frequencyHz", dc.frequency_hz);
     dc.threshold_db = floatProperty(deesser, "thresholdDb", dc.threshold_db);
@@ -1116,7 +1116,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   }
   if (hasProperty(dynamics, "transientShaper")) {
     val ts = objectProperty(dynamics, "transientShaper");
-    out.dynamics.transient_shaper.enabled = true;
+    out.dynamics.transient_shaper.enabled = boolProperty(ts, "enabled", true);
     auto& tc = out.dynamics.transient_shaper.config;
     tc.attack_gain_db = floatProperty(ts, "attackGainDb", tc.attack_gain_db);
     tc.sustain_gain_db = floatProperty(ts, "sustainGainDb", tc.sustain_gain_db);
@@ -1131,7 +1131,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   }
   if (hasProperty(dynamics, "multibandComp")) {
     val mb = objectProperty(dynamics, "multibandComp");
-    out.dynamics.multiband_comp.enabled = true;
+    out.dynamics.multiband_comp.enabled = boolProperty(mb, "enabled", true);
     auto& mc = out.dynamics.multiband_comp.config;
     // Default config has 2 cutoffs ([120,2000]) and 3 bands; we update in place.
     if (hasProperty(mb, "lowCutoffHz")) {
@@ -1156,7 +1156,6 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   val saturation = objectProperty(config, "saturation");
   if (hasProperty(saturation, "tape")) {
     val tape = objectProperty(saturation, "tape");
-    out.saturation.tape.enabled = true;
     auto& tc = out.saturation.tape.config;
     tc.drive_db = floatProperty(tape, "driveDb", tc.drive_db);
     tc.saturation = floatProperty(tape, "saturation", tc.saturation);
@@ -1166,22 +1165,34 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     tc.head_bump_db = floatProperty(tape, "headBumpDb", tc.head_bump_db);
     tc.bias = floatProperty(tape, "bias", tc.bias);
     tc.gap_loss = floatProperty(tape, "gapLoss", tc.gap_loss);
+    // Tape is a color stage, so the mere presence of the object must not engage
+    // it: an explicit `enabled` wins, otherwise defer to the shared core rule
+    // (tape_engages_color) so a `{ tape: { driveDb: 0, saturation: 0 } }` config
+    // stays bypassed, consistently with the flat-param chain parser.
+    out.saturation.tape.enabled = hasProperty(tape, "enabled")
+                                      ? boolProperty(tape, "enabled", true)
+                                      : mastering::saturation::tape_engages_color(tc);
   }
   if (hasProperty(saturation, "exciter")) {
     val exciter = objectProperty(saturation, "exciter");
-    out.saturation.exciter.enabled = true;
     auto& ec = out.saturation.exciter.config;
     ec.frequency_hz = floatProperty(exciter, "frequencyHz", ec.frequency_hz);
     ec.drive_db = floatProperty(exciter, "driveDb", ec.drive_db);
     ec.amount = floatProperty(exciter, "amount", ec.amount);
     ec.q = floatProperty(exciter, "q", ec.q);
     ec.even_odd_mix = floatProperty(exciter, "evenOddMix", ec.even_odd_mix);
+    // Same color-stage rule as tape: explicit `enabled` wins, otherwise defer to
+    // the shared core rule (exciter_engages_color) so `{ exciter: { amount: 0 } }`
+    // stays bypassed.
+    out.saturation.exciter.enabled = hasProperty(exciter, "enabled")
+                                         ? boolProperty(exciter, "enabled", true)
+                                         : mastering::saturation::exciter_engages_color(ec);
   }
 
   val spectral = objectProperty(config, "spectral");
   if (hasProperty(spectral, "airBand")) {
     val air_band = objectProperty(spectral, "airBand");
-    out.spectral.air_band.enabled = true;
+    out.spectral.air_band.enabled = boolProperty(air_band, "enabled", true);
     auto& ac = out.spectral.air_band.config;
     ac.amount = floatProperty(air_band, "amount", ac.amount);
     ac.shelf_frequency_hz = floatProperty(air_band, "shelfFrequencyHz", ac.shelf_frequency_hz);
@@ -1193,7 +1204,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   val stereo = objectProperty(config, "stereo");
   if (hasProperty(stereo, "imager")) {
     val imager = objectProperty(stereo, "imager");
-    out.stereo.imager.enabled = true;
+    out.stereo.imager.enabled = boolProperty(imager, "enabled", true);
     auto& ic = out.stereo.imager.config;
     ic.width = floatProperty(imager, "width", ic.width);
     ic.output_gain_db = floatProperty(imager, "outputGainDb", ic.output_gain_db);
@@ -1202,7 +1213,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   }
   if (hasProperty(stereo, "monoMaker")) {
     val mono_maker = objectProperty(stereo, "monoMaker");
-    out.stereo.mono_maker.enabled = true;
+    out.stereo.mono_maker.enabled = boolProperty(mono_maker, "enabled", true);
     out.stereo.mono_maker.config.amount =
         floatProperty(mono_maker, "amount", out.stereo.mono_maker.config.amount);
   }
@@ -1210,7 +1221,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   val maximizer = objectProperty(config, "maximizer");
   if (hasProperty(maximizer, "truePeakLimiter")) {
     val limiter = objectProperty(maximizer, "truePeakLimiter");
-    out.maximizer.true_peak_limiter.enabled = true;
+    out.maximizer.true_peak_limiter.enabled = boolProperty(limiter, "enabled", true);
     auto& lc = out.maximizer.true_peak_limiter.config;
     lc.ceiling_db = floatProperty(limiter, "ceilingDb", lc.ceiling_db);
     lc.lookahead_ms = floatProperty(limiter, "lookaheadMs", lc.lookahead_ms);
@@ -1222,7 +1233,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
 
   val loudness = objectProperty(config, "loudness");
   if (!loudness.isUndefined() && !loudness.isNull()) {
-    out.loudness.enabled = true;
+    out.loudness.enabled = boolProperty(loudness, "enabled", true);
     out.loudness.target_lufs = floatProperty(loudness, "targetLufs", out.loudness.target_lufs);
     out.loudness.ceiling_db = floatProperty(loudness, "ceilingDb", out.loudness.ceiling_db);
     out.loudness.true_peak_oversample =

@@ -914,6 +914,37 @@ describe('sonare native binding', () => {
     });
   });
 
+  describe('color saturation stages engage only when meaningful', () => {
+    const stagesFor = (config: Record<string, number | boolean>): string[] =>
+      masteringChain(new Float32Array(22050).fill(0.1), 22050, config).stages;
+
+    it('does not engage the exciter when amount is zero', () => {
+      expect(stagesFor({ 'saturation.exciter.amount': 0 })).not.toContain('saturation.exciter');
+    });
+
+    it('does not engage tape when drive and saturation are zero', () => {
+      expect(
+        stagesFor({ 'saturation.tape.driveDb': 0, 'saturation.tape.saturation': 0 }),
+      ).not.toContain('saturation.tape');
+    });
+
+    it('engages the exciter when amount is positive', () => {
+      expect(stagesFor({ 'saturation.exciter.amount': 0.2 })).toContain('saturation.exciter');
+    });
+
+    it('honors an explicit enabled:false even with meaningful params', () => {
+      expect(
+        stagesFor({ 'saturation.tape.driveDb': 3, 'saturation.tape.enabled': false }),
+      ).not.toContain('saturation.tape');
+    });
+
+    it('honors an explicit enabled:true even with zero amount', () => {
+      expect(
+        stagesFor({ 'saturation.exciter.amount': 0, 'saturation.exciter.enabled': true }),
+      ).toContain('saturation.exciter');
+    });
+  });
+
   describe('StreamingMasteringChain', () => {
     it('processes mono blocks and reports stage names', () => {
       const chain = new StreamingMasteringChain({

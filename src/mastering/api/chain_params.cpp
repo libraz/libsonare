@@ -34,6 +34,17 @@ bool resolve_enabled(const StageFlags& flags) {
   }
   return flags.any_key_seen;
 }
+
+// Color stages (tape, exciter) must not auto-engage on the mere presence of a
+// field: an explicit `enabled` still wins, but otherwise the stage engages only
+// when its parameters would actually impart coloration. `meaningful` carries
+// that per-stage predicate (tape_engages_color / exciter_engages_color).
+bool resolve_color_enabled(const StageFlags& flags, bool meaningful) {
+  if (flags.enabled_explicit) {
+    return flags.enabled_value;
+  }
+  return flags.any_key_seen && meaningful;
+}
 // ---------------------------------------------------------------------------
 // Per-key dispatch shared by parse_chain_config_params and
 // apply_chain_config_overrides.
@@ -648,8 +659,10 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
   cfg.dynamics.transient_shaper.enabled = resolve_enabled(flags.transient_shaper);
   cfg.dynamics.compressor.enabled = resolve_enabled(flags.compressor);
   cfg.dynamics.multiband_comp.enabled = resolve_enabled(flags.multiband_comp);
-  cfg.saturation.tape.enabled = resolve_enabled(flags.tape);
-  cfg.saturation.exciter.enabled = resolve_enabled(flags.exciter);
+  cfg.saturation.tape.enabled =
+      resolve_color_enabled(flags.tape, saturation::tape_engages_color(cfg.saturation.tape.config));
+  cfg.saturation.exciter.enabled = resolve_color_enabled(
+      flags.exciter, saturation::exciter_engages_color(cfg.saturation.exciter.config));
   cfg.spectral.air_band.enabled = resolve_enabled(flags.air_band);
   cfg.stereo.imager.enabled = resolve_enabled(flags.imager);
   cfg.stereo.mono_maker.enabled = resolve_enabled(flags.mono_maker);
@@ -708,10 +721,12 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
     cfg.dynamics.multiband_comp.enabled = resolve_enabled(flags.multiband_comp);
   }
   if (flags.tape.any_key_seen) {
-    cfg.saturation.tape.enabled = resolve_enabled(flags.tape);
+    cfg.saturation.tape.enabled = resolve_color_enabled(
+        flags.tape, saturation::tape_engages_color(cfg.saturation.tape.config));
   }
   if (flags.exciter.any_key_seen) {
-    cfg.saturation.exciter.enabled = resolve_enabled(flags.exciter);
+    cfg.saturation.exciter.enabled = resolve_color_enabled(
+        flags.exciter, saturation::exciter_engages_color(cfg.saturation.exciter.config));
   }
   if (flags.air_band.any_key_seen) {
     cfg.spectral.air_band.enabled = resolve_enabled(flags.air_band);

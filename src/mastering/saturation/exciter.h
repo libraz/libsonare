@@ -15,6 +15,13 @@ struct ExciterConfig {
   float even_odd_mix = 0.5f;
 };
 
+/// @brief Whether an exciter config would add harmonics.
+/// @details The exciter is a color stage whose `amount` scales the added
+/// harmonics; at zero amount it is a no-op. Parsers use this to auto-engage the
+/// stage only when it would do something, unless an explicit `enabled` flag is
+/// supplied. See tape_engages_color for the shared rationale.
+inline bool exciter_engages_color(const ExciterConfig& config) { return config.amount > 0.0f; }
+
 class Exciter : public rt::ProcessorBase {
  public:
   explicit Exciter(ExciterConfig config = {});

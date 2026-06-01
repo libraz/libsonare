@@ -554,6 +554,47 @@ describe('Sonare WASM Module', () => {
       expect(Number.isFinite(result.outputLufs)).toBe(true);
     });
 
+    describe('color saturation stages engage only when meaningful', () => {
+      const sampleRate = 22050;
+      const tone = () => {
+        const samples = new Float32Array(sampleRate);
+        for (let i = 0; i < samples.length; i++) {
+          samples[i] = 0.2 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+        }
+        return samples;
+      };
+      const stagesFor = (saturation: Record<string, unknown>): string[] =>
+        masteringChain(tone(), sampleRate, { saturation }).stages;
+
+      it('does not engage the exciter when amount is zero', () => {
+        expect(stagesFor({ exciter: { amount: 0 } })).not.toContain('saturation.exciter');
+      });
+
+      it('does not engage tape when drive and saturation are zero', () => {
+        expect(stagesFor({ tape: { driveDb: 0, saturation: 0 } })).not.toContain('saturation.tape');
+      });
+
+      it('engages the exciter when amount is positive', () => {
+        expect(stagesFor({ exciter: { amount: 0.2 } })).toContain('saturation.exciter');
+      });
+
+      it('engages tape when drive is positive', () => {
+        expect(stagesFor({ tape: { driveDb: 2 } })).toContain('saturation.tape');
+      });
+
+      it('honors an explicit enabled:true even with zero amount', () => {
+        expect(stagesFor({ exciter: { amount: 0, enabled: true } })).toContain(
+          'saturation.exciter',
+        );
+      });
+
+      it('honors an explicit enabled:false even with meaningful params', () => {
+        expect(stagesFor({ tape: { driveDb: 3, saturation: 0.5, enabled: false } })).not.toContain(
+          'saturation.tape',
+        );
+      });
+    });
+
     it('should run a stereo mastering chain in WASM', () => {
       const sampleRate = 22050;
       const left = new Float32Array(sampleRate);

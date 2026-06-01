@@ -37,6 +37,15 @@ struct TapeConfig {
   int oversample_factor = 1;
 };
 
+/// @brief Whether a tape config would impart audible coloration.
+/// @details Tape is a color stage, so a config that supplies neither drive nor
+/// saturation is a no-op. Parsers use this to decide whether to auto-engage the
+/// stage when the caller did not pass an explicit `enabled` flag, so a
+/// zero-drive/zero-saturation tape stays bypassed instead of adding grit.
+inline bool tape_engages_color(const TapeConfig& config) {
+  return config.drive_db > 0.0f || config.saturation > 0.0f;
+}
+
 class Tape : public rt::ProcessorBase {
  public:
   explicit Tape(TapeConfig config = {});

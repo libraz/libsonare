@@ -1398,6 +1398,29 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)
 
 
+def test_color_saturation_stages_engage_only_when_meaningful() -> None:
+    """Tape/exciter must not auto-engage on a zero-valued config (no coloration)."""
+    from libsonare import mastering_chain
+
+    def stages_for(config: dict) -> list[str]:
+        return mastering_chain(samples=[0.1] * 22050, sample_rate=22050, config=config).stages
+
+    # A zero-amount exciter / zero-drive tape is a no-op and stays bypassed.
+    assert "saturation.exciter" not in stages_for({"saturation.exciter.amount": 0.0})
+    assert "saturation.tape" not in stages_for(
+        {"saturation.tape.driveDb": 0.0, "saturation.tape.saturation": 0.0}
+    )
+    # Meaningful params engage the stage.
+    assert "saturation.exciter" in stages_for({"saturation.exciter.amount": 0.2})
+    # An explicit enabled flag wins either way.
+    assert "saturation.exciter" in stages_for(
+        {"saturation.exciter.amount": 0.0, "saturation.exciter.enabled": True}
+    )
+    assert "saturation.tape" not in stages_for(
+        {"saturation.tape.driveDb": 3.0, "saturation.tape.enabled": False}
+    )
+
+
 # ============================================================================
 # Newly exposed analysis functions: onset envelope, Fourier tempogram,
 # tempogram ratio, NNLS chroma, and LUFS loudness metering.
