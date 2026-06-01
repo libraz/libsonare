@@ -330,7 +330,15 @@ def analyze_bpm(
     hop_length: int = 512,
     max_candidates: int = 5,
 ) -> BpmAnalysisResult:
-    """Analyze BPM with confidence, candidates, autocorrelation, and tempogram."""
+    """Analyze BPM with confidence, candidates, autocorrelation, and tempogram.
+
+    Note:
+        ``bpm_min`` defaults to 30.0 here (lower than :func:`analyze_rhythm`'s
+        60.0). This wider search range lets the full BPM analyzer surface
+        half-tempo candidates and very slow material in its candidate list;
+        :func:`analyze_rhythm` keeps the narrower 60.0 floor for a single,
+        more stable tempo estimate. This difference is intentional.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareBpmAnalysisResult()
@@ -454,7 +462,16 @@ def analyze_rhythm(
     n_fft: int = 2048,
     hop_length: int = 512,
 ) -> RhythmResult:
-    """Analyze rhythm primitives without generating a summary report."""
+    """Analyze rhythm primitives without generating a summary report.
+
+    Note:
+        ``bpm_min`` defaults to 60.0 here (higher than :func:`analyze_bpm`'s
+        30.0). The narrower search range biases the single tempo estimate
+        toward the musically common 60-200 BPM band and avoids half-tempo
+        lock; :func:`analyze_bpm` uses the lower 30.0 floor so its candidate
+        list can include slow/half-tempo options. This difference is
+        intentional.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareRhythmResult()
@@ -675,6 +692,13 @@ def analyze_sections(
 
     Returns:
         A :class:`SectionResult` with a list of detected :class:`Section`.
+
+    Note:
+        The Python binding deliberately returns a :class:`SectionResult`
+        wrapper object (with a ``.sections`` list of :class:`Section`),
+        whereas the WASM/Node bindings return a flat array of section
+        records. This Pythonic shape is intentional; access the sections via
+        ``result.sections`` rather than indexing the result directly.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_analyze_sections"):

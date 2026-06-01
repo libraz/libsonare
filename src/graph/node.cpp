@@ -29,7 +29,13 @@ void Node::prepare(double sample_rate, int max_block_size) {
   input_.assign(static_cast<size_t>(num_ports_ * max_block_size_), 0.0f);
   output_.assign(static_cast<size_t>(num_ports_ * max_block_size_), 0.0f);
   process_channels_.assign(static_cast<size_t>(num_ports_), nullptr);
+  // prepared_ flips true only after the processor's own prepare() has completed
+  // without throwing, so process_block() (noexcept, audio thread) can rely on
+  // it: a prepared Node always has a prepared processor, hence ensure_prepared()
+  // inside processor_->process() can never throw across the noexcept boundary.
+  prepared_ = false;
   processor_->prepare(sample_rate, max_block_size);
+  prepared_ = true;
 }
 
 void Node::reset() {
@@ -53,7 +59,10 @@ void Node::clear_inputs(int num_samples) noexcept {
 
 void Node::process_block(int num_samples) noexcept {
   // Audio-thread path: silently no-op on out-of-range rather than throw.
-  if (num_samples < 0 || num_samples > max_block_size_) {
+  // Also bail when the node was compiled but never prepared: invoking
+  // processor_->process() then could trip ProcessorBase::ensure_prepared(),
+  // whose throw would cross this noexcept boundary and std::terminate.
+  if (!prepared_ || num_samples < 0 || num_samples > max_block_size_) {
     return;
   }
   for (int port = 0; port < num_ports_; ++port) {

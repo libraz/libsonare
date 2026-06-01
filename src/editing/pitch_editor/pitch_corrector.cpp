@@ -165,10 +165,13 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
       continue;
     }
     float target_delta = raw[i];
-    // Vibrato bypass: small deviations are mostly natural pitch, so scale the
-    // applied correction by retune_amount to preserve expressive movement.
+    // Vibrato bypass: small deviations are mostly natural pitch, so preserve
+    // the original (no correction). Larger deviations are genuine pitch errors,
+    // pulled toward the target by retune_amount.
     if (std::abs(target_delta) < vib_threshold_st) {
-      target_delta *= config_.retune_amount;
+      target_delta = 0.0f;  // within natural-pitch band: keep original
+    } else {
+      target_delta *= config_.retune_amount;  // true error: scale toward target
     }
     prev = alpha * prev + (1.0f - alpha) * target_delta;
     smooth[i] = std::clamp(prev, -max_corr, max_corr);
@@ -341,8 +344,20 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     result[idx] = w * out[idx] + (1.0f - w) * dry;
   }
 
-  for (float& s : result) {
-    s = std::clamp(s, -1.0f, 1.0f);
+  // The PSOLA path is OLA-normalized and stays in range, but the spectral
+  // fallback can overshoot. Peak-normalize (instead of hard-clipping) so a
+  // large-shift fallback region does not introduce clipping distortion.
+  if (have_fallback) {
+    float peak = 0.0f;
+    for (const float s : result) {
+      peak = std::max(peak, std::abs(s));
+    }
+    if (peak > 1.0f) {
+      const float gain = 1.0f / peak;
+      for (float& s : result) {
+        s *= gain;
+      }
+    }
   }
   return Audio::from_vector(std::move(result), sr);
 }

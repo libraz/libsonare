@@ -18,14 +18,18 @@ namespace sonare {
 /// @param freqs Bin center frequencies in Hz, length @p n_bins.
 /// @param harmonics Harmonic multipliers (e.g. {1.0, 2.0, 3.0}).
 /// @param fill_value Value to use when the harmonic lies outside @p freqs.
+/// @param weights Optional per-harmonic weights (length must equal @p harmonics);
+///        empty (the default) applies uniform weights, matching the prior
+///        behaviour and `librosa.salience`'s `weights=None`. The weighted sum is
+///        normalized by the sum of the weights.
 /// @return Salience map [n_bins x n_frames] row-major.
 std::vector<float> salience(const float* S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
-                            float fill_value = 0.0f);
+                            float fill_value = 0.0f, const std::vector<float>& weights = {});
 
 std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
-                            float fill_value = 0.0f);
+                            float fill_value = 0.0f, const std::vector<float>& weights = {});
 
 /// @brief Linearly interpolates the spectrum at integer multiples of each
 ///        frequency in @p freqs.

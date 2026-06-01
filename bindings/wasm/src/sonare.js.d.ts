@@ -111,11 +111,6 @@ export interface WasmRhythmAnalysisResult {
   beatIntervals: Float32Array;
 }
 
-export interface WasmLoudnessCurveResult {
-  times: Float32Array;
-  rmsDb: Float32Array;
-}
-
 export interface WasmDynamicsAnalysisResult {
   dynamicRangeDb: number;
   peakDb: number;
@@ -123,7 +118,8 @@ export interface WasmDynamicsAnalysisResult {
   crestFactor: number;
   loudnessRangeDb: number;
   isCompressed: boolean;
-  loudnessCurve: WasmLoudnessCurveResult;
+  loudnessTimes: Float32Array;
+  loudnessRmsDb: Float32Array;
 }
 
 export interface WasmTimbreFrameResult {
@@ -168,6 +164,25 @@ export interface WasmHpssResult {
   harmonic: Float32Array;
   percussive: Float32Array;
   sampleRate: number;
+}
+
+export interface WasmHpssWithResidualResult {
+  harmonic: Float32Array;
+  percussive: Float32Array;
+  residual: Float32Array;
+  sampleRate: number;
+}
+
+/** Row-major 2-D matrix as a flat buffer plus its dimensions. */
+export interface WasmMatrix2dResult {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+}
+
+export interface WasmDecomposeResult {
+  w: Float32Array;
+  h: Float32Array;
 }
 
 export interface WasmStftResult {
@@ -780,6 +795,41 @@ export interface SonareModule {
     kernelHarmonic: number,
     kernelPercussive: number,
   ) => WasmHpssResult;
+  hpssWithResidual: (
+    samples: Float32Array,
+    sampleRate: number,
+    kernelHarmonic: number,
+    kernelPercussive: number,
+  ) => WasmHpssWithResidualResult;
+  decompose: (
+    s: Float32Array,
+    nFeatures: number,
+    nFrames: number,
+    nComponents: number,
+    nIter: number,
+    beta: number,
+  ) => WasmDecomposeResult;
+  nnFilter: (
+    s: Float32Array,
+    nFeatures: number,
+    nFrames: number,
+    aggregate: string,
+    k: number,
+    width: number,
+  ) => WasmMatrix2dResult;
+  remix: (
+    samples: Float32Array,
+    intervals: Int32Array,
+    sampleRate: number,
+    alignZeros: boolean,
+  ) => Float32Array;
+  phaseVocoder: (
+    samples: Float32Array,
+    sampleRate: number,
+    rate: number,
+    nFft: number,
+    hopLength: number,
+  ) => Float32Array;
   harmonic: (samples: Float32Array, sampleRate: number) => Float32Array;
   percussive: (samples: Float32Array, sampleRate: number) => Float32Array;
   timeStretch: (samples: Float32Array, sampleRate: number, rate: number) => Float32Array;
@@ -1094,6 +1144,38 @@ export interface SonareModule {
     frameLength: number,
     hopLength: number,
   ) => Float32Array;
+  spectralContrast: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nBands: number,
+    fmin: number,
+    quantile: number,
+  ) => WasmMatrix2dResult;
+  polyFeatures: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    order: number,
+  ) => WasmMatrix2dResult;
+  zeroCrossings: (
+    samples: Float32Array,
+    threshold: number,
+    refMagnitude: boolean,
+    pad: boolean,
+    zeroPos: boolean,
+  ) => Int32Array;
+  pitchTuning: (frequencies: Float32Array, resolution: number, binsPerOctave: number) => number;
+  estimateTuning: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    resolution: number,
+    binsPerOctave: number,
+  ) => number;
 
   // Features - Pitch
   pitchYin: (
@@ -1244,6 +1326,8 @@ export interface SonareModule {
   lufs: (samples: Float32Array, sampleRate: number) => WasmLufsResult;
   momentaryLufs: (samples: Float32Array, sampleRate: number) => Float32Array;
   shortTermLufs: (samples: Float32Array, sampleRate: number) => Float32Array;
+  lufsInterleaved: (samples: Float32Array, channels: number, sampleRate: number) => WasmLufsResult;
+  ebur128LoudnessRange: (samples: Float32Array, sampleRate: number) => number;
 
   // Core - Resample
   resample: (samples: Float32Array, srcSr: number, targetSr: number) => Float32Array;

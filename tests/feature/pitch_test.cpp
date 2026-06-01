@@ -417,6 +417,42 @@ TEST_CASE("pyin empty audio", "[pitch]") {
   REQUIRE_THROWS(pyin(audio, PitchConfig()));
 }
 
+TEST_CASE("pyin rejects degenerate fmin == fmax", "[pitch][edge]") {
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  PitchConfig config;
+  config.fmin = 440.0f;
+  config.fmax = 440.0f;  // n_pitch_bins would be degenerate (log2(1) == 0)
+
+  REQUIRE_THROWS(pyin(audio, config));
+
+  // fmax below fmin is equally invalid.
+  config.fmax = 400.0f;
+  REQUIRE_THROWS(pyin(audio, config));
+}
+
+TEST_CASE("pyin caps max_period at frame_length/2 for reliable lags", "[pitch][edge]") {
+  // Regression for max_period = frame_length - 1, which admitted unreliable
+  // high-lag troughs computed from only a handful of sample products. With a low
+  // fmin the requested max_period (sr/fmin) falls in (frame_length/2,
+  // frame_length-1], so the tighter frame_length/2 cap is what now bounds it.
+  // A clean 220 Hz tone must still track accurately under the cap.
+  Audio audio = generate_sine(220.0f, 0.5f, 22050);
+
+  PitchConfig config;
+  config.frame_length = 2048;
+  config.fmin = 15.0f;  // sr/fmin = 1470, between frame_length/2 (1024) and 2047
+  config.fmax = 1000.0f;
+  config.threshold = 0.3f;
+
+  PitchResult result = pyin(audio, config);
+  REQUIRE(result.n_frames() > 0);
+
+  // The tracked pitch should still resolve near 220 Hz despite the low fmin.
+  float mean_f0 = result.mean_f0();
+  REQUIRE_THAT(mean_f0, WithinRel(220.0f, 0.05f));
+}
+
 TEST_CASE("yin_track with fill_na", "[pitch]") {
   // Generate audio with some silence
   std::vector<float> samples(22050, 0.0f);  // 1 second silence

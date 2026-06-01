@@ -64,22 +64,33 @@ std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int
 
 std::vector<float> salience(const float* S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
-                            float fill_value) {
+                            float fill_value, const std::vector<float>& weights) {
   if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "salience: S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
     throw SonareException(ErrorCode::InvalidParameter, "salience: freqs size must equal n_bins");
   }
+  if (!weights.empty() && weights.size() != harmonics.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "salience: weights size must equal harmonics size");
+  }
+  // Per-harmonic weights (librosa's `weights`); empty => uniform. Normalizing by
+  // the weight sum keeps the empty case byte-identical to the prior mean.
+  float weight_sum = 0.0f;
+  for (size_t h = 0; h < harmonics.size(); ++h) {
+    weight_sum += weights.empty() ? 1.0f : weights[h];
+  }
+  const float inv_sum = weight_sum > 0.0f ? 1.0f / weight_sum : 0.0f;
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames, 0.0f);
-  const float weight = 1.0f / static_cast<float>(harmonics.size());
   for (int k = 0; k < n_bins; ++k) {
     for (int t = 0; t < n_frames; ++t) {
       float acc = 0.0f;
-      for (float mult : harmonics) {
-        float target = mult * freqs[k];
-        acc += interp_at(S, n_bins, n_frames, freqs, target, t, fill_value);
+      for (size_t h = 0; h < harmonics.size(); ++h) {
+        const float w = weights.empty() ? 1.0f : weights[h];
+        const float target = harmonics[h] * freqs[k];
+        acc += w * interp_at(S, n_bins, n_frames, freqs, target, t, fill_value);
       }
-      out[k * n_frames + t] = acc * weight;
+      out[k * n_frames + t] = acc * inv_sum;
     }
   }
   return out;
@@ -87,8 +98,8 @@ std::vector<float> salience(const float* S, int n_bins, int n_frames,
 
 std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
-                            float fill_value) {
-  return salience(S.data(), n_bins, n_frames, freqs, harmonics, fill_value);
+                            float fill_value, const std::vector<float>& weights) {
+  return salience(S.data(), n_bins, n_frames, freqs, harmonics, fill_value, weights);
 }
 
 std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,

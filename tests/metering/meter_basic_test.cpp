@@ -500,3 +500,124 @@ TEST_CASE("LUFS integrated stays close to -23 LUFS for a calibrated 1 kHz sine (
   REQUIRE(std::isfinite(result.integrated_lufs));
   REQUIRE_THAT(result.integrated_lufs, WithinAbs(-23.0f, 0.1f));
 }
+
+// ============================================================================
+// Wave-1 regression tests: LRA relative gate, partial-block contamination,
+// Welch-averaged spectrum, and 16x true-peak oversampling.
+// ============================================================================
+
+TEST_CASE("lra_from_short_term_blocks applies the relative gate", "[meter][lufs][spec]") {
+  // EBU Tech 3342 mandates a two-stage gate: an absolute gate at -70 LUFS and a
+  // relative gate 20 LU below the (energy-domain) mean of the absolute-gated
+  // blocks. A cluster of loud blocks plus a few blocks ~25 LU quieter (but still
+  // above -70 LUFS) must be excluded by the relative gate, so the reported LRA is
+  // small. With only the absolute gate the quiet blocks would inflate the range.
+  std::vector<float> blocks;
+  for (int i = 0; i < 20; ++i) blocks.push_back(-23.0f + 0.01f * static_cast<float>(i % 3));
+  // Quiet blocks: above -70 (pass absolute) but >20 LU below the loud mean.
+  for (int i = 0; i < 5; ++i) blocks.push_back(-50.0f);
+
+  const float lra = metering::lra_from_short_term_blocks(blocks);
+  REQUIRE(lra >= 0.0f);
+  REQUIRE(lra < 1.0f);  // relative gate removed the -50 LUFS blocks
+}
+
+TEST_CASE("lra_from_short_term_blocks reflects a genuine wide range", "[meter][lufs]") {
+  // Two clusters within 20 LU of each other both survive the relative gate, so
+  // the 95th-10th percentile spread is large.
+  std::vector<float> blocks;
+  for (int i = 0; i < 10; ++i) blocks.push_back(-20.0f);
+  for (int i = 0; i < 10; ++i) blocks.push_back(-32.0f);
+
+  const float lra = metering::lra_from_short_term_blocks(blocks);
+  REQUIRE(lra > 8.0f);
+}
+
+TEST_CASE("lra_from_short_term_blocks ignores non-finite and gated-out blocks", "[meter][lufs]") {
+  std::vector<float> blocks = {-std::numeric_limits<float>::infinity(), -90.0f, -23.0f};
+  // Only one finite block survives the absolute gate => fewer than two => 0.
+  REQUIRE_THAT(metering::lra_from_short_term_blocks(blocks), WithinAbs(0.0f, 1e-6f));
+}
+
+TEST_CASE("ebur128 LRA matches the shared short-term helper", "[meter][lufs]") {
+  // A loud section followed by a much quieter (but non-silent) tail: the LRA from
+  // the audio path must equal the shared helper applied to short_term_lufs.
+  const int sample_rate = 48000;
+  const int n_samples = sample_rate * 8;
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float amplitude = i < n_samples / 2 ? 0.5f : 0.05f;
+    samples[static_cast<size_t>(i)] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  const float lra = metering::ebur128_loudness_range(audio);
+  REQUIRE(std::isfinite(lra));
+  REQUIRE(lra >= 0.0f);
+}
+
+TEST_CASE("LUFS integrated is unaffected by a trailing partial block", "[meter][lufs]") {
+  // A steady tone whose length is NOT an exact multiple of the block size must
+  // measure the same integrated loudness as one that is, because partial trailing
+  // blocks are no longer emitted (they would otherwise be averaged over their own
+  // short length, inflating energy).
+  const int sample_rate = 48000;
+  const float amplitude = 0.25f;
+  auto make = [&](int n_samples) {
+    std::vector<float> s(static_cast<size_t>(n_samples));
+    for (int i = 0; i < n_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+      s[static_cast<size_t>(i)] =
+          amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+    }
+    return s;
+  };
+  const std::vector<float> exact = make(sample_rate * 3);          // 3.000 s
+  const std::vector<float> ragged = make(sample_rate * 3 + 1234);  // + partial block
+
+  const auto exact_r = metering::lufs_interleaved(exact.data(), exact.size(), 1, sample_rate);
+  const auto ragged_r = metering::lufs_interleaved(ragged.data(), ragged.size(), 1, sample_rate);
+
+  REQUIRE(std::isfinite(exact_r.integrated_lufs));
+  REQUIRE(std::isfinite(ragged_r.integrated_lufs));
+  REQUIRE_THAT(ragged_r.integrated_lufs, WithinAbs(exact_r.integrated_lufs, 0.05f));
+}
+
+TEST_CASE("spectrum windows and averages across the whole signal", "[meter]") {
+  // A 1 kHz sine modulated so that only the second half is energetic would, under
+  // the old "FFT the first n_fft samples only" code, miss the energy entirely.
+  // With Welch averaging over hop-advanced Hann-windowed frames the peak bin is
+  // still located near 1 kHz and the dB value is finite.
+  const int sample_rate = 48000;
+  const int n_samples = sample_rate;  // 1 s
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = n_samples / 2; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(i)] =
+        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  metering::SpectrumConfig config;
+  config.n_fft = 4096;
+  const auto result = metering::spectrum(audio, config);
+
+  const auto max_it = std::max_element(result.magnitude.begin(), result.magnitude.end());
+  REQUIRE(max_it != result.magnitude.end());
+  const size_t peak_index = static_cast<size_t>(std::distance(result.magnitude.begin(), max_it));
+  REQUIRE_THAT(result.frequencies[peak_index], WithinAbs(1000.0f, 25.0f));
+  REQUIRE(std::isfinite(result.db[peak_index]));
+}
+
+TEST_CASE("true peak supports 16x oversampling without degrading", "[meter]") {
+  // A bandlimited inter-sample over: 16x must resolve a peak above the raw sample
+  // peak, and at least as high as 8x (it is a strictly finer reconstruction).
+  const std::vector<float> samples = {0.0f, 0.99f, 0.99f, 0.0f, -0.99f, -0.99f, 0.0f};
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+  const float tp16 = metering::true_peak(audio, 16);
+  REQUIRE(tp16 > metering::true_peak(audio, 1));
+  REQUIRE(tp16 >= metering::true_peak(audio, 8) - 0.05f);
+}

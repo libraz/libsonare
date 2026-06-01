@@ -213,6 +213,31 @@ TEST_CASE("apply_biquad_filtfilt zero phase", "[iir]") {
   REQUIRE(std::abs(peak_filtfilt - samples / 2) < 5);
 }
 
+TEST_CASE("apply_biquad_filtfilt reduced edge transient", "[iir]") {
+  // A lowpass filtfilt of a DC (constant) signal should pass it through almost
+  // unchanged everywhere. With zero initial conditions the steady-state seeding
+  // is what removes the large boundary transient at the first samples; assert the
+  // edges track the constant level closely.
+  const int sr = 22050;
+  const int samples = 4096;
+  const float level = 1.0f;
+  std::vector<float> signal(samples, level);
+
+  auto coeffs = lowpass_coeffs(1000.0f, sr);
+  auto filtered = apply_biquad_filtfilt(signal.data(), signal.size(), coeffs);
+
+  // The very first samples (the historically transient-prone region) must be
+  // close to the DC level, not ramping up from zero.
+  REQUIRE_THAT(filtered[0], WithinAbs(level, 0.02f));
+  REQUIRE_THAT(filtered[1], WithinAbs(level, 0.02f));
+  REQUIRE_THAT(filtered[samples - 1], WithinAbs(level, 0.02f));
+
+  // Edge deviation must be no worse than the steady interior deviation by much.
+  const float mid = filtered[samples / 2];
+  REQUIRE(std::abs(filtered[0] - mid) < 0.02f);
+  REQUIRE(std::abs(filtered[samples - 1] - mid) < 0.02f);
+}
+
 TEST_CASE("apply_biquad empty input", "[iir]") {
   auto coeffs = lowpass_coeffs(1000.0f, 22050);
   std::vector<float> empty;

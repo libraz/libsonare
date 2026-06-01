@@ -7,6 +7,19 @@
 
 namespace sonare::mastering::multiband {
 
+namespace {
+
+// Two crossover configurations are equivalent iff they produce the same filter
+// topology AND coefficients. Any difference forces a crossover rebuild (which
+// resets the filter history); when they match we must NOT rebuild, or every
+// non-structural set_config() would re-zero the crossover IIR state and click.
+bool crossover_config_equal(const CrossoverConfig& a, const CrossoverConfig& b) {
+  return a.slope == b.slope && a.mode == b.mode && a.fir_kernel_size == b.fir_kernel_size &&
+         a.cutoffs_hz == b.cutoffs_hz;
+}
+
+}  // namespace
+
 MultibandCompressor::MultibandCompressor(MultibandCompressorConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
   validate_config(config_);
@@ -84,11 +97,25 @@ void MultibandCompressor::reset() {
 
 void MultibandCompressor::set_config(const MultibandCompressorConfig& config) {
   validate_config(config);
+  // Only the crossover carries history that clicks when reset. Rebuild it (and
+  // re-prepare it, which re-zeros its IIR state) ONLY when its configuration
+  // actually changed; a non-structural set_config() must leave the crossover
+  // running so band-parameter tweaks don't re-zero the filters and click.
+  const bool crossover_changed = !crossover_config_equal(config_.crossover, config.crossover);
   config_ = config;
-  crossover_.set_config(config_.crossover);
+  if (crossover_changed) {
+    crossover_.set_config(config_.crossover);
+  }
   rebuild_processors();
   if (prepared_) {
-    prepare(sample_rate_, max_block_size_);
+    if (crossover_changed) {
+      crossover_.prepare(sample_rate_, max_block_size_);
+      crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+    }
+    for (auto& compressor : compressors_) {
+      compressor.prepare(sample_rate_, max_block_size_);
+    }
+    std::fill(last_gain_reductions_db_.begin(), last_gain_reductions_db_.end(), 0.0f);
   }
 }
 

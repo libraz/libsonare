@@ -5,12 +5,12 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #ifndef __EMSCRIPTEN__
 #include <future>
-#include <mutex>
 #endif
 
 #include "analysis/beat_analyzer.h"
@@ -192,6 +192,25 @@ class MusicAnalyzer {
   std::unique_ptr<MelSpectrogram> mel_spectrogram_;
   std::vector<float> onset_strength_;
   bool onset_strength_computed_ = false;
+
+  // One-shot flags guarding each lazy initialization so concurrent first-access
+  // from multiple threads cannot race on the unique_ptr writes above.
+  std::once_flag bpm_analyzer_once_;
+  std::once_flag key_analyzer_once_;
+  std::once_flag beat_analyzer_once_;
+  std::once_flag chord_analyzer_once_;
+  std::once_flag onset_analyzer_once_;
+  std::once_flag dynamics_analyzer_once_;
+  std::once_flag rhythm_analyzer_once_;
+  std::once_flag timbre_analyzer_once_;
+  std::once_flag melody_analyzer_once_;
+  std::once_flag section_analyzer_once_;
+  std::once_flag boundary_detector_once_;
+  std::once_flag spectrogram_once_;
+  std::once_flag chroma_once_;
+  std::once_flag harmonic_chroma_once_;
+  std::once_flag mel_spectrogram_once_;
+  std::once_flag onset_strength_once_;
 
   /// @brief Returns cached onset strength, computing if needed.
   const std::vector<float>& onset_strength();

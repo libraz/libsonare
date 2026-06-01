@@ -77,9 +77,13 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
                                                     const SonareMasteringParam* params,
                                                     size_t param_count,
                                                     SonareMasteringStereoResult* out) {
-  if (!out || !processor_name || !left || !right || sample_rate <= 0) {
+  if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->left = nullptr;

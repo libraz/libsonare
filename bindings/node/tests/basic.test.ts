@@ -589,11 +589,16 @@ describe('sonare native binding', () => {
     });
 
     it('mfcc returns coefficients', () => {
-      const result = mfcc(tone, SR, 2048, 512, 64, 13);
-      expect(result.nMfcc).toBe(13);
+      const result = mfcc(tone, SR, 2048, 512, 64, 20);
+      expect(result.nMfcc).toBe(20);
       expect(result.nFrames).toBeGreaterThan(0);
       expect(result.coefficients).toBeInstanceOf(Float32Array);
       expect(result.coefficients.length).toBe(result.nMfcc * result.nFrames);
+    });
+
+    it('mfcc defaults nMfcc to 20', () => {
+      const result = mfcc(tone, SR, 2048, 512, 64);
+      expect(result.nMfcc).toBe(20);
     });
 
     it('chroma returns 12 pitch classes', () => {

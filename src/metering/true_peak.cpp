@@ -20,6 +20,11 @@ const ::sonare::rt::PolyphaseFir& filter_for(int oversample_factor) {
   static const auto kFilter4x = ::sonare::rt::design_polyphase_lowpass(4, 48, 9.5, true);
   static const auto kFilter8x = ::sonare::rt::design_polyphase_lowpass(8, 96, 9.5, true);
   static const auto kFilter2x = ::sonare::rt::design_polyphase_lowpass(2, 24, 7.85726, true);
+  // 16x branch keeps the same 12-taps-per-phase Kaiser design density as the
+  // 4x/8x filters (192 = 16 * 12) so the higher request is genuinely resolved
+  // instead of silently falling back to the 4x default.
+  static const auto kFilter16x = ::sonare::rt::design_polyphase_lowpass(16, 192, 9.5, true);
+  if (oversample_factor == 16) return kFilter16x;
   if (oversample_factor == 8) return kFilter8x;
   if (oversample_factor == 2) return kFilter2x;
   return kFilter4x;

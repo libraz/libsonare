@@ -356,6 +356,7 @@ SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsR
 
 SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, float** out,
                                   size_t* out_length) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
     return copy_float_vector(metering::momentary_lufs(audio), out, out_length);
   });
@@ -363,7 +364,32 @@ SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, f
 
 SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, float** out,
                                    size_t* out_length) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
     return copy_float_vector(metering::short_term_lufs(audio), out, out_length);
+  });
+}
+
+SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
+                                    int sample_rate, SonareLufsResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (channels <= 0 || sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (frames > 0 && samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  metering::LufsResult result = metering::lufs_interleaved(samples, frames, channels, sample_rate);
+  out->integrated_lufs = result.integrated_lufs;
+  out->momentary_lufs = result.momentary_lufs;
+  out->short_term_lufs = result.short_term_lufs;
+  out->loudness_range = result.loudness_range;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
+                                          float* out_lra) {
+  if (!out_lra) return SONARE_ERROR_INVALID_PARAMETER;
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_lra = metering::ebur128_loudness_range(audio);
+    return SONARE_OK;
   });
 }

@@ -35,8 +35,15 @@ struct BoundaryBuildContext {
   int64_t block_timeline_sample = 0;
   int num_frames = 0;
   bool loop_wrap = false;
+  // Sample offset of the FIRST loop wrap inside this block. Subsequent wraps
+  // (short loop + large block) recur every loop_len_samples after this offset.
   int loop_wrap_offset = 0;
   int64_t loop_start_timeline_sample = 0;
+  // Loop length in samples. When > 0 and loop_wrap is set, timeline_at_offset
+  // folds any offset past the first wrap back into [loop_start, loop_start +
+  // loop_len), so the over-wrapped tail of the block maps to the correct
+  // timeline position even across multiple wraps. 0 means single-wrap behavior.
+  int64_t loop_len_samples = 0;
 };
 
 class BoundaryList {

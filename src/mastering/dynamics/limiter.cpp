@@ -34,7 +34,14 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
   lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
   update_coefficients(config_);
   prepared_ = true;
-  lookahead_.clear();
+  // Preallocate per-channel lookahead and scratch up front so the audio-thread
+  // process() path never resizes (which would malloc). A block requesting more
+  // than kRealtimePreparedChannels channels throws in prepare_buffers().
+  lookahead_.assign(kRealtimePreparedChannels, {});
+  for (auto& buffer : lookahead_) {
+    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
+  }
+  delayed_.assign(kRealtimePreparedChannels, 0.0f);
   gain_smoother_.prepare(sample_rate_, 0.0f, config_.release_ms);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -94,11 +101,13 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
 
   const float ceiling = db_to_linear(cfg.threshold_db);
   float min_gain = 1.0f;
-  std::vector<float> delayed(static_cast<size_t>(num_channels), 0.0f);
+  // Reuse the preallocated scratch (sized in prepare()) instead of allocating a
+  // fresh vector each block; only the first num_channels entries are read.
+  std::fill(delayed_.begin(), delayed_.begin() + num_channels, 0.0f);
   for (int i = 0; i < num_samples; ++i) {
     float peak = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
-      delayed[static_cast<size_t>(ch)] =
+      delayed_[static_cast<size_t>(ch)] =
           lookahead_[static_cast<size_t>(ch)].process(channels[ch][i]);
       peak = std::max(peak, lookahead_[static_cast<size_t>(ch)].peak());
     }
@@ -108,7 +117,7 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     // so the stereo image is preserved.
     const float gain = gain_smoother_.smooth_bidirectional(target_gain, release_coeff_, true);
     for (int ch = 0; ch < num_channels; ++ch) {
-      channels[ch][i] = delayed[static_cast<size_t>(ch)] * gain;
+      channels[ch][i] = delayed_[static_cast<size_t>(ch)] * gain;
     }
     min_gain = std::min(min_gain, gain);
   }
@@ -174,14 +183,15 @@ void Limiter::validate_config(const LimiterConfig& config) {
 }
 
 void Limiter::prepare_buffers(int num_channels) {
-  if (lookahead_.size() == static_cast<size_t>(num_channels)) {
+  // The lookahead buffers and delayed_ scratch are preallocated to
+  // kRealtimePreparedChannels in prepare(). Never resize on the audio thread;
+  // reject blocks wider than the prepared state (matches the established
+  // dynamics-processor pattern).
+  if (lookahead_.size() >= static_cast<size_t>(num_channels)) {
     return;
   }
 
-  lookahead_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& buffer : lookahead_) {
-    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
-  }
+  throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Limiter state");
 }
 
 void Limiter::update_coefficients(const LimiterConfig& config) {

@@ -196,6 +196,61 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float** out, size_t* out_count);
 
+/// @brief Spectral contrast: peak-to-valley energy difference per band per frame.
+/// @details Mirrors librosa.feature.spectral_contrast. Output is a row-major
+///   matrix [(@p n_bands + 1) x n_frames]; the extra row is the residual band.
+///   Free @p out with sonare_free_floats.
+/// @param out Receives the freshly allocated [(n_bands + 1) * n_frames] matrix.
+/// @param out_rows Receives the number of rows (n_bands + 1).
+/// @param out_cols Receives the number of columns (n_frames).
+SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
+                                     int n_fft, int hop_length, int n_bands, float fmin,
+                                     float quantile, float** out, int* out_rows, int* out_cols);
+
+/// @brief Polynomial coefficients fit to each frame's spectrum.
+/// @details Mirrors librosa.feature.poly_features. Output is a row-major matrix
+///   [(@p order + 1) x n_frames] with coefficients ordered high-to-low. Free
+///   @p out with sonare_free_floats.
+/// @param out Receives the freshly allocated [(order + 1) * n_frames] matrix.
+/// @param out_rows Receives the number of rows (order + 1).
+/// @param out_cols Receives the number of columns (n_frames).
+SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
+                                 int hop_length, int order, float** out, int* out_rows,
+                                 int* out_cols);
+
+/// @brief Raw zero-crossing indices of a signal (librosa.zero_crossings).
+/// @details Unlike sonare_zero_crossing_rate (a per-frame rate), this returns the
+///   sample indices @c i where the sign of @c y[i] differs from @c y[i-1]. Free
+///   @p out with sonare_free_ints.
+/// @param threshold Magnitudes <= threshold are treated as zero.
+/// @param ref_magnitude Non-zero scales @p threshold by max(|y|).
+/// @param pad Non-zero always reports index 0 as a zero-crossing.
+/// @param zero_pos Non-zero treats the sign of zero as positive.
+/// @param out Receives the freshly allocated array of zero-crossing indices.
+/// @param out_count Receives the number of indices.
+SonareError sonare_zero_crossings(const float* samples, size_t length, float threshold,
+                                  int ref_magnitude, int pad, int zero_pos, int** out,
+                                  size_t* out_count);
+
+/// @brief Per-octave tuning offset estimated from a list of detected pitches.
+/// @details Mirrors librosa.pitch_tuning. Non-positive frequencies are ignored.
+/// @param frequencies Detected pitch frequencies in Hz.
+/// @param length Number of frequencies.
+/// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
+/// @param bins_per_octave Number of pitch bins per octave (e.g. 12).
+/// @param out_tuning Receives the tuning offset in fractions of a bin (-0.5, 0.5].
+SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float resolution,
+                                int bins_per_octave, float* out_tuning);
+
+/// @brief Global tuning offset of an audio signal (librosa.estimate_tuning).
+/// @details Uses piptrack to find spectral peaks, then aggregates via pitch_tuning.
+/// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
+/// @param bins_per_octave Number of pitch bins per octave (e.g. 12).
+/// @param out_tuning Receives the tuning offset in fractions of a bin (-0.5, 0.5].
+SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
+                                   int hop_length, float resolution, int bins_per_octave,
+                                   float* out_tuning);
+
 // ============================================================================
 // Features - Pitch
 // ============================================================================

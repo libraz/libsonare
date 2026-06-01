@@ -6,6 +6,9 @@ namespace sonare::effects::modulation {
 namespace {
 
 constexpr float kMaxFlangerDelayMs = 100.0f;
+// Minimum delay-buffer length so the buffer is never smaller than a typical
+// flanger range even for tiny configured delays.
+constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
 
 }  // namespace
 
@@ -13,7 +16,15 @@ Flanger::Flanger(FlangerConfig config) : config_(config) {}
 
 void Flanger::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  const int max_delay = static_cast<int>(sample_rate_ * kMaxFlangerDelayMs * 0.001);
+  // Size the buffer from the actual maximum modulated delay (center + full LFO
+  // depth) so the configured modulation is not silently clipped at the LFO
+  // peaks, with a 100 ms floor. The delay line additionally clamps reads to
+  // this length at runtime, so later parameter automation can never cause an
+  // out-of-bounds read.
+  const float max_delay_ms =
+      std::max(0.0f, config_.center_delay_ms) + std::max(0.0f, config_.depth_ms);
+  const float buffer_ms = std::max(kMinDelayBufferMs, max_delay_ms);
+  const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(buffer_ms) * 0.001) + 1;
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
   }

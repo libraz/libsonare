@@ -3,6 +3,7 @@
 /// @file alignment_delay.h
 /// @brief Integer and fractional-sample channel alignment delay.
 
+#include <algorithm>
 #include <vector>
 
 #include "rt/delay_line.h"
@@ -30,6 +31,13 @@ class AlignmentDelay : public rt::ProcessorBase {
   // returns the integer floor for legacy callers; graph/mixing PDC should use
   // latency_samples_q8() to preserve the fractional part.
   int latency_samples_q8() const noexcept override { return delay_samples_q8_; }
+
+  // Number of channels the delay should preallocate storage for. Must be set
+  // (control thread) before prepare() so process() can run allocation-free for
+  // the full channel count the host will pass. Defaults to a stereo pair.
+  void set_prepared_channels(int num_channels) noexcept {
+    prepared_channels_ = std::max(1, num_channels);
+  }
 
   void set_delay_samples(int delay_samples);
   void set_delay_samples_q8(int delay_samples_q8,

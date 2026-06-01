@@ -42,7 +42,10 @@ void MixerController::recompute_solo_mutes() {
     any_solo = any_solo || strip->soloed();
   }
   for (ChannelStrip* strip : strips_) {
-    strip->set_implied_mute(any_solo && !strip->soloed());
+    // A solo-safe strip (e.g. a reverb-return or talkback bus) is never
+    // implied-muted by another strip's solo, matching effectively_muted()'s
+    // `implied_mute() && !solo_safe()` guard.
+    strip->set_implied_mute(any_solo && !strip->soloed() && !strip->solo_safe());
   }
 }
 

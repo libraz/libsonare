@@ -160,6 +160,64 @@ TEST_CASE("PitchCorrector applies pYIN-verifiable one semitone correction", "[pi
   REQUIRE_THAT(median_voiced_f0(corrected_track), WithinAbs(median_voiced_f0(target_track), 0.6f));
 }
 
+TEST_CASE("PitchCorrector retune_amount=0 leaves off-pitch notes uncorrected", "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  auto samples = sine(440.0f, sample_rate, sample_rate);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  const F0Track track = constant_track(440.0f, sample_rate, 256, 16);
+
+  // Target is a full semitone above the detected pitch (100 cents, well beyond
+  // the 20-cent vibrato band). With retune_amount=0 no correction must be
+  // applied: the output pitch stays at the original 440 Hz, not the target.
+  PitchCorrectionConfig corrector_config;
+  corrector_config.retune_speed_ms = 0.0f;
+  corrector_config.retune_amount = 0.0f;
+  PitchCorrector corrector(corrector_config);
+  const sonare::Audio corrected = corrector.correct_to_midi(audio, track, 70.0f);
+
+  sonare::PitchConfig config;
+  config.frame_length = 1024;
+  config.hop_length = 256;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  PyinF0Provider provider(config);
+  const F0Track corrected_track = provider.detect(corrected);
+
+  // Should remain near 440 Hz (original), far from the 466.16 Hz target.
+  REQUIRE_THAT(median_voiced_f0(corrected_track), WithinAbs(440.0f, 3.0f));
+}
+
+TEST_CASE("PitchCorrector retune_amount scales correction strength", "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  auto samples = sine(440.0f, sample_rate, sample_rate);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  const F0Track track = constant_track(440.0f, sample_rate, 256, 16);
+
+  sonare::PitchConfig config;
+  config.frame_length = 1024;
+  config.hop_length = 256;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  PyinF0Provider provider(config);
+
+  auto corrected_f0 = [&](float retune_amount) {
+    PitchCorrectionConfig corrector_config;
+    corrector_config.retune_speed_ms = 0.0f;
+    corrector_config.retune_amount = retune_amount;
+    PitchCorrector corrector(corrector_config);
+    const sonare::Audio corrected = corrector.correct_to_midi(audio, track, 70.0f);
+    return median_voiced_f0(provider.detect(corrected));
+  };
+
+  const float full = corrected_f0(1.0f);  // pulled to ~466 Hz target
+  const float half = corrected_f0(0.5f);  // pulled roughly halfway
+  const float none = corrected_f0(0.0f);  // stays at 440 Hz
+
+  // Higher retune_amount -> output pitch closer to the (higher) target.
+  REQUIRE(none < half);
+  REQUIRE(half < full);
+}
+
 TEST_CASE("NoteEditor moves note region with edge fades", "[pitch_editor]") {
   constexpr int sample_rate = 1000;
   std::vector<float> samples(1000, 0.0f);

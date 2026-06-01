@@ -42,6 +42,12 @@ class Node {
   std::unique_ptr<rt::ProcessorBase> processor_;
   int num_ports_ = 0;
   int max_block_size_ = 0;
+  // Set by prepare(); a node that was compiled but never prepared must not have
+  // its processor's process() invoked, because a derived process() may call
+  // ProcessorBase::ensure_prepared() and throw -- which would cross the
+  // noexcept process_block() boundary and call std::terminate on the audio
+  // thread. Guards the call locally so an unprepared swap cannot terminate.
+  bool prepared_ = false;
   std::vector<float> input_;
   std::vector<float> output_;
   std::vector<float*> process_channels_;

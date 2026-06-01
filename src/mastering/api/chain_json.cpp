@@ -90,10 +90,23 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
   add_field(params, "repair.dereverb.wpeStrength", cfg.repair.dereverb.config.wpe_strength);
 
   add_field(params, "repair.denoise.enabled", cfg.repair.denoise.enabled);
+  // `mode` and `noiseEstimator` are enums serialized as their integer values
+  // (the parser side restores them via static_cast in chain_params.cpp), so emit
+  // a number — not a bool — to keep the dump -> parse round-trip lossless.
+  add_field(params, "repair.denoise.mode", static_cast<int>(cfg.repair.denoise.config.mode));
+  add_field(params, "repair.denoise.noiseEstimator",
+            static_cast<int>(cfg.repair.denoise.config.noise_estimator));
   add_field(params, "repair.denoise.nFft", cfg.repair.denoise.config.n_fft);
   add_field(params, "repair.denoise.hopLength", cfg.repair.denoise.config.hop_length);
   add_field(params, "repair.denoise.ddAlpha", cfg.repair.denoise.config.dd_alpha);
   add_field(params, "repair.denoise.gainFloor", cfg.repair.denoise.config.gain_floor);
+  add_field(params, "repair.denoise.overSubtraction", cfg.repair.denoise.config.over_subtraction);
+  add_field(params, "repair.denoise.spectralFloor", cfg.repair.denoise.config.spectral_floor);
+  add_field(params, "repair.denoise.noiseEstimationQuantile",
+            cfg.repair.denoise.config.noise_estimation_quantile);
+  add_field(params, "repair.denoise.speechPresenceGain",
+            cfg.repair.denoise.config.speech_presence_gain);
+  add_field(params, "repair.denoise.gainSmoothing", cfg.repair.denoise.config.gain_smoothing);
 
   add_field(params, "eq.tilt.enabled", cfg.eq.tilt.enabled);
   add_field(params, "eq.tilt.tiltDb", cfg.eq.tilt.tilt_db);

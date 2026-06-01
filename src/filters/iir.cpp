@@ -19,6 +19,50 @@ float normalized_omega(float frequency_hz, int sr) {
   return constants::kTwoPi * frequency_hz / static_cast<float>(sr);
 }
 
+/// @brief Direct Form II Transposed initial delay states (z1, z2).
+struct BiquadZi {
+  float z1 = 0.0f;
+  float z2 = 0.0f;
+};
+
+/// @brief Computes the scipy.signal.lfilter_zi steady-state delay states for a
+///        normalized biquad (a0 == 1), i.e. the DF2T state that yields a constant
+///        output for a constant unit input. Multiplying the result by the boundary
+///        sample value seeds each filtfilt pass at its edge steady state, which
+///        removes the ~2*order start-up transient that zero initial conditions
+///        introduce.
+/// @details Solves (I - A) * zi = B with A = [[-a1, 1], [-a2, 0]] and
+///          B = [b1 - a1*b0, b2 - a2*b0]. For a stable section
+///          det = 1 + a1 + a2 != 0.
+BiquadZi lfilter_zi(const BiquadCoeffs& c) {
+  const float det = 1.0f + c.a1 + c.a2;
+  if (std::abs(det) < constants::kEpsilon) {
+    return {0.0f, 0.0f};
+  }
+  const float b0 = c.b1 - c.a1 * c.b0;
+  const float b1 = c.b2 - c.a2 * c.b0;
+  BiquadZi zi;
+  zi.z1 = (b0 + b1) / det;
+  zi.z2 = ((1.0f + c.a1) * b1 - c.a2 * b0) / det;
+  return zi;
+}
+
+/// @brief Applies a DF2T biquad with explicit initial delay states.
+std::vector<float> apply_biquad_zi(const float* input, size_t size, const BiquadCoeffs& coeffs,
+                                   const BiquadZi& zi) {
+  std::vector<float> output(size);
+  float z1 = zi.z1;
+  float z2 = zi.z2;
+  for (size_t i = 0; i < size; ++i) {
+    const float x = input[i];
+    const float y = coeffs.b0 * x + z1;
+    z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
+    z2 = coeffs.b2 * x - coeffs.a2 * y;
+    output[i] = y;
+  }
+  return output;
+}
+
 }  // namespace
 
 BiquadCoeffs highpass_coeffs(float cutoff_hz, int sr) {
@@ -83,16 +127,22 @@ std::vector<float> apply_biquad_filtfilt(const float* input, size_t size,
                                          const BiquadCoeffs& coeffs) {
   SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
 
-  // Forward pass
-  std::vector<float> forward = apply_biquad(input, size, coeffs);
+  // Seed each pass with scipy.signal.lfilter_zi-style steady-state initial
+  // conditions scaled by the boundary sample, matching scipy.signal.filtfilt.
+  // This suppresses the ~2*order edge transient that zero initial conditions
+  // would otherwise inject at the start of each direction.
+  const BiquadZi zi = lfilter_zi(coeffs);
 
-  // Reverse
+  // Forward pass seeded at the leading edge.
+  const BiquadZi zi_fwd{zi.z1 * input[0], zi.z2 * input[0]};
+  std::vector<float> forward = apply_biquad_zi(input, size, coeffs, zi_fwd);
+
+  // Reverse, then run the backward pass seeded at what is now the leading edge.
   std::reverse(forward.begin(), forward.end());
+  const BiquadZi zi_bwd{zi.z1 * forward[0], zi.z2 * forward[0]};
+  std::vector<float> backward = apply_biquad_zi(forward.data(), size, coeffs, zi_bwd);
 
-  // Backward pass
-  std::vector<float> backward = apply_biquad(forward.data(), size, coeffs);
-
-  // Reverse again
+  // Reverse again to restore the original time order.
   std::reverse(backward.begin(), backward.end());
 
   return backward;

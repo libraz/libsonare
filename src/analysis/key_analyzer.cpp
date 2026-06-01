@@ -387,7 +387,7 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
   float total_duration = 0.0f;
 
   for (const auto& chord : chords) {
-    float duration = chord.duration();
+    float duration = std::max(0.0f, chord.duration());
     root_weights[static_cast<int>(chord.root)] += duration;
     total_duration += duration;
   }
@@ -430,7 +430,7 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     float major_tonic_score = 0.0f;
 
     for (const auto& chord : chords) {
-      float duration = chord.duration();
+      float duration = std::max(0.0f, chord.duration());
       if (is_diatonic_major(chord.root, chord.quality, key_root)) {
         major_score += duration;
 
@@ -482,7 +482,7 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     float minor_tonic_score = 0.0f;
 
     for (const auto& chord : chords) {
-      float duration = chord.duration();
+      float duration = std::max(0.0f, chord.duration());
       int interval = (static_cast<int>(chord.root) - static_cast<int>(minor_root) + 12) % 12;
 
       bool is_diatonic_minor = false;

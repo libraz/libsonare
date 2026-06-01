@@ -31,6 +31,9 @@ void ParallelComp::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
+  if (followers_.size() < kRealtimePreparedChannels) {
+    followers_.resize(kRealtimePreparedChannels);
+  }
   update_coefficients(config_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -190,14 +193,15 @@ float ParallelComp::gain_reduction_db(float input_db, const ParallelCompConfig& 
 }
 
 void ParallelComp::ensure_followers(int num_channels) {
-  // Only grow the vector for newly-seen channels; never replace existing
-  // followers (assign() would reset their state and inject a transient). When
-  // the channel count shrinks the extra followers are simply left idle.
-  const auto target = static_cast<size_t>(num_channels);
-  while (followers_.size() < target) {
-    followers_.emplace_back();
-    followers_.back().prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+  // Followers are preallocated to kRealtimePreparedChannels in prepare(); never
+  // grow the vector on the audio thread (emplace_back would malloc). Reject
+  // blocks wider than the prepared state (matches the established pattern).
+  if (followers_.size() >= static_cast<size_t>(num_channels)) {
+    return;
   }
+
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "num_channels exceeds prepared ParallelComp state");
 }
 
 void ParallelComp::update_coefficients(const ParallelCompConfig& config) {

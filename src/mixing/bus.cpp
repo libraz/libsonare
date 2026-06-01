@@ -8,7 +8,13 @@
 
 namespace sonare::mixing {
 
-BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inputs_(max_inputs) {}
+BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inputs_(max_inputs) {
+  // Pre-reserve so add_insert (control thread) never reallocates inserts_ /
+  // insert_sidechains_ while process() (audio thread) iterates them; a
+  // reallocation would invalidate the in-flight pointers/iterators (C++ UB).
+  inserts_.reserve(kMaxInserts);
+  insert_sidechains_.reserve(kMaxInserts);
+}
 
 void BusProcessor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -27,8 +33,12 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   for (size_t index = 0; index < inserts_.size(); ++index) {
     const InsertSidechain* key =
         index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
-    if (key != nullptr && key->num_channels > 0 && key->num_samples >= num_samples) {
-      inserts_[index]->set_sidechain(key->channels.data(), key->num_channels, num_samples);
+    if (key != nullptr && key->num_channels > 0 && key->num_samples > 0) {
+      // Clip the key length to whatever is available rather than discarding a
+      // short block; dropping the key would make a sidechain compressor lose
+      // its detector input for the block and click. Mirrors ChannelStrip.
+      inserts_[index]->set_sidechain(key->channels.data(), key->num_channels,
+                                     std::min(key->num_samples, num_samples));
     } else if (key != nullptr && key->managed) {
       inserts_[index]->clear_sidechain();
     } else {
@@ -89,6 +99,9 @@ void BusProcessor::sum_inputs(const std::vector<float* const*>& inputs, float* c
 void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
   if (!processor) {
     throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
+  }
+  if (inserts_.size() >= kMaxInserts) {
+    throw SonareException(ErrorCode::InvalidState, "BusProcessor insert cap exceeded");
   }
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);

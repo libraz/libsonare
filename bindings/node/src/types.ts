@@ -327,6 +327,36 @@ export interface LufsResult {
   loudnessRange: number;
 }
 
+/** Row-major dense matrix returned by feature/decompose helpers. */
+export interface Matrix2D {
+  /** Number of rows. */
+  rows: number;
+  /** Number of columns. */
+  cols: number;
+  /** Row-major `[rows x cols]` data buffer. */
+  data: Float32Array;
+}
+
+/** Non-negative matrix factorisation result (`decompose`). */
+export interface DecomposeResult {
+  /** Component matrix `[nFeatures x nComponents]`. */
+  w: Matrix2D;
+  /** Activation matrix `[nComponents x nFrames]`. */
+  h: Matrix2D;
+}
+
+/** Harmonic/percussive/residual separation result (`hpssWithResidual`). */
+export interface HpssResidualResult {
+  /** Harmonic component signal. */
+  harmonic: Float32Array;
+  /** Percussive component signal. */
+  percussive: Float32Array;
+  /** Residual (`original - harmonic - percussive`) signal. */
+  residual: Float32Array;
+  /** Shared sample rate of all three signals. */
+  sampleRate: number;
+}
+
 export type MasteringPreset =
   | 'pop'
   | 'edm'

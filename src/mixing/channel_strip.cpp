@@ -118,6 +118,10 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   fader_.prepare(sample_rate, max_block_size);
   panner_.prepare(sample_rate, max_block_size);
   width_.prepare(sample_rate, max_block_size);
+  // process()/process_segment() pass up to kMaxStackChannels channels; the
+  // alignment delay must preallocate storage for all of them so the audio
+  // thread never allocates and never silently drops the upper channels.
+  alignment_delay_.set_prepared_channels(kMaxStackChannels);
   alignment_delay_.prepare(sample_rate, max_block_size);
   eq_.prepare(sample_rate, max_block_size);
   pre_meter_.prepare(sample_rate, max_block_size);
@@ -170,11 +174,14 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   for (auto& lane : send_automation_) {
     if (lane) lane->discard_before(block_start);
   }
-  if (num_channels > kMaxStackChannels) {
-    process_unsegmented(channels, num_channels, num_samples);
-    return;
-  }
 
+  // Drain the parameter-automation SPSC lanes UNCONDITIONALLY, before the
+  // wide-channel fast path. If we early-returned here without consuming, the
+  // control thread would keep pushing events the audio thread never pulls, so
+  // the bounded ring would overflow and sample-accurate automation would be
+  // permanently lost on > kMaxStackChannels layouts (e.g. 7.1.4). We consume
+  // first, then (for wide layouts) apply the events to advance parameter state
+  // and fall back to the unsegmented path.
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> fader_events{};
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> pan_events{};
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> width_events{};
@@ -199,6 +206,18 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     });
   }
   sort_events_by_offset(insert_events, insert_count);
+
+  if (num_channels > kMaxStackChannels) {
+    // Wide layouts cannot use the segmented stack-array path. Apply the drained
+    // events to advance fader / pan / width / insert parameters to their
+    // block-final values, then process unsegmented.
+    for (size_t i = 0; i < fader_count; ++i) apply_automation_event(fader_events[i].event);
+    for (size_t i = 0; i < pan_count; ++i) apply_automation_event(pan_events[i].event);
+    for (size_t i = 0; i < width_count; ++i) apply_automation_event(width_events[i].event);
+    for (size_t i = 0; i < insert_count; ++i) apply_automation_event(insert_events[i].event);
+    process_unsegmented(channels, num_channels, num_samples);
+    return;
+  }
 
   if (fader_count == 0 && pan_count == 0 && width_count == 0 && insert_count == 0) {
     process_unsegmented(channels, num_channels, num_samples);

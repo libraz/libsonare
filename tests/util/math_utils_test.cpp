@@ -123,6 +123,18 @@ TEST_CASE("power_to_db basic", "[math_utils]") {
     power_to_db(nullptr, 0, 1.0f, 1e-10f, 80.0f, db.data());
     REQUIRE(db.empty());
   }
+
+  SECTION("ref<=0 uses max(S) reference (librosa ref=np.max)") {
+    // With ref <= 0 the reference must resolve to max(|S|), so the peak lands at
+    // 0 dB. This is the unified behavior shared with core/db_convert; the old
+    // divergent implementation incorrectly floored ref at amin instead.
+    std::vector<float> power = {4.0f, 1.0f, 0.25f};
+    std::vector<float> db(3);
+    power_to_db(power.data(), 3, 0.0f, 1e-10f, -1.0f, db.data());
+    REQUIRE_THAT(db[0], WithinAbs(0.0f, 0.01f));       // 10*log10(4/4)
+    REQUIRE_THAT(db[1], WithinAbs(-6.0206f, 0.01f));   // 10*log10(1/4)
+    REQUIRE_THAT(db[2], WithinAbs(-12.0412f, 0.01f));  // 10*log10(0.25/4)
+  }
 }
 
 TEST_CASE("compute_autocorrelation", "[math_utils]") {

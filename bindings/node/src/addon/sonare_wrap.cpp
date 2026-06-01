@@ -110,6 +110,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MomentaryLufs, "momentaryLufs"));
   exports.Set("shortTermLufs",
               Napi::Function::New(env, &SonareWrap::ShortTermLufs, "shortTermLufs"));
+  exports.Set("lufsInterleaved",
+              Napi::Function::New(env, &SonareWrap::LufsInterleaved, "lufsInterleaved"));
+  exports.Set("ebur128LoudnessRange",
+              Napi::Function::New(env, &SonareWrap::Ebur128LoudnessRange, "ebur128LoudnessRange"));
   exports.Set("meteringPeakDb",
               Napi::Function::New(env, &SonareWrap::MeteringPeakDb, "meteringPeakDb"));
   exports.Set("meteringRmsDb",
@@ -158,6 +162,12 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::PitchCorrectToMidi, "pitchCorrectToMidi"));
   exports.Set("noteStretch", Napi::Function::New(env, &SonareWrap::NoteStretch, "noteStretch"));
   exports.Set("voiceChange", Napi::Function::New(env, &SonareWrap::VoiceChange, "voiceChange"));
+  exports.Set("decompose", Napi::Function::New(env, &SonareWrap::Decompose, "decompose"));
+  exports.Set("nnFilter", Napi::Function::New(env, &SonareWrap::NnFilter, "nnFilter"));
+  exports.Set("remix", Napi::Function::New(env, &SonareWrap::Remix, "remix"));
+  exports.Set("hpssWithResidual",
+              Napi::Function::New(env, &SonareWrap::HpssWithResidual, "hpssWithResidual"));
+  exports.Set("phaseVocoder", Napi::Function::New(env, &SonareWrap::PhaseVocoder, "phaseVocoder"));
   exports.Set("normalize", Napi::Function::New(env, &SonareWrap::Normalize, "normalize"));
   exports.Set("mastering", Napi::Function::New(env, &SonareWrap::Mastering, "mastering"));
   exports.Set("masteringProcess",
@@ -287,6 +297,14 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("zeroCrossingRate",
               Napi::Function::New(env, &SonareWrap::ZeroCrossingRate, "zeroCrossingRate"));
   exports.Set("rmsEnergy", Napi::Function::New(env, &SonareWrap::RmsEnergy, "rmsEnergy"));
+  exports.Set("spectralContrast",
+              Napi::Function::New(env, &SonareWrap::SpectralContrast, "spectralContrast"));
+  exports.Set("polyFeatures", Napi::Function::New(env, &SonareWrap::PolyFeatures, "polyFeatures"));
+  exports.Set("zeroCrossings",
+              Napi::Function::New(env, &SonareWrap::ZeroCrossings, "zeroCrossings"));
+  exports.Set("pitchTuning", Napi::Function::New(env, &SonareWrap::PitchTuning, "pitchTuning"));
+  exports.Set("estimateTuning",
+              Napi::Function::New(env, &SonareWrap::EstimateTuning, "estimateTuning"));
 
   // Features - Pitch
   exports.Set("pitchYin", Napi::Function::New(env, &SonareWrap::PitchYin, "pitchYin"));

@@ -16,6 +16,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -256,4 +257,98 @@ TEST_CASE("ConvolutionReverb partitioned-convolves with reported latency", "[fx]
   for (int n = 0; n < latency; ++n) {
     REQUIRE_THAT(mono[static_cast<size_t>(n)], WithinAbs(0.0f, 1e-4f));
   }
+}
+
+TEST_CASE("ConvolutionReverb dry_wet blends time-aligned dry signal", "[fx]") {
+  // Delta IR (gain 1, single tap) so the wet path is an exact delayed copy of
+  // the input. With a 50/50 dry/wet mix and a time-aligned dry path, the output
+  // at the latency offset must equal the input scaled by (dry + wet) == 1.
+  const std::vector<float> ir{1.0f};
+
+  sonare::effects::reverb::ConvolutionReverb convolution;
+  convolution.prepare(48000.0, 64);
+  convolution.load_ir(ir);
+  REQUIRE(convolution.set_parameter(0, 0.5f));  // dry_wet
+  REQUIRE_FALSE(convolution.set_parameter(99, 0.0f));
+
+  const int latency = convolution.latency_samples();
+  const int total = latency + 256;
+  std::vector<float> mono(static_cast<size_t>(total), 0.0f);
+  mono[0] = 1.0f;
+
+  float* channels[] = {mono.data()};
+  convolution.process(channels, 1, total);
+
+  REQUIRE(all_finite(mono));
+  // Delta IR: dry and wet are both the input delayed by the latency, so the
+  // mixed output reconstructs the original impulse at the latency offset.
+  REQUIRE_THAT(mono[static_cast<size_t>(latency)], WithinAbs(1.0f, 1e-4f));
+  // No dry leakage ahead of the (delayed) dry path.
+  for (int n = 0; n < latency; ++n) {
+    REQUIRE_THAT(mono[static_cast<size_t>(n)], WithinAbs(0.0f, 1e-4f));
+  }
+}
+
+TEST_CASE("ConvolutionReverb dry_wet=0 passes the dry signal through", "[fx]") {
+  const std::vector<float> ir{0.5f, 0.25f};
+
+  sonare::effects::reverb::ConvolutionReverb convolution;
+  convolution.prepare(48000.0, 64);
+  convolution.load_ir(ir);
+  REQUIRE(convolution.set_parameter(0, 0.0f));  // fully dry
+
+  const int latency = convolution.latency_samples();
+  const int total = latency + 256;
+  std::vector<float> mono(static_cast<size_t>(total), 0.0f);
+  mono[0] = 1.0f;
+
+  float* channels[] = {mono.data()};
+  convolution.process(channels, 1, total);
+
+  REQUIRE(all_finite(mono));
+  // The dry path is delayed by the same latency as the wet path so the mix stays
+  // time-aligned; with no wet contribution the impulse appears at the latency.
+  REQUIRE_THAT(mono[static_cast<size_t>(latency)], WithinAbs(1.0f, 1e-4f));
+  // No wet tail when fully dry: the second IR tap must not appear.
+  REQUIRE_THAT(mono[static_cast<size_t>(latency + 1)], WithinAbs(0.0f, 1e-4f));
+}
+
+TEST_CASE("Flanger buffer accommodates full LFO depth without plateauing", "[fx]") {
+  // center + depth = 80 + 80 = 160 ms exceeds the historical 100 ms buffer; at
+  // the LFO peaks the modulated read tap previously plateaued at the buffer
+  // length, distorting the sweep. With correct sizing the output stays finite
+  // and the per-channel decorrelation from independent LFOs is preserved.
+  sonare::effects::modulation::FlangerConfig config;
+  config.rate_hz = 2.0f;
+  config.center_delay_ms = 80.0f;
+  config.depth_ms = 80.0f;
+  config.feedback = 0.0f;
+  config.dry_wet = 1.0f;
+
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate / 4;  // 0.25 s spans multiple LFO cycles
+  std::vector<float> left(kSamples);
+  std::vector<float> right(kSamples);
+  const double w = 2.0 * sonare::constants::kPiD * 220.0 / static_cast<double>(kSampleRate);
+  for (int i = 0; i < kSamples; ++i) {
+    left[i] = static_cast<float>(std::sin(w * static_cast<double>(i)));
+    right[i] = left[i];
+  }
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::effects::modulation::Flanger flanger(config);
+  flanger.prepare(static_cast<double>(kSampleRate), kSamples);
+  flanger.process(channels, 2, kSamples);
+
+  REQUIRE(all_finite(left));
+  REQUIRE(all_finite(right));
+
+  // The two channels use phase-offset LFOs, so a correctly sized (non-clipped)
+  // sweep keeps them decorrelated. A plateaued sweep would collapse the
+  // difference toward zero.
+  double channel_diff = 0.0;
+  for (int i = kSamples / 4; i < kSamples; ++i) {
+    channel_diff += std::abs(static_cast<double>(left[i]) - static_cast<double>(right[i]));
+  }
+  REQUIRE(channel_diff > 1e-2);
 }

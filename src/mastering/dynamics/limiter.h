@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/envelope_follower.h"
 #include "rt/lookahead_buffer.h"
 #include "rt/processor_base.h"
@@ -65,6 +66,11 @@ class Limiter : public rt::ProcessorBase {
 
  private:
   static void validate_config(const LimiterConfig& config);
+  /// @brief Verifies the prepared lookahead state can cover @p num_channels.
+  /// @details RT-safe: never resizes on the audio thread. The lookahead
+  ///          buffers are preallocated to @c kRealtimePreparedChannels in
+  ///          prepare(); a block requesting more channels throws instead of
+  ///          allocating (which would malloc on the audio thread).
   void prepare_buffers(int num_channels);
   /// @brief Recomputes scalar derived coefficients (release smoothing) from
   ///        @p config. RT-safe: scalar math only, no allocation.
@@ -99,6 +105,9 @@ class Limiter : public rt::ProcessorBase {
   int lookahead_samples_ = 0;
   bool prepared_ = false;
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
+  // Per-channel delayed-sample scratch, allocated in prepare() so the per-block
+  // process() path never reallocates. Sized to kRealtimePreparedChannels.
+  std::vector<float> delayed_;
   // A single, shared gain smoother fed by the linked (max-peak) target so every
   // channel is scaled by the same gain. Per-channel smoothers would let the L/R
   // gain diverge on asymmetric content and shift the stereo image.

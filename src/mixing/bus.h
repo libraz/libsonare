@@ -40,6 +40,12 @@ class BusProcessor : public rt::ProcessorBase {
   BusRole role() const noexcept { return role_; }
   int max_inputs() const noexcept { return max_inputs_; }
 
+  // Upper bound on inserts per bus. Reserved at construction so add_insert
+  // never reallocates inserts_ / insert_sidechains_ while the audio thread
+  // iterates them in process(). Exceeding the cap throws SonareException
+  // (InvalidState), mirroring ChannelStrip::add_pre/post_insert.
+  static constexpr size_t kMaxInserts = 64;
+
  private:
   static constexpr int kMaxSidechainChannels = 8;
 

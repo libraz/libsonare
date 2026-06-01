@@ -38,9 +38,10 @@ struct VqtKernelCacheKey {
 
 struct VqtKernelCacheKeyHash {
   size_t operator()(const VqtKernelCacheKey& k) const {
-    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
-           (std::hash<int>()(k.bins_per_octave) << 2) ^ (std::hash<float>()(k.gamma) << 3) ^
-           (std::hash<int>()(static_cast<int>(k.window)) << 4);
+    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.hop_length) << 1) ^
+           (std::hash<float>()(k.fmin) << 2) ^ (std::hash<int>()(k.n_bins) << 3) ^
+           (std::hash<int>()(k.bins_per_octave) << 4) ^ (std::hash<float>()(k.gamma) << 5) ^
+           (std::hash<int>()(static_cast<int>(k.window)) << 6);
   }
 };
 
@@ -165,12 +166,18 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
 
   // Compute filter lengths for each bin
   kernel->lengths_.resize(config.n_bins);
+  kernel->raw_lengths_.resize(config.n_bins);
   int max_length = 0;
 
   for (int k = 0; k < config.n_bins; ++k) {
-    // Filter length based on bandwidth: length = sr / bandwidth * filter_scale
+    // Filter length based on bandwidth: length = sr / bandwidth * filter_scale.
+    // Keep the fractional length for normalization (matches the CQT path, which
+    // uses the fractional `wavelet_lengths`); the integer length is only the
+    // sample count for windowing / FFT sizing.
     float bandwidth = kernel->bandwidths_[k];
-    int length = static_cast<int>(std::ceil(config.filter_scale * sr / bandwidth));
+    float raw_length = config.filter_scale * sr / bandwidth;
+    int length = static_cast<int>(std::ceil(raw_length));
+    kernel->raw_lengths_[k] = raw_length;
     kernel->lengths_[k] = length;
     max_length = std::max(max_length, length);
   }
@@ -192,6 +199,7 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   for (int k = 0; k < config.n_bins; ++k) {
     float freq = kernel->frequencies_[k];
     int length = kernel->lengths_[k];
+    float raw_length = kernel->raw_lengths_[k];
 
     // Create window
     std::vector<float> window = create_window(config.window, length);
@@ -208,17 +216,31 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // (b) the final per-bin `1/sqrt(length)` scaling matches the CQT path's
     //     amplitude convention exactly (see cqt.cpp lines 226-231, 345-350).
     // This makes the gamma=0 (CQT delegation) and gamma>0 paths produce
-    // continuous output magnitudes for the same input.
-    float norm = (win_sum > 0.0f) ? (static_cast<float>(length) * inv_n_fft) / win_sum : 0.0f;
+    // continuous output magnitudes for the same input. The basis scaling uses
+    // the FRACTIONAL raw length (matching cqt.cpp's `raw_lengths[k] / n_fft`),
+    // not the truncated integer length.
+    float norm = (win_sum > 0.0f) ? (raw_length * inv_n_fft) / win_sum : 0.0f;
 
-    // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*n/sr)
+    // Generate time-domain kernel: windowed complex sinusoid exp(-j*2*pi*f*idx/sr).
+    //
+    // The kernel must be *centered* inside the fft_length window, exactly like
+    // the CQT path (filters::wavelet pad-centers each kernel and references the
+    // sinusoid phase to the window center via `idx = floor(-length/2) + n`).
+    // The analysis frames are center-padded, so their meaningful signal energy
+    // sits in the middle of the fft_length window. A one-sided kernel placed at
+    // samples [0, length) barely overlaps that energy, which silently dropped
+    // the matched-bin magnitude by a large, frequency-dependent factor
+    // (~3.46x for the 440 Hz bin). Centering restores the correct correlation so
+    // gamma->0 VQT tracks CQT.
     std::fill(complex_time_kernel.begin(), complex_time_kernel.end(),
               std::complex<float>(0.0f, 0.0f));
 
+    const int slot_offset = (kernel->fft_length_ - length) / 2;
+    const int phase_start = -(length / 2);
     for (int n = 0; n < length; ++n) {
-      float phase = kTwoPi * freq * n / sr;
+      float phase = kTwoPi * freq * (phase_start + n) / sr;
       float scaled_win = window[n] * norm;
-      complex_time_kernel[n] =
+      complex_time_kernel[slot_offset + n] =
           std::complex<float>(scaled_win * std::cos(phase), -scaled_win * std::sin(phase));
     }
 
@@ -288,11 +310,14 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   // The kernel already absorbs the `lengths/n_fft` basis scaling (see
   // VqtKernel::create), so no explicit `1/n_fft` is applied to the inner
   // product here. The matching code path lives in cqt.cpp (`inv_sqrt_len`).
+  // Use the FRACTIONAL raw length so the normalization is identical to the CQT
+  // path (cqt.cpp uses `1 / sqrt(raw_lengths[k])`); the integer length would
+  // introduce a frequency-dependent gain error, worst in the low bands.
   std::vector<float> inv_sqrt_lengths(n_bins, 1.0f);
-  const auto& lengths = kernel->lengths();
+  const auto& raw_lengths = kernel->raw_lengths();
   for (int k = 0; k < n_bins; ++k) {
-    if (lengths[k] > 0) {
-      inv_sqrt_lengths[k] = 1.0f / std::sqrt(static_cast<float>(lengths[k]));
+    if (raw_lengths[k] > 0.0f) {
+      inv_sqrt_lengths[k] = 1.0f / std::sqrt(raw_lengths[k]);
     }
   }
 

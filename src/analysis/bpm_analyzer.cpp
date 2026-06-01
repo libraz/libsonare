@@ -302,6 +302,11 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
   return candidates;
 }
 
+/// @brief Nominal Fourier-tempogram analysis window length in seconds.
+/// @details A multi-second window is needed to resolve tempo harmonics in the
+/// onset envelope; matches the librosa default tempogram window scale.
+constexpr float kFourierTempogramWindowSec = 12.0f;
+
 std::vector<float> extract_fourier_local_bpm_curve(const std::vector<float>& onset_strength, int sr,
                                                    int hop_length, float bpm_min, float bpm_max,
                                                    std::vector<float>* tempogram_out) {
@@ -312,9 +317,12 @@ std::vector<float> extract_fourier_local_bpm_curve(const std::vector<float>& ons
 
   TempogramConfig config;
   config.hop_length = hop_length;
-  const int nominal_win =
-      std::max(32, static_cast<int>(std::round(12.0f * static_cast<float>(sr) /
+  // Cap the nominal window to the available onset frames so short signals do not
+  // request a window longer than the data (which would over-pad the tempogram).
+  int nominal_win =
+      std::max(32, static_cast<int>(std::round(kFourierTempogramWindowSec * static_cast<float>(sr) /
                                                static_cast<float>(hop_length))));
+  nominal_win = std::min(nominal_win, static_cast<int>(onset_strength.size()));
   config.win_length = 1;
   while (config.win_length < nominal_win) {
     config.win_length *= 2;

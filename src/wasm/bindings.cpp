@@ -41,10 +41,13 @@
 #include "editing/voice_changer/realtime_voice_changer.h"
 #include "editing/voice_changer/streaming_retune.h"
 #include "editing/voice_changer/voice_changer.h"
+#include "effects/decompose.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
+#include "effects/phase_vocoder.h"
 #include "effects/pitch_shift.h"
 #include "effects/preemphasis.h"
+#include "effects/remix.h"
 #include "effects/silence.h"
 #include "effects/time_stretch.h"
 #include "engine/realtime_engine.h"
@@ -691,10 +694,8 @@ val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_
   out.set("isCompressed", dyn.is_compressed);
 
   const auto& curve = analyzer.loudness_curve();
-  val curve_obj = val::object();
-  curve_obj.set("times", vectorToFloat32Array(curve.times));
-  curve_obj.set("rmsDb", vectorToFloat32Array(curve.rms_db));
-  out.set("loudnessCurve", curve_obj);
+  out.set("loudnessTimes", vectorToFloat32Array(curve.times));
+  out.set("loudnessRmsDb", vectorToFloat32Array(curve.rms_db));
   return out;
 }
 
@@ -869,6 +870,110 @@ val js_voice_change(val samples, int sample_rate, float pitch_semitones, float f
   config.formant_factor = formant_factor;
   editing::voice_changer::VoiceChanger changer(config);
   Audio result = changer.process(audio);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+// NMF decomposition of a non-negative spectrogram. Mirrors the C ABI
+// sonare_decompose / librosa.decompose.decompose. Returns the two factor
+// matrices as { w, h }: w is [n_features x n_components] row-major and h is
+// [n_components x n_frames] row-major (both flat Float32Array buffers).
+val js_decompose(val s, int n_features, int n_frames, int n_components, int n_iter, float beta) {
+  std::vector<float> data = float32ArrayToVector(s);
+  DecomposeResult result =
+      decompose(data.data(), n_features, n_frames, n_components, n_iter, "mu", beta);
+
+  val out = val::object();
+  out.set("w", vectorToFloat32Array(result.W));
+  out.set("h", vectorToFloat32Array(result.H));
+  return out;
+}
+
+// Nearest-neighbour spectrogram filter. Mirrors the C ABI sonare_nn_filter /
+// librosa.decompose.nn_filter. Returns the smoothed spectrogram
+// [n_features x n_frames] as { data, rows, cols }.
+val js_nn_filter(val s, int n_features, int n_frames, std::string aggregate, int k, int width) {
+  std::vector<float> data = float32ArrayToVector(s);
+  if (aggregate.empty()) aggregate = "mean";
+  std::vector<float> filtered = nn_filter(data.data(), n_features, n_frames, aggregate, k, width);
+
+  val out = val::object();
+  out.set("data", vectorToFloat32Array(filtered));
+  out.set("rows", n_features);
+  out.set("cols", n_frames);
+  return out;
+}
+
+// Time-domain remix: reorders / concatenates a signal by (start, end) interval
+// slices. Mirrors the C ABI sonare_remix / librosa.effects.remix. @p intervals
+// is a flat Int32Array of (start, end) pairs.
+val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> interval_floats = float32ArrayToVector(intervals);
+  if (interval_floats.size() % 2 != 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "remix intervals must be (start, end) pairs");
+  }
+  std::vector<std::pair<int, int>> pairs;
+  pairs.reserve(interval_floats.size() / 2);
+  for (size_t i = 0; i + 1 < interval_floats.size(); i += 2) {
+    pairs.emplace_back(static_cast<int>(interval_floats[i]),
+                       static_cast<int>(interval_floats[i + 1]));
+  }
+  // sample_rate is validated for API symmetry with the C ABI but not consumed
+  // by the time-domain remix itself.
+  (void)sample_rate;
+  std::vector<float> remixed = remix(data.data(), data.size(), pairs, align_zeros);
+  return vectorToFloat32Array(remixed);
+}
+
+// HPSS with residual: separates audio into harmonic, percussive and residual
+// signals (residual = original - harmonic - percussive). Mirrors the C ABI
+// sonare_hpss_with_residual. Returns { harmonic, percussive, residual,
+// sampleRate } where all three buffers share the same length and sample rate.
+val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
+                          int kernel_percussive) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  HpssConfig config;
+  config.kernel_size_harmonic = kernel_harmonic;
+  config.kernel_size_percussive = kernel_percussive;
+
+  HpssAudioResultWithResidual result = hpss_with_residual(audio, config);
+
+  std::vector<float> harmonic_vec(result.harmonic.data(),
+                                  result.harmonic.data() + result.harmonic.size());
+  std::vector<float> percussive_vec(result.percussive.data(),
+                                    result.percussive.data() + result.percussive.size());
+  std::vector<float> residual_vec(result.residual.data(),
+                                  result.residual.data() + result.residual.size());
+
+  val out = val::object();
+  out.set("harmonic", vectorToFloat32Array(harmonic_vec));
+  out.set("percussive", vectorToFloat32Array(percussive_vec));
+  out.set("residual", vectorToFloat32Array(residual_vec));
+  out.set("sampleRate", result.harmonic.sample_rate());
+  return out;
+}
+
+// Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
+// Mirrors the C ABI sonare_phase_vocoder. rate < 1.0 = slower, > 1.0 = faster.
+val js_phase_vocoder(val samples, int sample_rate, float rate, int n_fft, int hop_length) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  PhaseVocoderConfig pv_config;
+  pv_config.hop_length = hop_length;
+  Spectrogram stretched = phase_vocoder(spec, rate, pv_config);
+
+  const int expected_length = static_cast<int>(std::ceil(static_cast<float>(audio.size()) / rate));
+  Audio result = stretched.to_audio(expected_length);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
@@ -3201,15 +3306,18 @@ val js_nnls_chroma(val samples, int sample_rate) {
 // Mirrors sonare_analyze_sections / SonareSectionResult and the Node/Python
 // analyzeSections: detects song-structure sections and returns an array of
 // { type, name, start, end, energyLevel, confidence }.
-val js_analyze_sections(val samples, int sample_rate, int n_fft, int hop_length,
-                        float min_section_sec) {
+val js_analyze_sections(val samples, int sample_rate, int n_fft = 2048, int hop_length = 512,
+                        float min_section_sec = 4.0f) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
+  // Fall back to the struct defaults when raw emscripten passes 0 for a
+  // missing argument, so the JS-facing defaults stay consistent with the
+  // C ABI / Node bindings (n_fft=2048, hop_length=512, min_section_sec=4.0).
   SectionConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.min_section_sec = min_section_sec;
+  if (n_fft > 0) config.n_fft = n_fft;
+  if (hop_length > 0) config.hop_length = hop_length;
+  if (min_section_sec > 0.0f) config.min_section_sec = min_section_sec;
 
   SectionAnalyzer analyzer(audio, config);
 
@@ -3230,17 +3338,21 @@ val js_analyze_sections(val samples, int sample_rate, int n_fft, int hop_length,
 // Mirrors sonare_analyze_melody / SonareMelodyResult: extracts the melody
 // contour via YIN and returns { points: [{ time, frequency, confidence }],
 // pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
-val js_analyze_melody(val samples, int sample_rate, float fmin, float fmax, int frame_length,
-                      int hop_length, float threshold) {
+val js_analyze_melody(val samples, int sample_rate, float fmin = 65.0f, float fmax = 2093.0f,
+                      int frame_length = 2048, int hop_length = 256, float threshold = 0.1f) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
+  // Fall back to the struct defaults when raw emscripten passes 0 for a
+  // missing argument, so the JS-facing defaults stay consistent with the
+  // C ABI / Node bindings (fmin=65, fmax=2093, frame_length=2048,
+  // hop_length=256, threshold=0.1).
   MelodyConfig config;
-  config.fmin = fmin;
-  config.fmax = fmax;
-  config.frame_length = frame_length;
-  config.hop_length = hop_length;
-  config.threshold = threshold;
+  if (fmin > 0.0f) config.fmin = fmin;
+  if (fmax > 0.0f) config.fmax = fmax;
+  if (frame_length > 0) config.frame_length = frame_length;
+  if (hop_length > 0) config.hop_length = hop_length;
+  if (threshold > 0.0f) config.threshold = threshold;
 
   MelodyAnalyzer analyzer(audio, config);
   const MelodyContour& contour = analyzer.contour();
@@ -3383,6 +3495,82 @@ val js_rms_energy(val samples, int sample_rate, int frame_length, int hop_length
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   std::vector<float> rms = rms_energy(audio, frame_length, hop_length);
   return vectorToFloat32Array(rms);
+}
+
+// Spectral contrast: peak-to-valley energy per band per frame. Mirrors the C
+// ABI sonare_spectral_contrast / librosa.feature.spectral_contrast. Returns a
+// row-major matrix [(n_bands + 1) x n_frames] as { data, rows, cols }, with the
+// extra row holding the residual band.
+val js_spectral_contrast(val samples, int sample_rate, int n_fft, int hop_length, int n_bands,
+                         float fmin, float quantile) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> contrast = spectral_contrast(spec, sample_rate, n_bands, fmin, quantile);
+
+  const int rows = n_bands + 1;
+  const int cols = rows > 0 ? static_cast<int>(contrast.size()) / rows : 0;
+
+  val out = val::object();
+  out.set("data", vectorToFloat32Array(contrast));
+  out.set("rows", rows);
+  out.set("cols", cols);
+  return out;
+}
+
+// Polynomial coefficients fit to each frame's spectrum. Mirrors the C ABI
+// sonare_poly_features / librosa.feature.poly_features. Returns a row-major
+// matrix [(order + 1) x n_frames] as { data, rows, cols } (coefficients ordered
+// high-to-low).
+val js_poly_features(val samples, int sample_rate, int n_fft, int hop_length, int order) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  std::vector<float> coeffs = poly_features(spec, sample_rate, order);
+
+  const int rows = order + 1;
+  const int cols = rows > 0 ? static_cast<int>(coeffs.size()) / rows : 0;
+
+  val out = val::object();
+  out.set("data", vectorToFloat32Array(coeffs));
+  out.set("rows", rows);
+  out.set("cols", cols);
+  return out;
+}
+
+// Raw zero-crossing sample indices. Mirrors the C ABI sonare_zero_crossings /
+// librosa.zero_crossings (returns indices i where sign(y[i]) != sign(y[i-1])).
+val js_zero_crossings(val samples, float threshold, bool ref_magnitude, bool pad, bool zero_pos) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<int> indices =
+      zero_crossings(data.data(), data.size(), threshold, ref_magnitude, pad, zero_pos);
+  return vectorToInt32Array(indices);
+}
+
+// Per-octave tuning offset from a list of detected pitches. Mirrors the C ABI
+// sonare_pitch_tuning / librosa.pitch_tuning.
+float js_pitch_tuning(val frequencies, float resolution, int bins_per_octave) {
+  std::vector<float> data = float32ArrayToVector(frequencies);
+  return pitch_tuning(data, resolution, bins_per_octave);
+}
+
+// Global tuning offset of an audio signal. Mirrors the C ABI
+// sonare_estimate_tuning / librosa.estimate_tuning.
+float js_estimate_tuning(val samples, int sample_rate, int n_fft, int hop_length, float resolution,
+                         int bins_per_octave) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
 // ============================================================================
@@ -3717,6 +3905,33 @@ val js_short_term_lufs(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   return vectorToFloat32Array(metering::short_term_lufs(audio));
+}
+
+// ITU-R BS.1770-4 multi-channel loudness over an interleaved buffer. Mirrors
+// the C ABI sonare_lufs_interleaved. @p samples holds frames * channels values
+// in channel-interleaved order. Returns the SonareLufsResult fields as
+// { integratedLufs, momentaryLufs, shortTermLufs, loudnessRange }.
+val js_lufs_interleaved(val samples, int channels, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  // Derive the per-channel frame count from the interleaved buffer length so the
+  // JS/Python facades share one (samples, channels, sampleRate) signature.
+  const size_t frames = channels > 0 ? data.size() / static_cast<size_t>(channels) : 0;
+  metering::LufsResult result =
+      metering::lufs_interleaved(data.data(), frames, channels, sample_rate);
+  val out = val::object();
+  out.set("integratedLufs", result.integrated_lufs);
+  out.set("momentaryLufs", result.momentary_lufs);
+  out.set("shortTermLufs", result.short_term_lufs);
+  out.set("loudnessRange", result.loudness_range);
+  return out;
+}
+
+// EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer. Mirrors
+// the C ABI sonare_ebur128_loudness_range.
+float js_ebur128_loudness_range(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  return metering::ebur128_loudness_range(audio);
 }
 
 // ============================================================================
@@ -5520,6 +5735,11 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
   function("noteStretch", &js_note_stretch);
   function("voiceChange", &js_voice_change);
+  function("decompose", &js_decompose);
+  function("nnFilter", &js_nn_filter);
+  function("remix", &js_remix);
+  function("hpssWithResidual", &js_hpss_with_residual);
+  function("phaseVocoder", &js_phase_vocoder);
   function("normalize", &js_normalize);
   function("mastering", &js_mastering);
   function("masteringProcessorNames", &js_mastering_processor_names);
@@ -5671,10 +5891,15 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("spectralFlatness", &js_spectral_flatness);
   function("zeroCrossingRate", &js_zero_crossing_rate);
   function("rmsEnergy", &js_rms_energy);
+  function("spectralContrast", &js_spectral_contrast);
+  function("polyFeatures", &js_poly_features);
+  function("zeroCrossings", &js_zero_crossings);
 
   // Features - Pitch
   function("pitchYin", &js_pitch_yin);
   function("pitchPyin", &js_pitch_pyin);
+  function("pitchTuning", &js_pitch_tuning);
+  function("estimateTuning", &js_estimate_tuning);
 
   // Core - Conversion
   function("hzToMel", &js_hz_to_mel);
@@ -5714,6 +5939,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("lufs", &js_lufs);
   function("momentaryLufs", &js_momentary_lufs);
   function("shortTermLufs", &js_short_term_lufs);
+  function("lufsInterleaved", &js_lufs_interleaved);
+  function("ebur128LoudnessRange", &js_ebur128_loudness_range);
 
   // Metering — basic / true-peak / clipping / dynamic range
   function("meteringPeakDb", &js_metering_peak_db);

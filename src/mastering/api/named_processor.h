@@ -29,6 +29,12 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
                                           const float* right, std::size_t length, int sample_rate,
                                           const std::vector<Param>& params = {});
 
+// Subset of processor_names() that have no mono implementation and must be run
+// through apply_named_processor_stereo(). Calling apply_named_processor() (the
+// mono entry point) with one of these names throws InvalidParameter. Exposed so
+// callers can distinguish "stereo-only processor" from "unknown processor".
+std::vector<std::string> stereo_processor_names();
+
 std::vector<std::string> pair_processor_names();
 std::vector<std::string> pair_analysis_names();
 std::vector<std::string> stereo_analysis_names();

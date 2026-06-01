@@ -9,6 +9,7 @@
 #include <complex>
 #include <vector>
 
+#include "core/db_convert.h"
 #include "core/fft.h"
 
 namespace sonare {
@@ -87,17 +88,12 @@ void power_to_db(const float* power, size_t n, float ref, float amin, float top_
     return;
   }
 
-  float ref_val = std::max(amin, ref);
-  float log_ref = 10.0f * std::log10(ref_val);
-  Eigen::Map<const Eigen::ArrayXf> power_map(power, static_cast<Eigen::Index>(n));
-  Eigen::Map<Eigen::ArrayXf> out_map(out, static_cast<Eigen::Index>(n));
-  out_map = (power_map.cwiseMax(amin)).log10() * 10.0f - log_ref;
-  if (top_db >= 0.0f) {
-    float max_val = *std::max_element(out, out + n);
-    for (size_t i = 0; i < n; ++i) {
-      out[i] = std::max(out[i], max_val - top_db);
-    }
-  }
+  // Delegate the core dB math (including the librosa ref<=0 => max(|S|) reference
+  // resolution and the top_db clamp) to the single canonical implementation in
+  // core/db_convert. This in-place / out-pointer overload merely copies the
+  // result back, so it remains safe when `out` aliases `power`.
+  std::vector<float> db = sonare::power_to_db(power, n, ref, amin, top_db);
+  std::copy(db.begin(), db.end(), out);
 }
 
 void compute_autocorrelation(const float* input, int n, int max_lag, float* output) {

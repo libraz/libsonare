@@ -45,10 +45,14 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
 
   float time_step = static_cast<float>(hop_length) / static_cast<float>(sample_rate);
 
+  /// FFT length implied by the one-sided bin count (n_bins == n_fft/2 + 1), so
+  /// the bin-frequency formula matches phase_vocoder() / phase_vocoder_phaselocked().
+  const int n_fft = (n_bins - 1) * 2;
+
   for (int k = 0; k < n_bins; ++k) {
     /// Expected phase advance based on bin frequency
-    float bin_freq = static_cast<float>(k) * static_cast<float>(sample_rate) /
-                     static_cast<float>((n_bins - 1) * 2);
+    float bin_freq =
+        static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
     float expected_phase_advance = kTwoPi * bin_freq * time_step;
 
     /// Actual phase difference

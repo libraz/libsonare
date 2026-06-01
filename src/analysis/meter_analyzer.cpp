@@ -12,20 +12,20 @@ namespace sonare {
 using sonare::constants::kEpsilon;
 namespace {
 
-float normalized_strength(const std::vector<float>& onset_strength, int frame) {
+float normalized_strength(const std::vector<float>& onset_strength, int frame, float max_value) {
   if (onset_strength.empty() || frame < 0 || frame >= static_cast<int>(onset_strength.size())) {
     return 0.0f;
   }
-  const float max_value = *std::max_element(onset_strength.begin(), onset_strength.end());
   if (max_value <= constants::kEpsilon) return 0.0f;
   return onset_strength[static_cast<size_t>(frame)] / max_value;
 }
 
-float local_normalized_strength(const std::vector<float>& onset_strength, int frame, int radius) {
+float local_normalized_strength(const std::vector<float>& onset_strength, int frame, int radius,
+                                float max_value) {
   if (onset_strength.empty()) return 0.0f;
   float best = 0.0f;
   for (int offset = -radius; offset <= radius; ++offset) {
-    best = std::max(best, normalized_strength(onset_strength, frame + offset));
+    best = std::max(best, normalized_strength(onset_strength, frame + offset, max_value));
   }
   return best;
 }
@@ -35,7 +35,7 @@ float mean_or_zero(float sum, int count) {
 }
 
 float compound_subdivision_score(const std::vector<float>& onset_strength,
-                                 const std::vector<Beat>& beats) {
+                                 const std::vector<Beat>& beats, float max_value) {
   if (onset_strength.empty() || beats.size() < 4) return 0.0f;
 
   float subdivision_sum = 0.0f;
@@ -44,8 +44,8 @@ float compound_subdivision_score(const std::vector<float>& onset_strength,
   for (size_t i = 0; i + 1 < beats.size(); ++i) {
     const int midpoint = static_cast<int>(
         std::lround(0.5f * static_cast<float>(beats[i].frame + beats[i + 1].frame)));
-    subdivision_sum += local_normalized_strength(onset_strength, midpoint, 2);
-    beat_sum += local_normalized_strength(onset_strength, beats[i].frame, 2);
+    subdivision_sum += local_normalized_strength(onset_strength, midpoint, 2, max_value);
+    beat_sum += local_normalized_strength(onset_strength, beats[i].frame, 2, max_value);
     ++count;
   }
   if (count == 0) return 0.0f;
@@ -74,11 +74,17 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
     return;
   }
 
+  // Compute the global onset-strength maximum once and reuse it for every
+  // normalization rather than rescanning the envelope on each lookup.
+  const float onset_max = onset_strength.empty()
+                              ? 0.0f
+                              : *std::max_element(onset_strength.begin(), onset_strength.end());
+
   std::vector<float> beat_strengths;
   beat_strengths.reserve(beats.size());
   for (const auto& beat : beats) {
     beat_strengths.push_back(
-        std::max(beat.strength, normalized_strength(onset_strength, beat.frame)));
+        std::max(beat.strength, normalized_strength(onset_strength, beat.frame, onset_max)));
   }
 
   float best_score = -1.0f;
@@ -166,7 +172,7 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   float confidence = std::clamp(0.45f + margin, 0.0f, 1.0f);
 
   int denominator = config_.denominator;
-  const float compound_score = compound_subdivision_score(onset_strength, beats);
+  const float compound_score = compound_subdivision_score(onset_strength, beats, onset_max);
   if (best_numerator == 6) {
     if (onset_strength.empty() || compound_score >= config_.compound_subdivision_threshold) {
       denominator = 8;

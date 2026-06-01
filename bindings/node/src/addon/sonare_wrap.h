@@ -59,6 +59,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Lufs(const Napi::CallbackInfo& info);
   static Napi::Value MomentaryLufs(const Napi::CallbackInfo& info);
   static Napi::Value ShortTermLufs(const Napi::CallbackInfo& info);
+  static Napi::Value LufsInterleaved(const Napi::CallbackInfo& info);
+  static Napi::Value Ebur128LoudnessRange(const Napi::CallbackInfo& info);
 
   // Metering - basic / true-peak / clipping / dynamic range
   static Napi::Value MeteringPeakDb(const Napi::CallbackInfo& info);
@@ -92,6 +94,11 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value PitchCorrectToMidi(const Napi::CallbackInfo& info);
   static Napi::Value NoteStretch(const Napi::CallbackInfo& info);
   static Napi::Value VoiceChange(const Napi::CallbackInfo& info);
+  static Napi::Value Decompose(const Napi::CallbackInfo& info);
+  static Napi::Value NnFilter(const Napi::CallbackInfo& info);
+  static Napi::Value Remix(const Napi::CallbackInfo& info);
+  static Napi::Value HpssWithResidual(const Napi::CallbackInfo& info);
+  static Napi::Value PhaseVocoder(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);
   static Napi::Value Mastering(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcess(const Napi::CallbackInfo& info);
@@ -160,6 +167,11 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value SpectralFlatness(const Napi::CallbackInfo& info);
   static Napi::Value ZeroCrossingRate(const Napi::CallbackInfo& info);
   static Napi::Value RmsEnergy(const Napi::CallbackInfo& info);
+  static Napi::Value SpectralContrast(const Napi::CallbackInfo& info);
+  static Napi::Value PolyFeatures(const Napi::CallbackInfo& info);
+  static Napi::Value ZeroCrossings(const Napi::CallbackInfo& info);
+  static Napi::Value PitchTuning(const Napi::CallbackInfo& info);
+  static Napi::Value EstimateTuning(const Napi::CallbackInfo& info);
 
   // Features - Pitch
   static Napi::Value PitchYin(const Napi::CallbackInfo& info);

@@ -50,15 +50,20 @@ bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* process
   // the bound range, so a rebind after a clear lands deterministically and does
   // not grow bound_count_ unnecessarily.
   for (size_t i = 0; i < bound; ++i) {
-    if (targets_[i].param_id == param_id) {
-      targets_[i].processor = processor;
+    if (targets_[i].param_id.load(std::memory_order_relaxed) == param_id) {
+      // Re-binding an existing param_id: publish the processor with release so
+      // the audio thread sees the matching param_id before the new pointer.
+      targets_[i].processor.store(processor, std::memory_order_release);
       return true;
     }
   }
   for (size_t i = 0; i < bound; ++i) {
-    if (targets_[i].processor == nullptr) {
-      targets_[i].param_id = param_id;
-      targets_[i].processor = processor;
+    if (targets_[i].processor.load(std::memory_order_relaxed) == nullptr) {
+      // Claim a cleared slot. Set param_id first, then publish processor with
+      // release; target_for() loads processor before param_id, so it never
+      // matches a half-populated slot.
+      targets_[i].param_id.store(param_id, std::memory_order_relaxed);
+      targets_[i].processor.store(processor, std::memory_order_release);
       return true;
     }
   }
@@ -69,8 +74,8 @@ bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* process
   // Append a new slot: fully populate it, then publish the grown count with
   // release so the audio thread (acquire load in target_for) only observes it
   // once the slot is complete.
-  targets_[bound].param_id = param_id;
-  targets_[bound].processor = processor;
+  targets_[bound].param_id.store(param_id, std::memory_order_relaxed);
+  targets_[bound].processor.store(processor, std::memory_order_relaxed);
   bound_count_.store(bound + 1, std::memory_order_release);
   return true;
 }
@@ -81,7 +86,10 @@ void AutomationEngine::clear_targets() noexcept {
   // the first one; freshly bound targets reuse the cleared slots.
   const size_t bound = bound_count_.load(std::memory_order_relaxed);
   for (size_t i = 0; i < bound; ++i) {
-    targets_[i] = {};
+    // Clear the processor with release first so the audio thread never sees a
+    // live pointer paired with a stale param_id, then reset param_id.
+    targets_[i].processor.store(nullptr, std::memory_order_release);
+    targets_[i].param_id.store(0, std::memory_order_relaxed);
   }
 }
 
@@ -168,9 +176,13 @@ rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcep
   // acquire to pair with bind_target's release publish.
   const size_t bound = bound_count_.load(std::memory_order_acquire);
   for (size_t i = 0; i < bound; ++i) {
-    const Target& target = targets_[i];
-    if (target.processor != nullptr && target.param_id == param_id) {
-      return target.processor;
+    // Load processor with acquire first; a non-null pointer here was published
+    // (release) after its param_id was set, so the subsequent param_id load
+    // observes the matching value. A concurrently-cleared slot reads null and
+    // is skipped, never producing a torn pointer / garbage vtable call.
+    rt::ProcessorBase* processor = targets_[i].processor.load(std::memory_order_acquire);
+    if (processor != nullptr && targets_[i].param_id.load(std::memory_order_relaxed) == param_id) {
+      return processor;
     }
   }
   return nullptr;

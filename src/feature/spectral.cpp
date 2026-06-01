@@ -173,6 +173,7 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
 
   constexpr float kAmin = constants::kEpsilon;
 
@@ -280,8 +281,10 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   std::vector<float> contrast((n_bands + 1) * n_frames, 0.0f);
   std::vector<float> peak_db(peak.size());
   std::vector<float> valley_db(valley.size());
-  power_to_db(peak.data(), peak.size(), 1.0f, constants::kEpsilon, 80.0f, peak_db.data());
-  power_to_db(valley.data(), valley.size(), 1.0f, constants::kEpsilon, 80.0f, valley_db.data());
+  power_to_db(peak.data(), peak.size(), 1.0f, constants::kEpsilon, constants::kDefaultTopDb,
+              peak_db.data());
+  power_to_db(valley.data(), valley.size(), 1.0f, constants::kEpsilon, constants::kDefaultTopDb,
+              valley_db.data());
 
   for (size_t i = 0; i < contrast.size(); ++i) {
     contrast[i] = peak_db[i] - valley_db[i];

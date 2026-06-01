@@ -972,6 +972,58 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, channels, sampleRate?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int channels = info[1].As<Napi::Number>().Int32Value();
+  int sr =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
+  if (channels <= 0) {
+    Napi::TypeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
+
+  SonareLufsResult lufs{};
+  SonareError err = sonare_lufs_interleaved(typed.Data(), frames, channels, sr, &lufs);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("integratedLufs", Napi::Number::New(env, lufs.integrated_lufs));
+  result.Set("momentaryLufs", Napi::Number::New(env, lufs.momentary_lufs));
+  result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
+  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
+  return result;
+}
+
+Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+
+  float out_lra = 0.0f;
+  SonareError err =
+      sonare_ebur128_loudness_range(typed.Data(), typed.ElementLength(), sr, &out_lra);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_lra);
+}
+
 namespace {
 
 // Shared shape for the scalar offline meters (peak/rms/crest/dc).
@@ -1476,7 +1528,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   const int hop_length =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
   const float min_section_sec =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 8.0f;
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 4.0f;
 
   SonareSectionResult result{};
   SonareError err = sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, n_fft,

@@ -271,6 +271,15 @@ TEST_CASE("spectral_flatness silent frame returns zero", "[spectral][edge]") {
   REQUIRE(broadband_flatness[0] > 0.5f);
 }
 
+TEST_CASE("spectral_flatness validates dimensions", "[spectral][edge]") {
+  // Non-positive dimensions on the raw-pointer path would otherwise drive an
+  // Eigen::Map over a zero/negative extent and divide by n_bins == 0.
+  std::vector<float> magnitude = {1.0f, 2.0f, 3.0f};
+  REQUIRE_THROWS_AS(spectral_flatness(magnitude.data(), 0, 1), SonareException);
+  REQUIRE_THROWS_AS(spectral_flatness(magnitude.data(), 3, 0), SonareException);
+  REQUIRE_THROWS_AS(spectral_flatness(magnitude.data(), -1, 1), SonareException);
+}
+
 TEST_CASE("zero_crossing_rate handles empty input", "[spectral][zcr][edge]") {
   // Empty input must not crash and must return a single defined zero-rate frame
   // so downstream callers always get a non-empty result.

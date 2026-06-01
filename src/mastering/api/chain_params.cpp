@@ -263,6 +263,16 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_enabled(flags.denoise, v);
     return true;
   }
+  if (key == "repair.denoise.mode") {
+    cfg.repair.denoise.config.mode = static_cast<repair::DenoiseMode>(vi);
+    mark_field(flags.denoise);
+    return true;
+  }
+  if (key == "repair.denoise.noiseEstimator") {
+    cfg.repair.denoise.config.noise_estimator = static_cast<repair::DenoiseNoiseEstimator>(vi);
+    mark_field(flags.denoise);
+    return true;
+  }
   if (key == "repair.denoise.nFft") {
     cfg.repair.denoise.config.n_fft = vi;
     mark_field(flags.denoise);
@@ -280,6 +290,31 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
   }
   if (key == "repair.denoise.gainFloor") {
     cfg.repair.denoise.config.gain_floor = vf;
+    mark_field(flags.denoise);
+    return true;
+  }
+  if (key == "repair.denoise.overSubtraction") {
+    cfg.repair.denoise.config.over_subtraction = vf;
+    mark_field(flags.denoise);
+    return true;
+  }
+  if (key == "repair.denoise.spectralFloor") {
+    cfg.repair.denoise.config.spectral_floor = vf;
+    mark_field(flags.denoise);
+    return true;
+  }
+  if (key == "repair.denoise.noiseEstimationQuantile") {
+    cfg.repair.denoise.config.noise_estimation_quantile = vf;
+    mark_field(flags.denoise);
+    return true;
+  }
+  if (key == "repair.denoise.speechPresenceGain") {
+    cfg.repair.denoise.config.speech_presence_gain = v != 0.0;
+    mark_field(flags.denoise);
+    return true;
+  }
+  if (key == "repair.denoise.gainSmoothing") {
+    cfg.repair.denoise.config.gain_smoothing = v != 0.0;
     mark_field(flags.denoise);
     return true;
   }

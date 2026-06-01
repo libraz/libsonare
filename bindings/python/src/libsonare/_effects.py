@@ -260,6 +260,245 @@ def note_stretch(
     return result
 
 
+# ============================================================================
+# Effects - decomposition / separation
+# ============================================================================
+
+
+def decompose(
+    s: Sequence[float] | list[float],
+    n_features: int,
+    n_frames: int,
+    n_components: int,
+    n_iter: int = 50,
+    beta: float = 2.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Non-negative matrix factorisation (librosa.decompose.decompose).
+
+    Args:
+        s: Input spectrogram, flattened row-major ``[n_features x n_frames]``.
+        n_features: Feature dimension (rows). Must be > 0.
+        n_frames: Number of time frames. Must be > 0.
+        n_components: Target number of components (k). Must be > 0.
+        n_iter: Number of multiplicative-update iterations (default 50).
+        beta: Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
+
+    Returns:
+        Tuple ``(w, h)`` of float32 arrays: ``w`` is the component matrix of
+        shape ``(n_features, n_components)`` and ``h`` is the activation matrix
+        of shape ``(n_components, n_frames)``.
+    """
+    lib = _get_lib()
+    c_array, _length = _to_c_float_array(s)
+    out_w = ctypes.POINTER(ctypes.c_float)()
+    out_w_length = ctypes.c_size_t()
+    out_h = ctypes.POINTER(ctypes.c_float)()
+    out_h_length = ctypes.c_size_t()
+    rc = lib.sonare_decompose(
+        c_array,
+        ctypes.c_int(n_features),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(n_components),
+        ctypes.c_int(n_iter),
+        ctypes.c_float(beta),
+        ctypes.byref(out_w),
+        ctypes.byref(out_w_length),
+        ctypes.byref(out_h),
+        ctypes.byref(out_h_length),
+    )
+    _check(rc)
+    try:
+        w = _from_c_float_array(out_w, out_w_length.value).reshape(n_features, n_components)
+        h = _from_c_float_array(out_h, out_h_length.value).reshape(n_components, n_frames)
+        return (w, h)
+    finally:
+        if out_w and out_w_length.value > 0:
+            lib.sonare_free_floats(out_w)
+        if out_h and out_h_length.value > 0:
+            lib.sonare_free_floats(out_h)
+
+
+def nn_filter(
+    s: Sequence[float] | list[float],
+    n_features: int,
+    n_frames: int,
+    aggregate: str = "mean",
+    k: int = 7,
+    width: int = 1,
+) -> np.ndarray:
+    """Nearest-neighbour spectrogram filter (librosa.decompose.nn_filter).
+
+    Args:
+        s: Input spectrogram, flattened row-major ``[n_features x n_frames]``.
+        n_features: Feature dimension (rows). Must be > 0.
+        n_frames: Number of time frames. Must be > 0.
+        aggregate: Aggregator: ``"mean"``, ``"median"``, ``"min"`` or ``"max"``.
+        k: Number of nearest neighbours (default 7).
+        width: Time exclusion half-width (default 1).
+
+    Returns:
+        The smoothed spectrogram as a float32 array of shape
+        ``(n_features, n_frames)``.
+    """
+    lib = _get_lib()
+    c_array, _length = _to_c_float_array(s)
+    aggregate_bytes = aggregate.encode("utf-8") if aggregate else None
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_nn_filter(
+        c_array,
+        ctypes.c_int(n_features),
+        ctypes.c_int(n_frames),
+        aggregate_bytes,
+        ctypes.c_int(k),
+        ctypes.c_int(width),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _from_c_float_array(out, out_length.value).reshape(n_features, n_frames)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def remix(
+    samples: Sequence[float] | list[float],
+    intervals: Sequence[int] | list[int],
+    sample_rate: int = 22050,
+    align_zeros: bool = False,
+) -> np.ndarray:
+    """Reorder / concatenate a signal by interval slices (librosa.effects.remix).
+
+    Args:
+        samples: Input signal.
+        intervals: Flat sequence of ``(start, end)`` pairs (even length).
+        sample_rate: Sample rate in Hz (default 22050).
+        align_zeros: Snap slice boundaries to zero-crossings (default False).
+
+    Returns:
+        The remixed signal as a 1-D float32 array.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    intervals_array, n_ints = _to_c_int_array(intervals)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_remix(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        intervals_array,
+        ctypes.c_size_t(n_ints // 2),
+        ctypes.c_int(1 if align_zeros else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _from_c_float_array(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def hpss_with_residual(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    kernel_harmonic: int = 31,
+    kernel_percussive: int = 31,
+) -> dict[str, object]:
+    """HPSS into harmonic / percussive / residual signals.
+
+    Args:
+        samples: Input audio.
+        sample_rate: Sample rate in Hz (default 22050).
+        kernel_harmonic: Horizontal median filter size (odd, >= 3).
+        kernel_percussive: Vertical median filter size (odd, >= 3).
+
+    Returns:
+        A dict with ``harmonic`` / ``percussive`` / ``residual`` float32 arrays
+        (all the same length) plus ``sampleRate``.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out_harmonic = ctypes.POINTER(ctypes.c_float)()
+    out_percussive = ctypes.POINTER(ctypes.c_float)()
+    out_residual = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    out_sample_rate = ctypes.c_int()
+    rc = lib.sonare_hpss_with_residual(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(kernel_harmonic),
+        ctypes.c_int(kernel_percussive),
+        ctypes.byref(out_harmonic),
+        ctypes.byref(out_percussive),
+        ctypes.byref(out_residual),
+        ctypes.byref(out_length),
+        ctypes.byref(out_sample_rate),
+    )
+    _check(rc)
+    try:
+        n = out_length.value
+        return {
+            "harmonic": _from_c_float_array(out_harmonic, n),
+            "percussive": _from_c_float_array(out_percussive, n),
+            "residual": _from_c_float_array(out_residual, n),
+            "sampleRate": int(out_sample_rate.value),
+        }
+    finally:
+        if out_harmonic and out_length.value > 0:
+            lib.sonare_free_floats(out_harmonic)
+        if out_percussive and out_length.value > 0:
+            lib.sonare_free_floats(out_percussive)
+        if out_residual and out_length.value > 0:
+            lib.sonare_free_floats(out_residual)
+
+
+def phase_vocoder(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    rate: float = 1.0,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+) -> np.ndarray:
+    """Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
+
+    Args:
+        samples: Input audio.
+        sample_rate: Sample rate in Hz (default 22050).
+        rate: Time stretch rate (< 1.0 slower, > 1.0 faster). Must be > 0.
+        n_fft: FFT size used for analysis/synthesis (default 2048).
+        hop_length: Hop length used for analysis/synthesis (default 512).
+
+    Returns:
+        The time-stretched audio as a 1-D float32 array.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_phase_vocoder(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _from_c_float_array(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
 def voice_change(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

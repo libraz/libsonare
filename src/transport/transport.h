@@ -64,9 +64,12 @@ class Transport {
     bool enabled = false;
   };
 
-  // Seqlock: an odd guard means a write is in progress; readers retry until the
-  // guard is even and unchanged across the copy. Mirrors the pattern in
-  // mixing/meter.cpp. No locks are taken on the audio thread.
+  // Seqlock: an odd guard means a write is in progress. The audio-thread reader
+  // does a single non-spinning attempt (read_loop_state); on a detected
+  // conflict (writer mid-update or torn read) it returns the last consistent
+  // value it cached instead of spinning up to a scheduler tick, which would
+  // risk an xrun if the control thread were preempted mid-write. The control
+  // thread alone calls write_loop_state. Mirrors mixing/meter.cpp's try-read.
   LoopState read_loop_state() const noexcept;
   void write_loop_state(const LoopState& state) noexcept;
 
@@ -77,6 +80,10 @@ class Transport {
   int64_t sample_position_ = 0;
   LoopState loop_state_{};
   mutable std::atomic<uint32_t> loop_guard_{0};
+  // Last torn-free LoopState observed by read_loop_state(). Touched only on the
+  // audio-thread read path, so no synchronization is needed; serves as the
+  // fallback when a single try-read races a control-thread write.
+  mutable LoopState cached_loop_state_{};
 };
 
 }  // namespace sonare::transport

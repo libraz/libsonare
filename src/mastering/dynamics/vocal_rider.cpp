@@ -32,6 +32,15 @@ void VocalRider::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
+  // Preallocate per-channel state up front so the audio-thread process() path
+  // never resizes (assign() there would malloc and reset follower/gain state,
+  // injecting a click). Blocks wider than this throw in ensure_followers().
+  if (followers_.size() < kRealtimePreparedChannels) {
+    followers_.resize(kRealtimePreparedChannels);
+  }
+  if (unlinked_gain_state_db_.size() < kRealtimePreparedChannels) {
+    unlinked_gain_state_db_.resize(kRealtimePreparedChannels, 0.0f);
+  }
   update_coefficients(config_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -197,18 +206,16 @@ void VocalRider::validate_config(const VocalRiderConfig& config) {
 }
 
 void VocalRider::ensure_followers(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
-    if (unlinked_gain_state_db_.size() != static_cast<size_t>(num_channels)) {
-      unlinked_gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
-    }
+  // Followers and per-channel gain state are preallocated to
+  // kRealtimePreparedChannels in prepare(); never resize on the audio thread
+  // (assign() would malloc and wipe the running envelope/gain state, producing
+  // a click). Reject blocks wider than the prepared state.
+  if (followers_.size() >= static_cast<size_t>(num_channels)) {
     return;
   }
 
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  unlinked_gain_state_db_.assign(static_cast<size_t>(num_channels), 0.0f);
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "num_channels exceeds prepared VocalRider state");
 }
 
 void VocalRider::update_coefficients(const VocalRiderConfig& config) {

@@ -74,6 +74,22 @@ std::vector<std::string> processor_names() {
           "stereo.stereoBalance"};
 }
 
+std::vector<std::string> stereo_processor_names() {
+  // Processors that are only meaningful (or only implemented) on a true stereo
+  // signal: the `stereo.*` width/balance tools, `eq.midSide` (operates on the
+  // mid/side decomposition), and the `multiband.*` processors whose
+  // implementations dispatch through the stereo path. These names appear in
+  // processor_names() (they run fine via apply_named_processor_stereo) but they
+  // have no mono implementation, so the mono apply_named_processor() rejects
+  // them with an opaque INVALID_PARAMETER. Callers can consult this list to give
+  // a clear "stereo-only processor" diagnostic instead.
+  return {"eq.midSide",           "multiband.compressor", "multiband.dynamicEq",
+          "multiband.expander",   "multiband.imager",     "multiband.limiter",
+          "multiband.saturation", "stereo.autoPan",       "stereo.haasEnhancer",
+          "stereo.imager",        "stereo.monoMaker",     "stereo.phaseAlign",
+          "stereo.stereoBalance"};
+}
+
 std::vector<std::string> pair_processor_names() {
   return {"match.applyMatchEq", "match.alignReferenceToSource", "match.abSwitch",
           "match.abCrossfade"};

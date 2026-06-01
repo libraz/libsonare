@@ -116,12 +116,12 @@ std::vector<double> block_energies(const std::vector<double>& samples, int sampl
   const size_t hop = std::max<size_t>(
       1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
 
+  // Emit only complete blocks (ITU-R BS.1770-4): a trailing partial block would
+  // be averaged over its own short length, inflating its energy and contaminating
+  // the momentary/short-term/gating statistics.
   std::vector<double> energies;
-  for (size_t start = 0; start < samples.size(); start += hop) {
-    const size_t available = samples.size() - start;
-    const size_t length = std::min(clamped_block, available);
-    energies.push_back(mean_square(samples.data(), start, length));
-    if (start + length == samples.size()) break;
+  for (size_t start = 0; start + clamped_block <= samples.size(); start += hop) {
+    energies.push_back(mean_square(samples.data(), start, clamped_block));
   }
   return energies;
 }
@@ -149,19 +149,17 @@ std::vector<double> block_energies_weighted_channels(
   const size_t hop = std::max<size_t>(
       1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
 
+  // Emit only complete blocks (ITU-R BS.1770-4); a trailing partial block would
+  // inflate its mean-square energy and contaminate the gated loudness.
   std::vector<double> energies;
-  for (size_t start = 0; start < frames; start += hop) {
-    const size_t available = frames - start;
-    const size_t length = std::min(clamped_block, available);
-
+  for (size_t start = 0; start + clamped_block <= frames; start += hop) {
     double energy = 0.0;
     for (int channel = 0; channel < channels; ++channel) {
-      energy += bs1770_channel_weight(channel, channels) *
-                mean_square(weighted_channels[static_cast<size_t>(channel)].data(), start, length);
+      energy +=
+          bs1770_channel_weight(channel, channels) *
+          mean_square(weighted_channels[static_cast<size_t>(channel)].data(), start, clamped_block);
     }
     energies.push_back(energy);
-
-    if (start + length == frames) break;
   }
   return energies;
 }
@@ -214,22 +212,6 @@ size_t percentile_index(size_t count, double percentile) {
   return static_cast<size_t>(std::floor(position));
 }
 
-float loudness_range_from_short_term(const std::vector<float>& values) {
-  std::vector<float> finite;
-  finite.reserve(values.size());
-  for (float value : values) {
-    if (std::isfinite(value) && value >= kLufsAbsoluteGate) {
-      finite.push_back(value);
-    }
-  }
-
-  if (finite.size() < 2) return 0.0f;
-  std::sort(finite.begin(), finite.end());
-  const size_t low_index = percentile_index(finite.size(), 0.10);
-  const size_t high_index = percentile_index(finite.size(), 0.95);
-  return finite[high_index] - finite[low_index];
-}
-
 float short_term_overlap_for(int sample_rate, float duration_sec) {
   if (sample_rate <= 0 || duration_sec <= 0.0f) return 0.0f;
   const float block = duration_sec * static_cast<float>(sample_rate);
@@ -276,7 +258,7 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
   result.integrated_lufs = gated_integrated_lufs(integrated_blocks, config);
   result.momentary_lufs = last_or_silence(momentary);
   result.short_term_lufs = last_or_silence(short_term);
-  result.loudness_range = loudness_range_from_short_term(short_term);
+  result.loudness_range = lra_from_short_term_blocks(short_term);
   return result;
 }
 
@@ -309,17 +291,20 @@ float ebur128_loudness_range(const Audio& audio) {
       short_term.push_back(energy_to_lufs(mean_square(weighted.data(), start, block_size)));
     }
   }
-  if (short_term.size() < 2) return 0.0f;
 
-  // Absolute gate at -70 LUFS.
+  return lra_from_short_term_blocks(short_term);
+}
+
+float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
+  // Stage 1 — absolute gate at -70 LUFS.
   std::vector<float> abs_gated;
-  abs_gated.reserve(short_term.size());
-  for (float value : short_term) {
+  abs_gated.reserve(short_term_lufs.size());
+  for (float value : short_term_lufs) {
     if (std::isfinite(value) && value >= kLufsAbsoluteGate) abs_gated.push_back(value);
   }
   if (abs_gated.size() < 2) return 0.0f;
 
-  // Relative gate 20 LU below the mean of the absolute-gated loudness.
+  // Stage 2 — relative gate 20 LU below the mean of the absolute-gated loudness.
   // Average in the linear (energy) domain, then convert back to LUFS.
   double mean_energy = 0.0;
   for (float value : abs_gated) {

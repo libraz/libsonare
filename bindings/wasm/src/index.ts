@@ -80,6 +80,7 @@ import type {
   WasmAnalysisResult,
   WasmChordAnalysisResult,
   WasmCyclicTempogramResult,
+  WasmDecomposeResult,
   WasmEngineAutomationPoint,
   WasmEngineBounceOptions,
   WasmEngineBounceResult,
@@ -97,7 +98,10 @@ import type {
   WasmEngineTransportState,
   WasmFourierTempogramResult,
   WasmFrameResult,
+  WasmHpssWithResidualResult,
   WasmKeyCandidateResult,
+  WasmLufsResult,
+  WasmMatrix2dResult,
   WasmNnlsChromaResult,
   WasmRealtimeEngine,
   WasmStreamAnalyzer,
@@ -206,6 +210,13 @@ export type EngineFreezeResult = WasmEngineFreezeResult;
 export type EngineTelemetry = WasmEngineTelemetry;
 export type EngineMeterTelemetry = WasmEngineMeterTelemetry;
 export type EngineTransportState = WasmEngineTransportState;
+
+/** Row-major 2-D matrix as a flat buffer plus its dimensions. */
+export type Matrix2dResult = WasmMatrix2dResult;
+/** NMF factor matrices { w, h } from {@link decompose}. */
+export type DecomposeResult = WasmDecomposeResult;
+/** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
+export type HpssWithResidualResult = WasmHpssWithResidualResult;
 
 export const EXPECTED_ENGINE_ABI_VERSION = 2;
 
@@ -1070,11 +1081,6 @@ export interface RhythmAnalysisResult {
   beatIntervals: Float32Array;
 }
 
-export interface LoudnessCurve {
-  times: Float32Array;
-  rmsDb: Float32Array;
-}
-
 export interface DynamicsAnalysisResult {
   dynamicRangeDb: number;
   peakDb: number;
@@ -1082,7 +1088,10 @@ export interface DynamicsAnalysisResult {
   crestFactor: number;
   loudnessRangeDb: number;
   isCompressed: boolean;
-  loudnessCurve: LoudnessCurve;
+  /** Loudness curve timestamps (seconds), parallel to {@link loudnessRmsDb}. */
+  loudnessTimes: Float32Array;
+  /** Loudness curve RMS values (dB), parallel to {@link loudnessTimes}. */
+  loudnessRmsDb: Float32Array;
 }
 
 export interface TimbreFrame {
@@ -3227,6 +3236,202 @@ export function spectralCentroid(
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.spectralCentroid(samples, sampleRate, nFft, hopLength);
+}
+
+/**
+ * Compute spectral contrast (librosa.feature.spectral_contrast).
+ *
+ * @returns Matrix2d of shape (nBands + 1) x nFrames.
+ */
+export function spectralContrast(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nBands = 6,
+  fmin = 200.0,
+  quantile = 0.02,
+): WasmMatrix2dResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.spectralContrast(samples, sampleRate, nFft, hopLength, nBands, fmin, quantile);
+}
+
+/**
+ * Fit per-frame polynomial coefficients (librosa.feature.poly_features).
+ *
+ * @returns Matrix2d of shape (order + 1) x nFrames.
+ */
+export function polyFeatures(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  order = 1,
+): WasmMatrix2dResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.polyFeatures(samples, sampleRate, nFft, hopLength, order);
+}
+
+/**
+ * Locate zero-crossing indices of a signal (librosa.zero_crossings).
+ */
+export function zeroCrossings(
+  samples: Float32Array,
+  threshold = 1e-10,
+  refMagnitude = false,
+  pad = true,
+  zeroPos = true,
+): Int32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.zeroCrossings(samples, threshold, refMagnitude, pad, zeroPos);
+}
+
+/**
+ * Estimate the global tuning offset from a set of frequencies
+ * (librosa.pitch_tuning). Returns a deviation in fractions of a bin.
+ */
+export function pitchTuning(
+  frequencies: Float32Array,
+  resolution = 0.01,
+  binsPerOctave = 12,
+): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.pitchTuning(frequencies, resolution, binsPerOctave);
+}
+
+/**
+ * Estimate the tuning offset of an audio signal (librosa.estimate_tuning).
+ */
+export function estimateTuning(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  resolution = 0.01,
+  binsPerOctave = 12,
+): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.estimateTuning(samples, sampleRate, nFft, hopLength, resolution, binsPerOctave);
+}
+
+/**
+ * Non-negative matrix factorisation of a flattened [nFeatures x nFrames]
+ * spectrogram (librosa.decompose.decompose). Returns the W and H factors.
+ */
+export function decompose(
+  s: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  nComponents: number,
+  nIter = 50,
+  beta = 2.0,
+): WasmDecomposeResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.decompose(s, nFeatures, nFrames, nComponents, nIter, beta);
+}
+
+/**
+ * Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram
+ * (librosa.decompose.nn_filter).
+ */
+export function nnFilter(
+  s: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  aggregate = 'mean',
+  k = 7,
+  width = 1,
+): WasmMatrix2dResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.nnFilter(s, nFeatures, nFrames, aggregate, k, width);
+}
+
+/**
+ * Reorder/concatenate a signal by interval slices (librosa.effects.remix).
+ *
+ * @param intervals - Flat (start, end) sample pairs (even length).
+ */
+export function remix(
+  samples: Float32Array,
+  intervals: Int32Array,
+  sampleRate = 22050,
+  alignZeros = false,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.remix(samples, intervals, sampleRate, alignZeros);
+}
+
+/**
+ * Phase-vocoder time-scale modification (rate > 1 faster, < 1 slower).
+ */
+export function phaseVocoder(
+  samples: Float32Array,
+  rate: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
+}
+
+/**
+ * HPSS into harmonic / percussive / residual signals.
+ */
+export function hpssWithResidual(
+  samples: Float32Array,
+  sampleRate = 22050,
+  kernelHarmonic = 31,
+  kernelPercussive = 31,
+): WasmHpssWithResidualResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.hpssWithResidual(samples, sampleRate, kernelHarmonic, kernelPercussive);
+}
+
+/**
+ * Channel-weighted multichannel integrated loudness + LRA (ITU-R BS.1770 /
+ * EBU R128) from an interleaved buffer of `frames * channels` samples. The
+ * per-channel frame count is derived from the buffer length and `channels`.
+ */
+export function lufsInterleaved(
+  samples: Float32Array,
+  channels: number,
+  sampleRate = 22050,
+): WasmLufsResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.lufsInterleaved(samples, channels, sampleRate);
+}
+
+/**
+ * Standards-compliant EBU R128 loudness range (LRA) in LU.
+ */
+export function ebur128LoudnessRange(samples: Float32Array, sampleRate = 22050): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.ebur128LoudnessRange(samples, sampleRate);
 }
 
 /**

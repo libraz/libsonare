@@ -25,14 +25,19 @@ struct IirtConfig {
   /// @brief Filter quality factor (Q). Higher Q means narrower passbands.
   float Q = 25.0f;
   /// @brief Butterworth filter order. Must be even and >= 2. The bandpass for each
-  /// band is realized as a cascade of @c filter_order/2 biquad sections whose
-  /// per-section quality factors follow the maximally-flat Butterworth distribution.
+  /// band is a true order-@c filter_order Butterworth bandpass, realized as a cascade
+  /// of @c filter_order/2 *distinct* biquad sections derived from the lowpass-prototype
+  /// poles via the analog lowpass-to-bandpass transform and the bilinear transform
+  /// (matching `scipy.signal.iirfilter(..., ftype='butter')`). At @c filter_order==2
+  /// this is a single second-order bandpass section.
   int filter_order = 2;
 };
 
 /// @brief Multi-rate energy time–frequency representation.
-/// @details Applies a bank of order-@ref IirtConfig::filter_order Butterworth bandpass
-/// filters (each a cascade of biquad sections) tuned to the equal-tempered
+/// @details Applies a bank of true order-@ref IirtConfig::filter_order Butterworth
+/// bandpass filters (each a cascade of @ref IirtConfig::filter_order /2 distinct
+/// biquad sections whose poles follow the maximally-flat Butterworth distribution)
+/// tuned to the equal-tempered
 /// 12-TET scale, then computes the RMS of each band's response inside frames
 /// of length @ref IirtConfig::win_length spaced @ref IirtConfig::hop_length
 /// apart. Mirrors `librosa.iirt`.

@@ -39,9 +39,10 @@ struct CqtKernelCacheKey {
 
 struct CqtKernelCacheKeyHash {
   size_t operator()(const CqtKernelCacheKey& k) const {
-    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_bins) << 1) ^
-           (std::hash<int>()(k.bins_per_octave) << 2) ^ (std::hash<float>()(k.filter_scale) << 3) ^
-           (std::hash<int>()(static_cast<int>(k.window)) << 4);
+    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.hop_length) << 1) ^
+           (std::hash<float>()(k.fmin) << 2) ^ (std::hash<int>()(k.n_bins) << 3) ^
+           (std::hash<int>()(k.bins_per_octave) << 4) ^ (std::hash<float>()(k.filter_scale) << 5) ^
+           (std::hash<int>()(static_cast<int>(k.window)) << 6);
   }
 };
 

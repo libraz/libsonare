@@ -369,10 +369,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
     return PitchResult();
   }
 
+  SONARE_CHECK(config.fmin < config.fmax, ErrorCode::InvalidParameter);
+
   // Convert frequency to period
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / config.fmax));
   int max_period = static_cast<int>(std::ceil(static_cast<float>(sr) / config.fmin));
-  max_period = std::min(max_period, config.frame_length - 1);
+  // Cap at frame_length / 2: lags beyond half the frame leave too few samples in
+  // the difference window to be reliable (matches yin_with_confidence). The old
+  // `frame_length - 1` cap admitted near-1-sample lags from a single product.
+  max_period = std::min(max_period, config.frame_length / 2);
 
   if (min_period >= max_period) {
     return PitchResult();

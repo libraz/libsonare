@@ -153,7 +153,11 @@ class RealtimeEngine {
 
  private:
   void drain_commands(int64_t block_render_frame, int num_frames) noexcept;
-  void store_pending(const rt::Command& command) noexcept;
+  // Store a command in the pending bank. When @p prefer_current is true (the
+  // command is due in the current block) and the bank is full, evict the
+  // furthest-future pending command to make room, so current-block commands are
+  // never starved by a backlog of far-future ones.
+  void store_pending(const rt::Command& command, bool prefer_current) noexcept;
   void apply_due_commands(int64_t boundary_render_frame) noexcept;
   void apply_command(const rt::Command& command) noexcept;
   void process_impl(float* const* io, float* const* monitor_out, int num_channels, int num_frames,

@@ -40,10 +40,9 @@ constexpr unsigned int kMaxProbedParams = 4096u;
 // covered processor silently loses its override. Removing a name from this list
 // once its set_parameter() lands will tighten coverage automatically.
 bool IsZeroParamAllowed(const std::string& name) {
-  static const std::array<const char*, 1> kZeroParam = {
-      // Configured by load_ir(), not scalar automation.
-      "effects.reverb.convolution",
-  };
+  // Every factory insert now exposes at least one automatable parameter
+  // (effects.reverb.convolution gained a dry/wet mix), so no name is exempt.
+  static const std::array<const char*, 0> kZeroParam = {};
   return std::any_of(kZeroParam.begin(), kZeroParam.end(),
                      [&name](const char* entry) { return name == entry; });
 }
@@ -59,7 +58,14 @@ bool IsNoiseEffectExempt(const std::string& name) {
   // band-parameter automation stays a no-op on our stimulus. Its set_parameter
   // forwards verbatim to the per-band eq.dynamic code path, which IS exercised
   // with an enabled band below, so the forwarding contract is still covered.
-  return name == "multiband.dynamicEq";
+  //
+  // effects.reverb.convolution constructs as a pure passthrough until an impulse
+  // response is supplied (the IR cannot be expressed through scalar JSON params),
+  // and process() early-returns while ir_ is empty — so its dryWet automation has
+  // no observable effect on a single noise block via plain make_insert(). The
+  // set_parameter contract (N == 1, range rejection) is still checked above; the
+  // dryWet blend itself is exercised by the effects-layer convolution tests.
+  return name == "multiband.dynamicEq" || name == "effects.reverb.convolution";
 }
 
 // Fills a deterministic broadband-noise block with a 32-bit LCG so the same

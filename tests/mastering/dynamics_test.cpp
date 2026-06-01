@@ -478,31 +478,28 @@ TEST_CASE("UpwardExpander preserves existing channel state when channel count gr
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
-TEST_CASE("UpwardExpander keeps inactive stereo channel state across mono blocks",
-          "[mastering][dynamics]") {
-  UpwardExpander reference({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
+TEST_CASE("UpwardExpander shares one linked detector across channels", "[mastering][dynamics]") {
+  // Linked stereo detection (mirrors UpwardCompressor): a single shared detector
+  // envelope drives the same gain on both channels, so an intervening mono block
+  // legitimately advances that shared detector. The defining invariant is that
+  // the left and right outputs of a stereo block stay identical sample-by-sample
+  // (preserved stereo image), even after a mono block in between — independent
+  // per-channel followers would let L/R diverge and rotate the image.
   UpwardExpander under_test({-30.0f, 1.5f, 20.0f, 80.0f, 12.0f});
-  reference.prepare(48000.0, 1024);
   under_test.prepare(48000.0, 1024);
 
   std::vector<float> warm_l(4096, 0.5f);
   std::vector<float> warm_r(4096, 0.5f);
-  auto test_warm_l = warm_l;
-  auto test_warm_r = warm_r;
-  process_stereo(reference, warm_l, warm_r);
-  process_stereo(under_test, test_warm_l, test_warm_r);
+  process_stereo(under_test, warm_l, warm_r);
 
   std::vector<float> mono(512, 0.5f);
   process(under_test, mono);
 
-  std::vector<float> ref_l(512, 0.5f);
-  std::vector<float> ref_r(512, 0.5f);
-  std::vector<float> test_l = ref_l;
-  std::vector<float> test_r = ref_r;
-  process_stereo(reference, ref_l, ref_r);
+  std::vector<float> test_l(512, 0.5f);
+  std::vector<float> test_r(512, 0.5f);
   process_stereo(under_test, test_l, test_r);
 
-  REQUIRE(max_abs_difference(test_r, ref_r) < 1.0e-6f);
+  REQUIRE(max_abs_difference(test_l, test_r) < 1.0e-6f);
 }
 
 TEST_CASE("DeEsser attenuates sibilant band more than low band", "[mastering][dynamics]") {

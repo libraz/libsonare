@@ -24,10 +24,14 @@ struct MelFilterbankCacheKey {
   bool htk;
   MelNorm norm;
 
+  // Exact equality so the equal/hash contract holds: the hash mixes the raw float
+  // bits of fmin/fmax, so a fuzzy operator== would let two logically-"equal" keys
+  // hash to different buckets and silently miss the cache. Any fmax==0 -> sr/2
+  // normalization is already applied before the key is constructed, so exact
+  // comparison is correct here.
   bool operator==(const MelFilterbankCacheKey& other) const {
     return sample_rate == other.sample_rate && n_fft == other.n_fft && n_mels == other.n_mels &&
-           htk == other.htk && norm == other.norm && std::abs(fmin - other.fmin) < 1e-4f &&
-           std::abs(fmax - other.fmax) < 1e-4f;
+           htk == other.htk && norm == other.norm && fmin == other.fmin && fmax == other.fmax;
   }
 };
 

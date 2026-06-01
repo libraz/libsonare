@@ -81,8 +81,8 @@ void clear_float_output(float** out, size_t* out_length) {
 }
 
 template <typename Processor>
-void run_offline(Processor& processor, std::vector<float>& samples, int sample_rate,
-                 int* out_latency_samples) {
+void run_processor_offline(Processor& processor, std::vector<float>& samples, int sample_rate,
+                           int* out_latency_samples) {
   processor.prepare(sample_rate, static_cast<int>(samples.size()));
   float* channels[] = {samples.data()};
   processor.process(channels, 1, static_cast<int>(samples.size()));
@@ -104,7 +104,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::Compressor processor(to_cpp_compressor_config(config));
-  run_offline(processor, buffer, sample_rate, out_latency_samples);
+  run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
   *out_length = buffer.size();
   *out = new float[buffer.size()];
   std::memcpy(*out, buffer.data(), buffer.size() * sizeof(float));
@@ -124,7 +124,7 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::Gate processor(to_cpp_gate_config(config));
-  run_offline(processor, buffer, sample_rate, out_latency_samples);
+  run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
   *out_length = buffer.size();
   *out = new float[buffer.size()];
   std::memcpy(*out, buffer.data(), buffer.size() * sizeof(float));
@@ -146,7 +146,7 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
   SONARE_C_TRY
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::TransientShaper processor(to_cpp_transient_shaper_config(config));
-  run_offline(processor, buffer, sample_rate, out_latency_samples);
+  run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
   *out_length = buffer.size();
   *out = new float[buffer.size()];
   std::memcpy(*out, buffer.data(), buffer.size() * sizeof(float));

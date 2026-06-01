@@ -773,6 +773,40 @@ def test_rms_energy() -> None:
     assert all(v >= 0 for v in result)
 
 
+def test_spectral_scalars_repeated_calls_are_stable() -> None:
+    """Repeated calls to the spectral/scalar helpers stay correct.
+
+    Regression guard for the C-buffer free path: each helper now frees its
+    ``sonare_free_floats`` output inside a ``try/finally``. Calling them many
+    times must keep returning identical, well-formed results (a smoke test for
+    the buffer lifecycle; it does not directly measure native heap growth).
+    """
+    from libsonare import (
+        rms_energy,
+        spectral_bandwidth,
+        spectral_centroid,
+        spectral_flatness,
+        spectral_rolloff,
+        zero_crossing_rate,
+    )
+
+    tone = _generate_sine(440, 22050, 1.0)
+    helpers = (
+        spectral_centroid,
+        spectral_bandwidth,
+        spectral_rolloff,
+        spectral_flatness,
+        zero_crossing_rate,
+        rms_energy,
+    )
+    for helper in helpers:
+        first = helper(tone, sample_rate=22050)
+        assert len(first) > 0
+        for _ in range(64):
+            again = helper(tone, sample_rate=22050)
+            assert again == first
+
+
 def test_pitch_yin() -> None:
     """pitch_yin detects 440 Hz tone."""
     from libsonare import pitch_yin

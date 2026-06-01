@@ -355,6 +355,98 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
 
+/// @brief Non-negative matrix factorisation of a non-negative spectrogram
+///        (mirror of @c sonare::decompose / librosa.decompose.decompose).
+/// @details Both output matrices are heap-allocated row-major and MUST be
+///          released with @ref sonare_free_floats. @p out_w is the component
+///          matrix [n_features x n_components] (length n_features*n_components)
+///          and @p out_h is the activation matrix [n_components x n_frames]
+///          (length n_components*n_frames). Multi-matrix shape: returned as two
+///          flat buffers because sonare_c_types.h has no decompose result struct.
+/// @param s Input spectrogram [n_features x n_frames] row-major (non-negative).
+/// @param n_features Feature dimension (rows). Must be > 0.
+/// @param n_frames Number of time frames. Must be > 0.
+/// @param n_components Target number of components (k). Must be > 0.
+/// @param n_iter Number of multiplicative-update iterations.
+/// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
+/// @param out_w Receives the [n_features x n_components] component matrix.
+/// @param out_w_length Receives n_features * n_components.
+/// @param out_h Receives the [n_components x n_frames] activation matrix.
+/// @param out_h_length Receives n_components * n_frames.
+SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
+                             int n_iter, float beta, float** out_w, size_t* out_w_length,
+                             float** out_h, size_t* out_h_length);
+
+/// @brief Nearest-neighbour filter for spectrogram denoising
+///        (mirror of @c sonare::nn_filter / librosa.decompose.nn_filter).
+/// @details Output is the smoothed spectrogram [n_features x n_frames] row-major
+///          (length n_features*n_frames); release with @ref sonare_free_floats.
+/// @param s Input spectrogram [n_features x n_frames] row-major.
+/// @param n_features Feature dimension (rows). Must be > 0.
+/// @param n_frames Number of time frames. Must be > 0.
+/// @param aggregate Aggregator: "mean", "median", "min" or "max". NULL = "mean".
+/// @param k Number of nearest neighbours.
+/// @param width Time exclusion half-width.
+/// @param out Receives the smoothed spectrogram buffer.
+/// @param out_length Receives n_features * n_frames.
+SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const char* aggregate,
+                             int k, int width, float** out, size_t* out_length);
+
+/// @brief Reorders / concatenates a signal by interval slices
+///        (mirror of @c sonare::remix / librosa.effects.remix).
+/// @details Each pair (intervals[2*i], intervals[2*i+1]) selects samples
+///          [start, end). The output is the concatenation of all slices.
+///          Output is heap-allocated; release with @ref sonare_free_floats.
+/// @param samples Input signal.
+/// @param length Number of samples.
+/// @param sample_rate Sample rate (validated, carried for API symmetry).
+/// @param intervals Flat array of @p interval_count (start, end) pairs.
+/// @param interval_count Number of (start, end) pairs.
+/// @param align_zeros Snap boundaries to zero-crossings (non-zero = true).
+/// @param out Receives the remixed signal buffer.
+/// @param out_length Receives the remixed signal length.
+SonareError sonare_remix(const float* samples, size_t length, int sample_rate, const int* intervals,
+                         size_t interval_count, int align_zeros, float** out, size_t* out_length);
+
+/// @brief HPSS with residual: separates audio into harmonic, percussive and
+///        residual signals (mirror of @c sonare::hpss_with_residual).
+/// @details All three outputs share the same @p out_length and @p out_sample_rate
+///          (residual = original - harmonic - percussive). Each buffer is
+///          heap-allocated and MUST be released with @ref sonare_free_floats.
+///          Three-signal shape: emitted as three flat buffers because
+///          sonare_c_types.h has no with-residual HPSS result struct.
+/// @param samples Input audio.
+/// @param length Number of samples.
+/// @param sample_rate Sample rate.
+/// @param kernel_harmonic Horizontal median filter size (odd, >= 3).
+/// @param kernel_percussive Vertical median filter size (odd, >= 3).
+/// @param out_harmonic Receives the harmonic signal.
+/// @param out_percussive Receives the percussive signal.
+/// @param out_residual Receives the residual signal.
+/// @param out_length Receives the (shared) signal length.
+/// @param out_sample_rate Receives the (shared) sample rate.
+SonareError sonare_hpss_with_residual(const float* samples, size_t length, int sample_rate,
+                                      int kernel_harmonic, int kernel_percussive,
+                                      float** out_harmonic, float** out_percussive,
+                                      float** out_residual, size_t* out_length,
+                                      int* out_sample_rate);
+
+/// @brief Phase-vocoder time-scale modification of audio
+///        (STFT -> @c sonare::phase_vocoder -> iSTFT).
+/// @details Faithful audio wrapper: computes the STFT, time-stretches the
+///          spectrogram with phase coherence, and reconstructs audio. Output is
+///          heap-allocated; release with @ref sonare_free_floats.
+/// @param samples Input audio.
+/// @param length Number of samples.
+/// @param sample_rate Sample rate.
+/// @param rate Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
+/// @param n_fft FFT size used for analysis/synthesis.
+/// @param hop_length Hop length used for analysis/synthesis.
+/// @param out Receives the time-stretched audio buffer.
+/// @param out_length Receives the output length.
+SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,
+                                 int n_fft, int hop_length, float** out, size_t* out_length);
+
 #ifdef __cplusplus
 }
 #endif

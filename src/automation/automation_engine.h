@@ -44,8 +44,16 @@ class AutomationEngine {
   bool unbind_target(uint32_t param_id) noexcept {
     const size_t bound = bound_count_.load(std::memory_order_relaxed);
     for (size_t i = 0; i < bound; ++i) {
-      if (targets_[i].processor != nullptr && targets_[i].param_id == param_id) {
-        targets_[i] = {};
+      if (targets_[i].processor.load(std::memory_order_relaxed) != nullptr &&
+          targets_[i].param_id.load(std::memory_order_relaxed) == param_id) {
+        // Publish the cleared slot atomically. The audio thread's target_for()
+        // reads processor first; storing nullptr there with release ensures it
+        // never observes a stale processor pointer paired with a torn param_id
+        // (which would produce a garbage vtable call). param_id is cleared after
+        // so a concurrent reader that already loaded the (now-null) processor
+        // simply skips the slot.
+        targets_[i].processor.store(nullptr, std::memory_order_release);
+        targets_[i].param_id.store(0, std::memory_order_relaxed);
         return true;
       }
     }
@@ -82,9 +90,12 @@ class AutomationEngine {
  private:
   // param_id 0 is reserved as the invalid/none sentinel: an unbound slot keeps
   // the default (param_id 0, processor null) and must never match a real lane.
+  // Both fields are atomic because the control thread (bind/unbind/clear) and
+  // the audio thread (target_for) touch them concurrently; a non-atomic
+  // pointer write would tear and yield a garbage vtable call on the reader.
   struct Target {
-    uint32_t param_id = 0;
-    rt::ProcessorBase* processor = nullptr;
+    std::atomic<uint32_t> param_id{0};
+    std::atomic<rt::ProcessorBase*> processor{nullptr};
   };
 
   rt::ProcessorBase* target_for(uint32_t param_id) const noexcept;

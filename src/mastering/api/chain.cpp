@@ -165,7 +165,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("repair.denoise");
   }
 
-  // 4. eq.tilt
+  // 7. eq.tilt
   if (config_.eq.tilt.enabled) {
     mastering::eq::TiltEq tilt;
     tilt.set_tilt_db(config_.eq.tilt.tilt_db);
@@ -174,7 +174,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("eq.tilt");
   }
 
-  // 5. dynamics.deesser
+  // 8. dynamics.deesser
   if (config_.dynamics.deesser.enabled) {
     mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
     run_processor_mono(processor, data, sample_rate);
@@ -183,14 +183,14 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("dynamics.deesser");
   }
 
-  // 6. dynamics.transientShaper
+  // 9. dynamics.transientShaper
   if (config_.dynamics.transient_shaper.enabled) {
     mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
     run_processor_mono(processor, data, sample_rate);
     report("dynamics.transientShaper");
   }
 
-  // 7. dynamics.compressor
+  // 10. dynamics.compressor
   if (config_.dynamics.compressor.enabled) {
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_mono(processor, data, sample_rate);
@@ -199,7 +199,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("dynamics.compressor");
   }
 
-  // 8. dynamics.multibandComp
+  // 11. dynamics.multibandComp
   if (config_.dynamics.multiband_comp.enabled) {
     mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
     run_processor_mono(processor, data, sample_rate);
@@ -208,28 +208,28 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("dynamics.multibandComp");
   }
 
-  // 9. saturation.tape
+  // 12. saturation.tape
   if (config_.saturation.tape.enabled) {
     mastering::saturation::Tape processor(config_.saturation.tape.config);
     run_processor_mono(processor, data, sample_rate);
     report("saturation.tape");
   }
 
-  // 10. saturation.exciter
+  // 13. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     mastering::saturation::Exciter processor(config_.saturation.exciter.config);
     run_processor_mono(processor, data, sample_rate);
     report("saturation.exciter");
   }
 
-  // 11. spectral.airBand
+  // 14. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     mastering::spectral::AirBand processor(config_.spectral.air_band.config);
     run_processor_mono(processor, data, sample_rate);
     report("spectral.airBand");
   }
 
-  // 12. maximizer.truePeakLimiter
+  // 15. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_mono(processor, data, sample_rate);
@@ -238,11 +238,14 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     report("maximizer.truePeakLimiter");
   }
 
-  // 13. loudness (mono path: manual gain + TruePeakLimiter pass, mirrors stereo)
+  // 16. loudness (mono path: manual gain + TruePeakLimiter pass, mirrors stereo)
   if (config_.loudness.enabled) {
-    const float current_lufs = integrated_lufs(data, sample_rate);
-    if (std::isfinite(current_lufs)) {
-      const float gain_db = config_.loudness.target_lufs - current_lufs;
+    // Clamp the static normalization gain to the ceiling headroom (mirrors the
+    // mono loudness_optimize() helper) so the limiter is not overdriven.
+    const float gain_db = detail::loudness_gain_db_with_ceiling(
+        data, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
+        config_.loudness.true_peak_oversample);
+    if (gain_db != 0.0f) {
       detail::apply_gain_db(data, gain_db);
       applied_gain_db += gain_db;
     }
@@ -361,7 +364,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("repair.denoise");
   }
 
-  // 4. eq.tilt
+  // 7. eq.tilt
   if (config_.eq.tilt.enabled) {
     mastering::eq::TiltEq tilt;
     tilt.set_tilt_db(config_.eq.tilt.tilt_db);
@@ -370,7 +373,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("eq.tilt");
   }
 
-  // 5. dynamics.deesser
+  // 8. dynamics.deesser
   if (config_.dynamics.deesser.enabled) {
     mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
     run_processor_stereo(processor, left, right, sample_rate);
@@ -379,14 +382,14 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("dynamics.deesser");
   }
 
-  // 6. dynamics.transientShaper
+  // 9. dynamics.transientShaper
   if (config_.dynamics.transient_shaper.enabled) {
     mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("dynamics.transientShaper");
   }
 
-  // 7. dynamics.compressor
+  // 10. dynamics.compressor
   if (config_.dynamics.compressor.enabled) {
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_stereo(processor, left, right, sample_rate);
@@ -395,7 +398,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("dynamics.compressor");
   }
 
-  // 8. dynamics.multibandComp
+  // 11. dynamics.multibandComp
   if (config_.dynamics.multiband_comp.enabled) {
     mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
     run_processor_stereo(processor, left, right, sample_rate);
@@ -404,42 +407,42 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("dynamics.multibandComp");
   }
 
-  // 9. saturation.tape
+  // 12. saturation.tape
   if (config_.saturation.tape.enabled) {
     mastering::saturation::Tape processor(config_.saturation.tape.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("saturation.tape");
   }
 
-  // 10. saturation.exciter
+  // 13. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     mastering::saturation::Exciter processor(config_.saturation.exciter.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("saturation.exciter");
   }
 
-  // 11. spectral.airBand
+  // 14. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     mastering::spectral::AirBand processor(config_.spectral.air_band.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("spectral.airBand");
   }
 
-  // 12. stereo.imager
+  // 15. stereo.imager
   if (config_.stereo.imager.enabled) {
     mastering::stereo::Imager processor(config_.stereo.imager.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("stereo.imager");
   }
 
-  // 13. stereo.monoMaker
+  // 16. stereo.monoMaker
   if (config_.stereo.mono_maker.enabled) {
     mastering::stereo::MonoMaker processor(config_.stereo.mono_maker.config);
     run_processor_stereo(processor, left, right, sample_rate);
     report("stereo.monoMaker");
   }
 
-  // 14. maximizer.truePeakLimiter
+  // 17. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_stereo(processor, left, right, sample_rate);
@@ -448,11 +451,14 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("maximizer.truePeakLimiter");
   }
 
-  // 15. loudness (stereo path: manual gain + TruePeakLimiter pass)
+  // 18. loudness (stereo path: manual gain + TruePeakLimiter pass)
   if (config_.loudness.enabled) {
-    const float current_lufs = integrated_lufs(detail::mono_mix(left, right), sample_rate);
-    if (std::isfinite(current_lufs)) {
-      const float gain_db = config_.loudness.target_lufs - current_lufs;
+    // Clamp the static normalization gain to the ceiling headroom (mirrors the
+    // mono loudness_optimize() helper) so the limiter is not overdriven.
+    const float gain_db = detail::loudness_gain_db_with_ceiling(
+        left, right, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
+        config_.loudness.true_peak_oversample);
+    if (gain_db != 0.0f) {
       detail::apply_gain_db(left, right, gain_db);
       applied_gain_db += gain_db;
     }

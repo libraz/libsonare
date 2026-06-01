@@ -31,14 +31,20 @@ void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
 }
 
 Transport::LoopState Transport::read_loop_state() const noexcept {
-  for (;;) {
-    const uint32_t g1 = loop_guard_.load(std::memory_order_acquire);
-    if (g1 & 1u) continue;  // writer mid-update
+  // Single try-read, no spin: if the writer is mid-update or the guard moved
+  // across the copy, fall back to the last consistent value rather than block
+  // the audio thread until the control thread finishes its write.
+  const uint32_t g1 = loop_guard_.load(std::memory_order_acquire);
+  if ((g1 & 1u) == 0u) {  // not mid-update
     LoopState copy = loop_state_;
     std::atomic_thread_fence(std::memory_order_acquire);
     const uint32_t g2 = loop_guard_.load(std::memory_order_acquire);
-    if (g1 == g2) return copy;
+    if (g1 == g2) {
+      cached_loop_state_ = copy;
+      return copy;
+    }
   }
+  return cached_loop_state_;
 }
 
 void Transport::write_loop_state(const LoopState& state) noexcept {

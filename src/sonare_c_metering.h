@@ -169,6 +169,33 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
 
 void sonare_free_spectrum_result(SonareSpectrumResult* result);
 
+// ============================================================================
+// Metering - multi-channel / standards-compliant LUFS (offline)
+// ============================================================================
+
+/// @brief ITU-R BS.1770-4 multi-channel loudness over an interleaved buffer.
+/// @details Mirrors @ref sonare_lufs but accepts an interleaved multi-channel
+///          signal (channel-summed K-weighting per the standard). @p samples
+///          holds @p frames * @p channels values in channel-interleaved order.
+/// @param samples Interleaved input buffer (may be null only when @p frames is 0).
+/// @param frames Number of sample frames (per-channel length).
+/// @param channels Channel count (must be > 0).
+/// @param sample_rate Sample rate in Hz (must be > 0).
+/// @param out Receives the integrated / momentary / short-term / loudness-range
+///            fields. Must not be null. No heap pointers (no free required).
+SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
+                                    int sample_rate, SonareLufsResult* out);
+
+/// @brief EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
+/// @details Multi-channel signals are not accepted here; use
+///          @ref sonare_lufs_interleaved for a multi-channel measurement.
+/// @param samples Mono input buffer (may be null only when @p length is 0).
+/// @param length Number of samples.
+/// @param sample_rate Sample rate in Hz (must be > 0).
+/// @param out_lra Receives the loudness range in LU. Must not be null.
+SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
+                                          float* out_lra);
+
 #ifdef __cplusplus
 }
 #endif

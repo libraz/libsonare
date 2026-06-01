@@ -54,8 +54,15 @@ class VqtKernel {
   /// @brief Returns kernel matrix in frequency domain [n_bins x fft_length].
   const std::vector<std::complex<float>>& kernel() const { return kernel_; }
 
-  /// @brief Returns filter lengths for each bin.
+  /// @brief Returns effective integer filter lengths for each bin.
   const std::vector<int>& lengths() const { return lengths_; }
+
+  /// @brief Returns raw fractional filter lengths for each bin.
+  /// @details These are the un-truncated lengths (filter_scale * sr / bandwidth)
+  ///          used for the librosa-compatible `scale=True` normalization. Using
+  ///          the fractional value keeps the VQT amplitude convention continuous
+  ///          with the CQT path (which uses fractional `wavelet_lengths`).
+  const std::vector<float>& raw_lengths() const { return raw_lengths_; }
 
   /// @brief Returns bandwidths for each bin.
   const std::vector<float>& bandwidths() const { return bandwidths_; }
@@ -68,7 +75,8 @@ class VqtKernel {
   std::vector<float> frequencies_;
   std::vector<float> bandwidths_;
   std::vector<std::complex<float>> kernel_;
-  std::vector<int> lengths_;
+  std::vector<int> lengths_;        ///< Effective integer length per bin
+  std::vector<float> raw_lengths_;  ///< Raw fractional length per bin
 };
 
 /// @brief Computes Variable-Q Transform.

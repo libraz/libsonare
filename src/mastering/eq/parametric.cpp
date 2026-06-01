@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -12,6 +13,7 @@ namespace sonare::mastering::eq {
 namespace {
 
 using sonare::constants::kPiD;
+using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 float safe_q(float q) {
   if (!(q > 0.0f)) {
@@ -33,6 +35,10 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
+  // Preallocate per-channel biquad state up front so the audio-thread process()
+  // path never resizes the state vectors (resize there would malloc). Blocks
+  // wider than this throw instead of allocating.
+  prepare_channels(static_cast<int>(kRealtimePreparedChannels));
   reset();
 
   for (size_t i = 0; i < kMaxBands; ++i) {
@@ -64,13 +70,12 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
+  // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
+  // prepare(); never resize on the audio thread. Reject blocks wider than the
+  // prepared state (matches the dynamics-processor pattern).
   if (num_channels_ < num_channels) {
-    prepare_channels(num_channels);
-  } else if (num_channels_ != num_channels && num_channels_ == 0) {
-    num_channels_ = num_channels;
-    for (auto& band_states : states_) {
-      band_states.resize(static_cast<size_t>(num_channels));
-    }
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared ParametricEq state");
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {

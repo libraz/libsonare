@@ -66,6 +66,10 @@
 #ifdef SONARE_HAVE_FX
 #include <algorithm>
 
+#include "effects/delay/stereo_delay.h"
+#include "effects/modulation/chorus.h"
+#include "effects/modulation/flanger.h"
+#include "effects/modulation/phaser.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
@@ -303,12 +307,14 @@ std::unique_ptr<Processor> build_maximizer(const std::string& name, const ParamM
   if (name == "maximizer.maximizer") {
     return make<maximizer::Maximizer>(detail::maximizer_config(params));
   }
-  if (name == "maximizer.loudnessOptimize") {
-    maximizer::TruePeakLimiterConfig config;
-    config.ceiling_db = f(params, "ceilingDb", config.ceiling_db);
-    config.oversample_factor = detail::i(params, "truePeakOversample", config.oversample_factor);
-    return make<maximizer::TruePeakLimiter>(config);
-  }
+  // Note: there is intentionally no "maximizer.loudnessOptimize" insert. LUFS
+  // normalization is an offline/whole-signal operation (it needs the full
+  // integrated-loudness measurement before it can pick a gain) and cannot be
+  // expressed as a streaming block processor. Exposing it here would silently
+  // drop `targetLufs` and degrade to a bare true-peak limiter, which is
+  // surprising. Callers who want true-peak limiting as an insert should use
+  // "maximizer.truePeakLimiter"; LUFS targeting lives in the offline mastering
+  // chain (loudness.* config).
   if (name == "maximizer.truePeakLimiter") {
     return make<maximizer::TruePeakLimiter>(detail::true_peak_limiter_config(params));
   }
@@ -413,6 +419,41 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // ConvolutionReverb's config, so no params are translated.
     return make<ConvolutionReverb>();
   }
+  if (name == "effects.modulation.chorus") {
+    effects::modulation::ChorusConfig config;
+    config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.depth_ms = f(params, "depthMs", config.depth_ms);
+    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::Chorus>(config);
+  }
+  if (name == "effects.modulation.flanger") {
+    effects::modulation::FlangerConfig config;
+    config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.depth_ms = f(params, "depthMs", config.depth_ms);
+    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
+    config.feedback = f(params, "feedback", config.feedback);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::Flanger>(config);
+  }
+  if (name == "effects.modulation.phaser") {
+    effects::modulation::PhaserConfig config;
+    config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.min_hz = f(params, "minHz", config.min_hz);
+    config.max_hz = f(params, "maxHz", config.max_hz);
+    config.stages = detail::i(params, "stages", config.stages);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::Phaser>(config);
+  }
+  if (name == "effects.delay.stereo") {
+    effects::delay::StereoDelayConfig config;
+    config.delay_time_l_ms = f(params, "delayTimeLMs", config.delay_time_l_ms);
+    config.delay_time_r_ms = f(params, "delayTimeRMs", config.delay_time_r_ms);
+    config.feedback = f(params, "feedback", config.feedback);
+    config.ping_pong = f(params, "pingPong", config.ping_pong);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::delay::StereoDelay>(config);
+  }
   return nullptr;
 }
 #endif  // SONARE_HAVE_FX
@@ -507,7 +548,6 @@ std::vector<std::string> insert_factory_names() {
       "stereo.phaseAlign",
       "stereo.stereoBalance",
       "maximizer.maximizer",
-      "maximizer.loudnessOptimize",
       "maximizer.truePeakLimiter",
       "maximizer.softKneeMax",
       "maximizer.adaptiveRelease",
@@ -525,6 +565,10 @@ std::vector<std::string> insert_factory_names() {
       "effects.reverb.fdn",
       "effects.reverb.velvet",
       "effects.reverb.convolution",
+      "effects.modulation.chorus",
+      "effects.modulation.flanger",
+      "effects.modulation.phaser",
+      "effects.delay.stereo",
 #endif
   };
 }

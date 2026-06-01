@@ -177,9 +177,12 @@ MasteringChainConfig make_speech() {
 }
 
 MasteringChainConfig make_streaming() {
-  auto cfg = make_pop();
-  enable_loudness(cfg, -14.0f, -1.0f);
-  return cfg;
+  // The streaming target (-14 LUFS, -1 dBTP) is identical to the pop preset's
+  // loudness configuration, so make_pop() already establishes it. Re-calling
+  // enable_loudness() with the same numbers would be a no-op; we keep the
+  // alias explicit instead. If a distinct streaming voicing is desired later,
+  // override stages here.
+  return make_pop();
 }
 
 MasteringChainConfig make_youtube() {

@@ -28,9 +28,6 @@ struct PcenConfig {
   /// If empty, the initial state defaults to `(1 - b)` for every bin, matching
   /// librosa / `scipy.signal.lfilter_zi`. Length must equal `n_bins` if set.
   std::vector<float> zi;
-  /// If true, treat input as magnitude and square it first (max_size unused
-  /// here — we follow the simple PCEN path).
-  bool max_size_one = true;
 };
 
 /// @brief Applies Per-Channel Energy Normalization to a spectrogram.

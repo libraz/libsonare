@@ -983,9 +983,20 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
   if (insert_index >= insert_count) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Mirror ChannelStrip::schedule_insert_automation's gross param-id bound
+  // (kMaxReasonableParamId) so an out-of-range param id is reported as a bad
+  // argument rather than being conflated with the full-lane capacity condition
+  // below (the underlying call returns a bare bool for both).
+  constexpr unsigned int kMaxReasonableParamId = 65535u;
+  if (param_id > kMaxReasonableParamId) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // After the index/param-id bounds above, a false return is dominated by the
+  // capacity condition (the event lane is full): map it to OUT_OF_MEMORY so
+  // callers can distinguish "lane full" from a bad argument.
   if (!strip->strip.schedule_insert_automation(insert_index, param_id, sample_pos, value,
                                                curve_enum)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_OK;
 }
@@ -999,8 +1010,9 @@ SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t s
   if (!parse_automation_curve(curve, &curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // A false return is a full-lane capacity condition, not a bad argument.
   if (!strip->strip.schedule_fader_automation(sample_pos, fader_db, curve_enum)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_OK;
 }
@@ -1014,8 +1026,9 @@ SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sam
   if (!parse_automation_curve(curve, &curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // A false return is a full-lane capacity condition, not a bad argument.
   if (!strip->strip.schedule_pan_automation(sample_pos, pan, curve_enum)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_OK;
 }
@@ -1029,8 +1042,9 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
   if (!parse_automation_curve(curve, &curve_enum)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // A false return is a full-lane capacity condition, not a bad argument.
   if (!strip->strip.schedule_width_automation(sample_pos, width, curve_enum)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_OK;
 }

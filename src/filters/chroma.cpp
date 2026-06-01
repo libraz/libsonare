@@ -102,6 +102,11 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
   // Minimum frequency (default to C1)
   float fmin = config.fmin > 0.0f ? config.fmin : constants::kC1Hz;
 
+  // NOTE: librosa's STFT chroma maps EVERY FFT bin at/above fmin to a pitch
+  // class (no upper octave bound) — ChromaFilterConfig::n_octaves does not apply
+  // to this STFT path (it is a CQT-chroma concept). Bounding by fmin*2^n_octaves
+  // here diverges from the librosa reference, so we intentionally do not cap.
+
   // Create filterbank [n_chroma x n_bins]
   std::vector<float> filterbank(n_chroma * n_bins, 0.0f);
 

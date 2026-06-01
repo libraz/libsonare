@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/envelope_follower.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"

@@ -63,4 +63,16 @@ std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config 
 /// @throws SonareException (InvalidParameter) if @p audio is not mono.
 float ebur128_loudness_range(const Audio& audio);
 
+/// @brief Computes the EBU Tech 3342 Loudness Range (LRA) from short-term loudness blocks.
+/// @param short_term_lufs Per-block short-term loudness values (LUFS). Non-finite
+///                        values are ignored.
+/// @details Applies the full two-stage gate (absolute gate at -70 LUFS, then a
+///          relative gate 20 LU below the energy-domain mean of the absolute-gated
+///          blocks) and returns the difference between the 95th and 10th percentiles
+///          of the gated distribution. This is the single shared implementation used
+///          by both `lufs_interleaved`'s `loudness_range` field and
+///          `ebur128_loudness_range`; it is exposed for reuse from the C-API.
+/// @return Loudness range in LU (0 if fewer than two gated blocks remain).
+float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs);
+
 }  // namespace sonare::metering

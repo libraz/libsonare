@@ -152,6 +152,101 @@ TEST_CASE("vqt with gamma>0", "[vqt]") {
   REQUIRE(result.n_frames() > 0);
 }
 
+TEST_CASE("VqtKernel exposes fractional raw lengths matching the bandwidth model", "[vqt]") {
+  VqtConfig config;
+  config.fmin = 32.7f;
+  config.n_bins = 24;
+  config.gamma = 5.0f;
+  config.filter_scale = 1.0f;
+
+  const int sr = 22050;
+  auto kernel = VqtKernel::create(sr, config);
+
+  REQUIRE(kernel->raw_lengths().size() == static_cast<size_t>(config.n_bins));
+  REQUIRE(kernel->lengths().size() == static_cast<size_t>(config.n_bins));
+
+  const auto& raw = kernel->raw_lengths();
+  const auto& bw = kernel->bandwidths();
+  for (int k = 0; k < config.n_bins; ++k) {
+    // Raw length is the un-truncated filter_scale * sr / bandwidth.
+    float expected = config.filter_scale * sr / bw[k];
+    REQUIRE_THAT(raw[k], WithinRel(expected, 1e-4f));
+    // Integer length is the ceil of the raw length, so raw is never larger.
+    REQUIRE(raw[k] <= static_cast<float>(kernel->lengths()[k]) + 1e-4f);
+  }
+}
+
+TEST_CASE("vqt 1/sqrt(L) normalization uses the fractional raw length", "[vqt]") {
+  // Two related regressions are guarded here:
+  //   1. The 1/sqrt(L) normalization uses the FRACTIONAL raw length (matching
+  //      cqt.cpp) rather than the integer ceil(raw_length).
+  //   2. The VQT time-domain kernel is CENTERED inside the fft_length window,
+  //      like the CQT path. A previous implementation placed the kernel
+  //      one-sided at samples [0, length); because the analysis frames are
+  //      center-padded, that kernel barely overlapped the signal energy and
+  //      attenuated the matched bin by a large, frequency-dependent factor
+  //      (~3.46x at 440 Hz). After centering, gamma->0 VQT tracks CQT to a few
+  //      percent (the residual is the alpha bandwidth-model difference).
+  // We assert the per-bin energy at the dominant bin matches the CQT path,
+  // especially in the low bands where ceil(raw_length) deviates most from
+  // raw_length.
+  VqtConfig config;
+  config.fmin = 32.7f;  // low fmin -> short low-band filters, largest ceil gap
+  config.n_bins = 48;
+  config.gamma = 5.0f;
+
+  const int sr = 22050;
+  auto kernel = VqtKernel::create(sr, config);
+  const auto& raw = kernel->raw_lengths();
+  const auto& len = kernel->lengths();
+
+  // The low bands must have a meaningful fractional/integer length gap, i.e. the
+  // bug would have produced a non-trivial error there.
+  bool any_gap = false;
+  for (int k = 0; k < config.n_bins; ++k) {
+    if (std::abs(static_cast<float>(len[k]) - raw[k]) > 0.25f) {
+      any_gap = true;
+      break;
+    }
+  }
+  REQUIRE(any_gap);
+
+  // A pure tone landing on a bin: the VQT magnitude should scale with the
+  // fractional-length convention. We verify continuity with the gamma=0 (CQT)
+  // path for the dominant detected bin, which both transforms resolve cleanly.
+  Audio audio = generate_sine(440.0f, 0.5f, sr);
+  VqtConfig vqt_cfg = config;
+  vqt_cfg.gamma = 1e-4f;  // essentially CQT but takes the gamma>0 code path
+  VqtResult vqt_result = vqt(audio, vqt_cfg);
+  CqtResult cqt_result = cqt(audio, vqt_cfg.to_cqt_config());
+
+  REQUIRE(vqt_result.n_bins() == cqt_result.n_bins());
+  REQUIRE(vqt_result.n_frames() == cqt_result.n_frames());
+
+  const int n_frames = vqt_result.n_frames();
+  const auto& vqt_mag = vqt_result.magnitude();
+  const auto& cqt_mag = cqt_result.magnitude();
+
+  // Per-bin total energy; find the dominant CQT bin.
+  int peak_bin = 0;
+  float peak_e = -1.0f;
+  std::vector<float> vqt_e(vqt_result.n_bins(), 0.0f);
+  std::vector<float> cqt_e(vqt_result.n_bins(), 0.0f);
+  for (int k = 0; k < vqt_result.n_bins(); ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      vqt_e[k] += vqt_mag[k * n_frames + t];
+      cqt_e[k] += cqt_mag[k * n_frames + t];
+    }
+    if (cqt_e[k] > peak_e) {
+      peak_e = cqt_e[k];
+      peak_bin = k;
+    }
+  }
+  REQUIRE(peak_e > 0.0f);
+  // Dominant-bin gain is continuous across the gamma=0 / gamma>0 boundary.
+  REQUIRE_THAT(vqt_e[peak_bin], WithinRel(cqt_e[peak_bin], 0.1f));
+}
+
 TEST_CASE("vqt single sine wave detection", "[vqt]") {
   float freq = 440.0f;
   Audio audio = generate_sine(freq, 1.0f, 22050);

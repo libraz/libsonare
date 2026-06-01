@@ -49,6 +49,8 @@ void ConvolutionReverb::process(float* const* channels, int num_channels, int nu
   // Convolvers/buffers are preallocated for the maximum supported channel count;
   // clamp here so the audio thread never allocates.
   const int channels_to_process = std::min(num_channels, static_cast<int>(convolvers_.size()));
+  const float wet = std::clamp(dry_wet_, 0.0f, 1.0f);
+  const float dry = 1.0f - wet;
   for (int ch = 0; ch < channels_to_process; ++ch) {
     auto& convolver = convolvers_[static_cast<size_t>(ch)];
     if (channels[ch] == nullptr || !convolver) {
@@ -61,8 +63,12 @@ void ConvolutionReverb::process(float* const* channels, int num_channels, int nu
     for (int i = 0; i < num_samples; ++i) {
       // Emit the convolution output produced one partition ago, then stage the
       // incoming sample. This introduces partition_size_ samples of latency.
+      // The dry path is delayed by the same amount so the dry/wet mix stays
+      // time-aligned.
       const float input_sample = data[i];
-      data[i] = out_block[static_cast<size_t>(fill)];
+      const float wet_sample = out_block[static_cast<size_t>(fill)];
+      const float dry_sample = in_block[static_cast<size_t>(fill)];
+      data[i] = dry * dry_sample + wet * wet_sample;
       in_block[static_cast<size_t>(fill)] = input_sample;
       if (++fill == partition_size_) {
         convolver->process_block(in_block.data(), out_block.data());
@@ -100,6 +106,17 @@ void ConvolutionReverb::load_ir(const float* impulse_response, int num_samples) 
 
 void ConvolutionReverb::load_ir(const std::vector<float>& impulse_response) {
   load_ir(impulse_response.data(), static_cast<int>(impulse_response.size()));
+}
+
+bool ConvolutionReverb::set_parameter(unsigned int param_id, float value) {
+  switch (param_id) {
+    case 0:
+      // process() clamps dry_wet to [0, 1]; store the raw target.
+      dry_wet_ = value;
+      return true;
+    default:
+      return false;
+  }
 }
 
 }  // namespace sonare::effects::reverb

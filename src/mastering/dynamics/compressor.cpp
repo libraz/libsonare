@@ -21,6 +21,12 @@ using sonare::constants::kFloorDb;
 constexpr float kRmsWindowMs = 10.0f;
 constexpr float kLogRmsWindowMs = 50.0f;
 
+// Program-dependent-release normalization: the smoothed gain-reduction state
+// (in dB) is mapped to a [0, 1] "how hard are we compressing" amount by
+// dividing by this reference depth. 24 dB of sustained reduction saturates the
+// program-dependent release at its maximum scaling.
+constexpr float kPdrNormalizationDb = 24.0f;
+
 // Fraction of the theoretical full makeup gain applied by the auto-makeup
 // heuristic. The full static makeup that exactly restores the pre-compression
 // level of a signal sitting at the threshold is
@@ -188,8 +194,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
     const float target_db = gain_reduction_db(level_db, cfg);
     pdr_state_db_ = pdr_coeff_ * pdr_state_db_ + (1.0f - pdr_coeff_) * target_db;
-    const float pdr_amount =
-        cfg.pdr_time_ms > 0.0f ? std::clamp(-pdr_state_db_ / 24.0f, 0.0f, 1.0f) : 0.0f;
+    const float pdr_amount = cfg.pdr_time_ms > 0.0f
+                                 ? std::clamp(-pdr_state_db_ / kPdrNormalizationDb, 0.0f, 1.0f)
+                                 : 0.0f;
     const float release_coeff = time_to_coefficient(
         sample_rate_,
         cfg.release_ms * (1.0f + pdr_amount * std::max(cfg.pdr_release_scale - 1.0f, 0.0f)));

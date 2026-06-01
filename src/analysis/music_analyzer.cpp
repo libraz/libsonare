@@ -57,7 +57,7 @@ std::vector<Chord> MusicAnalyzer::chords() { return chord_analyzer().chords(); }
 std::string MusicAnalyzer::form() { return section_analyzer().form(); }
 
 BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
-  if (!bpm_analyzer_) {
+  std::call_once(bpm_analyzer_once_, [this]() {
     BpmConfig bpm_config;
     bpm_config.bpm_min = config_.bpm_min;
     bpm_config.bpm_max = config_.bpm_max;
@@ -67,17 +67,20 @@ BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
     // Use cached onset strength to avoid recomputation
     bpm_analyzer_ = std::make_unique<BpmAnalyzer>(onset_strength(), analysis_sr_,
                                                   config_.hop_length, bpm_config);
-  }
+  });
   return *bpm_analyzer_;
 }
 
 KeyAnalyzer& MusicAnalyzer::key_analyzer() {
-  if (!key_analyzer_) {
+  std::call_once(key_analyzer_once_, [this]() {
     KeyConfig key_config;
     key_config.hop_length = config_.hop_length;
-    // Use harmonic chroma for better key detection
-    key_analyzer_ = std::make_unique<KeyAnalyzer>(harmonic_chroma(), key_config);
-  }
+    // Build the key analyzer from the analysis audio (not a pre-computed chroma)
+    // so the full refinement runs: the auto candidate search, the 60 Hz harmonic
+    // high-pass fallback, and the loudness-weighted chroma refinement. Feeding a
+    // bare chroma bypasses all of that and degrades key accuracy on dense mixes.
+    key_analyzer_ = std::make_unique<KeyAnalyzer>(analysis_audio_, key_config);
+  });
   return *key_analyzer_;
 }
 

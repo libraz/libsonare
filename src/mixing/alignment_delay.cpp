@@ -4,6 +4,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "rt/fractional_delay.h"
+
 namespace sonare::mixing {
 
 AlignmentDelay::AlignmentDelay(int delay_samples)
@@ -84,30 +86,7 @@ void AlignmentDelay::prepare_storage() {
 }
 
 float AlignmentDelay::process_fractional(FractionalState& state, float input) const noexcept {
-  auto sample_at_delay = [&](int delay) {
-    delay = std::max(0, delay);
-    const size_t size = state.buffer.size();
-    const size_t index = (state.write_index + size - (static_cast<size_t>(delay) % size)) % size;
-    return state.buffer[index];
-  };
-
-  state.buffer[state.write_index] = input;
-  const float delay = static_cast<float>(delay_samples_q8_) / 256.0f;
-  const int base = static_cast<int>(std::floor(delay));
-  const float mu = delay - static_cast<float>(base);
-
-  const float y0 = sample_at_delay(base - 1);
-  const float y1 = sample_at_delay(base);
-  const float y2 = sample_at_delay(base + 1);
-  const float y3 = sample_at_delay(base + 2);
-
-  state.write_index = (state.write_index + 1) % state.buffer.size();
-
-  const float c0 = -mu * (mu - 1.0f) * (mu - 2.0f) / 6.0f;
-  const float c1 = (mu + 1.0f) * (mu - 1.0f) * (mu - 2.0f) / 2.0f;
-  const float c2 = -(mu + 1.0f) * mu * (mu - 2.0f) / 2.0f;
-  const float c3 = (mu + 1.0f) * mu * (mu - 1.0f) / 6.0f;
-  return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
+  return rt::lagrange3_fractional_delay(state.buffer, state.write_index, delay_samples_q8_, input);
 }
 
 }  // namespace sonare::mixing

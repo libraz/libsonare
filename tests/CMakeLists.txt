@@ -100,6 +100,9 @@ add_executable(sonare_tests
   transport/transport_test.cpp
   api/quick_test.cpp
   api/sonare_c_test.cpp
+  api/sonare_c_features_extra_test.cpp
+  api/sonare_c_effects_extra_test.cpp
+  api/sonare_c_metering_extra_test.cpp
   librosa/convert_test.cpp
   librosa/mel_test.cpp
   librosa/mfcc_test.cpp
@@ -163,6 +166,7 @@ if(BUILD_MASTERING)
     mastering/eq_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp
+    mastering/insert_factory_extra_test.cpp
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp

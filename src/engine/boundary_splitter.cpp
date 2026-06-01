@@ -63,7 +63,14 @@ bool BoundaryList::finalize(const BoundaryBuildContext& context) noexcept {
 
 int64_t BoundaryList::timeline_at_offset(int offset, const BoundaryBuildContext& context) noexcept {
   if (context.loop_wrap && offset >= context.loop_wrap_offset) {
-    return context.loop_start_timeline_sample + (offset - context.loop_wrap_offset);
+    const int64_t past_wrap = offset - context.loop_wrap_offset;
+    // Fold the position past the first wrap back into one loop length so a
+    // block long enough to wrap multiple times still maps each sub-block offset
+    // to the right point on the looped timeline (not a runaway position past
+    // loop_end). loop_len_samples <= 0 keeps the original single-wrap mapping.
+    const int64_t within =
+        context.loop_len_samples > 0 ? past_wrap % context.loop_len_samples : past_wrap;
+    return context.loop_start_timeline_sample + within;
   }
   return context.block_timeline_sample + offset;
 }
@@ -134,9 +141,17 @@ void BoundarySplitter::begin(BoundaryBuildContext context) noexcept {
 }
 
 bool BoundarySplitter::add_loop(int offset) noexcept {
-  context_.loop_wrap = true;
-  context_.loop_wrap_offset = clamp_offset(offset, context_.num_frames);
-  return boundaries_.add_offset(context_.loop_wrap_offset, BoundarySource::kLoop, context_);
+  const int clamped = clamp_offset(offset, context_.num_frames);
+  // timeline_at_offset folds offsets relative to the FIRST wrap, so once a wrap
+  // is recorded keep loop_wrap_offset at the earliest one. Later (multi-wrap)
+  // calls only add their boundary points; they must not move the fold origin.
+  if (!context_.loop_wrap) {
+    context_.loop_wrap = true;
+    context_.loop_wrap_offset = clamped;
+  } else {
+    context_.loop_wrap_offset = std::min(context_.loop_wrap_offset, clamped);
+  }
+  return boundaries_.add_offset(clamped, BoundarySource::kLoop, context_);
 }
 
 bool BoundarySplitter::add_command(int offset) noexcept {

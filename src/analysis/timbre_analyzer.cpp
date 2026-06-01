@@ -63,12 +63,14 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   spectral_rolloff_ = sonare::spectral_rolloff(spec, sr_, 0.85f);
   spectral_flux_ = sonare::spectral_flux(spec);
 
-  // Compute MFCC for complexity analysis
+  // Retain the per-frame MFCC matrix so timbre complexity can be computed over
+  // each analysis window's frame range rather than from a single global figure.
   const int n_mfcc = std::max(0, config_.n_mfcc);
-
-  // Compute MFCC variance for complexity
-  mfcc_variance_.resize(static_cast<size_t>(n_mfcc), 0.0f);
   const int mfcc_frames = mel_spec.n_frames();
+  n_mfcc_ = 0;
+  mfcc_frames_ = 0;
+  mfcc_.clear();
+
   if (n_mfcc <= 0 || mfcc_frames <= 0 || mel_spec.n_mels() < n_mfcc) {
     analyze();
     return;
@@ -79,20 +81,9 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
     return;
   }
 
-  for (int c = 0; c < n_mfcc; ++c) {
-    float mean = 0.0f;
-    for (int f = 0; f < mfcc_frames; ++f) {
-      mean += mfcc[c * mfcc_frames + f];
-    }
-    mean /= static_cast<float>(mfcc_frames);
-
-    float var = 0.0f;
-    for (int f = 0; f < mfcc_frames; ++f) {
-      float diff = mfcc[c * mfcc_frames + f] - mean;
-      var += diff * diff;
-    }
-    mfcc_variance_[c] = var / static_cast<float>(mfcc_frames);
-  }
+  n_mfcc_ = n_mfcc;
+  mfcc_frames_ = mfcc_frames;
+  mfcc_ = std::move(mfcc);
 
   analyze();
 }
@@ -171,13 +162,31 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   // Normalize flux to [0, 1] relative to the roughness reference.
   t.roughness = std::min(1.0f, avg_flux / kRoughnessFluxRef);
 
-  // Complexity: based on MFCC variance
-  // Higher variance across MFCCs = more complex timbre
-  float total_var = 0.0f;
-  for (float var : mfcc_variance_) {
-    total_var += var;
+  // Complexity: based on per-window MFCC variance.
+  // Higher variance across MFCCs within this window = more complex timbre.
+  const int mfcc_start = std::max(0, std::min(start_frame, mfcc_frames_));
+  const int mfcc_end = std::max(mfcc_start, std::min(end_frame, mfcc_frames_));
+  const int mfcc_count = mfcc_end - mfcc_start;
+  float avg_var = 0.0f;
+  if (n_mfcc_ > 0 && mfcc_count > 0) {
+    float total_var = 0.0f;
+    for (int c = 0; c < n_mfcc_; ++c) {
+      const float* row = &mfcc_[static_cast<size_t>(c) * static_cast<size_t>(mfcc_frames_)];
+      float mean = 0.0f;
+      for (int f = mfcc_start; f < mfcc_end; ++f) {
+        mean += row[f];
+      }
+      mean /= static_cast<float>(mfcc_count);
+
+      float var = 0.0f;
+      for (int f = mfcc_start; f < mfcc_end; ++f) {
+        const float diff = row[f] - mean;
+        var += diff * diff;
+      }
+      total_var += var / static_cast<float>(mfcc_count);
+    }
+    avg_var = total_var / static_cast<float>(n_mfcc_);
   }
-  float avg_var = total_var / std::max(1, static_cast<int>(mfcc_variance_.size()));
 
   // Normalize variance to [0, 1] relative to the complexity reference.
   t.complexity = std::min(1.0f, std::sqrt(avg_var) / kComplexityMfccStdRef);

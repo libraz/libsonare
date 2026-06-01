@@ -20,6 +20,10 @@ class ConvolutionReverb : public rt::ProcessorBase {
   void load_ir(const float* impulse_response, int num_samples);
   void load_ir(const std::vector<float>& impulse_response);
 
+  // Automatable parameters (RT-safe, no allocation, no state reset):
+  //   0 = dry_wet (clamped to [0, 1] in process())
+  bool set_parameter(unsigned int param_id, float value) override;
+
   /// Latency equals the partitioned-convolution block size: input is buffered
   /// until a full partition is available before being processed.
   int latency_samples() const noexcept override { return partition_size_; }
@@ -30,6 +34,8 @@ class ConvolutionReverb : public rt::ProcessorBase {
 
   std::vector<float> ir_;
   int partition_size_ = 0;
+  // Dry/wet mix. 1.0 = fully wet (convolution only); 0.0 = dry passthrough.
+  float dry_wet_ = 1.0f;
 
   // One convolver per channel; the library targets mono/stereo only.
   std::vector<std::unique_ptr<rt::PartitionedConvolver>> convolvers_;

@@ -363,6 +363,8 @@ SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, floa
 SonareError sonare_spectral_centroid(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count) {
   if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out) *out = nullptr;
+  if (out_count) *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
@@ -380,6 +382,8 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
                                       int n_fft, int hop_length, float** out, size_t* out_count) {
   if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out) *out = nullptr;
+  if (out_count) *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
@@ -398,6 +402,8 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
                                     int hop_length, float roll_percent, float** out,
                                     size_t* out_count) {
   if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out) *out = nullptr;
+  if (out_count) *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
@@ -455,6 +461,108 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
     std::unique_ptr<float[]> tmp(new float[result.size()]);
     std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
     *out = release_array(tmp);
+    return SONARE_OK;
+  });
+}
+
+SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
+                                     int n_fft, int hop_length, int n_bands, float fmin,
+                                     float quantile, float** out, int* out_rows, int* out_cols) {
+  if (!out || !out_rows || !out_cols) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_rows = 0;
+  *out_cols = 0;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    StftConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    Spectrogram spec = Spectrogram::compute(audio, config);
+    std::vector<float> result =
+        spectral_contrast(spec, audio.sample_rate(), n_bands, fmin, quantile);
+    int rows = n_bands + 1;
+    int cols = spec.n_frames();
+    *out_rows = rows;
+    *out_cols = cols;
+    std::unique_ptr<float[]> tmp(new float[result.size()]);
+    std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
+    *out = release_array(tmp);
+    return SONARE_OK;
+  });
+}
+
+SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
+                                 int hop_length, int order, float** out, int* out_rows,
+                                 int* out_cols) {
+  if (!out || !out_rows || !out_cols) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_rows = 0;
+  *out_cols = 0;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    StftConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    Spectrogram spec = Spectrogram::compute(audio, config);
+    std::vector<float> result = poly_features(spec, audio.sample_rate(), order);
+    int rows = order + 1;
+    int cols = spec.n_frames();
+    *out_rows = rows;
+    *out_cols = cols;
+    std::unique_ptr<float[]> tmp(new float[result.size()]);
+    std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
+    *out = release_array(tmp);
+    return SONARE_OK;
+  });
+}
+
+SonareError sonare_zero_crossings(const float* samples, size_t length, float threshold,
+                                  int ref_magnitude, int pad, int zero_pos, int** out,
+                                  size_t* out_count) {
+  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_count = 0;
+  if (!samples && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!(threshold >= 0.0f)) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  std::vector<int> result =
+      zero_crossings(samples, length, threshold, ref_magnitude != 0, pad != 0, zero_pos != 0);
+  *out_count = result.size();
+  if (result.empty()) return SONARE_OK;
+  std::unique_ptr<int[]> tmp(new int[result.size()]);
+  std::memcpy(tmp.get(), result.data(), result.size() * sizeof(int));
+  *out = release_array(tmp);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float resolution,
+                                int bins_per_octave, float* out_tuning) {
+  if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_tuning = 0.0f;
+  if (!frequencies && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!(resolution > 0.0f) || bins_per_octave <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  std::vector<float> freqs;
+  if (frequencies && length > 0) {
+    freqs.assign(frequencies, frequencies + length);
+  }
+  *out_tuning = pitch_tuning(freqs, resolution, bins_per_octave);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
+                                   int hop_length, float resolution, int bins_per_octave,
+                                   float* out_tuning) {
+  if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_tuning = 0.0f;
+  if (!(resolution > 0.0f) || bins_per_octave <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    *out_tuning = estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
     return SONARE_OK;
   });
 }

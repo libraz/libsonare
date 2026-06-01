@@ -120,11 +120,23 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     boundary_context.loop_wrap = true;
     boundary_context.loop_wrap_offset = loop_boundaries[0].offset;
     boundary_context.loop_start_timeline_sample = tempo_map_.ppq_to_sample(state.loop_start_ppq);
+    // Carry the loop length so timeline_at_offset can fold offsets past the
+    // first wrap; with a short loop and a large block the playhead can wrap
+    // more than once within this block.
+    const int64_t loop_end_sample = tempo_map_.ppq_to_sample(state.loop_end_ppq);
+    boundary_context.loop_len_samples =
+        loop_end_sample - boundary_context.loop_start_timeline_sample;
   }
 
   boundary_splitter_.begin(boundary_context);
   if (boundary_context.loop_wrap) {
-    boundary_splitter_.add_loop(boundary_context.loop_wrap_offset);
+    // Register EVERY wrap that falls inside this block, not just the first.
+    // Each wrap must become a sub-block boundary so the over-wrapped tail of
+    // the block renders from the looped position rather than running past
+    // loop_end.
+    for (size_t i = 0; i < loop_boundaries.size(); ++i) {
+      boundary_splitter_.add_loop(loop_boundaries[i].offset);
+    }
   }
   for (size_t i = 0; i < pending_.size(); ++i) {
     if (!pending_active_[i]) continue;
@@ -147,6 +159,16 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     for (int offset = kControlPeriod; offset < frames; offset += kControlPeriod) {
       boundary_splitter_.add_automation(offset);
     }
+  }
+
+  // Clip edges must split sub-blocks at the exact sample where a clip starts or
+  // ends, so automation/fades evaluated per sub-block do not lag up to a full
+  // block at clip boundaries. collect_boundaries returns offsets relative to
+  // the block's timeline sample position, matching add_clip's convention.
+  ClipBoundaryList clip_boundaries;
+  clip_player_.collect_boundaries(state.sample_position, frames, &clip_boundaries);
+  for (size_t i = 0; i < clip_boundaries.size; ++i) {
+    boundary_splitter_.add_clip(clip_boundaries.offsets[i]);
   }
 
   // Punch in/out transitions must split sub-blocks at the exact sample so the
@@ -395,13 +417,18 @@ bool RealtimeEngine::bind_graph_parameter(uint32_t param_id, const char* node_id
 void RealtimeEngine::drain_commands(int64_t block_render_frame, int num_frames) noexcept {
   rt::Command command{};
   for (size_t i = 0; i < kMaxCommandsPerBlock && commands_.pop(command); ++i) {
+    // A command due now or in the past is clamped to the block head and treated
+    // as current-block. Current-block commands take priority over far-future
+    // ones when the pending bank is full, so a backlog of future commands can
+    // never drop a command that must fire this block.
+    bool current_block;
     if (command.sample_time < 0 || command.sample_time <= block_render_frame) {
       command.sample_time = block_render_frame;
-    } else if (!command_belongs_to_block(command.sample_time, block_render_frame, num_frames)) {
-      store_pending(command);
-      continue;
+      current_block = true;
+    } else {
+      current_block = command_belongs_to_block(command.sample_time, block_render_frame, num_frames);
     }
-    store_pending(command);
+    store_pending(command, current_block);
   }
   // Commands beyond the per-block cap stay queued for future blocks; surface
   // the backlog so hosts can observe the resulting temporal drift.
@@ -411,11 +438,34 @@ void RealtimeEngine::drain_commands(int64_t block_render_frame, int num_frames) 
   }
 }
 
-void RealtimeEngine::store_pending(const rt::Command& command) noexcept {
+void RealtimeEngine::store_pending(const rt::Command& command, bool prefer_current) noexcept {
   for (size_t i = 0; i < pending_.size(); ++i) {
     if (!pending_active_[i]) {
       pending_[i] = command;
       pending_active_[i] = true;
+      return;
+    }
+  }
+  // Bank is full. If this command must fire in the current block, evict the
+  // furthest-future pending entry to make room rather than dropping the
+  // current-block command. The evicted future command is the one whose loss is
+  // least disruptive (it would have fired latest, if at all).
+  if (prefer_current) {
+    size_t furthest = pending_.size();
+    int64_t furthest_time = command.sample_time;
+    for (size_t i = 0; i < pending_.size(); ++i) {
+      if (pending_[i].sample_time > furthest_time) {
+        furthest_time = pending_[i].sample_time;
+        furthest = i;
+      }
+    }
+    if (furthest < pending_.size()) {
+      pending_[furthest] = command;
+      pending_active_[furthest] = true;
+      // The displaced far-future command is dropped; report it so hosts can
+      // observe the lost command rather than have it vanish silently.
+      enqueue_error(TelemetryErrorCode::kPendingCommandOverflow, transport_.render_frame(),
+                    transport_.sample_position(), 1);
       return;
     }
   }

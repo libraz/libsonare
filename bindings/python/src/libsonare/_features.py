@@ -273,10 +273,11 @@ def spectral_centroid(
         ctypes.byref(out_count),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_count.value)]
-    if out and out_count.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_count.value)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_floats(out)
 
 
 def spectral_bandwidth(
@@ -310,10 +311,11 @@ def spectral_bandwidth(
         ctypes.byref(out_count),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_count.value)]
-    if out and out_count.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_count.value)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_floats(out)
 
 
 def spectral_rolloff(
@@ -350,10 +352,11 @@ def spectral_rolloff(
         ctypes.byref(out_count),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_count.value)]
-    if out and out_count.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_count.value)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_floats(out)
 
 
 def spectral_flatness(
@@ -387,10 +390,11 @@ def spectral_flatness(
         ctypes.byref(out_count),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_count.value)]
-    if out and out_count.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_count.value)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_floats(out)
 
 
 def zero_crossing_rate(
@@ -424,10 +428,11 @@ def zero_crossing_rate(
         ctypes.byref(out_count),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_count.value)]
-    if out and out_count.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_count.value)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_floats(out)
 
 
 def rms_energy(
@@ -461,10 +466,222 @@ def rms_energy(
         ctypes.byref(out_count),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_count.value)]
-    if out and out_count.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_count.value)]
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_floats(out)
+
+
+# ============================================================================
+# Features - Spectral contrast / poly / zero-crossings / tuning
+# ============================================================================
+
+
+def spectral_contrast(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_bands: int = 6,
+    fmin: float = 200.0,
+    quantile: float = 0.02,
+) -> np.ndarray:
+    """Compute spectral contrast (librosa.feature.spectral_contrast).
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        n_fft: FFT window size (default 2048).
+        hop_length: Hop length in samples (default 512).
+        n_bands: Number of frequency bands (default 6).
+        fmin: Lowest band edge in Hz (default 200.0).
+        quantile: Peak/valley quantile (default 0.02).
+
+    Returns:
+        A float32 array of shape ``(n_bands + 1, n_frames)`` (matches the
+        bare-ndarray convention of ``stft`` / ``mel_spectrogram`` / ``nn_filter``).
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_rows = ctypes.c_int()
+    out_cols = ctypes.c_int()
+    rc = lib.sonare_spectral_contrast(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_bands),
+        ctypes.c_float(fmin),
+        ctypes.c_float(quantile),
+        ctypes.byref(out),
+        ctypes.byref(out_rows),
+        ctypes.byref(out_cols),
+    )
+    _check(rc)
+    try:
+        rows = int(out_rows.value)
+        cols = int(out_cols.value)
+        return _from_c_float_array(out, rows * cols).reshape(rows, cols)
+    finally:
+        if out and out_rows.value * out_cols.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def poly_features(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    order: int = 1,
+) -> np.ndarray:
+    """Fit polynomial coefficients per frame (librosa.feature.poly_features).
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        n_fft: FFT window size (default 2048).
+        hop_length: Hop length in samples (default 512).
+        order: Polynomial order (default 1).
+
+    Returns:
+        A float32 array of shape ``(order + 1, n_frames)`` (matches the
+        bare-ndarray convention of ``stft`` / ``mel_spectrogram`` / ``nn_filter``).
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_rows = ctypes.c_int()
+    out_cols = ctypes.c_int()
+    rc = lib.sonare_poly_features(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(order),
+        ctypes.byref(out),
+        ctypes.byref(out_rows),
+        ctypes.byref(out_cols),
+    )
+    _check(rc)
+    try:
+        rows = int(out_rows.value)
+        cols = int(out_cols.value)
+        return _from_c_float_array(out, rows * cols).reshape(rows, cols)
+    finally:
+        if out and out_rows.value * out_cols.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def zero_crossings(
+    samples: Sequence[float] | list[float],
+    threshold: float = 1e-10,
+    ref_magnitude: bool = False,
+    pad: bool = True,
+    zero_pos: bool = True,
+) -> np.ndarray:
+    """Return zero-crossing sample indices (librosa.zero_crossings).
+
+    Args:
+        samples: Input signal.
+        threshold: Magnitudes <= threshold are treated as zero (default 1e-10).
+        ref_magnitude: Scale ``threshold`` by ``max(|y|)`` (default False).
+        pad: Always report index 0 as a zero-crossing (default True).
+        zero_pos: Treat the sign of zero as positive (default True).
+
+    Returns:
+        A 1-D ``int32`` array of zero-crossing sample indices.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_count = ctypes.c_size_t()
+    rc = lib.sonare_zero_crossings(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_float(threshold),
+        ctypes.c_int(1 if ref_magnitude else 0),
+        ctypes.c_int(1 if pad else 0),
+        ctypes.c_int(1 if zero_pos else 0),
+        ctypes.byref(out),
+        ctypes.byref(out_count),
+    )
+    _check(rc)
+    try:
+        return np.asarray([int(out[i]) for i in range(out_count.value)], dtype=np.int32)
+    finally:
+        if out and out_count.value > 0:
+            lib.sonare_free_ints(out)
+
+
+def pitch_tuning(
+    frequencies: Sequence[float] | list[float],
+    resolution: float = 0.01,
+    bins_per_octave: int = 12,
+) -> float:
+    """Per-octave tuning offset from detected pitches (librosa.pitch_tuning).
+
+    Args:
+        frequencies: Detected pitch frequencies in Hz (non-positive ignored).
+        resolution: Tuning resolution in fractions of a bin (default 0.01).
+        bins_per_octave: Pitch bins per octave (default 12).
+
+    Returns:
+        Tuning offset in fractions of a bin, in ``(-0.5, 0.5]``.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(frequencies)
+    out = ctypes.c_float(0.0)
+    rc = lib.sonare_pitch_tuning(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_float(resolution),
+        ctypes.c_int(bins_per_octave),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return float(out.value)
+
+
+def estimate_tuning(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    resolution: float = 0.01,
+    bins_per_octave: int = 12,
+) -> float:
+    """Global tuning offset of an audio signal (librosa.estimate_tuning).
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        n_fft: FFT window size (default 2048).
+        hop_length: Hop length in samples (default 512).
+        resolution: Tuning resolution in fractions of a bin (default 0.01).
+        bins_per_octave: Pitch bins per octave (default 12).
+
+    Returns:
+        Tuning offset in fractions of a bin, in ``(-0.5, 0.5]``.
+    """
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.c_float(0.0)
+    rc = lib.sonare_estimate_tuning(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(resolution),
+        ctypes.c_int(bins_per_octave),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return float(out.value)
 
 
 # ============================================================================
@@ -630,6 +847,66 @@ def short_term_lufs(
         samples,
         ctypes.c_int(sample_rate),
     )
+
+
+def lufs_interleaved(
+    samples: Sequence[float] | list[float],
+    channels: int,
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> LufsResult:
+    """ITU-R BS.1770-4 multi-channel LUFS over an interleaved buffer.
+
+    Args:
+        samples: Interleaved input buffer of ``frames * channels`` values.
+        channels: Channel count (must be > 0).
+        sample_rate: Sample rate in Hz (default 22050).
+
+    Returns:
+        A :class:`LufsResult` with integrated/momentary/short-term LUFS and
+        loudness range.
+    """
+    samples = _validate_samples("lufs_interleaved", samples, validate=validate)
+    lib = _get_lib()
+    c_array, total = _to_c_float_array(samples)
+    frames = total // channels if channels > 0 else 0
+    out = SonareLufsResult()
+    rc = lib.sonare_lufs_interleaved(
+        c_array,
+        ctypes.c_size_t(frames),
+        ctypes.c_int(channels),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return LufsResult(
+        integrated_lufs=float(out.integrated_lufs),
+        momentary_lufs=float(out.momentary_lufs),
+        short_term_lufs=float(out.short_term_lufs),
+        loudness_range=float(out.loudness_range),
+    )
+
+
+def ebur128_loudness_range(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> float:
+    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer."""
+    samples = _validate_samples("ebur128_loudness_range", samples, validate=validate)
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.c_float(0.0)
+    rc = lib.sonare_ebur128_loudness_range(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return float(out.value)
 
 
 # ============================================================================

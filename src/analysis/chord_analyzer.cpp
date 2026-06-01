@@ -166,13 +166,12 @@ float extension_threshold(ChordQuality quality) {
   }
 }
 
-bool chord_contains_pitch_class(ChordQuality quality, PitchClass root, PitchClass pitch) {
-  for (const auto& candidate : generate_all_chord_templates()) {
-    if (candidate.root == root && candidate.quality == quality) {
-      return candidate.pattern[static_cast<int>(pitch)] > 0.0f;
-    }
-  }
-  return pitch == root;
+/// @brief Checks whether @p chord's pattern contains @p pitch.
+/// @details Uses the already-selected template directly instead of regenerating
+/// the full 192-entry template set per call, which also avoids a template-set
+/// mismatch when @c use_triads_only is enabled.
+bool chord_contains_pitch_class(const ChordTemplate& chord, PitchClass pitch) {
+  return chord.pattern[static_cast<int>(pitch)] > 0.0f || pitch == chord.root;
 }
 
 }  // namespace
@@ -315,7 +314,9 @@ void ChordAnalyzer::analyze_chords() {
   }
 
   int n_frames = chroma_.n_frames();
-  int n_chroma = chroma_.n_chroma();
+  // The smoothing/observation buffers are fixed at 12 pitch classes; clamp the
+  // chroma iteration so a chromagram with more than 12 bins cannot overrun them.
+  int n_chroma = std::min(chroma_.n_chroma(), 12);
 
   // Smoothing: apply running average to chroma
   int smooth_frames =
@@ -397,7 +398,7 @@ void ChordAnalyzer::analyze_chords() {
       if (config_.detect_inversions) {
         const PitchClass estimated_bass =
             estimate_bass_pitch_class(segment_start, f, templates_[current_chord]);
-        if (chord_contains_pitch_class(chord.quality, chord.root, estimated_bass)) {
+        if (chord_contains_pitch_class(templates_[current_chord], estimated_bass)) {
           chord.bass = estimated_bass;
         }
       }
@@ -425,15 +426,21 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
     return;
   }
 
-  int n_chroma = chroma_.n_chroma();
+  // The per-beat chroma buffer is fixed at 12 pitch classes; clamp iteration so
+  // a chromagram with more than 12 bins cannot overrun it.
+  int n_chroma = std::min(chroma_.n_chroma(), 12);
   float hop_duration = static_cast<float>(chroma_.hop_length()) / chroma_.sample_rate();
 
   // Detect chord at each beat position
   std::vector<int> beat_chords;
   std::vector<float> beat_confidences;
   std::vector<ChordHmmObservation> observations;
+  // Retain each beat's smoothed chroma so confidences can be recomputed against
+  // the Viterbi-selected templates (which may differ from the per-beat argmax).
+  std::vector<std::array<float, 12>> beat_chromas;
   beat_chords.reserve(beat_times.size());
   beat_confidences.reserve(beat_times.size());
+  beat_chromas.reserve(beat_times.size());
   if (config_.use_hmm) {
     observations.reserve(beat_times.size());
   }
@@ -465,6 +472,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
     ChordMatch match = find_best_chord_with_confidence(beat_chroma.data());
     beat_chords.push_back(match.index);
     beat_confidences.push_back(match.confidence);
+    beat_chromas.push_back(beat_chroma);
     if (config_.use_hmm) {
       observations.push_back(chord_observation(beat_chroma.data()));
     }
@@ -477,6 +485,13 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
     auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config());
     if (smoothed_sequence.size() == beat_chords.size()) {
       beat_chords = std::move(smoothed_sequence);
+      // Viterbi may replace a beat's chord with one that the per-beat argmax did
+      // not select; recompute each confidence against the chosen template so the
+      // stored score reflects the final chord rather than the pre-Viterbi one.
+      for (size_t i = 0; i < beat_chords.size(); ++i) {
+        beat_confidences[i] = std::min(
+            1.0f, std::max(0.0f, templates_[beat_chords[i]].correlate(beat_chromas[i].data())));
+      }
     }
   }
 
@@ -506,7 +521,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
       if (config_.detect_inversions) {
         const PitchClass estimated_bass =
             estimate_bass_pitch_class(start_frame, end_frame, templates_[current_chord]);
-        if (chord_contains_pitch_class(chord.quality, chord.root, estimated_bass)) {
+        if (chord_contains_pitch_class(templates_[current_chord], estimated_bass)) {
           chord.bass = estimated_bass;
         }
       }

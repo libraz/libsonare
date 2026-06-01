@@ -5,6 +5,7 @@
 #include <queue>
 #include <utility>
 
+#include "rt/fractional_delay.h"
 #include "util/exception.h"
 
 namespace sonare::graph {
@@ -337,31 +338,8 @@ void Graph::prepare_delay_lines(RuntimeConnection& runtime_connection) {
 
 float Graph::process_fractional_delay(RuntimeConnection::FractionalDelayLine& delay_line,
                                       int delay_samples_q8, float input) noexcept {
-  auto sample_at_delay = [&](int delay) {
-    delay = std::max(0, delay);
-    const size_t size = delay_line.buffer.size();
-    const size_t index =
-        (delay_line.write_index + size - (static_cast<size_t>(delay) % size)) % size;
-    return delay_line.buffer[index];
-  };
-
-  delay_line.buffer[delay_line.write_index] = input;
-  const float delay = static_cast<float>(std::max(0, delay_samples_q8)) / 256.0f;
-  const int base = static_cast<int>(std::floor(delay));
-  const float mu = delay - static_cast<float>(base);
-
-  const float y0 = sample_at_delay(base - 1);
-  const float y1 = sample_at_delay(base);
-  const float y2 = sample_at_delay(base + 1);
-  const float y3 = sample_at_delay(base + 2);
-
-  delay_line.write_index = (delay_line.write_index + 1) % delay_line.buffer.size();
-
-  const float c0 = -mu * (mu - 1.0f) * (mu - 2.0f) / 6.0f;
-  const float c1 = (mu + 1.0f) * (mu - 1.0f) * (mu - 2.0f) / 2.0f;
-  const float c2 = -(mu + 1.0f) * mu * (mu - 2.0f) / 2.0f;
-  const float c3 = (mu + 1.0f) * mu * (mu - 1.0f) / 6.0f;
-  return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
+  return rt::lagrange3_fractional_delay(delay_line.buffer, delay_line.write_index, delay_samples_q8,
+                                        input);
 }
 
 }  // namespace sonare::graph

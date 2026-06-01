@@ -34,6 +34,7 @@ import type {
   KeyCandidate,
   KeyDetectionOptions,
   LufsResult,
+  Matrix2D,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringPreset,
@@ -2016,6 +2017,140 @@ export function spectralCentroid(
   hopLength = 512,
 ): Float32Array {
   return addon.spectralCentroid(samples, sampleRate, nFft, hopLength);
+}
+
+/** Spectral contrast (librosa.feature.spectral_contrast); (nBands+1) x nFrames. */
+export function spectralContrast(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nBands = 6,
+  fmin = 200.0,
+  quantile = 0.02,
+): Matrix2D {
+  return addon.spectralContrast(samples, sampleRate, nFft, hopLength, nBands, fmin, quantile);
+}
+
+/** Per-frame polynomial coefficients (librosa.feature.poly_features); (order+1) x nFrames. */
+export function polyFeatures(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  order = 1,
+): Matrix2D {
+  return addon.polyFeatures(samples, sampleRate, nFft, hopLength, order);
+}
+
+/** Zero-crossing indices of a signal (librosa.zero_crossings). */
+export function zeroCrossings(
+  samples: Float32Array,
+  threshold = 1e-10,
+  refMagnitude = false,
+  pad = true,
+  zeroPos = true,
+): Int32Array {
+  return addon.zeroCrossings(samples, threshold, refMagnitude, pad, zeroPos);
+}
+
+/** Global tuning offset from a set of frequencies (librosa.pitch_tuning). */
+export function pitchTuning(
+  frequencies: Float32Array,
+  resolution = 0.01,
+  binsPerOctave = 12,
+): number {
+  return addon.pitchTuning(frequencies, resolution, binsPerOctave);
+}
+
+/** Tuning offset of an audio signal (librosa.estimate_tuning). */
+export function estimateTuning(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  resolution = 0.01,
+  binsPerOctave = 12,
+): number {
+  return addon.estimateTuning(samples, sampleRate, nFft, hopLength, resolution, binsPerOctave);
+}
+
+/** NMF of a flattened [nFeatures x nFrames] spectrogram (librosa.decompose.decompose). */
+export function decompose(
+  s: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  nComponents: number,
+  nIter = 50,
+  beta = 2.0,
+): { w: Matrix2D; h: Matrix2D } {
+  return addon.decompose(s, nFeatures, nFrames, nComponents, nIter, beta);
+}
+
+/** Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram. */
+export function nnFilter(
+  s: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  aggregate = 'mean',
+  k = 7,
+  width = 1,
+): Matrix2D {
+  return addon.nnFilter(s, nFeatures, nFrames, aggregate, k, width);
+}
+
+/** Reorder/concatenate a signal by (start,end) interval slices (librosa.effects.remix). */
+export function remix(
+  samples: Float32Array,
+  intervals: Int32Array,
+  sampleRate = 22050,
+  alignZeros = false,
+): Float32Array {
+  return addon.remix(samples, intervals, sampleRate, alignZeros);
+}
+
+/** Phase-vocoder time-scale modification (rate > 1 faster, < 1 slower). */
+export function phaseVocoder(
+  samples: Float32Array,
+  rate: number,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+): Float32Array {
+  return addon.phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
+}
+
+/** HPSS into harmonic / percussive / residual signals. */
+export function hpssWithResidual(
+  samples: Float32Array,
+  sampleRate = 22050,
+  kernelHarmonic = 31,
+  kernelPercussive = 31,
+): {
+  harmonic: Float32Array;
+  percussive: Float32Array;
+  residual: Float32Array;
+  sampleRate: number;
+} {
+  return addon.hpssWithResidual(samples, sampleRate, kernelHarmonic, kernelPercussive);
+}
+
+/**
+ * Channel-weighted multichannel loudness + LRA (BS.1770 / EBU R128) from an
+ * interleaved buffer of `frames * channels` samples. The per-channel frame
+ * count is derived from the buffer length and `channels`.
+ */
+export function lufsInterleaved(
+  samples: Float32Array,
+  channels: number,
+  sampleRate = 22050,
+): LufsResult {
+  return addon.lufsInterleaved(samples, channels, sampleRate);
+}
+
+/** Standards-compliant EBU R128 loudness range (LRA) in LU. */
+export function ebur128LoudnessRange(samples: Float32Array, sampleRate = 22050): number {
+  return addon.ebur128LoudnessRange(samples, sampleRate);
 }
 
 export function spectralBandwidth(
