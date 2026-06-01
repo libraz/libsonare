@@ -38,7 +38,9 @@ function makeSine(durationSec: number, freqHz: number): Float32Array {
 
 function allFinite(arr: ArrayLike<number>): boolean {
   for (let i = 0; i < arr.length; i++) {
-    if (!Number.isFinite(arr[i])) return false;
+    if (!Number.isFinite(arr[i])) {
+      return false;
+    }
   }
   return arr.length > 0;
 }
@@ -90,7 +92,9 @@ describe('newly exposed WASM functions', () => {
     const nFrames = 24;
     const nComponents = 3;
     const s = new Float32Array(nFeatures * nFrames);
-    for (let i = 0; i < s.length; i++) s[i] = Math.abs(Math.sin(i));
+    for (let i = 0; i < s.length; i++) {
+      s[i] = Math.abs(Math.sin(i));
+    }
     const r = decompose(s, nFeatures, nFrames, nComponents, 20, 2.0);
     expect(r.w.length).toBe(nFeatures * nComponents);
     expect(r.h.length).toBe(nComponents * nFrames);
@@ -102,7 +106,9 @@ describe('newly exposed WASM functions', () => {
     const nFeatures = 12;
     const nFrames = 20;
     const s = new Float32Array(nFeatures * nFrames);
-    for (let i = 0; i < s.length; i++) s[i] = Math.abs(Math.cos(i));
+    for (let i = 0; i < s.length; i++) {
+      s[i] = Math.abs(Math.cos(i));
+    }
     const r = nnFilter(s, nFeatures, nFrames);
     expect(r.rows).toBe(nFeatures);
     expect(r.cols).toBe(nFrames);

@@ -70,5 +70,7 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
       - name: Build
         run: cmake --build build --parallel
+      - name: Generate K-weighting reference fixture
+        run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel

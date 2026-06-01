@@ -71,6 +71,8 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
       - name: Build
         run: cmake --build build --parallel
+      - name: Generate K-weighting reference fixture
+        run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
 
@@ -99,6 +101,8 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
       - name: Build
         run: cmake --build build-sanitize --parallel
+      - name: Generate K-weighting reference fixture
+        run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
         env:
           ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
@@ -166,6 +170,9 @@ jobs:
 
       - name: Show ccache statistics
         run: ccache --show-stats
+
+      - name: Generate K-weighting reference fixture
+        run: python3 tools/scripts/k_weighting_reference.py
 
       - name: Run C++ tests
         run: ctest --test-dir build --output-on-failure --parallel

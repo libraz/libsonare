@@ -9,7 +9,7 @@ plus broadcast-grade mastering, mixing, and editing.
 
 Built on a C++ core with zero Python dependencies. Analysis defaults match
 librosa (validated against generated librosa reference values in CI), and
-mastering ships 77 named DSP processors implemented against published
+mastering ships 66 named DSP processors implemented against published
 references (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers,
 Vicanek matched-Z biquads, ADAA-antialiased saturation) — Apache-2.0, no model
 weights.
@@ -89,6 +89,36 @@ bpm = audio.detect_bpm()
 
 # Or call the function directly (equivalent shortcut)
 bpm = libsonare.detect_bpm(samples, sample_rate=sr)
+```
+
+### Pitch, timbre, and spectral APIs
+
+Pitch tracking keeps unvoiced `f0` frames as `nan` by default. Pass
+`fill_na=True` when downstream code needs finite values and should treat
+unvoiced frames as `0`. Timbre analysis returns aggregate metrics plus
+`timbre_over_time`; `timbreOverTime` is also available as an alias.
+
+```python
+yin = libsonare.pitch_yin(samples, sample_rate=sr, fill_na=True)
+pyin = audio.pitch_pyin(fill_na=True)
+
+timbre = libsonare.analyze_timbre(samples, sample_rate=sr)
+print(timbre.brightness, timbre.timbre_over_time[0].brightness)
+
+contrast = libsonare.spectral_contrast(samples, sample_rate=sr)
+poly = libsonare.poly_features(samples, sample_rate=sr)
+crossings = libsonare.zero_crossings(samples)
+tuning = libsonare.estimate_tuning(samples, sample_rate=sr)
+offset = libsonare.pitch_tuning(yin.f0)
+
+w, h = libsonare.decompose(spectrogram, n_features, n_frames, 8)
+filtered = libsonare.nn_filter(spectrogram, n_features, n_frames)
+remixed = libsonare.remix(samples, [0, sr, 2 * sr, 3 * sr], sample_rate=sr)
+stretched = libsonare.phase_vocoder(samples, sample_rate=sr, rate=1.5)
+hpss = libsonare.hpss_with_residual(samples, sample_rate=sr)
+
+multi = libsonare.lufs_interleaved(interleaved, channels=2, sample_rate=sr)
+lra = libsonare.ebur128_loudness_range(samples, sample_rate=sr)
 ```
 
 ### Mastering
@@ -369,8 +399,9 @@ sonare mastering-stereo-analyze left.wav --reference right.wav --analysis stereo
 
 - **Detection**: BPM (`float`), key (`Key(root, mode, confidence)`), beats (`list[float]` seconds), onsets (`list[float]` seconds)
 - **Analysis**: Full music analysis (`AnalysisResult` with BPM, key, time signature, beat times)
-- **Effects**: HPSS, pitch shift, time stretch, normalize, trim
-- **Features**: STFT, mel spectrogram, MFCC, chroma, spectral features, pitch tracking (YIN / pYIN with voicing probabilities)
+- **Effects**: HPSS, HPSS with residual, pitch shift, time stretch, phase vocoder, normalize, trim, remix
+- **Features**: STFT, mel spectrogram, MFCC, chroma, CQT/VQT, spectral contrast, poly features, zero crossings, pitch tracking (YIN / pYIN with optional `fill_na`)
+- **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
 - **Conversions**: Hz / mel / MIDI / note, frames / time
 - **I/O**: Load WAV / MP3 (and M4A/AAC/FLAC/OGG when built with FFmpeg), resample
 

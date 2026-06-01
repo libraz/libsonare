@@ -10,7 +10,7 @@
 
 A dependency-free audio DSP toolkit for Node.js — librosa-compatible analysis
 plus broadcast-grade mastering, mixing, and editing — exposed as a native N-API
-addon built on the libsonare C++ core. Mastering ships 77 named DSP processors
+addon built on the libsonare C++ core. Mastering ships 66 named DSP processors
 implemented against published references (ITU-R BS.1770-4 true-peak limiting,
 Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
 saturation), all under Apache-2.0 with no model weights.
@@ -82,6 +82,54 @@ const keyWithOptions = detectKey(samples, audio.getSampleRate(), {
   hopLength: 512,
 });
 const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
+```
+
+### Pitch, timbre, and spectral APIs
+
+Pitch tracking keeps unvoiced `f0` frames as `NaN` by default. Pass
+`fillNa: true` when downstream code needs finite values and should treat
+unvoiced frames as `0`. Timbre analysis returns aggregate metrics plus
+`timbreOverTime`.
+
+```typescript
+import {
+  analyzeTimbre,
+  decompose,
+  ebur128LoudnessRange,
+  estimateTuning,
+  hpssWithResidual,
+  lufsInterleaved,
+  nnFilter,
+  phaseVocoder,
+  pitchPyin,
+  pitchTuning,
+  pitchYin,
+  polyFeatures,
+  remix,
+  spectralContrast,
+  zeroCrossings,
+} from '@libraz/libsonare-native';
+
+const yin = pitchYin(samples, sampleRate, 2048, 512, 65, 2093, 0.3, true);
+const pyin = pitchPyin(samples, sampleRate, 2048, 512, 65, 2093, 0.3, true);
+
+const timbre = analyzeTimbre(samples, sampleRate);
+console.log(timbre.brightness, timbre.timbreOverTime[0]?.brightness);
+
+const contrast = spectralContrast(samples, sampleRate); // Matrix2D
+const poly = polyFeatures(samples, sampleRate);         // Matrix2D
+const crossings = zeroCrossings(samples);               // Int32Array
+const tuning = estimateTuning(samples, sampleRate);
+const offset = pitchTuning(yin.f0);
+
+const { w, h } = decompose(spectrogram, nFeatures, nFrames, 8);
+const filtered = nnFilter(spectrogram, nFeatures, nFrames);
+const remixed = remix(samples, Int32Array.from([0, sampleRate, sampleRate, 2 * sampleRate]));
+const stretched = phaseVocoder(samples, 1.5, sampleRate);
+const hpss = hpssWithResidual(samples, sampleRate);
+
+const multi = lufsInterleaved(interleaved, 2, sampleRate);
+const lra = ebur128LoudnessRange(samples, sampleRate);
 ```
 
 ### Room acoustics

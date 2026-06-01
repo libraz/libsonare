@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Bindings & API
+
+- Added `fill_na` / `fillNa` to YIN and pYIN pitch APIs across the C ABI,
+  Python, Node, and WASM. The default keeps unvoiced frames as `NaN`; enabling
+  the option returns `0` for unvoiced `f0` frames.
+- Added time-varying timbre output to `analyze_timbre` / `analyzeTimbre`.
+  Results now include per-window brightness, warmth, density, roughness, and
+  complexity entries via `timbre_over_time` / `timbreOverTime`.
+- Exposed additional librosa-compatible feature, decomposition, effect, and
+  loudness APIs across the C ABI, Python, Node, and WASM: spectral contrast,
+  polynomial spectral features, zero-crossing indices, pitch tuning, tuning
+  estimation, NMF decomposition, nearest-neighbour filtering, interval remix,
+  phase-vocoder time scaling, HPSS with residual, multichannel LUFS, and
+  EBU R128 loudness range.
+
+### Fixes
+
+- Preserved mixer pan mode when serialising scenes after `sonare_strip_set_pan`.
+- Removed a per-call allocation from latest goniometer reads.
+
+### Tooling & internal
+
+- Updated Node/WASM package tooling versions and adjusted parity normalisation
+  so digit runs in names such as `ebur128` match C naming.
+
 ## v1.2.2 (2026-06-01)
 
 ### Breaking changes
