@@ -34,6 +34,32 @@
 
 namespace sonare::engine {
 
+/// @brief Realtime audio engine.
+///
+/// @par Thread-safety contract
+/// RealtimeEngine has two callers: a single **audio thread** that drives
+/// @c process / @c process_with_monitor / @c render_offline, and a single
+/// **control thread** (host UI/scripting) that issues parameter changes and
+/// configuration mutations. The two threads must never enter the same
+/// non-noexcept method concurrently.
+/// - **Audio-thread-safe (RT-safe, noexcept, allocation-free after prepare):**
+///   @c process, @c process_with_monitor, @c push_command (lock-free SPSC
+///   producer; control-thread is the sole writer in normal flow but the
+///   underlying queue is wait-free), @c pop_telemetry, @c pop_meter_telemetry,
+///   @c set_loop, @c set_metronome_config, @c set_capture_*, @c reset_capture,
+///   @c marker_by_index/id, @c seek_marker, @c set_loop_from_markers,
+///   @c set_mixing_enabled, @c set_monitoring_enabled,
+///   @c set_param_smoothing_ms, @c set_graph_latency_samples_q8,
+///   @c transport, @c automation accessors, all @c *_count noexcept getters.
+/// - **Control-thread-only (NOT RT-safe; may allocate or take time):**
+///   @c prepare, @c render_offline (offline use), @c set_tempo,
+///   @c set_time_signature, @c set_markers, @c set_clips,
+///   @c bind_mixing_strip, @c add_monitor_strip, @c remove_monitor_strip,
+///   @c swap_graph, @c bind_graph_parameter. These must be called from the
+///   thread that owns engine lifecycle; do not call from the audio callback.
+/// Cross-thread state changes that must reach the audio thread (e.g. tempo,
+/// parameter automation) flow through @c push_command and the SPSC command
+/// queue, drained inside @c process at sub-block boundaries.
 class RealtimeEngine {
  public:
   static constexpr size_t kMaxCommandsPerBlock = 64;

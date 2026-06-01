@@ -42,6 +42,22 @@ struct ChannelStripConfig {
   float input_trim_db = 0.0f;
 };
 
+/// @brief Per-track signal path: trim, EQ, pre-fader sends, fader, pan,
+///        post-fader sends, meter, and optional insert chain.
+///
+/// @par Thread-safety
+/// - @c process and @c process_at are RT-safe (no allocation, no locks)
+///   once @c prepare has been called with the working block size and the
+///   target number of pre/post inserts (capped at @c kMaxInserts). They must
+///   be driven by a single audio thread.
+/// - All structural mutators — @c add_pre_insert / @c add_post_insert,
+///   @c add_send, @c set_eq_position, @c set_pan_law, @c set_polarity_invert,
+///   etc. — must be called from the host/control thread. They may allocate
+///   and may throw @c sonare::SonareException (InvalidParameter for null
+///   processors, InvalidState when the insert cap is exhausted).
+/// - Real-time parameter changes (fader, pan, send level, EQ band gains)
+///   land via @c AutomationLane::push from the control thread; the audio
+///   thread reads them with @c AutomationLane::pull during @c process_at.
 class ChannelStrip : public rt::ProcessorBase {
  public:
   explicit ChannelStrip(ChannelStripConfig config = {});
