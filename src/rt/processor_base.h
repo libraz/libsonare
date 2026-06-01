@@ -3,8 +3,9 @@
 /// @file processor_base.h
 /// @brief Base interface for stateful mastering processors.
 
-#include <stdexcept>
 #include <string>
+
+#include "util/exception.h"
 
 namespace sonare::rt {
 
@@ -12,16 +13,17 @@ class ProcessorBase {
  public:
   virtual ~ProcessorBase() = default;
 
-  /// @brief Throws @c std::logic_error if @p prepared is false. Centralises
-  ///        the "X must be prepared before processing" check that every
-  ///        derived processor performs at the top of @c process().
+  /// @brief Throws @c SonareException (InvalidState) if @p prepared is false.
+  ///        Centralises the "X must be prepared before processing" check that
+  ///        every derived processor performs at the top of @c process().
   /// @param prepared       Value of the derived processor's @c prepared_ flag.
   /// @param processor_name Class name used in the exception message
   ///                       (e.g. "Compressor"). Must be a string literal or
   ///                       otherwise outlive the throw.
   static void ensure_prepared(bool prepared, const char* processor_name) {
     if (!prepared) {
-      throw std::logic_error(std::string(processor_name) + " must be prepared before processing");
+      throw SonareException(ErrorCode::InvalidState,
+                            std::string(processor_name) + " must be prepared before processing");
     }
   }
 

@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare::rt {
 namespace {
@@ -25,22 +26,22 @@ PolyphaseFir make_true_peak_fir(int factor) {
   if (factor == 2) return design_polyphase_lowpass(2, 24, 7.85726, true);
   if (factor == 4) return design_polyphase_lowpass(4, 48, kKaiserBeta, true);
   if (factor == 8) return design_polyphase_lowpass(8, 96, kKaiserBeta, true);
-  throw std::invalid_argument("TruePeakFilter factor must be 2, 4, or 8");
+  throw SonareException(ErrorCode::InvalidParameter, "TruePeakFilter factor must be 2, 4, or 8");
 }
 
 void validate_buffers(const float* const* input, int num_channels, int num_samples) {
   if (num_channels < 0 || num_samples < 0) {
-    throw std::invalid_argument("dimensions must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "dimensions must be non-negative");
   }
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
   if (input == nullptr) {
-    throw std::invalid_argument("input must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "input must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (input[ch] == nullptr) {
-      throw std::invalid_argument("input channel must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "input channel must not be null");
     }
   }
 }
@@ -50,7 +51,7 @@ void validate_buffers(const float* const* input, int num_channels, int num_sampl
 TruePeakFilter::TruePeakFilter(int num_channels, int factor)
     : factor_(factor), fir_(make_true_peak_fir(factor)) {
   if (num_channels < 0) {
-    throw std::invalid_argument("num_channels must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
   prepare(num_channels, 0);
 }
@@ -85,11 +86,11 @@ void TruePeakFilter::upsample(const float* const* input, float* const* output_ov
     return;
   }
   if (output_oversampled == nullptr) {
-    throw std::invalid_argument("output must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (output_oversampled[ch] == nullptr) {
-      throw std::invalid_argument("output channel must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "output channel must not be null");
     }
     for (int i = 0; i < num_samples; ++i) {
       for (int phase = 0; phase < factor_; ++phase) {
@@ -129,7 +130,7 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
   validate_buffers(input, num_channels, num_samples);
   if (num_channels == 0 || num_samples == 0) return;
   if (output_oversampled == nullptr) {
-    throw std::invalid_argument("output must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
   }
   const size_t history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
   if (history.size() != static_cast<size_t>(num_channels)) {
@@ -141,7 +142,7 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (output_oversampled[ch] == nullptr) {
-      throw std::invalid_argument("output channel must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "output channel must not be null");
     }
     auto& channel_history = history[static_cast<size_t>(ch)];
     if (channel_history.size() != history_size) {

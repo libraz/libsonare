@@ -1,8 +1,8 @@
-#include <stdexcept>
 #include <string>
 #include <utility>
 
 #include "mixing/api/scene.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace sonare::mixing::api {
@@ -17,13 +17,13 @@ const char* to_string(SendTiming timing) { return timing == SendTiming::PreFader
 InsertSlot insert_slot_from_string(const std::string& value) {
   if (value == "pre") return InsertSlot::PreFader;
   if (value == "post") return InsertSlot::PostFader;
-  throw std::invalid_argument("unknown insert slot: " + value);
+  throw SonareException(ErrorCode::InvalidParameter, "unknown insert slot: " + value);
 }
 
 SendTiming send_timing_from_string(const std::string& value) {
   if (value == "pre") return SendTiming::PreFader;
   if (value == "post") return SendTiming::PostFader;
-  throw std::invalid_argument("unknown send timing: " + value);
+  throw SonareException(ErrorCode::InvalidParameter, "unknown send timing: " + value);
 }
 
 // ---------------------------------------------------------------------------
@@ -314,12 +314,12 @@ std::string scene_to_json(const Scene& scene) {
 Scene scene_from_json(const std::string& json) {
   const auto root = sonare::util::json::parse(json);
   if (!root.is_object()) {
-    throw std::invalid_argument("scene JSON must be an object");
+    throw SonareException(ErrorCode::InvalidParameter, "scene JSON must be an object");
   }
   Scene scene;
   scene.version = int_or(root, "version", 1);
   if (scene.version != 1) {
-    throw std::invalid_argument("unsupported scene JSON version");
+    throw SonareException(ErrorCode::InvalidParameter, "unsupported scene JSON version");
   }
   if (const auto* strips = root.find("strips")) scene.strips = strips_from_value(*strips);
   if (const auto* buses = root.find("buses")) scene.buses = buses_from_value(*buses);

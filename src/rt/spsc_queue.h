@@ -6,9 +6,10 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
-#include <stdexcept>
 #include <type_traits>
 #include <vector>
+
+#include "util/exception.h"
 
 namespace sonare::rt {
 
@@ -26,7 +27,8 @@ class SpscQueue {
   /// Allocates storage for exactly @p capacity_pow2 records. Non-RT only.
   void reserve(size_t capacity_pow2) {
     if (capacity_pow2 == 0 || (capacity_pow2 & (capacity_pow2 - 1)) != 0) {
-      throw std::invalid_argument("SpscQueue capacity must be a non-zero power of two");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "SpscQueue capacity must be a non-zero power of two");
     }
     buffer_.assign(capacity_pow2, T{});
     mask_ = capacity_pow2 - 1;

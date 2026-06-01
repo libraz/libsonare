@@ -1,10 +1,10 @@
 #include "mixing/bus.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::mixing {
 
@@ -88,7 +88,7 @@ void BusProcessor::sum_inputs(const std::vector<float* const*>& inputs, float* c
 
 void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
   if (!processor) {
-    throw std::invalid_argument("insert processor must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
   }
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);

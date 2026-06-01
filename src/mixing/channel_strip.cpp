@@ -2,8 +2,9 @@
 
 #include <algorithm>
 #include <array>
-#include <stdexcept>
 #include <utility>
+
+#include "util/exception.h"
 
 namespace sonare::mixing {
 
@@ -595,10 +596,10 @@ size_t ChannelStrip::read_goniometer_latest(GoniometerPoint* dest,
 
 void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor) {
   if (!processor) {
-    throw std::invalid_argument("insert processor must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
   }
   if (pre_inserts_.size() + post_inserts_.size() >= kMaxInserts) {
-    throw std::length_error("ChannelStrip insert cap exceeded");
+    throw SonareException(ErrorCode::InvalidState, "ChannelStrip insert cap exceeded");
   }
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);
@@ -609,10 +610,10 @@ void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor) 
 
 void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor) {
   if (!processor) {
-    throw std::invalid_argument("insert processor must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
   }
   if (pre_inserts_.size() + post_inserts_.size() >= kMaxInserts) {
-    throw std::length_error("ChannelStrip insert cap exceeded");
+    throw SonareException(ErrorCode::InvalidState, "ChannelStrip insert cap exceeded");
   }
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);

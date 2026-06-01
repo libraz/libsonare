@@ -7,6 +7,7 @@
 #include "mastering/common/biquad_design.h"
 #include "mastering/common/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 namespace {
@@ -207,7 +208,13 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
         return from_common(common::vicanek_high_shelf(w0f, band.gain_db));
       case EqBandType::TiltShelf:
       case EqBandType::FlatTilt:
-        throw std::invalid_argument("unsupported Vicanek EQ band type");
+        // Vicanek matched-Z designs have no closed-form for tilt/flat-tilt;
+        // surfacing the error lets the caller pick BiquadCoeffMode::RBJ (which
+        // does support tilt) instead of silently falling through to a
+        // different magnitude/phase response.
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "Vicanek EQ coefficient mode does not support TiltShelf/FlatTilt; "
+                              "use BiquadCoeffMode::RBJ for these band types");
     }
   }
 

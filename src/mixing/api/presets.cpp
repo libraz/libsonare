@@ -1,6 +1,6 @@
 #include "mixing/api/presets.h"
 
-#include <stdexcept>
+#include "util/exception.h"
 
 namespace sonare::mixing::api {
 namespace {
@@ -107,7 +107,7 @@ ScenePreset scene_preset_from_string(const std::string& name) {
   if (name == "vocalReverbSend") return ScenePreset::VocalReverbSend;
   if (name == "drumBusSubgroup") return ScenePreset::DrumBusSubgroup;
   if (name == "commentaryDucking") return ScenePreset::CommentaryDucking;
-  throw std::invalid_argument("unknown mixing scene preset: " + name);
+  throw SonareException(ErrorCode::InvalidParameter, "unknown mixing scene preset: " + name);
 }
 
 const char* scene_preset_to_string(ScenePreset preset) noexcept {
@@ -131,7 +131,7 @@ Scene scene_preset(ScenePreset preset) {
     case ScenePreset::CommentaryDucking:
       return make_commentary_ducking();
   }
-  throw std::invalid_argument("unknown mixing scene preset");
+  throw SonareException(ErrorCode::InvalidParameter, "unknown mixing scene preset");
 }
 
 }  // namespace sonare::mixing::api

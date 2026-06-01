@@ -3,11 +3,11 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
-#include <stdexcept>
 #include <thread>
 #include <type_traits>
 
 #include "rt/command.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -23,8 +23,8 @@ static_assert(std::is_trivially_copyable_v<QueueRecord>);
 TEST_CASE("SpscQueue rejects invalid capacities", "[rt][spsc]") {
   sonare::rt::SpscQueue<QueueRecord> queue;
 
-  REQUIRE_THROWS_AS(queue.reserve(0), std::invalid_argument);
-  REQUIRE_THROWS_AS(queue.reserve(3), std::invalid_argument);
+  REQUIRE_THROWS_AS(queue.reserve(0), sonare::SonareException);
+  REQUIRE_THROWS_AS(queue.reserve(3), sonare::SonareException);
 }
 
 TEST_CASE("SpscQueue preserves FIFO order and full/empty states", "[rt][spsc]") {

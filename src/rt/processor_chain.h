@@ -4,10 +4,10 @@
 /// @brief Helpers for processor-chain level accounting.
 
 #include <initializer_list>
-#include <stdexcept>
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "util/exception.h"
 
 namespace sonare::rt {
 
@@ -15,7 +15,7 @@ inline int total_latency_samples(std::initializer_list<const ProcessorBase*> pro
   int total = 0;
   for (const ProcessorBase* processor : processors) {
     if (processor == nullptr) {
-      throw std::invalid_argument("processor must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "processor must not be null");
     }
     total += processor->latency_samples();
   }
@@ -26,7 +26,7 @@ inline int total_latency_samples_q8(std::initializer_list<const ProcessorBase*> 
   int total = 0;
   for (const ProcessorBase* processor : processors) {
     if (processor == nullptr) {
-      throw std::invalid_argument("processor must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "processor must not be null");
     }
     total += processor->latency_samples_q8();
   }
@@ -37,7 +37,7 @@ inline int total_latency_samples(const std::vector<const ProcessorBase*>& proces
   int total = 0;
   for (const ProcessorBase* processor : processors) {
     if (processor == nullptr) {
-      throw std::invalid_argument("processor must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "processor must not be null");
     }
     total += processor->latency_samples();
   }
@@ -48,7 +48,7 @@ inline int total_latency_samples_q8(const std::vector<const ProcessorBase*>& pro
   int total = 0;
   for (const ProcessorBase* processor : processors) {
     if (processor == nullptr) {
-      throw std::invalid_argument("processor must not be null");
+      throw SonareException(ErrorCode::InvalidParameter, "processor must not be null");
     }
     total += processor->latency_samples_q8();
   }

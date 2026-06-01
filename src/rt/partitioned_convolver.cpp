@@ -1,7 +1,8 @@
 #include "rt/partitioned_convolver.h"
 
 #include <algorithm>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare::rt {
 
@@ -11,9 +12,10 @@ PartitionedConvolver::PartitionedConvolver(PartitionedConvolverConfig config) : 
 }
 
 void PartitionedConvolver::set_impulse_response(const float* impulse_response, int num_samples) {
-  if (num_samples < 0) throw std::invalid_argument("num_samples must be non-negative");
+  if (num_samples < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "num_samples must be non-negative");
   if (num_samples > 0 && impulse_response == nullptr) {
-    throw std::invalid_argument("impulse_response must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "impulse_response must not be null");
   }
 
   const int partition_size = config_.partition_size;
@@ -103,7 +105,7 @@ void PartitionedConvolver::process_block(const float* input, float* output) noex
 
 void PartitionedConvolver::validate_config() const {
   if (config_.partition_size <= 0) {
-    throw std::invalid_argument("partition_size must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "partition_size must be positive");
   }
 }
 

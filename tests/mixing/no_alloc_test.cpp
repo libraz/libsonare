@@ -36,6 +36,7 @@
 #include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -987,9 +988,9 @@ TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safet
 
   // The N+1th insert (pre or post) must throw.
   REQUIRE_THROWS_AS(strip.add_pre_insert(std::make_unique<ScaleProcessor>(1.0f)),
-                    std::length_error);
+                    sonare::SonareException);
   REQUIRE_THROWS_AS(strip.add_post_insert(std::make_unique<ScaleProcessor>(1.0f)),
-                    std::length_error);
+                    sonare::SonareException);
 }
 
 #ifdef SONARE_WITH_VOICE_CHANGER

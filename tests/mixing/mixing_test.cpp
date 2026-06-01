@@ -20,6 +20,7 @@
 #include "mixing/meter.h"
 #include "sonare_c.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using sonare::constants::kTwoPi;
@@ -775,7 +776,7 @@ TEST_CASE("Mixing Scene JSON ignores unknown forward-compat fields", "[mixing]")
 
 TEST_CASE("Mixing Scene JSON rejects unsupported version", "[mixing]") {
   const std::string json = "{\"version\":2,\"strips\":[],\"buses\":[]}";
-  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(json), std::invalid_argument);
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(json), sonare::SonareException);
 }
 
 TEST_CASE("Mixing scene presets expose planned templates and JSON round-trip", "[mixing]") {
@@ -799,7 +800,7 @@ TEST_CASE("Mixing scene presets expose planned templates and JSON round-trip", "
   }
 
   REQUIRE_THROWS_AS(sonare::mixing::api::scene_preset_from_string("missing"),
-                    std::invalid_argument);
+                    sonare::SonareException);
 }
 
 TEST_CASE("Mixing scene presets contain expected routing intent", "[mixing]") {
