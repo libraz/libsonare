@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
-#include <stdexcept>
 
 #include "core/fft.h"
 #include "core/window.h"
@@ -404,10 +403,10 @@ Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames,
 
 MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power) {
   if (power <= 0.0f) {
-    throw std::invalid_argument("magphase: power must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "magphase: power must be > 0");
   }
   if (n > 0 && spec == nullptr) {
-    throw std::invalid_argument("magphase: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "magphase: null input with non-zero length");
   }
   MagPhase out;
   out.magnitude.resize(n);

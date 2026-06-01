@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "core/convert.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -14,11 +14,14 @@ using sonare::constants::kTwoPi;
 
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
                                    float Q) {
-  if (sr <= 0) throw std::invalid_argument("wavelet_lengths: sr must be positive");
+  if (sr <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "wavelet_lengths: sr must be positive");
   if (window_param <= 0.0f) {
-    throw std::invalid_argument("wavelet_lengths: window_param must be positive");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "wavelet_lengths: window_param must be positive");
   }
-  if (Q < 0.0f) throw std::invalid_argument("wavelet_lengths: Q must be non-negative");
+  if (Q < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter, "wavelet_lengths: Q must be non-negative");
   const bool use_Q = (Q > 0.0f);
 
   // Pre-compute alpha[k] from the local bins-per-octave (matches
@@ -163,7 +166,7 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
 
 std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float fmin, int sr) {
   if (n_octaves <= 0 || bins_per_octave <= 0 || sr <= 0 || fmin <= 0.0f) {
-    throw std::invalid_argument("semitone_filterbank: invalid parameters");
+    throw SonareException(ErrorCode::InvalidParameter, "semitone_filterbank: invalid parameters");
   }
   const int n_filters = n_octaves * bins_per_octave;
   std::vector<float> out(static_cast<size_t>(n_filters) * 6, 0.0f);
@@ -191,7 +194,7 @@ std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float
 std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, float fmin,
                                 float tuning) {
   if (n_input <= 0 || bins_per_octave <= 0 || n_chroma <= 0) {
-    throw std::invalid_argument("cq_to_chroma: invalid parameters");
+    throw SonareException(ErrorCode::InvalidParameter, "cq_to_chroma: invalid parameters");
   }
   int pitch_class_offset = 0;
   if (fmin > 0.0f) {
@@ -217,9 +220,11 @@ std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, 
 }
 
 std::vector<float> diagonal_filter(int n, int direction, float window_param) {
-  if (n <= 0) throw std::invalid_argument("diagonal_filter: n must be positive");
+  if (n <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "diagonal_filter: n must be positive");
   if (window_param <= 0.0f) {
-    throw std::invalid_argument("diagonal_filter: window_param must be positive");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "diagonal_filter: window_param must be positive");
   }
   std::vector<float> out(static_cast<size_t>(n) * n, 0.0f);
   for (int r = 0; r < n; ++r) {
@@ -248,7 +253,8 @@ float window_bandwidth(const std::vector<float>& window, int /*n*/) {
 std::vector<float> window_sumsquare(const std::vector<float>& window, int n_frames, int hop_length,
                                     int n_fft) {
   if (hop_length <= 0) {
-    throw std::invalid_argument("window_sumsquare: hop_length must be positive");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "window_sumsquare: hop_length must be positive");
   }
   const int win_len = static_cast<int>(window.size());
   if (n_fft <= 0) n_fft = win_len;

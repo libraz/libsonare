@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -63,8 +64,10 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
               const std::string& metric, bool subseq,
               const std::vector<std::pair<int, int>>& step_sizes_sigma,
               const std::vector<float>& weights_add) {
-  if (X == nullptr || Y == nullptr) throw std::invalid_argument("dtw: null input");
-  if (X_rows != Y_rows) throw std::invalid_argument("dtw: feature dims must match");
+  if (X == nullptr || Y == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "dtw: null input");
+  if (X_rows != Y_rows)
+    throw SonareException(ErrorCode::InvalidParameter, "dtw: feature dims must match");
   if (X_cols <= 0 || Y_cols <= 0) return {};
 
   // Resolve the step pattern. Default is symmetric P0: {(1,1),(1,0),(0,1)}.
@@ -73,14 +76,16 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
                                : step_sizes_sigma;
   for (const auto& s : steps) {
     if (s.first < 0 || s.second < 0 || (s.first == 0 && s.second == 0)) {
-      throw std::invalid_argument("dtw: step sizes must be non-negative and not (0,0)");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "dtw: step sizes must be non-negative and not (0,0)");
     }
   }
   std::vector<float> weights = weights_add;
   if (weights.empty()) {
     weights.assign(steps.size(), 1.0f);
   } else if (weights.size() != steps.size()) {
-    throw std::invalid_argument("dtw: weights_add must have the same length as step_sizes_sigma");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "dtw: weights_add must have the same length as step_sizes_sigma");
   }
 
   DtwResult result;
@@ -202,7 +207,7 @@ RqaResult rqa(const float* rec, int n) {
 std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const float* transition,
                          const float* p_init) {
   if (log_prob == nullptr || transition == nullptr) {
-    throw std::invalid_argument("viterbi: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "viterbi: null input");
   }
   if (n_states <= 0 || n_steps <= 0) return {};
   const float minus_inf = -std::numeric_limits<float>::infinity();
@@ -253,7 +258,7 @@ std::vector<int> viterbi_discriminative(const float* posteriors, int n_states, i
                                         const float* transition, const float* p_state,
                                         const float* p_init) {
   if (posteriors == nullptr || transition == nullptr || p_state == nullptr) {
-    throw std::invalid_argument("viterbi_discriminative: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "viterbi_discriminative: null input");
   }
   std::vector<float> log_prob(static_cast<size_t>(n_states) * n_steps);
   for (int s = 0; s < n_states; ++s) {

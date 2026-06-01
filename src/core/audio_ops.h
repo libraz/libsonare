@@ -13,7 +13,7 @@ namespace sonare {
 /// @details Mirrors `librosa.mu_compress`. When `quantize` is true, the output
 ///          is quantized into `1 + mu` discrete integer levels (cast back to
 ///          float). Input must be in `[-1, 1]`.
-/// @throw std::invalid_argument if x is null with n > 0, mu <= 0, or values
+/// @throw sonare::SonareException if x is null with n > 0, mu <= 0, or values
 ///        outside [-1, 1].
 std::vector<float> mu_compress(const float* x, std::size_t n, int mu = 255, bool quantize = false);
 std::vector<float> mu_compress(const std::vector<float>& x, int mu = 255, bool quantize = false);
@@ -35,7 +35,7 @@ std::vector<float> autocorrelate(const std::vector<float>& y, int max_size = 0);
 /// @brief Linear prediction coefficients via Burg's method.
 /// @details Returns the AR filter denominator polynomial `[1, a_1, ..., a_order]`
 ///          (length `order + 1`). Matches `librosa.lpc`.
-/// @throw std::invalid_argument if order < 1 or y is too short.
+/// @throw sonare::SonareException if order < 1 or y is too short.
 std::vector<float> lpc(const float* y, std::size_t n, int order);
 std::vector<float> lpc(const std::vector<float>& y, int order);
 

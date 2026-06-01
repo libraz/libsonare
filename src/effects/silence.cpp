@@ -5,7 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -58,13 +59,14 @@ std::vector<bool> non_silent_frames(const std::vector<float>& rms, float top_db)
 
 TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, int hop_length) {
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("trim: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "trim: null input with non-zero length");
   }
   if (frame_length <= 0 || hop_length <= 0) {
-    throw std::invalid_argument("trim: frame_length and hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "trim: frame_length and hop_length must be > 0");
   }
   if (top_db <= 0.0f) {
-    throw std::invalid_argument("trim: top_db must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "trim: top_db must be > 0");
   }
   TrimResult result{{}, 0, 0};
   if (n == 0) return result;
@@ -100,13 +102,14 @@ TrimResult trim(const std::vector<float>& x, float top_db, int frame_length, int
 std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_db,
                                        int frame_length, int hop_length) {
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("split: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "split: null input with non-zero length");
   }
   if (frame_length <= 0 || hop_length <= 0) {
-    throw std::invalid_argument("split: frame_length and hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "split: frame_length and hop_length must be > 0");
   }
   if (top_db <= 0.0f) {
-    throw std::invalid_argument("split: top_db must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "split: top_db must be > 0");
   }
   std::vector<std::pair<int, int>> intervals;
   if (n == 0) return intervals;

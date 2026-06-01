@@ -1,9 +1,9 @@
 #include "feature/tonnetz.h"
 
 #include <cmath>
-#include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -46,10 +46,11 @@ std::vector<float> tonnetz(const Chroma& chroma) {
 
 std::vector<float> tonnetz(const float* chromagram, int n_chroma, int n_frames) {
   if (chromagram == nullptr) {
-    throw std::invalid_argument("tonnetz: chromagram is null");
+    throw SonareException(ErrorCode::InvalidParameter, "tonnetz: chromagram is null");
   }
   if (n_chroma != kChromaBins) {
-    throw std::invalid_argument("tonnetz: only 12-bin chromagrams are supported");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tonnetz: only 12-bin chromagrams are supported");
   }
   if (n_frames <= 0) {
     return {};

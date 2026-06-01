@@ -21,7 +21,7 @@ namespace sonare {
 /// @param intervals Sequence of (start, end) sample boundaries.
 /// @param align_zeros Snap to zero-crossings (default true).
 /// @return Remixed signal.
-/// @throw std::invalid_argument on null input with n > 0 or invalid intervals.
+/// @throw sonare::SonareException on null input with n > 0 or invalid intervals.
 std::vector<float> remix(const float* y, std::size_t n,
                          const std::vector<std::pair<int, int>>& intervals,
                          bool align_zeros = true);

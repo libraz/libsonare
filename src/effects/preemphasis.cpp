@@ -3,7 +3,7 @@
 
 #include "effects/preemphasis.h"
 
-#include <stdexcept>
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -33,7 +33,8 @@ float default_zi_de(const float* x, std::size_t n, float coef) {
 
 std::vector<float> preemphasis(const float* x, std::size_t n, float coef, std::optional<float> zi) {
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("preemphasis: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "preemphasis: null input with non-zero length");
   }
   std::vector<float> y(n);
   if (n == 0) return y;
@@ -51,7 +52,8 @@ std::vector<float> preemphasis(const std::vector<float>& x, float coef, std::opt
 
 std::vector<float> deemphasis(const float* x, std::size_t n, float coef, std::optional<float> zi) {
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("deemphasis: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "deemphasis: null input with non-zero length");
   }
   std::vector<float> y(n);
   if (n == 0) return y;

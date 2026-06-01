@@ -19,7 +19,7 @@ namespace sonare {
 ///          If n < frame_length, returns an empty vector.
 ///          Mirrors librosa.util.frame with axis=-1 (frames stored along the
 ///          last dimension of the input, the trailing axis in the output).
-/// @throw std::invalid_argument if frame_length <= 0 or hop_length <= 0,
+/// @throw sonare::SonareException if frame_length <= 0 or hop_length <= 0,
 ///        or if x is null when n > 0.
 std::vector<float> frame(const float* x, std::size_t n, int frame_length, int hop_length);
 

@@ -5,17 +5,18 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
 using constants::kTwoPiD;
 
 Audio tone(float frequency, int sr, float duration, float phi, float amplitude) {
-  if (sr <= 0) throw std::invalid_argument("tone: sr must be positive");
-  if (duration < 0.0f) throw std::invalid_argument("tone: duration must be non-negative");
+  if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "tone: sr must be positive");
+  if (duration < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter, "tone: duration must be non-negative");
 
   const size_t n = static_cast<size_t>(duration * static_cast<float>(sr));
   std::vector<float> y(n);
@@ -29,8 +30,9 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
 }
 
 Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
-  if (sr <= 0) throw std::invalid_argument("chirp: sr must be positive");
-  if (duration < 0.0f) throw std::invalid_argument("chirp: duration must be non-negative");
+  if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "chirp: sr must be positive");
+  if (duration < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter, "chirp: duration must be non-negative");
 
   const size_t n = static_cast<size_t>(duration * static_cast<float>(sr));
   std::vector<float> y(n);
@@ -54,7 +56,8 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
     //   f(t) = f0 * (f1/f0) ** (t/d)
     //   phase(t) = 2*pi * f0 * d / ln(f1/f0) * ((f1/f0)**(t/d) - 1)
     if (!(f0 > 0.0) || !(f1 > 0.0)) {
-      throw std::invalid_argument("chirp: fmin and fmax must be > 0 for exponential sweep");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "chirp: fmin and fmax must be > 0 for exponential sweep");
     }
     const double ratio = f1 / f0;
     if (std::abs(ratio - 1.0) < 1e-12) {
@@ -79,14 +82,15 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
 
 Audio clicks(const std::vector<float>& times, int sr, int length, float frequency,
              float click_duration) {
-  if (sr <= 0) throw std::invalid_argument("clicks: sr must be positive");
+  if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "clicks: sr must be positive");
   if (!(click_duration > 0.0f)) {
-    throw std::invalid_argument("clicks: click_duration must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "clicks: click_duration must be > 0");
   }
   if (!(frequency > 0.0f)) {
-    throw std::invalid_argument("clicks: frequency must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "clicks: frequency must be > 0");
   }
-  if (length < 0) throw std::invalid_argument("clicks: length must be non-negative");
+  if (length < 0)
+    throw SonareException(ErrorCode::InvalidParameter, "clicks: length must be non-negative");
 
   // Build the click waveform: 2**(0 .. -10) * sin(2*pi*f*n/sr)
   const int click_n = static_cast<int>(static_cast<float>(sr) * click_duration);

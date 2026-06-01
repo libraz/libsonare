@@ -21,7 +21,7 @@ namespace sonare {
 /// @param top_db Threshold below max(dB) to clamp (default 80.0).
 ///        Pass a negative value to disable clamping.
 /// @return dB values, 10 * log10(max(S, amin)) - 10 * log10(max(ref, amin)).
-/// @throw std::invalid_argument if amin <= 0, or n > 0 with null S.
+/// @throw sonare::SonareException if amin <= 0, or n > 0 with null S.
 std::vector<float> power_to_db(const float* S, std::size_t n, float ref = 1.0f,
                                float amin = constants::kEpsilon, float top_db = 80.0f);
 std::vector<float> power_to_db(const std::vector<float>& S, float ref = 1.0f,

@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -34,7 +35,7 @@ TEST_CASE("peak_pick respects wait window", "[util][peak]") {
 
 TEST_CASE("peak_pick rejects negative params", "[util][peak][edge]") {
   std::vector<float> x(10, 0.0f);
-  REQUIRE_THROWS_AS(peak_pick(x, -1, 1, 1, 1, 0.0f, 0), std::invalid_argument);
+  REQUIRE_THROWS_AS(peak_pick(x, -1, 1, 1, 1, 0.0f, 0), SonareException);
 }
 
 TEST_CASE("peak_pick matches librosa output", "[librosa][util][peak]") {

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -95,7 +96,7 @@ TEST_CASE("dB conversions reject invalid input", "[db_convert][edge]") {
   REQUIRE(amplitude_to_db(empty).empty());
   REQUIRE(db_to_power(empty).empty());
   REQUIRE(db_to_amplitude(empty).empty());
-  REQUIRE_THROWS_AS(power_to_db(nullptr, 5), std::invalid_argument);
+  REQUIRE_THROWS_AS(power_to_db(nullptr, 5), SonareException);
   std::vector<float> v{0.5f};
-  REQUIRE_THROWS_AS(power_to_db(v, 1.0f, 0.0f, 80.0f), std::invalid_argument);
+  REQUIRE_THROWS_AS(power_to_db(v, 1.0f, 0.0f, 80.0f), SonareException);
 }

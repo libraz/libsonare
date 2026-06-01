@@ -4,17 +4,20 @@
 #include "util/peak.h"
 
 #include <algorithm>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
 std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_max, int pre_avg,
                            int post_avg, float delta, int wait) {
   if (pre_max < 0 || post_max < 0 || pre_avg < 0 || post_avg < 0 || wait < 0) {
-    throw std::invalid_argument("peak_pick: negative window or wait parameter");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "peak_pick: negative window or wait parameter");
   }
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("peak_pick: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "peak_pick: null input with non-zero length");
   }
   std::vector<int> peaks;
   if (n == 0) return peaks;

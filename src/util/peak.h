@@ -21,7 +21,7 @@ namespace sonare {
 /// @details Same algorithm as librosa.util.peak_pick. All window radii are
 ///          non-negative integers; the comparison windows extend by `pre_*+1`
 ///          and `post_*+1` around the candidate index respectively.
-/// @throw std::invalid_argument if any radius or wait is negative.
+/// @throw sonare::SonareException if any radius or wait is negative.
 std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_max, int pre_avg,
                            int post_avg, float delta, int wait);
 std::vector<int> peak_pick(const std::vector<float>& x, int pre_max, int post_max, int pre_avg,

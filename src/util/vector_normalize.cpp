@@ -5,9 +5,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -52,7 +52,8 @@ float compute_norm(const float* x, std::size_t n, NormType type) {
 
 std::vector<float> normalize(const float* x, std::size_t n, NormType norm, float threshold) {
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("normalize: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "normalize: null input with non-zero length");
   }
   std::vector<float> out(x, x + n);
   if (n == 0) return out;
@@ -73,14 +74,14 @@ std::vector<float> normalize(const std::vector<float>& x, NormType norm, float t
 std::vector<float> normalize_matrix(const float* x, int rows, int cols, int axis, NormType norm,
                                     float threshold) {
   if (rows < 0 || cols < 0) {
-    throw std::invalid_argument("normalize_matrix: negative dimension");
+    throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: negative dimension");
   }
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   if (total > 0 && x == nullptr) {
-    throw std::invalid_argument("normalize_matrix: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: null input");
   }
   if (axis != 0 && axis != 1) {
-    throw std::invalid_argument("normalize_matrix: axis must be 0 or 1");
+    throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: axis must be 0 or 1");
   }
   std::vector<float> out(x, x + total);
   if (total == 0) return out;

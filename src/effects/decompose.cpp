@@ -5,7 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -106,15 +107,16 @@ void multiply_WH(const std::vector<float>& W, const std::vector<float>& H, int n
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
                           int n_iter, const std::string& solver, float beta,
                           const std::string& init) {
-  if (S == nullptr) throw std::invalid_argument("decompose: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "decompose: S is null");
   if (n_features <= 0 || n_frames <= 0 || n_components <= 0) {
-    throw std::invalid_argument("decompose: dimensions must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "decompose: dimensions must be positive");
   }
   if (solver != "mu") {
-    throw std::invalid_argument("decompose: only solver=\"mu\" is supported");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decompose: only solver=\"mu\" is supported");
   }
   if (!std::isfinite(beta)) {
-    throw std::invalid_argument("decompose: beta must be finite");
+    throw SonareException(ErrorCode::InvalidParameter, "decompose: beta must be finite");
   }
 
   DecomposeResult out;
@@ -123,7 +125,8 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   } else if (init == "nndsvd") {
     init_nndsvd(S, out.W, out.H, n_features, n_components, n_frames);
   } else {
-    throw std::invalid_argument("decompose: init must be \"random\" or \"nndsvd\"");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decompose: init must be \"random\" or \"nndsvd\"");
   }
 
   // Generalized beta-divergence multiplicative updates (Fevotte-Idier 2011).
@@ -192,10 +195,11 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
 
 std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
                              const std::string& aggregate, int k, int width) {
-  if (S == nullptr) throw std::invalid_argument("nn_filter: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "nn_filter: S is null");
   if (n_features <= 0 || n_frames <= 0) return {};
   if (aggregate != "mean" && aggregate != "median" && aggregate != "min" && aggregate != "max") {
-    throw std::invalid_argument("nn_filter: aggregate must be mean/median/min/max");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "nn_filter: aggregate must be mean/median/min/max");
   }
   if (k <= 0) k = std::min(5, n_frames);
 

@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -29,7 +30,7 @@ TEST_CASE("pad_center centers data in target size", "[util][padding]") {
 
 TEST_CASE("pad_center rejects shrinking", "[util][padding][edge]") {
   std::vector<float> x{1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
-  REQUIRE_THROWS_AS(pad_center(x, 3), std::invalid_argument);
+  REQUIRE_THROWS_AS(pad_center(x, 3), SonareException);
 }
 
 TEST_CASE("fix_length truncates and pads", "[util][padding]") {

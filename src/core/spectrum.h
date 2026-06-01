@@ -197,7 +197,7 @@ struct MagPhase {
 /// @param n Total number of complex entries (n_bins * n_frames)
 /// @param power Exponent applied to magnitude (default 1.0; e.g. 2.0 for power)
 /// @return MagPhase. phase[i] = spec[i] / max(|spec[i]|, eps); magnitude[i] = |spec[i]|^power.
-/// @throw std::invalid_argument if n > 0 and spec is null, or power <= 0.
+/// @throw sonare::SonareException if n > 0 and spec is null, or power <= 0.
 MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power = 1.0f);
 
 /// @brief Convenience overload accepting a Spectrogram.

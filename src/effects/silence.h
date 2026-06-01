@@ -28,7 +28,7 @@ struct TrimResult {
 /// @return TrimResult with the trimmed audio and the original-sample range.
 /// @details Computes RMS per frame, finds the peak, and treats frames whose
 ///          RMS is below peak_dB - top_db as silent. Mirrors librosa.effects.trim.
-/// @throw std::invalid_argument on null input, non-positive frame/hop, or top_db <= 0.
+/// @throw sonare::SonareException on null input, non-positive frame/hop, or top_db <= 0.
 TrimResult trim(const float* x, std::size_t n, float top_db = 60.0f, int frame_length = 2048,
                 int hop_length = 512);
 TrimResult trim(const std::vector<float>& x, float top_db = 60.0f, int frame_length = 2048,

@@ -1,9 +1,9 @@
 #include "effects/reverb/convolution_reverb.h"
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/exception.h"
 
 namespace sonare::effects::reverb {
 
@@ -90,7 +90,7 @@ void ConvolutionReverb::reset() {
 
 void ConvolutionReverb::load_ir(const float* impulse_response, int num_samples) {
   if (num_samples < 0 || (num_samples > 0 && impulse_response == nullptr)) {
-    throw std::invalid_argument("invalid impulse response");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid impulse response");
   }
   ir_.assign(impulse_response, impulse_response + num_samples);
   // Feeding the IR into the convolvers (re)allocates FFT partitions; this is a

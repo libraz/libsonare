@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -33,10 +34,12 @@ float interp_at(const float* S, int n_bins, int n_frames, const std::vector<floa
 std::vector<float> interp_harmonics(const float* x, int n_bins, int n_frames,
                                     const std::vector<float>& freqs,
                                     const std::vector<float>& harmonics) {
-  if (x == nullptr) throw std::invalid_argument("interp_harmonics: x is null");
+  if (x == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "interp_harmonics: x is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw std::invalid_argument("interp_harmonics: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "interp_harmonics: freqs size must equal n_bins");
   }
   const int H = static_cast<int>(harmonics.size());
   std::vector<float> out(static_cast<size_t>(H) * n_bins * n_frames, 0.0f);
@@ -62,10 +65,10 @@ std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int
 std::vector<float> salience(const float* S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
                             float fill_value) {
-  if (S == nullptr) throw std::invalid_argument("salience: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "salience: S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw std::invalid_argument("salience: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter, "salience: freqs size must equal n_bins");
   }
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames, 0.0f);
   const float weight = 1.0f / static_cast<float>(harmonics.size());
@@ -91,13 +94,14 @@ std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frame
 std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
                                 const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics) {
-  if (S == nullptr) throw std::invalid_argument("f0_harmonics: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "f0_harmonics: S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw std::invalid_argument("f0_harmonics: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "f0_harmonics: freqs size must equal n_bins");
   }
   if (static_cast<int>(f0.size()) != n_frames) {
-    throw std::invalid_argument("f0_harmonics: f0 size must equal n_frames");
+    throw SonareException(ErrorCode::InvalidParameter, "f0_harmonics: f0 size must equal n_frames");
   }
   const int H = static_cast<int>(harmonics.size());
   std::vector<float> out(static_cast<size_t>(H) * n_frames, 0.0f);

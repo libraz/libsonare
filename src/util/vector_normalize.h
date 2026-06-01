@@ -27,7 +27,7 @@ enum class NormType {
 /// @return Normalized data of length n.
 /// @details If the computed norm is < max(threshold, tiny_eps), the result is
 ///          a copy of the input (matches librosa's `fill=None` behavior).
-/// @throw std::invalid_argument if n > 0 and x is null.
+/// @throw sonare::SonareException if n > 0 and x is null.
 std::vector<float> normalize(const float* x, std::size_t n, NormType norm = NormType::Inf,
                              float threshold = 0.0f);
 std::vector<float> normalize(const std::vector<float>& x, NormType norm = NormType::Inf,

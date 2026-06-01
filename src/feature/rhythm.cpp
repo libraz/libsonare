@@ -5,13 +5,13 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "core/fft.h"
 #include "core/window.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -34,10 +34,10 @@ std::vector<float> pad_envelope(const std::vector<float>& env, int pad, bool cen
 std::vector<float> tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
                              const TempogramConfig& config) {
   if (config.win_length <= 1) {
-    throw std::invalid_argument("tempogram: win_length must be > 1");
+    throw SonareException(ErrorCode::InvalidParameter, "tempogram: win_length must be > 1");
   }
   if (config.hop_length <= 0) {
-    throw std::invalid_argument("tempogram: hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "tempogram: hop_length must be > 0");
   }
   if (onset_envelope.empty()) return {};
 
@@ -111,10 +111,10 @@ std::vector<float> tempogram(const Audio& audio, const TempogramConfig& config) 
 std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
                                      const TempogramConfig& config) {
   if (config.win_length <= 1) {
-    throw std::invalid_argument("fourier_tempogram: win_length must be > 1");
+    throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: win_length must be > 1");
   }
   if (config.hop_length <= 0) {
-    throw std::invalid_argument("fourier_tempogram: hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: hop_length must be > 0");
   }
   if (onset_envelope.empty()) return {};
 
@@ -159,10 +159,12 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
 std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
                                     const TempogramConfig& config, float bpm_min, int n_bins) {
   if (sr <= 0 || config.hop_length <= 0) {
-    throw std::invalid_argument("cyclic_tempogram: sr and hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "cyclic_tempogram: sr and hop_length must be > 0");
   }
   if (bpm_min <= 0.0f || n_bins <= 0) {
-    throw std::invalid_argument("cyclic_tempogram: bpm_min and n_bins must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "cyclic_tempogram: bpm_min and n_bins must be > 0");
   }
   if (onset_envelope.empty()) return {};
 
@@ -204,10 +206,10 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
 
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
   if (config.win_length <= 1) {
-    throw std::invalid_argument("plp: win_length must be > 1");
+    throw SonareException(ErrorCode::InvalidParameter, "plp: win_length must be > 1");
   }
   if (config.hop_length <= 0 || config.sr <= 0) {
-    throw std::invalid_argument("plp: sr and hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "plp: sr and hop_length must be > 0");
   }
   const int n = static_cast<int>(onset_envelope.size());
   if (n == 0) return {};
@@ -296,7 +298,8 @@ std::vector<float> plp(const Audio& audio, const PlpConfig& config) {
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,
                                    int hop_length, const std::vector<float>& factors) {
   if (win_length <= 0 || hop_length <= 0) {
-    throw std::invalid_argument("tempogram_ratio: win_length and hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tempogram_ratio: win_length and hop_length must be > 0");
   }
   std::vector<float> out(factors.size(), 0.0f);
   if (tempogram_data.empty() || factors.empty()) return out;

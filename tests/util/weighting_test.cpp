@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -43,7 +45,7 @@ TEST_CASE("frequency_weighting dispatches kind", "[util][weighting]") {
 
 TEST_CASE("frequency_weighting rejects unknown kind", "[util][weighting][edge]") {
   std::vector<float> freqs{100.0f};
-  REQUIRE_THROWS_AS(frequency_weighting(freqs, "X"), std::invalid_argument);
+  REQUIRE_THROWS_AS(frequency_weighting(freqs, "X"), SonareException);
 }
 
 TEST_CASE("min_db floor is honored", "[util][weighting]") {

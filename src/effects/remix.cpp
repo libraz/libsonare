@@ -6,10 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <stdexcept>
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -76,7 +76,7 @@ int match_event(int value, const std::vector<int>& sorted_zeros) {
 std::vector<float> remix(const float* y, std::size_t n,
                          const std::vector<std::pair<int, int>>& intervals, bool align_zeros) {
   if (n > 0 && y == nullptr) {
-    throw std::invalid_argument("remix: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "remix: null input with non-zero length");
   }
 
   std::vector<int> zeros;

@@ -4,7 +4,8 @@
 #include "util/frame.h"
 
 #include <cstring>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -18,13 +19,13 @@ int frame_count(std::size_t n, int frame_length, int hop_length) {
 
 std::vector<float> frame(const float* x, std::size_t n, int frame_length, int hop_length) {
   if (frame_length <= 0) {
-    throw std::invalid_argument("frame: frame_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "frame: frame_length must be > 0");
   }
   if (hop_length <= 0) {
-    throw std::invalid_argument("frame: hop_length must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "frame: hop_length must be > 0");
   }
   if (n > 0 && x == nullptr) {
-    throw std::invalid_argument("frame: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "frame: null input with non-zero length");
   }
 
   const int n_frames = frame_count(n, frame_length, hop_length);

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "feature/spectral.h"
+#include "util/exception.h"
 
 using namespace sonare;
 
@@ -47,5 +48,5 @@ TEST_CASE("zero_crossings on empty input", "[util][zero_crossings][edge]") {
 
 TEST_CASE("zero_crossings rejects negative threshold", "[util][zero_crossings][edge]") {
   std::vector<float> y{1.0f, -1.0f};
-  REQUIRE_THROWS_AS(zero_crossings(y, -1.0f), std::invalid_argument);
+  REQUIRE_THROWS_AS(zero_crossings(y, -1.0f), SonareException);
 }

@@ -4,10 +4,10 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
-#include <stdexcept>
 #include <unordered_map>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -126,10 +126,13 @@ std::vector<float> apply_affinity_kernel(const std::vector<float>& D, int n_rows
 std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, const float* Y,
                                     int Y_rows, int Y_cols, int k, const std::string& metric,
                                     const std::string& mode) {
-  if (X == nullptr || Y == nullptr) throw std::invalid_argument("cross_similarity: null input");
-  if (X_rows != Y_rows) throw std::invalid_argument("cross_similarity: feature dims must match");
+  if (X == nullptr || Y == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: null input");
+  if (X_rows != Y_rows)
+    throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: feature dims must match");
   if (mode != "connectivity" && mode != "affinity") {
-    throw std::invalid_argument("cross_similarity: mode must be 'connectivity' or 'affinity'");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "cross_similarity: mode must be 'connectivity' or 'affinity'");
   }
   if (X_cols <= 0 || Y_cols <= 0) return {};
 
@@ -178,9 +181,11 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
 std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int k, int width,
                                      bool sym, const std::string& metric, const std::string& mode) {
   if (mode != "connectivity" && mode != "affinity") {
-    throw std::invalid_argument("recurrence_matrix: mode must be 'connectivity' or 'affinity'");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "recurrence_matrix: mode must be 'connectivity' or 'affinity'");
   }
-  if (data == nullptr) throw std::invalid_argument("recurrence_matrix: null input");
+  if (data == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "recurrence_matrix: null input");
   if (cols <= 0) return {};
   if (width < 1) width = 1;
 
@@ -302,10 +307,13 @@ std::vector<int> subsegment(const float* data, int rows, int cols,
 
 std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
                                const std::string& linkage) {
-  if (data == nullptr) throw std::invalid_argument("agglomerative: null input");
-  if (k <= 0) throw std::invalid_argument("agglomerative: k must be positive");
+  if (data == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "agglomerative: null input");
+  if (k <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "agglomerative: k must be positive");
   if (linkage != "average" && linkage != "single" && linkage != "complete" && linkage != "ward") {
-    throw std::invalid_argument("agglomerative: linkage must be average/single/complete/ward");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "agglomerative: linkage must be average/single/complete/ward");
   }
   k = std::min(k, cols);
   if (cols <= 0) return {};

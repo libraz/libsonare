@@ -9,6 +9,8 @@
 #include <random>
 #include <vector>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -26,12 +28,12 @@ TEST_CASE("mu_compress / mu_expand round-trip (no quantize)", "[audio_ops][util]
 
 TEST_CASE("mu_compress rejects out-of-range input", "[audio_ops][util][edge]") {
   std::vector<float> x{1.5f};
-  REQUIRE_THROWS_AS(mu_compress(x, 255, false), std::invalid_argument);
+  REQUIRE_THROWS_AS(mu_compress(x, 255, false), SonareException);
 }
 
 TEST_CASE("mu_compress rejects non-positive mu", "[audio_ops][util][edge]") {
   std::vector<float> x{0.5f};
-  REQUIRE_THROWS_AS(mu_compress(x, 0, false), std::invalid_argument);
+  REQUIRE_THROWS_AS(mu_compress(x, 0, false), SonareException);
 }
 
 TEST_CASE("autocorrelate[0] equals sum of squares", "[audio_ops][util]") {
@@ -70,5 +72,5 @@ TEST_CASE("lpc on AR(2) recovers approximate coefficients", "[audio_ops][util]")
 
 TEST_CASE("lpc rejects invalid order", "[audio_ops][util][edge]") {
   std::vector<float> y(8, 1.0f);
-  REQUIRE_THROWS_AS(lpc(y, 0), std::invalid_argument);
+  REQUIRE_THROWS_AS(lpc(y, 0), SonareException);
 }

@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -29,9 +30,9 @@ TEST_CASE("frame returns empty for short input", "[util][frame][edge]") {
 
 TEST_CASE("frame rejects invalid params", "[util][frame][edge]") {
   std::vector<float> x(100, 0.0f);
-  REQUIRE_THROWS_AS(frame(x, 0, 64), std::invalid_argument);
-  REQUIRE_THROWS_AS(frame(x, 256, 0), std::invalid_argument);
-  REQUIRE_THROWS_AS(frame(nullptr, 100, 256, 64), std::invalid_argument);
+  REQUIRE_THROWS_AS(frame(x, 0, 64), SonareException);
+  REQUIRE_THROWS_AS(frame(x, 256, 0), SonareException);
+  REQUIRE_THROWS_AS(frame(nullptr, 100, 256, 64), SonareException);
 }
 
 TEST_CASE("frame matches librosa output exactly", "[librosa][util][frame]") {

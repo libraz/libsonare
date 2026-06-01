@@ -4,7 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -106,12 +107,13 @@ Eigen::VectorXd nnls_with_normal(const Eigen::MatrixXd& AtA, const Eigen::Vector
 std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, int B_cols,
                         int max_iter, float tol) {
   if (A == nullptr || B == nullptr) {
-    throw std::invalid_argument("nnls: A and B must be non-null");
+    throw SonareException(ErrorCode::InvalidParameter, "nnls: A and B must be non-null");
   }
   if (A_rows <= 0 || A_cols <= 0 || B_cols <= 0) {
-    throw std::invalid_argument("nnls: dimensions must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "nnls: dimensions must be positive");
   }
-  if (tol < 0.0f) throw std::invalid_argument("nnls: tol must be non-negative");
+  if (tol < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter, "nnls: tol must be non-negative");
 
   // Build A once and pre-compute the normal-equation matrices. AtA is shared
   // across all columns of B.

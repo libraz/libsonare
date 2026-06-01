@@ -6,7 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -24,10 +25,11 @@ float resolve_ref(const float* S, std::size_t n, float ref) {
 
 std::vector<float> power_to_db(const float* S, std::size_t n, float ref, float amin, float top_db) {
   if (amin <= 0.0f) {
-    throw std::invalid_argument("power_to_db: amin must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "power_to_db: amin must be > 0");
   }
   if (n > 0 && S == nullptr) {
-    throw std::invalid_argument("power_to_db: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "power_to_db: null input with non-zero length");
   }
   std::vector<float> out(n);
   if (n == 0) return out;
@@ -60,10 +62,11 @@ std::vector<float> power_to_db(const std::vector<float>& S, float ref, float ami
 std::vector<float> amplitude_to_db(const float* S, std::size_t n, float ref, float amin,
                                    float top_db) {
   if (amin <= 0.0f) {
-    throw std::invalid_argument("amplitude_to_db: amin must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "amplitude_to_db: amin must be > 0");
   }
   if (n > 0 && S == nullptr) {
-    throw std::invalid_argument("amplitude_to_db: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "amplitude_to_db: null input with non-zero length");
   }
   // Mirror librosa: amplitude_to_db(S) == power_to_db(S^2, amin=amin^2, ref=ref^2).
   std::vector<float> power(n);
@@ -83,7 +86,8 @@ std::vector<float> amplitude_to_db(const std::vector<float>& S, float ref, float
 
 std::vector<float> db_to_power(const float* S_db, std::size_t n, float ref) {
   if (n > 0 && S_db == nullptr) {
-    throw std::invalid_argument("db_to_power: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "db_to_power: null input with non-zero length");
   }
   std::vector<float> out(n);
   for (std::size_t i = 0; i < n; ++i) {
@@ -98,7 +102,8 @@ std::vector<float> db_to_power(const std::vector<float>& S_db, float ref) {
 
 std::vector<float> db_to_amplitude(const float* S_db, std::size_t n, float ref) {
   if (n > 0 && S_db == nullptr) {
-    throw std::invalid_argument("db_to_amplitude: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "db_to_amplitude: null input with non-zero length");
   }
   std::vector<float> out(n);
   for (std::size_t i = 0; i < n; ++i) {

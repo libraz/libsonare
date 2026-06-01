@@ -1,7 +1,8 @@
 #include "core/pcen.h"
 
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -23,28 +24,29 @@ float derive_b(float time_constant, int sr, int hop_length) {
 
 std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConfig& config) {
   if (S == nullptr) {
-    throw std::invalid_argument("pcen: S is null");
+    throw SonareException(ErrorCode::InvalidParameter, "pcen: S is null");
   }
   if (n_bins <= 0 || n_frames <= 0) {
     return {};
   }
   if (config.eps <= 0.0f) {
-    throw std::invalid_argument("pcen: eps must be strictly positive");
+    throw SonareException(ErrorCode::InvalidParameter, "pcen: eps must be strictly positive");
   }
   if (config.power < 0.0f) {
-    throw std::invalid_argument("pcen: power must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "pcen: power must be non-negative");
   }
   if (config.bias < 0.0f) {
-    throw std::invalid_argument("pcen: bias must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "pcen: bias must be non-negative");
   }
   if (config.gain < 0.0f) {
-    throw std::invalid_argument("pcen: gain must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "pcen: gain must be non-negative");
   }
 
   float b =
       config.b.empty() ? derive_b(config.time_constant, config.sr, config.hop_length) : config.b[0];
   if (b <= 0.0f || b > 1.0f) {
-    throw std::invalid_argument("pcen: derived/explicit smoothing coefficient out of range (0,1]");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "pcen: derived/explicit smoothing coefficient out of range (0,1]");
   }
 
   // Initial AR(1) delay state. librosa mirrors `scipy.signal.lfilter` with
@@ -57,7 +59,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
   std::vector<float> d(static_cast<size_t>(n_bins), 1.0f - b);
   if (!config.zi.empty()) {
     if (static_cast<int>(config.zi.size()) != n_bins) {
-      throw std::invalid_argument("pcen: zi length must equal n_bins");
+      throw SonareException(ErrorCode::InvalidParameter, "pcen: zi length must equal n_bins");
     }
     for (int k = 0; k < n_bins; ++k) d[k] = config.zi[k];
   }

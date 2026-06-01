@@ -2,20 +2,21 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
+#include "util/exception.h"
 
 namespace sonare {
 namespace {
 
 void validate_lpc_args(const float* x, size_t n, int order) {
   if (x == nullptr && n > 0) {
-    throw std::invalid_argument("input must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "input must not be null");
   }
   if (order < 0) {
-    throw std::invalid_argument("order must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "order must be non-negative");
   }
   if (order >= static_cast<int>(n) && n > 0) {
-    throw std::invalid_argument("order must be smaller than input length");
+    throw SonareException(ErrorCode::InvalidParameter, "order must be smaller than input length");
   }
 }
 
@@ -137,10 +138,10 @@ LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
 
 std::vector<float> lpc_residual(const float* x, size_t n, const LpcResult& model) {
   if (x == nullptr && n > 0) {
-    throw std::invalid_argument("input must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "input must not be null");
   }
   if (model.ar.empty() || model.ar[0] == 0.0f) {
-    throw std::invalid_argument("invalid LPC model");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid LPC model");
   }
   const size_t order = model.ar.size() - 1;
   std::vector<float> residual(n, 0.0f);
@@ -158,10 +159,10 @@ std::vector<float> lpc_residual(const float* x, size_t n, const LpcResult& model
 std::vector<float> ar_interpolate(const float* x, const bool* mask, size_t n,
                                   const LpcResult& model) {
   if ((x == nullptr || mask == nullptr) && n > 0) {
-    throw std::invalid_argument("input and mask must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "input and mask must not be null");
   }
   if (model.ar.empty() || model.ar[0] == 0.0f) {
-    throw std::invalid_argument("invalid LPC model");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid LPC model");
   }
 
   std::vector<float> out(x, x + n);

@@ -3,24 +3,24 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 
 #include "core/spectrum.h"
 #include "filters/dct.h"
 #include "filters/mel.h"
+#include "util/exception.h"
 #include "util/nnls.h"
 
 namespace sonare {
 
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr) {
-  if (M == nullptr) throw std::invalid_argument("mel_to_stft: M is null");
+  if (M == nullptr) throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: M is null");
   if (n_mels <= 0 || n_frames <= 0) return {};
   if (mel_config.n_fft <= 0) {
-    throw std::invalid_argument("mel_to_stft: n_fft must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: n_fft must be > 0");
   }
   if (sr <= 0) {
-    throw std::invalid_argument("mel_to_stft: sr must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: sr must be > 0");
   }
   const int n_freq = mel_config.n_fft / 2 + 1;
   MelFilterConfig fcfg = mel_config.to_mel_filter_config();
@@ -48,7 +48,8 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 }
 
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels) {
-  if (mfcc == nullptr) throw std::invalid_argument("mfcc_to_mel: mfcc is null");
+  if (mfcc == nullptr)
+    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: mfcc is null");
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0) return {};
 
   // Inverse DCT of each frame: mel_db [n_mels x n_frames].

@@ -15,7 +15,7 @@ namespace sonare {
 /// @param pad_value Padding value (default 0)
 /// @return Vector of length size with x placed at indices [lpad, lpad + n),
 ///         where lpad = (size - n) / 2 (matches numpy.pad mode='constant').
-/// @throw std::invalid_argument if size < n.
+/// @throw sonare::SonareException if size < n.
 std::vector<float> pad_center(const float* x, std::size_t n, std::size_t size,
                               float pad_value = 0.0f);
 std::vector<float> pad_center(const std::vector<float>& x, std::size_t size,
@@ -35,7 +35,7 @@ std::vector<float> fix_length(const std::vector<float>& x, std::size_t size,
 /// @param x_max Maximum allowed value (exclusive). If negative, only x_min is enforced.
 /// @param pad If true, prepend x_min and append x_max (when set) if missing.
 /// @return New vector with bounds applied and duplicates removed.
-/// @throw std::invalid_argument if frames is not non-decreasing, or contains
+/// @throw sonare::SonareException if frames is not non-decreasing, or contains
 ///        a negative value when x_min >= 0.
 std::vector<int> fix_frames(const std::vector<int>& frames, int x_min = 0, int x_max = -1,
                             bool pad = true);

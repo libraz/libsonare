@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -58,7 +59,7 @@ TEST_CASE("chirp linear has growing instantaneous frequency", "[util][synthesis]
 }
 
 TEST_CASE("chirp exponential requires positive endpoints", "[util][synthesis][edge]") {
-  REQUIRE_THROWS_AS(chirp(0.0f, 1000.0f, 22050, 0.1f, /*linear=*/false), std::invalid_argument);
+  REQUIRE_THROWS_AS(chirp(0.0f, 1000.0f, 22050, 0.1f, /*linear=*/false), SonareException);
 }
 
 TEST_CASE("clicks places clicks at expected positions", "[util][synthesis]") {
@@ -101,7 +102,7 @@ TEST_CASE("clicks places clicks at expected positions", "[util][synthesis]") {
 }
 
 TEST_CASE("clicks rejects invalid params", "[util][synthesis][edge]") {
-  REQUIRE_THROWS_AS(clicks({}, 22050, 0, 0.0f, 0.1f), std::invalid_argument);
-  REQUIRE_THROWS_AS(clicks({}, 22050, 0, 1000.0f, 0.0f), std::invalid_argument);
-  REQUIRE_THROWS_AS(clicks({}, 22050, -1, 1000.0f, 0.1f), std::invalid_argument);
+  REQUIRE_THROWS_AS(clicks({}, 22050, 0, 0.0f, 0.1f), SonareException);
+  REQUIRE_THROWS_AS(clicks({}, 22050, 0, 1000.0f, 0.0f), SonareException);
+  REQUIRE_THROWS_AS(clicks({}, 22050, -1, 1000.0f, 0.1f), SonareException);
 }

@@ -22,7 +22,7 @@ namespace sonare {
 /// @param zi Optional initial state. If unset, uses the librosa-compatible
 ///        reflect-padding default `2*x[0] - x[1]`.
 /// @return Filtered signal of the same length.
-/// @throw std::invalid_argument if x is null and n > 0.
+/// @throw sonare::SonareException if x is null and n > 0.
 std::vector<float> preemphasis(const float* x, std::size_t n, float coef = 0.97f,
                                std::optional<float> zi = std::nullopt);
 std::vector<float> preemphasis(const std::vector<float>& x, float coef = 0.97f,

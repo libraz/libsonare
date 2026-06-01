@@ -411,10 +411,12 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 std::vector<int> zero_crossings(const float* y, size_t n, float threshold, bool ref_magnitude,
                                 bool pad, bool zero_pos) {
   if (n > 0 && y == nullptr) {
-    throw std::invalid_argument("zero_crossings: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "zero_crossings: null input with non-zero length");
   }
   if (!(threshold >= 0.0f)) {
-    throw std::invalid_argument("zero_crossings: threshold must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "zero_crossings: threshold must be non-negative");
   }
 
   std::vector<int> indices;
