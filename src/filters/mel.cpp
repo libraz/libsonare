@@ -1,14 +1,10 @@
 #include "filters/mel.h"
 
 #include <Eigen/Core>
-#include <algorithm>
-#include <cmath>
-#include <list>
-#include <mutex>
-#include <unordered_map>
 
 #include "core/convert.h"
 #include "util/exception.h"
+#include "util/lru_cache.h"
 
 namespace sonare {
 
@@ -46,30 +42,6 @@ struct MelFilterbankCacheKeyHash {
 
 /// @brief Maximum number of cached Mel filterbanks.
 constexpr size_t kMaxMelCacheSize = 8;
-
-/// @brief Cached filterbank with a back-pointer into the LRU list.
-/// @details The stored iterator lets cache hits and evictions touch the LRU
-/// queue in O(1) (via `splice`/`erase`) instead of doing an O(n)
-/// `lru.remove(key)` while holding the mutex.
-struct CachedMelFilterbank {
-  std::vector<float> filterbank;
-  std::list<MelFilterbankCacheKey>::iterator lru_it;
-};
-
-/// @brief Mel filterbank cache state with LRU eviction.
-/// @details Wrapped in a function-local static (Meyers singleton) so its
-/// construction and destruction order are well-defined; the mutex guards
-/// concurrent access.
-struct MelFilterbankCache {
-  std::mutex mutex;
-  std::unordered_map<MelFilterbankCacheKey, CachedMelFilterbank, MelFilterbankCacheKeyHash> map;
-  std::list<MelFilterbankCacheKey> lru;
-};
-
-MelFilterbankCache& mel_filterbank_cache() {
-  static MelFilterbankCache cache;
-  return cache;
-}
 
 }  // namespace
 
@@ -159,39 +131,11 @@ const std::vector<float>& get_mel_filterbank_cached(int sr, int n_fft,
   float fmax = config.fmax > 0.0f ? config.fmax : static_cast<float>(sr) / 2.0f;
   MelFilterbankCacheKey key{sr, n_fft, config.n_mels, config.fmin, fmax, config.htk, config.norm};
 
-  MelFilterbankCache& cache = mel_filterbank_cache();
-  {
-    std::lock_guard<std::mutex> lock(cache.mutex);
-    auto it = cache.map.find(key);
-    if (it != cache.map.end()) {
-      // O(1) MRU update: splice the existing list node to the front instead of
-      // searching with `lru.remove(key)` (was O(n) while holding the mutex).
-      cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
-      return it->second.filterbank;
-    }
-  }
-
-  // Build outside the lock — create_mel_filterbank can take real time and we do
-  // not want to serialize concurrent unique-key builds. Worst case two threads
-  // race to build the same key; the second insert is a no-op.
-  std::vector<float> fb = create_mel_filterbank(sr, n_fft, config);
-
-  std::lock_guard<std::mutex> lock(cache.mutex);
-  // Re-check in case another thread inserted while we built.
-  auto it = cache.map.find(key);
-  if (it != cache.map.end()) {
-    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
-    return it->second.filterbank;
-  }
-  // Evict oldest entry if cache is full.
-  while (cache.map.size() >= kMaxMelCacheSize && !cache.lru.empty()) {
-    auto oldest_it = std::prev(cache.lru.end());
-    cache.map.erase(*oldest_it);
-    cache.lru.erase(oldest_it);
-  }
-  cache.lru.push_front(key);
-  auto [ins, _] = cache.map.emplace(key, CachedMelFilterbank{std::move(fb), cache.lru.begin()});
-  return ins->second.filterbank;
+  // create_mel_filterbank is the expensive part, so build outside the lock and
+  // keep the cached vector referenced in place (no per-hit copy).
+  static LruCache<MelFilterbankCacheKey, std::vector<float>, MelFilterbankCacheKeyHash> cache(
+      kMaxMelCacheSize);
+  return cache.get_or_build(key, [&] { return create_mel_filterbank(sr, n_fft, config); });
 }
 
 std::vector<float> apply_mel_filterbank(const float* power, int n_bins, int n_frames,

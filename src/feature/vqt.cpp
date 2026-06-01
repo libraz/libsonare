@@ -3,13 +3,12 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
-#include <list>
-#include <mutex>
-#include <unordered_map>
+#include <memory>
 
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/exception.h"
+#include "util/lru_cache.h"
 #include "util/math_utils.h"
 
 namespace sonare {
@@ -79,75 +78,41 @@ struct VqtKernelCacheKeyHash {
 using EigenKernelMatrix =
     Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-/// @brief Cached kernel with Eigen matrix.
-/// @details Holds an iterator pointing back into the LRU list so cache hits
-/// can splice the key to the most-recently-used end in O(1) instead of doing
-/// an O(n) `lru.remove(key)`.
+/// @brief Cached kernel with its pre-computed Eigen matrix.
+/// @details Both members are shared pointers, so callers take ownership of a
+/// snapshot that survives concurrent eviction of the cache entry.
 struct CachedVqtKernel {
   std::shared_ptr<VqtKernel> kernel;
   std::shared_ptr<EigenKernelMatrix> eigen_matrix;
-  std::list<VqtKernelCacheKey>::iterator lru_it;
 };
 
 /// @brief Maximum number of cached VQT kernels
 constexpr size_t kMaxVqtCacheSize = 8;
 
-/// @brief VQT kernel cache state with LRU eviction.
-/// @details Wrapped in a function-local static (Meyers singleton) so its
-/// construction and destruction order are well-defined; the mutex still guards
-/// concurrent access.
-struct VqtKernelCache {
-  std::mutex mutex;
-  std::unordered_map<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> map;
-  std::list<VqtKernelCacheKey> lru;
-};
-
-VqtKernelCache& vqt_kernel_cache() {
-  static VqtKernelCache cache;
-  return cache;
-}
-
 /// @brief Get or create cached VQT kernel with Eigen matrix
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   VqtKernelCacheKey key = make_key(sr, config);
 
-  VqtKernelCache& cache = vqt_kernel_cache();
-  std::lock_guard<std::mutex> lock(cache.mutex);
-  auto it = cache.map.find(key);
-  if (it != cache.map.end()) {
-    // O(1) MRU update: splice the existing list node to the front instead of
-    // searching with `lru.remove(key)` (was O(n) while holding the mutex).
-    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
-    return it->second;
-  }
+  // Returned by value so the shared-pointer snapshot survives eviction; the
+  // build runs under the lock (see LruCache::get_or_build_value).
+  static LruCache<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> cache(
+      kMaxVqtCacheSize);
+  return cache.get_or_build_value(key, [&]() -> CachedVqtKernel {
+    auto kernel = VqtKernel::create(sr, config);
 
-  // Create kernel
-  auto kernel = VqtKernel::create(sr, config);
+    // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
+    int fft_length = kernel->fft_length();
+    int n_bins = kernel->n_bins();
+    const auto& freq_kernels = kernel->kernel();
 
-  // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
-  int fft_length = kernel->fft_length();
-  int n_bins = kernel->n_bins();
-  const auto& freq_kernels = kernel->kernel();
-
-  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
-  for (int k = 0; k < n_bins; ++k) {
-    for (int i = 0; i < fft_length; ++i) {
-      (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
+    auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
+    for (int k = 0; k < n_bins; ++k) {
+      for (int i = 0; i < fft_length; ++i) {
+        (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
+      }
     }
-  }
-
-  // Evict oldest entry if cache is full
-  while (cache.map.size() >= kMaxVqtCacheSize && !cache.lru.empty()) {
-    auto oldest_key = cache.lru.back();
-    cache.lru.pop_back();
-    cache.map.erase(oldest_key);
-  }
-
-  cache.lru.push_front(key);
-  CachedVqtKernel cached{std::shared_ptr<VqtKernel>(std::move(kernel)), eigen_matrix,
-                         cache.lru.begin()};
-  cache.map[key] = cached;
-  return cached;
+    return CachedVqtKernel{std::shared_ptr<VqtKernel>(std::move(kernel)), std::move(eigen_matrix)};
+  });
 }
 
 }  // namespace

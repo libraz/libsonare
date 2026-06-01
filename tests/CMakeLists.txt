@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(sonare_tests
   test_main.cpp
   util/math_utils_test.cpp
+  util/lru_cache_test.cpp
   util/json_test.cpp
   util/frame_test.cpp
   util/padding_test.cpp

@@ -2,13 +2,11 @@
 
 #include <Eigen/Core>
 #include <cmath>
-#include <list>
-#include <mutex>
-#include <unordered_map>
 
 #include "core/convert.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/lru_cache.h"
 
 namespace sonare {
 
@@ -71,28 +69,6 @@ struct ChromaFilterbankCacheKeyHash {
 
 /// @brief Maximum number of cached Chroma filterbanks.
 constexpr size_t kMaxChromaCacheSize = 8;
-
-/// @brief Cached filterbank with a back-pointer into the LRU list.
-/// @details The stored iterator lets cache hits and evictions touch the LRU
-/// queue in O(1) (via `splice`/`erase`) instead of doing an O(n)
-/// `lru.remove(key)` while holding the mutex.
-struct CachedChromaFilterbank {
-  std::vector<float> filterbank;
-  std::list<ChromaFilterbankCacheKey>::iterator lru_it;
-};
-
-/// @brief Chroma filterbank cache state with LRU eviction.
-struct ChromaFilterbankCache {
-  std::mutex mutex;
-  std::unordered_map<ChromaFilterbankCacheKey, CachedChromaFilterbank, ChromaFilterbankCacheKeyHash>
-      map;
-  std::list<ChromaFilterbankCacheKey> lru;
-};
-
-ChromaFilterbankCache& chroma_filterbank_cache() {
-  static ChromaFilterbankCache cache;
-  return cache;
-}
 
 }  // namespace
 
@@ -200,35 +176,10 @@ const std::vector<float>& get_chroma_filterbank_cached(int sr, int n_fft,
                                                        const ChromaFilterConfig& config) {
   ChromaFilterbankCacheKey key = make_key(sr, n_fft, config);
 
-  ChromaFilterbankCache& cache = chroma_filterbank_cache();
-  {
-    std::lock_guard<std::mutex> lock(cache.mutex);
-    auto it = cache.map.find(key);
-    if (it != cache.map.end()) {
-      // O(1) MRU update: splice the existing list node to the front instead of
-      // searching with `lru.remove(key)` (was O(n) while holding the mutex).
-      cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
-      return it->second.filterbank;
-    }
-  }
-
   // Build outside the lock — see get_mel_filterbank_cached for rationale.
-  std::vector<float> fb = create_chroma_filterbank(sr, n_fft, config);
-
-  std::lock_guard<std::mutex> lock(cache.mutex);
-  auto it = cache.map.find(key);
-  if (it != cache.map.end()) {
-    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
-    return it->second.filterbank;
-  }
-  while (cache.map.size() >= kMaxChromaCacheSize && !cache.lru.empty()) {
-    auto oldest_it = std::prev(cache.lru.end());
-    cache.map.erase(*oldest_it);
-    cache.lru.erase(oldest_it);
-  }
-  cache.lru.push_front(key);
-  auto [ins, _] = cache.map.emplace(key, CachedChromaFilterbank{std::move(fb), cache.lru.begin()});
-  return ins->second.filterbank;
+  static LruCache<ChromaFilterbankCacheKey, std::vector<float>, ChromaFilterbankCacheKeyHash> cache(
+      kMaxChromaCacheSize);
+  return cache.get_or_build(key, [&] { return create_chroma_filterbank(sr, n_fft, config); });
 }
 
 std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n_frames,

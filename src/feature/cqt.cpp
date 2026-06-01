@@ -3,14 +3,13 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
-#include <list>
-#include <mutex>
-#include <unordered_map>
+#include <memory>
 
 #include "core/fft.h"
 #include "core/spectrum.h"
 #include "filters/wavelet.h"
 #include "util/exception.h"
+#include "util/lru_cache.h"
 #include "util/math_utils.h"
 
 namespace sonare {
@@ -80,74 +79,41 @@ struct CqtKernelCacheKeyHash {
 using EigenKernelMatrix =
     Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-/// @brief Cached kernel with Eigen matrix.
-/// @details Holds an iterator pointing back into the LRU list so cache hits
-/// can splice the key to the most-recently-used end in O(1) instead of doing
-/// an O(n) `lru.remove(key)`.
+/// @brief Cached kernel with its pre-computed Eigen matrix.
+/// @details Both members are shared pointers, so callers take ownership of a
+/// snapshot that survives concurrent eviction of the cache entry.
 struct CachedCqtKernel {
   std::shared_ptr<CqtKernel> kernel;
   std::shared_ptr<EigenKernelMatrix> eigen_matrix;
-  std::list<CqtKernelCacheKey>::iterator lru_it;
 };
 
 /// @brief Maximum number of cached CQT kernels
 constexpr size_t kMaxCqtCacheSize = 8;
 
-/// @brief CQT kernel cache state with LRU eviction.
-/// @details Wrapped in a function-local static (Meyers singleton) so its
-/// construction and destruction order are well-defined; the mutex still guards
-/// concurrent access.
-struct CqtKernelCache {
-  std::mutex mutex;
-  std::unordered_map<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> map;
-  std::list<CqtKernelCacheKey> lru;
-};
-
-CqtKernelCache& cqt_kernel_cache() {
-  static CqtKernelCache cache;
-  return cache;
-}
-
 /// @brief Get or create cached CQT kernel with Eigen matrix
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   CqtKernelCacheKey key = make_key(sr, config);
 
-  CqtKernelCache& cache = cqt_kernel_cache();
-  std::lock_guard<std::mutex> lock(cache.mutex);
-  auto it = cache.map.find(key);
-  if (it != cache.map.end()) {
-    // O(1) MRU update: splice the existing list node to the front instead of
-    // searching with `lru.remove(key)` (was O(n) while holding the mutex).
-    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
-    return it->second;
-  }
+  // Returned by value so the shared-pointer snapshot survives eviction; the
+  // build runs under the lock (see LruCache::get_or_build_value).
+  static LruCache<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> cache(
+      kMaxCqtCacheSize);
+  return cache.get_or_build_value(key, [&]() -> CachedCqtKernel {
+    std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
 
-  // Create kernel
-  std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
+    // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
+    int fft_length = kernel->fft_length();
+    int n_bins = kernel->n_bins();
+    const auto& freq_kernels = kernel->kernel();
 
-  // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
-  int fft_length = kernel->fft_length();
-  int n_bins = kernel->n_bins();
-  const auto& freq_kernels = kernel->kernel();
-
-  auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
-  for (int k = 0; k < n_bins; ++k) {
-    for (int i = 0; i < fft_length; ++i) {
-      (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
+    auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
+    for (int k = 0; k < n_bins; ++k) {
+      for (int i = 0; i < fft_length; ++i) {
+        (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
+      }
     }
-  }
-
-  // Evict oldest entry if cache is full
-  while (cache.map.size() >= kMaxCqtCacheSize && !cache.lru.empty()) {
-    auto oldest_key = cache.lru.back();
-    cache.lru.pop_back();
-    cache.map.erase(oldest_key);
-  }
-
-  cache.lru.push_front(key);
-  CachedCqtKernel cached{kernel, eigen_matrix, cache.lru.begin()};
-  cache.map[key] = cached;
-  return cached;
+    return CachedCqtKernel{std::move(kernel), std::move(eigen_matrix)};
+  });
 }
 
 /// @brief Computes Q factor for CQT.
