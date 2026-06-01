@@ -413,8 +413,13 @@ void BeatAnalyzer::track_beats() {
     // Find first frame with significant onset
     float threshold = 0.1f;
     int first_valid = 0;
+    // Clamp frame indices into [0, n_frames-1]: the adaptive DP backtracer and
+    // prepend_missed_initial_beat can emit frames slightly outside the valid
+    // local_score / onset_strength_ range, which would otherwise be UB.
+    const int max_frame_index = n_frames - 1;
     for (size_t i = 0; i < beat_frames_vec.size(); ++i) {
-      if (local_score[beat_frames_vec[i]] > threshold) {
+      const int idx = std::clamp(beat_frames_vec[i], 0, max_frame_index);
+      if (local_score[idx] > threshold) {
         first_valid = static_cast<int>(i);
         break;
       }
@@ -423,7 +428,8 @@ void BeatAnalyzer::track_beats() {
     // Find last frame with significant onset
     int last_valid = static_cast<int>(beat_frames_vec.size()) - 1;
     for (int i = static_cast<int>(beat_frames_vec.size()) - 1; i >= 0; --i) {
-      if (local_score[beat_frames_vec[i]] > threshold) {
+      const int idx = std::clamp(beat_frames_vec[i], 0, max_frame_index);
+      if (local_score[idx] > threshold) {
         last_valid = i;
         break;
       }
@@ -439,11 +445,16 @@ void BeatAnalyzer::track_beats() {
   // Create Beat objects
   beats_.clear();
   beats_.reserve(beat_frames_vec.size());
+  // Clamp index into onset_strength_: prepend_missed_initial_beat can insert a
+  // 0-frame and the adaptive DP backtracer may emit out-of-range frames, both
+  // of which would otherwise read past onset_strength_'s end (UB).
+  const int max_onset_index = static_cast<int>(onset_strength_.size()) - 1;
   for (int f : beat_frames_vec) {
     Beat beat;
     beat.frame = f;
     beat.time = frames_to_time(f, sr_, hop_length_);
-    beat.strength = onset_strength_[f];
+    beat.strength =
+        max_onset_index >= 0 ? onset_strength_[std::clamp(f, 0, max_onset_index)] : 0.0f;
     beats_.push_back(beat);
   }
   if (beats_.size() >= 2 && beats_.front().frame == 0 &&

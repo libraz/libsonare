@@ -60,6 +60,8 @@ void FFT::forward(const float* input, std::complex<float>* output) {
 }
 
 void FFT::forward_complex(const std::complex<float>* input, std::complex<float>* output) {
+  SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
+                   "Null pointer passed to FFT::forward_complex");
   kiss_fft(impl_->forward_complex_cfg, reinterpret_cast<const kiss_fft_cpx*>(input),
            reinterpret_cast<kiss_fft_cpx*>(output));
 }

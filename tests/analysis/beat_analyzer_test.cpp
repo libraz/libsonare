@@ -358,6 +358,59 @@ TEST_CASE("BeatAnalyzer short audio", "[beat_analyzer]") {
   REQUIRE(analyzer.bpm() > 0.0f);
 }
 
+TEST_CASE("BeatAnalyzer adversarial short silence + single click", "[beat_analyzer]") {
+  // 0.1s of silence with a single click near the start. This exercises the
+  // adaptive-DP fallback and the post-DP clamping fix: backtracer can emit
+  // frame indices outside [0, n_frames) on tiny buffers.
+  constexpr int sr = 22050;
+  constexpr float duration = 0.1f;
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  // Single click roughly 10ms long, starting at 10ms.
+  const int click_start = sr / 100;
+  const int click_len = sr / 100;
+  for (int i = 0; i < click_len && click_start + i < n_samples; ++i) {
+    const float envelope = 1.0f - static_cast<float>(i) / click_len;
+    samples[click_start + i] = envelope * 0.8f;
+  }
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  BeatConfig config;
+  config.start_bpm = 120.0f;
+
+  REQUIRE_NOTHROW(BeatAnalyzer(audio, config));
+  BeatAnalyzer analyzer(audio, config);
+  const auto& beats = analyzer.beats();
+  // strength must be a finite, non-negative real (i.e. not uninitialized
+  // garbage from OOB read into onset_strength_).
+  for (const auto& beat : beats) {
+    REQUIRE(std::isfinite(beat.strength));
+    REQUIRE(beat.strength >= 0.0f);
+  }
+}
+
+TEST_CASE("BeatAnalyzer all-zero onset exercises adaptive-DP fallback", "[beat_analyzer]") {
+  // No onset energy anywhere — drives the adaptive-DP backtracer through its
+  // fallback path. We assert it completes without crashing and yields finite
+  // strengths.
+  std::vector<float> onset(256, 0.0f);
+
+  BeatConfig config;
+  config.start_bpm = 120.0f;
+  config.bpm_min = 60.0f;
+  config.bpm_max = 200.0f;
+  config.trim = false;
+  config.adaptive_tempo = true;
+
+  REQUIRE_NOTHROW(BeatAnalyzer(onset, 22050, 512, config));
+  BeatAnalyzer analyzer(onset, 22050, 512, config);
+  for (const auto& beat : analyzer.beats()) {
+    REQUIRE(std::isfinite(beat.strength));
+    REQUIRE(beat.strength >= 0.0f);
+    REQUIRE(beat.frame >= 0);
+  }
+}
+
 TEST_CASE("BeatAnalyzer accessors", "[beat_analyzer]") {
   Audio audio = create_click_track(120.0f);
 

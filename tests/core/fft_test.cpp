@@ -251,4 +251,26 @@ TEST_CASE("FFT input validation", "[fft]") {
     std::vector<std::complex<float>> input(513);
     REQUIRE_THROWS_AS(fft.inverse(input.data(), nullptr), SonareException);
   }
+
+  SECTION("FFT forward_complex with null input") {
+    FFT fft(1024);
+    std::vector<std::complex<float>> output(1024);
+    REQUIRE_THROWS_AS(fft.forward_complex(nullptr, output.data()), SonareException);
+    try {
+      fft.forward_complex(nullptr, output.data());
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("FFT forward_complex with null output") {
+    FFT fft(1024);
+    std::vector<std::complex<float>> input(1024);
+    REQUIRE_THROWS_AS(fft.forward_complex(input.data(), nullptr), SonareException);
+    try {
+      fft.forward_complex(input.data(), nullptr);
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
 }
