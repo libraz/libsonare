@@ -161,3 +161,89 @@ TEST_CASE("apply_mel_filterbank", "[mel]") {
     }
   }
 }
+
+TEST_CASE("get_mel_filterbank_cached returns same matrix for same key", "[mel][cache]") {
+  // Cache hit: identical (sr, n_fft, config) must return the same underlying
+  // storage (same data pointer) — that is the whole point of caching.
+  int sr = 22050;
+  int n_fft = 2048;
+  MelFilterConfig config;
+  config.n_mels = 64;
+
+  const std::vector<float>& a = get_mel_filterbank_cached(sr, n_fft, config);
+  const std::vector<float>& b = get_mel_filterbank_cached(sr, n_fft, config);
+  REQUIRE(a.data() == b.data());
+  REQUIRE(a.size() == static_cast<size_t>(config.n_mels * (n_fft / 2 + 1)));
+
+  // The cached values must match a freshly built filterbank.
+  std::vector<float> fresh = create_mel_filterbank(sr, n_fft, config);
+  REQUIRE(a.size() == fresh.size());
+  for (size_t i = 0; i < fresh.size(); ++i) {
+    REQUIRE_THAT(a[i], WithinAbs(fresh[i], 1e-6f));
+  }
+}
+
+TEST_CASE("get_mel_filterbank_cached treats fmax=0 as sr/2", "[mel][cache]") {
+  // 0 sentinel and the explicit sr/2 value must collapse to the same cache key,
+  // otherwise the cache silently doubles in size at the most common call sites.
+  int sr = 22050;
+  int n_fft = 2048;
+  MelFilterConfig config_default;
+  config_default.n_mels = 32;
+  MelFilterConfig config_explicit = config_default;
+  config_explicit.fmax = static_cast<float>(sr) / 2.0f;
+
+  const std::vector<float>& a = get_mel_filterbank_cached(sr, n_fft, config_default);
+  const std::vector<float>& b = get_mel_filterbank_cached(sr, n_fft, config_explicit);
+  REQUIRE(a.data() == b.data());
+}
+
+TEST_CASE("get_mel_filterbank_cached distinguishes different keys", "[mel][cache]") {
+  int sr = 22050;
+  int n_fft = 2048;
+
+  MelFilterConfig c1;
+  c1.n_mels = 40;
+  MelFilterConfig c2;
+  c2.n_mels = 64;
+  MelFilterConfig c3;
+  c3.n_mels = 40;
+  c3.htk = true;
+
+  const std::vector<float>& a = get_mel_filterbank_cached(sr, n_fft, c1);
+  const std::vector<float>& b = get_mel_filterbank_cached(sr, n_fft, c2);
+  const std::vector<float>& c = get_mel_filterbank_cached(sr, n_fft, c3);
+
+  REQUIRE(a.data() != b.data());
+  REQUIRE(a.data() != c.data());
+  REQUIRE(b.data() != c.data());
+  REQUIRE(a.size() != b.size());  // different n_mels → different shape
+}
+
+TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel][cache]") {
+  // The implementation caps the cache at a small constant (kMaxMelCacheSize =
+  // 8 at the time of writing). Insert more than that and verify the oldest
+  // entry is evicted (its pointer becomes stale on re-fetch). We do not pin
+  // the exact capacity from the test — we only require eviction within a
+  // reasonable upper bound so the test stays robust if the cap changes.
+  int sr = 22050;
+  int n_fft = 1024;
+
+  MelFilterConfig first;
+  first.n_mels = 16;
+  const void* first_ptr = get_mel_filterbank_cached(sr, n_fft, first).data();
+
+  constexpr int kPressure = 32;
+  for (int i = 0; i < kPressure; ++i) {
+    MelFilterConfig c;
+    c.n_mels = 17 + i;
+    // Touch every distinct key once so they enter the LRU queue ahead of
+    // `first` (which has not been re-touched since).
+    (void)get_mel_filterbank_cached(sr, n_fft, c);
+  }
+
+  // After kPressure unique inserts, the original entry must have been evicted
+  // and rebuilt — pointers cannot match if the storage was freed.
+  const void* first_ptr_after = get_mel_filterbank_cached(sr, n_fft, first).data();
+  REQUIRE(first_ptr_after != first_ptr);
+}

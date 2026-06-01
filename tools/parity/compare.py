@@ -17,6 +17,11 @@ canonical key we line up the C signature against each language surface and emit:
                 or vs C (e.g. C `sr` vs python `sample_rate`).
 5. enum       — the accepted enum/string-union value set for a param differs
                 across surfaces.
+6. core_default — a facade default diverges from the C++ core design default
+                (config-struct field initializer / free-fn default argument).
+7. wasm_internal — the WASM binding is inconsistent across its own three files
+                (embind registration -> SonareModule type -> index.ts facade);
+                catches a wiring break the index.ts-only checks cannot see.
 
 A finding may be marked ``informational``: it is reported but does not count
 toward the non-zero exit code (CI gate). Allowlisted findings are suppressed
@@ -31,6 +36,7 @@ import re
 
 from allowlist import Allowlist
 from core_defaults import CoreConfig
+from extractors.wasm_internal import WasmInternal
 from model import Extraction, FunctionSig
 from normalize import (
     canonical_core_default,
@@ -117,7 +123,9 @@ _HANDLE_FULL_PREFIXES = (
 
 @dataclass
 class Finding:
-    category: str  # coverage | default | order | input | enum
+    category: (
+        str  # coverage | default | core_default | order | input | enum | wasm_internal
+    )
     key: str
     surface: str  # surface the finding is attributed to (or 'cross')
     message: str
@@ -188,6 +196,7 @@ def build_report(
     allow: Allowlist,
     selected: list[str],
     core_configs: dict[str, CoreConfig] | None = None,
+    wasm_internal: WasmInternal | None = None,
 ) -> Report:
     rep = Report(surfaces=selected)
     indexed = {s: _index(ex) for s, ex in extractions.items()}
@@ -318,6 +327,10 @@ def build_report(
     # --- 6. Core-default drift (facade vs C++ core struct design default) ---
     if core_configs:
         _core_default_drift(indexed, core_configs, allow, rep, roles)
+
+    # --- 7. WASM-internal wiring consistency (embind <-> SonareModule <-> facade) ---
+    if wasm_internal is not None:
+        _wasm_internal_drift(wasm_internal, allow, rep)
 
     return rep
 
@@ -669,3 +682,78 @@ def _core_default_drift(
                         location=f"{sig.file}:{sig.line} (core {cfg.header})",
                     )
                 )
+
+
+def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
+    """Cross-validate the WASM binding against ITSELF across its three files.
+
+    The cross-binding checks read ``index.ts`` alone, so they model "exposed in
+    WASM" == "exported from index.ts" and are blind to a partial wiring break
+    spread across embind (``bindings.cpp``) -> the ``SonareModule`` type
+    (``sonare.js.d.ts``) -> the facade (``index.ts``). This check closes that gap
+    (the P0-4 class: a function registered in embind but missing from the type
+    and/or the facade). Three legs:
+
+    1. ACTIVE -- a FREE-function embind registration absent from ``SonareModule``
+       (TypeScript cannot call it; a real type/registration break).
+    2. ACTIVE -- ``index.ts`` calls ``module.X`` / ``requireModule().X`` for a
+       name absent from ``SonareModule`` (a TS compile gap).
+    3. INFORMATIONAL -- a registered AND typed free function with no ``index.ts``
+       facade wrapper. Often intentional (a raw entry superseded by a richer
+       variant, e.g. ``detectKey`` -> ``_detectKeyWithOptions``), so non-gating.
+    """
+    if not wi.available:
+        return
+
+    def _emit(name: str, message: str, location: str, informational: bool) -> None:
+        if allow.wasm_internal_ok(name):
+            rep.findings.append(
+                Finding("wasm_internal", name, "wasm", "", allowlisted=True)
+            )
+            return
+        rep.findings.append(
+            Finding(
+                category="wasm_internal",
+                key=name,
+                surface="wasm",
+                message=message,
+                location=location,
+                informational=informational,
+            )
+        )
+
+    # 1. embind free registration not declared in the SonareModule type.
+    for name, line in sorted(wi.embind.items()):
+        if name in wi.iface:
+            continue
+        _emit(
+            name,
+            f"embind registers free function '{name}' but it is not declared in "
+            "the SonareModule interface (TypeScript cannot call it)",
+            f"{wi.bindings_file}:{line}",
+            informational=False,
+        )
+
+    # 2. index.ts calls module.X for a name the SonareModule type does not declare.
+    for name, line in sorted(wi.refs.items()):
+        if name in wi.iface:
+            continue
+        _emit(
+            name,
+            f"index.ts calls module.{name} but it is not declared in the "
+            "SonareModule interface",
+            f"{wi.index_file}:{line}",
+            informational=False,
+        )
+
+    # 3. Registered AND typed, but no index.ts facade wraps it (module.X unused).
+    for name, line in sorted(wi.embind.items()):
+        if name not in wi.iface or name in wi.refs:
+            continue
+        _emit(
+            name,
+            f"embind registers free function '{name}' (typed in SonareModule) but "
+            f"no index.ts facade wraps it (module.{name} is never called)",
+            f"{wi.bindings_file}:{line}",
+            informational=True,
+        )

@@ -10,10 +10,11 @@
 namespace sonare {
 
 using sonare::constants::kTwoPi;
+using sonare::constants::kTwoPiD;
 
 namespace {
 
-/// @brief Wraps phase to [-pi, pi].
+/// @brief Wraps phase to [-pi, pi] in single precision.
 /// @details Uses std::remainder for O(1) computation without loops.
 ///          Returns 0 for NaN/Inf inputs to prevent undefined behavior.
 float wrap_phase(float phase) {
@@ -21,6 +22,17 @@ float wrap_phase(float phase) {
     return 0.0f;
   }
   return std::remainder(phase, kTwoPi);
+}
+
+/// @brief Wraps phase to [-pi, pi] in double precision.
+/// @details Double-precision variant used for the synthesis-phase accumulator so that
+///          per-frame phase advances `2*pi*f*hop/sr` do not accumulate single-precision
+///          rounding error over thousands of frames (long pitch shift / time stretch).
+double wrap_phase(double phase) {
+  if (!std::isfinite(phase)) {
+    return 0.0;
+  }
+  return std::remainder(phase, kTwoPiD);
 }
 
 }  // namespace
@@ -73,11 +85,12 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
   /// Output complex spectrum
   std::vector<std::complex<float>> output(n_bins * n_frames_out);
 
-  /// Phase accumulator
-  std::vector<float> phase_acc(n_bins, 0.0f);
+  /// Phase accumulator (double precision to avoid drift over long signals).
+  std::vector<double> phase_acc(n_bins, 0.0);
 
-  /// Time step ratio
-  float time_step = static_cast<float>(hop_length) / static_cast<float>(sample_rate);
+  /// Time step ratio (double precision: hop/sr is used to scale every per-frame
+  /// phase advance, so single-precision rounding here biases the accumulator).
+  const double time_step = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
 
   for (int t_out = 0; t_out < n_frames_out; ++t_out) {
     /// Input time position
@@ -105,29 +118,30 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
       float mag1 = std::abs(frame1);
       float mag = mag0 * (1.0f - frac) + mag1 * frac;
 
-      /// Compute phase advance
+      /// Compute phase advance (analysis side stays in float — bounded per-frame).
       float phase0 = std::arg(frame0);
       float phase1 = std::arg(frame1);
 
       /// Expected phase advance based on bin frequency
       float bin_freq =
           static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-      float expected_advance = kTwoPi * bin_freq * time_step;
+      float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
 
       /// Phase difference with unwrapping
       float phase_diff = wrap_phase(phase1 - phase0 - expected_advance);
-      float inst_freq = bin_freq + phase_diff / (kTwoPi * time_step);
+      float inst_freq = bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
 
-      /// Accumulate phase
+      /// Accumulate phase in double precision.
       if (t_out == 0) {
-        phase_acc[k] = phase0 + frac * wrap_phase(phase1 - phase0);
+        phase_acc[k] = static_cast<double>(phase0) +
+                       static_cast<double>(frac) * static_cast<double>(wrap_phase(phase1 - phase0));
       } else {
-        phase_acc[k] += kTwoPi * inst_freq * time_step;
+        phase_acc[k] += kTwoPiD * static_cast<double>(inst_freq) * time_step;
         phase_acc[k] = wrap_phase(phase_acc[k]);
       }
 
-      /// Construct output complex value
-      output[k * n_frames_out + t_out] = std::polar(mag, phase_acc[k]);
+      /// Construct output complex value (cast back to float for FFT-domain storage).
+      output[k * n_frames_out + t_out] = std::polar(mag, static_cast<float>(phase_acc[k]));
     }
   }
 
@@ -153,10 +167,11 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
   const std::complex<float>* input = spec.complex_data();
   std::vector<std::complex<float>> output(n_bins * n_frames_out);
 
-  /// Synthesis phase accumulator (per bin).
-  std::vector<float> phase_acc(n_bins, 0.0f);
+  /// Synthesis phase accumulator (per bin, double precision to avoid drift).
+  std::vector<double> phase_acc(n_bins, 0.0);
 
-  float time_step = static_cast<float>(hop_length) / static_cast<float>(sample_rate);
+  /// Time step ratio in double precision (see phase_vocoder() for rationale).
+  const double time_step = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
 
   /// Reused per-frame scratch buffers (avoid per-frame heap churn).
   std::vector<float> mag(n_bins, 0.0f);
@@ -196,9 +211,9 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
 
       float bin_freq =
           static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-      float expected_advance = kTwoPi * bin_freq * time_step;
+      float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
       float phase_diff = wrap_phase(phase1 - phase0 - expected_advance);
-      inst_freq[k] = bin_freq + phase_diff / (kTwoPi * time_step);
+      inst_freq[k] = bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
     }
 
     /// Detect spectral peaks: local maxima of the (interpolated) magnitude.
@@ -210,14 +225,15 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
     }
 
     if (peaks.empty()) {
-      /// Silence/DC: fall back to standard per-bin phase accumulation.
+      /// Silence/DC: fall back to standard per-bin phase accumulation (double precision).
       for (int k = 0; k < n_bins; ++k) {
         if (t_out == 0) {
-          phase_acc[k] = ana_phase[k];
+          phase_acc[k] = static_cast<double>(ana_phase[k]);
         } else {
-          phase_acc[k] = wrap_phase(phase_acc[k] + kTwoPi * inst_freq[k] * time_step);
+          phase_acc[k] =
+              wrap_phase(phase_acc[k] + kTwoPiD * static_cast<double>(inst_freq[k]) * time_step);
         }
-        output[k * n_frames_out + t_out] = std::polar(mag[k], phase_acc[k]);
+        output[k * n_frames_out + t_out] = std::polar(mag[k], static_cast<float>(phase_acc[k]));
       }
       continue;
     }
@@ -240,23 +256,24 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
       }
     }
 
-    /// Accumulate synthesis phase at peak bins only.
+    /// Accumulate synthesis phase at peak bins only (double precision).
     for (int peak_bin : peaks) {
       if (t_out == 0) {
-        phase_acc[peak_bin] = ana_phase[peak_bin];
+        phase_acc[peak_bin] = static_cast<double>(ana_phase[peak_bin]);
       } else {
-        phase_acc[peak_bin] =
-            wrap_phase(phase_acc[peak_bin] + kTwoPi * inst_freq[peak_bin] * time_step);
+        phase_acc[peak_bin] = wrap_phase(
+            phase_acc[peak_bin] + kTwoPiD * static_cast<double>(inst_freq[peak_bin]) * time_step);
       }
     }
 
     /// Lock every bin (including peaks) and emit output.
     for (int k = 0; k < n_bins; ++k) {
       int k_p = nearest_peak[k];
-      float synth_phase =
-          (k == k_p) ? phase_acc[k_p] : phase_acc[k_p] + (ana_phase[k] - ana_phase[k_p]);
+      double synth_phase = (k == k_p) ? phase_acc[k_p]
+                                      : phase_acc[k_p] + static_cast<double>(ana_phase[k]) -
+                                            static_cast<double>(ana_phase[k_p]);
       phase_acc[k] = wrap_phase(synth_phase);
-      output[k * n_frames_out + t_out] = std::polar(mag[k], phase_acc[k]);
+      output[k * n_frames_out + t_out] = std::polar(mag[k], static_cast<float>(phase_acc[k]));
     }
   }
 

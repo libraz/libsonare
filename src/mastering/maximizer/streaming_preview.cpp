@@ -4,17 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
-// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
-// `core/ + util/ + rt/`. `streaming_preview` is a loudness-target previewer
-// whose core job is to report integrated LUFS and true-peak per streaming
-// platform; the includes below cannot be removed without redesigning the API.
-// Suggested follow-ups:
-//   1. Move this helper under `mastering/assistant/` (it is functionally an
-//      analysis/recommendation tool, not a DSP processor).
-//   2. Or change the signature to accept pre-measured loudness + true-peak as
-//      inputs and push the measurement to the C API / WASM bridge layer.
-#include "metering/lufs.h"
-#include "metering/true_peak.h"
+#include "mastering/common/loudness_measure.h"
 #include "util/json.h"
 
 namespace sonare::mastering::maximizer {
@@ -24,8 +14,9 @@ std::vector<StreamingPreviewResult> streaming_preview(
   if (audio.empty()) throw std::invalid_argument("audio must not be empty");
   if (platforms.empty()) throw std::invalid_argument("platform list must not be empty");
 
-  const float integrated = metering::lufs(audio).integrated_lufs;
-  const float true_peak = metering::true_peak_db(audio, 4);
+  const auto measured = common::measure_lufs_and_true_peak(audio);
+  const float integrated = measured.integrated_lufs;
+  const float true_peak = measured.true_peak_dbtp;
   std::vector<StreamingPreviewResult> results;
   results.reserve(platforms.size());
   for (const auto& platform : platforms) {

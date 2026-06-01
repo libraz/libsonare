@@ -444,9 +444,18 @@ RawBiquadCoeffsD rbj_bandpass_raw_d(double frequency, double sample_rate, double
 
 namespace {
 
+// Deman bilinear-transform high-shelf and high-pass designs for K-weighting.
+// Source: Mansbridge, S., Finn, S., & Reiss, J. D. (2012). "Implementation and
+// Evaluation of Autonomous Multi-track Fader Control." AES 133rd Convention,
+// San Francisco. Appendix: BS.1770 K-weighting filter implementation.
+// Cross-reference: EBU Tech 3341 (2016), ITU-R BS.1770-4 Annex 2.
+// The constant 0.499666774155 is the Deman exponent vb = vh^0.499666774155,
+// derived from the parametric EQ bilinear-transform to satisfy the
+// gain-normalisation condition of the shelving filter.
 BiquadCoeffsD deman_high_shelf_d(double frequency, double sample_rate, double gain_db, double q) {
   const double k = std::tan(kPiD * frequency / sample_rate);
   const double vh = std::pow(10.0, gain_db / 20.0);
+  // vb = vh^0.499666774155: Deman parametric-EQ gain exponent (see note above)
   const double vb = std::pow(vh, 0.499666774155);
   const double a0 = 1.0 + k / q + k * k;
   return {

@@ -165,6 +165,31 @@ float percentile(std::vector<float> values, float q) {
   return values[lower] * (1.0f - weight) + values[upper] * weight;
 }
 
+// O(n) average percentile using std::nth_element on a mutable buffer.
+// Caller owns the buffer; the contents are partially reordered on return.
+// For linear interpolation between adjacent ranks we run nth_element twice,
+// but the second call still operates on the partially partitioned buffer
+// (so on average it remains linear time and avoids the full O(n log n) sort).
+float percentile_nth_element(float* data, size_t count, float q) {
+  if (data == nullptr || count == 0) {
+    return nan_value();
+  }
+  q = std::clamp(q, 0.0f, 1.0f);
+  const float position = q * static_cast<float>(count - 1);
+  const auto lower = static_cast<size_t>(std::floor(position));
+  const auto upper = static_cast<size_t>(std::ceil(position));
+  std::nth_element(data, data + lower, data + count);
+  const float lower_value = data[lower];
+  if (lower == upper) {
+    return lower_value;
+  }
+  // Elements at [lower+1, count) are all >= lower_value after the first call,
+  // so the minimum of that tail is the (upper)th order statistic.
+  const float upper_value = *std::min_element(data + lower + 1, data + count);
+  const float weight = position - static_cast<float>(lower);
+  return lower_value * (1.0f - weight) + upper_value * weight;
+}
+
 std::vector<float> suppress_stationary_noise_spectral(const float* samples, size_t size,
                                                       int sample_rate) {
   if (samples == nullptr || sample_rate <= 0 || size < 1024) {
@@ -181,10 +206,10 @@ std::vector<float> suppress_stationary_noise_spectral(const float* samples, size
   const auto& window = get_window_cached(WindowType::Hann, n_fft);
   const size_t n_frames = 1 + (size - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop);
   const int n_bins = fft.n_bins();
-  std::vector<std::vector<float>> magnitudes(static_cast<size_t>(n_bins));
-  for (auto& bin : magnitudes) {
-    bin.reserve(n_frames);
-  }
+  // Flat [n_bins x n_frames] matrix in bin-major (row-major) layout so each
+  // bin's per-frame magnitudes are contiguous for percentile/nth_element.
+  // Single allocation replaces n_bins nested vector allocations.
+  std::vector<float> magnitudes(static_cast<size_t>(n_bins) * n_frames, 0.0f);
 
   std::vector<float> frame(static_cast<size_t>(n_fft), 0.0f);
   std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_bins));
@@ -195,13 +220,17 @@ std::vector<float> suppress_stationary_noise_spectral(const float* samples, size
     }
     fft.forward(frame.data(), spectrum.data());
     for (int bin = 0; bin < n_bins; ++bin) {
-      magnitudes[static_cast<size_t>(bin)].push_back(std::abs(spectrum[static_cast<size_t>(bin)]));
+      magnitudes[static_cast<size_t>(bin) * n_frames + frame_index] =
+          std::abs(spectrum[static_cast<size_t>(bin)]);
     }
   }
 
   std::vector<float> noise_floor(static_cast<size_t>(n_bins), 0.0f);
   for (int bin = 0; bin < n_bins; ++bin) {
-    noise_floor[static_cast<size_t>(bin)] = percentile(magnitudes[static_cast<size_t>(bin)], 0.20f);
+    // nth_element is O(n) average vs std::sort O(n log n); we mutate the
+    // bin's row in place since we don't need the magnitudes again afterward.
+    noise_floor[static_cast<size_t>(bin)] = percentile_nth_element(
+        magnitudes.data() + static_cast<size_t>(bin) * n_frames, n_frames, 0.20f);
   }
 
   std::vector<float> output(size, 0.0f);
@@ -797,23 +826,47 @@ std::vector<float> filter_octave_band(const Audio& ir, float center_hz) {
   return apply_biquad_filtfilt(ir.data(), ir.size(), coeffs);
 }
 
+// Forward biquad pass that subtracts a constant DC offset from each input
+// sample in-line, fusing the DC removal step with the filter's natural copy
+// and eliminating the dedicated `centered` buffer.
+std::vector<float> apply_biquad_dc_removed(const float* input, size_t size, float dc_offset,
+                                           const BiquadCoeffs& coeffs) {
+  std::vector<float> output(size);
+  float z1 = 0.0f;
+  float z2 = 0.0f;
+  for (size_t i = 0; i < size; ++i) {
+    const float x = input[i] - dc_offset;
+    const float y = coeffs.b0 * x + z1;
+    z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
+    z2 = coeffs.b2 * x - coeffs.a2 * y;
+    output[i] = y;
+  }
+  return output;
+}
+
 std::vector<float> filter_third_octave_band(const Audio& audio, float center_hz) {
   const float ratio = std::pow(2.0f, 1.0f / 6.0f);
   const float lower_hz = center_hz / ratio;
   const float upper_hz = center_hz * ratio;
   const float nyquist = static_cast<float>(audio.sample_rate()) * 0.5f;
-  if (upper_hz >= nyquist || lower_hz <= 0.0f) {
+  if (upper_hz >= nyquist || lower_hz <= 0.0f || audio.empty()) {
     return {};
   }
-  std::vector<float> centered(audio.data(), audio.data() + audio.size());
-  const float mean = centered.empty() ? 0.0f
-                                      : std::accumulate(centered.begin(), centered.end(), 0.0f) /
-                                            static_cast<float>(centered.size());
-  for (float& sample : centered) {
-    sample -= mean;
+  // Compute DC offset directly from the source buffer (no copy).
+  const float* src = audio.data();
+  const size_t n = audio.size();
+  double sum = 0.0;
+  for (size_t i = 0; i < n; ++i) {
+    sum += static_cast<double>(src[i]);
   }
+  const float mean = static_cast<float>(sum / static_cast<double>(n));
   const auto coeffs = bandpass_coeffs(center_hz, upper_hz - lower_hz, audio.sample_rate());
-  return apply_biquad_filtfilt(centered.data(), centered.size(), coeffs);
+  // Forward pass with fused DC removal (replaces the explicit centered copy).
+  std::vector<float> forward = apply_biquad_dc_removed(src, n, mean, coeffs);
+  std::reverse(forward.begin(), forward.end());
+  std::vector<float> backward = apply_biquad(forward.data(), n, coeffs);
+  std::reverse(backward.begin(), backward.end());
+  return backward;
 }
 
 double mean_square_energy(const std::vector<float>& samples) {

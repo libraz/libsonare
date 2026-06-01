@@ -46,6 +46,9 @@ class MatrixView {
 };
 
 /// @brief Error codes for library operations.
+/// @details Mirrors the C ABI @c SonareError enum; new values MUST be added to
+///          both enums in lockstep and to the @c map_sonare_exception switch in
+///          @c sonare_c_internal.cpp.
 enum class ErrorCode : int {
   Ok = 0,
   FileNotFound,
@@ -54,6 +57,9 @@ enum class ErrorCode : int {
   InvalidParameter,
   OutOfMemory,
   NotImplemented,
+  /// @brief The component is not in a state where the call is allowed
+  ///        (e.g. @c process_block before @c prepare, configuration mismatch).
+  InvalidState,
 };
 
 /// @brief Pitch class (0-11, C=0).
@@ -175,6 +181,8 @@ inline const char* error_message(ErrorCode code) {
       return "Out of memory";
     case ErrorCode::NotImplemented:
       return "Not implemented";
+    case ErrorCode::InvalidState:
+      return "Invalid state";
     default:
       return "Unknown error";
   }

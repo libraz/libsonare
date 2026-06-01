@@ -6,7 +6,9 @@
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/processor_params.h"
+#include "mastering/common/loudness_measure.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
@@ -79,16 +81,6 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
-// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
-// `core/ + util/ + rt/`. `apply_named_processor` populates `input_lufs` /
-// `output_lufs` on every `MonoResult` / `StereoResult` (relied on by the C API
-// and WASM bridge), which requires `metering::lufs()`. To remove this include
-// the LUFS reporting must move out of this layer; suggested follow-ups:
-//   1. Drop the loudness fields from the result structs and have callers
-//      re-measure with `metering/` directly.
-//   2. Move the dispatcher into `mastering/assistant/` (the only sub-module
-//      allowed to depend on `metering/`).
-#include "metering/lufs.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -103,27 +95,29 @@ using detail::limiter_config;
 using detail::make_map;
 using detail::ParamMap;
 
+// Run a processor over a mono buffer with latency compensation. The reported
+// latency is captured into @p latency_samples for informational purposes
+// (`MonoResult::latency_samples`); the returned audio in @p samples is already
+// time-aligned (leading `latency` samples have been dropped and the tail has
+// been flushed via zero-padding by the shared runner).
 template <typename Processor>
 void run_processor(Processor& processor, std::vector<float>& samples, int sample_rate,
                    int& latency_samples) {
-  processor.prepare(sample_rate, static_cast<int>(samples.size()));
-  float* channels[] = {samples.data()};
-  processor.process(channels, 1, static_cast<int>(samples.size()));
+  internal::run_processor_mono(processor, samples, sample_rate);
   latency_samples = processor.latency_samples();
 }
 
+// Stereo counterpart to run_processor(). Both channels are processed and
+// trimmed together by the shared runner so they stay sample-accurately aligned.
 template <typename Processor>
 void run_processor_stereo(Processor& processor, std::vector<float>& left, std::vector<float>& right,
                           int sample_rate, int& latency_samples) {
-  processor.prepare(sample_rate, static_cast<int>(left.size()));
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(left.size()));
+  internal::run_processor_stereo(processor, left, right, sample_rate);
   latency_samples = processor.latency_samples();
 }
 
 float lufs_for(const std::vector<float>& samples, int sample_rate) {
-  auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-  return metering::lufs(audio).integrated_lufs;
+  return common::measure_lufs(samples.data(), samples.size(), sample_rate);
 }
 
 void configure_processor(const std::string& name, const ParamMap& params,

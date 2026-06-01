@@ -317,10 +317,17 @@ def cmd_key(args: argparse.Namespace) -> int:
     from . import detect_key, detect_key_candidates
 
     samples, sr = _load_audio(args.file)
-    n_fft = 4096 if args.n_fft == 2048 else args.n_fft
+    # Respect the user-supplied --n-fft. Key detection prefers n_fft >= 4096
+    # for better low-frequency resolution; warn (but don't silently rewrite)
+    # when the caller left the default 2048.
+    if args.n_fft < 4096:
+        print(
+            "Warning: key detection prefers --n-fft >= 4096 for better resolution",
+            file=sys.stderr,
+        )
     key_options = {
         "sample_rate": sr,
-        "n_fft": n_fft,
+        "n_fft": args.n_fft,
         "hop_length": args.hop_length,
         "use_hpss": args.use_hpss,
         "loudness_weighted": args.loudness_weighted,

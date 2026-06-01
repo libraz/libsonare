@@ -247,6 +247,19 @@ params = []
 keys = ["mel_to_stft", "mel_to_audio", "mfcc_to_mel", "mfcc_to_audio"]
 
 # ---------------------------------------------------------------------------
+# [wasm_internal] — WASM embind / SonareModule / index.ts names whose
+# intra-binding wiring inconsistency is intentional. This suppresses the ACTIVE
+# legs (a free embind registration not in the SonareModule type, or an index.ts
+# `module.X` call not in the type). The INFORMATIONAL "typed but no facade
+# wrapper" leg is already non-gating, so the current cases (detectKey /
+# detectKeyCandidates superseded by `_detectKeyWithOptions` / `_detectKeyCandidates`,
+# and the unwrapped `mixerPresetJson`) need no entry here. Seed empty: a missing
+# type declaration is a real TS break worth surfacing.
+# ---------------------------------------------------------------------------
+[wasm_internal]
+names = []
+
+# ---------------------------------------------------------------------------
 # [tuning] — central knobs. Leave empty to use the built-in defaults in
 # compare.py. Set these only to override.
 #   input_roles:     leading audio-input param names stripped before the

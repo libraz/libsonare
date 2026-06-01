@@ -21,6 +21,10 @@ SonareError map_sonare_exception(const SonareException& e) {
       return SONARE_ERROR_INVALID_PARAMETER;
     case sonare::ErrorCode::OutOfMemory:
       return SONARE_ERROR_OUT_OF_MEMORY;
+    case sonare::ErrorCode::NotImplemented:
+      return SONARE_ERROR_NOT_SUPPORTED;
+    case sonare::ErrorCode::InvalidState:
+      return SONARE_ERROR_INVALID_STATE;
     default:
       return SONARE_ERROR_UNKNOWN;
   }

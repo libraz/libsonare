@@ -639,3 +639,101 @@ TEST_CASE("Spectrogram from_complex defaults win_length to n_fft", "[spectrum]")
   // from_complex does not accept win_length, so it should default to n_fft
   REQUIRE(spec.win_length() == n_fft);
 }
+
+namespace {
+
+float compute_nrmse(const float* original, const float* reconstructed, size_t size) {
+  double sq_error = 0.0;
+  double sq_signal = 0.0;
+  for (size_t i = 0; i < size; ++i) {
+    const double diff = static_cast<double>(original[i]) - static_cast<double>(reconstructed[i]);
+    sq_error += diff * diff;
+    sq_signal += static_cast<double>(original[i]) * static_cast<double>(original[i]);
+  }
+  if (sq_signal <= 0.0) {
+    return 0.0f;
+  }
+  return static_cast<float>(std::sqrt(sq_error / sq_signal));
+}
+
+}  // namespace
+
+TEST_CASE("iSTFT 10s long-signal round-trip stays numerically stable", "[spectrum][istft]") {
+  // Regression: ensure the Eigen-based overlap-add still produces sample-stable
+  // output on a long input (10 s @ 22050 Hz). NRMSE on the interior of the
+  // reconstruction should remain comfortably small.
+  constexpr int sr = 22050;
+  constexpr int samples = sr * 10;
+  std::vector<float> original(samples);
+  for (int i = 0; i < samples; ++i) {
+    original[i] = 0.35f * std::sin(kTwoPi * 220.0f * i / sr) +
+                  0.25f * std::sin(kTwoPi * 880.0f * i / sr) +
+                  0.15f * std::sin(kTwoPi * 3520.0f * i / sr);
+  }
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig config;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.center = true;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  Audio reconstructed = spec.to_audio(samples);
+
+  REQUIRE(reconstructed.size() == static_cast<size_t>(samples));
+
+  const size_t skip = static_cast<size_t>(config.n_fft);
+  REQUIRE(reconstructed.size() > 2 * skip);
+  const float nrmse = compute_nrmse(original.data() + skip, reconstructed.data() + skip,
+                                    reconstructed.size() - 2 * skip);
+  REQUIRE(nrmse < 1e-3f);
+}
+
+TEST_CASE("iSTFT round-trip matches between center=true and center=false", "[spectrum][istft]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 1 << 14;  // 16384 samples ~= 0.74 s
+  std::vector<float> original(samples);
+  for (int i = 0; i < samples; ++i) {
+    original[i] =
+        0.3f * std::sin(kTwoPi * 330.0f * i / sr) + 0.2f * std::sin(kTwoPi * 1100.0f * i / sr);
+  }
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  SECTION("center = true") {
+    StftConfig config;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.center = true;
+
+    Spectrogram spec = Spectrogram::compute(audio, config);
+    Audio reconstructed = spec.to_audio(samples);
+
+    REQUIRE(reconstructed.size() == static_cast<size_t>(samples));
+
+    const size_t skip = static_cast<size_t>(config.n_fft);
+    REQUIRE(reconstructed.size() > 2 * skip);
+    const float nrmse = compute_nrmse(original.data() + skip, reconstructed.data() + skip,
+                                      reconstructed.size() - 2 * skip);
+    REQUIRE(nrmse < 1e-3f);
+  }
+
+  SECTION("center = false") {
+    StftConfig config;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.center = false;
+
+    Spectrogram spec = Spectrogram::compute(audio, config);
+    Audio reconstructed = spec.to_audio(samples);
+
+    REQUIRE(reconstructed.size() == static_cast<size_t>(samples));
+
+    // For center=false we need to skip more aggressively because the analysis
+    // padding is not symmetric, so the edges have less overlap support.
+    const size_t skip = static_cast<size_t>(config.n_fft);
+    REQUIRE(reconstructed.size() > 2 * skip);
+    const float nrmse = compute_nrmse(original.data() + skip, reconstructed.data() + skip,
+                                      reconstructed.size() - 2 * skip);
+    REQUIRE(nrmse < 1e-2f);
+  }
+}

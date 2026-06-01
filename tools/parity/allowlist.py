@@ -10,6 +10,8 @@ Loaded from ``allowlist.toml`` via the stdlib ``tomllib``. Entries fall into:
 * ``[order]``     surface -> list of keys whose param order legitimately differs.
 * ``[default]``   list of ``"key.param"`` whose default is allowed to differ.
 * ``[enum]``      list of ``"key.param"`` whose enum sets are allowed to differ.
+* ``[wasm_internal]`` list of WASM embind/SonareModule ``names`` whose
+                  intra-binding wiring inconsistency is intentional.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ class Allowlist:
     core_default: list[str] = field(default_factory=list)
     enum: list[str] = field(default_factory=list)
     input_naming: list[str] = field(default_factory=list)
+    wasm_internal: list[str] = field(default_factory=list)
     # Overrides for the central tuning knobs (empty -> use compare.py defaults).
     input_roles: list[str] = field(default_factory=list)
     handle_prefixes: list[str] = field(default_factory=list)
@@ -66,6 +69,9 @@ class Allowlist:
     def enum_ok(self, key: str, param: str) -> bool:
         return _match(f"{key}.{param}", self.enum)
 
+    def wasm_internal_ok(self, name: str) -> bool:
+        return _match(name, self.wasm_internal)
+
 
 def load(path: Path) -> Allowlist:
     if not path.exists():
@@ -79,6 +85,7 @@ def load(path: Path) -> Allowlist:
         core_default=list(data.get("core_default", {}).get("params", [])),
         enum=list(data.get("enum", {}).get("params", [])),
         input_naming=list(data.get("input_naming", {}).get("keys", [])),
+        wasm_internal=list(data.get("wasm_internal", {}).get("names", [])),
         input_roles=list(data.get("tuning", {}).get("input_roles", [])),
         handle_prefixes=list(data.get("tuning", {}).get("handle_prefixes", [])),
     )

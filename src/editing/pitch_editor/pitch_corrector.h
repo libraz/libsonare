@@ -9,6 +9,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/scale_quantizer.h"
 #include "effects/time_stretch.h"
+#include "util/constants.h"
 
 namespace sonare::editing::pitch_editor {
 
@@ -16,7 +17,7 @@ struct PitchCorrectionConfig {
   ScaleQuantizerConfig scale{};
   StretchBackend backend = StretchBackend::NativeSpectral;
   float retune_amount = 1.0f;
-  float max_correction_semitones = 12.0f;
+  float max_correction_semitones = constants::kSemitonesPerOctave;
   float retune_speed_ms = 50.0f;          ///< Retune IIR time constant (ms)
   float vibrato_threshold_cents = 20.0f;  ///< Below this, preserve natural pitch (vibrato bypass)
 };

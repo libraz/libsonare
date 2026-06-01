@@ -325,3 +325,71 @@ TEST_CASE("AcousticAnalyzer reports low-confidence blind RT60 as unavailable",
   REQUIRE(std::isnan(params.edt));
   REQUIRE(params.confidence == 0.0f);
 }
+
+// Regression coverage for the percentile/nth_element optimization in
+// suppress_stationary_noise_spectral: a pure tone embedded under white noise
+// must still yield a finite RT60 estimate of the underlying free-decay
+// envelope after spectral subtraction (the noise should not dominate).
+TEST_CASE("AcousticAnalyzer preserves tone energy through spectral noise suppression",
+          "[acoustic_analyzer]") {
+  const int sample_rate = 48000;
+  const float duration_sec = 4.0f;
+  const float expected_rt60 = 0.8f;
+  const int n_samples = static_cast<int>(sample_rate * duration_sec);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  const float decay = std::log(1000.0f) / expected_rt60;
+  uint32_t state = 0x5eed5eedu;
+  for (int i = 0; i < n_samples; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float white = static_cast<float>((state >> 8) & 0xffffu) / 32768.0f - 1.0f;
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float envelope = std::exp(-decay * t);
+    const float tone =
+        envelope * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+    samples[static_cast<size_t>(i)] = tone + white * 0.008f;
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sample_rate);
+
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.noise_floor_margin_db = 10.0f;
+  AcousticAnalyzer analyzer(audio, config);
+  const auto& params = analyzer.parameters();
+
+  REQUIRE(params.is_blind);
+  REQUIRE(std::isfinite(params.rt60));
+  // Tolerance is intentionally loose: nth_element returns the same k-th
+  // order statistic as std::sort but unrelated reorderings of equal-valued
+  // bins can shift downstream estimates by a small but bounded amount.
+  REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.35f));
+  REQUIRE(params.confidence >= 0.4f);
+}
+
+// Regression coverage for the DC-removal fusion in filter_third_octave_band:
+// a DC-offset signal must produce identical third-octave-band downstream
+// estimates to its zero-mean counterpart (within tight tolerance).
+TEST_CASE("AcousticAnalyzer is invariant to DC offset in blind third-octave fitting",
+          "[acoustic_analyzer]") {
+  const float expected_rt60 = 0.7f;
+  const Audio zero_mean = create_upper_band_free_decay(expected_rt60);
+
+  std::vector<float> offset_samples(zero_mean.data(), zero_mean.data() + zero_mean.size());
+  for (float& sample : offset_samples) {
+    sample += 0.05f;  // arbitrary DC offset
+  }
+  const Audio with_offset = Audio::from_vector(std::move(offset_samples), zero_mean.sample_rate());
+
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = 4;
+  config.n_third_octave_subbands = 16;
+
+  const auto params_zero = AcousticAnalyzer(zero_mean, config).parameters();
+  const auto params_offset = AcousticAnalyzer(with_offset, config).parameters();
+
+  REQUIRE(std::isfinite(params_zero.rt60));
+  REQUIRE(std::isfinite(params_offset.rt60));
+  // The bandpass filter plus explicit DC removal should make the analyzer
+  // effectively invariant to a constant offset.
+  REQUIRE_THAT(params_offset.rt60, WithinRel(params_zero.rt60, 0.05f));
+}

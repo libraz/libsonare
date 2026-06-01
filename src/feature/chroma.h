@@ -46,7 +46,7 @@ struct ChromaCqtConfig {
   int n_chroma = 12;
   float tuning = 0.0f;     ///< Tuning deviation in fractional semitones/chroma bins.
   float threshold = 0.0f;  ///< Magnitudes below this fraction of the per-frame max are zeroed.
-  bool normalize_frames = true;  ///< L-inf normalize per frame (matches librosa default norm=Inf).
+  bool normalize_frames = true;  ///< L2 normalize per frame (matches Chroma::from_spectrogram).
 };
 
 /// @brief Configuration for chroma_cens (Energy Normalized Statistics).
@@ -74,7 +74,8 @@ class Chroma;  // forward declaration; full definition below.
 /// @brief Computes a chromagram from a Constant-Q Transform of the audio.
 /// @details Implements `librosa.feature.chroma_cqt`. The signal is mapped to
 /// CQT, magnitudes are wrapped to chroma classes, optionally thresholded, then
-/// L-inf normalized per frame.
+/// L2 normalized per frame (matching libsonare's STFT chroma path;
+/// librosa's default uses L-inf — this is a deliberate divergence).
 Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config = ChromaCqtConfig());
 
 /// @brief Computes CENS (Chroma Energy Normalized Statistics).
@@ -141,10 +142,14 @@ class Chroma {
   std::array<float, 12> weighted_mean_energy(const std::vector<float>& frame_weights) const;
 
   /// @brief Computes normalized chromagram per frame.
-  /// @param norm Norm type: 0 for max (inf), 1 for L1, 2 for L2
+  /// @param norm Norm type: 2 for L2 normalization (matches the librosa
+  ///   chroma_stft default), 1 for L1, 0 or other for L-inf (max) norm.
   /// @return Normalized chromagram [n_chroma x n_frames]
-  /// @note norm=0 uses max norm
-  std::vector<float> normalize(int norm = 0) const;
+  /// @note Calling `normalize()` without arguments uses L2 to preserve
+  ///   librosa parity with `librosa.feature.chroma_stft` (default norm=2).
+  ///   This also matches the L2 per-frame normalization already applied
+  ///   inside `Chroma::compute` / `Chroma::from_spectrogram`.
+  std::vector<float> normalize(int norm = 2) const;
 
   /// @brief Returns the dominant pitch class for each frame.
   /// @return Vector of pitch class indices (0=C, 1=C#, ..., 11=B)

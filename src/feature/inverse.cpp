@@ -24,7 +24,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   }
   const int n_freq = mel_config.n_fft / 2 + 1;
   MelFilterConfig fcfg = mel_config.to_mel_filter_config();
-  std::vector<float> filterbank = create_mel_filterbank(sr, mel_config.n_fft, fcfg);
+  const std::vector<float>& filterbank = get_mel_filterbank_cached(sr, mel_config.n_fft, fcfg);
 
   // librosa.feature.inverse.mel_to_stft solves `min ||M - W @ S||^2  s.t. S >= 0`
   // column-wise using scipy.optimize.nnls when available, where W is the mel

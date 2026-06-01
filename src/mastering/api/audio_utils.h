@@ -1,17 +1,18 @@
 #pragma once
 
 #include <cstddef>
-#include <stdexcept>
 #include <vector>
 
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api::detail {
 
 inline std::vector<float> mono_mix(const std::vector<float>& left,
                                    const std::vector<float>& right) {
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
   std::vector<float> mono(left.size());
   for (std::size_t index = 0; index < left.size(); ++index) {
@@ -29,7 +30,8 @@ inline void apply_gain_db(std::vector<float>& samples, float gain_db) {
 
 inline void apply_gain_db(std::vector<float>& left, std::vector<float>& right, float gain_db) {
   if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
   }
   const float gain = db_to_linear(gain_db);
   for (std::size_t index = 0; index < left.size(); ++index) {

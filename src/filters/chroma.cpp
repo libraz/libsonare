@@ -2,12 +2,61 @@
 
 #include <Eigen/Core>
 #include <cmath>
+#include <list>
+#include <mutex>
+#include <unordered_map>
 
 #include "core/convert.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
+
+namespace {
+
+/// @brief Cache key for Chroma filterbank.
+struct ChromaFilterbankCacheKey {
+  int sample_rate;
+  int n_fft;
+  int n_chroma;
+  float tuning;
+  float fmin;
+  int n_octaves;
+  ChromaFilterNorm norm;
+
+  bool operator==(const ChromaFilterbankCacheKey& other) const {
+    return sample_rate == other.sample_rate && n_fft == other.n_fft && n_chroma == other.n_chroma &&
+           n_octaves == other.n_octaves && norm == other.norm &&
+           std::abs(tuning - other.tuning) < 1e-4f && std::abs(fmin - other.fmin) < 1e-4f;
+  }
+};
+
+struct ChromaFilterbankCacheKeyHash {
+  size_t operator()(const ChromaFilterbankCacheKey& k) const {
+    return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_fft) << 1) ^
+           (std::hash<int>()(k.n_chroma) << 2) ^ (std::hash<int>()(k.n_octaves) << 3) ^
+           (std::hash<int>()(static_cast<int>(k.norm)) << 4) ^ (std::hash<float>()(k.tuning) << 5) ^
+           (std::hash<float>()(k.fmin) << 6);
+  }
+};
+
+/// @brief Maximum number of cached Chroma filterbanks.
+constexpr size_t kMaxChromaCacheSize = 8;
+
+/// @brief Chroma filterbank cache state with LRU eviction.
+struct ChromaFilterbankCache {
+  std::mutex mutex;
+  std::unordered_map<ChromaFilterbankCacheKey, std::vector<float>, ChromaFilterbankCacheKeyHash>
+      map;
+  std::list<ChromaFilterbankCacheKey> lru;
+};
+
+ChromaFilterbankCache& chroma_filterbank_cache() {
+  static ChromaFilterbankCache cache;
+  return cache;
+}
+
+}  // namespace
 
 int hz_to_pitch_class(float hz, float tuning) {
   if (hz <= 0.0f) {
@@ -102,6 +151,42 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
   }
 
   return filterbank;
+}
+
+const std::vector<float>& get_chroma_filterbank_cached(int sr, int n_fft,
+                                                       const ChromaFilterConfig& config) {
+  ChromaFilterbankCacheKey key{
+      sr, n_fft, config.n_chroma, config.tuning, config.fmin, config.n_octaves, config.norm};
+
+  ChromaFilterbankCache& cache = chroma_filterbank_cache();
+  {
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    auto it = cache.map.find(key);
+    if (it != cache.map.end()) {
+      cache.lru.remove(key);
+      cache.lru.push_front(key);
+      return it->second;
+    }
+  }
+
+  // Build outside the lock — see get_mel_filterbank_cached for rationale.
+  std::vector<float> fb = create_chroma_filterbank(sr, n_fft, config);
+
+  std::lock_guard<std::mutex> lock(cache.mutex);
+  auto it = cache.map.find(key);
+  if (it != cache.map.end()) {
+    cache.lru.remove(key);
+    cache.lru.push_front(key);
+    return it->second;
+  }
+  while (cache.map.size() >= kMaxChromaCacheSize && !cache.lru.empty()) {
+    auto oldest = cache.lru.back();
+    cache.lru.pop_back();
+    cache.map.erase(oldest);
+  }
+  auto [ins, _] = cache.map.emplace(key, std::move(fb));
+  cache.lru.push_front(key);
+  return ins->second;
 }
 
 std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n_frames,

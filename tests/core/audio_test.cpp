@@ -8,6 +8,9 @@
 #include <cmath>
 #include <vector>
 
+#include "util/exception.h"
+#include "util/types.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -34,6 +37,72 @@ TEST_CASE("Audio from_buffer", "[audio]") {
   REQUIRE(audio.channels() == 1);
   REQUIRE_FALSE(audio.empty());
   REQUIRE_THAT(audio.duration(), WithinRel(1000.0f / 22050.0f, 0.001f));
+}
+
+TEST_CASE("Audio from_buffer null safety", "[audio]") {
+  SECTION("null pointer with zero size is valid (empty audio)") {
+    Audio audio = Audio::from_buffer(nullptr, 0, 22050);
+    REQUIRE(audio.empty());
+    REQUIRE(audio.size() == 0);
+    REQUIRE(audio.sample_rate() == 22050);
+  }
+
+  SECTION("null pointer with non-zero size throws InvalidParameter") {
+    try {
+      Audio audio = Audio::from_buffer(nullptr, 10, 22050);
+      FAIL("Expected SonareException");
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("valid pointer with zero size is valid (empty audio)") {
+    float dummy = 0.0f;
+    Audio audio = Audio::from_buffer(&dummy, 0, 22050);
+    REQUIRE(audio.empty());
+    REQUIRE(audio.size() == 0);
+    REQUIRE(audio.sample_rate() == 22050);
+  }
+
+  SECTION("valid pointer with non-zero size succeeds") {
+    std::vector<float> samples = {0.1f, 0.2f, 0.3f, 0.4f};
+    Audio audio = Audio::from_buffer(samples.data(), samples.size(), 22050);
+    REQUIRE(audio.size() == 4);
+    REQUIRE(audio.sample_rate() == 22050);
+    REQUIRE_THAT(audio[0], WithinAbs(0.1f, 1e-6f));
+    REQUIRE_THAT(audio[3], WithinAbs(0.4f, 1e-6f));
+  }
+
+  SECTION("invalid sample rate throws InvalidParameter") {
+    std::vector<float> samples = {0.1f, 0.2f};
+    try {
+      Audio audio = Audio::from_buffer(samples.data(), samples.size(), 0);
+      FAIL("Expected SonareException");
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
+}
+
+TEST_CASE("Audio from_memory null safety", "[audio]") {
+  SECTION("null pointer throws InvalidParameter") {
+    try {
+      Audio audio = Audio::from_memory(nullptr, 100);
+      FAIL("Expected SonareException");
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("zero size throws InvalidParameter") {
+    uint8_t dummy = 0;
+    try {
+      Audio audio = Audio::from_memory(&dummy, 0);
+      FAIL("Expected SonareException");
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
 }
 
 TEST_CASE("Audio from_vector", "[audio]") {

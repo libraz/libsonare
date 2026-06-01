@@ -29,7 +29,12 @@ class SlidingMedian {
   explicit SlidingMedian(int max_size) : sorted_(max_size), size_(0) {}
 
   /// @brief Adds a value to the window.
+  /// @details Non-finite values (NaN / +/-Inf) are sanitized to 0.0f so that the
+  ///          sorted array remains a strict weak ordering. NaN-tainted inputs
+  ///          would otherwise corrupt `std::lower_bound` and trigger undefined
+  ///          behavior in subsequent erase operations.
   void insert(float val) {
+    if (!std::isfinite(val)) val = 0.0f;
     auto pos = std::lower_bound(sorted_.begin(), sorted_.begin() + size_, val);
     int idx = static_cast<int>(pos - sorted_.begin());
     if (idx < size_) {
@@ -41,7 +46,10 @@ class SlidingMedian {
   }
 
   /// @brief Removes a value from the window.
+  /// @details Must apply the same sanitization as `insert` so that the value
+  ///          actually present in the sorted array is the one we search for.
   void erase(float val) {
+    if (!std::isfinite(val)) val = 0.0f;
     auto pos = std::lower_bound(sorted_.begin(), sorted_.begin() + size_, val);
     int idx = static_cast<int>(pos - sorted_.begin());
     --size_;
@@ -75,8 +83,14 @@ class SlidingMedian {
 /// @warning This function modifies the input array via std::nth_element.
 ///          The array will be partially sorted after the call.
 /// @details Used only for boundary regions where sliding window doesn't apply.
+///          Non-finite entries (NaN / Inf) are sanitized to 0.0f before sorting
+///          because `std::nth_element` requires a strict weak ordering.
 float compute_median(float* values, size_t n) {
   if (n == 0) return 0.0f;
+
+  for (size_t i = 0; i < n; ++i) {
+    if (!std::isfinite(values[i])) values[i] = 0.0f;
+  }
 
   size_t mid = n / 2;
   std::nth_element(values, values + mid, values + n);

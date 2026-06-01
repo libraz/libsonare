@@ -48,6 +48,18 @@ float hz_to_chroma(float hz, float tuning = 0.0f);
 std::vector<float> create_chroma_filterbank(
     int sr, int n_fft, const ChromaFilterConfig& config = ChromaFilterConfig());
 
+/// @brief Returns a cached Chroma filterbank matrix, building it on first access.
+/// @param sr Sample rate in Hz
+/// @param n_fft FFT size
+/// @param config Chroma filterbank configuration (full identity is used as key)
+/// @return Const reference to cached filterbank [n_chroma x n_bins]
+/// @details Thread-safe (guarded by a mutex). Uses an LRU eviction policy
+///          bounded by a small fixed capacity (see implementation). The
+///          returned reference is stable until evicted; copy if you need to
+///          keep it across long-lived calls.
+const std::vector<float>& get_chroma_filterbank_cached(
+    int sr, int n_fft, const ChromaFilterConfig& config = ChromaFilterConfig());
+
 /// @brief Applies chroma filterbank to power spectrum.
 /// @param power Power spectrum [n_bins x n_frames]
 /// @param n_bins Number of frequency bins

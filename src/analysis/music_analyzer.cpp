@@ -208,11 +208,8 @@ BoundaryDetector& MusicAnalyzer::boundary_detector() {
 
 const Spectrogram& MusicAnalyzer::spectrogram() {
   if (!spectrogram_) {
-    StftConfig stft_config;
-    stft_config.n_fft = config_.n_fft;
-    stft_config.hop_length = config_.hop_length;
-    spectrogram_ =
-        std::make_unique<Spectrogram>(Spectrogram::compute(analysis_audio_, stft_config));
+    spectrogram_ = std::make_unique<Spectrogram>(
+        Spectrogram::compute(analysis_audio_, make_stft_config(config_.n_fft, config_.hop_length)));
   }
   return *spectrogram_;
 }
@@ -248,11 +245,8 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       hpss_config.margin_harmonic = 3.0f;
       hpss_config.margin_percussive = 3.0f;
 
-      StftConfig stft_config;
-      stft_config.n_fft = config_.n_fft;
-      stft_config.hop_length = config_.hop_length;
-
-      harmonic_audio = harmonic(analysis_audio, hpss_config, stft_config);
+      harmonic_audio = harmonic(analysis_audio, hpss_config,
+                                make_stft_config(config_.n_fft, config_.hop_length));
     }
 
     // Step 2: Apply 4th order Butterworth high-pass filter

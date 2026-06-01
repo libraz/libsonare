@@ -1,5 +1,6 @@
 #include "core/spectrum.h"
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -179,8 +180,16 @@ const std::complex<float>* Spectrogram::complex_data() const { return data_.data
 const std::vector<float>& Spectrogram::magnitude() const {
   if (magnitude_cache_.empty() && !data_.empty()) {
     magnitude_cache_.resize(data_.size());
-    for (size_t i = 0; i < data_.size(); ++i) {
-      magnitude_cache_[i] = std::abs(data_[i]);
+    if (!power_cache_.empty()) {
+      // Derive magnitude from cached power via sqrt — cheaper than recomputing
+      // re²+im² + sqrt from the complex spectrum.
+      for (size_t i = 0; i < power_cache_.size(); ++i) {
+        magnitude_cache_[i] = std::sqrt(power_cache_[i]);
+      }
+    } else {
+      for (size_t i = 0; i < data_.size(); ++i) {
+        magnitude_cache_[i] = std::abs(data_[i]);
+      }
     }
   }
   return magnitude_cache_;
@@ -189,11 +198,20 @@ const std::vector<float>& Spectrogram::magnitude() const {
 const std::vector<float>& Spectrogram::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     power_cache_.resize(data_.size());
-    // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
-    for (size_t i = 0; i < data_.size(); ++i) {
-      const float re = data_[i].real();
-      const float im = data_[i].imag();
-      power_cache_[i] = re * re + im * im;
+    if (!magnitude_cache_.empty()) {
+      // Magnitude already computed — squaring is cheaper than recomputing
+      // re²+im² from the complex spectrum.
+      for (size_t i = 0; i < magnitude_cache_.size(); ++i) {
+        const float m = magnitude_cache_[i];
+        power_cache_[i] = m * m;
+      }
+    } else {
+      // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
+      for (size_t i = 0; i < data_.size(); ++i) {
+        const float re = data_[i].real();
+        const float im = data_[i].imag();
+        power_cache_[i] = re * re + im * im;
+      }
     }
   }
   return power_cache_;
@@ -247,6 +265,17 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   std::vector<std::complex<float>> frame_spectrum(n_fft_ / 2 + 1);
   std::vector<float> frame(n_fft_);
 
+  // Eigen maps and precomputed analysis*synthesis (constant across frames).
+  // Wrapping the synthesis / analysis windows in Eigen::Map lets the inner
+  // overlap-add reuse SIMD-vectorized .segment().noalias() += expressions
+  // instead of a hand-rolled scalar scatter-add.
+  Eigen::Map<const Eigen::VectorXf> synthesis_window_vec(synthesis_window.data(), n_fft_);
+  Eigen::Map<const Eigen::VectorXf> analysis_window_vec(analysis_window.data(), n_fft_);
+  Eigen::Map<const Eigen::VectorXf> frame_vec(frame.data(), n_fft_);
+  Eigen::Map<Eigen::VectorXf> output_vec(output.data(), full_length);
+  Eigen::Map<Eigen::VectorXf> window_sum_vec(window_sum.data(), full_length);
+  const Eigen::VectorXf window_product_vec = analysis_window_vec.cwiseProduct(synthesis_window_vec);
+
   // Process each frame with overlap-add
   for (int t = 0; t < n_frames_; ++t) {
     // Extract spectrum for this frame
@@ -257,23 +286,23 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
     // Inverse FFT
     fft.inverse(frame_spectrum.data(), frame.data());
 
-    // Overlap-add with window
-    int start = t * hop_length_;
-    for (int i = 0; i < n_fft_; ++i) {
-      int idx = start + i;
-      if (idx >= 0 && idx < full_length) {
-        output[idx] += frame[i] * synthesis_window[i];
-        window_sum[idx] += analysis_window[i] * synthesis_window[i];
-      }
-    }
+    // Overlap-add with window. start >= 0 because hop_length_ > 0 and t >= 0;
+    // start + n_fft_ <= full_length by construction (full_length =
+    // (n_frames_ - 1) * hop_length_ + n_fft_), so the segment is fully inside
+    // the output buffer and we can avoid the per-sample bounds check.
+    const int start = t * hop_length_;
+    output_vec.segment(start, n_fft_).noalias() += frame_vec.cwiseProduct(synthesis_window_vec);
+    window_sum_vec.segment(start, n_fft_).noalias() += window_product_vec;
   }
 
-  // Normalize by window sum (COLA condition)
-  for (int i = 0; i < full_length; ++i) {
-    if (window_sum[i] > sonare::constants::kSpectrumEpsilon) {
-      output[i] /= window_sum[i];
-    }
-  }
+  // Normalize by window sum (COLA condition). Use a vectorized select to keep
+  // the original sample wherever window_sum is below the threshold, matching
+  // the previous scalar behavior. The `.max(eps)` guard inside the division
+  // keeps the divisor strictly positive for the lanes that get selected.
+  const float eps = sonare::constants::kSpectrumEpsilon;
+  output_vec =
+      (window_sum_vec.array() > eps)
+          .select(output_vec.array() / window_sum_vec.array().max(eps), output_vec.array());
 
   // Trim to requested length or remove center padding
   int trim_start = center_ ? n_fft_ / 2 : 0;

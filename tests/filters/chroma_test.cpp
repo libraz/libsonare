@@ -182,3 +182,68 @@ TEST_CASE("apply_chroma_filterbank", "[chroma]") {
     }
   }
 }
+
+TEST_CASE("get_chroma_filterbank_cached returns same matrix for same key", "[chroma][cache]") {
+  int sr = 22050;
+  int n_fft = 2048;
+  ChromaFilterConfig config;
+  config.n_chroma = 12;
+
+  const std::vector<float>& a = get_chroma_filterbank_cached(sr, n_fft, config);
+  const std::vector<float>& b = get_chroma_filterbank_cached(sr, n_fft, config);
+  REQUIRE(a.data() == b.data());
+  REQUIRE(a.size() == static_cast<size_t>(config.n_chroma * (n_fft / 2 + 1)));
+
+  // The cached matrix must match a fresh build.
+  std::vector<float> fresh = create_chroma_filterbank(sr, n_fft, config);
+  REQUIRE(a.size() == fresh.size());
+  for (size_t i = 0; i < fresh.size(); ++i) {
+    REQUIRE_THAT(a[i], WithinAbs(fresh[i], 1e-6f));
+  }
+}
+
+TEST_CASE("get_chroma_filterbank_cached distinguishes different keys", "[chroma][cache]") {
+  int sr = 22050;
+  int n_fft = 2048;
+
+  ChromaFilterConfig c1;
+  c1.n_chroma = 12;
+  ChromaFilterConfig c2;
+  c2.n_chroma = 24;
+  ChromaFilterConfig c3;
+  c3.n_chroma = 12;
+  c3.norm = ChromaFilterNorm::L1;
+
+  const std::vector<float>& a = get_chroma_filterbank_cached(sr, n_fft, c1);
+  const std::vector<float>& b = get_chroma_filterbank_cached(sr, n_fft, c2);
+  const std::vector<float>& c = get_chroma_filterbank_cached(sr, n_fft, c3);
+
+  REQUIRE(a.data() != b.data());
+  REQUIRE(a.data() != c.data());
+  REQUIRE(b.data() != c.data());
+  REQUIRE(a.size() != b.size());  // different n_chroma → different shape
+}
+
+TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[chroma][cache]") {
+  int sr = 22050;
+  int n_fft = 1024;
+
+  ChromaFilterConfig first;
+  first.n_chroma = 12;
+  first.tuning = 0.0f;
+  const void* first_ptr = get_chroma_filterbank_cached(sr, n_fft, first).data();
+
+  // Pressure-test by inserting more distinct keys than the cap. The chroma
+  // cache uses kMaxChromaCacheSize = 8 today; the test only requires eviction
+  // within a generous upper bound so it tolerates future cap changes.
+  constexpr int kPressure = 32;
+  for (int i = 0; i < kPressure; ++i) {
+    ChromaFilterConfig c;
+    c.n_chroma = 12;
+    c.tuning = 0.01f * static_cast<float>(i + 1);  // distinct key per iter
+    (void)get_chroma_filterbank_cached(sr, n_fft, c);
+  }
+
+  const void* first_ptr_after = get_chroma_filterbank_cached(sr, n_fft, first).data();
+  REQUIRE(first_ptr_after != first_ptr);
+}

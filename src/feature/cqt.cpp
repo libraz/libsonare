@@ -49,10 +49,14 @@ struct CqtKernelCacheKeyHash {
 using EigenKernelMatrix =
     Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-/// @brief Cached kernel with Eigen matrix
+/// @brief Cached kernel with Eigen matrix.
+/// @details Holds an iterator pointing back into the LRU list so cache hits
+/// can splice the key to the most-recently-used end in O(1) instead of doing
+/// an O(n) `lru.remove(key)`.
 struct CachedCqtKernel {
   std::shared_ptr<CqtKernel> kernel;
   std::shared_ptr<EigenKernelMatrix> eigen_matrix;
+  std::list<CqtKernelCacheKey>::iterator lru_it;
 };
 
 /// @brief Maximum number of cached CQT kernels
@@ -87,9 +91,9 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   std::lock_guard<std::mutex> lock(cache.mutex);
   auto it = cache.map.find(key);
   if (it != cache.map.end()) {
-    // Move to front of LRU list (most recently used)
-    cache.lru.remove(key);
-    cache.lru.push_front(key);
+    // O(1) MRU update: splice the existing list node to the front instead of
+    // searching with `lru.remove(key)` (was O(n) while holding the mutex).
+    cache.lru.splice(cache.lru.begin(), cache.lru, it->second.lru_it);
     return it->second;
   }
 
@@ -115,9 +119,9 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
     cache.map.erase(oldest_key);
   }
 
-  CachedCqtKernel cached{kernel, eigen_matrix};
-  cache.map[key] = cached;
   cache.lru.push_front(key);
+  CachedCqtKernel cached{kernel, eigen_matrix, cache.lru.begin()};
+  cache.map[key] = cached;
   return cached;
 }
 
@@ -154,8 +158,16 @@ MatrixView<std::complex<float>> CqtResult::complex_view() const {
 const std::vector<float>& CqtResult::magnitude() const {
   if (magnitude_cache_.empty() && !data_.empty()) {
     magnitude_cache_.resize(data_.size());
-    for (size_t i = 0; i < data_.size(); ++i) {
-      magnitude_cache_[i] = std::abs(data_[i]);
+    if (!power_cache_.empty()) {
+      // Derive magnitude from cached power via sqrt — cheaper than recomputing
+      // |z| from the complex spectrum.
+      for (size_t i = 0; i < power_cache_.size(); ++i) {
+        magnitude_cache_[i] = std::sqrt(power_cache_[i]);
+      }
+    } else {
+      for (size_t i = 0; i < data_.size(); ++i) {
+        magnitude_cache_[i] = std::abs(data_[i]);
+      }
     }
   }
   return magnitude_cache_;
@@ -164,11 +176,20 @@ const std::vector<float>& CqtResult::magnitude() const {
 const std::vector<float>& CqtResult::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     power_cache_.resize(data_.size());
-    // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
-    for (size_t i = 0; i < data_.size(); ++i) {
-      const float re = data_[i].real();
-      const float im = data_[i].imag();
-      power_cache_[i] = re * re + im * im;
+    if (!magnitude_cache_.empty()) {
+      // Magnitude already computed — squaring is cheaper than recomputing
+      // re²+im² from the complex spectrum.
+      for (size_t i = 0; i < magnitude_cache_.size(); ++i) {
+        const float m = magnitude_cache_[i];
+        power_cache_[i] = m * m;
+      }
+    } else {
+      // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
+      for (size_t i = 0; i < data_.size(); ++i) {
+        const float re = data_[i].real();
+        const float im = data_[i].imag();
+        power_cache_[i] = re * re + im * im;
+      }
     }
   }
   return power_cache_;

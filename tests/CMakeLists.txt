@@ -57,6 +57,7 @@ add_executable(sonare_tests
   effects/hpss_test.cpp
   effects/time_stretch_test.cpp
   effects/pitch_shift_test.cpp
+  effects/phase_vocoder_test.cpp
   effects/normalize_test.cpp
   analysis/key_profiles_test.cpp
   analysis/chord_templates_test.cpp
@@ -81,6 +82,7 @@ add_executable(sonare_tests
   streaming/stream_analyzer_test.cpp
   rt/adaa2_test.cpp
   rt/biquad_design_test.cpp
+  rt/k_weighting_freq_response_test.cpp
   rt/spsc_queue_test.cpp
   rt/partitioned_convolver_test.cpp
   rt/true_peak_filter_test.cpp

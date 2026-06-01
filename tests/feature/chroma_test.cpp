@@ -226,7 +226,7 @@ TEST_CASE("Chroma compute uses L2-normalized frames by default", "[chroma]") {
   }
 }
 
-TEST_CASE("Chroma normalize default produces max norm", "[chroma]") {
+TEST_CASE("Chroma normalize default produces L2 norm (librosa parity)", "[chroma]") {
   Audio audio = create_sine_audio(440.0f);
 
   ChromaConfig config;
@@ -234,35 +234,11 @@ TEST_CASE("Chroma normalize default produces max norm", "[chroma]") {
 
   Chroma chroma = Chroma::compute(audio, config);
 
-  // Default normalize() should use max norm (norm=0)
+  // Default normalize() must use L2 to match librosa chroma_stft default.
   std::vector<float> normalized = chroma.normalize();
   REQUIRE(normalized.size() == static_cast<size_t>(12 * chroma.n_frames()));
 
-  // Each frame should have max value of 1.0 (or be all-zero)
-  for (int t = 0; t < chroma.n_frames(); ++t) {
-    float max_val = 0.0f;
-    for (int c = 0; c < 12; ++c) {
-      float val = normalized[c * chroma.n_frames() + t];
-      max_val = std::max(max_val, val);
-    }
-    // Either max is 1.0 or frame is zero
-    REQUIRE((max_val < 1e-6f || std::abs(max_val - 1.0f) < 0.01f));
-  }
-}
-
-TEST_CASE("Chroma normalize L2 explicit", "[chroma]") {
-  Audio audio = create_sine_audio(440.0f);
-
-  ChromaConfig config;
-  config.n_chroma = 12;
-
-  Chroma chroma = Chroma::compute(audio, config);
-
-  // Explicit L2 norm should still work
-  std::vector<float> normalized = chroma.normalize(2);
-  REQUIRE(normalized.size() == static_cast<size_t>(12 * chroma.n_frames()));
-
-  // Each frame should have unit L2 norm
+  // Each frame should have unit L2 norm (or be all-zero).
   for (int t = 0; t < chroma.n_frames(); ++t) {
     float sum_sq = 0.0f;
     for (int c = 0; c < 12; ++c) {
@@ -271,6 +247,46 @@ TEST_CASE("Chroma normalize L2 explicit", "[chroma]") {
     }
     float norm = std::sqrt(sum_sq);
     REQUIRE((norm < 1e-6f || std::abs(norm - 1.0f) < 0.01f));
+  }
+}
+
+TEST_CASE("Chroma normalize default matches explicit norm=2", "[chroma]") {
+  Audio audio = create_sine_audio(440.0f);
+
+  ChromaConfig config;
+  config.n_chroma = 12;
+
+  Chroma chroma = Chroma::compute(audio, config);
+
+  // Calling normalize() and normalize(2) must produce identical results.
+  std::vector<float> default_norm = chroma.normalize();
+  std::vector<float> explicit_l2 = chroma.normalize(2);
+  REQUIRE(default_norm.size() == explicit_l2.size());
+  for (size_t i = 0; i < default_norm.size(); ++i) {
+    REQUIRE_THAT(default_norm[i], WithinAbs(explicit_l2[i], 1e-6f));
+  }
+}
+
+TEST_CASE("Chroma normalize(0) produces L-inf (max) norm", "[chroma]") {
+  Audio audio = create_sine_audio(440.0f);
+
+  ChromaConfig config;
+  config.n_chroma = 12;
+
+  Chroma chroma = Chroma::compute(audio, config);
+
+  // norm=0 must still select L-inf (max) normalization.
+  std::vector<float> normalized = chroma.normalize(0);
+  REQUIRE(normalized.size() == static_cast<size_t>(12 * chroma.n_frames()));
+
+  for (int t = 0; t < chroma.n_frames(); ++t) {
+    float max_val = 0.0f;
+    for (int c = 0; c < 12; ++c) {
+      float val = normalized[c * chroma.n_frames() + t];
+      max_val = std::max(max_val, val);
+    }
+    // Either max is 1.0 or frame is zero.
+    REQUIRE((max_val < 1e-6f || std::abs(max_val - 1.0f) < 0.01f));
   }
 }
 

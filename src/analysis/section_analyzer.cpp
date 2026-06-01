@@ -225,10 +225,8 @@ std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descripto
   chroma_config.hop_length = config_.hop_length;
   Chroma chroma = Chroma::compute(audio_, chroma_config);
 
-  StftConfig stft_config;
-  stft_config.n_fft = config_.n_fft;
-  stft_config.hop_length = config_.hop_length;
-  Spectrogram spec = Spectrogram::compute(audio_, stft_config);
+  Spectrogram spec =
+      Spectrogram::compute(audio_, make_stft_config(config_.n_fft, config_.hop_length));
   const std::vector<float>& mag = spec.magnitude();
   const int n_bins = spec.n_bins();
   const int n_spec_frames = spec.n_frames();

@@ -43,6 +43,22 @@ struct StftConfig {
   int actual_win_length() const { return win_length > 0 ? win_length : n_fft; }
 };
 
+/// @brief Builds an StftConfig with the given FFT and hop sizes.
+/// @details Convenience helper for the common case where callers only need to
+/// override @p n_fft and @p hop_length. All other fields (window, win_length,
+/// center, pad_mode) remain at their StftConfig defaults so changing the
+/// defaults still propagates to every call site.
+/// @param n_fft FFT size
+/// @param hop_length Hop length between frames
+/// @return StftConfig with the specified n_fft / hop_length and default
+///         window/centering settings.
+inline StftConfig make_stft_config(int n_fft, int hop_length) {
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  return config;
+}
+
 /// @brief Configuration for Griffin-Lim algorithm.
 /// @details Griffin-Lim iteratively estimates phase from magnitude spectrogram.
 ///          Momentum accelerates convergence but may cause instability if too high.

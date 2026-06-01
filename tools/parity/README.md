@@ -26,7 +26,11 @@ Flags: `--json`, `--surface <csv>`, `--root <path>`, `--allowlist <path>`,
 `--core-map <path>`. Exit code is **0** when there is no active drift, **1**
 otherwise (CI-gate friendly).
 
-## What it reports — six categories
+## What it reports — seven categories
+
+Categories 1–6 compare each facade against the **C API**. Category 7 is a
+different axis: it compares the WASM binding against **itself** (its own three
+files), catching a wiring break the C-anchored checks structurally cannot see.
 
 1. **coverage** — a canonical C free function missing from a surface, or a
    surface symbol with no C counterpart. Handle/class APIs, `free_*` memory
@@ -45,6 +49,19 @@ otherwise (CI-gate friendly).
    inconsistently across surfaces.
 6. **enum** — the accepted enum / string-union value set for a param differs
    across surfaces.
+7. **wasm_internal** — the WASM binding is inconsistent across its own three
+   files: an embind free-function registration (`src/wasm/bindings.cpp`), the
+   `SonareModule` TS interface (`bindings/wasm/src/sonare.js.d.ts`) and the
+   `index.ts` facade. *Active* when a registered free function is missing from
+   the `SonareModule` type (TypeScript can't call it) or `index.ts` calls a
+   `module.X` the type never declares; *informational* when a registered + typed
+   function has no `index.ts` wrapper (often a raw entry superseded by a richer
+   variant). This is the leg that would have caught **P0-4** (`analyzeSections`
+   registered in embind but absent from both the type and the facade) — the
+   other six checks read `index.ts` alone and so model "exposed in WASM" =
+   "exported from `index.ts`", blind to a break upstream of it. Only
+   FREE-function registrations are checked; class methods (`.function(...)`
+   inside a `class_<T>()` chain) belong to bound class types, not `SonareModule`.
 
 ### Finding states
 
@@ -100,8 +117,9 @@ never compared. Only overlapping, comparable defaults produce a finding.
 Intentional divergences, one section per category:
 `[coverage]`, `[surface_only]`, `[order]` (each keyed by surface → list of
 keys), `[default]` / `[core_default]` / `[enum]` (lists of `"key.param"`),
-`[input_naming]` (list of keys). `[tuning]` overrides the central knobs
-(`input_roles`, `handle_prefixes`).
+`[input_naming]` (list of keys), `[wasm_internal]` (list of `names` whose
+intra-binding wiring inconsistency is intentional). `[tuning]` overrides the
+central knobs (`input_roles`, `handle_prefixes`).
 
 ## Architecture
 
@@ -113,10 +131,11 @@ extractors/         one parser per surface:
   node_ts.py / wasm_ts.py / ts_common.py   the TS facades (every export class body)
   cli.py              the curated CLI command surface
   cpp_struct.py       C++ core struct field inits + free-fn default args (+ constants)
+  wasm_internal.py    the WASM binding's own 3 files (embind regs / SonareModule / index.ts)
 core_defaults.py    loads core_map.toml, resolves each struct/func to its core defaults
 model.py            FunctionSig / Param / Extraction data model (canonical keys)
 normalize.py        name + default canonicalization (cross-surface equality)
-compare.py          builds the matrix and the six drift categories
+compare.py          builds the matrix and the seven drift categories
 report.py           markdown / JSON rendering
 allowlist.py        loads allowlist.toml
 ```
@@ -129,3 +148,12 @@ a facade spells as a bare integer, and CLI defaults / argument names (the CLI is
 a curated subset — coverage-only, informational). These are gaps in *coverage*,
 not silent passes: an un-mapped function simply isn't checked for core-default
 drift.
+
+The `wasm_internal` check covers only WASM **free-function** wiring (embind
+`function(...)` ↔ `SonareModule` ↔ `index.ts` `module.X`). It does NOT
+cross-validate class-method registrations (`.function(...)` inside a
+`class_<T>()` chain) against their bound-class interfaces, nor does it compare
+embind argument *types/arity* — only the existence of the name across the three
+layers. It also assumes the facade reaches the raw module via `module.X` or
+`requireModule().X`; a method aliased through a differently-named local would
+read as unwrapped (surfaced informationally, never as an active gap).

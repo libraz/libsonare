@@ -89,6 +89,9 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
   } catch (const std::invalid_argument& e) {
     set_last_error(e.what());
     return SONARE_ERROR_INVALID_PARAMETER;
+  } catch (const std::logic_error& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_STATE;
   } catch (const std::exception& e) {
     set_last_error(e.what());
     return SONARE_ERROR_UNKNOWN;
@@ -114,6 +117,10 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
   catch (const std::invalid_argument& e) {                                              \
     sonare_c_detail::set_last_error(e.what());                                          \
     return SONARE_ERROR_INVALID_PARAMETER;                                              \
+  }                                                                                     \
+  catch (const std::logic_error& e) {                                                   \
+    sonare_c_detail::set_last_error(e.what());                                          \
+    return SONARE_ERROR_INVALID_STATE;                                                  \
   }                                                                                     \
   catch (const std::exception& e) {                                                     \
     sonare_c_detail::set_last_error(e.what());                                          \

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "mastering/api/result_types.h"
+
 namespace sonare::mastering::api {
 
 struct Param {
@@ -11,24 +13,12 @@ struct Param {
   double value = 0.0;
 };
 
-struct MonoResult {
-  std::vector<float> samples;
-  int sample_rate = 0;
-  float input_lufs = 0.0f;
-  float output_lufs = 0.0f;
-  float applied_gain_db = 0.0f;
-  int latency_samples = 0;
-};
-
-struct StereoResult {
-  std::vector<float> left;
-  std::vector<float> right;
-  int sample_rate = 0;
-  float input_lufs = 0.0f;
-  float output_lufs = 0.0f;
-  float applied_gain_db = 0.0f;
-  int latency_samples = 0;
-};
+// Per-processor results share the same shape as the shared audio-result base
+// types. They are exposed as aliases so callers (binding layers, tests) can
+// keep using `MonoResult` / `StereoResult` while the field definitions live
+// in a single place (@ref result_types.h).
+using MonoResult = MonoAudioResult;
+using StereoResult = StereoAudioResult;
 
 std::vector<std::string> processor_names();
 

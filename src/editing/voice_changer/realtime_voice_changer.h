@@ -54,14 +54,14 @@ struct CharacterEqConfig {
   float air_db = 0.0f;
 };
 
-struct GateConfig {
+struct VoiceGateConfig {
   float threshold_db = -55.0f;
   float attack_ms = 2.0f;
   float release_ms = 100.0f;
   float range_db = 18.0f;
 };
 
-struct CompressorConfig {
+struct VoiceCompressorConfig {
   float threshold_db = -22.0f;
   float ratio = 2.5f;
   float attack_ms = 6.0f;
@@ -69,7 +69,7 @@ struct CompressorConfig {
   float makeup_gain_db = 1.0f;
 };
 
-struct DeesserConfig {
+struct VoiceDeesserConfig {
   float frequency_hz = 7200.0f;
   float threshold_db = -28.0f;
   float ratio = 4.0f;     ///< Slope above threshold (1 = no reduction, 20 = brick).
@@ -112,9 +112,9 @@ struct RealtimeVoiceChangerConfig {
   StreamingRetuneConfig retune;
   StreamingFormantConfig formant;
   CharacterEqConfig eq;
-  GateConfig gate;
-  CompressorConfig compressor;
-  DeesserConfig deesser;
+  VoiceGateConfig gate;
+  VoiceCompressorConfig compressor;
+  VoiceDeesserConfig deesser;
   ReverbConfig reverb;
   LimiterConfig limiter;
 };

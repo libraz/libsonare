@@ -2,9 +2,10 @@
 """Cross-binding parity drift checker for libsonare.
 
 Compares every language surface (Python, Node, WASM, CLI) against the C API
-(the canonical ABI) and reports six kinds of drift: coverage gaps, cross-facade
+(the canonical ABI) and reports seven kinds of drift: coverage gaps, cross-facade
 default drift, facade-vs-C++-core default drift (core_map.toml), argument
-order/count/name mismatch, audio-input naming, and enum value-set mismatch.
+order/count/name mismatch, audio-input naming, enum value-set mismatch, and
+WASM-internal wiring consistency (embind -> SonareModule type -> index.ts facade).
 
 Standard library only (ast, re, json, argparse, pathlib, tomllib, dataclasses).
 Read-only: it never modifies repository sources.
@@ -32,7 +33,7 @@ import allowlist as allowlist_mod  # noqa: E402
 import compare  # noqa: E402
 import core_defaults  # noqa: E402
 import report as report_mod  # noqa: E402
-from extractors import c_api, cli, node_ts, python_pyi, wasm_ts  # noqa: E402
+from extractors import c_api, cli, node_ts, python_pyi, wasm_internal, wasm_ts  # noqa: E402
 from model import SURFACES  # noqa: E402
 
 _EXTRACTORS = {
@@ -95,7 +96,12 @@ def main(argv: list[str] | None = None) -> int:
     for s in selected:
         extractions[s] = _EXTRACTORS[s](args.root)
 
-    rep = compare.build_report(extractions, allow, selected, core_configs)
+    # The WASM-internal consistency check cross-validates the WASM binding's own
+    # three files (embind -> SonareModule type -> index.ts facade); only run it
+    # when the WASM surface is in scope.
+    wasm_int = wasm_internal.extract(args.root) if "wasm" in selected else None
+
+    rep = compare.build_report(extractions, allow, selected, core_configs, wasm_int)
 
     if args.json:
         print(report_mod.to_json(rep))

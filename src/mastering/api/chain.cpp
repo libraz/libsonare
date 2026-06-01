@@ -11,6 +11,8 @@
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/internal_processor_runner.h"
+#include "mastering/common/loudness_measure.h"
 #include "mastering/common/processor_base.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
@@ -29,88 +31,12 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
-// TODO(layer-violation): CLAUDE.md restricts `mastering/` (non-assistant) to
-// `core/ + util/ + rt/`. The `MasteringChain` reports `input_lufs`,
-// `output_lufs`, `output_true_peak_dbtp`, and `output_lra` on every result
-// (consumed by the C API and WASM bindings), and the loudness target stage
-// internally needs `metering::lufs()` to compute the per-pass gain. Possible
-// future fixes:
-//   1. Move the loudness-target stage of the chain into `mastering/assistant/`
-//      (or into a dedicated `editing/loudness_target` module) and have the
-//      core chain only return raw audio + per-stage gain reductions.
-//   2. Drop the loudness reporting fields from `MonoChainResult` /
-//      `StereoChainResult` and have callers re-measure with `metering/`.
-//   3. Accept pre-measured input loudness as a parameter and have the C/WASM
-//      bridge perform the post-chain LUFS / dBTP / LRA measurement.
-#include "metering/lufs.h"
-#include "metering/true_peak.h"
 
 namespace sonare::mastering::api {
 namespace {
 
-// ---------------------------------------------------------------------------
-// Shared per-processor helpers (mirror src/wasm/bindings.cpp lines 137-182).
-// ---------------------------------------------------------------------------
-
-void run_processor_mono(common::ProcessorBase& processor, std::vector<float>& samples,
-                        int sample_rate) {
-  if (samples.empty()) {
-    return;
-  }
-  const int n = static_cast<int>(samples.size());
-  // Query latency: prepare once at N, read latency (valid post-prepare for our
-  // processors).
-  processor.prepare(sample_rate, n);
-  const int latency = processor.latency_samples();
-  if (latency <= 0) {
-    float* channels[] = {samples.data()};
-    processor.process(channels, 1, n);
-    return;
-  }
-  // Re-prepare for the padded length (prepare() reinitializes processor state,
-  // so a separate reset() before it would be redundant), then process N signal +
-  // `latency` zeros and drop the leading `latency` output samples so the result
-  // is time-aligned and the delayed tail is flushed out.
-  processor.prepare(sample_rate, n + latency);
-  std::vector<float> padded(samples.begin(), samples.end());
-  padded.resize(static_cast<std::size_t>(n) + latency, 0.0f);
-  float* channels[] = {padded.data()};
-  processor.process(channels, 1, n + latency);
-  std::copy(padded.begin() + latency, padded.begin() + latency + n, samples.begin());
-}
-
-void run_processor_stereo(common::ProcessorBase& processor, std::vector<float>& left,
-                          std::vector<float>& right, int sample_rate) {
-  if (left.empty()) {
-    return;
-  }
-  if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
-  }
-  const int n = static_cast<int>(left.size());
-  // Query latency: prepare once at N, read latency (valid post-prepare for our
-  // processors).
-  processor.prepare(sample_rate, n);
-  const int latency = processor.latency_samples();
-  if (latency <= 0) {
-    float* channels[] = {left.data(), right.data()};
-    processor.process(channels, 2, n);
-    return;
-  }
-  // Re-prepare for the padded length (prepare() reinitializes processor state,
-  // so a separate reset() before it would be redundant), then process N signal +
-  // `latency` zeros and drop the leading `latency` output samples so the result
-  // is time-aligned and the delayed tail is flushed out.
-  processor.prepare(sample_rate, n + latency);
-  std::vector<float> padded_left(left.begin(), left.end());
-  std::vector<float> padded_right(right.begin(), right.end());
-  padded_left.resize(static_cast<std::size_t>(n) + latency, 0.0f);
-  padded_right.resize(static_cast<std::size_t>(n) + latency, 0.0f);
-  float* channels[] = {padded_left.data(), padded_right.data()};
-  processor.process(channels, 2, n + latency);
-  std::copy(padded_left.begin() + latency, padded_left.begin() + latency + n, left.begin());
-  std::copy(padded_right.begin() + latency, padded_right.begin() + latency + n, right.begin());
-}
+using internal::run_processor_mono;
+using internal::run_processor_stereo;
 
 // Returns the per-band gain reduction with the largest magnitude (most-reduced
 // band). Returns 0.0f for an empty vector.
@@ -125,8 +51,7 @@ float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
 }
 
 float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
-  Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-  return metering::lufs(audio).integrated_lufs;
+  return common::measure_lufs(samples.data(), samples.size(), sample_rate);
 }
 
 // ---------------------------------------------------------------------------
@@ -337,8 +262,8 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   result.applied_gain_db = applied_gain_db;
   {
     Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    result.output_true_peak_dbtp = metering::true_peak_db(audio, 4);
-    result.output_lra = metering::lufs(audio).loudness_range;
+    result.output_true_peak_dbtp = common::measure_true_peak_dbtp(audio);
+    result.output_lra = common::measure_lra(audio);
   }
   result.samples = std::move(data);
   return result;
@@ -548,11 +473,11 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    result.output_true_peak_dbtp =
-        std::max(metering::true_peak_db(left_audio, 4), metering::true_peak_db(right_audio, 4));
+    result.output_true_peak_dbtp = std::max(common::measure_true_peak_dbtp(left_audio),
+                                            common::measure_true_peak_dbtp(right_audio));
     std::vector<float> mono = detail::mono_mix(left, right);
     Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
-    result.output_lra = metering::lufs(mono_audio).loudness_range;
+    result.output_lra = common::measure_lra(mono_audio);
   }
   result.left = std::move(left);
   result.right = std::move(right);

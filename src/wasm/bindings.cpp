@@ -61,6 +61,7 @@
 #include "feature/vqt.h"
 #include "graph/graph.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/suggester.h"
@@ -117,23 +118,56 @@ using namespace sonare;
 // Helper functions
 // ============================================================================
 
+// ---------------------------------------------------------------------------
+// Zero-copy / bulk-copy helpers for the JS ↔ C++ Float32Array boundary.
+//
+// The naïve embind path (`vecFromJSArray<float>` + `result.set(i, vec[i])`)
+// performs one JS↔WASM boundary crossing per element, which is O(N) marshalling
+// overhead — measurable at hundreds of microseconds per million samples.
+//
+// These helpers collapse the marshalling to a single bulk memcpy by wrapping
+// the C++ buffer in a `Float32Array` view onto the WASM heap and using the
+// JS-side `TypedArray.prototype.set(otherTypedArray)` fast path.
+// ---------------------------------------------------------------------------
+
 val vectorToFloat32Array(const std::vector<float>& vec) {
-  val result = val::global("Float32Array").new_(vec.size());
-  for (size_t i = 0; i < vec.size(); ++i) {
-    result.set(i, vec[i]);
-  }
+  const size_t n = vec.size();
+  val result = val::global("Float32Array").new_(n);
+  if (n == 0) return result;
+  // Wrap the C++ vector data as a Float32Array view onto the WASM heap and
+  // use JS-side TypedArray.set for a single bulk memcpy across the boundary.
+  // The view is non-owning; ownership stays with `vec`. Because `result` is a
+  // freshly-allocated, independent Float32Array, the caller owns the copy and
+  // we drop the view immediately after the set() call.
+  val view = val(typed_memory_view(n, vec.data()));
+  result.call<void>("set", view);
   return result;
 }
 
 val vectorToInt32Array(const std::vector<int>& vec) {
-  val result = val::global("Int32Array").new_(vec.size());
-  for (size_t i = 0; i < vec.size(); ++i) {
-    result.set(i, vec[i]);
-  }
+  const size_t n = vec.size();
+  val result = val::global("Int32Array").new_(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, vec.data()));
+  result.call<void>("set", view);
   return result;
 }
 
-std::vector<float> float32ArrayToVector(val arr) { return vecFromJSArray<float>(arr); }
+// Bulk-copy a JS Float32Array (or any array-like with numeric `.length`) into
+// a freshly-allocated std::vector<float>. The single boundary crossing is
+// `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
+// vector's storage so no intermediate buffer is allocated.
+std::vector<float> float32ArrayToVector(val arr) {
+  const size_t n = arr["length"].as<size_t>();
+  std::vector<float> result(n);
+  if (n == 0) return result;
+  // Build a Float32Array view onto the destination vector's storage. The view
+  // is short-lived: we only keep it long enough to invoke set() before the
+  // function returns and the view is dropped.
+  val view = val(typed_memory_view(n, result.data()));
+  view.call<void>("set", arr);
+  return result;
+}
 
 std::vector<mastering::api::Param> masteringParamsFromObject(val object) {
   std::vector<mastering::api::Param> params;
@@ -227,27 +261,18 @@ KeyProfileType keyProfileFromInt(int profile_type) {
   }
 }
 
+// Module-local mono/stereo runners. They delegate to the shared latency-
+// compensating helpers in `mastering::api::internal` so the WASM bridge,
+// `MasteringChain`, and `apply_named_processor` all go through the same
+// implementation and stay in sync.
 void processMono(mastering::common::ProcessorBase& processor, std::vector<float>& samples,
                  int sample_rate) {
-  if (samples.empty()) {
-    return;
-  }
-  processor.prepare(sample_rate, static_cast<int>(samples.size()));
-  float* channels[] = {samples.data()};
-  processor.process(channels, 1, static_cast<int>(samples.size()));
+  mastering::api::internal::run_processor_mono(processor, samples, sample_rate);
 }
 
 void processStereo(mastering::common::ProcessorBase& processor, std::vector<float>& left,
                    std::vector<float>& right, int sample_rate) {
-  if (left.empty()) {
-    return;
-  }
-  if (left.size() != right.size()) {
-    throw std::invalid_argument("stereo channel lengths must match");
-  }
-  processor.prepare(sample_rate, static_cast<int>(left.size()));
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(left.size()));
+  mastering::api::internal::run_processor_stereo(processor, left, right, sample_rate);
 }
 
 std::vector<float> monoMix(const std::vector<float>& left, const std::vector<float>& right) {
@@ -382,12 +407,12 @@ val analysisResultToVal(const AnalysisResult& result) {
 // ============================================================================
 
 float js_detect_bpm(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   return quick::detect_bpm(data.data(), data.size(), sample_rate);
 }
 
 val js_detect_key(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Key key = quick::detect_key(data.data(), data.size(), sample_rate);
 
   val result = val::object();
@@ -402,7 +427,7 @@ val js_detect_key(val samples, int sample_rate) {
 val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_length,
                                bool use_hpss, bool loudness_weighted, float high_pass_hz, val modes,
                                int profile_type, std::string genre_hint) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   KeyConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -430,7 +455,7 @@ val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_
 val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_length, bool use_hpss,
                              bool loudness_weighted, float high_pass_hz, val modes,
                              int profile_type, std::string genre_hint) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   KeyConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -463,19 +488,19 @@ val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_le
 }
 
 val js_detect_onsets(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> onsets = quick::detect_onsets(data.data(), data.size(), sample_rate);
   return vectorToFloat32Array(onsets);
 }
 
 val js_detect_beats(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> beats = quick::detect_beats(data.data(), data.size(), sample_rate);
   return vectorToFloat32Array(beats);
 }
 
 val js_detect_downbeats(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> downbeats = quick::detect_downbeats(data.data(), data.size(), sample_rate);
   return vectorToFloat32Array(downbeats);
 }
@@ -484,7 +509,7 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
                      float threshold, bool use_triads_only, int n_fft, int hop_length,
                      bool use_beat_sync, bool use_hmm, int hmm_beam_width, bool use_key_context,
                      int key_root, int key_mode, bool detect_inversions, int chroma_method) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   ChordConfig config;
@@ -509,7 +534,7 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
 }
 
 val js_analyze(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   AnalysisResult result = quick::analyze(data.data(), data.size(), sample_rate);
   return analysisResultToVal(result);
 }
@@ -531,7 +556,7 @@ val acousticParametersToVal(const AcousticParameters& params) {
 }
 
 val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
@@ -541,7 +566,7 @@ val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands
 val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
                        int n_third_octave_subbands, float min_decay_db,
                        float noise_floor_margin_db) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
@@ -554,7 +579,7 @@ val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
 
 // Analyze with progress callback
 val js_analyze_with_progress(val samples, int sample_rate, val progress_callback) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
 
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   MusicAnalyzer analyzer(audio);
@@ -579,7 +604,7 @@ val js_analyze_with_progress(val samples, int sample_rate, val progress_callback
 
 val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
                    int n_fft, int hop_length, int max_candidates) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   BpmConfig config;
   config.bpm_min = bpm_min;
@@ -614,7 +639,7 @@ val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, f
 
 val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
                       int n_fft, int hop_length) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   RhythmConfig config;
   config.bpm_min = bpm_min;
@@ -645,7 +670,7 @@ val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max
 
 val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_length,
                         float compression_threshold) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   DynamicsConfig config;
   config.window_sec = window_sec;
@@ -672,7 +697,7 @@ val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_
 
 val js_analyze_timbre(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
                       int n_mfcc, float window_sec) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   TimbreConfig config;
   config.n_fft = n_fft;
@@ -710,7 +735,7 @@ val js_analyze_timbre(val samples, int sample_rate, int n_fft, int hop_length, i
 }
 
 val js_detect_key_candidates_default(val samples, int sample_rate) {
-  std::vector<float> data = vecFromJSArray<float>(samples);
+  std::vector<float> data = float32ArrayToVector(samples);
   const auto candidates =
       quick::detect_key_candidates(data.data(), data.size(), sample_rate, KeyConfig{});
   val out = val::array();
@@ -4357,12 +4382,12 @@ class StreamAnalyzerWrapper {
   int sampleRate() const { return config_.sample_rate; }
 
   void process(val samples) {
-    std::vector<float> data = vecFromJSArray<float>(samples);
+    std::vector<float> data = float32ArrayToVector(samples);
     analyzer_->process(data.data(), data.size());
   }
 
   void processWithOffset(val samples, size_t sample_offset) {
-    std::vector<float> data = vecFromJSArray<float>(samples);
+    std::vector<float> data = float32ArrayToVector(samples);
     analyzer_->process(data.data(), data.size(), sample_offset);
   }
 

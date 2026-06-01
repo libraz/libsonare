@@ -391,7 +391,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
         beta_2_18_cdf(thresholds[static_cast<size_t>(index)]);
   }
 
-  std::vector<std::vector<double>> observation(n_frames, std::vector<double>(n_states, 0.0));
+  // Flat row-major storage [n_frames x n_states]: observation_idx(t, s) = t * n_states + s.
+  // Row-major matches the access pattern: every inner loop sweeps states for a fixed frame
+  // (observation initialization, Viterbi update, Viterbi backtrack), keeping cache lines hot
+  // and avoiding n_frames separate heap allocations / row-pointer chases.
+  const auto obs_idx = [n_states](int t, int s) {
+    return static_cast<size_t>(t) * static_cast<size_t>(n_states) + static_cast<size_t>(s);
+  };
+  std::vector<double> observation(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states),
+                                  0.0);
   std::vector<double> voiced_prob(static_cast<size_t>(n_frames), 0.0);
 
   for (int i = 0; i < n_frames; ++i) {
@@ -413,7 +421,7 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
     if (troughs.empty()) {
       const double unvoiced = 1.0 / n_pitch_bins;
       for (int bin = 0; bin < n_pitch_bins; ++bin) {
-        observation[static_cast<size_t>(i)][static_cast<size_t>(n_pitch_bins + bin)] = unvoiced;
+        observation[obs_idx(i, n_pitch_bins + bin)] = unvoiced;
       }
       continue;
     }
@@ -477,18 +485,18 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
       int bin = static_cast<int>(std::llround(static_cast<double>(constants::kSemitonesPerOctave) *
                                               bins_per_semitone * std::log2(f0 / config.fmin)));
       bin = std::clamp(bin, 0, n_pitch_bins - 1);
-      observation[static_cast<size_t>(i)][static_cast<size_t>(bin)] += trough_probs[trough_index];
+      observation[obs_idx(i, bin)] += trough_probs[trough_index];
     }
 
     double voiced = 0.0;
     for (int bin = 0; bin < n_pitch_bins; ++bin) {
-      voiced += observation[static_cast<size_t>(i)][static_cast<size_t>(bin)];
+      voiced += observation[obs_idx(i, bin)];
     }
     voiced = std::clamp(voiced, 0.0, 1.0);
     voiced_prob[static_cast<size_t>(i)] = voiced;
     const double unvoiced = (1.0 - voiced) / n_pitch_bins;
     for (int bin = 0; bin < n_pitch_bins; ++bin) {
-      observation[static_cast<size_t>(i)][static_cast<size_t>(n_pitch_bins + bin)] = unvoiced;
+      observation[obs_idx(i, n_pitch_bins + bin)] = unvoiced;
     }
   }
 
@@ -513,18 +521,23 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
     }
   }
 
-  std::vector<std::vector<double>> viterbi(
-      n_frames, std::vector<double>(n_states, -std::numeric_limits<double>::infinity()));
-  std::vector<std::vector<int>> backtrack(n_frames, std::vector<int>(n_states, -1));
+  // Flat row-major [n_frames x n_states] for Viterbi log-likelihoods and backpointers.
+  // Row-major matches the forward update (sweeps curr_state for fixed i), the per-frame
+  // log-observation add (sweeps state for fixed i), and the backtrack pass (reads frame i+1's
+  // states then the row's argmax at n_frames-1) — all contiguous accesses.
+  // Allocations drop from 3 * n_frames to 3 across observation / viterbi / backtrack.
+  std::vector<double> viterbi(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states),
+                              -std::numeric_limits<double>::infinity());
+  std::vector<int> backtrack(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states), -1);
   const double log_init = -std::log(static_cast<double>(n_states));
   for (int state = 0; state < n_states; ++state) {
-    viterbi[0][static_cast<size_t>(state)] =
-        log_init + std::log(std::max(observation[0][static_cast<size_t>(state)], kLogFloor));
+    viterbi[obs_idx(0, state)] =
+        log_init + std::log(std::max(observation[obs_idx(0, state)], kLogFloor));
   }
 
   for (int i = 1; i < n_frames; ++i) {
     for (int prev_state = 0; prev_state < n_states; ++prev_state) {
-      const double previous = viterbi[static_cast<size_t>(i - 1)][static_cast<size_t>(prev_state)];
+      const double previous = viterbi[obs_idx(i - 1, prev_state)];
       if (!std::isfinite(previous)) {
         continue;
       }
@@ -537,27 +550,30 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
              pitch_transitions[static_cast<size_t>(prev_bin)]) {
           const int curr_state = state_offset + curr_bin;
           const double score = previous + std::log(switch_prob) + std::log(pitch_prob);
-          if (score > viterbi[static_cast<size_t>(i)][static_cast<size_t>(curr_state)]) {
-            viterbi[static_cast<size_t>(i)][static_cast<size_t>(curr_state)] = score;
-            backtrack[static_cast<size_t>(i)][static_cast<size_t>(curr_state)] = prev_state;
+          const size_t curr_idx = obs_idx(i, curr_state);
+          if (score > viterbi[curr_idx]) {
+            viterbi[curr_idx] = score;
+            backtrack[curr_idx] = prev_state;
           }
         }
       }
     }
     for (int state = 0; state < n_states; ++state) {
-      viterbi[static_cast<size_t>(i)][static_cast<size_t>(state)] += std::log(
-          std::max(observation[static_cast<size_t>(i)][static_cast<size_t>(state)], kLogFloor));
+      viterbi[obs_idx(i, state)] += std::log(std::max(observation[obs_idx(i, state)], kLogFloor));
     }
   }
 
   std::vector<int> best_path(n_frames);
-  best_path[n_frames - 1] = static_cast<int>(
-      std::distance(viterbi[static_cast<size_t>(n_frames - 1)].begin(),
-                    std::max_element(viterbi[static_cast<size_t>(n_frames - 1)].begin(),
-                                     viterbi[static_cast<size_t>(n_frames - 1)].end())));
+  {
+    const size_t last_row_begin = obs_idx(n_frames - 1, 0);
+    const auto row_begin = viterbi.begin() + static_cast<std::ptrdiff_t>(last_row_begin);
+    const auto row_end = row_begin + n_states;
+    best_path[static_cast<size_t>(n_frames - 1)] =
+        static_cast<int>(std::distance(row_begin, std::max_element(row_begin, row_end)));
+  }
   for (int i = n_frames - 2; i >= 0; --i) {
     const int next_state = best_path[static_cast<size_t>(i + 1)];
-    const int previous = backtrack[static_cast<size_t>(i + 1)][static_cast<size_t>(next_state)];
+    const int previous = backtrack[obs_idx(i + 1, next_state)];
     best_path[static_cast<size_t>(i)] = previous < 0 ? next_state : previous;
   }
 

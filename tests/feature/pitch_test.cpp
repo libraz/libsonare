@@ -262,6 +262,101 @@ TEST_CASE("pyin - pitch sweep", "[pitch]") {
   }
 }
 
+TEST_CASE("pyin - 5 second 440Hz tone (flat-vector Viterbi regression)", "[pitch]") {
+  // P1-13 regression test: ensure the flat-vector Viterbi implementation still
+  // tracks a long stationary tone correctly. Five seconds at hop=512, sr=22050
+  // yields >200 frames, exercising the row-major observation/viterbi/backtrack
+  // layout across many transitions.
+  Audio audio = generate_sine(440.0f, 5.0f, 22050);
+
+  PitchConfig config;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  config.threshold = 0.3f;
+
+  PitchResult result = pyin(audio, config);
+
+  REQUIRE(result.n_frames() > 100);
+
+  // Median is robust to occasional edge / unvoiced frames.
+  float median_f0 = result.median_f0();
+  REQUIRE_THAT(median_f0, WithinRel(440.0f, 0.01f));
+
+  // Vast majority of frames should be voiced and within 2% of 440 Hz.
+  int voiced_in_band = 0;
+  int voiced_total = 0;
+  for (int i = 0; i < result.n_frames(); ++i) {
+    if (result.voiced_flag[i]) {
+      ++voiced_total;
+      const float f = result.f0[i];
+      if (f > 0.0f && std::abs(f - 440.0f) / 440.0f < 0.02f) {
+        ++voiced_in_band;
+      }
+    }
+  }
+  REQUIRE(voiced_total > result.n_frames() * 8 / 10);
+  REQUIRE(voiced_in_band > voiced_total * 9 / 10);
+}
+
+TEST_CASE("pyin - stepped pitch tracking (Viterbi follows discontinuities)", "[pitch]") {
+  // P1-13 regression test: a synthetic signal with two abrupt pitch steps
+  // (220 Hz -> 330 Hz -> 440 Hz, ~1 second each). The Viterbi pass must
+  // follow each step within a small transition window. This stresses the
+  // backtrack traversal across the flat backtrack[n_frames * n_states] array.
+  const int sr = 22050;
+  const float seg_dur = 1.0f;
+  const std::vector<float> segs = {220.0f, 330.0f, 440.0f};
+
+  const int seg_samples = static_cast<int>(sr * seg_dur);
+  std::vector<float> samples(static_cast<size_t>(seg_samples) * segs.size());
+  float phase = 0.0f;
+  for (size_t s = 0; s < segs.size(); ++s) {
+    const float freq = segs[s];
+    for (int i = 0; i < seg_samples; ++i) {
+      samples[s * seg_samples + i] = std::sin(phase);
+      phase += 2.0f * sonare::constants::kPiD * freq / sr;
+    }
+  }
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  PitchConfig config;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  config.threshold = 0.3f;
+
+  PitchResult result = pyin(audio, config);
+  REQUIRE(result.n_frames() > 30);
+
+  const int n = result.n_frames();
+  // Sample mid-third of each segment to avoid step transition frames.
+  const auto seg_mean = [&](float start_t, float end_t) {
+    const int begin = static_cast<int>(start_t * n);
+    const int end = static_cast<int>(end_t * n);
+    float sum = 0.0f;
+    int count = 0;
+    for (int i = begin; i < end; ++i) {
+      if (result.voiced_flag[i] && result.f0[i] > 0.0f) {
+        sum += result.f0[i];
+        ++count;
+      }
+    }
+    REQUIRE(count > 0);
+    return sum / count;
+  };
+
+  const float mean1 = seg_mean(0.05f, 0.28f);
+  const float mean2 = seg_mean(0.38f, 0.62f);
+  const float mean3 = seg_mean(0.72f, 0.95f);
+
+  REQUIRE_THAT(mean1, WithinRel(220.0f, 0.03f));
+  REQUIRE_THAT(mean2, WithinRel(330.0f, 0.03f));
+  REQUIRE_THAT(mean3, WithinRel(440.0f, 0.03f));
+
+  // Viterbi must follow the step ordering monotonically across segments.
+  REQUIRE(mean1 < mean2);
+  REQUIRE(mean2 < mean3);
+}
+
 TEST_CASE("pyin - sawtooth wave", "[pitch]") {
   Audio audio = generate_sawtooth(330.0f, 1.0f, 22050);
 

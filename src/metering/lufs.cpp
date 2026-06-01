@@ -6,20 +6,22 @@
 #include <numeric>
 
 #include "rt/biquad_design.h"
-#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare::metering {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 using Biquad = rt::BiquadCoeffsD;
 
+// Energies are accumulated in `double`; treat anything below this as silence
+// rather than feeding it to log10(). Smaller than the float `kEpsilon` so we
+// keep the full double dynamic range when the input is genuinely quiet.
+constexpr double kEnergyFloor = 1e-15;
+
 float energy_to_lufs(double energy) {
-  if (energy < kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (energy < kEnergyFloor) return -std::numeric_limits<float>::infinity();
   return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
 }
 

@@ -258,6 +258,7 @@ if(BUILD_MASTERING)
     mastering/assistant/audio_profile.cpp
     mastering/assistant/suggester.cpp
     mastering/common/hysteresis_ja.cpp
+    mastering/common/loudness_measure.cpp
     mastering/common/noise_tracker.cpp
     mastering/dynamics/brickwall_limiter.cpp
     mastering/dynamics/compressor.cpp
@@ -659,7 +660,9 @@ if(BUILD_WASM)
     target_link_libraries(sonare PRIVATE sonare_mastering)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_MASTERING=1)
   else()
-    target_sources(sonare PRIVATE mastering/maximizer/loudness_optimize.cpp)
+    target_sources(sonare PRIVATE
+      mastering/common/loudness_measure.cpp
+      mastering/maximizer/loudness_optimize.cpp)
   endif()
   if(BUILD_MIXING)
     target_link_libraries(sonare PRIVATE sonare_mixing)

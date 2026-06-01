@@ -38,6 +38,18 @@ std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk 
 /// @details Each row is a triangular filter centered at a Mel frequency.
 std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfig& config);
 
+/// @brief Returns a cached Mel filterbank matrix, building it on first access.
+/// @param sr Sample rate in Hz
+/// @param n_fft FFT size
+/// @param config Mel filterbank configuration (full identity is used as cache key)
+/// @return Const reference to cached filterbank [n_mels x n_bins]
+/// @details Thread-safe (guarded by a mutex). Uses an LRU eviction policy bounded
+///          by a small fixed capacity (see implementation). The returned
+///          reference is stable until evicted; copy the data if you need to keep
+///          it across long-lived calls.
+const std::vector<float>& get_mel_filterbank_cached(int sr, int n_fft,
+                                                    const MelFilterConfig& config);
+
 /// @brief Applies Mel filterbank to power spectrum.
 /// @param power Power spectrum [n_bins x n_frames] in row-major order
 /// @param n_bins Number of frequency bins

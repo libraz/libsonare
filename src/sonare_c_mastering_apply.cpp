@@ -51,7 +51,9 @@ SonareError sonare_mastering_apply_processor(const char* processor_name, const f
                                              size_t length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              SonareMasteringResult* out) {
-  if (!out || !processor_name) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !processor_name || processor_name[0] == '\0') {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -145,7 +147,9 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
                                                   int sample_rate,
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, SonareMasteringResult* out) {
-  if (!out || !processor_name) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !processor_name || processor_name[0] == '\0') {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SonareError err = validate_audio_params(source, length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params(reference, length, sample_rate);

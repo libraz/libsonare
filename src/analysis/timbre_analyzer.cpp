@@ -30,20 +30,14 @@ TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
     : n_frames_(0), sr_(audio.sample_rate()), config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute spectrogram
-  StftConfig stft_config;
-  stft_config.n_fft = config.n_fft;
-  stft_config.hop_length = config.hop_length;
+  // Compute spectrogram once and derive the mel spectrogram from it so the
+  // STFT pass is not repeated inside MelSpectrogram::compute.
+  Spectrogram spec = Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
 
-  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  MelFilterConfig mel_filter_config;
+  mel_filter_config.n_mels = config.n_mels;
 
-  // Compute mel spectrogram
-  MelConfig mel_config;
-  mel_config.n_fft = config.n_fft;
-  mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = config.n_mels;
-
-  MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
+  MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, sr_, mel_filter_config);
 
   // Delegate to shared implementation
   init_from_features(spec, mel);

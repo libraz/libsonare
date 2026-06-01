@@ -227,6 +227,38 @@ TEST_CASE("TimbreAnalyzer tolerates missing MFCC frames from precomputed feature
   REQUIRE_FALSE(analyzer.timbre_over_time().empty());
 }
 
+TEST_CASE("TimbreAnalyzer audio and prefeatured ctors agree", "[timbre_analyzer]") {
+  // Regression: the Audio constructor used to compute STFT twice (once for the
+  // Spectrogram and once inside MelSpectrogram::compute). It now reuses a
+  // single Spectrogram via MelSpectrogram::from_spectrogram and must produce
+  // the same scalar timbre values as the (Spectrogram, MelSpectrogram) ctor
+  // fed with the exact same intermediates.
+  Audio audio = create_sine(440.0f);
+
+  TimbreConfig config;
+  TimbreAnalyzer from_audio(audio, config);
+
+  Spectrogram spec = Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
+  MelFilterConfig mel_filter_config;
+  mel_filter_config.n_mels = config.n_mels;
+  MelSpectrogram mel =
+      MelSpectrogram::from_spectrogram(spec, audio.sample_rate(), mel_filter_config);
+  TimbreAnalyzer from_features(spec, mel, config);
+
+  const Timbre& a = from_audio.timbre();
+  const Timbre& b = from_features.timbre();
+
+  // Both code paths now share the exact same Spectrogram + MelSpectrogram so
+  // every reported scalar should match bit-for-bit.
+  REQUIRE_THAT(a.brightness, WithinAbs(b.brightness, 1e-6f));
+  REQUIRE_THAT(a.warmth, WithinAbs(b.warmth, 1e-6f));
+  REQUIRE_THAT(a.density, WithinAbs(b.density, 1e-6f));
+  REQUIRE_THAT(a.roughness, WithinAbs(b.roughness, 1e-6f));
+  REQUIRE_THAT(a.complexity, WithinAbs(b.complexity, 1e-6f));
+
+  REQUIRE(from_audio.timbre_over_time().size() == from_features.timbre_over_time().size());
+}
+
 TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
   // Pure sine has low complexity
   Audio sine = create_sine(440.0f);

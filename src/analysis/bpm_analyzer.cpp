@@ -446,8 +446,11 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
         autocorr_[lag] > 0.0f) {
       float bpm = lag_to_bpm(refine_peak_lag(autocorr_, lag), sr, hop_length);
       if (bpm >= config_.bpm_min && bpm <= config_.bpm_max) {
-        /// Add candidate multiple times based on autocorrelation strength
-        int weight = std::max(1, static_cast<int>(autocorr_[lag] * 100.0f));
+        /// Add candidate multiple times based on autocorrelation strength.
+        /// Clamp the upper bound to 100 so a pure-tone signal with an
+        /// extremely strong autocorrelation peak (e.g. autocorr * 100 > 100)
+        /// cannot blow up `tempo_candidates` memory.
+        int weight = std::min(100, std::max(1, static_cast<int>(autocorr_[lag] * 100.0f)));
         for (int w = 0; w < weight; ++w) {
           tempo_candidates.push_back(bpm);
         }

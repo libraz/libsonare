@@ -17,7 +17,12 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
-inline double log10_safe(double v) { return std::log10(v); }
+// Clamp inputs to a tiny positive floor so that the DC bin (f = 0) yields a
+// very large negative but finite weight instead of -inf. The floor is well
+// below any realistic squared-frequency value the weighting curves operate on
+// (smallest meaningful f_sq ≈ (1 Hz)² = 1.0), so it never affects audible
+// bins.
+inline double log10_safe(double v) { return std::log10(std::max(v, 1e-300)); }
 
 double a_weight_one(double f_sq) {
   static const double c0 = 12194.217 * 12194.217;

@@ -16,6 +16,14 @@ Audio::Audio(std::shared_ptr<const std::vector<float>> buffer, size_t offset, si
 
 Audio Audio::from_buffer(const float* samples, size_t size, int sample_rate) {
   SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  // Reject null + size>0 to avoid UB in the iterator-pair vector constructor.
+  // A null pointer with size==0 is treated as an empty buffer (valid).
+  SONARE_CHECK_MSG(samples != nullptr || size == 0, ErrorCode::InvalidParameter,
+                   "Audio::from_buffer: samples is null but size > 0");
+  if (size == 0) {
+    auto buffer = std::make_shared<std::vector<float>>();
+    return Audio(buffer, 0, 0, sample_rate);
+  }
   auto buffer = std::make_shared<std::vector<float>>(samples, samples + size);
   return Audio(buffer, 0, size, sample_rate);
 }
@@ -33,6 +41,11 @@ Audio Audio::from_file(const std::string& path) {
 }
 
 Audio Audio::from_memory(const uint8_t* data, size_t size) {
+  // load_buffer / detect_format dereference `data` when size is large enough;
+  // reject the obviously-invalid (null, size>0) and (anything, size==0) cases up front.
+  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter,
+                   "Audio::from_memory: data is null");
+  SONARE_CHECK_MSG(size > 0, ErrorCode::InvalidParameter, "Audio::from_memory: size is zero");
   auto [samples, sample_rate] = load_buffer(data, size);
   return from_vector(std::move(samples), sample_rate);
 }
