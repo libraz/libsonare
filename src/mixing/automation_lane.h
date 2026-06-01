@@ -75,14 +75,38 @@ inline float interpolate_automation_value(const AutomationEvent& a, const Automa
   }
 }
 
+// Bounded SPSC queue of AutomationEvent breakpoints with sample-accurate
+// block consumption.
+//
+// Threading model:
+//   * Producer (control thread): push().
+//   * Consumer (audio thread):   consume_block(), discard_before(), clear().
+//
+// The atomic head_/tail_ pair gives the standard SPSC ring guarantees.
+// In addition, the consumer-side fields active_event_ / has_active_event_
+// (the "last-seen breakpoint" used to interpolate curves across block
+// boundaries) are mutated by BOTH consume_block() and discard_before(),
+// so those two MUST run on the same (audio) thread. ChannelStrip enforces
+// this by calling both from process_at(), which is invoked only on the
+// audio thread (RealtimeEngine, MixingRuntime, MonitorRuntime, and the
+// graph-runtime StripNode all dispatch process_at() from the audio
+// callback). See channel_strip.cpp for the NOTE at the top of process_at().
 class AutomationLane {
  public:
   explicit AutomationLane(size_t capacity = 1024);
 
   size_t capacity() const noexcept { return capacity_; }
   bool empty() const noexcept;
+
+  // Producer-side. Control thread only.
   bool push(const AutomationEvent& event) noexcept;
+
+  // Consumer-side. Audio thread only. Must be serialized with consume_block()
+  // on the same lane (both write active_event_/has_active_event_).
   size_t discard_before(int64_t sample_pos) noexcept;
+
+  // Lane reset. Safe to call when the audio thread is stopped (e.g. during
+  // ChannelStrip::reset()).
   void clear() noexcept;
 
   template <typename Callback>
@@ -169,8 +193,13 @@ class AutomationLane {
   std::vector<AutomationEvent> buffer_;
   std::atomic<size_t> head_{0};
   std::atomic<size_t> tail_{0};
+
+  // Producer-only (control thread); read/written exclusively in push().
   int64_t last_pushed_sample_ = 0;
   bool has_last_pushed_sample_ = false;
+
+  // Consumer-only (audio thread); read/written in consume_block() and
+  // discard_before(). Callers must serialize those two on the audio thread.
   AutomationEvent active_event_{};
   bool has_active_event_ = false;
 };

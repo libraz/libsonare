@@ -96,7 +96,18 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
       fader_({config.fader_db, config.smoothing_ms}),
       panner_({config.pan, config.pan_law, config.smoothing_ms}),
       width_(1.0f, config.smoothing_ms),
-      eq_position_(config.eq_position) {}
+      eq_position_(config.eq_position) {
+  // Pre-reserve the vectors that the audio thread iterates while the control
+  // thread may concurrently push_back into. The audio thread iterates
+  // insert_automation_ in process_at() and insert_sidechains_ in
+  // process_insert_chain(); a reallocation here would invalidate those
+  // iterators / pointers (C++ UB). Caps are enforced in schedule_insert_
+  // automation() and add_pre/post_insert(); see channel_strip.h.
+  insert_automation_.reserve(kMaxInsertAutomationLanes);
+  insert_sidechains_.reserve(kMaxInserts);
+  pre_inserts_.reserve(kMaxInserts);
+  post_inserts_.reserve(kMaxInserts);
+}
 
 void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
@@ -148,6 +159,13 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
+  // AUDIO-THREAD ONLY. discard_before() and consume_block() on an
+  // AutomationLane are both consumer-side and mutate the lane's
+  // active_event_/has_active_event_ state, so they must be serialized.
+  // All process_at() call sites are audio-thread (RealtimeEngine,
+  // MixingRuntime, MonitorRuntime, graph-runtime StripNode); the control
+  // thread only ever calls push() via the schedule_*_automation() APIs, so
+  // the SPSC contract documented on AutomationLane is preserved.
   for (auto& lane : send_automation_) {
     if (lane) lane->discard_before(block_start);
   }
@@ -521,6 +539,12 @@ bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigne
       return lane.lane->push(event);
     }
   }
+  // Hard cap: push_back below MUST NOT reallocate, because the audio thread
+  // may concurrently iterate insert_automation_ in process_at(). Capacity is
+  // reserved up-front in the constructor (kMaxInsertAutomationLanes).
+  if (insert_automation_.size() >= kMaxInsertAutomationLanes) {
+    return false;
+  }
   insert_automation_.push_back({event.target, std::make_unique<AutomationLane>()});
   return insert_automation_.back().lane->push(event);
 }
@@ -573,6 +597,9 @@ void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor) 
   if (!processor) {
     throw std::invalid_argument("insert processor must not be null");
   }
+  if (pre_inserts_.size() + post_inserts_.size() >= kMaxInserts) {
+    throw std::length_error("ChannelStrip insert cap exceeded");
+  }
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);
   }
@@ -583,6 +610,9 @@ void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor) 
 void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor) {
   if (!processor) {
     throw std::invalid_argument("insert processor must not be null");
+  }
+  if (pre_inserts_.size() + post_inserts_.size() >= kMaxInserts) {
+    throw std::length_error("ChannelStrip insert cap exceeded");
   }
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);

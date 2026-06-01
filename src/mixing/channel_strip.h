@@ -151,6 +151,32 @@ class ChannelStrip : public rt::ProcessorBase {
                    int64_t block_start);
   size_t read_goniometer_latest(GoniometerPoint* dest, size_t max_points) const noexcept;
 
+  // Upper bound on the number of distinct (insert_index, param_id) automation
+  // targets the strip may track. Reserved at construction so that
+  // schedule_insert_automation() (control thread) cannot trigger a
+  // reallocation of insert_automation_ while the audio thread is iterating
+  // it inside process_at() -- such a reallocation would invalidate the
+  // audio-thread iterator (C++ UB). schedule_insert_automation() returns
+  // false once this cap is reached instead of growing the vector.
+  static constexpr size_t kMaxInsertAutomationLanes = 64;
+
+  // Upper bound on inserts per strip (pre + post combined). Reserved at
+  // construction so add_pre_insert / add_post_insert never reallocate
+  // pre_inserts_ / post_inserts_ / insert_sidechains_ while the audio thread
+  // iterates them. Exceeding the cap throws std::length_error from
+  // add_pre_insert / add_post_insert.
+  static constexpr size_t kMaxInserts = 64;
+
+#ifdef SONARE_TESTING
+  // Test-only introspection used to assert that schedule_insert_automation
+  // does not reallocate insert_automation_ after construction.
+  size_t insert_automation_capacity() const noexcept { return insert_automation_.capacity(); }
+  size_t insert_automation_size() const noexcept { return insert_automation_.size(); }
+  size_t insert_sidechains_capacity() const noexcept { return insert_sidechains_.capacity(); }
+  size_t pre_inserts_capacity() const noexcept { return pre_inserts_.capacity(); }
+  size_t post_inserts_capacity() const noexcept { return post_inserts_.capacity(); }
+#endif
+
  private:
   static constexpr int kPreparedChannels = 2;
   static constexpr int kMaxStackChannels = 8;
