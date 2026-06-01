@@ -156,7 +156,9 @@ describe('newly exposed WASM functions', () => {
   it('realtimeVoiceChangerPresetConfig returns a POD object with expected fields', () => {
     const cfg = realtimeVoiceChangerPresetConfig('bright-idol');
     expect(cfg).not.toBeNull();
-    if (cfg === null) return;
+    if (cfg === null) {
+      return;
+    }
     const expectedFields = [
       'input_gain_db',
       'output_gain_db',
