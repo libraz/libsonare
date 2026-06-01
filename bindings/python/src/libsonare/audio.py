@@ -793,10 +793,11 @@ class Audio:
         fmin: float = 65.0,
         fmax: float = 2093.0,
         threshold: float = 0.3,
+        fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the YIN algorithm."""
         return _pitch_yin(
-            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold
+            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na
         )
 
     def pitch_pyin(
@@ -806,10 +807,11 @@ class Audio:
         fmin: float = 65.0,
         fmax: float = 2093.0,
         threshold: float = 0.3,
+        fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the pYIN algorithm."""
         return _pitch_pyin(
-            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold
+            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na
         )
 
     # --- Core - Resample ---

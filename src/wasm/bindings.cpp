@@ -3578,7 +3578,7 @@ float js_estimate_tuning(val samples, int sample_rate, int n_fft, int hop_length
 // ============================================================================
 
 val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
-                 float fmax, float threshold) {
+                 float fmax, float threshold, bool fill_na) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
@@ -3588,6 +3588,7 @@ val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length,
   config.fmin = fmin;
   config.fmax = fmax;
   config.threshold = threshold;
+  config.fill_na = fill_na;
 
   PitchResult result = yin_track(audio, config);
 
@@ -3614,7 +3615,7 @@ val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length,
 }
 
 val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
-                  float fmax, float threshold) {
+                  float fmax, float threshold, bool fill_na) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
@@ -3624,6 +3625,7 @@ val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length
   config.fmin = fmin;
   config.fmax = fmax;
   config.threshold = threshold;
+  config.fill_na = fill_na;
 
   PitchResult result = pyin(audio, config);
 

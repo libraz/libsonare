@@ -123,3 +123,39 @@ def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
     lra = libsonare.ebur128_loudness_range(_tone())
     assert math.isfinite(lra)
     assert lra >= 0.0
+
+
+def test_pitch_yin_fill_na_controls_unvoiced_value() -> None:
+    # Silence is fully unvoiced, so fill_na decides NaN vs 0 for every frame.
+    silence = np.zeros(SR, dtype=np.float32)
+
+    nan_res = libsonare.pitch_yin(silence, SR, fill_na=False)
+    assert nan_res.n_frames > 0
+    assert any(math.isnan(v) for v in nan_res.f0)
+
+    filled = libsonare.pitch_yin(silence, SR, fill_na=True)
+    assert filled.n_frames > 0
+    assert all(math.isfinite(v) for v in filled.f0)
+
+
+def test_pitch_pyin_fill_na_controls_unvoiced_value() -> None:
+    silence = np.zeros(SR, dtype=np.float32)
+
+    nan_res = libsonare.pitch_pyin(silence, SR, fill_na=False)
+    assert any(math.isnan(v) for v in nan_res.f0)
+
+    filled = libsonare.pitch_pyin(silence, SR, fill_na=True)
+    assert all(math.isfinite(v) for v in filled.f0)
+
+
+def test_analyze_timbre_exposes_timbre_over_time() -> None:
+    result = libsonare.analyze_timbre(_tone(seconds=2.0), SR)
+    assert len(result.timbre_over_time) > 0
+    # camelCase alias mirrors the JS binding.
+    assert result.timbreOverTime is result.timbre_over_time
+    for frame in result.timbre_over_time:
+        assert math.isfinite(frame.brightness)
+        assert math.isfinite(frame.warmth)
+        assert math.isfinite(frame.density)
+        assert math.isfinite(frame.roughness)
+        assert math.isfinite(frame.complexity)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  analyzeTimbre,
   decompose,
   ebur128LoudnessRange,
   estimateTuning,
@@ -7,7 +8,9 @@ import {
   lufsInterleaved,
   nnFilter,
   phaseVocoder,
+  pitchPyin,
   pitchTuning,
+  pitchYin,
   polyFeatures,
   remix,
   spectralContrast,
@@ -126,5 +129,35 @@ describe('newly exposed Node functions', () => {
     const lra = ebur128LoudnessRange(sine(1, 440));
     expect(Number.isFinite(lra)).toBe(true);
     expect(lra).toBeGreaterThanOrEqual(0);
+  });
+
+  it('pitchYin fillNa controls the unvoiced value', () => {
+    const silence = new Float32Array(SR); // fully unvoiced
+    const nanRes = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
+    expect(nanRes.f0.some((v) => Number.isNaN(v))).toBe(true);
+
+    const filled = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
+    expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
+  });
+
+  it('pitchPyin fillNa controls the unvoiced value', () => {
+    const silence = new Float32Array(SR);
+    const nanRes = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
+    expect(nanRes.f0.some((v) => Number.isNaN(v))).toBe(true);
+
+    const filled = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
+    expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
+  });
+
+  it('analyzeTimbre exposes timbreOverTime', () => {
+    const r = analyzeTimbre(sine(2, 440), SR);
+    expect(r.timbreOverTime.length).toBeGreaterThan(0);
+    for (const frame of r.timbreOverTime) {
+      expect(Number.isFinite(frame.brightness)).toBe(true);
+      expect(Number.isFinite(frame.warmth)).toBe(true);
+      expect(Number.isFinite(frame.density)).toBe(true);
+      expect(Number.isFinite(frame.roughness)).toBe(true);
+      expect(Number.isFinite(frame.complexity)).toBe(true);
+    }
   });
 });

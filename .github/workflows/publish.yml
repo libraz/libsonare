@@ -18,12 +18,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.22.1'
+          node-version: '22.22.3'
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm install -g npm@latest
       - run: corepack enable
-      - run: corepack prepare yarn@4.12.0 --activate
+      - run: corepack prepare yarn@4.15.0 --activate
 
       - uses: actions/cache@v4
         with:

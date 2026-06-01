@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -597,9 +598,12 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
+  // to_pan_mode throws SONARE_ERROR_INVALID_PARAMETER for unknown modes, so by
+  // the time we mirror it into the scene strip the value is already validated.
   strip->strip.set_pan_mode(to_pan_mode(pan_mode));
   strip->strip.set_pan(pan);
   strip->scene_strip.pan = pan;
+  strip->scene_strip.pan_mode = pan_mode;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -803,17 +807,20 @@ size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGo
   if (!strip || !out || max_points == 0) {
     return 0;
   }
-  try {
-    std::vector<sonare::mixing::GoniometerPoint> points(max_points);
-    const size_t count = strip->strip.read_goniometer_latest(points.data(), points.size());
-    for (size_t i = 0; i < count; ++i) {
-      out[i].left = points[i].left;
-      out[i].right = points[i].right;
-    }
-    return count;
-  } catch (...) {
-    return 0;
-  }
+  // SonareMixGoniometerPoint and sonare::mixing::GoniometerPoint are both
+  // standard-layout {float left; float right;} pairs, so we can write the
+  // result directly into the caller's buffer instead of allocating a temporary
+  // vector on every (potentially per-frame, UI-rate) call. The static_asserts
+  // pin the layout so this stays valid if either struct changes.
+  using NativePoint = sonare::mixing::GoniometerPoint;
+  static_assert(sizeof(SonareMixGoniometerPoint) == sizeof(NativePoint),
+                "GoniometerPoint size must match the C ABI struct");
+  static_assert(offsetof(SonareMixGoniometerPoint, left) == offsetof(NativePoint, left),
+                "GoniometerPoint 'left' offset must match the C ABI struct");
+  static_assert(offsetof(SonareMixGoniometerPoint, right) == offsetof(NativePoint, right),
+                "GoniometerPoint 'right' offset must match the C ABI struct");
+  // read_goniometer_latest is noexcept, so no try/catch is required here.
+  return strip->strip.read_goniometer_latest(reinterpret_cast<NativePoint*>(out), max_points);
 }
 
 size_t sonare_mixer_strip_count(const SonareMixer* mixer) {

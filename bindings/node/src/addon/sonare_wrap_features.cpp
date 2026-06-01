@@ -505,6 +505,8 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2093.0f;
   float threshold =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.3f;
+  bool fill_na =
+      info.Length() >= 8 && info[7].IsBoolean() ? info[7].As<Napi::Boolean>().Value() : false;
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::PitchConfig config;
@@ -513,6 +515,7 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   config.fmin = fmin;
   config.fmax = fmax;
   config.threshold = threshold;
+  config.fill_na = fill_na;
 
   sonare::PitchResult result = sonare::yin_track(audio, config);
 
@@ -560,6 +563,8 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2093.0f;
   float threshold =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.3f;
+  bool fill_na =
+      info.Length() >= 8 && info[7].IsBoolean() ? info[7].As<Napi::Boolean>().Value() : false;
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::PitchConfig config;
@@ -568,6 +573,7 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   config.fmin = fmin;
   config.fmax = fmax;
   config.threshold = threshold;
+  config.fill_na = fill_na;
 
   sonare::PitchResult result = sonare::pyin(audio, config);
 

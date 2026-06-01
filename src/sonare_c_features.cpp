@@ -594,7 +594,7 @@ SonareError fill_pitch_result(const PitchResult& result, SonarePitchResult* out)
 }  // namespace
 
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
-                             int hop_length, float fmin, float fmax, float threshold,
+                             int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -609,6 +609,7 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
     config.fmin = fmin;
     config.fmax = fmax;
     config.threshold = threshold;
+    config.fill_na = fill_na != 0;
     PitchResult result = yin_track(audio, config);
     return fill_pitch_result(result, out);
   });
@@ -616,7 +617,7 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float fmin, float fmax,
-                              float threshold, SonarePitchResult* out) {
+                              float threshold, int fill_na, SonarePitchResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->f0 = nullptr;
@@ -630,6 +631,7 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
     config.fmin = fmin;
     config.fmax = fmax;
     config.threshold = threshold;
+    config.fill_na = fill_na != 0;
     PitchResult result = pyin(audio, config);
     return fill_pitch_result(result, out);
   });

@@ -255,12 +255,13 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
 // Features - Pitch
 // ============================================================================
 
+/// @param fill_na If non-zero, return 0 for unvoiced f0 frames; otherwise keep NaN.
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
-                             int hop_length, float fmin, float fmax, float threshold,
+                             int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out);
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float fmin, float fmax,
-                              float threshold, SonarePitchResult* out);
+                              float threshold, int fill_na, SonarePitchResult* out);
 
 // ============================================================================
 // Core - Conversion

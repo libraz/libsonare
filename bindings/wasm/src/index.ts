@@ -1094,6 +1094,7 @@ export interface DynamicsAnalysisResult {
   loudnessRmsDb: Float32Array;
 }
 
+/** Timbre metrics for one analysis window. Entries are ordered by time in `timbreOverTime`. */
 export interface TimbreFrame {
   brightness: number;
   warmth: number;
@@ -1106,6 +1107,7 @@ export interface TimbreAnalysisResult extends TimbreFrame {
   spectralCentroid: Float32Array;
   spectralFlatness: Float32Array;
   spectralRolloff: Float32Array;
+  /** Time-varying timbre metrics, one entry per analysis window. */
   timbreOverTime: TimbreFrame[];
 }
 
@@ -3555,6 +3557,7 @@ export function rmsEnergy(
  * @param fmin - Minimum frequency in Hz (default: 65)
  * @param fmax - Maximum frequency in Hz (default: 2093)
  * @param threshold - YIN threshold (default: 0.3)
+ * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
  * @returns Pitch detection result
  */
 export function pitchYin(
@@ -3565,11 +3568,21 @@ export function pitchYin(
   fmin = 65.0,
   fmax = 2093.0,
   threshold = 0.3,
+  fillNa = false,
 ): PitchResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.pitchYin(samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold);
+  return module.pitchYin(
+    samples,
+    sampleRate,
+    frameLength,
+    hopLength,
+    fmin,
+    fmax,
+    threshold,
+    fillNa,
+  );
 }
 
 /**
@@ -3582,6 +3595,7 @@ export function pitchYin(
  * @param fmin - Minimum frequency in Hz (default: 65)
  * @param fmax - Maximum frequency in Hz (default: 2093)
  * @param threshold - YIN threshold (default: 0.3)
+ * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
  * @returns Pitch detection result
  */
 export function pitchPyin(
@@ -3592,11 +3606,21 @@ export function pitchPyin(
   fmin = 65.0,
   fmax = 2093.0,
   threshold = 0.3,
+  fillNa = false,
 ): PitchResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.pitchPyin(samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold);
+  return module.pitchPyin(
+    samples,
+    sampleRate,
+    frameLength,
+    hopLength,
+    fmin,
+    fmax,
+    threshold,
+    fillNa,
+  );
 }
 
 // ============================================================================
@@ -4676,8 +4700,18 @@ export class Audio {
     fmin = 65.0,
     fmax = 2093.0,
     threshold = 0.3,
+    fillNa = false,
   ): PitchResult {
-    return pitchYin(this._samples, this._sampleRate, frameLength, hopLength, fmin, fmax, threshold);
+    return pitchYin(
+      this._samples,
+      this._sampleRate,
+      frameLength,
+      hopLength,
+      fmin,
+      fmax,
+      threshold,
+      fillNa,
+    );
   }
 
   pitchPyin(
@@ -4686,6 +4720,7 @@ export class Audio {
     fmin = 65.0,
     fmax = 2093.0,
     threshold = 0.3,
+    fillNa = false,
   ): PitchResult {
     return pitchPyin(
       this._samples,
@@ -4695,6 +4730,7 @@ export class Audio {
       fmin,
       fmax,
       threshold,
+      fillNa,
     );
   }
 

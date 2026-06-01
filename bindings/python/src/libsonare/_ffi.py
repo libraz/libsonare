@@ -729,6 +729,18 @@ class SonareRealtimeVoiceChangerConfig(ctypes.Structure):
     ]
 
 
+class SonareTimbreFrame(ctypes.Structure):
+    """Maps to SonareTimbreFrame in sonare_c.h."""
+
+    _fields_ = [
+        ("brightness", ctypes.c_float),
+        ("warmth", ctypes.c_float),
+        ("density", ctypes.c_float),
+        ("roughness", ctypes.c_float),
+        ("complexity", ctypes.c_float),
+    ]
+
+
 class SonareTimbreResult(ctypes.Structure):
     """Maps to SonareTimbreResult in sonare_c.h."""
 
@@ -744,6 +756,8 @@ class SonareTimbreResult(ctypes.Structure):
         ("spectral_flatness_count", ctypes.c_size_t),
         ("spectral_rolloff", ctypes.POINTER(ctypes.c_float)),
         ("spectral_rolloff_count", ctypes.c_size_t),
+        ("timbre_over_time", ctypes.POINTER(SonareTimbreFrame)),
+        ("timbre_over_time_count", ctypes.c_size_t),
     ]
 
 
@@ -2508,6 +2522,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_float,
+        ctypes.c_int,
         ctypes.POINTER(SonarePitchResult),
     ]
 
@@ -2522,6 +2537,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_float,
+        ctypes.c_int,
         ctypes.POINTER(SonarePitchResult),
     ]
 

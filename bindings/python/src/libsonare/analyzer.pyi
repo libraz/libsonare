@@ -665,6 +665,7 @@ def pitch_yin(
     fmin: float = 65.0,
     fmax: float = 2093.0,
     threshold: float = 0.3,
+    fill_na: bool = False,
 ) -> PitchResult: ...
 def pitch_pyin(
     samples: FloatSamples,
@@ -674,7 +675,92 @@ def pitch_pyin(
     fmin: float = 65.0,
     fmax: float = 2093.0,
     threshold: float = 0.3,
+    fill_na: bool = False,
 ) -> PitchResult: ...
+def spectral_contrast(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_bands: int = 6,
+    fmin: float = 200.0,
+    quantile: float = 0.02,
+) -> np.ndarray[Any, Any]: ...
+def poly_features(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    order: int = 1,
+) -> np.ndarray[Any, Any]: ...
+def zero_crossings(
+    samples: FloatSamples,
+    threshold: float = 1e-10,
+    ref_magnitude: bool = False,
+    pad: bool = True,
+    zero_pos: bool = True,
+) -> np.ndarray[Any, Any]: ...
+def pitch_tuning(
+    frequencies: FloatSamples,
+    resolution: float = 0.01,
+    bins_per_octave: int = 12,
+) -> float: ...
+def estimate_tuning(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    resolution: float = 0.01,
+    bins_per_octave: int = 12,
+) -> float: ...
+def lufs_interleaved(
+    samples: FloatSamples,
+    channels: int,
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> LufsResult: ...
+def ebur128_loudness_range(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> float: ...
+def decompose(
+    s: FloatSamples,
+    n_features: int,
+    n_frames: int,
+    n_components: int,
+    n_iter: int = 50,
+    beta: float = 2.0,
+) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
+def nn_filter(
+    s: FloatSamples,
+    n_features: int,
+    n_frames: int,
+    aggregate: str = "mean",
+    k: int = 7,
+    width: int = 1,
+) -> np.ndarray[Any, Any]: ...
+def remix(
+    samples: FloatSamples,
+    intervals: Sequence[int] | list[int],
+    sample_rate: int = 22050,
+    align_zeros: bool = False,
+) -> np.ndarray[Any, Any]: ...
+def hpss_with_residual(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    kernel_harmonic: int = 31,
+    kernel_percussive: int = 31,
+) -> dict[str, object]: ...
+def phase_vocoder(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    rate: float = 1.0,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+) -> np.ndarray[Any, Any]: ...
 def hz_to_mel(hz: float) -> float: ...
 def mel_to_hz(mel: float) -> float: ...
 def hz_to_midi(hz: float) -> float: ...

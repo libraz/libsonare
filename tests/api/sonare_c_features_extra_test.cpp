@@ -237,3 +237,84 @@ TEST_CASE("sonare_estimate_tuning", "[c_api][features]") {
     REQUIRE(tuning == 0.0f);
   }
 }
+
+// Silence yields all-unvoiced frames, which is exactly where the fill_na flag
+// changes the f0 output (NaN when off, 0 when on).
+TEST_CASE("sonare_pitch_yin fill_na", "[c_api][features]") {
+  std::vector<float> silence(static_cast<size_t>(kSampleRate), 0.0f);
+
+  SECTION("fill_na = 0 leaves unvoiced frames as NaN") {
+    SonarePitchResult result{};
+    REQUIRE(sonare_pitch_yin(silence.data(), silence.size(), kSampleRate, 2048, 512, 65.0f, 2093.0f,
+                             0.3f, /*fill_na=*/0, &result) == SONARE_OK);
+    REQUIRE(result.n_frames > 0);
+    bool any_nan = false;
+    for (int i = 0; i < result.n_frames; ++i) {
+      if (std::isnan(result.f0[i])) any_nan = true;
+    }
+    REQUIRE(any_nan);
+    sonare_free_pitch_result(&result);
+  }
+
+  SECTION("fill_na = 1 replaces unvoiced frames with finite 0") {
+    SonarePitchResult result{};
+    REQUIRE(sonare_pitch_yin(silence.data(), silence.size(), kSampleRate, 2048, 512, 65.0f, 2093.0f,
+                             0.3f, /*fill_na=*/1, &result) == SONARE_OK);
+    REQUIRE(result.n_frames > 0);
+    for (int i = 0; i < result.n_frames; ++i) {
+      REQUIRE(std::isfinite(result.f0[i]));
+    }
+    sonare_free_pitch_result(&result);
+  }
+}
+
+TEST_CASE("sonare_pitch_pyin fill_na", "[c_api][features]") {
+  std::vector<float> silence(static_cast<size_t>(kSampleRate), 0.0f);
+
+  SonarePitchResult nan_result{};
+  REQUIRE(sonare_pitch_pyin(silence.data(), silence.size(), kSampleRate, 2048, 512, 65.0f, 2093.0f,
+                            0.3f, /*fill_na=*/0, &nan_result) == SONARE_OK);
+  REQUIRE(nan_result.n_frames > 0);
+  bool any_nan = false;
+  for (int i = 0; i < nan_result.n_frames; ++i) {
+    if (std::isnan(nan_result.f0[i])) any_nan = true;
+  }
+  REQUIRE(any_nan);
+  sonare_free_pitch_result(&nan_result);
+
+  SonarePitchResult filled{};
+  REQUIRE(sonare_pitch_pyin(silence.data(), silence.size(), kSampleRate, 2048, 512, 65.0f, 2093.0f,
+                            0.3f, /*fill_na=*/1, &filled) == SONARE_OK);
+  for (int i = 0; i < filled.n_frames; ++i) {
+    REQUIRE(std::isfinite(filled.f0[i]));
+  }
+  sonare_free_pitch_result(&filled);
+}
+
+TEST_CASE("sonare_analyze_timbre exposes timbre_over_time", "[c_api][features]") {
+  auto samples = make_sine(440.0f, kSampleRate, 2.0f);
+
+  SonareTimbreResult result{};
+  REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), kSampleRate, 2048, 512, 128, 13,
+                                0.5f, &result) == SONARE_OK);
+
+  // A 2s signal with a 0.5s window must yield at least one per-window snapshot,
+  // and the pointer/count pair must be consistent.
+  REQUIRE(result.timbre_over_time_count > 0);
+  REQUIRE(result.timbre_over_time != nullptr);
+  for (size_t i = 0; i < result.timbre_over_time_count; ++i) {
+    const SonareTimbreFrame& frame = result.timbre_over_time[i];
+    REQUIRE(std::isfinite(frame.brightness));
+    REQUIRE(std::isfinite(frame.warmth));
+    REQUIRE(std::isfinite(frame.density));
+    REQUIRE(std::isfinite(frame.roughness));
+    REQUIRE(std::isfinite(frame.complexity));
+  }
+
+  sonare_free_timbre_result(&result);
+
+  // Double-free / free-after-clear must be safe (pointers nulled on free).
+  sonare_free_timbre_result(&result);
+  REQUIRE(result.timbre_over_time == nullptr);
+  REQUIRE(result.timbre_over_time_count == 0);
+}

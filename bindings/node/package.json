@@ -23,19 +23,19 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "yarn@4.12.0",
+  "packageManager": "yarn@4.15.0",
   "volta": {
-    "node": "22.21.1",
-    "yarn": "4.12.0"
+    "node": "22.22.3",
+    "yarn": "4.15.0"
   },
   "dependencies": {
     "cmake-js": "^8.0.0",
     "node-addon-api": "^8.8.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.15",
+    "@biomejs/biome": "^2.4.16",
     "@types/node": "^22.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }

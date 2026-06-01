@@ -515,6 +515,17 @@ class DynamicsResult:
 
 
 @dataclass(frozen=True, slots=True)
+class TimbreFrame:
+    """Timbre metrics for one analysis window in TimbreResult.timbre_over_time."""
+
+    brightness: float
+    warmth: float
+    density: float
+    roughness: float
+    complexity: float
+
+
+@dataclass(frozen=True, slots=True)
 class TimbreResult:
     """Timbre and spectral-shape analysis primitives."""
 
@@ -526,6 +537,7 @@ class TimbreResult:
     spectral_centroid: list[float]
     spectral_flatness: list[float]
     spectral_rolloff: list[float]
+    timbre_over_time: list[TimbreFrame]
 
     @property
     def spectralCentroid(self) -> list[float]:  # noqa: N802
@@ -538,6 +550,10 @@ class TimbreResult:
     @property
     def spectralRolloff(self) -> list[float]:  # noqa: N802
         return self.spectral_rolloff
+
+    @property
+    def timbreOverTime(self) -> list[TimbreFrame]:  # noqa: N802
+        return self.timbre_over_time
 
 
 @dataclass(frozen=True, slots=True)

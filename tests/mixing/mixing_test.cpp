@@ -425,6 +425,38 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   sonare_mixer_destroy(restored);
 }
 
+TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned");
+  REQUIRE(strip != nullptr);
+  // sonare_strip_set_pan must mirror the pan mode into the scene strip so it
+  // survives scene serialization (regression: previously only the pan position
+  // was written, leaving panMode at the default 0).
+  REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_STEREO_PAN) == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  REQUIRE(scene_json.find("\"panMode\":1") != std::string::npos);
+  sonare_free_string(json);
+
+  // Round-trips through from_scene_json with the mode intact.
+  SonareMixer* restored = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 8);
+  REQUIRE(restored != nullptr);
+  char* restored_json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(restored, &restored_json) == SONARE_OK);
+  REQUIRE(restored_json != nullptr);
+  REQUIRE(std::string(restored_json).find("\"panMode\":1") != std::string::npos);
+  sonare_free_string(restored_json);
+  sonare_mixer_destroy(restored);
+
+  // Invalid pan modes are rejected without mutating state.
+  REQUIRE(sonare_strip_set_pan(strip, 0.0f, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API reports invalid scene JSON through last error", "[mixing][capi]") {
   SonareMixer* mixer = sonare_mixer_from_scene_json("{\"strips\":[", 48000, 8);
   REQUIRE(mixer == nullptr);

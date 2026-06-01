@@ -18,14 +18,17 @@ from __future__ import annotations
 import re
 
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
-_NUM_BOUNDARY = re.compile(r"(?<=[A-Za-z])(?=[0-9])")
 
 
 def camel_to_snake(name: str) -> str:
-    """``masteringRepairDeclick`` / ``nFft`` -> ``mastering_repair_declick`` / ``n_fft``."""
-    s = _CAMEL_BOUNDARY.sub("_", name)
-    s = _NUM_BOUNDARY.sub("_", s)
-    return s.lower()
+    """``masteringRepairDeclick`` / ``ebur128LoudnessRange`` -> ``mastering_repair_declick`` / ``ebur128_loudness_range``.
+
+    No boundary is inserted before a digit run: the canonical C names never
+    separate a letter from a following digit with an underscore (``ebur128``,
+    ``framesI16``), so doing so here would make the camelCase facades fail to
+    match their C counterparts.
+    """
+    return _CAMEL_BOUNDARY.sub("_", name).lower()
 
 
 def kebab_to_snake(name: str) -> str:

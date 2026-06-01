@@ -494,6 +494,15 @@ export interface DynamicsResult {
   loudnessRmsDb: Float32Array;
 }
 
+/** Timbre metrics for one analysis window. Entries are ordered by time in {@link TimbreResult.timbreOverTime}. */
+export interface TimbreFrame {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+}
+
 export interface TimbreResult {
   brightness: number;
   warmth: number;
@@ -503,6 +512,8 @@ export interface TimbreResult {
   spectralCentroid: Float32Array;
   spectralFlatness: Float32Array;
   spectralRolloff: Float32Array;
+  /** Time-varying timbre metrics, one entry per analysis window. */
+  timbreOverTime: TimbreFrame[];
 }
 
 export interface Chord {

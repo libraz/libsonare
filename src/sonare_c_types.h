@@ -560,6 +560,15 @@ typedef struct {
   size_t loudness_count;
 } SonareDynamicsResult;
 
+/// @brief Timbre metrics for one analysis window.
+typedef struct {
+  float brightness;
+  float warmth;
+  float density;
+  float roughness;
+  float complexity;
+} SonareTimbreFrame;
+
 typedef struct {
   float brightness;
   float warmth;
@@ -572,6 +581,10 @@ typedef struct {
   size_t spectral_flatness_count;
   float* spectral_rolloff;
   size_t spectral_rolloff_count;
+  /// @brief Time-varying timbre metrics, one entry per analysis window.
+  /// Owned by the result; released by sonare_free_timbre_result.
+  SonareTimbreFrame* timbre_over_time;
+  size_t timbre_over_time_count;
 } SonareTimbreResult;
 
 typedef struct {

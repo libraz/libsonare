@@ -697,6 +697,7 @@ def pitch_yin(
     fmin: float = 65.0,
     fmax: float = 2093.0,
     threshold: float = 0.3,
+    fill_na: bool = False,
 ) -> PitchResult:
     """Estimate fundamental frequency using the YIN algorithm.
 
@@ -708,6 +709,8 @@ def pitch_yin(
         fmin: Minimum frequency in Hz (default 65.0).
         fmax: Maximum frequency in Hz (default 2093.0).
         threshold: YIN threshold (default 0.3).
+        fill_na: If True, return 0 for unvoiced f0 frames. If False,
+            keep those frames as NaN to match librosa-style pitch tracks.
 
     Returns:
         PitchResult with f0, voiced probabilities, and statistics.
@@ -724,6 +727,7 @@ def pitch_yin(
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_float(threshold),
+        ctypes.c_int(1 if fill_na else 0),
         ctypes.byref(out),
     )
     _check(rc)
@@ -749,6 +753,7 @@ def pitch_pyin(
     fmin: float = 65.0,
     fmax: float = 2093.0,
     threshold: float = 0.3,
+    fill_na: bool = False,
 ) -> PitchResult:
     """Estimate fundamental frequency using the pYIN algorithm.
 
@@ -760,6 +765,8 @@ def pitch_pyin(
         fmin: Minimum frequency in Hz (default 65.0).
         fmax: Maximum frequency in Hz (default 2093.0).
         threshold: YIN threshold (default 0.3).
+        fill_na: If True, return 0 for unvoiced f0 frames. If False,
+            keep those frames as NaN to match librosa-style pitch tracks.
 
     Returns:
         PitchResult with f0, voiced probabilities, and statistics.
@@ -776,6 +783,7 @@ def pitch_pyin(
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_float(threshold),
+        ctypes.c_int(1 if fill_na else 0),
         ctypes.byref(out),
     )
     _check(rc)

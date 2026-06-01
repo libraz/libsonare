@@ -44,6 +44,15 @@ constexpr size_t kMaxBufferSize = 500000000;
 std::string& last_error_storage();
 void set_last_error(const char* msg);
 SonareError map_sonare_exception(const SonareException& e);
+/// @brief Validates an offline audio buffer shared by every run_*_offline entry.
+/// @details EMPTY-AUDIO POLICY: a NULL @p samples or @c length == 0 is rejected
+///          with @c SONARE_ERROR_INVALID_PARAMETER (empty audio is never treated
+///          as a valid zero-length analysis). Also rejects out-of-range
+///          @p sample_rate ([kMinSampleRate, kMaxSampleRate]), @p length above
+///          @c kMaxBufferSize, and any non-finite sample. This is the single
+///          source of truth for that policy; all C-ABI offline functions funnel
+///          through it (directly or via run_offline / run_mono_offline), so the
+///          empty-input contract is uniform across the whole C API.
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate);
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);

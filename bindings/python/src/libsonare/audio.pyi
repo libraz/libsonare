@@ -192,6 +192,7 @@ class Audio:
         fmin: float = 65.0,
         fmax: float = 2093.0,
         threshold: float = 0.3,
+        fill_na: bool = False,
     ) -> PitchResult: ...
     def pitch_pyin(
         self,
@@ -200,6 +201,7 @@ class Audio:
         fmin: float = 65.0,
         fmax: float = 2093.0,
         threshold: float = 0.3,
+        fill_na: bool = False,
     ) -> PitchResult: ...
     def resample(self, target_sr: int) -> list[float]: ...
     def close(self) -> None: ...

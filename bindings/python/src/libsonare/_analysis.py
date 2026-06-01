@@ -22,6 +22,7 @@ from .types import (
     Section,
     SectionResult,
     SectionType,
+    TimbreFrame,
     TimbreResult,
     TimeSignature,
 )
@@ -582,6 +583,16 @@ def analyze_timbre(
             ],
             spectral_rolloff=[
                 float(out.spectral_rolloff[i]) for i in range(out.spectral_rolloff_count)
+            ],
+            timbre_over_time=[
+                TimbreFrame(
+                    brightness=float(out.timbre_over_time[i].brightness),
+                    warmth=float(out.timbre_over_time[i].warmth),
+                    density=float(out.timbre_over_time[i].density),
+                    roughness=float(out.timbre_over_time[i].roughness),
+                    complexity=float(out.timbre_over_time[i].complexity),
+                )
+                for i in range(out.timbre_over_time_count)
             ],
         )
     finally:

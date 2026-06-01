@@ -55,6 +55,9 @@ from .analyzer import (
     db_to_power as db_to_power,
 )
 from .analyzer import (
+    decompose as decompose,
+)
+from .analyzer import (
     deemphasis as deemphasis,
 )
 from .analyzer import (
@@ -82,7 +85,13 @@ from .analyzer import (
     detect_onsets as detect_onsets,
 )
 from .analyzer import (
+    ebur128_loudness_range as ebur128_loudness_range,
+)
+from .analyzer import (
     engine_abi_version as engine_abi_version,
+)
+from .analyzer import (
+    estimate_tuning as estimate_tuning,
 )
 from .analyzer import (
     fix_frames as fix_frames,
@@ -109,6 +118,9 @@ from .analyzer import (
     hpss as hpss,
 )
 from .analyzer import (
+    hpss_with_residual as hpss_with_residual,
+)
+from .analyzer import (
     hz_to_mel as hz_to_mel,
 )
 from .analyzer import (
@@ -116,6 +128,9 @@ from .analyzer import (
 )
 from .analyzer import (
     hz_to_note as hz_to_note,
+)
+from .analyzer import (
+    lufs_interleaved as lufs_interleaved,
 )
 from .analyzer import (
     master_audio as master_audio,
@@ -229,6 +244,9 @@ from .analyzer import (
     mixing_scene_preset_names as mixing_scene_preset_names,
 )
 from .analyzer import (
+    nn_filter as nn_filter,
+)
+from .analyzer import (
     normalize as normalize,
 )
 from .analyzer import (
@@ -250,6 +268,9 @@ from .analyzer import (
     percussive as percussive,
 )
 from .analyzer import (
+    phase_vocoder as phase_vocoder,
+)
+from .analyzer import (
     pitch_correct_to_midi as pitch_correct_to_midi,
 )
 from .analyzer import (
@@ -259,10 +280,16 @@ from .analyzer import (
     pitch_shift as pitch_shift,
 )
 from .analyzer import (
+    pitch_tuning as pitch_tuning,
+)
+from .analyzer import (
     pitch_yin as pitch_yin,
 )
 from .analyzer import (
     plp as plp,
+)
+from .analyzer import (
+    poly_features as poly_features,
 )
 from .analyzer import (
     power_to_db as power_to_db,
@@ -275,6 +302,9 @@ from .analyzer import (
 )
 from .analyzer import (
     realtime_voice_changer_preset_names as realtime_voice_changer_preset_names,
+)
+from .analyzer import (
+    remix as remix,
 )
 from .analyzer import (
     resample as resample,
@@ -290,6 +320,9 @@ from .analyzer import (
 )
 from .analyzer import (
     spectral_centroid as spectral_centroid,
+)
+from .analyzer import (
+    spectral_contrast as spectral_contrast,
 )
 from .analyzer import (
     spectral_flatness as spectral_flatness,
@@ -344,6 +377,9 @@ from .analyzer import (
 )
 from .analyzer import (
     zero_crossing_rate as zero_crossing_rate,
+)
+from .analyzer import (
+    zero_crossings as zero_crossings,
 )
 from .audio import Audio as Audio
 from .engine import RealtimeEngine as RealtimeEngine
@@ -545,6 +581,9 @@ from .types import (
 )
 from .types import (
     StreamStats as StreamStats,
+)
+from .types import (
+    TimbreFrame as TimbreFrame,
 )
 from .types import (
     TimbreResult as TimbreResult,

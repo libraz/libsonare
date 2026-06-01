@@ -164,12 +164,15 @@ void sonare_free_timbre_result(SonareTimbreResult* r) {
     delete[] r->spectral_centroid;
     delete[] r->spectral_flatness;
     delete[] r->spectral_rolloff;
+    delete[] r->timbre_over_time;
     r->spectral_centroid = nullptr;
     r->spectral_centroid_count = 0;
     r->spectral_flatness = nullptr;
     r->spectral_flatness_count = 0;
     r->spectral_rolloff = nullptr;
     r->spectral_rolloff_count = 0;
+    r->timbre_over_time = nullptr;
+    r->timbre_over_time_count = 0;
   }
 }
 

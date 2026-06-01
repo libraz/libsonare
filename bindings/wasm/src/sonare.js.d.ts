@@ -1186,6 +1186,7 @@ export interface SonareModule {
     fmin: number,
     fmax: number,
     threshold: number,
+    fillNa: boolean,
   ) => WasmPitchResult;
   pitchPyin: (
     samples: Float32Array,
@@ -1195,6 +1196,7 @@ export interface SonareModule {
     fmin: number,
     fmax: number,
     threshold: number,
+    fillNa: boolean,
   ) => WasmPitchResult;
 
   // Core - Conversion

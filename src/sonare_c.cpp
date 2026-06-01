@@ -773,6 +773,8 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
   out->spectral_flatness_count = 0;
   out->spectral_rolloff = nullptr;
   out->spectral_rolloff_count = 0;
+  out->timbre_over_time = nullptr;
+  out->timbre_over_time_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     TimbreConfig config;
@@ -812,6 +814,20 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
       std::unique_ptr<float[]> data(new float[rolloff.size()]);
       std::memcpy(data.get(), rolloff.data(), rolloff.size() * sizeof(float));
       out->spectral_rolloff = release_array(data);
+    }
+
+    const std::vector<Timbre>& over_time = analyzer.timbre_over_time();
+    out->timbre_over_time_count = over_time.size();
+    if (!over_time.empty()) {
+      std::unique_ptr<SonareTimbreFrame[]> frames(new SonareTimbreFrame[over_time.size()]);
+      for (size_t i = 0; i < over_time.size(); ++i) {
+        frames[i].brightness = over_time[i].brightness;
+        frames[i].warmth = over_time[i].warmth;
+        frames[i].density = over_time[i].density;
+        frames[i].roughness = over_time[i].roughness;
+        frames[i].complexity = over_time[i].complexity;
+      }
+      out->timbre_over_time = release_array(frames);
     }
     return SONARE_OK;
   });

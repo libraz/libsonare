@@ -796,6 +796,19 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   }
   result.Set("spectralRolloff", rolloff);
 
+  auto over_time = Napi::Array::New(env, timbre.timbre_over_time_count);
+  for (size_t i = 0; i < timbre.timbre_over_time_count; ++i) {
+    const SonareTimbreFrame& frame = timbre.timbre_over_time[i];
+    Napi::Object entry = Napi::Object::New(env);
+    entry.Set("brightness", Napi::Number::New(env, frame.brightness));
+    entry.Set("warmth", Napi::Number::New(env, frame.warmth));
+    entry.Set("density", Napi::Number::New(env, frame.density));
+    entry.Set("roughness", Napi::Number::New(env, frame.roughness));
+    entry.Set("complexity", Napi::Number::New(env, frame.complexity));
+    over_time.Set(static_cast<uint32_t>(i), entry);
+  }
+  result.Set("timbreOverTime", over_time);
+
   sonare_free_timbre_result(&timbre);
   return result;
 }

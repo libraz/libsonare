@@ -181,6 +181,25 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
 // sonare_mixer_process_stereo also compiles lazily as a fallback when the
 // topology is dirty.
 SonareError sonare_mixer_compile(SonareMixer* mixer);
+// Processes one stereo block through the compiled mixer graph.
+//
+// Buffers:
+// - @c input_left and @c input_right are arrays of @c input_count planar channel
+//   pointers, one L/R buffer pair per strip in strip order.
+// - @c output_left and @c output_right receive the master bus.
+// - @c num_samples must not exceed the @c max_block_size passed to
+//   sonare_mixer_create.
+//
+// REAL-TIME SAFETY: NOT guaranteed real-time safe. This is a block-convenience
+// entry point. If the topology is dirty (strips/sends/buses changed since the
+// last compile), it lazily rebuilds and compiles the routing graph, which can
+// allocate. To keep the audio thread allocation-free, call sonare_mixer_compile
+// once after each topology change and before the first process call. The
+// steady-state path with an already-compiled graph performs no heap allocation.
+//
+// Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if any
+// required pointer is NULL, @c input_count exceeds the strip count, a per-strip
+// channel pointer is NULL, or @c num_samples exceeds @c max_block_size.
 SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* input_left,
                                         const float* const* input_right, size_t input_count,
                                         float* output_left, float* output_right,

@@ -397,6 +397,21 @@ class SpectrumReport:
         sample_rate: int,
     ) -> None: ...
 
+class TimbreFrame:
+    brightness: float
+    warmth: float
+    density: float
+    roughness: float
+    complexity: float
+    def __init__(
+        self,
+        brightness: float,
+        warmth: float,
+        density: float,
+        roughness: float,
+        complexity: float,
+    ) -> None: ...
+
 class TimbreResult:
     brightness: float
     warmth: float
@@ -406,6 +421,7 @@ class TimbreResult:
     spectral_centroid: list[float]
     spectral_flatness: list[float]
     spectral_rolloff: list[float]
+    timbre_over_time: list[TimbreFrame]
     def __init__(
         self,
         brightness: float,
@@ -416,6 +432,7 @@ class TimbreResult:
         spectral_centroid: list[float],
         spectral_flatness: list[float],
         spectral_rolloff: list[float],
+        timbre_over_time: list[TimbreFrame],
     ) -> None: ...
     @property
     def spectralCentroid(self) -> list[float]: ...
@@ -423,6 +440,8 @@ class TimbreResult:
     def spectralFlatness(self) -> list[float]: ...
     @property
     def spectralRolloff(self) -> list[float]: ...
+    @property
+    def timbreOverTime(self) -> list[TimbreFrame]: ...
 
 class Chord:
     root: PitchClass

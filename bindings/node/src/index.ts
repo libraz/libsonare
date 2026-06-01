@@ -477,6 +477,7 @@ export class Audio {
     fmin = 65.0,
     fmax = 2093.0,
     threshold = 0.3,
+    fillNa = false,
   ): PitchResult {
     return addon.pitchYin(
       this.getData(),
@@ -486,6 +487,7 @@ export class Audio {
       fmin,
       fmax,
       threshold,
+      fillNa,
     );
   }
 
@@ -495,6 +497,7 @@ export class Audio {
     fmin = 65.0,
     fmax = 2093.0,
     threshold = 0.3,
+    fillNa = false,
   ): PitchResult {
     return addon.pitchPyin(
       this.getData(),
@@ -504,6 +507,7 @@ export class Audio {
       fmin,
       fmax,
       threshold,
+      fillNa,
     );
   }
 
@@ -2207,8 +2211,9 @@ export function pitchYin(
   fmin = 65.0,
   fmax = 2093.0,
   threshold = 0.3,
+  fillNa = false,
 ): PitchResult {
-  return addon.pitchYin(samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold);
+  return addon.pitchYin(samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa);
 }
 
 export function pitchPyin(
@@ -2219,8 +2224,18 @@ export function pitchPyin(
   fmin = 65.0,
   fmax = 2093.0,
   threshold = 0.3,
+  fillNa = false,
 ): PitchResult {
-  return addon.pitchPyin(samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold);
+  return addon.pitchPyin(
+    samples,
+    sampleRate,
+    frameLength,
+    hopLength,
+    fmin,
+    fmax,
+    threshold,
+    fillNa,
+  );
 }
 
 // -- Core --
@@ -3155,6 +3170,7 @@ export type {
   StreamFramesU8,
   StreamingPlatform,
   StripRef,
+  TimbreFrame,
   TimbreResult,
   TimeSignature,
 } from './types.js';

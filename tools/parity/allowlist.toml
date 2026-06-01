@@ -171,6 +171,11 @@ python = [
 # (the handle becomes a numeric `strip_index`) and add a `tap` metering-tap
 # selector, the same extended-facade shape already accepted for strip_meter
 # (python) below. Same op, handle->index + tap-selector — not order drift.
+# lufs_interleaved: C is (samples, frames, channels, sample_rate). All facades
+# expose (samples, channels, sample_rate) and DERIVE frames = len(samples) /
+# channels internally — passing both an interleaved buffer and a redundant frame
+# count would let them disagree. The frames-derived shape is the documented
+# cross-binding convention; not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -178,6 +183,7 @@ node = [
   "deemphasis",
   "tempogram",
   "strip_meter",
+  "lufs_interleaved",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -186,6 +192,7 @@ wasm = [
   "deemphasis",
   "tempogram",
   "strip_meter",
+  "lufs_interleaved",
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -201,6 +208,7 @@ python = [
   "tempogram",
   "scale_quantize_midi",
   "scale_correction_semitones",
+  "lufs_interleaved",
 ]
 
 # ---------------------------------------------------------------------------

@@ -24,7 +24,7 @@ no GPL/AGPL, no model weights.
   (LUFS), and room acoustics (blind RT60/EDT, or ISO-style RT60/EDT/C50/C80/D50
   from a measured IR). Defaults match librosa and are validated against
   generated librosa reference values in CI.
-- **Mastering (77 named DSP processors, 14 in the default chain)** — EQ,
+- **Mastering (66 named DSP processors, 18 in the default chain)** — EQ,
   dynamics, multiband, stereo, saturation, repair, maximizer, and reference
   matching, implemented against published references: ITU-R BS.1770-4 loudness
   and inter-sample true-peak limiting, Linkwitz-Riley crossovers with all-pass
@@ -146,6 +146,50 @@ const loud = lufs(samples, sampleRate);
 // { integratedLufs, momentaryLufs, shortTermLufs, loudnessRange }
 ```
 
+**Pitch and timbre results**
+
+`pitchYin` and `pitchPyin` keep unvoiced frames as `NaN` by default, matching librosa-style pitch tracks. Pass `fillNa: true` when downstream code needs a finite series and should treat unvoiced frames as `0`.
+
+`analyzeTimbre` returns both aggregate timbre metrics and `timbreOverTime`, a per-analysis-window series with the same brightness, warmth, density, roughness, and complexity fields.
+
+| Runtime | Pitch option | Time-varying timbre field |
+|---------|--------------|---------------------------|
+| JavaScript / WASM / Node | `fillNa` | `timbreOverTime` |
+| Python | `fill_na` | `timbre_over_time` (`timbreOverTime` alias) |
+| C ABI | `fill_na` | `timbre_over_time` + `timbre_over_time_count` |
+
+**Spectral features, decomposition & effects (librosa-compatible)**
+
+```typescript
+import {
+  spectralContrast, polyFeatures, zeroCrossings, pitchTuning, estimateTuning,
+  decompose, nnFilter, remix, phaseVocoder, hpssWithResidual,
+  lufsInterleaved, ebur128LoudnessRange,
+} from '@libraz/libsonare';
+
+// Spectral features
+const contrast = spectralContrast(samples, sampleRate); // Matrix2d (nBands+1) x nFrames
+const poly = polyFeatures(samples, sampleRate);         // Matrix2d (order+1) x nFrames
+const crossings = zeroCrossings(samples);               // Int32Array of crossing indices
+
+// Tuning estimation (deviation in fractions of a bin)
+const tuning = estimateTuning(samples, sampleRate);
+const fromF0 = pitchTuning(frequencies);
+
+// Spectrogram decomposition: NMF factors + nearest-neighbour filtering
+const { w, h } = decompose(spectrogram, nFeatures, nFrames, 8); // n_components = 8
+const filtered = nnFilter(spectrogram, nFeatures, nFrames);
+
+// Effects: interval remix, phase-vocoder time-scaling, HPSS + residual
+const remixed = remix(samples, Int32Array.from([0, 22050, 44100, 66150]));
+const faster = phaseVocoder(samples, 1.5, sampleRate);  // rate > 1 → faster
+const { harmonic, percussive, residual } = hpssWithResidual(samples, sampleRate);
+
+// Multichannel / standards-compliant loudness
+const multi = lufsInterleaved(interleaved, 2, sampleRate); // channel-weighted LUFS + LRA
+const lra = ebur128LoudnessRange(samples, sampleRate);     // EBU R128 loudness range (LU)
+```
+
 **Mastering**
 
 ```typescript
@@ -201,7 +245,7 @@ dot-notation keys** (mirroring the Node and Python overrides API):
 ```typescript
 // Mastering presets (one-shot) and streaming variant
 import { masterAudio, masteringPresetNames, StreamingMasteringChain } from '@libraz/libsonare';
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
+masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 const out = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
 
 const chain = new StreamingMasteringChain({ eq: { tiltDb: 0.5 } });
@@ -286,6 +330,23 @@ loud = audio.lufs()  # integrated_lufs / momentary_lufs / short_term_lufs / loud
 mom = audio.momentary_lufs()                     # per-block time series
 short = audio.short_term_lufs()
 
+# librosa-compatible spectral features, decomposition & effects
+contrast = libsonare.spectral_contrast(samples, sample_rate=sr)  # (n_bands+1) x n_frames
+poly = libsonare.poly_features(samples, sample_rate=sr)          # (order+1) x n_frames
+crossings = libsonare.zero_crossings(samples)                    # crossing indices
+tuning = libsonare.estimate_tuning(samples, sample_rate=sr)      # deviation (bins fraction)
+offset = libsonare.pitch_tuning(frequencies)
+
+w, h = libsonare.decompose(spectrogram, n_features, n_frames, 8)  # NMF factors
+filtered = libsonare.nn_filter(spectrogram, n_features, n_frames)
+
+remixed = libsonare.remix(samples, [0, sr, 2 * sr, 3 * sr], sample_rate=sr)
+faster = libsonare.phase_vocoder(samples, sample_rate=sr, rate=1.5)
+hpss = libsonare.hpss_with_residual(samples, sample_rate=sr)      # harmonic/percussive/residual
+
+multi = libsonare.lufs_interleaved(interleaved, channels=2, sample_rate=sr)
+lra = libsonare.ebur128_loudness_range(samples, sample_rate=sr)   # EBU R128 LRA (LU)
+
 # Mastering chain — returns MasteringResult(samples, sample_rate,
 # input_lufs, output_lufs, applied_gain_db, latency_samples)
 result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
@@ -306,7 +367,7 @@ libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
 libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
 
 # Preset-based chain (one-shot) + streaming
-libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical']
+libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
                                  overrides={'loudness.targetLufs': -13})
 
@@ -395,7 +456,7 @@ std::cout << "BPM: " << result.bpm
 | RT60 / EDT / C50          | Room acoustics       |                     |
 | Loudness (EBU R128 LUFS)  | Onset envelope       |                     |
 
-### Mastering (70+ DSP processors)
+### Mastering (66 DSP processors)
 
 | Dynamics                  | EQ                        | Multiband / Stereo                  |
 |---------------------------|---------------------------|-------------------------------------|
