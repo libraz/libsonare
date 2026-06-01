@@ -86,19 +86,30 @@ void UpwardCompressor::process(float* const* channels, int num_channels, int num
   const UpwardCompressorConfig& cfg = *adopt_snapshot_for_block();
 
   ensure_followers(num_channels);
-  float max_gain = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
+  }
 
-    auto& follower = followers_[static_cast<size_t>(ch)];
-    for (int i = 0; i < num_samples; ++i) {
-      const float envelope = follower.process(channels[ch][i]);
-      const float applied_gain_db = gain_db(linear_to_db(envelope), cfg);
-      channels[ch][i] *= db_to_linear(applied_gain_db);
-      max_gain = std::max(max_gain, applied_gain_db);
+  // Linked detection: derive a single detector envelope from the loudest
+  // channel each sample and apply the same gain to every channel. Independent
+  // per-channel followers would let the L/R gain diverge on asymmetric content
+  // and rotate the stereo image (mirrors Compressor).
+  auto& follower = followers_[0];
+  float max_gain = 0.0f;
+  for (int i = 0; i < num_samples; ++i) {
+    float linked_level = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      linked_level = std::max(linked_level, std::abs(channels[ch][i]));
     }
+    const float envelope = follower.process(linked_level);
+    const float applied_gain_db = gain_db(linear_to_db(envelope), cfg);
+    const float gain = db_to_linear(applied_gain_db);
+    for (int ch = 0; ch < num_channels; ++ch) {
+      channels[ch][i] *= gain;
+    }
+    max_gain = std::max(max_gain, applied_gain_db);
   }
 
   last_gain_db_ = max_gain;

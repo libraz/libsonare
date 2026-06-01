@@ -95,7 +95,8 @@ class Gate : public rt::ProcessorBase {
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
-  float gain_db_ = 0.0f;
+  // Smoothed gain in the linear (0..1) domain; 1.0 == unity (open).
+  float gain_ = 1.0f;
   float last_gain_reduction_db_ = 0.0f;
   int hold_samples_remaining_ = 0;
   bool gate_open_ = false;

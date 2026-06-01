@@ -99,7 +99,10 @@ class Limiter : public rt::ProcessorBase {
   int lookahead_samples_ = 0;
   bool prepared_ = false;
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
-  std::vector<sonare::rt::EnvelopeFollower> gain_smoothers_;
+  // A single, shared gain smoother fed by the linked (max-peak) target so every
+  // channel is scaled by the same gain. Per-channel smoothers would let the L/R
+  // gain diverge on asymmetric content and shift the stereo image.
+  sonare::rt::EnvelopeFollower gain_smoother_;
   float release_coeff_ = 0.0f;
   float last_gain_reduction_db_ = 0.0f;
 };

@@ -190,13 +190,13 @@ float ParallelComp::gain_reduction_db(float input_db, const ParallelCompConfig& 
 }
 
 void ParallelComp::ensure_followers(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
-    return;
-  }
-
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
+  // Only grow the vector for newly-seen channels; never replace existing
+  // followers (assign() would reset their state and inject a transient). When
+  // the channel count shrinks the extra followers are simply left idle.
+  const auto target = static_cast<size_t>(num_channels);
+  while (followers_.size() < target) {
+    followers_.emplace_back();
+    followers_.back().prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   }
 }
 

@@ -140,6 +140,49 @@ TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximiz
   REQUIRE(maximizer.last_gain_reduction_db() <= 0.0f);
 }
 
+TEST_CASE("SoftKneeMax keeps knee and limiting in the same time reference",
+          "[mastering][maximizer]") {
+  // Regression for the knee/lookahead alignment fix: the soft-knee shaping is a
+  // full pre-stage applied to the whole block before the maximizer runs, so the
+  // maximizer's lookahead delay and detector both observe the knee-shaped
+  // signal. The output must stay within the ceiling with no spurious overs that
+  // a knee-vs-envelope timing skew would produce. The lookahead is non-zero so
+  // any skew would be observable.
+  SoftKneeMax maximizer({12.0f, -1.0f, 6.0f, 50.0f});
+  maximizer.prepare(48000.0, 512);
+
+  // A signal with sharp periodic transients exercises the lookahead alignment.
+  std::vector<float> signal(2048, 0.0f);
+  for (size_t i = 0; i < signal.size(); i += 64) {
+    signal[i] = 0.95f;
+  }
+  process(maximizer, signal);
+
+  const float ceiling = std::pow(10.0f, -1.0f / 20.0f);
+  for (float s : signal) {
+    REQUIRE(std::isfinite(s));
+    REQUIRE(std::abs(s) <= ceiling + 0.01f);
+  }
+}
+
+TEST_CASE("TruePeakLimiter detect-only forces base samples down for inter-sample overs",
+          "[mastering][maximizer]") {
+  // Regression for the detect-only (apply_gain_at_input_rate) min-over-window
+  // mapping: the gain applied to each base sample is the minimum gain across the
+  // oversampled subsamples of that base sample, so any inter-sample over forces
+  // the corresponding base sample down. The base-rate peak must therefore be
+  // pulled below the ceiling even though gain is applied at the input rate.
+  TruePeakLimiter limiter({-6.0f, 0.0f, 0.0f, 4, /*apply_gain_at_input_rate=*/true});
+  limiter.prepare(48000.0, 64);
+
+  // Alternating extreme samples create strong inter-sample peaks between bases.
+  std::vector<float> signal = {0.0f, 1.2f, -1.2f, 1.1f, -1.1f, 0.0f};
+  process(limiter, signal);
+
+  REQUIRE(peak_abs(signal) <= 0.502f);
+  REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
+}
+
 TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximizer]") {
   AdaptiveRelease limiter({-6.0f, 0.0f, 10.0f, 120.0f});
   // Prepare for the full 2048-sample blocks processed below; process() must

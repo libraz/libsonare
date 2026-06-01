@@ -121,6 +121,13 @@ class Compressor : public rt::ProcessorBase {
   float rms_state_ = 0.0f;
   float rms_coeff_ = 0.0f;
   float log_rms_coeff_ = 0.0f;
+  // The Rms and LogRms detectors share rms_state_ but use different time
+  // constants. When the detector mode changes between blocks the carried-over
+  // state belongs to the wrong window, producing a spurious gain transient at
+  // the switch. Track the last mode and reseed rms_state_ to the current
+  // instantaneous power on a change so steady-state behaviour is unaffected.
+  DetectorMode last_detector_mode_ = DetectorMode::Rms;
+  bool detector_mode_initialized_ = false;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
   // Per-channel sidechain HPF state, sized to the channel count on first

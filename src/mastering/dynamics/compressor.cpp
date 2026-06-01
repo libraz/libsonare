@@ -124,6 +124,16 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
                           "num_channels exceeds prepared Compressor state");
   }
 
+  // Detect a detector-mode change since the previous block. The Rms and LogRms
+  // detectors share rms_state_ with different time constants, so a mid-stream
+  // switch would otherwise carry wrong-window state and spike the gain. Reseed
+  // rms_state_ to the current instantaneous power on the first sample below.
+  const bool detector_mode_changed =
+      detector_mode_initialized_ && cfg.detector != last_detector_mode_;
+  bool reseed_rms_state = detector_mode_changed;
+  last_detector_mode_ = cfg.detector;
+  detector_mode_initialized_ = true;
+
   const float inv_channels = 1.0f / static_cast<float>(num_channels);
   float max_reduction = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
@@ -157,12 +167,20 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
       case DetectorMode::Rms:
         // Linear-domain RMS smoothing (10 ms window). Fast response, follows
         // transients more aggressively than LogRms.
+        if (reseed_rms_state) {
+          rms_state_ = power_lin;
+          reseed_rms_state = false;
+        }
         rms_state_ = rms_coeff_ * rms_state_ + (1.0f - rms_coeff_) * power_lin;
         level_db = linear_to_db(std::sqrt(std::max(rms_state_, 0.0f)));
         break;
       case DetectorMode::LogRms:
         // Slower RMS smoothing (50 ms window) for sustained-level estimation.
         // Used for "musical" compression that ignores brief transients.
+        if (reseed_rms_state) {
+          rms_state_ = power_lin;
+          reseed_rms_state = false;
+        }
         rms_state_ = log_rms_coeff_ * rms_state_ + (1.0f - log_rms_coeff_) * power_lin;
         level_db = linear_to_db(std::sqrt(std::max(rms_state_, 0.0f)));
         break;
@@ -190,6 +208,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
 void Compressor::reset() {
   rms_state_ = 0.0f;
+  detector_mode_initialized_ = false;
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   pdr_state_db_ = 0.0f;

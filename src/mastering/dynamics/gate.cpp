@@ -117,17 +117,22 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
       gate_open_ = false;
     }
     const bool open = gate_open_ || hold_samples_remaining_ > 0;
-    const float target_db = open ? 0.0f : cfg.range_db;
-    const float c = target_db > gain_db_ ? attack : release;
-    gain_db_ = c * gain_db_ + (1.0f - c) * target_db;
-    const float gain = db_to_linear(gain_db_);
+    // Smooth the gain in the linear (0..1) domain. dB-domain smoothing toward an
+    // open target of 0 dB starting from range_db never converges cleanly (and
+    // db_to_linear(-inf) underflows for a fully-closed range), producing an
+    // unnatural opening. range_db == -inf maps to a linear floor of 0.
+    const float target_gain = open ? 1.0f : db_to_linear(cfg.range_db);
+    const float c = target_gain > gain_ ? attack : release;
+    gain_ = c * gain_ + (1.0f - c) * target_gain;
+    const float gain = gain_;
     for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
-    last_gain_reduction_db_ = std::min(last_gain_reduction_db_, gain_db_);
+    last_gain_reduction_db_ = std::min(last_gain_reduction_db_, linear_to_db(gain_));
   }
 }
 
 void Gate::reset() {
-  gain_db_ = 0.0f;
+  // Linear gain; 1.0 == unity == fully open (matches the previous 0 dB seed).
+  gain_ = 1.0f;
   last_gain_reduction_db_ = 0.0f;
   hold_samples_remaining_ = 0;
   gate_open_ = false;

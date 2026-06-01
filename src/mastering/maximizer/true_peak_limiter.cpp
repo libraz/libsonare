@@ -14,6 +14,12 @@
 namespace sonare::mastering::maximizer {
 namespace {
 
+// Fast/slow gain-smoother attack times (ms). The fast smoother clamps inter-
+// sample peaks quickly; the slow smoother avoids audible distortion on
+// sustained material. The per-sample gain is the minimum of the two.
+constexpr float kFastAttackMs = 0.1f;
+constexpr float kSlowAttackMs = 1.0f;
+
 float sanitize_sample(float sample, float ceiling) {
   if (std::isnan(sample)) return 0.0f;
   if (sample == std::numeric_limits<float>::infinity()) return ceiling;
@@ -203,6 +209,12 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
     }
     const float gain = std::min(fast_gain_, slow_gain_);
     min_gain = std::min(min_gain, gain);
+    // Map the oversampled gain back to its base sample as the MINIMUM gain over
+    // the factor subsamples that belong to that base sample (os / factor). Any
+    // inter-sample peak detected at OS rate therefore forces the corresponding
+    // base sample down. This is the best the detect-only mode can do without
+    // re-synthesising the limited signal at OS rate (see header note); the
+    // polyphase path is the sample-accurate, true-peak-guaranteeing route.
     input_rate_gain_[os / static_cast<size_t>(factor)] =
         std::min(input_rate_gain_[os / static_cast<size_t>(factor)], gain);
   }
@@ -319,8 +331,8 @@ void TruePeakLimiter::prepare_buffers(int num_channels) {
 }
 
 void TruePeakLimiter::update_time_constants() {
-  fast_attack_coeff_ = time_to_coefficient(sample_rate_, 0.1f);
-  slow_attack_coeff_ = time_to_coefficient(sample_rate_, 1.0f);
+  fast_attack_coeff_ = time_to_coefficient(sample_rate_, kFastAttackMs);
+  slow_attack_coeff_ = time_to_coefficient(sample_rate_, kSlowAttackMs);
   release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
   crest_coeff_ = time_to_coefficient(sample_rate_, 200.0f);
 }

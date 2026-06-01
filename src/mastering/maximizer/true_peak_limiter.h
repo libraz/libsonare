@@ -18,6 +18,15 @@ struct TruePeakLimiterConfig {
   float lookahead_ms = 1.0f;
   float release_ms = 50.0f;
   int oversample_factor = 4;
+  /// @brief Detect-only mode: when true the gain envelope is computed at the
+  ///        oversampled rate but applied to the base-rate signal (the per-base
+  ///        sample gain is the minimum over the oversampled subsamples of that
+  ///        base sample, so any inter-sample over forces the base sample down).
+  ///        This is a BEST-EFFORT mode: it does NOT guarantee the true (inter-
+  ///        sample) peak ceiling because the limited signal is never
+  ///        re-synthesised at the oversampled rate. Leave false (the default)
+  ///        to use the sample-accurate polyphase path that does guarantee the
+  ///        true-peak ceiling.
   bool apply_gain_at_input_rate = false;
 };
 

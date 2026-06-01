@@ -53,8 +53,15 @@ TEST_CASE("MeterTelemetryTap publishes peak RMS LUFS and goniometer data",
   REQUIRE(tap.read_goniometer(points.data(), points.size()) > 0);
 }
 
-TEST_CASE("MeterTelemetryTap keeps latest record when telemetry queue is full",
+TEST_CASE("MeterTelemetryTap drops newest record and counts drops when full",
           "[engine][meter_telemetry]") {
+  // Race-safe contract: the producer (audio thread) never pops -- pop() is the
+  // consumer role owned by the host. So when the SPSC queue is full the newest
+  // record is dropped and accounted for, while already-queued (older) records
+  // remain intact. The accumulated drop count is propagated to the host on the
+  // next record that pushes successfully (after the host has drained a slot).
+  // The freshest meter *value* is independently available via the meter seqlock
+  // snapshot, so dropping newest telemetry records does not stall live meters.
   sonare::engine::MeterTelemetryTap tap;
   tap.prepare(48000.0, kBlock, 7, 1);
 
@@ -64,13 +71,23 @@ TEST_CASE("MeterTelemetryTap keeps latest record when telemetry queue is full",
   right.fill(-0.25f);
   float* channels[] = {left.data(), right.data()};
 
-  tap.process(channels, 2, kBlock, 0);
-  tap.process(channels, 2, kBlock, kBlock);
-  tap.process(channels, 2, kBlock, kBlock * 2);
+  tap.process(channels, 2, kBlock, 0);           // record 0 -> queued (now full)
+  tap.process(channels, 2, kBlock, kBlock);      // full -> newest dropped (1)
+  tap.process(channels, 2, kBlock, kBlock * 2);  // full -> newest dropped (2)
 
+  // The surviving record is the oldest; it predates any drop so its own
+  // dropped_records snapshot is still zero.
   sonare::engine::MeterTelemetryRecord record{};
   REQUIRE(tap.pop(record));
-  REQUIRE(record.render_frame == kBlock * 2);
-  REQUIRE(record.dropped_records > 0);
+  REQUIRE(record.render_frame == 0);
+  REQUIRE(record.dropped_records == 0);
+  REQUIRE_FALSE(tap.pop(record));
+
+  // After draining a slot the next push succeeds and carries the accumulated
+  // drop count so the host learns exactly how many records were lost.
+  tap.process(channels, 2, kBlock, kBlock * 3);
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.render_frame == kBlock * 3);
+  REQUIRE(record.dropped_records == 2);
   REQUIRE_FALSE(tap.pop(record));
 }

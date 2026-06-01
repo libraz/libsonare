@@ -111,10 +111,19 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
     auto& follower = followers_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
       const float input = channels[ch][i];
+      // The cascaded bandpass isolates the sibilant band for both detection AND
+      // the actual split: the reduction is applied only to that band, then the
+      // attenuated band is recombined with the untouched full-band signal. This
+      // avoids the pumping / broadband (incl. low-frequency) attenuation that
+      // results from multiplying the full input by a band-derived gain. The
+      // detection BP is reused as the split filter; this is an acceptable
+      // approximation for a split-band de-esser of this design.
       const float sibilant = filter2.process(filter.process(input));
       const float envelope = follower.process(sibilant);
       const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
-      channels[ch][i] = input * db_to_linear(reduction_db);
+      const float linear_reduction = db_to_linear(reduction_db);
+      // out = dry full-band minus the attenuated portion of the detected band.
+      channels[ch][i] = input + sibilant * (linear_reduction - 1.0f);
       max_reduction = std::min(max_reduction, reduction_db);
     }
   }

@@ -33,6 +33,12 @@ void SoftKneeMax::process(float* const* channels, int num_channels, int num_samp
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   const float drive = db_to_linear(config_.input_gain_db);
   const float knee = db_to_linear(config_.ceiling_db - config_.knee_db);
+  // Apply the soft-knee shaping as a full pre-stage over the ENTIRE block first,
+  // in place, before handing the buffer to the maximizer. This keeps the knee
+  // and the maximizer in the same time reference: the maximizer's lookahead
+  // delay and its detector both observe the same knee-shaped signal, so the
+  // gain envelope and the audio it scales stay aligned (no lookahead_ms skew
+  // between the knee shape and the limiting).
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");

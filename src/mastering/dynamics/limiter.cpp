@@ -35,7 +35,7 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
   update_coefficients(config_);
   prepared_ = true;
   lookahead_.clear();
-  gain_smoothers_.clear();
+  gain_smoother_.prepare(sample_rate_, 0.0f, config_.release_ms);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -104,12 +104,13 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     }
 
     const float target_gain = peak > ceiling && peak > 0.0f ? ceiling / peak : 1.0f;
+    // Smooth the linked target once, then apply the same gain to every channel
+    // so the stereo image is preserved.
+    const float gain = gain_smoother_.smooth_bidirectional(target_gain, release_coeff_, true);
     for (int ch = 0; ch < num_channels; ++ch) {
-      auto& gain_smoother = gain_smoothers_[static_cast<size_t>(ch)];
-      const float gain = gain_smoother.smooth_bidirectional(target_gain, release_coeff_, true);
       channels[ch][i] = delayed[static_cast<size_t>(ch)] * gain;
-      min_gain = std::min(min_gain, gain);
     }
+    min_gain = std::min(min_gain, gain);
   }
 
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
@@ -119,9 +120,7 @@ void Limiter::reset() {
   for (auto& buffer : lookahead_) {
     buffer.reset();
   }
-  for (auto& smoother : gain_smoothers_) {
-    smoother.reset(1.0f);
-  }
+  gain_smoother_.reset(1.0f);
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -180,13 +179,8 @@ void Limiter::prepare_buffers(int num_channels) {
   }
 
   lookahead_.assign(static_cast<size_t>(num_channels), {});
-  gain_smoothers_.assign(static_cast<size_t>(num_channels), {});
   for (auto& buffer : lookahead_) {
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
-  }
-  for (auto& smoother : gain_smoothers_) {
-    smoother.prepare(sample_rate_, 0.0f, config_.release_ms);
-    smoother.reset(1.0f);
   }
 }
 
