@@ -19,11 +19,11 @@ enum class TempogramMode {
 
 /// @brief Configuration for tempogram / fourier_tempogram.
 struct TempogramConfig {
-  int hop_length = 512;                                  ///< Hop length used for the onset envelope
-  int win_length = 384;                                  ///< Window length in onset-envelope frames
-  WindowType window = WindowType::Hann;                  ///< Analysis window
-  bool center = true;                                    ///< Center-pad the onset envelope
-  bool norm = true;                                      ///< L2-normalize each tempogram column
+  int hop_length = 512;                  ///< Hop length used for the onset envelope
+  int win_length = 384;                  ///< Window length in onset-envelope frames
+  WindowType window = WindowType::Hann;  ///< Analysis window
+  bool center = true;                    ///< Center-pad the onset envelope
+  bool norm = true;                      ///< Max-abs (L-inf) normalize each column (librosa)
   TempogramMode mode = TempogramMode::kAutocorrelation;  ///< Tempogram similarity mode
 };
 

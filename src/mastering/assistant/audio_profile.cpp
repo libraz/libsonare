@@ -195,7 +195,12 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
   MelConfig mel_config;
   mel_config.n_fft = config.n_fft;
   mel_config.hop_length = config.hop_length;
-  const auto onset = compute_onset_strength(audio, mel_config, OnsetConfig{});
+  // Detrend (DC-remove) the onset envelope so the attack-density peak picking
+  // discriminates transient bursts from steady energy. This consumer opts in
+  // explicitly; the public OnsetConfig default is detrend=false (librosa).
+  OnsetConfig onset_config;
+  onset_config.detrend = true;
+  const auto onset = compute_onset_strength(audio, mel_config, onset_config);
   profile.dynamics.attack_density = attack_density(onset, profile.duration_sec);
   profile.dynamics.sustain_ratio =
       sustain_ratio(rms_energy(audio, config.n_fft, config.hop_length));

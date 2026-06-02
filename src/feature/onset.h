@@ -11,9 +11,11 @@ namespace sonare {
 
 /// @brief Configuration for onset strength computation.
 struct OnsetConfig {
-  int lag = 1;          ///< Time lag for computing differences (frames)
-  bool detrend = true;  ///< Remove DC component from onset curve
-  bool center = true;   ///< Pad frames so each onset value is aligned to the frame center
+  int lag = 1;           ///< Time lag for computing differences (frames)
+  bool detrend = false;  ///< Mean-subtract the onset curve. Default false to match
+                         ///< librosa.onset.onset_strength (detrend=False); the internal
+                         ///< beat/tempo analyzers opt in explicitly.
+  bool center = true;    ///< Pad frames so each onset value is aligned to the frame center
 };
 
 /// @brief Computes onset strength envelope from Mel spectrogram.

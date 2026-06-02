@@ -85,13 +85,14 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
         ac[lag] = s;
       }
     }
-    // Optional L2 normalize per column.
+    // Optional per-column normalize. librosa's tempogram defaults to
+    // norm=np.inf (max-abs / L-infinity), so each column is divided by its
+    // peak magnitude to match librosa.feature.tempogram numerically.
     if (config.norm) {
-      double sum_sq = 0.0;
-      for (int lag = 0; lag < win; ++lag) sum_sq += ac[lag] * ac[lag];
-      const double n2 = std::sqrt(sum_sq);
-      if (n2 > 0.0) {
-        const double inv = 1.0 / n2;
+      double max_abs = 0.0;
+      for (int lag = 0; lag < win; ++lag) max_abs = std::max(max_abs, std::fabs(ac[lag]));
+      if (max_abs > 0.0) {
+        const double inv = 1.0 / max_abs;
         for (int lag = 0; lag < win; ++lag) ac[lag] *= inv;
       }
     }

@@ -330,6 +330,9 @@ const MelSpectrogram& MusicAnalyzer::mel_spectrogram() {
 const std::vector<float>& MusicAnalyzer::onset_strength() {
   std::call_once(onset_strength_once_, [this]() {
     OnsetConfig onset_config;
+    // Internal analysis pipeline opts into detrend explicitly (the public
+    // OnsetConfig default is detrend=false to match librosa).
+    onset_config.detrend = true;
     onset_strength_ = compute_onset_strength(mel_spectrogram(), onset_config);
     onset_strength_computed_ = true;
   });
