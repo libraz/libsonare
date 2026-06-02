@@ -65,6 +65,14 @@ TEST_CASE("percentile", "[math_utils]") {
   REQUIRE_THAT(percentile(data.data(), data.size(), 100.0f), WithinAbs(5.0f, 1e-6f));
 }
 
+TEST_CASE("percentile clamps out-of-range p to [0, 100]", "[math_utils][edge]") {
+  std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+  // p < 0 must clamp to 0 (min element) and p > 100 to 100 (max element)
+  // without reading out of bounds of the sorted buffer.
+  REQUIRE_THAT(percentile(data.data(), data.size(), -5.0f), WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(percentile(data.data(), data.size(), 150.0f), WithinAbs(5.0f, 1e-6f));
+}
+
 TEST_CASE("next_power_of_2", "[math_utils]") {
   SECTION("powers of 2") {
     REQUIRE(next_power_of_2(1) == 1);

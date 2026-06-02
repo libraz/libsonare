@@ -75,6 +75,9 @@ float percentile(const float* data, size_t size, float p) {
   std::vector<float> sorted(data, data + size);
   std::sort(sorted.begin(), sorted.end());
 
+  // Clamp the requested percentile to [0, 100]. Out-of-range p would scale to a
+  // fractional index outside [0, size-1], reading out of bounds of `sorted`.
+  p = std::clamp(p, 0.0f, 100.0f);
   float idx = (p / 100.0f) * (size - 1);
   size_t lo = static_cast<size_t>(idx);
   size_t hi = std::min(lo + 1, size - 1);

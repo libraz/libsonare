@@ -96,4 +96,16 @@ inline float linear_crossfade(float a, float b, float mix) noexcept {
   return a * (1.0f - mix) + b * mix;
 }
 
+/// @brief Equal-power (constant-energy) crossfade between two samples.
+/// @details Uses the square-root law `a*sqrt(1-x) + b*sqrt(x)` whose gains
+///   satisfy `g_a^2 + g_b^2 = 1`, so two decorrelated sources sum to constant
+///   energy across the fade (no level dip at the seam). `mix` is clamped to
+///   [0, 1]. Note: the sine/cosine fade-gain law used by some fade-curve
+///   enums (`sin(pi/2*x)`) is a distinct equal-power formulation and is kept
+///   separate where golden output depends on it.
+inline float equal_power_crossfade(float a, float b, float mix) noexcept {
+  const float x = std::clamp(mix, 0.0f, 1.0f);
+  return a * std::sqrt(1.0f - x) + b * std::sqrt(x);
+}
+
 }  // namespace sonare
