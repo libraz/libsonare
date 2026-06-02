@@ -141,6 +141,25 @@ inline int next_power_of_2(int n) {
   return power;
 }
 
+/// @brief Returns the smallest power of 2 greater than or equal to value (size_t).
+/// @details Canonical unsigned implementation: returns 1 for value <= 1, and is
+///          overflow-safe -- if value exceeds the largest representable power of
+///          two it saturates at that value (the highest set bit) instead of
+///          shifting to 0 and spinning forever. For valid inputs (value within
+///          [0, 2^(bits-1)]) this is bit-for-bit equivalent to the prior
+///          `out = 1; while (out < value) out <<= 1;` loops it replaces.
+/// @param value Input value
+/// @return Smallest power of 2 >= value (1 if value <= 1)
+inline size_t next_power_of_2(size_t value) {
+  size_t out = 1;
+  // Highest power of two representable in size_t; stop here to avoid overflow.
+  constexpr size_t kMaxPow2 = static_cast<size_t>(1) << (sizeof(size_t) * 8 - 1);
+  while (out < value && out < kMaxPow2) {
+    out <<= 1u;
+  }
+  return out;
+}
+
 /// @brief Convert power spectrogram to decibel scale.
 /// @details Uses 10 * log10(S / ref), clipped to top_db below peak.
 ///          Note: ref is treated as a power value directly (not squared).

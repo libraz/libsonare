@@ -92,6 +92,17 @@ class ChordAnalyzer {
   ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
                 const ChordConfig& config = ChordConfig());
 
+  /// @brief Constructs chord analyzer with beat synchronization and a dedicated
+  /// bass chromagram for inversion detection.
+  /// @param chroma Chromagram used for chord-quality matching
+  /// @param beat_times Beat times in seconds
+  /// @param bass_chroma Low-register chromagram used to estimate the bass pitch
+  ///   class when @c config.detect_inversions is enabled. Pass an empty Chroma to
+  ///   fall back to @p chroma.
+  /// @param config Chord configuration
+  ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
+                const Chroma& bass_chroma, const ChordConfig& config = ChordConfig());
+
   /// @brief Returns detected chords with timing.
   const std::vector<Chord>& chords() const { return chords_; }
 

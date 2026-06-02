@@ -58,6 +58,14 @@ class Limiter : public rt::ProcessorBase {
   ///          audio thread driving the per-block release. Uses the same
   ///          release-coefficient math as @ref set_release_ms.
   void set_release_ms_in_place(float release_ms) noexcept;
+  /// @brief Realtime-safe ceiling (threshold) update for per-block automation.
+  /// @details Updates the scalar threshold the per-sample loop reads in place,
+  ///          without publishing a new configuration snapshot (so no
+  ///          @c shared_ptr allocation occurs). Safe to call from the audio
+  ///          thread once per block. The control-thread @c config_ mirror is NOT
+  ///          updated and the published snapshot is untouched, so a later
+  ///          snapshot adoption will overwrite the in-place threshold.
+  void set_threshold_in_place(float threshold_db) noexcept;
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread.
   /// @details NOT realtime-safe and NOT safe to call concurrently with
@@ -123,6 +131,10 @@ class Limiter : public rt::ProcessorBase {
   // gain diverge on asymmetric content and shift the stereo image.
   sonare::rt::EnvelopeFollower gain_smoother_;
   float release_coeff_ = 0.0f;
+  // Derived scalar threshold the per-sample loop reads. Set by
+  // update_coefficients() on snapshot adoption and by set_threshold_in_place()
+  // for RT-safe per-block automation, so a ceiling change needs no publish.
+  float threshold_db_ = -1.0f;
   float last_gain_reduction_db_ = 0.0f;
 };
 

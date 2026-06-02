@@ -12,6 +12,7 @@
 #include "analysis/chord_templates.h"
 #include "streaming/stream_config.h"
 #include "streaming/stream_frame.h"
+#include "streaming/stream_resampler.h"
 
 namespace sonare {
 
@@ -214,6 +215,13 @@ class StreamAnalyzer {
   bool needs_resampling_ = false;
   float resample_ratio_ = 1.0f;
   std::vector<float> resample_buffer_;  // Buffer for resampled audio
+  std::vector<float> sanitize_buffer_;  // Scratch for NaN/Inf-sanitized input
+  // Stateful, phase-continuous resampler used only by the streaming path.
+  // Unlike a per-chunk one-shot resample (which flushes its filter tail with
+  // zeros every call and thus glitches/drifts at chunk boundaries), this keeps
+  // filter state across process() calls so consecutive chunks join seamlessly.
+  // Constructed lazily only when needs_resampling_ is true.
+  std::unique_ptr<streaming_detail::StreamResampler> stream_resampler_;
 
   // Normalization
   float normalization_gain_ = 1.0f;  // Gain factor for loud audio
@@ -296,7 +304,8 @@ class StreamAnalyzer {
   // Chord progression tracking
   int prev_chord_root_ = -1;
   int prev_chord_quality_ = -1;
-  float chord_stable_time_ = 0.0f;  ///< Time chord has been stable
+  float chord_stable_time_ = 0.0f;         ///< Time chord has been stable
+  float current_chord_start_time_ = 0.0f;  ///< Stream time the current chord began
   /// Running-max confidence of the chord currently being held (prev_chord_*).
   /// Accumulated each frame the chord persists so that, at a transition, the
   /// ChordChange records the *completed* chord's own confidence rather than the
@@ -336,6 +345,12 @@ class StreamAnalyzer {
   // retained chroma content is identical; only the container changes.
   static constexpr size_t kMaxChromaHistoryFrames = 3000;  ///< ~35s at default settings
   std::deque<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
+  // Absolute frame index of full_chroma_history_.front(). Starts at 0 and
+  // advances by one every time the cap drops the oldest frame. Retroactive bar
+  // detection multiplies (this + local index) by the per-frame duration to get
+  // a correct absolute start_time, instead of wrongly assuming the surviving
+  // history still begins at t=0.
+  size_t full_chroma_history_offset_ = 0;
 
   // Internal methods
   void compute_retroactive_bar_chords();
@@ -343,6 +358,10 @@ class StreamAnalyzer {
   void correct_voted_pattern_by_known_patterns();
   void detect_progression_pattern();
   void process_internal(const float* samples, size_t n_samples);
+  /// @brief Copies @p n_samples from @p src into @p dst, replacing any NaN/Inf
+  ///        with 0. Returns dst.data(). Used to keep one bad input sample from
+  ///        poisoning every downstream estimate (FFT, mel, chroma, onset).
+  static const float* sanitize_into(const float* src, size_t n_samples, std::vector<float>& dst);
   StreamFrame process_single_frame(const float* frame_start, size_t sample_offset);
   void compute_stft(const float* frame_start);
   void compute_mel();

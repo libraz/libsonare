@@ -40,14 +40,19 @@ class Tube : public rt::ProcessorBase {
  private:
   static void validate_config(const TubeConfig& config);
   static float process_model(float sample, const TubeConfig& config);
+  void allocate_scratch();
   void ensure_state(int num_channels);
   float apply_miller_filter(int channel, float sample);
 
   TubeConfig tube_config_{};
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
+  int max_block_size_ = 0;
   sonare::rt::Oversampler oversampler_{4};
-  std::vector<float> scratch_;
+  // Preallocated oversampling scratch (sized max_block_size_*oversample_factor
+  // in prepare()) so the audio-thread process() path never allocates.
+  std::vector<float> up_scratch_;
+  std::vector<float> down_scratch_;
   std::vector<float> miller_state_;
 };
 

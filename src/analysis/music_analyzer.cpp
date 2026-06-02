@@ -120,7 +120,18 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
 
     // Use beat-synchronized chord detection with harmonic chroma for better accuracy
     auto beat_times = beat_analyzer().beat_times();
-    chord_analyzer_ = std::make_unique<ChordAnalyzer>(harmonic_chroma(), beat_times, chord_config);
+    if (chord_config.detect_inversions) {
+      // Supply the dedicated low-register bass chromagram so inversion detection
+      // uses the bass-band CQT front-end rather than falling back to the
+      // harmonic chroma (which lacks the low-frequency emphasis).
+      BassChromaConfig bass_config;
+      bass_config.cqt.hop_length = config_.hop_length;
+      chord_analyzer_ = std::make_unique<ChordAnalyzer>(
+          harmonic_chroma(), beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
+    } else {
+      chord_analyzer_ =
+          std::make_unique<ChordAnalyzer>(harmonic_chroma(), beat_times, chord_config);
+    }
     const auto chord_changes =
         chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
     beat_analyzer_->refine_downbeats(

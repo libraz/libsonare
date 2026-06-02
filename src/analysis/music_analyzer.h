@@ -38,8 +38,8 @@ using ProgressCallback = std::function<void(float progress, const char* stage)>;
 
 /// @brief Complete music analysis result.
 struct AnalysisResult {
-  float bpm;                      ///< Detected BPM
-  float bpm_confidence;           ///< BPM detection confidence
+  float bpm = 0.0f;               ///< Detected BPM
+  float bpm_confidence = 0.0f;    ///< BPM detection confidence
   Key key;                        ///< Detected key
   TimeSignature time_signature;   ///< Detected time signature
   std::vector<Beat> beats;        ///< Beat positions

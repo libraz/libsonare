@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::repair {
@@ -70,7 +71,14 @@ void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
       static constexpr float kMadGaussianConstant = 0.67448975f;
       noise_sigma = median_abs(details) / kMadGaussianConstant;
     }
-    const float level_threshold = bayes_shrink_threshold(details, noise_sigma, threshold);
+    // The Haar transform here is UNNORMALIZED: each successive level averages
+    // the approximation band (0.5*(a+b)), so the white-noise standard deviation
+    // in the detail band shrinks by 1/sqrt(2) per level. Scale the level-0 noise
+    // sigma accordingly instead of reusing it verbatim, which would grossly
+    // over-threshold deeper (coarser) levels.
+    float level_noise_sigma = noise_sigma;
+    for (int l = 0; l < level; ++l) level_noise_sigma *= sonare::constants::kInvSqrt2;
+    const float level_threshold = bayes_shrink_threshold(details, level_noise_sigma, threshold);
     for (size_t i = 0; i < pairs; ++i) {
       temp[pairs + i] = soft_threshold(details[i], level_threshold);
     }

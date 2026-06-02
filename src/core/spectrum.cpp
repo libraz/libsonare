@@ -505,7 +505,13 @@ namespace {
 /// @brief Builds the three windows used by reassignment.
 /// @details `padded_window` is the analysis window, zero-padded to n_fft.
 ///          `t_window` is the time-weighted window `(t - half) * w(t)`.
-///          `dw_window` is the central-difference derivative of `w(t)`.
+///          `dw_window` is the cyclic central-difference derivative of `w(t)`.
+///          The derivative uses a cyclic (wrap-around) gradient at the window
+///          boundaries, matching librosa's `__reassign_frequencies`, which
+///          differentiates the periodic (fftbins=True) analysis window. Using a
+///          non-cyclic edge difference (treating samples outside the window as
+///          zero) introduces a spurious half-amplitude spike at both ends and
+///          biases the reassigned frequencies near DC and Nyquist.
 void build_reassignment_windows(const StftConfig& config, std::vector<float>& padded_window,
                                 std::vector<float>& t_window, std::vector<float>& dw_window,
                                 double& half_n) {
@@ -522,10 +528,12 @@ void build_reassignment_windows(const StftConfig& config, std::vector<float>& pa
     const double t_sample = static_cast<double>(i) - half_n;
     t_window[win_offset + i] = static_cast<float>(t_sample * window[i]);
   }
+  // Cyclic central difference: indices wrap around the window so the periodic
+  // window is differentiated without an artificial zero boundary.
   for (int i = 0; i < win_length; ++i) {
     const int idx = win_offset + i;
-    const float prev = (i > 0) ? window[i - 1] : 0.0f;
-    const float next = (i + 1 < win_length) ? window[i + 1] : 0.0f;
+    const float prev = window[(i - 1 + win_length) % win_length];
+    const float next = window[(i + 1) % win_length];
     dw_window[idx] = 0.5f * (next - prev);
   }
 }

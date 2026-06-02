@@ -2501,3 +2501,36 @@ TEST_CASE("RealtimeVoiceChanger JSON round-trips the ISP limiter fields", "[voic
     REQUIRE(roundtrip.limiter.isp_ceiling_dbtp == -6.0f);
   }
 }
+
+TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voice_changer]") {
+  // Regression (editing#4): the lenient JSON path read integer fields via
+  // static_cast<int>(double) after only a finite check. A finite JSON number
+  // outside [INT_MIN, INT_MAX] (e.g. 1e12) is undefined behaviour when cast to
+  // int. The parser must clamp such values to the int range instead of
+  // invoking UB, and still produce a usable config.
+  SECTION("absurdly large positive seed clamps to INT_MAX") {
+    const auto config = realtime_voice_changer_config_from_json(
+        "{\"schemaVersion\":1,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":1000000000000}}}");
+    REQUIRE(config.reverb.seed == std::numeric_limits<int>::max());
+  }
+
+  SECTION("absurdly large negative seed clamps to INT_MIN") {
+    const auto config = realtime_voice_changer_config_from_json(
+        "{\"schemaVersion\":1,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":-1000000000000}}}");
+    REQUIRE(config.reverb.seed == std::numeric_limits<int>::min());
+  }
+
+  SECTION("clamped-seed config drives the engine without crashing") {
+    const auto config = realtime_voice_changer_config_from_json(
+        "{\"schemaVersion\":1,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":9e18,\"mix\":0.3}}}");
+    RealtimeVoiceChanger changer(config);
+    changer.prepare(48000, 128, 1);
+    const auto input = sine(220.0f, 48000, 512);
+    std::vector<float> output(input.size(), 0.0f);
+    for (int pos = 0; pos < static_cast<int>(input.size()); pos += 128) {
+      const int n = std::min(128, static_cast<int>(input.size()) - pos);
+      changer.process_block(input.data() + pos, output.data() + pos, n);
+    }
+    for (float sample : output) REQUIRE(std::isfinite(sample));
+  }
+}

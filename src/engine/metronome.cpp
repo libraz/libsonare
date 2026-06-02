@@ -42,14 +42,46 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames,
   const double end_ppq = tempo_map_->sample_to_ppq(block_end_sample);
   const double lo = std::min(start_ppq, end_ppq);
   const double hi = std::max(start_ppq, end_ppq);
-  const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(lo);
-  const double beat_len = 4.0 / static_cast<double>(std::max(sig.denominator, 1));
-  const double first = std::ceil(lo / beat_len) * beat_len;
-  for (double ppq = first; ppq <= hi + kPpqEpsilon; ppq += beat_len) {
+  // Walk the beat grid one beat at a time, deriving the beat length from the
+  // time signature ACTIVE at each position rather than from a single signature
+  // sampled at the block start. A meter change inside the block (e.g. 4/4 -> 6/8
+  // mid-block) otherwise misplaces every beat after the change. Each step aligns
+  // to the bar grid of the current signature segment so beats land on the
+  // segment's own grid across a boundary.
+  double ppq = lo;
+  // Snap the starting position to the first beat at or after `lo` within its
+  // active segment.
+  {
+    const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(ppq);
+    const double beat_len = 4.0 / static_cast<double>(std::max(sig.denominator, 1));
+    const double bar_start = tempo_map_->bar_start_ppq(ppq);
+    const double beats_from_bar = std::ceil((ppq - bar_start) / beat_len - kPpqEpsilon);
+    ppq = bar_start + beats_from_bar * beat_len;
+  }
+  // Bound the iteration so a degenerate beat_len can never spin forever.
+  for (int guard = 0; ppq <= hi + kPpqEpsilon && guard < num_frames + 64; ++guard) {
+    const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(ppq);
+    const double beat_len =
+        std::max(4.0 / static_cast<double>(std::max(sig.denominator, 1)), kPpqEpsilon);
     const int64_t sample = tempo_map_->ppq_to_sample(ppq);
-    if (sample < block_start_sample || sample >= block_end_sample) continue;
-    const transport::BarBeat beat = tempo_map_->ppq_to_bar_beat(ppq);
-    out->add({static_cast<int>(sample - block_start_sample), beat.beat == 1, sample});
+    if (sample >= block_start_sample && sample < block_end_sample) {
+      const transport::BarBeat beat = tempo_map_->ppq_to_bar_beat(ppq);
+      out->add({static_cast<int>(sample - block_start_sample), beat.beat == 1, sample});
+    }
+    // If the next beat would cross into a new (shorter-beat) signature segment,
+    // re-snap to that segment's bar grid so beats remain grid-aligned.
+    const double next_ppq = ppq + beat_len;
+    const double next_bar_start = tempo_map_->bar_start_ppq(next_ppq);
+    const transport::TimeSignature next_sig = tempo_map_->time_signature_at_ppq(next_ppq);
+    if (next_sig.denominator != sig.denominator || next_sig.numerator != sig.numerator) {
+      // Snap to the first beat at or after the boundary on the new grid.
+      const double next_beat_len = 4.0 / static_cast<double>(std::max(next_sig.denominator, 1));
+      const double beats_from_bar =
+          std::ceil((next_ppq - next_bar_start) / next_beat_len - kPpqEpsilon);
+      ppq = next_bar_start + beats_from_bar * next_beat_len;
+    } else {
+      ppq = next_ppq;
+    }
   }
 }
 

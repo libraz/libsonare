@@ -95,11 +95,22 @@ void MultibandDynamicEq::reset() {
 
 void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
   validate_config(config);
+  // Only reconfigure/re-prepare the crossover when its parameters actually
+  // change; rebuilding it zeroes the crossover filter state and would click on
+  // band-parameter-only updates. Sub-processors are always rebuilt, prepared and
+  // reconfigured.
+  const bool crossover_changed = config.crossover != config_.crossover;
   config_ = config;
-  crossover_.set_config(config_.crossover);
   rebuild_processors();
   if (prepared_) {
-    prepare(sample_rate_, max_block_size_);
+    if (crossover_changed) {
+      crossover_.set_config(config_.crossover);
+      crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+    }
+    for (size_t band = 0; band < processors_.size(); ++band) {
+      processors_[band].prepare(sample_rate_, max_block_size_);
+      configure_processor(band);
+    }
   }
 }
 

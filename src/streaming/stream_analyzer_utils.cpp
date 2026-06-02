@@ -33,25 +33,38 @@ float compute_centroid_frame(const float* magnitude, int n_bins, const float* fr
 }
 
 float compute_flatness_frame(const float* magnitude, int n_bins) {
-  float sum = 0.0f;
-  float log_sum = 0.0f;
-  int count = 0;
-
-  for (int k = 0; k < n_bins; ++k) {
-    float val = magnitude[k];
-    if (val > kEpsilon) {
-      sum += val;
-      log_sum += std::log(val);
-      ++count;
-    }
-  }
-
-  if (count == 0 || sum < kEpsilon) {
+  /// Match the batch feature::spectral_flatness definition exactly so the
+  /// streaming value does not drift from the offline one:
+  ///   * operate on POWER (magnitude^2), not magnitude,
+  ///   * floor power at amin (= kEpsilon) over EVERY bin (not just nonzero ones),
+  ///   * normalize the geometric/arithmetic means by the full n_bins,
+  ///   * return 0 for silent frames (max raw power <= amin), like librosa,
+  ///     instead of the maximally-flat 1.0 the floored ratio would yield.
+  if (n_bins <= 0) {
     return 0.0f;
   }
 
-  float arithmetic_mean = sum / static_cast<float>(count);
-  float geometric_mean = std::exp(log_sum / static_cast<float>(count));
+  constexpr float kAmin = kEpsilon;
+
+  float raw_max_power = 0.0f;
+  float sum_linear = 0.0f;
+  float sum_log = 0.0f;
+  for (int k = 0; k < n_bins; ++k) {
+    const float raw_power = magnitude[k] * magnitude[k];
+    raw_max_power = std::max(raw_max_power, raw_power);
+    const float power = std::max(raw_power, kAmin);
+    sum_linear += power;
+    sum_log += std::log(power);
+  }
+
+  /// Silent frame: entire spectrum at/below the floor.
+  if (raw_max_power <= kAmin) {
+    return 0.0f;
+  }
+
+  const float n = static_cast<float>(n_bins);
+  const float geometric_mean = std::exp(sum_log / n);
+  const float arithmetic_mean = sum_linear / n;
   return geometric_mean / arithmetic_mean;
 }
 
@@ -87,13 +100,22 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
   lag_min = std::max(1, lag_min);
   lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
 
+  /// No usable lag range: report "unknown" via BPM 0 with confidence 0 so the
+  /// caller can detect the absence of an estimate. Returning a plausible-looking
+  /// 120 BPM here (as the old code did) masked the failure: 120 and 0
+  /// confidence are indistinguishable from a genuine low-confidence 120 BPM.
   if (lag_min >= lag_max) {
-    return {120.0f, 0.0f};
+    return {0.0f, 0.0f};
   }
 
   std::vector<std::pair<float, float>> candidates;
 
-  for (int lag = lag_min + 1; lag < lag_max - 1; ++lag) {
+  /// Scan every interior lag that has both neighbors available. The previous
+  /// bound (lag < lag_max - 1) needlessly skipped lag == lag_max - 1, even
+  /// though autocorr[lag + 1] = autocorr[lag_max] is a valid in-range index
+  /// (lag_max <= autocorr.size() - 1). That dropped a legitimate tempo peak at
+  /// the slow (low-BPM) edge of the search range.
+  for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
     if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1] &&
         autocorr[lag] > 0.0f) {
       float bpm = lag_to_bpm(lag, sr, hop_length);
@@ -103,8 +125,10 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
     }
   }
 
+  /// No clear periodicity detected: signal "unknown" (BPM 0, confidence 0)
+  /// rather than a misleading default tempo.
   if (candidates.empty()) {
-    return {120.0f, 0.0f};
+    return {0.0f, 0.0f};
   }
 
   float max_weight = 0.0f;

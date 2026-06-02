@@ -165,17 +165,17 @@ namespace {
 /// @details CQT bin 0 corresponds to @p fmin, whose pitch class is generally not C.
 ///          The fold `(b % bins_per_octave) * n_chroma / bins_per_octave` assigns the
 ///          lowest bin of each octave to class 0, so we add the pitch-class offset of
-///          @p fmin (with @p tuning, in fractional semitones) and take a positive modulo
-///          to align chroma class 0 with C, matching librosa.feature.chroma_cqt.
+///          @p fmin and take a positive modulo to align chroma class 0 with C, matching
+///          librosa.feature.chroma_cqt. @p fmin is expected to already include the tuning
+///          shift (see chroma_cqt / bass_chroma); tuning is therefore not re-applied here.
 std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames,
-                                      int bins_per_octave, int n_chroma, float fmin, float tuning) {
+                                      int bins_per_octave, int n_chroma, float fmin) {
   std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
   // Pitch class of fmin relative to C. hz_to_midi yields MIDI numbers where C is a
   // multiple of 12 (pitch class 0), so (round(midi) mod 12) is the C-relative class.
-  // Account for tuning (fractional semitones) before rounding.
   int pitch_class_offset = 0;
   if (fmin > 0.0f && n_chroma > 0) {
-    const float midi = hz_to_midi(fmin) + tuning;
+    const float midi = hz_to_midi(fmin);
     int pc = static_cast<int>(std::lround(midi)) % n_chroma;
     if (pc < 0) pc += n_chroma;
     pitch_class_offset = pc;
@@ -201,6 +201,19 @@ std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames
     }
   }
   return chroma;
+}
+
+/// @brief Shifts @p fmin by the requested tuning deviation.
+/// @details Mirrors librosa: tuning is expressed in fractions of a CQT bin, so
+///          the lowest analysis frequency moves to
+///          `fmin * 2^(tuning / bins_per_octave)`. This is what makes sub-semitone
+///          tuning actually affect the CQT grid (and therefore the chroma fold),
+///          rather than only nudging the integer pitch-class offset.
+float apply_tuning_to_fmin(float fmin, float tuning, int bins_per_octave) {
+  if (fmin <= 0.0f || tuning == 0.0f || bins_per_octave <= 0) {
+    return fmin;
+  }
+  return fmin * std::pow(2.0f, tuning / static_cast<float>(bins_per_octave));
 }
 
 /// @brief Applies a centered Hann smoothing kernel of length @p win along axis=time.
@@ -245,14 +258,19 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.cqt.bins_per_octave % config.n_chroma == 0, ErrorCode::InvalidParameter);
 
-  CqtResult result = cqt(audio, config.cqt);
+  // Apply tuning to the CQT grid itself (not just the chroma fold) so that
+  // sub-semitone tuning actually shifts the analysis frequencies, matching
+  // librosa.feature.chroma_cqt(tuning=...).
+  CqtConfig cqt_config = config.cqt;
+  cqt_config.fmin =
+      apply_tuning_to_fmin(config.cqt.fmin, config.tuning, config.cqt.bins_per_octave);
+  CqtResult result = cqt(audio, cqt_config);
   const std::vector<float>& mag = result.magnitude();
   int n_bins = result.n_bins();
   int n_frames = result.n_frames();
 
-  std::vector<float> chroma =
-      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
-                         config.cqt.fmin, config.tuning);
+  std::vector<float> chroma = wrap_cqt_to_chroma(
+      mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma, cqt_config.fmin);
 
   if (config.threshold > 0.0f) {
     for (int t = 0; t < n_frames; ++t) {
@@ -285,7 +303,10 @@ Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
   // Run a CQT over the bass frequency range (fmin / bins_per_octave / n_bins all
   // come from config.cqt, so the number of octaves covered is honored by n_bins),
   // then fold the magnitude bins onto chroma classes.
-  CqtResult result = cqt(audio, config.cqt);
+  CqtConfig cqt_config = config.cqt;
+  cqt_config.fmin =
+      apply_tuning_to_fmin(config.cqt.fmin, config.tuning, config.cqt.bins_per_octave);
+  CqtResult result = cqt(audio, cqt_config);
   if (result.empty()) {
     return Chroma();
   }
@@ -294,9 +315,8 @@ Chroma bass_chroma(const Audio& audio, const BassChromaConfig& config) {
   int n_bins = result.n_bins();
   int n_frames = result.n_frames();
 
-  std::vector<float> chroma =
-      wrap_cqt_to_chroma(mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma,
-                         config.cqt.fmin, config.tuning);
+  std::vector<float> chroma = wrap_cqt_to_chroma(
+      mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma, cqt_config.fmin);
 
   if (config.normalize_frames && n_frames > 0) {
     chroma = normalize_matrix(chroma.data(), config.n_chroma, n_frames, /*axis=*/0, NormType::Inf);

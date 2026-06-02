@@ -97,6 +97,7 @@ set(SONARE_SOURCES
   streaming/stream_analyzer.cpp
   streaming/stream_analyzer_output.cpp
   streaming/stream_analyzer_utils.cpp
+  streaming/stream_resampler.cpp
   quick.cpp
   sonare_c.cpp
   sonare_c_effects.cpp

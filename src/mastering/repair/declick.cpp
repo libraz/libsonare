@@ -59,6 +59,8 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
   const size_t length = end - start;
   const float left = output[start - 1];
   const float right = samples[end];
+  // Linear interpolation anchored to BOTH boundaries; this is the fallback fill
+  // and also the boundary-respecting baseline the AR estimate is blended toward.
   for (size_t j = start; j < end; ++j) {
     const float t = static_cast<float>(j - start + 1) / static_cast<float>(length + 1);
     output[j] = left + (right - left) * t;
@@ -69,13 +71,25 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
   if (!can_use_lpc(output.size(), order)) return;
 
   const auto model = sonare::lpc_burg(output.data(), output.size(), order);
+
+  // Forward AR extrapolation from the left context restores the click's spectral
+  // detail but, on its own, drifts away from the right boundary. Crossfade the
+  // AR prediction (weight 1 at the left edge) toward the linear interpolation
+  // (weight 1 at the right edge) so both boundaries are respected. Predict into
+  // a scratch buffer first so each step uses the already-blended history rather
+  // than raw AR output.
+  std::vector<float> ar_fill(length, 0.0f);
   for (size_t j = start; j < end; ++j) {
     double predicted = 0.0;
     const size_t max_k = std::min(model.ar.size() - 1, j);
     for (size_t k = 1; k <= max_k; ++k) {
       predicted -= static_cast<double>(model.ar[k]) * output[j - k];
     }
-    output[j] = static_cast<float>(predicted);
+    const float linear = output[j];
+    // w: 1 at the first filled sample, decreasing to ~0 near the right anchor.
+    const float w = 1.0f - static_cast<float>(j - start + 1) / static_cast<float>(length + 1);
+    ar_fill[j - start] = w * static_cast<float>(predicted) + (1.0f - w) * linear;
+    output[j] = ar_fill[j - start];
   }
 }
 

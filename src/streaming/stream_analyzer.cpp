@@ -64,6 +64,14 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     needs_resampling_ = true;
     internal_sample_rate_ = kInternalSampleRate;
     resample_ratio_ = static_cast<float>(kInternalSampleRate) / config_.sample_rate;
+    /// Use a single persistent, phase-continuous resampler for the whole
+    /// stream. The previous per-chunk one-shot resample() rebuilt the filter
+    /// and flushed its tail with zeros on every process() call, which injected
+    /// a discontinuity (click) at every chunk boundary and let rounding drift
+    /// accumulate. A stateful resampler carries filter history across chunks so
+    /// boundaries are seamless. See streaming/stream_resampler.h.
+    stream_resampler_ = std::make_unique<streaming_detail::StreamResampler>(config_.sample_rate,
+                                                                            internal_sample_rate_);
   } else {
     needs_resampling_ = false;
     internal_sample_rate_ = config_.sample_rate;
@@ -169,14 +177,31 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     return;
   }
 
-  const float* process_samples = samples;
+  /// Sanitize input first: replace any NaN/Inf with 0 so a single bad input
+  /// sample cannot poison the FFT and, through it, every downstream estimate
+  /// (mel, chroma, onset, spectral features) for the rest of the stream. Done
+  /// before resampling so corrupted values never enter the resampler's filter
+  /// history either. The sanitized copy reuses a persistent scratch buffer.
+  const float* clean_samples = sanitize_into(samples, n_samples, sanitize_buffer_);
+
+  const float* process_samples = clean_samples;
   size_t process_n_samples = n_samples;
 
-  /// Resample if needed (for high sample rates like 96000 Hz)
+  /// Resample if needed (for high sample rates like 96000 Hz). Use the
+  /// persistent, phase-continuous resampler so chunk boundaries stay seamless
+  /// (no per-chunk click / drift). Output is appended into resample_buffer_,
+  /// which we clear first because its previous contents were already drained
+  /// into overlap_buffer_ on the prior call.
   if (needs_resampling_) {
-    resample_buffer_ = resample(samples, n_samples, config_.sample_rate, internal_sample_rate_);
+    resample_buffer_.clear();
+    stream_resampler_->process(clean_samples, n_samples, resample_buffer_);
     process_samples = resample_buffer_.data();
     process_n_samples = resample_buffer_.size();
+    /// The stateful resampler can return 0 samples for a short first chunk
+    /// (start-up filter latency). Nothing to append yet in that case.
+    if (process_n_samples == 0) {
+      return;
+    }
   }
 
   /// Append (resampled) samples to overlap buffer with normalization gain
@@ -251,6 +276,17 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   }
 }
 
+const float* StreamAnalyzer::sanitize_into(const float* src, size_t n_samples,
+                                           std::vector<float>& dst) {
+  dst.resize(n_samples);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float v = src[i];
+    /// std::isfinite is false for NaN and +/-Inf; replace those with silence.
+    dst[i] = std::isfinite(v) ? v : 0.0f;
+  }
+  return dst.data();
+}
+
 StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_t sample_offset) {
   StreamFrame frame;
 
@@ -306,6 +342,9 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
       full_chroma_history_.push_back(current_chroma);
       while (full_chroma_history_.size() > kMaxChromaHistoryFrames) {
         full_chroma_history_.pop_front();
+        /// Advance the absolute index of the surviving front frame so
+        /// retroactive bar timing stays correct once old frames are dropped.
+        ++full_chroma_history_offset_;
       }
 
       /// Compute median-filtered chroma (more robust to noise than averaging)
@@ -524,6 +563,17 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
           /// own strength, not the next chord's.
           chord_stable_time_ += frame_duration;
           prev_chord_confidence_ = std::max(prev_chord_confidence_, new_confidence);
+        } else if (prev_chord_root_ < 0) {
+          /// First ever stable chord: seed its start time at the current frame.
+          /// (The general "changed" branch below also seeds new chords, but it
+          /// only runs once prev_chord_root_ is valid, so handle the very first
+          /// chord here so current_chord_start_time_ is never left at 0 by
+          /// default.)
+          prev_chord_root_ = new_root;
+          prev_chord_quality_ = new_quality;
+          chord_stable_time_ = frame_duration;
+          prev_chord_confidence_ = new_confidence;
+          current_chord_start_time_ = current_time;
         } else {
           /// Chord changed - check if previous chord was stable long enough
           if (prev_chord_root_ >= 0 && chord_stable_time_ >= kChordMinDuration) {
@@ -551,8 +601,16 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
           prev_chord_quality_ = new_quality;
           chord_stable_time_ = frame_duration;
           prev_chord_confidence_ = new_confidence;
+          current_chord_start_time_ = current_time;
         }
       }
+
+      /// Expose when the current chord began. chord_start_time was declared in
+      /// ProgressiveEstimate and surfaced through every binding but was never
+      /// assigned, so it always read 0.0. current_chord_start_time_ is updated
+      /// whenever the held chord changes (above), so this reflects the start of
+      /// the chord currently reported in current_estimate_.chord_root/quality.
+      current_estimate_.chord_start_time = current_chord_start_time_;
     }
   }
 

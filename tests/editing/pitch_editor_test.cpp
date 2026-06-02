@@ -160,6 +160,26 @@ TEST_CASE("PitchCorrector applies pYIN-verifiable one semitone correction", "[pi
   REQUIRE_THAT(median_voiced_f0(corrected_track), WithinAbs(median_voiced_f0(target_track), 0.6f));
 }
 
+TEST_CASE("PitchCorrector rejects an F0Track whose sample rate differs from the audio",
+          "[pitch_editor]") {
+  // Regression (editing#3): hop_length is in samples at the track's rate, so a
+  // track produced at a different rate than the audio would silently apply the
+  // correction curve at the wrong time positions. correct_timevarying must
+  // reject the mismatch instead of returning silently mis-aligned output.
+  constexpr int sample_rate = 22050;
+  auto samples = sine(440.0f, sample_rate, sample_rate);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  F0Track track = constant_track(440.0f, sample_rate, 256, 16);
+  PitchCorrector corrector;
+
+  // Matching rate succeeds.
+  REQUIRE_NOTHROW(corrector.correct_to_midi(audio, track, 70.0f));
+
+  // Mismatched rate is rejected.
+  track.sample_rate = 48000;
+  REQUIRE_THROWS(corrector.correct_to_midi(audio, track, 70.0f));
+}
+
 TEST_CASE("PitchCorrector retune_amount=0 leaves off-pitch notes uncorrected", "[pitch_editor]") {
   constexpr int sample_rate = 22050;
   auto samples = sine(440.0f, sample_rate, sample_rate);
@@ -372,6 +392,125 @@ TEST_CASE("ScaleQuantizer pitch_class_enabled reflects mode_mask bits", "[pitch_
   const ScaleQuantizer c_only({0, 0b000000000001, 69.0f});
   REQUIRE(c_only.pitch_class_enabled(0));        // C enabled
   REQUIRE_FALSE(c_only.pitch_class_enabled(1));  // C# disabled
+}
+
+TEST_CASE("PitchCorrector scopes fallback overshoot guard to the fallback region",
+          "[pitch_editor]") {
+  // Regression (editing#1): a localized spectral-fallback overshoot must not
+  // trigger a GLOBAL gain reduction of the whole corrected output. We build a
+  // long voiced tone and a track whose correction is small (PSOLA-handled) for
+  // the first half and very large (> 6 semitones, spectral fallback) for the
+  // second half. The first half's level must stay intact whether or not the
+  // second half later forces a fallback overshoot.
+  constexpr int sample_rate = 48000;
+  constexpr float f0_hz = 200.0f;
+  constexpr int n_samples = 24000;  // 500 ms
+  constexpr int hop_length = 256;
+  const int n_frames = n_samples / hop_length + 2;
+
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    samples[static_cast<size_t>(i)] =
+        0.95f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * f0_hz *
+                                            static_cast<double>(i) / sample_rate));
+  }
+  const sonare::Audio audio = sonare::Audio::from_vector(std::vector<float>(samples), sample_rate);
+
+  // Track: small +1 semitone target for the first half, +18 semitones (way past
+  // kPsolaMaxSemitones=6) for the second half so it routes to the spectral
+  // fallback which can overshoot.
+  const float base_midi = PitchCorrector::hz_to_midi(f0_hz);
+  F0Track split_track;
+  split_track.sample_rate = sample_rate;
+  split_track.hop_length = hop_length;
+  split_track.f0_hz.assign(static_cast<size_t>(n_frames), f0_hz);
+  split_track.voiced.assign(static_cast<size_t>(n_frames), true);
+  split_track.voiced_prob.assign(static_cast<size_t>(n_frames), 1.0f);
+
+  // First-half-only track: identical small correction, no fallback region. The
+  // remainder is left voiced at f0 with target == detected (no shift) so PSOLA
+  // simply reproduces it.
+  PitchCorrectionConfig config;
+  config.retune_speed_ms = 0.0f;
+  config.vibrato_threshold_cents = 0.0f;
+  config.max_correction_semitones = 24.0f;
+  PitchCorrector corrector(config);
+
+  // Build a target-midi curve via correct_to_scale-style helper is awkward, so
+  // exercise the fixed-target path for the whole buffer (+1 st) as the no-fallback
+  // reference, then a hand-built large-shift second half via a per-frame f0 that
+  // forces a >6 st correction toward the same fixed target.
+  const sonare::Audio reference = corrector.correct_to_midi(audio, split_track, base_midi + 1.0f);
+
+  // Now make the second half "off-pitch" so correcting to (base+1) needs a huge
+  // shift there: drop f0 of the second-half frames so target-detected > 6 st.
+  for (int f = n_frames / 2; f < n_frames; ++f) {
+    split_track.f0_hz[static_cast<size_t>(f)] = PitchCorrector::midi_to_hz(base_midi - 18.0f);
+  }
+  const sonare::Audio corrected = corrector.correct_to_midi(audio, split_track, base_midi + 1.0f);
+
+  REQUIRE(corrected.size() == audio.size());
+  for (size_t i = 0; i < corrected.size(); ++i) REQUIRE(std::isfinite(corrected[i]));
+
+  // RMS of the first quarter (clearly PSOLA, far from the fallback boundary)
+  // must be essentially unchanged by the presence of the second-half fallback.
+  // A global peak-normalization (the bug) would scale this region down whenever
+  // the fallback half overshoots.
+  auto rms = [](const sonare::Audio& a, int lo, int hi) {
+    double acc = 0.0;
+    for (int i = lo; i < hi; ++i)
+      acc += static_cast<double>(a[static_cast<size_t>(i)]) * a[static_cast<size_t>(i)];
+    return std::sqrt(acc / std::max(1, hi - lo));
+  };
+  const int q = n_samples / 4;
+  const double ref_rms = rms(reference, 1000, q);
+  const double cor_rms = rms(corrected, 1000, q);
+  REQUIRE(ref_rms > 0.0);
+  // Scoped guard: the first-quarter level tracks the no-fallback reference to
+  // within a few percent. (A global-gain bug would drop it noticeably.)
+  REQUIRE(cor_rms > ref_rms * 0.9);
+}
+
+TEST_CASE("NoteEditor stretch_note keeps a continuous level across the splice", "[pitch_editor]") {
+  // Regression (editing#2): stretch_note used to fade the stretched region to
+  // zero at both splice points, leaving an audible level dip/gap where the
+  // unmodified head/tail (at full level) meet the silenced splice. The
+  // equal-power cross-fade must keep the seam level continuous.
+  constexpr int sample_rate = 22050;
+  // Constant-amplitude tone so any dip is purely an artifact of the splice.
+  auto samples = sine(440.0f, sample_rate, sample_rate);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+  NoteRegion region;
+  region.onset_sample = 4000;
+  region.offset_sample = 9000;
+  const float stretch_ratio = 1.4f;
+
+  NoteEditor editor({5.0f, sonare::StretchBackend::NativeSpectral});
+  const sonare::Audio stretched = editor.stretch_note(audio, region, stretch_ratio);
+
+  std::vector<float> out(stretched.data(), stretched.data() + stretched.size());
+  for (float s : out) REQUIRE(std::isfinite(s));
+
+  // Local RMS in a short window around the first splice (region.onset_sample)
+  // must not collapse toward zero. A fade-to-zero left a deep notch here.
+  auto local_rms = [&](int center, int half) {
+    const int lo = std::max(0, center - half);
+    const int hi = std::min(static_cast<int>(out.size()), center + half);
+    double acc = 0.0;
+    for (int i = lo; i < hi; ++i)
+      acc += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
+    return std::sqrt(acc / std::max(1, hi - lo));
+  };
+
+  // Reference level taken from the untouched head, well before the splice.
+  const float head_rms = local_rms(2000, 200);
+  const float seam_rms = local_rms(region.onset_sample, 64);
+  REQUIRE(head_rms > 0.0f);
+  // Equal-power seam: the splice retains a substantial fraction of the head
+  // level rather than dipping to silence (the old fade-to-zero would put this
+  // far below 0.5x).
+  REQUIRE(seam_rms > head_rms * 0.5f);
 }
 
 TEST_CASE("ScaleQuantizer root shift moves enabled pitch classes", "[pitch_editor]") {

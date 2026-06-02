@@ -2,18 +2,9 @@
 
 #include <algorithm>
 
+#include "util/math_utils.h"
+
 namespace sonare::engine {
-namespace {
-
-size_t next_power_of_two(size_t value) {
-  size_t out = 1;
-  while (out < value) {
-    out <<= 1u;
-  }
-  return out;
-}
-
-}  // namespace
 
 void MeterTelemetryTap::prepare(double sample_rate, int max_block_size, uint32_t target_id,
                                 size_t telemetry_capacity, const mixing::MeterConfig& config) {
@@ -21,7 +12,7 @@ void MeterTelemetryTap::prepare(double sample_rate, int max_block_size, uint32_t
   dropped_records_ = 0;
   meter_.emplace(config);
   meter_->prepare(sample_rate, max_block_size);
-  telemetry_.reserve(next_power_of_two(std::max<size_t>(telemetry_capacity, 1)));
+  telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 1)));
   goniometer_.reset();
 }
 

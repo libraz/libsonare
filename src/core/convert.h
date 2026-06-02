@@ -33,7 +33,9 @@ float mel_to_hz_htk(float mel);
 
 /// @brief Converts Hz to MIDI note number.
 /// @param hz Frequency in Hz
-/// @return MIDI note number (A4 = 440Hz = 69)
+/// @return MIDI note number (A4 = 440Hz = 69). Returns -inf for non-positive
+///         Hz, since 0 is a valid MIDI value (C-1) and cannot double as an
+///         invalid-input sentinel.
 float hz_to_midi(float hz);
 
 /// @brief Converts MIDI note number to Hz.

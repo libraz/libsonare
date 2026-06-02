@@ -94,12 +94,17 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     }
   }
 
-  // Adopt the latest published configuration once per block. The returned
-  // pointer is stable for the entire per-sample loop — RtPublisher only
-  // changes its current() value inside acquire(), and we already called it.
-  const LimiterConfig& cfg = *adopt_snapshot_for_block();
+  // Adopt the latest published configuration once per block. This applies any
+  // pending snapshot and re-derives the scalar coefficients (threshold_db_,
+  // release_coeff_) via update_coefficients(); the per-sample loop reads those
+  // scalars, not the snapshot fields, so an in-place ceiling/release update
+  // needs no shared_ptr publish.
+  adopt_snapshot_for_block();
 
-  const float ceiling = db_to_linear(cfg.threshold_db);
+  // Read the threshold from the derived scalar (set by update_coefficients on
+  // snapshot adoption, or overridden by set_threshold_in_place for RT-safe
+  // per-block automation).
+  const float ceiling = db_to_linear(threshold_db_);
   float min_gain = 1.0f;
   // Reuse the preallocated scratch (sized in prepare()) instead of allocating a
   // fresh vector each block; only the first num_channels entries are read.
@@ -164,6 +169,13 @@ void Limiter::set_release_ms_in_place(float release_ms) noexcept {
   release_coeff_ = time_to_coefficient(sample_rate_, std::max(0.0f, release_ms));
 }
 
+void Limiter::set_threshold_in_place(float threshold_db) noexcept {
+  // RT-safe: only update the scalar threshold the per-sample loop reads. No
+  // publish, no allocation. The control-thread config_ mirror and the published
+  // snapshot are intentionally left unchanged.
+  threshold_db_ = threshold_db;
+}
+
 bool Limiter::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
@@ -204,6 +216,7 @@ void Limiter::prepare_buffers(int num_channels) {
 
 void Limiter::update_coefficients(const LimiterConfig& config) {
   release_coeff_ = time_to_coefficient(sample_rate_, config.release_ms);
+  threshold_db_ = config.threshold_db;
 }
 
 }  // namespace sonare::mastering::dynamics

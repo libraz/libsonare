@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -77,6 +78,23 @@ void Tube::set_config(const TubeConfig& config) {
   if (tube_config_.oversample_factor != 1) {
     oversampler_.set_factor(tube_config_.oversample_factor);
   }
+  if (prepared_) {
+    // oversample_factor may have changed; resize the scratch on this
+    // control-thread path (allocation here is acceptable, never on the audio
+    // thread). Matches the sizing done in prepare().
+    allocate_scratch();
+  }
+}
+
+void Tube::allocate_scratch() {
+  // Preallocate the oversampling scratch up front so the audio-thread process()
+  // path never allocates. Sized to the worst case (max block * factor); the
+  // factor==1 path leaves these empty. Blocks wider than max_block_size_ throw
+  // instead of resizing on the audio thread.
+  const size_t base = static_cast<size_t>(std::max(0, max_block_size_));
+  const size_t scratch = base * static_cast<size_t>(std::max(1, tube_config_.oversample_factor));
+  up_scratch_.assign(scratch, 0.0f);
+  down_scratch_.assign(base, 0.0f);
 }
 
 void Tube::prepare(double sample_rate, int max_block_size) {
@@ -85,6 +103,11 @@ void Tube::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
+  max_block_size_ = max_block_size;
+  allocate_scratch();
+  // Preallocate per-channel Miller-filter state so process() never resizes on
+  // the audio thread for any channel count up to the realtime limit.
+  miller_state_.assign(dynamics::kRealtimePreparedChannels, 0.0f);
   prepared_ = true;
   reset();
 }
@@ -102,29 +125,45 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    if (tube_config_.oversample_factor == 1) {
+  }
+
+  if (tube_config_.oversample_factor == 1) {
+    for (int ch = 0; ch < num_channels; ++ch) {
       for (int i = 0; i < num_samples; ++i) {
         const float wet = apply_miller_filter(ch, process_model(channels[ch][i], tube_config_));
         channels[ch][i] = channels[ch][i] * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
       }
-      continue;
     }
+    return;
+  }
 
-    const auto upsampled = oversampler_.upsample(channels[ch], static_cast<size_t>(num_samples));
-    scratch_.resize(upsampled.size());
-    for (size_t i = 0; i < upsampled.size(); ++i) {
-      scratch_[i] = process_model(upsampled[i], tube_config_);
+  // Oversampled path. Reuse the preallocated scratch buffers (sized in
+  // prepare()) so this audio-thread path never allocates; reject blocks wider
+  // than the prepared size instead of resizing here.
+  const size_t os_samples =
+      static_cast<size_t>(num_samples) * static_cast<size_t>(tube_config_.oversample_factor);
+  if (os_samples > up_scratch_.size() || static_cast<size_t>(num_samples) > down_scratch_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared Tube oversampling scratch");
+  }
+  for (int ch = 0; ch < num_channels; ++ch) {
+    oversampler_.upsample_to(channels[ch], static_cast<size_t>(num_samples), up_scratch_.data(),
+                             up_scratch_.size());
+    for (size_t i = 0; i < os_samples; ++i) {
+      up_scratch_[i] = process_model(up_scratch_[i], tube_config_);
     }
-    const auto downsampled = oversampler_.downsample(scratch_);
+    oversampler_.downsample_to(up_scratch_.data(), os_samples, down_scratch_.data(),
+                               down_scratch_.size());
     for (int i = 0; i < num_samples; ++i) {
-      const float wet = apply_miller_filter(ch, downsampled[static_cast<size_t>(i)]);
+      const float wet = apply_miller_filter(ch, down_scratch_[static_cast<size_t>(i)]);
       channels[ch][i] = channels[ch][i] * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
     }
   }
 }
 
 void Tube::reset() {
-  scratch_.clear();
+  std::fill(up_scratch_.begin(), up_scratch_.end(), 0.0f);
+  std::fill(down_scratch_.begin(), down_scratch_.end(), 0.0f);
   std::fill(miller_state_.begin(), miller_state_.end(), 0.0f);
 }
 
@@ -174,7 +213,9 @@ void Tube::validate_config(const TubeConfig& config) {
 }
 
 void Tube::ensure_state(int num_channels) {
-  if (miller_state_.size() != static_cast<size_t>(num_channels)) {
+  // prepare() preallocates kRealtimePreparedChannels states so the common audio
+  // path never resizes. Only grow (control thread) if a caller exceeds it.
+  if (miller_state_.size() < static_cast<size_t>(num_channels)) {
     miller_state_.assign(static_cast<size_t>(num_channels), 0.0f);
   }
 }

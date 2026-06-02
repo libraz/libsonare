@@ -29,7 +29,13 @@ std::vector<std::complex<float>> solve_linear_system(
         pivot = row;
       }
     }
-    if (best < 1.0e-18) continue;
+    if (best < 1.0e-18) {
+      // Near-singular column: no usable pivot. Force this predictor entry to
+      // zero instead of leaving rhs[col] at its raw cross-correlation value,
+      // which would otherwise yield an arbitrary (often huge) predictor tap.
+      rhs[col] = {0.0, 0.0};
+      continue;
+    }
     if (pivot != col) {
       std::swap(matrix[pivot], matrix[col]);
       std::swap(rhs[pivot], rhs[col]);

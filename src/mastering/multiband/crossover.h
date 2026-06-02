@@ -28,6 +28,12 @@ struct CrossoverConfig {
   CrossoverSlope slope = CrossoverSlope::LR4;
   CrossoverMode mode = CrossoverMode::LinkwitzRiley;
   int fir_kernel_size = 513;
+
+  bool operator==(const CrossoverConfig& other) const {
+    return cutoffs_hz == other.cutoffs_hz && slope == other.slope && mode == other.mode &&
+           fir_kernel_size == other.fir_kernel_size;
+  }
+  bool operator!=(const CrossoverConfig& other) const { return !(*this == other); }
 };
 
 struct CrossoverOutput {

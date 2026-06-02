@@ -156,17 +156,20 @@ float gain_mmse_stsa(double ksi, double gamma_post) {
     const double gain = prefactor * envelope;
     return static_cast<float>(std::isfinite(gain) ? gain : 1.0);
   }
-  // Series for I0 and I1 (accurate for small arguments, which is the common case).
+  // Series for I0(z) and I1(z) at z = nu/2 = half_nu.
+  // I0(z) = sum_k (z/2)^(2k) / (k!)^2, I1(z) = sum_k (z/2)^(2k+1) / (k! (k+1)!).
+  // The successive-term ratio therefore carries (z/2)^2 = (half_nu/2)^2.
+  const double z_half_sq = 0.25 * half_nu * half_nu;
   double i0 = 1.0;
   double i1 = 0.0;
   double term0 = 1.0;
   double term1 = 0.5 * half_nu;
   i1 = term1;
   for (int k = 1; k < 25; ++k) {
-    term0 *= (half_nu * half_nu) / static_cast<double>(k * k);
+    term0 *= z_half_sq / static_cast<double>(k * k);
     i0 += term0;
     if (k >= 1) {
-      term1 *= (half_nu * half_nu) / static_cast<double>(k * (k + 1));
+      term1 *= z_half_sq / static_cast<double>(k * (k + 1));
       i1 += term1;
     }
   }

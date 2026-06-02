@@ -102,7 +102,8 @@ class RhythmAnalyzer {
   RhythmFeatures features_;
   std::vector<Beat> beats_;
   std::vector<float> beat_intervals_;
-  std::vector<float> onset_times_;  ///< Detected onset times in seconds
+  std::vector<float> onset_strength_;  ///< Onset strength envelope (beat-aligned)
+  std::vector<float> onset_times_;     ///< Detected onset times in seconds
   float bpm_;
   RhythmConfig config_;
   int sr_;

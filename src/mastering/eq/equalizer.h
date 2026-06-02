@@ -84,8 +84,20 @@ class EqualizerProcessor : public rt::ProcessorBase {
                                         PhaseMode global_phase);
   static void validate_dynamic_params(const DynamicParams& dyn);
   static float detector_db(const float* const* channels, int num_channels, int num_samples);
-  static float band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                double sample_rate, const EqBand& band);
+  // Per-band, per-channel detector filter and envelope state that persists across
+  // process() blocks. Allocating fresh state per block (the previous behaviour)
+  // re-rang the bandpass filter and reset the envelope at every block boundary,
+  // making the dynamic-band detector dependent on block size and producing
+  // discontinuities. State is preallocated in prepare() and cleared in reset().
+  struct DetectorState {
+    double filter_a_z1 = 0.0;
+    double filter_a_z2 = 0.0;
+    double filter_b_z1 = 0.0;
+    double filter_b_z2 = 0.0;
+    double envelope = 0.0;
+  };
+  float band_detector_db(size_t band_index, const float* const* channels, int num_channels,
+                         int num_samples, double sample_rate, const EqBand& band);
   static float rms_db(const float* const* channels, int num_channels, int num_samples) noexcept;
   static float dynamic_gain_delta(const EqBand& band, float detector_db, float threshold_db);
   void update_dynamic_state(const float* const* channels, int num_channels, int num_samples);
@@ -115,6 +127,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   bool has_dynamic_bands_ = false;
   std::array<EqBand, kMaxBands> bands_{};
   std::array<float, kMaxBands> last_band_detector_db_{};
+  std::array<std::vector<DetectorState>, kMaxBands> detector_states_{};
   std::array<float, kMaxBands> last_applied_gain_db_{};
   std::array<float, kMaxBands> smoothed_gain_db_{};
   std::array<float, kMaxBands> auto_threshold_db_{};

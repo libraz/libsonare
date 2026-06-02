@@ -94,11 +94,20 @@ int MultibandLimiter::latency_samples() const noexcept {
 
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   validate_config(config);
+  // Only reconfigure/re-prepare the crossover when its parameters actually
+  // change; rebuilding it zeroes the crossover filter state and would click on
+  // band-parameter-only updates. Sub-processors are always rebuilt and prepared.
+  const bool crossover_changed = config.crossover != config_.crossover;
   config_ = config;
-  crossover_.set_config(config_.crossover);
   rebuild_processors();
   if (prepared_) {
-    prepare(sample_rate_, max_block_size_);
+    if (crossover_changed) {
+      crossover_.set_config(config_.crossover);
+      crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+    }
+    for (auto& limiter : limiters_) {
+      limiter.prepare(sample_rate_, max_block_size_);
+    }
   }
 }
 

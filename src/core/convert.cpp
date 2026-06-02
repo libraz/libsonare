@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include "util/constants.h"
@@ -46,7 +47,12 @@ float hz_to_mel_htk(float hz) { return 2595.0f * std::log10(1.0f + hz / 700.0f);
 float mel_to_hz_htk(float mel) { return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f); }
 
 float hz_to_midi(float hz) {
-  if (hz <= 0) return 0.0f;
+  // 0 is a valid MIDI value (C-1), so it must not double as the
+  // invalid-input sentinel. Return -inf for non-positive Hz, matching the
+  // log2 limit (librosa propagates -inf / NaN here as well). All in-tree
+  // callers pass strictly positive frequencies (fmin / f0), so this only
+  // affects genuinely invalid input.
+  if (hz <= 0) return -std::numeric_limits<float>::infinity();
   return constants::kSemitonesPerOctave * std::log2(hz / constants::kA4Hz) + constants::kMidiA4;
 }
 
@@ -163,7 +169,13 @@ std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_leng
   return out;
 }
 
-float bin_to_hz(int bin, int sr, int n_fft) { return static_cast<float>(bin * sr) / n_fft; }
+float bin_to_hz(int bin, int sr, int n_fft) {
+  // Promote to double before multiplying so bin * sr cannot overflow int at
+  // high sample rates / large FFT bins (e.g. bin=2048, sr=192000 overflows a
+  // 32-bit int). Accumulate in double, return float.
+  return static_cast<float>(static_cast<double>(bin) * static_cast<double>(sr) /
+                            static_cast<double>(n_fft));
+}
 
 int hz_to_bin(float hz, int sr, int n_fft) { return static_cast<int>(std::round(hz * n_fft / sr)); }
 

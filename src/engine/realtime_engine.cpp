@@ -5,17 +5,10 @@
 #include <vector>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/math_utils.h"
 
 namespace sonare::engine {
 namespace {
-
-size_t next_power_of_two(size_t value) {
-  size_t out = 1;
-  while (out < value) {
-    out <<= 1u;
-  }
-  return out;
-}
 
 int64_t block_end_frame(int64_t block_start, int num_frames) noexcept {
   return block_start + static_cast<int64_t>(std::max(num_frames, 0));
@@ -50,11 +43,11 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
         monitor_bus_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
 #endif
-  commands_.reserve(next_power_of_two(std::max<size_t>(command_capacity, 2)));
+  commands_.reserve(next_power_of_2(std::max<size_t>(command_capacity, 2)));
   // Telemetry is a single-producer queue with the audio thread as its only
   // producer; reserve it here so process()/enqueue_telemetry never push to an
   // unreserved (capacity 0) queue and silently drop records.
-  telemetry_.reserve(next_power_of_two(std::max<size_t>(telemetry_capacity, 2)));
+  telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
   pending_active_.fill(false);
   // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
   // the audio thread; mark all slots inactive.
@@ -147,11 +140,51 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
 
   automation::AutomationBoundaryList automation_boundaries;
-  const double block_end_ppq = tempo_map_.sample_to_ppq(state.sample_position + frames);
-  automation_.collect_boundaries(state.ppq_position, block_end_ppq, &automation_boundaries);
-  for (size_t i = 0; i < automation_boundaries.size; ++i) {
-    const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
-    boundary_splitter_.add_automation(static_cast<int>(timeline_sample - state.sample_position));
+  if (boundary_context.loop_wrap) {
+    // On a loop-wrap block the playhead is NOT a single linear ppq span: it runs
+    // from ppq_position up to loop_end_ppq (offsets [0, loop_wrap_offset)), then
+    // jumps back and runs from loop_start_ppq (offsets [loop_wrap_offset,
+    // frames)). Collecting one span ppq_position..block_end_ppq would overshoot
+    // past loop_end and miss every breakpoint in the looped-back region, so
+    // those breakpoints never become sub-block boundaries and apply a full block
+    // late. Collect each region separately and map breakpoints to their offset
+    // using the same fold the boundary splitter applies.
+    const int wrap_offset = boundary_context.loop_wrap_offset;
+    // Pre-wrap region: timeline runs forward to loop_end.
+    automation_.collect_boundaries(state.ppq_position, state.loop_end_ppq, &automation_boundaries);
+    for (size_t i = 0; i < automation_boundaries.size; ++i) {
+      const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
+      const int offset = static_cast<int>(timeline_sample - state.sample_position);
+      if (offset >= 0 && offset < wrap_offset) {
+        boundary_splitter_.add_automation(offset);
+      }
+    }
+    // Post-wrap region: timeline restarts at loop_start. The tail of this block
+    // renders (frames - wrap_offset) samples from the loop start; collect that
+    // far past loop_start_ppq.
+    const int64_t tail_frames = static_cast<int64_t>(frames) - wrap_offset;
+    if (tail_frames > 0) {
+      const double post_wrap_end_ppq =
+          tempo_map_.sample_to_ppq(boundary_context.loop_start_timeline_sample + tail_frames);
+      automation_.collect_boundaries(state.loop_start_ppq, post_wrap_end_ppq,
+                                     &automation_boundaries);
+      for (size_t i = 0; i < automation_boundaries.size; ++i) {
+        const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
+        const int offset =
+            wrap_offset +
+            static_cast<int>(timeline_sample - boundary_context.loop_start_timeline_sample);
+        if (offset >= wrap_offset && offset < frames) {
+          boundary_splitter_.add_automation(offset);
+        }
+      }
+    }
+  } else {
+    const double block_end_ppq = tempo_map_.sample_to_ppq(state.sample_position + frames);
+    automation_.collect_boundaries(state.ppq_position, block_end_ppq, &automation_boundaries);
+    for (size_t i = 0; i < automation_boundaries.size; ++i) {
+      const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
+      boundary_splitter_.add_automation(static_cast<int>(timeline_sample - state.sample_position));
+    }
   }
   // Insert control-period boundaries so automation lanes and engine-level
   // parameter smoothers are re-evaluated at a bounded cadence within the block.

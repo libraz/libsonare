@@ -87,14 +87,33 @@ std::vector<double> k_weighted_channel(const float* interleaved, size_t frames, 
 }
 
 double bs1770_channel_weight(int channel, int channels) {
-  // LFE is excluded. For common 5.1 WAV order, channel 3 is LFE.
-  if (channels == 6 && channel == 3) return 0.0;
-  // Surround channels are weighted +1.5 dB in BS.1770.
-  if ((channels == 5 && (channel == 3 || channel == 4)) ||
-      (channels == 6 && (channel == 4 || channel == 5))) {
-    return kBs1770SurroundWeight;
+  // ITU-R BS.1770-4 §2.4: front channels (L/R/C) carry unity weight, surround
+  // channels (Ls/Rs and, for 7.1, the rear pair Lb/Rb) are weighted +1.5 dB, and
+  // the LFE channel is excluded entirely (weight 0). Layouts are keyed off the
+  // canonical SMPTE/WAV interleaving order for each channel count.
+  switch (channels) {
+    case 4:
+      // Quad: L, R, Ls(2), Rs(3). No center, no LFE.
+      if (channel == 2 || channel == 3) return kBs1770SurroundWeight;
+      return 1.0;
+    case 5:
+      // 5.0: L, R, C, Ls(3), Rs(4).
+      if (channel == 3 || channel == 4) return kBs1770SurroundWeight;
+      return 1.0;
+    case 6:
+      // 5.1: L, R, C, LFE(3), Ls(4), Rs(5).
+      if (channel == 3) return 0.0;  // LFE excluded.
+      if (channel == 4 || channel == 5) return kBs1770SurroundWeight;
+      return 1.0;
+    case 8:
+      // 7.1: L, R, C, LFE(3), Ls(4), Rs(5), Lb(6), Rb(7).
+      if (channel == 3) return 0.0;                    // LFE excluded.
+      if (channel >= 4) return kBs1770SurroundWeight;  // side + rear surround.
+      return 1.0;
+    default:
+      // Mono, stereo, and unspecified layouts: treat every channel as unity.
+      return 1.0;
   }
-  return 1.0;
 }
 
 double mean_square(const double* data, size_t start, size_t length) {

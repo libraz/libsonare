@@ -82,10 +82,21 @@ class SidechainRouter : public rt::ProcessorBase {
  private:
   static void validate_config(const SidechainRouterConfig& config);
   static float gain_reduction_db(float input_db, const SidechainRouterConfig& config);
-  void ensure_followers(int num_channels);
-  void ensure_lookahead(int num_channels);
-  void ensure_hpf_state(int num_channels);
-  float detector_sample(float* const* channels, int channel, int sample,
+  /// @brief Verifies the prepared lookahead/HPF state can cover @p num_channels.
+  /// @details RT-safe: never resizes on the audio thread. Per-channel state is
+  ///          preallocated to @c kRealtimePreparedChannels in prepare(); a block
+  ///          (or sidechain) requesting more channels throws instead of
+  ///          allocating, mirroring @ref Limiter::prepare_buffers.
+  void ensure_capacity(int num_channels) const;
+  /// @brief Computes the shared (linked) detector level for a single sample.
+  /// @details Reads the detector source (external sidechain when set, otherwise
+  ///          the main channels), applies the per-channel sidechain HPF once per
+  ///          source channel when enabled, then folds the source down to a
+  ///          single linked detector value (mono sum when @c mono_summing,
+  ///          otherwise the loudest channel). Because the HPF runs exactly once
+  ///          per source channel per sample, the detector is never
+  ///          double-filtered across output channels.
+  float detector_sample(float* const* channels, int num_channels, int sample,
                         const SidechainRouterConfig& cfg);
   /// @brief Recomputes scalar derived coefficients (envelope follower attack/
   ///        release and the sidechain HPF) from @p config. RT-safe: scalar
@@ -125,9 +136,17 @@ class SidechainRouter : public rt::ProcessorBase {
   const float* const* sidechain_channels_ = nullptr;
   int sidechain_num_channels_ = 0;
   int sidechain_num_samples_ = 0;
-  std::vector<sonare::rt::EnvelopeFollower> followers_;
+  // A single shared (linked) envelope follower so every output channel receives
+  // the same gain, preserving the stereo image (mirrors Compressor/Limiter).
+  sonare::rt::EnvelopeFollower follower_;
+  // Per-channel main-signal delay lines; the gain is linked, so a single gain
+  // delay line is sufficient. Both are sized to kRealtimePreparedChannels in
+  // prepare() and never resized on the audio thread.
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
-  std::vector<sonare::rt::LookaheadBuffer> gain_lookahead_;
+  sonare::rt::LookaheadBuffer gain_lookahead_;
+  // Per-source-channel one-pole HPF state for the sidechain detector. Each
+  // source channel is filtered exactly once per sample (no shared index, no
+  // double-filtering). Sized to kRealtimePreparedChannels in prepare().
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;
   float hpf_b0_ = 1.0f;

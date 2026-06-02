@@ -763,3 +763,46 @@ TEST_CASE("iSTFT round-trip matches between center=true and center=false", "[spe
     REQUIRE(nrmse < 1e-2f);
   }
 }
+
+TEST_CASE("reassign_frequencies uses a cyclic derivative window", "[spectrum][reassign]") {
+  // The derivative (dw/dt) window is built with a cyclic central difference so
+  // the periodic analysis window is differentiated without an artificial zero
+  // boundary. For a pure tone, the reassigned frequency at the dominant bin must
+  // collapse to the true frequency. A non-cyclic edge difference biases the
+  // derivative window and shifts the reassigned frequencies.
+  constexpr int sr = 22050;
+  constexpr float freq = 1000.0f;
+  constexpr int samples = sr;  // 1 s
+
+  std::vector<float> sine = generate_sine(samples, freq, sr);
+  Audio audio = Audio::from_vector(std::move(sine), sr);
+
+  StftConfig config;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+
+  std::vector<float> freqs = reassign_frequencies(audio, config);
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  const std::vector<float>& mag = spec.magnitude();
+  const int n_frames = spec.n_frames();
+  const int n_bins = spec.n_bins();
+  const int mid_frame = n_frames / 2;
+
+  // Find the dominant bin in the middle frame.
+  int peak_bin = 0;
+  float max_mag = 0.0f;
+  for (int f = 0; f < n_bins; ++f) {
+    float m = mag[f * n_frames + mid_frame];
+    if (m > max_mag) {
+      max_mag = m;
+      peak_bin = f;
+    }
+  }
+
+  const float reassigned = freqs[peak_bin * n_frames + mid_frame];
+  REQUIRE(std::isfinite(reassigned));
+  // Reassignment should pin the tone to its true frequency far tighter than the
+  // raw FFT bin spacing (~10.77 Hz).
+  REQUIRE_THAT(reassigned, WithinAbs(freq, 1.0f));
+}

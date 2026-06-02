@@ -54,10 +54,17 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
       std::max<size_t>(1, static_cast<size_t>(std::round(config.hop_sec * audio.sample_rate())));
   const float* data = audio.data();
 
-  for (size_t start = 0; start < audio.size(); start += hop) {
-    const size_t length = std::min(window, audio.size() - start);
-    result.window_rms_db.push_back(rms_db_for_window(data, start, length, config.floor_db));
-    if (start + length == audio.size()) break;
+  if (audio.size() < window) {
+    // The signal is shorter than a single analysis window: measure the whole
+    // thing once so short clips still yield a defined result.
+    result.window_rms_db.push_back(rms_db_for_window(data, 0, audio.size(), config.floor_db));
+  } else {
+    // Emit only complete windows. A trailing partial window is computed over its
+    // own (shorter) length, so its RMS is not comparable to the full-length
+    // windows and would skew the low/high percentiles.
+    for (size_t start = 0; start + window <= audio.size(); start += hop) {
+      result.window_rms_db.push_back(rms_db_for_window(data, start, window, config.floor_db));
+    }
   }
 
   std::vector<float> sorted = result.window_rms_db;

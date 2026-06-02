@@ -25,57 +25,58 @@ float EqualizerProcessor::detector_db(const float* const* channels, int num_chan
   return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
 }
 
-float EqualizerProcessor::band_detector_db(const float* const* channels, int num_channels,
-                                           int num_samples, double sample_rate,
+float EqualizerProcessor::band_detector_db(size_t band_index, const float* const* channels,
+                                           int num_channels, int num_samples, double sample_rate,
                                            const EqBand& band) {
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
-  struct Biquad {
-    double b0 = 1.0;
-    double b1 = 0.0;
-    double b2 = 0.0;
-    double a1 = 0.0;
-    double a2 = 0.0;
-    double z1 = 0.0;
-    double z2 = 0.0;
 
-    double process(double x) {
-      const double y = b0 * x + z1;
-      z1 = b1 * x - a1 * y + z2;
-      z2 = b2 * x - a2 * y;
-      return y;
-    }
-  };
-
+  // Shared bandpass coefficients for this band's detector. Each channel keeps its
+  // own persistent z-state in detector_states_ so the filter and envelope carry
+  // over between blocks (see DetectorState comment in equalizer.h).
   const double detector_frequency =
       band.dyn.sidechain_freq_hz > 0.0f ? band.dyn.sidechain_freq_hz : band.frequency_hz;
   const double frequency =
       std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate * 0.5 - 1.0);
   const auto coeffs = rt::rbj_bandpass_d(
       frequency, sample_rate, std::max(static_cast<double>(band.dyn.sidechain_q), 1.0e-6));
-  Biquad prototype;
-  prototype.b0 = coeffs.b0;
-  prototype.b1 = coeffs.b1;
-  prototype.b2 = coeffs.b2;
-  prototype.a1 = coeffs.a1;
-  prototype.a2 = coeffs.a2;
+  const double b0 = coeffs.b0;
+  const double b1 = coeffs.b1;
+  const double b2 = coeffs.b2;
+  const double a1 = coeffs.a1;
+  const double a2 = coeffs.a2;
 
   const double attack = sonare::time_to_attack_release_rate(sample_rate, band.dyn.attack_ms);
   const double release = sonare::time_to_attack_release_rate(sample_rate, band.dyn.release_ms);
   const int lookahead_samples =
       static_cast<int>(std::round(sample_rate * band.dyn.lookahead_ms * 0.001));
 
+  auto& states = detector_states_[band_index];
+  // States are preallocated in prepare(); only grow if a wider channel count is
+  // seen (e.g. an unprepared offline call). Never shrink so state persists.
+  if (states.size() < static_cast<size_t>(num_channels)) {
+    states.resize(static_cast<size_t>(num_channels));
+  }
+
+  const auto biquad = [&](double x, double& z1, double& z2) {
+    const double y = b0 * x + z1;
+    z1 = b1 * x - a1 * y + z2;
+    z2 = b2 * x - a2 * y;
+    return y;
+  };
+
   double sum = 0.0;
   for (int ch = 0; ch < num_channels; ++ch) {
-    Biquad filter_a = prototype;
-    Biquad filter_b = prototype;
-    double envelope = 0.0;
+    DetectorState& s = states[static_cast<size_t>(ch)];
+    double envelope = s.envelope;
     for (int i = 0; i < num_samples; ++i) {
       const int src = std::min(num_samples - 1, i + std::max(lookahead_samples, 0));
-      const double rectified = std::abs(filter_b.process(filter_a.process(channels[ch][src])));
+      const double stage_a = biquad(channels[ch][src], s.filter_a_z1, s.filter_a_z2);
+      const double rectified = std::abs(biquad(stage_a, s.filter_b_z1, s.filter_b_z2));
       const double coeff = rectified > envelope ? attack : release;
       envelope += coeff * (rectified - envelope);
       sum += envelope * envelope;
     }
+    s.envelope = envelope;
   }
   const double count = static_cast<double>(num_channels) * static_cast<double>(num_samples);
   return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
@@ -125,7 +126,7 @@ void EqualizerProcessor::update_dynamic_state(const float* const* channels, int 
       const bool use_external = band.dyn.external_sidechain && sidechain_channels_ != nullptr;
       const float* const* detector_channels = use_external ? sidechain_channels_ : channels;
       const int detector_num_channels = use_external ? sidechain_num_channels_ : num_channels;
-      last_band_detector_db_[i] = band_detector_db(detector_channels, detector_num_channels,
+      last_band_detector_db_[i] = band_detector_db(i, detector_channels, detector_num_channels,
                                                    num_samples, sample_rate_, band);
       if (band.dyn.auto_threshold) {
         const float target = last_band_detector_db_[i] - 6.0f;

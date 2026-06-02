@@ -5,18 +5,13 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::dynamics {
-
-namespace {
-// The library targets mono/stereo only; preallocate detector state for two
-// channels so the audio thread never resizes the HPF state.
-constexpr int kMaxChannels = 2;
-}  // namespace
 
 SidechainRouter::SidechainRouter(SidechainRouterConfig config)
     : config_(config),
@@ -41,16 +36,19 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
   lookahead_samples_ = static_cast<int>(
       std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate_));
   prepared_ = true;
+  // Preallocate per-channel main delay lines, the single shared gain delay line,
+  // and the per-source-channel HPF state up front so the audio-thread process()
+  // path never resizes (which would malloc). A block (or sidechain) requesting
+  // more than kRealtimePreparedChannels channels throws in ensure_capacity().
+  const auto delay = static_cast<size_t>(std::max(lookahead_samples_, 0));
+  lookahead_.assign(kRealtimePreparedChannels, {});
   for (auto& lookahead : lookahead_) {
-    lookahead.prepare(static_cast<size_t>(lookahead_samples_));
+    lookahead.prepare(delay);
   }
-  for (auto& lookahead : gain_lookahead_) {
-    lookahead.prepare(static_cast<size_t>(lookahead_samples_));
-  }
+  gain_lookahead_.prepare(delay);
+  hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
+  hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
   update_coefficients(config_);
-  // Preallocate detector HPF state for the maximum supported channel count so
-  // it never has to grow on the audio thread.
-  ensure_hpf_state(kMaxChannels);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -100,50 +98,55 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   // changes its current() value inside acquire(), and we already called it.
   const SidechainRouterConfig& cfg = *adopt_snapshot_for_block();
 
-  ensure_followers(num_channels);
-  ensure_lookahead(num_channels);
-  // HPF state is preallocated in prepare()/set_sidechain() for the maximum
-  // supported channel count; no audio-thread reallocation here.
-  float max_reduction = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
+  }
+  // Per-channel main delay lines and per-source-channel HPF state are
+  // preallocated in prepare(); verify the block (and the external sidechain, if
+  // any) fit the prepared state instead of resizing on the audio thread.
+  ensure_capacity(num_channels);
+  if (sidechain_channels_ != nullptr) {
+    ensure_capacity(sidechain_num_channels_);
+  }
 
-    auto& follower = followers_[static_cast<size_t>(ch)];
-    for (int i = 0; i < num_samples; ++i) {
-      const float detector = detector_sample(channels, ch, i, cfg);
-      if (cfg.key_listen) {
+  float max_reduction = 0.0f;
+  // Sample-major loop with a single linked detector and a single shared
+  // envelope follower: every output channel receives the same gain (preserves
+  // the stereo image) and the sidechain HPF runs exactly once per source
+  // channel per sample (no double-filtering across output channels).
+  for (int i = 0; i < num_samples; ++i) {
+    const float detector = detector_sample(channels, num_channels, i, cfg);
+    if (cfg.key_listen) {
+      for (int ch = 0; ch < num_channels; ++ch) {
         channels[ch][i] = detector;
-        continue;
       }
-      const float envelope = follower.process(detector);
-      const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
-      const float reduction_gain = db_to_linear(reduction_db);
+      continue;
+    }
+    const float envelope = follower_.process(detector);
+    const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
+    const float reduction_gain = db_to_linear(reduction_db);
+    const float delayed_gain =
+        lookahead_samples_ > 0 ? gain_lookahead_.process(reduction_gain) : reduction_gain;
+    for (int ch = 0; ch < num_channels; ++ch) {
       const float main_sample = lookahead_samples_ > 0
                                     ? lookahead_[static_cast<size_t>(ch)].process(channels[ch][i])
                                     : channels[ch][i];
-      const float delayed_gain =
-          lookahead_samples_ > 0 ? gain_lookahead_[static_cast<size_t>(ch)].process(reduction_gain)
-                                 : reduction_gain;
       channels[ch][i] = main_sample * delayed_gain;
-      max_reduction = std::min(max_reduction, reduction_db);
     }
+    max_reduction = std::min(max_reduction, reduction_db);
   }
 
   last_gain_reduction_db_ = max_reduction;
 }
 
 void SidechainRouter::reset() {
-  for (auto& follower : followers_) {
-    follower.reset();
-  }
+  follower_.reset();
   for (auto& lookahead : lookahead_) {
     lookahead.reset();
   }
-  for (auto& lookahead : gain_lookahead_) {
-    lookahead.reset();
-  }
+  gain_lookahead_.reset();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   last_gain_reduction_db_ = 0.0f;
@@ -168,13 +171,16 @@ void SidechainRouter::set_sidechain(const float* const* channels, int num_channe
     }
   }
 
+  // The detector HPF state is preallocated to kRealtimePreparedChannels in
+  // prepare(); an external sidechain wider than that is rejected here (on the
+  // non-RT control thread) rather than triggering an audio-thread resize.
+  if (prepared_ && static_cast<size_t>(num_channels) > hpf_x1_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sidechain channels exceed prepared SidechainRouter state");
+  }
   sidechain_channels_ = channels;
   sidechain_num_channels_ = num_channels;
   sidechain_num_samples_ = num_samples;
-  // Grow detector HPF state if the external sidechain has more channels than
-  // were preallocated. set_sidechain() is a non-RT setter, so resizing is safe
-  // here (and avoids it on the audio thread).
-  ensure_hpf_state(sidechain_num_channels_);
 }
 
 void SidechainRouter::clear_sidechain() {
@@ -237,78 +243,61 @@ float SidechainRouter::gain_reduction_db(float input_db, const SidechainRouterCo
 }
 
 void SidechainRouter::update_coefficients(const SidechainRouterConfig& config) {
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
-  }
+  follower_.prepare(sample_rate_, config.attack_ms, config.release_ms);
   const auto hpf = sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz),
                                                        sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
 }
 
-void SidechainRouter::ensure_followers(int num_channels) {
-  if (followers_.size() == static_cast<size_t>(num_channels)) {
+void SidechainRouter::ensure_capacity(int num_channels) const {
+  // RT-safe: never resizes on the audio thread. The per-channel main delay
+  // lines and per-source-channel HPF state are preallocated to
+  // kRealtimePreparedChannels in prepare(); a wider block throws instead of
+  // allocating (matches Limiter::prepare_buffers).
+  if (static_cast<size_t>(num_channels) <= lookahead_.size() &&
+      static_cast<size_t>(num_channels) <= hpf_x1_.size()) {
     return;
   }
-
-  followers_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-  }
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "num_channels exceeds prepared SidechainRouter state");
 }
 
-void SidechainRouter::ensure_lookahead(int num_channels) {
-  if (lookahead_.size() == static_cast<size_t>(num_channels)) {
-    return;
-  }
-
-  lookahead_.assign(static_cast<size_t>(num_channels), {});
-  gain_lookahead_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& lookahead : lookahead_) {
-    lookahead.prepare(static_cast<size_t>(lookahead_samples_));
-  }
-  for (auto& lookahead : gain_lookahead_) {
-    lookahead.prepare(static_cast<size_t>(lookahead_samples_));
-  }
-}
-
-void SidechainRouter::ensure_hpf_state(int num_channels) {
-  const auto target = static_cast<size_t>(std::max(num_channels, 0));
-  if (hpf_x1_.size() >= target) {
-    return;
-  }
-  hpf_x1_.resize(target, 0.0f);
-  hpf_y1_.resize(target, 0.0f);
-}
-
-float SidechainRouter::detector_sample(float* const* channels, int channel, int sample,
+float SidechainRouter::detector_sample(float* const* channels, int num_channels, int sample,
                                        const SidechainRouterConfig& cfg) {
-  if (sidechain_channels_ == nullptr || sidechain_num_channels_ == 0 ||
-      sidechain_num_samples_ == 0) {
-    return channels[channel][sample];
-  }
-
-  if (sample >= sidechain_num_samples_) {
+  // Choose the detector source: the external sidechain when set, otherwise the
+  // main channels (self / internal detection). The sidechain HPF is honored in
+  // both modes.
+  const bool use_external =
+      sidechain_channels_ != nullptr && sidechain_num_channels_ > 0 && sidechain_num_samples_ > 0;
+  if (use_external && sample >= sidechain_num_samples_) {
     return 0.0f;
   }
-  float detector = 0.0f;
-  int detector_channel = std::min(channel, sidechain_num_channels_ - 1);
+  const int source_channels = use_external ? sidechain_num_channels_ : num_channels;
+
+  // Fold the source down to a single linked detector value, applying the
+  // per-channel HPF once per source channel per sample. Because the one-pole
+  // HPF is LTI, filtering each source channel and averaging is identical to
+  // averaging then filtering, so mono summing keeps its meaning while never
+  // sharing HPF state across output channels.
+  float sum = 0.0f;
+  float peak = 0.0f;
+  for (int ch = 0; ch < source_channels; ++ch) {
+    float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
+    if (cfg.sidechain_hpf_enabled) {
+      const auto idx = static_cast<size_t>(ch);
+      const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
+      hpf_x1_[idx] = s;
+      hpf_y1_[idx] = y;
+      s = y;
+    }
+    sum += s;
+    peak = std::max(peak, std::abs(s));
+  }
   if (cfg.mono_summing) {
-    for (int ch = 0; ch < sidechain_num_channels_; ++ch)
-      detector += sidechain_channels_[ch][sample];
-    detector /= static_cast<float>(sidechain_num_channels_);
-    detector_channel = 0;
-  } else {
-    detector = sidechain_channels_[detector_channel][sample];
+    return sum / static_cast<float>(std::max(source_channels, 1));
   }
-  if (cfg.sidechain_hpf_enabled && detector_channel < static_cast<int>(hpf_x1_.size())) {
-    auto idx = static_cast<size_t>(detector_channel);
-    const float y = hpf_b0_ * (detector - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-    hpf_x1_[idx] = detector;
-    hpf_y1_[idx] = y;
-    detector = y;
-  }
-  return detector;
+  return peak;
 }
 
 }  // namespace sonare::mastering::dynamics

@@ -138,11 +138,22 @@ void MultibandSaturation::reset() {
 
 void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   validate_config(config);
+  // Only reconfigure/re-prepare the crossover when its parameters actually
+  // change. crossover_.set_config() (and prepare()) rebuild and zero the
+  // crossover filter state, which would click if invoked on every set_config
+  // call that only touches band parameters. Sub-processors are always rebuilt
+  // and prepared; that path does not disturb crossover state.
+  const bool crossover_changed = config.crossover != config_.crossover;
   config_ = config;
-  crossover_.set_config(config_.crossover);
   rebuild_processors();
   if (prepared_) {
-    prepare(sample_rate_, max_block_size_);
+    if (crossover_changed) {
+      crossover_.set_config(config_.crossover);
+      crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+    }
+    for (auto& processor : processors_) {
+      processor->prepare(sample_rate_, max_block_size_);
+    }
   }
 }
 

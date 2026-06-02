@@ -128,7 +128,11 @@ ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const ChordConfig& config)
 
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
                              const ChordConfig& config)
-    : chroma_(chroma), config_(config) {
+    : ChordAnalyzer(chroma, beat_times, Chroma(), config) {}
+
+ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
+                             const Chroma& bass_chroma, const ChordConfig& config)
+    : chroma_(chroma), bass_chroma_(bass_chroma), config_(config) {
   // Generate templates
   if (config.use_triads_only) {
     templates_ = generate_triad_templates();

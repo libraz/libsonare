@@ -65,6 +65,11 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
   auto_threshold_db_.fill(kFloorDb);
+  // Preallocate persistent detector state per band so the audio-thread detector
+  // never resizes. Sized to the IIR backend's prepared channel capacity.
+  for (auto& states : detector_states_) {
+    states.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), DetectorState{});
+  }
   validate_backend_capacity(bands_, phase_mode_);
   rebuild_iir();
 }
@@ -166,6 +171,9 @@ void EqualizerProcessor::reset() {
   side_fir_.reset();
   last_detector_db_ = kFloorDb;
   last_band_detector_db_.fill(kFloorDb);
+  for (auto& states : detector_states_) {
+    std::fill(states.begin(), states.end(), DetectorState{});
+  }
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
   auto_threshold_db_.fill(kFloorDb);

@@ -5,6 +5,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
+#include <limits>
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -38,6 +40,51 @@ TEST_CASE("hz_to_midi / midi_to_hz", "[convert]") {
   // C4 = 261.63Hz = MIDI 60
   REQUIRE_THAT(hz_to_midi(261.63f), WithinAbs(60.0f, 0.1f));
   REQUIRE_THAT(midi_to_hz(60.0f), WithinAbs(261.63f, 0.1f));
+}
+
+TEST_CASE("hz_to_midi non-positive input is not a valid pitch sentinel", "[convert]") {
+  // 0 is a valid MIDI value (C-1), so non-positive Hz must not return 0.0f and
+  // masquerade as a real pitch. It should return -inf instead.
+  SECTION("zero Hz returns -inf") {
+    float midi = hz_to_midi(0.0f);
+    REQUIRE(std::isinf(midi));
+    REQUIRE(midi < 0.0f);
+  }
+
+  SECTION("negative Hz returns -inf") {
+    float midi = hz_to_midi(-440.0f);
+    REQUIRE(std::isinf(midi));
+    REQUIRE(midi < 0.0f);
+  }
+
+  SECTION("a frequency that legitimately maps to MIDI 0 is distinguishable") {
+    // C-1 is MIDI 0 ~= 8.1758 Hz. This is a valid pitch and must remain finite.
+    float c_minus1_hz = midi_to_hz(0.0f);
+    float midi = hz_to_midi(c_minus1_hz);
+    REQUIRE(std::isfinite(midi));
+    REQUIRE_THAT(midi, WithinAbs(0.0f, 0.01f));
+  }
+}
+
+TEST_CASE("bin_to_hz does not overflow at high sample rates", "[convert]") {
+  // bin * sr computed in int overflows for large bins / sample rates. With
+  // double-precision accumulation the result must remain accurate.
+  SECTION("high sample rate, large bin") {
+    int sr = 192000;
+    int n_fft = 4096;
+    int bin = 2048;  // Nyquist bin; bin * sr = 393'216'000 overflows int32.
+    float hz = bin_to_hz(bin, sr, n_fft);
+    // Expected: 2048 * 192000 / 4096 = 96000 Hz (Nyquist).
+    REQUIRE_THAT(hz, WithinRel(96000.0f, 1e-4f));
+  }
+
+  SECTION("standard parameters remain correct") {
+    int sr = 22050;
+    int n_fft = 2048;
+    REQUIRE_THAT(bin_to_hz(0, sr, n_fft), WithinAbs(0.0f, 1e-3f));
+    // bin 1024 (Nyquist) -> sr / 2 = 11025 Hz.
+    REQUIRE_THAT(bin_to_hz(1024, sr, n_fft), WithinRel(11025.0f, 1e-4f));
+  }
 }
 
 TEST_CASE("hz_to_note / note_to_hz", "[convert]") {

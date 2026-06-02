@@ -67,7 +67,12 @@ int object_int(const sonare::util::json::Value& object, const char* key, int fal
   if (!value || !value->is_number()) return fallback;
   const double n = value->as_number();
   if (!std::isfinite(n)) return fallback;
-  return static_cast<int>(n);
+  // Clamp to the representable int range BEFORE the cast: a finite JSON number
+  // outside [INT_MIN, INT_MAX] (e.g. a 1e12 reverb seed) would otherwise be an
+  // out-of-range static_cast<int>, which is undefined behaviour.
+  const double clamped = std::clamp(n, static_cast<double>(std::numeric_limits<int>::min()),
+                                    static_cast<double>(std::numeric_limits<int>::max()));
+  return static_cast<int>(clamped);
 }
 
 bool object_bool(const sonare::util::json::Value& object, const char* key, bool fallback) {

@@ -16,6 +16,14 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+// Oversample factors that have a dedicated polyphase design. Any other factor is
+// rejected by true_peak() rather than silently resolved to a different filter,
+// which would report a mislabeled (lower) oversample resolution.
+bool is_supported_oversample(int oversample_factor) {
+  return oversample_factor == 1 || oversample_factor == 2 || oversample_factor == 4 ||
+         oversample_factor == 8 || oversample_factor == 16;
+}
+
 const ::sonare::rt::PolyphaseFir& filter_for(int oversample_factor) {
   static const auto kFilter4x = ::sonare::rt::design_polyphase_lowpass(4, 48, 9.5, true);
   static const auto kFilter8x = ::sonare::rt::design_polyphase_lowpass(8, 96, 9.5, true);
@@ -46,6 +54,11 @@ float upsampled_peak(const float* data, size_t length, int oversample_factor) {
 
 float true_peak(const float* data, size_t length, int oversample_factor) {
   SONARE_CHECK(oversample_factor >= 1, ErrorCode::InvalidParameter);
+  // Reject factors without a dedicated polyphase design instead of silently
+  // falling back to 4x and reporting a result mislabeled with the requested
+  // factor. Supported factors: 1, 2, 4, 8, 16.
+  SONARE_CHECK_MSG(is_supported_oversample(oversample_factor), ErrorCode::InvalidParameter,
+                   "true_peak oversample_factor must be one of 1, 2, 4, 8, 16");
   SONARE_CHECK(data != nullptr || length == 0, ErrorCode::InvalidParameter);
   if (length == 0) return 0.0f;
 

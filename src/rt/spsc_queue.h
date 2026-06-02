@@ -41,6 +41,13 @@ class SpscQueue {
     // which would drop records (e.g. telemetry) without any signal. Catch the
     // missing reserve() in debug builds; release builds still fail closed.
     assert(capacity() != 0 && "SpscQueue::push before reserve(): records will be dropped");
+    // Explicit fail-closed guard for the never-reserved (capacity 0) queue so
+    // release builds never index into an empty buffer_. Returning false also
+    // makes the dropped-record behaviour observable to callers via the return
+    // value rather than relying on the head/tail comparison below.
+    if (capacity() == 0) {
+      return false;
+    }
     const size_t head = head_.load(std::memory_order_relaxed);
     const size_t tail = tail_.load(std::memory_order_acquire);
     if (head - tail >= capacity()) {

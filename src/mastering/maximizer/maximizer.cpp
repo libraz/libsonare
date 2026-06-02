@@ -64,9 +64,12 @@ bool Maximizer::set_parameter(unsigned int param_id, float value) {
       return true;
     case 2:
       config_.release_ms = std::max(0.0f, value);
-      // In-place release coefficient update; preserves limiter audio state.
+      // RT-safe in-place release coefficient update: recomputes the inner
+      // limiter's release coefficient without publishing a snapshot (no
+      // allocation), preserving the limiter audio state. Matches the
+      // parameter_is_realtime_safe(2) == true contract.
       if (prepared_) {
-        limiter_.set_release_ms(config_.release_ms);
+        limiter_.set_release_ms_in_place(config_.release_ms);
       }
       return true;
     default:

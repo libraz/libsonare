@@ -198,11 +198,20 @@ BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
   const int beat_index = static_cast<int>(std::floor(offset / beat_len));
 
   int64_t bar_count = 0;
+  // Tolerance for treating a segment span as a whole number of bars, so a
+  // signature that does fall on the bar grid is not bumped by floating-point
+  // fuzz.
+  constexpr double kBarEpsilon = 1.0e-9;
   for (size_t i = 0; i < sig_index; ++i) {
     const double next_start = sigs[i + 1].start_ppq;
     const double len = bar_length_ppq(sigs[i].time_sig);
-    bar_count +=
-        static_cast<int64_t>(std::floor(std::max(0.0, next_start - sigs[i].start_ppq) / len));
+    // A signature change that lands off the bar grid leaves a partial bar at the
+    // end of this segment. That partial bar has still STARTED, so count it as a
+    // full bar (ceil): otherwise the next segment's bar 0 would collide with the
+    // partial bar's number, producing duplicate/wrong bar numbers across the
+    // boundary. ceil reduces to floor when the span is an exact bar multiple.
+    const double bars = std::max(0.0, next_start - sigs[i].start_ppq) / len;
+    bar_count += static_cast<int64_t>(std::ceil(bars - kBarEpsilon));
   }
   const double current_len = bar_length_ppq(sig);
   bar_count += static_cast<int64_t>(

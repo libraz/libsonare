@@ -202,11 +202,12 @@ void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
 }
 
 void BrickwallLimiter::update_coefficients(const BrickwallLimiterConfig& config) {
-  // RT-safe: forward ceiling and release to the inner limiter via its
-  // parameter setters, which update scalar coefficients in place without
-  // resizing the lookahead buffers.
-  limiter_.set_parameter(0, config.ceiling_db);
-  limiter_.set_release_ms(config.release_ms);
+  // RT-safe: forward ceiling and release to the inner limiter via its in-place
+  // setters, which update scalar coefficients without publishing a snapshot
+  // (no shared_ptr allocation) and without resizing the lookahead buffers.
+  // Called from the audio thread on snapshot adoption, so it must not allocate.
+  limiter_.set_threshold_in_place(config.ceiling_db);
+  limiter_.set_release_ms_in_place(config.release_ms);
 }
 
 }  // namespace sonare::mastering::dynamics

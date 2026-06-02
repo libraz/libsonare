@@ -106,6 +106,8 @@ class ChannelStrip : public rt::ProcessorBase {
   void set_dual_pan(float left_pan, float right_pan) noexcept {
     panner_.set_dual_pan(left_pan, right_pan);
   }
+  float dual_pan_left() const noexcept { return panner_.dual_pan_left(); }
+  float dual_pan_right() const noexcept { return panner_.dual_pan_right(); }
 
   void set_muted(bool muted) noexcept;
   bool muted() const noexcept;
@@ -129,6 +131,10 @@ class ChannelStrip : public rt::ProcessorBase {
   void set_eq_position(EqPosition p) noexcept { eq_position_.store(p, std::memory_order_relaxed); }
   EqPosition eq_position() const noexcept { return eq_position_.load(std::memory_order_relaxed); }
   sonare::mastering::eq::ParametricEq& eq() noexcept { return eq_; }
+  // Const accessor for read-only introspection of the embedded EQ stage. The EQ
+  // is currently reachable only from C++ (no scene/binding field exposes it); a
+  // const overload keeps the accessor pair consistent for read-only callers.
+  const sonare::mastering::eq::ParametricEq& eq() const noexcept { return eq_; }
 
   // Embedded meters. The no-arg overload is kept as the post-chain/output meter.
   MeterSnapshot meter_snapshot() const noexcept { return meter_snapshot(TapPoint::PostFader); }

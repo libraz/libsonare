@@ -120,6 +120,9 @@ float PitchCorrector::apply_limits(float semitones) const noexcept {
 Audio PitchCorrector::correct_timevarying(const Audio& audio, const F0Track& track, TargetMode mode,
                                           float fixed_target_midi) const {
   SONARE_CHECK(track.f0_hz.size() == track.voiced.size(), ErrorCode::InvalidParameter);
+  // hop_length is in samples at the track's rate; a rate mismatch would silently apply
+  // the correction curve at the wrong time positions and derive a wrong retune tau.
+  SONARE_CHECK(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
   if (audio.empty() || track.n_frames() == 0) {
     return audio.to_mono();
   }
@@ -352,6 +355,11 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
 
   const int xfade = std::max(1, static_cast<int>(std::lround(kCrossfadeMs * 0.001f * sr_f)));
   std::vector<float> result(static_cast<size_t>(n_samples), 0.0f);
+  // Weight of the fallback (dry/spectral-shift) contribution at each sample,
+  // i.e. (1 - w) below. Used to scope the overshoot guard to only the samples
+  // the spectral fallback actually feeds, so a localized fallback overshoot
+  // never attenuates the rest of the (in-range) corrected output.
+  std::vector<float> fallback_weight(static_cast<size_t>(n_samples), 0.0f);
   for (int i = 0; i < n_samples; ++i) {
     const size_t idx = static_cast<size_t>(i);
     const bool psola_here = have_psola && norm[idx] > kSpectrumEpsilon;
@@ -363,6 +371,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     }
     if (!psola_here) {
       result[idx] = dry;
+      fallback_weight[idx] = 1.0f;
       continue;
     }
     // Cross-fade weight ramps from dry to PSOLA across boundary samples.
@@ -382,20 +391,37 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       w = static_cast<float>(edge) / static_cast<float>(xfade);
     }
     result[idx] = w * out[idx] + (1.0f - w) * dry;
+    fallback_weight[idx] = 1.0f - w;
   }
 
   // The PSOLA path is OLA-normalized and stays in range, but the spectral
   // fallback can overshoot. Peak-normalize (instead of hard-clipping) so a
   // large-shift fallback region does not introduce clipping distortion.
+  //
+  // Scope the guard to the fallback-fed samples only: a contiguous run of
+  // samples that the spectral fallback contributes to (directly or through its
+  // cross-fade tails) is normalized as a unit, and the same per-run gain is
+  // applied to the cross-fade neighbours so no gain step appears at the
+  // boundary. PSOLA-only samples (fallback_weight == 0) keep unity gain, so a
+  // localized overshoot can no longer pull down the whole corrected output.
   if (have_fallback) {
-    float peak = 0.0f;
-    for (const float s : result) {
-      peak = std::max(peak, std::abs(s));
-    }
-    if (peak > 1.0f) {
-      const float gain = 1.0f / peak;
-      for (float& s : result) {
-        s *= gain;
+    int i = 0;
+    while (i < n_samples) {
+      if (fallback_weight[static_cast<size_t>(i)] <= 0.0f) {
+        ++i;
+        continue;
+      }
+      const int run_start = i;
+      float peak = 0.0f;
+      while (i < n_samples && fallback_weight[static_cast<size_t>(i)] > 0.0f) {
+        peak = std::max(peak, std::abs(result[static_cast<size_t>(i)]));
+        ++i;
+      }
+      if (peak > 1.0f) {
+        const float gain = 1.0f / peak;
+        for (int j = run_start; j < i; ++j) {
+          result[static_cast<size_t>(j)] *= gain;
+        }
       }
     }
   }

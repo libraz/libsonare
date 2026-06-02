@@ -28,9 +28,10 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   BeatAnalyzer beat_analyzer(audio, beat_config);
   beats_ = beat_analyzer.beats();
   bpm_ = beat_analyzer.bpm();
+  onset_strength_ = beat_analyzer.onset_strength();
 
   // Detect onsets from onset strength envelope
-  detect_onsets(beat_analyzer.onset_strength());
+  detect_onsets(onset_strength_);
 
   analyze();
 }
@@ -41,9 +42,10 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
       sr_(beat_analyzer.sample_rate()),
       hop_length_(beat_analyzer.hop_length()) {
   beats_ = beat_analyzer.beats();
+  onset_strength_ = beat_analyzer.onset_strength();
 
   // Detect onsets from onset strength envelope
-  detect_onsets(beat_analyzer.onset_strength());
+  detect_onsets(onset_strength_);
 
   analyze();
 }
@@ -181,7 +183,10 @@ void RhythmAnalyzer::detect_time_signature() {
     return;
   }
 
-  features_.time_signature = estimate_meter({}, beats_).time_signature;
+  // Pass the beat-aligned onset strength envelope (matching BeatAnalyzer) so
+  // estimate_meter can resolve simple-vs-compound meter from the audio instead
+  // of being forced into the empty-envelope 6/8 fallback.
+  features_.time_signature = estimate_meter(onset_strength_, beats_).time_signature;
 }
 
 void RhythmAnalyzer::detect_groove_type() {

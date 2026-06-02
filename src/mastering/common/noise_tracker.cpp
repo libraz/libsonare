@@ -12,6 +12,9 @@ namespace {
 constexpr float kFloor = 1.0e-12f;
 constexpr float kMcraSignalThreshold = 3.0f;
 constexpr float kImcraSignalThreshold = 4.6f;
+// Static mode is a simplified soft-decision tracker; it gets its own threshold so a
+// future tweak to the MCRA tuning cannot silently change Static-mode behavior.
+constexpr float kStaticSignalThreshold = 3.0f;
 
 float clamp_probability(float value) { return std::clamp(value, 0.0f, 1.0f); }
 
@@ -67,7 +70,7 @@ void NoiseTracker::update(const float* power_spectrum) {
     float alpha_noise = 0.8f;
     switch (mode_) {
       case Mode::Static:
-        speech_probability = ratio > kMcraSignalThreshold ? 1.0f : 0.0f;
+        speech_probability = ratio > kStaticSignalThreshold ? 1.0f : 0.0f;
         alpha_noise = speech_probability > 0.0f ? 0.995f : 0.92f;
         noise_psd_[idx] =
             std::min(alpha_noise * noise_psd_[idx] + (1.0f - alpha_noise) * power_spectrum[idx],

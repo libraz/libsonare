@@ -156,9 +156,15 @@ void MultibandImager::reset() {
 
 void MultibandImager::set_config(const MultibandImagerConfig& config) {
   validate_config(config);
+  // Only reconfigure/re-prepare the crossover when its parameters actually
+  // change; rebuilding it zeroes the crossover filter state and would click on
+  // band-parameter-only updates. The allpass decorrelation state is rebuilt and
+  // reset on every set_config (it was before this change too).
+  const bool crossover_changed = config.crossover != config_.crossover;
   config_ = config;
-  crossover_.set_config(config_.crossover);
-  if (prepared_) {
+  if (prepared_ && crossover_changed) {
+    // Re-prepare (which rebuilds crossover state and the allpass stages) only
+    // when the crossover layout changed, e.g. the band count.
     prepare(sample_rate_, max_block_size_);
   }
 }
