@@ -171,6 +171,12 @@ void AutomationEngine::collect_boundaries(double block_start_ppq, double block_e
       next = lane.next_breakpoint_after(next);
     }
   }
+  // A full boundary list means breakpoints past kCapacity were dropped this
+  // block, so sub-block splitting (and thus per-breakpoint parameter updates)
+  // is late. Surface it as a counter like the other apply-path diagnostics.
+  if (out->overflowed) {
+    boundary_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+  }
   out->sort_unique();
 }
 

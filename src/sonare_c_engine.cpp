@@ -305,7 +305,12 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
   std::vector<automation::Breakpoint> breakpoints;
   breakpoints.reserve(point_count);
   for (size_t i = 0; i < point_count; ++i) {
-    if (!std::isfinite(points[i].ppq)) return SONARE_ERROR_INVALID_PARAMETER;
+    // Reject non-finite breakpoints (both axes): a NaN/Inf ppq or value would
+    // poison the lane's interpolation and propagate through every parameter the
+    // lane drives.
+    if (!std::isfinite(points[i].ppq) || !std::isfinite(points[i].value)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     breakpoints.push_back(
         {points[i].ppq, points[i].value, curve_from_int(points[i].curve_to_next)});
   }

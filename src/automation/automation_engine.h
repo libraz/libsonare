@@ -86,6 +86,11 @@ class AutomationEngine {
   uint32_t stale_lane_apply_count() const noexcept {
     return stale_lane_apply_count_.load(std::memory_order_relaxed);
   }
+  // Number of blocks whose boundary collection overflowed AutomationBoundaryList
+  // (kCapacity exceeded), so some breakpoint sub-block splits were dropped.
+  uint32_t boundary_overflow_count() const noexcept {
+    return boundary_overflow_count_.load(std::memory_order_relaxed);
+  }
 
  private:
   // param_id 0 is reserved as the invalid/none sentinel: an unbound slot keeps
@@ -115,6 +120,7 @@ class AutomationEngine {
   std::atomic<uint32_t> non_realtime_safe_rejection_count_{0};
   std::atomic<uint32_t> bind_target_overflow_count_{0};
   std::atomic<uint32_t> stale_lane_apply_count_{0};
+  std::atomic<uint32_t> boundary_overflow_count_{0};
 };
 
 }  // namespace sonare::automation

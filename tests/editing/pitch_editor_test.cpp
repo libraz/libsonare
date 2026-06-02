@@ -68,6 +68,23 @@ TEST_CASE("NoteSegmenter splits voiced notes by sustained pitch jump", "[pitch_e
   REQUIRE_THAT(regions[1].median_cents, WithinAbs(386.3137f, 0.01f));
 }
 
+TEST_CASE("NoteSegmenter returns nothing for an invalid reference frequency", "[pitch_editor]") {
+  F0Track track;
+  track.sample_rate = 1000;
+  track.hop_length = 10;
+  track.f0_hz = {440.0f, 440.0f, 440.0f, 550.0f, 550.0f, 550.0f};
+  track.voiced.assign(track.f0_hz.size(), true);
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+
+  // reference_hz <= 0 makes every cents value collapse to 0; bail instead of
+  // emitting meaningless segments.
+  NoteSegmenter zero_ref({50.0f, 20.0f, 0.0f});
+  REQUIRE(zero_ref.segment(track).empty());
+
+  NoteSegmenter neg_ref({50.0f, 20.0f, -100.0f});
+  REQUIRE(neg_ref.segment(track).empty());
+}
+
 TEST_CASE("NoteSegmenter splits sustained pitch changes without silence", "[pitch_editor]") {
   F0Track track;
   track.sample_rate = 1000;

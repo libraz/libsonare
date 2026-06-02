@@ -19,6 +19,10 @@ struct ParameterInfo {
   uint32_t id = 0;
   const char* name = "";
   const char* unit = "";
+  // NOTE: min_value/max_value are descriptive UI metadata only. AutomationEngine
+  // does NOT clamp applied values to this range — apply()/set_parameter() pass
+  // the lane/host value straight to the processor (each processor clamps its own
+  // parameters as needed). Callers must not assume the engine enforces [min,max].
   float min_value = 0.0f;
   float max_value = 1.0f;
   float default_value = 0.0f;

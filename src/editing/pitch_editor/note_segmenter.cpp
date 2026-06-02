@@ -13,6 +13,12 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
       track.sample_rate <= 0) {
     return regions;
   }
+  // A non-positive or non-finite reference frequency makes every hz_to_cents
+  // return 0 (its own guard), collapsing all pitch statistics to a single value
+  // and silently producing meaningless segmentation. Bail out explicitly.
+  if (!(config_.reference_hz > 0.0f) || !std::isfinite(config_.reference_hz)) {
+    return regions;
+  }
 
   const int min_frames =
       std::max(1, static_cast<int>(std::ceil(config_.min_note_ms * 0.001f *
