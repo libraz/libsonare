@@ -451,6 +451,23 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     }
   }
 
+  // Detect a minor perfect cadence (V-i): a major-quality dominant resolving to
+  // a minor-quality tonic. Tracked separately from the major V-I above so the
+  // minor branch can receive the same cadence bonus the major branch gets,
+  // rather than systematically losing close ties to its relative major.
+  PitchClass minor_cadence_tonic = PitchClass::C;
+  bool has_minor_cadence = false;
+  if (chords.size() >= 2) {
+    const Chord& last = chords.back();
+    const Chord& second_last = chords[chords.size() - 2];
+    int interval = (static_cast<int>(last.root) - static_cast<int>(second_last.root) + 12) % 12;
+    if (interval == 5 && reduce_to_triad(second_last.quality) == ChordQuality::Major &&
+        reduce_to_triad(last.quality) == ChordQuality::Minor) {
+      minor_cadence_tonic = last.root;
+      has_minor_cadence = true;
+    }
+  }
+
   // Check if first and last chords are the same (common for pop songs)
   bool first_last_same = false;
   if (chords.size() >= 2) {
@@ -563,7 +580,30 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
       }
     }
 
-    float total_minor_score = minor_score + minor_tonic_score;
+    // Apply the same cadence/bookend/first-chord bonuses as the major branch,
+    // with minor-appropriate tonic-quality checks (a minor tonic is a Minor
+    // triad, not Major). Without these the major branch wins close ties on
+    // minor material that happens to share diatonic chords with its relative
+    // major (analysis#5).
+    float minor_cadence_bonus = 0.0f;
+    if (has_minor_cadence && minor_cadence_tonic == minor_root) {
+      minor_cadence_bonus = total_duration * 0.4f;
+    }
+
+    float minor_bookend_bonus = 0.0f;
+    if (first_last_same && chords.front().root == minor_root &&
+        reduce_to_triad(chords.front().quality) == ChordQuality::Minor) {
+      minor_bookend_bonus = total_duration * 0.3f;
+    }
+
+    float minor_first_chord_bonus = 0.0f;
+    if (!chords.empty() && chords.front().root == minor_root &&
+        reduce_to_triad(chords.front().quality) == ChordQuality::Minor) {
+      minor_first_chord_bonus = total_duration * 0.15f;
+    }
+
+    float total_minor_score = minor_score + minor_tonic_score + minor_cadence_bonus +
+                              minor_bookend_bonus + minor_first_chord_bonus;
     if (total_minor_score > best_score) {
       best_score = total_minor_score;
       best_root = minor_root;

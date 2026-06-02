@@ -109,6 +109,39 @@ TEST_CASE("estimate_key_from_chords synthetic cadence matrix resolves all tonics
   }
 }
 
+TEST_CASE("estimate_key_from_chords scores minor cadence/bookend bonuses symmetrically",
+          "[key_analyzer][synthetic_matrix]") {
+  // Regression for the major-bias defect: the minor branch used to receive no
+  // cadence/bookend/first-chord bonus, so a progression that ends on an authentic
+  // minor cadence (V major -> i minor) but contains prominent relative-major
+  // chords was mis-detected as the relative major. Here C/G/C give C major a
+  // strong tonic+dominant+first-chord lead, but the piece resolves E -> Am (an
+  // A-minor V-i). With the symmetric minor cadence bonus the correct A-minor
+  // reading wins; without it the relative major (C) would.
+  std::vector<Chord> minor_cadence_in_major_context = {
+      chord(PitchClass::C, ChordQuality::Major, 0.0f, 1.0f),
+      chord(PitchClass::G, ChordQuality::Major, 1.0f, 2.0f),
+      chord(PitchClass::C, ChordQuality::Major, 2.0f, 3.0f),
+      chord(PitchClass::E, ChordQuality::Major, 3.0f, 4.0f),
+      chord(PitchClass::A, ChordQuality::Minor, 4.0f, 5.0f),
+  };
+  Key key = estimate_key_from_chords(minor_cadence_in_major_context);
+  REQUIRE(key.root == PitchClass::A);
+  REQUIRE(key.mode == Mode::Minor);
+
+  // The analogous all-minor bookended vamp (i ... i with a minor tonic at both
+  // ends) must also resolve to minor rather than its relative major.
+  std::vector<Chord> minor_bookended = {
+      chord(PitchClass::A, ChordQuality::Minor, 0.0f, 1.0f),
+      chord(PitchClass::D, ChordQuality::Minor, 1.0f, 2.0f),
+      chord(PitchClass::E, ChordQuality::Major, 2.0f, 3.0f),
+      chord(PitchClass::A, ChordQuality::Minor, 3.0f, 4.0f),
+  };
+  Key bookend_key = estimate_key_from_chords(minor_bookended);
+  REQUIRE(bookend_key.root == PitchClass::A);
+  REQUIRE(bookend_key.mode == Mode::Minor);
+}
+
 TEST_CASE("KeyAnalyzer modal synthetic matrix is opt-in", "[key_analyzer][synthetic_matrix]") {
   const Mode modes[] = {Mode::Dorian, Mode::Phrygian, Mode::Lydian, Mode::Mixolydian,
                         Mode::Locrian};

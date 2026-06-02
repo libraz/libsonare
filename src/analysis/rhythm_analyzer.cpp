@@ -5,6 +5,7 @@
 #include <numeric>
 
 #include "analysis/meter_analyzer.h"
+#include "analysis/onset_analyzer.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -51,37 +52,21 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
 }
 
 void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength) {
+  // Reuse the library's canonical OnsetAnalyzer peak-picker (pre/post-max
+  // windows, wait/refractory constraint, adaptive local-average gating) on the
+  // beat-aligned onset-strength envelope instead of a divergent local heuristic,
+  // so swing/groove analysis shares a single onset definition with
+  // OnsetAnalyzer::onset_times() and the two cannot drift apart (analysis#7).
   onset_times_.clear();
   if (onset_strength.size() < 3) {
     return;
   }
 
-  // Find local maxima in onset strength as onset times
-  float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
-
-  // Calculate threshold (mean + std of onset strength)
-  float mean = 0.0f;
-  for (float s : onset_strength) {
-    mean += s;
-  }
-  mean /= static_cast<float>(onset_strength.size());
-
-  float variance = 0.0f;
-  for (float s : onset_strength) {
-    float diff = s - mean;
-    variance += diff * diff;
-  }
-  variance /= static_cast<float>(onset_strength.size());
-  float std_dev = std::sqrt(variance);
-  float threshold = mean + 0.5f * std_dev;
-
-  // Find peaks above threshold
-  for (size_t i = 1; i + 1 < onset_strength.size(); ++i) {
-    if (onset_strength[i] > onset_strength[i - 1] && onset_strength[i] > onset_strength[i + 1] &&
-        onset_strength[i] > threshold) {
-      onset_times_.push_back(static_cast<float>(i) * hop_duration);
-    }
-  }
+  OnsetDetectConfig onset_config;
+  onset_config.n_fft = config_.n_fft;
+  onset_config.hop_length = hop_length_;
+  OnsetAnalyzer onset_analyzer(onset_strength, sr_, hop_length_, onset_config);
+  onset_times_ = onset_analyzer.onset_times();
 }
 
 float RhythmAnalyzer::calculate_swing_ratio() const {
