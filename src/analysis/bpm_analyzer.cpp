@@ -282,11 +282,11 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
   int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
 
   lag_min = std::max(1, lag_min);
-  lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
+  lag_max = std::min(static_cast<int>(autocorr.size()) - 2, lag_max);
 
-  /// Find local maxima. lag_min >= 1 and lag_max <= size-1, so accessing
-  /// autocorr[lag-1]/autocorr[lag+1] over the full [lag_min, lag_max] range stays
-  /// in bounds and lets true peaks at the bpm_min/bpm_max extremes be detected.
+  /// Find local maxima. lag_min >= 1 and lag_max <= size-2, so accessing both
+  /// autocorr[lag-1] and autocorr[lag+1] over the full [lag_min, lag_max] range
+  /// stays in bounds while still admitting peaks near the bpm_min/bpm_max extremes.
   for (int lag = lag_min; lag <= lag_max; ++lag) {
     if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1]) {
       float bpm = lag_to_bpm(refine_peak_lag(autocorr, lag), sr, hop_length);
@@ -453,11 +453,12 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   int lag_min = bpm_to_lag(config_.bpm_max, sr, hop_length);
   int lag_max_inner = bpm_to_lag(config_.bpm_min, sr, hop_length);
   lag_min = std::max(1, lag_min);
-  lag_max_inner = std::min(static_cast<int>(autocorr_.size()) - 1, lag_max_inner);
+  lag_max_inner = std::min(static_cast<int>(autocorr_.size()) - 2, lag_max_inner);
 
   /// Iterate the full [lag_min, lag_max_inner] range (neighbor access stays in
-  /// bounds because lag_min >= 1 and lag_max_inner <= size-1) so peaks at the
-  /// documented bpm_min/bpm_max boundaries are not dropped.
+  /// bounds because lag_min >= 1 and lag_max_inner <= size-2, keeping both
+  /// autocorr_[lag-1] and autocorr_[lag+1] valid) so peaks at the documented
+  /// bpm_min/bpm_max boundaries are not dropped.
   for (int lag = lag_min; lag <= lag_max_inner; ++lag) {
     if (autocorr_[lag] > autocorr_[lag - 1] && autocorr_[lag] > autocorr_[lag + 1] &&
         autocorr_[lag] > 0.0f) {
