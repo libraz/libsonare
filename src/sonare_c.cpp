@@ -312,7 +312,10 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out) {
   if (audio == nullptr || out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->beat_times = nullptr;
+  // Zero the whole struct up front so a rejected input never leaves an
+  // inconsistent (null beat_times, garbage beat_count) pair (matches
+  // sonare_analyze_melody).
+  *out = {};
 
   SONARE_C_TRY
   AnalysisResult result =
@@ -542,7 +545,10 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out) {
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->beat_times = nullptr;
+  // Zero the whole struct up front so a rejected input (e.g. validate_audio_params
+  // failure inside run_offline) never leaves an inconsistent (null beat_times,
+  // garbage beat_count) pair (matches sonare_analyze_melody).
+  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     AnalysisResult result = quick::analyze(audio.data(), audio.size(), audio.sample_rate());
@@ -634,11 +640,11 @@ SonareError sonare_analyze_impulse_response(const float* samples, size_t length,
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_octave_bands < 0) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->rt60_bands = nullptr;
-  out->edt_bands = nullptr;
-  out->c50_bands = nullptr;
-  out->c80_bands = nullptr;
-  out->band_count = 0;
+  // Zero the whole struct up front so a rejected input (validate_audio_params
+  // failure) leaves a fully-initialized result: the scalar fields
+  // (rt60/edt/c50/c80/d50/confidence/is_blind) as well as the band pointers /
+  // band_count are all defined, not caller garbage.
+  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     AcousticConfig config;
@@ -658,11 +664,11 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  out->rt60_bands = nullptr;
-  out->edt_bands = nullptr;
-  out->c50_bands = nullptr;
-  out->c80_bands = nullptr;
-  out->band_count = 0;
+  // Zero the whole struct up front so a rejected input (validate_audio_params
+  // failure) leaves a fully-initialized result: the scalar fields
+  // (rt60/edt/c50/c80/d50/confidence/is_blind) as well as the band pointers /
+  // band_count are all defined, not caller garbage.
+  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     AcousticConfig config;
@@ -909,6 +915,82 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
 
     std::vector<Chord> chords = detect_chords(audio, config);
     fill_chord_result(chords, out);
+    return SONARE_OK;
+  });
+}
+
+SonareError sonare_chord_functional_analysis(const float* samples, size_t length, int sample_rate,
+                                             const SonareChordDetectionOptions* options,
+                                             SonarePitchClass key_root, SonareMode key_mode,
+                                             SonareStringArray* out) {
+  if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (options->min_duration < 0.0f || options->smoothing_window <= 0.0f ||
+      options->threshold < 0.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
+      options->hmm_beam_width < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->chroma_method != 0 && options->chroma_method != 1) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->use_key_context != 0) {
+    const int root = static_cast<int>(options->key_root);
+    const int mode = static_cast<int>(options->key_mode);
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
+        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+  // The analysis key drives the Roman-numeral labelling; reject out-of-range
+  // enum-like values rather than silently clamping them to C / Major.
+  {
+    const int root = static_cast<int>(key_root);
+    const int mode = static_cast<int>(key_mode);
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
+        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+
+  out->items = nullptr;
+  out->count = 0;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    ChordConfig config;
+    config.min_duration = options->min_duration;
+    config.smoothing_window = options->smoothing_window;
+    config.threshold = options->threshold;
+    config.use_triads_only = options->use_triads_only != 0;
+    config.n_fft = options->n_fft;
+    config.hop_length = options->hop_length;
+    config.use_beat_sync = options->use_beat_sync != 0;
+    config.use_hmm = options->use_hmm != 0;
+    config.hmm_beam_width = options->hmm_beam_width;
+    config.use_key_context = options->use_key_context != 0;
+    config.key_root = from_c_pitch_class(options->key_root);
+    config.key_mode = from_c_mode(options->key_mode);
+    config.detect_inversions = options->detect_inversions != 0;
+    config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+
+    ChordAnalyzer analyzer(audio, config);
+    std::vector<std::string> labels =
+        analyzer.functional_analysis(from_c_pitch_class(key_root), from_c_mode(key_mode));
+
+    if (labels.empty()) {
+      return SONARE_OK;
+    }
+
+    std::unique_ptr<char*[]> items(new char*[labels.size()]);
+    size_t filled = 0;
+    try {
+      for (; filled < labels.size(); ++filled) {
+        items[filled] = copy_string(labels[filled]);
+      }
+    } catch (...) {
+      for (size_t i = 0; i < filled; ++i) sonare_free_string(items[i]);
+      throw;
+    }
+    out->items = release_array(items);
+    out->count = labels.size();
     return SONARE_OK;
   });
 }

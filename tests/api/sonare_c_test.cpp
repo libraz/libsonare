@@ -845,6 +845,88 @@ TEST_CASE("sonare_detect_chords", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
+  SonareChordDetectionOptions options{};
+  options.min_duration = 0.3f;
+  options.smoothing_window = 2.0f;
+  options.threshold = 0.5f;
+  options.use_triads_only = 1;
+  options.n_fft = 2048;
+  options.hop_length = 512;
+  options.use_beat_sync = 0;
+  options.use_hmm = 0;
+  options.hmm_beam_width = 8;
+  options.use_key_context = 0;
+  options.key_root = SONARE_PITCH_C;
+  options.key_mode = SONARE_MODE_MAJOR;
+  options.detect_inversions = 0;
+  options.chroma_method = 0;
+
+  SECTION("returns one Roman-numeral label per detected chord") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
+
+    // Detection count for the same options, to cross-check the label count.
+    SonareChordAnalysisResult chords = {};
+    REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &chords) ==
+            SONARE_OK);
+    const size_t expected = chords.chord_count;
+    sonare_free_chord_analysis_result(&chords);
+    REQUIRE(expected > 0);
+
+    SonareStringArray labels = {};
+    SonareError err =
+        sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                         SONARE_PITCH_C, SONARE_MODE_MAJOR, &labels);
+
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(labels.count == expected);
+    REQUIRE(labels.items != nullptr);
+    for (size_t i = 0; i < labels.count; ++i) {
+      REQUIRE(labels.items[i] != nullptr);
+      REQUIRE(std::string(labels.items[i]).size() > 0);
+    }
+
+    sonare_free_string_array(&labels);
+    REQUIRE(labels.items == nullptr);
+    REQUIRE(labels.count == 0);
+  }
+
+  SECTION("rejects invalid parameters") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
+    SonareStringArray labels = {};
+
+    REQUIRE(sonare_chord_functional_analysis(nullptr, samples.size(), 22050, &options,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
+                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, nullptr,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
+                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
+                                             nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+    SonareChordDetectionOptions bad = options;
+    bad.n_fft = 0;
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &bad,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
+                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                             static_cast<SonarePitchClass>(99), SONARE_MODE_MAJOR,
+                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                             SONARE_PITCH_C, static_cast<SonareMode>(99),
+                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("free is safe on a zero-initialized struct") {
+    SonareStringArray labels = {};
+    sonare_free_string_array(&labels);
+    REQUIRE(labels.items == nullptr);
+    REQUIRE(labels.count == 0);
+  }
+}
+
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   SECTION("streaming EQ handle processes JSON bands and exposes spectrum") {
@@ -2933,5 +3015,65 @@ TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing
     float c = 0.0f;
     REQUIRE(sonare_metering_stereo_correlation(bad_left.data(), right.data(), left.size(), sr,
                                                &c) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[c_api][features]") {
+  const int sr = 22050;
+  const int n_fft = 1024;
+  const int hop = 256;
+  const int n_mels = 40;
+  auto samples = generate_sine(440.0f, sr, 1.0f);
+
+  SECTION("custom fmin/fmax forward transform round-trips with the inverse API") {
+    // The forward _ex transform and the inverse sonare_mel_to_stft now share the
+    // same fmin/fmax, so a custom-range round-trip is possible from pure C.
+    const float fmin = 100.0f;
+    const float fmax = 8000.0f;
+    SonareMelResult mel = {};
+    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, fmin,
+                                      fmax, 0, &mel) == SONARE_OK);
+    REQUIRE(mel.power != nullptr);
+    REQUIRE(mel.n_mels == n_mels);
+    REQUIRE(mel.n_frames > 0);
+
+    SonareInverseResult stft = {};
+    REQUIRE(sonare_mel_to_stft(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, fmin, fmax, &stft) ==
+            SONARE_OK);
+    REQUIRE(stft.data != nullptr);
+    REQUIRE(stft.rows == n_fft / 2 + 1);
+    REQUIRE(stft.n_frames == mel.n_frames);
+
+    sonare_free_inverse_result(&stft);
+    sonare_free_mel_result(&mel);
+  }
+
+  SECTION("a non-default range yields a different forward result than the default") {
+    SonareMelResult def = {};
+    SonareMelResult ranged = {};
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, &def) ==
+            SONARE_OK);
+    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels,
+                                      500.0f, 4000.0f, 0, &ranged) == SONARE_OK);
+    const size_t total = static_cast<size_t>(n_mels) * def.n_frames;
+    bool differs = false;
+    for (size_t i = 0; i < total && !differs; ++i) {
+      differs = std::abs(def.power[i] - ranged.power[i]) > 1e-6f;
+    }
+    REQUIRE(differs);
+    sonare_free_mel_result(&def);
+    sonare_free_mel_result(&ranged);
+  }
+
+  SECTION("sonare_mfcc_ex accepts the range and a null out is rejected") {
+    SonareMfccResult mfcc = {};
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 100.0f,
+                           8000.0f, 0, &mfcc) == SONARE_OK);
+    REQUIRE(mfcc.coefficients != nullptr);
+    REQUIRE(mfcc.n_mfcc == 13);
+    sonare_free_mfcc_result(&mfcc);
+
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 0.0f, 0.0f,
+                           0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }

@@ -609,6 +609,15 @@ typedef struct {
   size_t chord_count;
 } SonareChordAnalysisResult;
 
+/* Heap-owned array of NUL-terminated C strings. @c items has @c count entries,
+   each a separately allocated string. Free the whole array (items and the
+   container array) with sonare_free_string_array. An empty result yields
+   @c items == NULL and @c count == 0. */
+typedef struct {
+  char** items;
+  size_t count;
+} SonareStringArray;
+
 /* Song-structure section types (mirrors sonare::SectionType ordinals). */
 typedef enum {
   SONARE_SECTION_INTRO = 0,

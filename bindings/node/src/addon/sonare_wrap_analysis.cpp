@@ -817,6 +817,82 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int key_root =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 0;
+  int key_mode =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 0;
+  int sample_rate =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
+  float min_duration =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.3f;
+  float smoothing_window =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2.0f;
+  float threshold =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.5f;
+  bool use_triads_only =
+      info.Length() >= 8 && info[7].IsBoolean() ? info[7].As<Napi::Boolean>().Value() : false;
+  int n_fft =
+      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().Int32Value() : 2048;
+  int hop_length =
+      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().Int32Value() : 512;
+  bool use_beat_sync =
+      info.Length() >= 11 && info[10].IsBoolean() ? info[10].As<Napi::Boolean>().Value() : true;
+  bool use_hmm =
+      info.Length() >= 12 && info[11].IsBoolean() ? info[11].As<Napi::Boolean>().Value() : false;
+  int hmm_beam_width =
+      info.Length() >= 13 && info[12].IsNumber() ? info[12].As<Napi::Number>().Int32Value() : 24;
+  bool use_key_context =
+      info.Length() >= 14 && info[13].IsBoolean() ? info[13].As<Napi::Boolean>().Value() : false;
+  bool detect_inversions =
+      info.Length() >= 15 && info[14].IsBoolean() ? info[14].As<Napi::Boolean>().Value() : false;
+  int chroma_method =
+      info.Length() >= 16 && info[15].IsNumber() ? info[15].As<Napi::Number>().Int32Value() : 0;
+
+  SonareChordDetectionOptions options{};
+  options.min_duration = min_duration;
+  options.smoothing_window = smoothing_window;
+  options.threshold = threshold;
+  options.use_triads_only = use_triads_only ? 1 : 0;
+  options.n_fft = n_fft;
+  options.hop_length = hop_length;
+  options.use_beat_sync = use_beat_sync ? 1 : 0;
+  options.use_hmm = use_hmm ? 1 : 0;
+  options.hmm_beam_width = hmm_beam_width;
+  options.use_key_context = use_key_context ? 1 : 0;
+  options.key_root = static_cast<SonarePitchClass>(key_root);
+  options.key_mode = static_cast<SonareMode>(key_mode);
+  options.detect_inversions = detect_inversions ? 1 : 0;
+  options.chroma_method = chroma_method;
+
+  SonareStringArray labels{};
+  SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options,
+                                                     static_cast<SonarePitchClass>(key_root),
+                                                     static_cast<SonareMode>(key_mode), &labels);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Array result = Napi::Array::New(env, labels.count);
+  for (size_t i = 0; i < labels.count; ++i) {
+    result.Set(static_cast<uint32_t>(i),
+               Napi::String::New(env, labels.items[i] != nullptr ? labels.items[i] : ""));
+  }
+  sonare_free_string_array(&labels);
+  return result;
+}
+
 Napi::Value SonareWrap::Version(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return Napi::String::New(env, sonare_version());

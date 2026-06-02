@@ -2,8 +2,10 @@
 
 /// @file rhythm.h
 /// @brief Rhythm-domain features: tempogram and Fourier tempogram.
-/// @details librosa.feature.tempogram, librosa.feature.fourier_tempogram,
-///          librosa.feature.tempogram_ratio compatible.
+/// @details tempogram() and fourier_tempogram() mirror librosa.feature.tempogram
+///          and librosa.feature.fourier_tempogram. tempogram_ratio() is NOT
+///          librosa-compatible: see its declaration below for what it actually
+///          computes.
 
 #include <vector>
 
@@ -70,14 +72,26 @@ std::vector<float> cyclic_tempogram(const Audio& audio,
                                     const TempogramConfig& config = TempogramConfig(),
                                     float bpm_min = 60.0f, int n_bins = 60);
 
-/// @brief Aggregated tempogram values at integer tempo ratios of a reference tempo.
+/// @brief Heuristic harmonic-ratio summary of an autocorrelation tempogram.
+/// @warning This is NOT compatible with librosa.feature.tempogram_ratio and must
+///          not be treated as a drop-in for it. librosa builds a full BPM tempo
+///          axis, estimates a reference tempo, and resamples the tempogram onto
+///          tempo-ratio bins. This function instead:
+///            - picks a single reference lag as the lag (excluding lag 0) with the
+///              strongest frame-averaged autocorrelation;
+///            - for each requested ratio f, samples the frame-averaged
+///              autocorrelation at the integer lag round(reference_lag / f);
+///          so the result is a coarse, lag-domain harmonic-ratio summary rather
+///          than a tempo-axis ratio feature. @p sr is currently ignored (no BPM
+///          axis is constructed); it is retained only for API stability and a
+///          potential future tempo-axis implementation.
 /// @param tempogram_data Tempogram matrix as returned by tempogram()
 /// @param win_length Tempogram win_length used to compute the lag axis
-/// @param sr Sample rate
+/// @param sr Sample rate (currently unused, see warning above)
 /// @param hop_length Hop length used for the onset envelope
 /// @param factors Lag ratios to evaluate (default {0.5, 1, 2, 3, 4})
-/// @return Vector of length factors.size() with the mean autocorrelation at
-///         each ratio (averaged over frames).
+/// @return Vector of length factors.size() with the frame-averaged
+///         autocorrelation sampled at each ratio's integer lag.
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,
                                    int hop_length,
                                    const std::vector<float>& factors = {0.5f, 1.0f, 2.0f, 3.0f,

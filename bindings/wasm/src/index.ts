@@ -1023,6 +1023,43 @@ export function detectChords(
   return convertChordAnalysisResult(result);
 }
 
+/**
+ * Functional (Roman-numeral) harmonic analysis of the detected chord
+ * progression, relative to the given key. Mirrors the C-ABI
+ * `sonare_chord_functional_analysis` and the Node/Python `chordFunctionalAnalysis`.
+ *
+ * @returns One Roman-numeral label (e.g. "I", "IV", "V", "vi") per detected chord
+ */
+export function chordFunctionalAnalysis(
+  samples: Float32Array,
+  keyRoot: PitchClass,
+  keyMode: Mode,
+  sampleRate = 22050,
+  options: ChordDetectionOptions = {},
+): string[] {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.chordFunctionalAnalysis(
+    samples,
+    keyRoot,
+    keyMode,
+    sampleRate,
+    options.minDuration ?? 0.3,
+    options.smoothingWindow ?? 2.0,
+    options.threshold ?? 0.5,
+    options.useTriadsOnly ?? false,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.useBeatSync ?? true,
+    options.useHmm ?? false,
+    options.hmmBeamWidth ?? 24,
+    options.useKeyContext ?? false,
+    options.detectInversions ?? false,
+    chordChromaMethodValue(options.chromaMethod ?? 'stft'),
+  );
+}
+
 function chordChromaMethodValue(method: 'stft' | 'nnls'): number {
   if (method === 'stft') {
     return 0;
@@ -2677,12 +2714,31 @@ export class RealtimeVoiceChanger {
    * views are reused across calls and become invalid after {@link delete}.
    */
   createRealtimeMonoBuffer(numSamples: number): RealtimeVoiceChangerMonoBuffer {
-    const input = this.getMonoInputBuffer(numSamples);
-    const output = this.getMonoOutputBuffer(numSamples);
+    let input = this.getMonoInputBuffer(numSamples);
+    let output = this.getMonoOutputBuffer(numSamples);
+    // The cached heap views can detach if WASM linear memory grows (the embind
+    // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
+    // (byteLength === 0) before use, mirroring the worklet RT path. In the
+    // common no-growth case this is a cheap branch with no allocation.
+    const reacquireIfDetached = (): void => {
+      if (input.byteLength === 0 || output.byteLength === 0) {
+        input = this.getMonoInputBuffer(numSamples);
+        output = this.getMonoOutputBuffer(numSamples);
+      }
+    };
     return {
-      input,
-      output,
-      process: () => this.processPreparedMono(numSamples),
+      get input(): Float32Array {
+        reacquireIfDetached();
+        return input;
+      },
+      get output(): Float32Array {
+        reacquireIfDetached();
+        return output;
+      },
+      process: () => {
+        reacquireIfDetached();
+        this.processPreparedMono(numSamples);
+      },
     };
   }
 
@@ -2691,13 +2747,30 @@ export class RealtimeVoiceChanger {
     numFrames: number,
     numChannels: number,
   ): RealtimeVoiceChangerInterleavedBuffer {
-    const input = this.getInterleavedInputBuffer(numFrames, numChannels);
-    const output = this.getInterleavedOutputBuffer(numFrames, numChannels);
+    let input = this.getInterleavedInputBuffer(numFrames, numChannels);
+    let output = this.getInterleavedOutputBuffer(numFrames, numChannels);
+    // Re-acquire detached views after WASM memory growth (see
+    // createRealtimeMonoBuffer for rationale).
+    const reacquireIfDetached = (): void => {
+      if (input.byteLength === 0 || output.byteLength === 0) {
+        input = this.getInterleavedInputBuffer(numFrames, numChannels);
+        output = this.getInterleavedOutputBuffer(numFrames, numChannels);
+      }
+    };
     return {
-      input,
-      output,
+      get input(): Float32Array {
+        reacquireIfDetached();
+        return input;
+      },
+      get output(): Float32Array {
+        reacquireIfDetached();
+        return output;
+      },
       channels: numChannels,
-      process: () => this.processPreparedInterleaved(numFrames, numChannels),
+      process: () => {
+        reacquireIfDetached();
+        this.processPreparedInterleaved(numFrames, numChannels);
+      },
     };
   }
 
@@ -2711,13 +2784,30 @@ export class RealtimeVoiceChanger {
     numFrames: number,
     numChannels: number,
   ): RealtimeVoiceChangerPlanarBuffer {
-    const channels: Float32Array[] = [];
-    for (let ch = 0; ch < numChannels; ch++) {
-      channels.push(this.getPlanarChannelBuffer(ch, numFrames));
-    }
+    let channels: Float32Array[] = [];
+    const acquire = (): void => {
+      channels = [];
+      for (let ch = 0; ch < numChannels; ch++) {
+        channels.push(this.getPlanarChannelBuffer(ch, numFrames));
+      }
+    };
+    acquire();
+    // Re-acquire detached views after WASM memory growth (see
+    // createRealtimeMonoBuffer for rationale).
+    const reacquireIfDetached = (): void => {
+      if ((channels[0]?.byteLength ?? 0) === 0) {
+        acquire();
+      }
+    };
     return {
-      channels,
-      process: () => this.processPreparedPlanar(numFrames),
+      get channels(): Float32Array[] {
+        reacquireIfDetached();
+        return channels;
+      },
+      process: () => {
+        reacquireIfDetached();
+        this.processPreparedPlanar(numFrames);
+      },
     };
   }
 
@@ -2849,20 +2939,50 @@ export class Mixer {
    */
   createRealtimeBuffer(): MixerRealtimeBuffer {
     const stripCount = this.stripCount();
-    const leftInputs: Float32Array[] = [];
-    const rightInputs: Float32Array[] = [];
-    for (let index = 0; index < stripCount; index++) {
-      leftInputs.push(this.mixer.inputLeftView(index));
-      rightInputs.push(this.mixer.inputRightView(index));
-    }
-    const outLeft = this.mixer.outputLeftView();
-    const outRight = this.mixer.outputRightView();
+    let leftInputs: Float32Array[] = [];
+    let rightInputs: Float32Array[] = [];
+    let outLeft = this.mixer.outputLeftView();
+    let outRight = this.mixer.outputRightView();
+    const acquire = (): void => {
+      leftInputs = [];
+      rightInputs = [];
+      for (let index = 0; index < stripCount; index++) {
+        leftInputs.push(this.mixer.inputLeftView(index));
+        rightInputs.push(this.mixer.inputRightView(index));
+      }
+      outLeft = this.mixer.outputLeftView();
+      outRight = this.mixer.outputRightView();
+    };
+    acquire();
+    // The cached heap views can detach if WASM linear memory grows (the embind
+    // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
+    // (byteLength === 0) before use, mirroring the worklet RT path.
+    const reacquireIfDetached = (): void => {
+      if (outLeft.byteLength === 0 || (leftInputs[0]?.byteLength ?? 1) === 0) {
+        acquire();
+      }
+    };
     return {
-      leftInputs,
-      rightInputs,
-      outLeft,
-      outRight,
-      process: (numSamples = outLeft.length) => this.mixer.processPreparedStereo(numSamples),
+      get leftInputs(): Float32Array[] {
+        reacquireIfDetached();
+        return leftInputs;
+      },
+      get rightInputs(): Float32Array[] {
+        reacquireIfDetached();
+        return rightInputs;
+      },
+      get outLeft(): Float32Array {
+        reacquireIfDetached();
+        return outLeft;
+      },
+      get outRight(): Float32Array {
+        reacquireIfDetached();
+        return outRight;
+      },
+      process: (numSamples = outLeft.length) => {
+        reacquireIfDetached();
+        this.mixer.processPreparedStereo(numSamples);
+      },
     };
   }
 
@@ -3055,14 +3175,16 @@ export class Mixer {
   }
 
   /**
-   * Read a strip's meter snapshot. Alias of {@link meterTap}, provided for
-   * cross-binding (Node/Python) parity.
+   * Read a strip's current (post-fader) meter snapshot.
+   *
+   * This is the tap-less variant, matching the Node/Python `stripMeter`
+   * contract (it reads the strip's own meter rather than selecting a tap
+   * point). Use {@link meterTap} to choose `'preFader'` / `'postFader'`.
    *
    * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param tap - `'preFader'` or `'postFader'` (default: `'postFader'`)
    */
-  stripMeter(stripIndex: number, tap: MeterTap = 'postFader'): MixMeterSnapshot {
-    return this.mixer.stripMeter(stripIndex, meterTapCode(tap));
+  stripMeter(stripIndex: number): MixMeterSnapshot {
+    return this.mixer.stripMeter(stripIndex);
   }
 
   /**
@@ -4789,6 +4911,14 @@ export class Audio {
 
   detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
     return detectChords(this._samples, this._sampleRate, options);
+  }
+
+  chordFunctionalAnalysis(
+    keyRoot: PitchClass,
+    keyMode: Mode,
+    options: ChordDetectionOptions = {},
+  ): string[] {
+    return chordFunctionalAnalysis(this._samples, keyRoot, keyMode, this._sampleRate, options);
   }
 
   analyze(): AnalysisResult {

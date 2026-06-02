@@ -43,6 +43,9 @@ from .analyzer import (
     analyze_timbre as analyze_timbre,
 )
 from .analyzer import (
+    chord_functional_analysis as chord_functional_analysis,
+)
+from .analyzer import (
     chroma as chroma,
 )
 from .analyzer import (

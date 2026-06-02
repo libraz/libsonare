@@ -77,6 +77,10 @@ python = []
 #     into the facade `detect_key` / `detect_key_candidates` extended params
 #     (modes / profile / genre_hint).
 #   tempogram_with_mode: folded into `tempogram`'s `mode` selector.
+#   mel_spectrogram_ex / mfcc_ex: C-ABI convenience variants that add an explicit
+#     Mel range (fmin/fmax/htk) to the pure-C forward transform. The bindings
+#     already expose the full Mel range through their native mel/mfcc config
+#     objects, so the `_ex` form is covered by the base facade, not missing.
 #   onset_strength: exposed by the facades under the ergonomic name
 #     `onset_envelope`.
 #   error_message / last_error_message: C-ABI error-string helpers consumed
@@ -98,6 +102,8 @@ node = [
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
+  "mel_spectrogram_ex",
+  "mfcc_ex",
   "onset_strength",
   "error_message",
   "last_error_message",
@@ -117,6 +123,8 @@ wasm = [
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
+  "mel_spectrogram_ex",
+  "mfcc_ex",
   "onset_strength",
   "error_message",
   "last_error_message",
@@ -134,6 +142,8 @@ python = [
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
+  "mel_spectrogram_ex",
+  "mfcc_ex",
   "onset_strength",
   "error_message",
   "last_error_message",
@@ -173,6 +183,10 @@ python = [
 # channels internally — passing both an interleaved buffer and a redundant frame
 # count would let them disagree. The frames-derived shape is the documented
 # cross-binding convention; not order drift.
+# chord_functional_analysis: C is (options-bag, key_root, key_mode); the facades
+# put (key_root, key_mode) first and INLINE the SonareChordDetectionOptions
+# fields after them — the same ergonomic options-inlining + key-first shape
+# already used for detect_chords. Remapped internally; not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -181,6 +195,7 @@ node = [
   "tempogram",
   "strip_meter",
   "lufs_interleaved",
+  "chord_functional_analysis",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -190,6 +205,7 @@ wasm = [
   "tempogram",
   "strip_meter",
   "lufs_interleaved",
+  "chord_functional_analysis",
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -206,6 +222,7 @@ python = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "lufs_interleaved",
+  "chord_functional_analysis",
 ]
 
 # ---------------------------------------------------------------------------

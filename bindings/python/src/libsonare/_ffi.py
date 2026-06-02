@@ -406,6 +406,10 @@ class SonareRirSynthConfig(ctypes.Structure):
         ("ism_order", ctypes.c_int),
         ("late_model", ctypes.c_int),
         ("seed", ctypes.c_uint),
+        # Optional per-octave-band absorption tail (NULL/0 keeps the scalar path).
+        ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
+        ("absorption_band_count", ctypes.c_size_t),
+        ("material_preset", ctypes.c_int),
     ]
 
 
@@ -468,8 +472,15 @@ class SonareRoomMorphConfig(ctypes.Structure):
         ("source_tail_suppression", ctypes.c_float),
         ("wet", ctypes.c_float),
         ("max_seconds", ctypes.c_float),
+        ("mixing_time_ms", ctypes.c_float),
+        ("crossfade_ms", ctypes.c_float),
         ("ism_order", ctypes.c_int),
+        ("late_model", ctypes.c_int),
         ("seed", ctypes.c_uint),
+        # Optional per-octave-band absorption tail (NULL/0 keeps the scalar path).
+        ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
+        ("absorption_band_count", ctypes.c_size_t),
+        ("material_preset", ctypes.c_int),
     ]
 
 
@@ -897,6 +908,15 @@ class SonareChordDetectionOptions(ctypes.Structure):
         ("key_mode", ctypes.c_int32),
         ("detect_inversions", ctypes.c_int),
         ("chroma_method", ctypes.c_int),
+    ]
+
+
+class SonareStringArray(ctypes.Structure):
+    """Maps to SonareStringArray in sonare_c.h."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(ctypes.c_char_p)),
+        ("count", ctypes.c_size_t),
     ]
 
 
@@ -1692,6 +1712,17 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareChordAnalysisResult),
     ]
 
+    lib.sonare_chord_functional_analysis.restype = ctypes.c_int32
+    lib.sonare_chord_functional_analysis.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChordDetectionOptions),
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(SonareStringArray),
+    ]
+
     if hasattr(lib, "sonare_synthesize_rir"):
         lib.sonare_synthesize_rir.restype = ctypes.c_int32
         lib.sonare_synthesize_rir.argtypes = [
@@ -1964,6 +1995,9 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
 
     lib.sonare_free_chord_analysis_result.restype = None
     lib.sonare_free_chord_analysis_result.argtypes = [ctypes.POINTER(SonareChordAnalysisResult)]
+
+    lib.sonare_free_string_array.restype = None
+    lib.sonare_free_string_array.argtypes = [ctypes.POINTER(SonareStringArray)]
 
     # --- Error handling ---
 
@@ -2371,6 +2405,10 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.c_int,
         ctypes.c_int64,
         ctypes.c_int,
+    ]
+    lib.sonare_engine_bounce_options_default.restype = ctypes.c_int32
+    lib.sonare_engine_bounce_options_default.argtypes = [
+        ctypes.POINTER(SonareEngineBounceOptions),
     ]
     lib.sonare_engine_bounce_offline.restype = ctypes.c_int32
     lib.sonare_engine_bounce_offline.argtypes = [

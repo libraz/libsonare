@@ -80,25 +80,12 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
   SONARE_CHECK(n_mfcc > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_mfcc <= n_mels_, ErrorCode::InvalidParameter);
 
-  // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling.
-  // Clipping is done in dB scale: max(log_spec, log_spec.max() - top_db)
+  // Compute log Mel spectrogram in dB with the standard 10 * log10 scaling and
+  // top_db clamp. This is exactly the shared power_to_db (ref=1.0, amin=kEpsilon,
+  // top_db=kDefaultTopDb), so route through it instead of reimplementing it.
   std::vector<float> log_mel(power_.size());
-  const float amin = kEpsilon;
-  constexpr float top_db = constants::kDefaultTopDb;
-
-  // First pass: convert to dB and find max
-  float max_db = -1e30f;
-  for (size_t i = 0; i < power_.size(); ++i) {
-    float val = std::max(power_[i], amin);
-    log_mel[i] = 10.0f * std::log10(val);
-    max_db = std::max(max_db, log_mel[i]);
-  }
-
-  // Second pass: apply top_db clipping in dB scale
-  float threshold_db = max_db - top_db;
-  for (size_t i = 0; i < power_.size(); ++i) {
-    log_mel[i] = std::max(log_mel[i], threshold_db);
-  }
+  power_to_db(power_.data(), power_.size(), /*ref=*/1.0f, /*amin=*/kEpsilon,
+              /*top_db=*/constants::kDefaultTopDb, log_mel.data());
 
   // Apply DCT-II to each frame using Eigen matrix multiplication
   std::vector<float> mfcc_out(n_mfcc * n_frames_);

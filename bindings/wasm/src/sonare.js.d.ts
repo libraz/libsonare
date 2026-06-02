@@ -745,6 +745,24 @@ export interface SonareModule {
     detectInversions: boolean,
     chromaMethod: number,
   ) => WasmChordAnalysisResult;
+  chordFunctionalAnalysis: (
+    samples: Float32Array,
+    keyRoot: number,
+    keyMode: number,
+    sampleRate: number,
+    minDuration: number,
+    smoothingWindow: number,
+    threshold: number,
+    useTriadsOnly: boolean,
+    nFft: number,
+    hopLength: number,
+    useBeatSync: boolean,
+    useHmm: boolean,
+    hmmBeamWidth: number,
+    useKeyContext: boolean,
+    detectInversions: boolean,
+    chromaMethod: number,
+  ) => string[];
   analyze: (samples: Float32Array, sampleRate: number) => WasmAnalysisResult;
   analyzeImpulseResponse: (
     samples: Float32Array,
@@ -1688,7 +1706,7 @@ export interface WasmMixer {
   ) => number;
   setSendDb: (stripIndex: number, sendIndex: number, sendDb: number) => void;
   meterTap: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
-  stripMeter: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
+  stripMeter: (stripIndex: number) => WasmMixMeterSnapshot;
   scheduleFaderAutomation: (
     stripIndex: number,
     samplePos: number,

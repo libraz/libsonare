@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,18 +14,6 @@
 
 using namespace sonare;
 using namespace sonare_c_detail;
-
-namespace {
-
-#if defined(SONARE_WITH_VOICE_CHANGER)
-char* copy_c_string(const std::string& value) {
-  char* out = new char[value.size() + 1];
-  std::memcpy(out, value.c_str(), value.size() + 1);
-  return out;
-}
-#endif
-
-}  // namespace
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 struct SonareRealtimeVoiceChanger {
@@ -474,7 +461,7 @@ SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceC
   if (!handle || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
   SONARE_C_TRY
-  *out_json = copy_c_string(
+  *out_json = copy_string(
       editing::voice_changer::realtime_voice_changer_config_to_json(handle->changer.config()));
   return SONARE_OK;
   SONARE_C_CATCH
@@ -531,7 +518,7 @@ SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** o
   *out_json = nullptr;
   SONARE_C_TRY
   const auto preset = editing::voice_changer::realtime_voice_changer_preset_from_id(name);
-  *out_json = copy_c_string(editing::voice_changer::realtime_voice_changer_preset_json(preset));
+  *out_json = copy_string(editing::voice_changer::realtime_voice_changer_preset_json(preset));
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -551,13 +538,13 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
     std::string error;
     if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(json, &normalized,
                                                                              &error)) {
-      *out_error = copy_c_string(error.empty() ? "invalid preset JSON" : error);
+      *out_error = copy_string(error.empty() ? "invalid preset JSON" : error);
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    *out_normalized_json = copy_c_string(normalized);
+    *out_normalized_json = copy_string(normalized);
     return SONARE_OK;
   } catch (const std::exception& ex) {
-    *out_error = copy_c_string(ex.what());
+    *out_error = copy_string(ex.what());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 #else

@@ -251,6 +251,11 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
       }
     }
 
+    // librosa computes the quantile count against the FULL band (including the
+    // overlap-extension bins) BEFORE trimming the last bin: in librosa
+    // `idx = max(1, rint(quantile * np.sum(current_band)))` is evaluated before
+    // `sub_band = sub_band[..., :-1, :]`. So q_count is derived from the full
+    // band_indices.size() here, then only min-clamped to the trimmed size below.
     int q_count = std::max(1, static_cast<int>(std::round(quantile * band_indices.size())));
 
     if (b < n_bands && !band_indices.empty()) {

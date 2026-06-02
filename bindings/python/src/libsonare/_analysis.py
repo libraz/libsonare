@@ -17,6 +17,7 @@ from ._ffi import (
     SonareMelodyResult,
     SonareRhythmResult,
     SonareSectionResult,
+    SonareStringArray,
     SonareTimbreResult,
 )
 from ._runtime import (
@@ -708,6 +709,68 @@ def detect_chords(
         )
     finally:
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
+
+
+def chord_functional_analysis(
+    samples: Sequence[float] | list[float],
+    key_root: PitchClass,
+    key_mode: Mode = Mode.MAJOR,
+    sample_rate: int = 22050,
+    min_duration: float = 0.3,
+    smoothing_window: float = 2.0,
+    threshold: float = 0.5,
+    use_triads_only: bool = False,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    use_beat_sync: bool = True,
+    use_hmm: bool = False,
+    hmm_beam_width: int = 24,
+    use_key_context: bool = False,
+    detect_inversions: bool = False,
+    chroma_method: str = "stft",
+) -> list[str]:
+    """Label detected chords with Roman numerals relative to a key.
+
+    Detects chords with the same algorithm as :func:`detect_chords`, then
+    returns one Roman-numeral label (e.g. ``"I"``, ``"IV"``, ``"V"``, ``"vi"``)
+    per detected chord, in chord order.
+    """
+    chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
+    if chroma_method_value is None:
+        raise ValueError("chroma_method must be 'stft' or 'nnls'")
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareStringArray()
+    options = SonareChordDetectionOptions(
+        min_duration,
+        smoothing_window,
+        threshold,
+        1 if use_triads_only else 0,
+        n_fft,
+        hop_length,
+        1 if use_beat_sync else 0,
+        1 if use_hmm else 0,
+        hmm_beam_width,
+        1 if use_key_context else 0,
+        int(key_root),
+        int(key_mode),
+        1 if detect_inversions else 0,
+        chroma_method_value,
+    )
+    rc = lib.sonare_chord_functional_analysis(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(options),
+        ctypes.c_int32(int(key_root)),
+        ctypes.c_int32(int(key_mode)),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return [out.items[i].decode("utf-8") for i in range(out.count)]
+    finally:
+        lib.sonare_free_string_array(ctypes.byref(out))
 
 
 def analyze_sections(

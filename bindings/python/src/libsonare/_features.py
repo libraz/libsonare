@@ -924,9 +924,15 @@ def lufs_interleaved(
         loudness range.
     """
     sample_buf = _validate_samples("lufs_interleaved", samples, validate=validate)
+    if channels <= 0:
+        raise ValueError("lufs_interleaved: channels must be > 0")
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
-    frames = total // channels if channels > 0 else 0
+    if total % channels != 0:
+        raise ValueError(
+            "lufs_interleaved: interleaved samples length must be divisible by channels"
+        )
+    frames = total // channels
     out = SonareLufsResult()
     rc = lib.sonare_lufs_interleaved(
         c_array,

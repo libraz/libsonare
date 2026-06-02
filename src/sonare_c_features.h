@@ -38,6 +38,19 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out);
+/// @brief Functional (Roman-numeral) harmony analysis of detected chords.
+/// @details Detects chords with @p options (same algorithm as
+///   sonare_detect_chords_ex), then labels each detected chord with a Roman
+///   numeral relative to the supplied key (e.g. "I", "IV", "V", "vi"). The
+///   returned array has one string per detected chord, in chord order.
+/// @param key_root Tonic pitch class of the analysis key.
+/// @param key_mode Mode of the analysis key (major/minor/...).
+/// @param out Receives a heap-owned string array; free with
+///   sonare_free_string_array. Empty audio with no chords yields an empty array.
+SonareError sonare_chord_functional_analysis(const float* samples, size_t length, int sample_rate,
+                                             const SonareChordDetectionOptions* options,
+                                             SonarePitchClass key_root, SonareMode key_mode,
+                                             SonareStringArray* out);
 /// @brief Detects song-structure sections (intro/verse/chorus/...).
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float min_section_sec,
@@ -52,6 +65,7 @@ void sonare_free_rhythm_result(SonareRhythmResult* result);
 void sonare_free_dynamics_result(SonareDynamicsResult* result);
 void sonare_free_timbre_result(SonareTimbreResult* result);
 void sonare_free_chord_analysis_result(SonareChordAnalysisResult* result);
+void sonare_free_string_array(SonareStringArray* result);
 void sonare_free_section_result(SonareSectionResult* result);
 void sonare_free_melody_result(SonareMelodyResult* result);
 
@@ -97,6 +111,19 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
                                    int hop_length, int n_mels, SonareMelResult* out);
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out);
+
+/// @brief Mel spectrogram with an explicit Mel range, so a forward transform can
+///        round-trip with the inverse API (sonare_mel_to_stft / _to_audio).
+/// @param fmin Minimum Mel frequency in Hz (0.0 keeps the librosa default).
+/// @param fmax Maximum Mel frequency in Hz (0.0 = sr/2).
+/// @param htk Non-zero to use the HTK Mel formula instead of Slaney.
+SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int sample_rate,
+                                      int n_fft, int hop_length, int n_mels, float fmin, float fmax,
+                                      int htk, SonareMelResult* out);
+/// @brief MFCC with an explicit Mel range (see sonare_mel_spectrogram_ex).
+SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
+                           int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
+                           SonareMfccResult* out);
 
 // ============================================================================
 // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)

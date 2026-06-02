@@ -318,8 +318,8 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
 
   using VectorXcf = Eigen::Matrix<std::complex<float>, Eigen::Dynamic, 1>;
 
-  // Pre-allocate output
-  std::vector<std::complex<float>> output(n_bins * n_frames);
+  // Pre-allocate output (promote to size_t before multiplying to avoid int overflow)
+  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames);
 
   // Create FFT processor
   FFT fft(fft_length);

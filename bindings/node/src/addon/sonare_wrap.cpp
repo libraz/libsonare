@@ -111,6 +111,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("analyzeTimbre",
               Napi::Function::New(env, &SonareWrap::AnalyzeTimbre, "analyzeTimbre"));
   exports.Set("detectChords", Napi::Function::New(env, &SonareWrap::DetectChords, "detectChords"));
+  exports.Set("chordFunctionalAnalysis",
+              Napi::Function::New(env, &SonareWrap::FunctionalAnalysis, "chordFunctionalAnalysis"));
   exports.Set("lufs", Napi::Function::New(env, &SonareWrap::Lufs, "lufs"));
   exports.Set("momentaryLufs",
               Napi::Function::New(env, &SonareWrap::MomentaryLufs, "momentaryLufs"));

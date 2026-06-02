@@ -49,6 +49,7 @@ from ._runtime import (
     SonareTransportState,
     TimeSignature,
     TransportState,
+    _as_float32_buffer,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -399,7 +400,9 @@ class RealtimeEngine:
         self, channels: Sequence[Sequence[float]]
     ) -> tuple[list[list[float]], list[list[float]]]:
         arrays, ptrs, frame_count = self._channel_arrays(channels)
-        monitor_arrays = [(ctypes.c_float * frame_count)(*([0.0] * frame_count)) for _ in arrays]
+        # `(c_float * N)()` already zero-initialises; the previous
+        # `*([0.0] * N)` built a throwaway Python list and varargs-marshalled it.
+        monitor_arrays = [(ctypes.c_float * frame_count)() for _ in arrays]
         monitor_ptrs = (ctypes.POINTER(ctypes.c_float) * len(monitor_arrays))(
             *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in monitor_arrays]
         )
@@ -431,7 +434,12 @@ class RealtimeEngine:
         ]
 
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
+        lib = _get_lib()
         raw_options = SonareEngineBounceOptions()
+        # Seed native defaults first (mirrors StreamAnalyzer.__init__) so any
+        # field the caller leaves at the dataclass sentinel still tracks the C
+        # layer's defaults instead of a hardcoded Python copy that can drift.
+        _check(lib.sonare_engine_bounce_options_default(ctypes.byref(raw_options)))
         raw_options.total_frames = int(options.total_frames)
         raw_options.block_size = int(options.block_size)
         raw_options.num_channels = int(options.num_channels)
@@ -443,7 +451,6 @@ class RealtimeEngine:
         raw_options.dither_bits = int(options.dither_bits)
         raw_options.dither_seed = int(options.dither_seed)
         raw_result = SonareEngineBounceResult()
-        lib = _get_lib()
         _check(
             lib.sonare_engine_bounce_offline(
                 self._require_handle(), ctypes.byref(raw_options), ctypes.byref(raw_result)
@@ -577,7 +584,17 @@ class RealtimeEngine:
         for channel in channels:
             if len(channel) != frame_count:
                 raise ValueError("all channels must have the same length")
-            arrays.append((ctypes.c_float * frame_count)(*channel))
+            # Zero-copy marshal each channel via NumPy's vectorised C path
+            # instead of `(c_float*N)(*channel)`, which unpacks every sample
+            # through Python varargs on this realtime path. The engine writes
+            # its output back into these buffers in-place, so always own a
+            # fresh writable copy (np.array(copy=True)) rather than aliasing the
+            # caller's array; pin the numpy backing to the ctypes object so it
+            # outlives the C call.
+            buf = np.array(_as_float32_buffer(channel), dtype=np.float32, copy=True, order="C")
+            c_array = (ctypes.c_float * frame_count).from_buffer(buf)
+            c_array._np_backing = buf  # type: ignore[attr-defined]
+            arrays.append(c_array)
         ptr_type = ctypes.POINTER(ctypes.c_float) * len(arrays)
         ptrs = ptr_type(*[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in arrays])
         return arrays, ptrs, frame_count

@@ -586,6 +586,47 @@ def test_analysis_primitives() -> None:
     assert isinstance(audio.detect_chords(use_beat_sync=False).chords, list)
 
 
+def test_chord_functional_analysis() -> None:
+    """Functional analysis labels each detected chord with a Roman numeral."""
+    from libsonare import (
+        Mode,
+        PitchClass,
+        chord_functional_analysis,
+        detect_chords,
+    )
+
+    sr = 22050
+    tone = [
+        0.25
+        * (
+            math.sin(2 * math.pi * 261.63 * i / sr)
+            + math.sin(2 * math.pi * 329.63 * i / sr)
+            + math.sin(2 * math.pi * 392.00 * i / sr)
+        )
+        for i in range(sr * 2)
+    ]
+
+    chords = detect_chords(tone, sample_rate=sr, use_beat_sync=False)
+    romans = chord_functional_analysis(
+        tone,
+        key_root=PitchClass.C,
+        key_mode=Mode.MAJOR,
+        sample_rate=sr,
+        use_beat_sync=False,
+    )
+    assert isinstance(romans, list)
+    assert len(romans) == len(chords.chords)
+    assert all(isinstance(label, str) and label for label in romans)
+
+    with pytest.raises(ValueError):
+        chord_functional_analysis(
+            tone,
+            key_root=PitchClass.C,
+            sample_rate=sr,
+            chroma_method="bogus",
+        )
+
+
 ## Effects tests
 
 

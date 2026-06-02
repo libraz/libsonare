@@ -540,6 +540,41 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
   return result;
 }
 
+val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sample_rate,
+                                 float min_duration, float smoothing_window, float threshold,
+                                 bool use_triads_only, int n_fft, int hop_length,
+                                 bool use_beat_sync, bool use_hmm, int hmm_beam_width,
+                                 bool use_key_context, bool detect_inversions, int chroma_method) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  ChordConfig config;
+  config.min_duration = min_duration;
+  config.smoothing_window = smoothing_window;
+  config.threshold = threshold;
+  config.use_triads_only = use_triads_only;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_beat_sync = use_beat_sync;
+  config.use_hmm = use_hmm;
+  config.hmm_beam_width = hmm_beam_width;
+  config.use_key_context = use_key_context;
+  config.key_root = static_cast<PitchClass>(key_root);
+  config.key_mode = static_cast<Mode>(key_mode);
+  config.detect_inversions = detect_inversions;
+  config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+
+  ChordAnalyzer analyzer(audio, config);
+  std::vector<std::string> labels =
+      analyzer.functional_analysis(static_cast<PitchClass>(key_root), static_cast<Mode>(key_mode));
+
+  val out = val::array();
+  for (size_t i = 0; i < labels.size(); ++i) {
+    out.call<void>("push", labels[i]);
+  }
+  return out;
+}
+
 val js_analyze(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   AnalysisResult result = quick::analyze(data.data(), data.size(), sample_rate);
@@ -1103,6 +1138,14 @@ val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
 // Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
 // Mirrors the C ABI sonare_phase_vocoder. rate < 1.0 = slower, > 1.0 = faster.
 val js_phase_vocoder(val samples, int sample_rate, float rate, int n_fft, int hop_length) {
+  // Guard the time-scale rate before deriving the output length: a non-finite
+  // or non-positive rate yields an opaque embind exception, and a tiny rate
+  // would request an enormous output buffer. Mirrors the C ABI rate > 0 check
+  // (sonare_phase_vocoder) and adds a sane upper bound.
+  if (!std::isfinite(rate) || rate <= 0.0f || rate > 100.0f) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "phaseVocoder: rate must be finite and within (0, 100]");
+  }
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
@@ -2570,11 +2613,12 @@ class MixerWasm {
     return mixMeterSnapshotToVal(snapshot);
   }
 
-  // Reads the strip's current meter snapshot. tap: 0 = pre-fader,
-  // 1 = post-fader (see SonareMeterTap). Mirrors the Node/Python stripMeter.
-  val stripMeter(unsigned int strip_index, int tap) {
+  // Reads the strip's current (post-fader) meter snapshot. Tap-less, mirroring
+  // the Node/Python stripMeter contract which calls sonare_strip_meter; the
+  // tap-selectable variant is meterTap.
+  val stripMeter(unsigned int strip_index) {
     SonareMixMeterSnapshot snapshot{};
-    checkStripError(sonare_strip_meter_tap(stripAt(strip_index), tap, &snapshot),
+    checkStripError(sonare_strip_meter(stripAt(strip_index), &snapshot),
                     "failed to read strip meter");
     return mixMeterSnapshotToVal(snapshot);
   }
@@ -2739,9 +2783,13 @@ class MixerWasm {
 
   val processStereo(val left_channels, val right_channels) {
     const int count = left_channels["length"].as<int>();
-    if (count < 0 || right_channels["length"].as<int>() != count) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "leftChannels and rightChannels must have the same length");
+    // Reject empty input to match the free js_mix_stereo contract: a zero-strip
+    // call would derive a zero-length block and produce an empty master, which
+    // is never a useful result. (There is no master-only path here.)
+    if (count <= 0 || right_channels["length"].as<int>() != count) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "leftChannels and rightChannels must have the same non-zero length");
     }
 
     std::vector<std::vector<float>> left_inputs;
@@ -6024,6 +6072,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("detectBeats", &js_detect_beats);
   function("detectDownbeats", &js_detect_downbeats);
   function("detectChords", &js_detect_chords);
+  function("chordFunctionalAnalysis", &js_chord_functional_analysis);
   function("analyze", &js_analyze);
   function("analyzeImpulseResponse", &js_analyze_impulse_response);
   function("detectAcoustic", &js_detect_acoustic);

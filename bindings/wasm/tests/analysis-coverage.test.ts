@@ -14,10 +14,13 @@ import {
   analyzeDynamics,
   analyzeRhythm,
   analyzeTimbre,
+  chordFunctionalAnalysis,
   hasFfmpegSupport,
   init,
   masterAudioStereoWithProgress,
   masterAudioWithProgress,
+  Mode,
+  PitchClass,
 } from '../src/index';
 
 const SR = 22050;
@@ -122,6 +125,20 @@ describe('WASM analyzer coverage parity', () => {
       expect(result.spectralFlatness).toBeInstanceOf(Float32Array);
       expect(result.spectralRolloff).toBeInstanceOf(Float32Array);
       expect(Array.isArray(result.timbreOverTime)).toBe(true);
+    });
+  });
+
+  describe('chordFunctionalAnalysis', () => {
+    it('returns a Roman-numeral label array relative to the given key', () => {
+      // A simple tonal signal; the exact labels depend on detection, but the
+      // surface must return a string[] (one label per detected chord).
+      const samples = makeSine(4, 261.63); // C4
+      const labels = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR);
+      expect(Array.isArray(labels)).toBe(true);
+      for (const label of labels) {
+        expect(typeof label).toBe('string');
+        expect(label.length).toBeGreaterThan(0);
+      }
     });
   });
 

@@ -78,10 +78,17 @@ inline char* copy_string(const std::string& value) {
 }
 
 /// @brief Copies an Audio result into a freshly heap-allocated float array
-///        owned by the caller (freed via sonare_free_array). Shared by the
+///        owned by the caller (freed via sonare_free_floats). Shared by the
 ///        offline Audio -> Audio wrappers (pitch editor / voice changer TUs).
+/// @details EMPTY-RESULT POLICY: a zero-length result yields @c *out == nullptr
+///          with @c *out_length == 0, matching the analysis emitters'
+///          (null, 0) convention. sonare_free_floats(nullptr) is a safe no-op.
 inline SonareError copy_audio_result(const Audio& result, float** out, size_t* out_length) {
   *out_length = result.size();
+  if (result.size() == 0) {
+    *out = nullptr;
+    return SONARE_OK;
+  }
   *out = new float[result.size()];
   std::memcpy(*out, result.data(), result.size() * sizeof(float));
   return SONARE_OK;
@@ -124,10 +131,9 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
   try {
     Audio audio = Audio::from_buffer(samples, length, sample_rate);
     Audio result = process(audio);
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    // Empty-result policy lives in copy_audio_result: size()==0 -> (*out=nullptr,
+    // *out_length=0), matching the analysis emitters' (null, 0) convention.
+    return copy_audio_result(result, out, out_length);
   } catch (const sonare::SonareException& e) {
     set_last_error(e.what());
     return map_sonare_exception(e);

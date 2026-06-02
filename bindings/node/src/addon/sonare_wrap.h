@@ -59,6 +59,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value AnalyzeDynamics(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeTimbre(const Napi::CallbackInfo& info);
   static Napi::Value DetectChords(const Napi::CallbackInfo& info);
+  static Napi::Value FunctionalAnalysis(const Napi::CallbackInfo& info);
   static Napi::Value Lufs(const Napi::CallbackInfo& info);
   static Napi::Value MomentaryLufs(const Napi::CallbackInfo& info);
   static Napi::Value ShortTermLufs(const Napi::CallbackInfo& info);

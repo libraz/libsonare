@@ -306,6 +306,24 @@ def detect_chords(
     detect_inversions: bool = False,
     chroma_method: str = "stft",
 ) -> ChordAnalysisResult: ...
+def chord_functional_analysis(
+    samples: FloatSamples,
+    key_root: PitchClass,
+    key_mode: Mode = Mode.MAJOR,
+    sample_rate: int = 22050,
+    min_duration: float = 0.3,
+    smoothing_window: float = 2.0,
+    threshold: float = 0.5,
+    use_triads_only: bool = False,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    use_beat_sync: bool = True,
+    use_hmm: bool = False,
+    hmm_beam_width: int = 24,
+    use_key_context: bool = False,
+    detect_inversions: bool = False,
+    chroma_method: str = "stft",
+) -> list[str]: ...
 def analyze_sections(
     samples: FloatSamples,
     sample_rate: int = 22050,

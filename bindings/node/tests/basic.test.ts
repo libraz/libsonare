@@ -14,6 +14,7 @@ import {
   analyzeSections,
   analyzeTimbre,
   analyzeWithProgress,
+  chordFunctionalAnalysis,
   chroma,
   cqt,
   dbToAmplitude,
@@ -258,6 +259,33 @@ describe('sonare native binding', () => {
 
       const chords = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
       expect(Array.isArray(chords.chords)).toBe(true);
+
+      // Roman-numeral labels: one per detected chord, all non-empty strings.
+      const romans = chordFunctionalAnalysis(
+        tone,
+        0,
+        0,
+        SR,
+        0.3,
+        2.0,
+        0.5,
+        false,
+        2048,
+        512,
+        false,
+      );
+      expect(Array.isArray(romans)).toBe(true);
+      expect(romans.length).toBe(chords.chords.length);
+      for (const label of romans) {
+        expect(typeof label).toBe('string');
+        expect(label.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('chordFunctionalAnalysis rejects non-Float32Array input', () => {
+      expect(() =>
+        chordFunctionalAnalysis(new Float64Array(SR) as unknown as Float32Array, 0, 0, SR),
+      ).toThrow(/Float32Array/);
     });
 
     it('rejects non-Float32Array input', () => {

@@ -5,14 +5,12 @@
 #include <vector>
 
 #include "core/convert.h"
+#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/vector_normalize.h"
 
 namespace sonare {
-
-using sonare::constants::kEpsilon;
-using sonare::constants::kTwoPi;
 
 namespace {
 
@@ -219,14 +217,11 @@ float apply_tuning_to_fmin(float fmin, float tuning, int bins_per_octave) {
 /// @brief Applies a centered Hann smoothing kernel of length @p win along axis=time.
 std::vector<float> smooth_rows_hann(const std::vector<float>& m, int rows, int cols, int win) {
   if (win <= 1 || cols == 0) return m;
-  std::vector<float> kernel(win);
+  // Shared periodic Hann (sym=False), matching scipy/librosa get_window(fftbins=True),
+  // then normalize by its sum so the kernel is a moving weighted average.
+  std::vector<float> kernel = create_window(WindowType::Hann, win, /*periodic=*/true);
   double sum = 0.0;
-  for (int i = 0; i < win; ++i) {
-    // periodic Hann (matches scipy/librosa default sym=False inside windows.get_window).
-    kernel[i] =
-        0.5f - 0.5f * std::cos(constants::kTwoPi * static_cast<float>(i) / static_cast<float>(win));
-    sum += kernel[i];
-  }
+  for (int i = 0; i < win; ++i) sum += kernel[i];
   if (sum > 0.0) {
     for (int i = 0; i < win; ++i) kernel[i] /= static_cast<float>(sum);
   }

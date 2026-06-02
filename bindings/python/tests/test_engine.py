@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from libsonare import (
@@ -195,6 +196,57 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert last.render_frame == 0
         assert last.timeline_sample == 48000 + 128
         assert last.audible_timeline_sample == 48000 + 128
+
+
+def test_realtime_engine_process_zero_copy_matches_list_input() -> None:
+    """The zero-copy ``_channel_arrays`` marshalling preserves process() output.
+
+    A numpy float32 input and the equivalent Python-list input must yield the
+    same result, and the caller's input array must not be mutated in-place.
+    """
+    left = [math.sin(i * 0.013) for i in range(128)]
+    right = [-sample for sample in left]
+    np_left = np.asarray(left, dtype=np.float32)
+    np_right = np.asarray(right, dtype=np.float32)
+    np_left_before = np_left.copy()
+
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as list_engine:
+        list_engine.play()
+        list_out = list_engine.process([left, right])
+
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as np_engine:
+        np_engine.play()
+        np_out = np_engine.process([np_left, np_right])
+
+    assert np_out[0] == pytest.approx(list_out[0])
+    assert np_out[1] == pytest.approx(list_out[1])
+    # The input buffer is copied, never aliased: the engine writes its output
+    # into an internal buffer, leaving the caller's array untouched.
+    assert np.array_equal(np_left, np_left_before)
+
+
+def test_bounce_options_default_seeded_from_native_layer() -> None:
+    """Leaving ``target_lufs`` at its sentinel still tracks the C default.
+
+    The C ``sonare_engine_bounce_options_default`` maps ``target_lufs == 0.0``
+    to the -14 LUFS default; the Python wrapper seeds the raw options from it,
+    so a bounce request runs without raising regardless of the dataclass copy.
+    """
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.play()
+        bounced = engine.bounce_offline(
+            EngineBounceOptions(
+                total_frames=128,
+                block_size=128,
+                num_channels=2,
+                source_sample_rate=48000,
+                target_sample_rate=48000,
+                normalize_lufs=True,
+            )
+        )
+    assert bounced.num_channels == 2
+    assert bounced.frames == 128
+    assert bounced.sample_rate == 48000
 
 
 def test_realtime_engine_offline_render_matches_process() -> None:

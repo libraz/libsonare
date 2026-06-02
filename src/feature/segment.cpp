@@ -6,12 +6,11 @@
 #include <numeric>
 #include <unordered_map>
 
+#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
-
-using sonare::constants::kTwoPi;
 
 namespace {
 
@@ -451,16 +450,12 @@ std::vector<float> path_enhance(const float* rec, int n, int win, int max_ratio,
 
   // 1D smoothing window applied along each diagonal direction. librosa's
   // path_enhance uses a normalized Hann window along the diagonal, so we use the
-  // same periodic-Hann formula (sym=False) as smooth_rows_hann and normalize by
-  // its sum.
-  std::vector<float> kernel(win);
+  // shared periodic-Hann window (sym=False, matching get_window(fftbins=True))
+  // and normalize by its sum.
+  std::vector<float> kernel = create_window(WindowType::Hann, win, /*periodic=*/true);
   {
     float ksum = 0.0f;
-    for (int q = 0; q < win; ++q) {
-      kernel[q] = 0.5f - 0.5f * std::cos(constants::kTwoPi * static_cast<float>(q) /
-                                         static_cast<float>(win));
-      ksum += kernel[q];
-    }
+    for (float k : kernel) ksum += k;
     if (ksum > 0.0f)
       for (float& k : kernel) k /= ksum;
   }

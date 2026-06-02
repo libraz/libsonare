@@ -184,6 +184,19 @@ void sonare_free_chord_analysis_result(SonareChordAnalysisResult* r) {
   }
 }
 
+void sonare_free_string_array(SonareStringArray* result) {
+  if (result) {
+    if (result->items) {
+      for (size_t i = 0; i < result->count; ++i) {
+        delete[] result->items[i];
+      }
+      delete[] result->items;
+    }
+    result->items = nullptr;
+    result->count = 0;
+  }
+}
+
 void sonare_free_bounce_result(SonareEngineBounceResult* result) {
   if (!result) return;
   delete[] result->interleaved;

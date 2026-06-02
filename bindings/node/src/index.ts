@@ -329,6 +329,42 @@ export class Audio {
     );
   }
 
+  chordFunctionalAnalysis(
+    keyRoot: number,
+    keyMode = 0,
+    minDuration = 0.3,
+    smoothingWindow = 2.0,
+    threshold = 0.5,
+    useTriadsOnly = false,
+    nFft = 2048,
+    hopLength = 512,
+    useBeatSync = true,
+    useHmm = false,
+    hmmBeamWidth = 24,
+    useKeyContext = false,
+    detectInversions = false,
+    chromaMethod: ChordChromaMethod = 'stft',
+  ): string[] {
+    return addon.chordFunctionalAnalysis(
+      this.getData(),
+      keyRoot,
+      keyMode,
+      this.getSampleRate(),
+      minDuration,
+      smoothingWindow,
+      threshold,
+      useTriadsOnly,
+      nFft,
+      hopLength,
+      useBeatSync,
+      useHmm,
+      hmmBeamWidth,
+      useKeyContext,
+      detectInversions,
+      chordChromaMethodValue(chromaMethod),
+    );
+  }
+
   // -- Effects --
 
   hpss(kernelHarmonic = 31, kernelPercussive = 31): HpssResult {
@@ -1086,6 +1122,44 @@ export function detectChords(
     useKeyContext,
     keyRoot,
     keyMode,
+    detectInversions,
+    chordChromaMethodValue(chromaMethod),
+  );
+}
+
+export function chordFunctionalAnalysis(
+  samples: Float32Array,
+  keyRoot: number,
+  keyMode = 0,
+  sampleRate = 22050,
+  minDuration = 0.3,
+  smoothingWindow = 2.0,
+  threshold = 0.5,
+  useTriadsOnly = false,
+  nFft = 2048,
+  hopLength = 512,
+  useBeatSync = true,
+  useHmm = false,
+  hmmBeamWidth = 24,
+  useKeyContext = false,
+  detectInversions = false,
+  chromaMethod: ChordChromaMethod = 'stft',
+): string[] {
+  return addon.chordFunctionalAnalysis(
+    samples,
+    keyRoot,
+    keyMode,
+    sampleRate,
+    minDuration,
+    smoothingWindow,
+    threshold,
+    useTriadsOnly,
+    nFft,
+    hopLength,
+    useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
     detectInversions,
     chordChromaMethodValue(chromaMethod),
   );

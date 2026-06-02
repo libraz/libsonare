@@ -102,8 +102,9 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
 // Features - Mel
 // ============================================================================
 
-SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
-                                   int hop_length, int n_mels, SonareMelResult* out) {
+SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int sample_rate,
+                                      int n_fft, int hop_length, int n_mels, float fmin, float fmax,
+                                      int htk, SonareMelResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->power = nullptr;
@@ -114,6 +115,10 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
     config.n_fft = n_fft;
     config.hop_length = hop_length;
     config.n_mels = n_mels;
+    // 0.0 keeps the librosa default (fmin 0, fmax sr/2); a positive value overrides.
+    if (fmin > 0.0f) config.fmin = fmin;
+    if (fmax > 0.0f) config.fmax = fmax;
+    config.htk = htk != 0;
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
 
     out->n_mels = mel.n_mels();
@@ -134,8 +139,17 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
   });
 }
 
-SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
-                        int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out) {
+SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
+                                   int hop_length, int n_mels, SonareMelResult* out) {
+  // Default Mel range (fmin 0, fmax sr/2, Slaney) — see sonare_mel_spectrogram_ex
+  // for the custom-range forward transform that round-trips with the inverse API.
+  return sonare_mel_spectrogram_ex(samples, length, sample_rate, n_fft, hop_length, n_mels, 0.0f,
+                                   0.0f, 0, out);
+}
+
+SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
+                           int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
+                           SonareMfccResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->coefficients = nullptr;
@@ -145,6 +159,9 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
     config.n_fft = n_fft;
     config.hop_length = hop_length;
     config.n_mels = n_mels;
+    if (fmin > 0.0f) config.fmin = fmin;
+    if (fmax > 0.0f) config.fmax = fmax;
+    config.htk = htk != 0;
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
     std::vector<float> mfcc_data = mel.mfcc(n_mfcc);
 
@@ -155,6 +172,12 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
     out->coefficients = release_array(coeffs);
     return SONARE_OK;
   });
+}
+
+SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
+                        int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out) {
+  return sonare_mfcc_ex(samples, length, sample_rate, n_fft, hop_length, n_mels, n_mfcc, 0.0f, 0.0f,
+                        0, out);
 }
 
 // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
@@ -848,7 +871,9 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   config->fmin = defaults.fmin;
   config->fmax = defaults.fmax;
   config->tuning_ref_hz = defaults.tuning_ref_hz;
-  config->compute_magnitude = defaults.compute_magnitude ? 1 : 0;
+  // The C ABI streaming surface has no magnitude read path, so the default
+  // config advertises it as off (an explicit non-zero is rejected by _create).
+  config->compute_magnitude = 0;
   config->compute_mel = defaults.compute_mel ? 1 : 0;
   config->compute_chroma = defaults.compute_chroma ? 1 : 0;
   config->compute_onset = defaults.compute_onset ? 1 : 0;
@@ -876,6 +901,9 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       !valid_output_format(config->output_format)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Magnitude readout is not surfaced by any SOA read path, so honestly reject
+  // compute_magnitude rather than silently accepting and ignoring it.
+  if (config->compute_magnitude != 0) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
 
   SONARE_C_TRY
@@ -889,10 +917,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.tuning_ref_hz = config->tuning_ref_hz;
   cfg.window = to_window_type(config->window);
   // The SOA read paths (read_frames / read_frames_u8 / read_frames_i16) do not
-  // surface the per-frame magnitude spectrum, so compute_magnitude is forced off
-  // here to avoid silently incurring the per-frame compute cost for a result that
-  // cannot be retrieved through the C ABI. The config field is accepted (so the
-  // default config still constructs) but treated as a no-op.
+  // surface the per-frame magnitude spectrum. An explicit compute_magnitude is
+  // rejected above; the default config leaves it off, so this is always false.
   cfg.compute_magnitude = false;
   cfg.compute_mel = config->compute_mel != 0;
   cfg.compute_chroma = config->compute_chroma != 0;

@@ -119,6 +119,23 @@ def test_lufs_interleaved_matches_mono_for_dual_mono() -> None:
     assert res.integrated_lufs < 0.0
 
 
+def test_lufs_interleaved_rejects_bad_channel_count() -> None:
+    x = _tone()
+    interleaved = np.stack([x, x], axis=1).reshape(-1)
+    with pytest.raises(ValueError, match="channels must be > 0"):
+        libsonare.lufs_interleaved(interleaved, 0, SR)
+
+
+def test_lufs_interleaved_rejects_non_multiple_length() -> None:
+    # An odd-length buffer is not divisible by 2 channels; must raise instead of
+    # silently dropping the trailing sample via floor division.
+    x = _tone()
+    interleaved = np.stack([x, x], axis=1).reshape(-1)
+    truncated = interleaved[:-1]
+    with pytest.raises(ValueError, match="divisible by channels"):
+        libsonare.lufs_interleaved(truncated, 2, SR)
+
+
 def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
     lra = libsonare.ebur128_loudness_range(_tone())
     assert math.isfinite(lra)

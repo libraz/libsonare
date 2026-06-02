@@ -15,12 +15,24 @@
 #include "sonare_c_types.h"
 
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
-#define SONARE_ACOUSTIC_ABI_VERSION 1u
+#define SONARE_ACOUSTIC_ABI_VERSION 2u
 
 /// Statistical late-reverberation RT60 model for RIR synthesis
 /// (SonareRirSynthConfig::late_model). Mirrors sonare::acoustic::ReverbModel.
 #define SONARE_REVERB_MODEL_SABINE 0
 #define SONARE_REVERB_MODEL_EYRING 1
+
+/// Building-material preset selector for the uniform-room wall material
+/// (SonareRirSynthConfig::material_preset / SonareRoomMorphConfig::material_preset).
+/// Mirrors sonare::acoustic::MaterialPreset. SONARE_MATERIAL_PRESET_NONE is 0 so a
+/// zero-initialized config leaves the preset unused (back-compat): the per-band
+/// array or scalar absorption then applies.
+#define SONARE_MATERIAL_PRESET_NONE 0
+#define SONARE_MATERIAL_PRESET_CONCRETE 1
+#define SONARE_MATERIAL_PRESET_WOOD 2
+#define SONARE_MATERIAL_PRESET_CURTAIN 3
+#define SONARE_MATERIAL_PRESET_CARPET 4
+#define SONARE_MATERIAL_PRESET_GLASS 5
 
 /// Blind/IR acoustic-analyzer routing mode for room estimation
 /// (SonareRoomEstimateConfig::mode). Mirrors AcousticConfig::Mode.
@@ -35,7 +47,16 @@ extern "C" {
 /// @brief Shoebox geometry + placement + synthesis controls for RIR synthesis.
 ///
 /// The room is an axis-aligned box [0,length] x [0,width] x [0,height] with a
-/// single uniform wall absorption. Source/listener are points inside it.
+/// uniform wall material applied to all six walls. The wall material is chosen by
+/// this precedence: a named `material_preset` (non-zero) wins; otherwise a
+/// non-NULL `absorption_bands` per-octave-band array; otherwise the scalar
+/// `absorption`.
+///
+/// NOTE: this C ABI exposes only uniform (single-material) shoebox rooms — one
+/// material on every wall, selected as uniform scalar, per-band, or preset
+/// absorption. Per-wall mesh materials (a different material per surface) are not
+/// reachable through this ABI yet.
+/// TODO(acoustic-c-abi): expose per-wall / polyhedral-mesh materials.
 typedef struct {
   float length_m;
   float width_m;
@@ -53,6 +74,12 @@ typedef struct {
   int ism_order;        /* image-source reflection order (>= 0) */
   int late_model;       /* SONARE_REVERB_MODEL_* (Sabine/Eyring) for the late tail */
   unsigned int seed;    /* deterministic late-tail seed */
+  /* Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
+   * absorption_bands != NULL and absorption_band_count > 0 it overrides the
+   * scalar `absorption` (unless material_preset selects a preset). */
+  const float* absorption_bands;
+  size_t absorption_band_count;
+  int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
 } SonareRirSynthConfig;
 
 /// @brief Synthesized room impulse response (mono). Free with
@@ -90,6 +117,10 @@ typedef struct {
 } SonareRoomEstimate;
 
 /// @brief Target room + placement + morph controls for the offline morph.
+///
+/// The target wall material follows the same precedence as SonareRirSynthConfig
+/// (material_preset > absorption_bands > scalar absorption); only uniform
+/// (single-material) target rooms are reachable through this ABI.
 typedef struct {
   float length_m;
   float width_m;
@@ -104,17 +135,39 @@ typedef struct {
   float source_tail_suppression; /* [0,1] gentle source-reverb reduction */
   float wet;                     /* [0,1] target-room mix */
   float max_seconds;             /* target RIR length cap; 0 = natural */
+  float mixing_time_ms;          /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
+  float crossfade_ms;            /* equal-power crossfade width around mixing time (ms) */
   int ism_order;
+  int late_model; /* SONARE_REVERB_MODEL_* (Sabine/Eyring) for the target tail */
   unsigned int seed;
+  /* Optional per-octave-band target-wall absorption; see SonareRirSynthConfig. */
+  const float* absorption_bands;
+  size_t absorption_band_count;
+  int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
 } SonareRoomMorphConfig;
 
 #ifdef __cplusplus
-static_assert(sizeof(SonareRirSynthConfig) == 16u * sizeof(float),
-              "SonareRirSynthConfig unexpected size");
+// Each config's scalar prefix is a packed run of 4-byte members (float/int/
+// unsigned), followed by the optional per-band-array + preset tail. The prefix
+// length is asserted by the offset of the first trailing member, and the tail
+// layout by member-relative offsets, so any padding/alignment/reorder change is
+// caught. SonareRoomEstimateConfig stays a pure-float-sized POD.
+//
+// SonareRirSynthConfig prefix: 13 floats + 3 ints/unsigned = 16 four-byte members.
+static_assert(offsetof(SonareRirSynthConfig, absorption_bands) == 16u * sizeof(float),
+              "SonareRirSynthConfig scalar prefix layout changed");
+static_assert(offsetof(SonareRirSynthConfig, material_preset) ==
+                  offsetof(SonareRirSynthConfig, absorption_band_count) + sizeof(size_t),
+              "SonareRirSynthConfig optional tail layout changed");
 static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
-static_assert(sizeof(SonareRoomMorphConfig) == 15u * sizeof(float),
-              "SonareRoomMorphConfig unexpected size");
+// SonareRoomMorphConfig prefix: 15 floats + 3 ints/unsigned = 18 four-byte members
+// (gained late_model/mixing_time_ms/crossfade_ms over the v1 layout).
+static_assert(offsetof(SonareRoomMorphConfig, absorption_bands) == 18u * sizeof(float),
+              "SonareRoomMorphConfig scalar prefix layout changed");
+static_assert(offsetof(SonareRoomMorphConfig, material_preset) ==
+                  offsetof(SonareRoomMorphConfig, absorption_band_count) + sizeof(size_t),
+              "SonareRoomMorphConfig optional tail layout changed");
 #endif
 
 /// @brief Synthesize a room impulse response from shoebox geometry.

@@ -25,7 +25,9 @@ typedef struct {
   float fmin;               /* Minimum Mel frequency */
   float fmax;               /* Maximum Mel frequency (0 = Nyquist) */
   float tuning_ref_hz;      /* A4 tuning reference */
-  int compute_magnitude;    /* Non-zero to compute magnitude spectra */
+  int compute_magnitude;    /* Magnitude readout is not yet supported through the
+                               C ABI; must be 0 (non-zero is rejected with
+                               SONARE_ERROR_INVALID_PARAMETER). */
   int compute_mel;          /* Non-zero to compute Mel spectra */
   int compute_chroma;       /* Non-zero to compute chroma */
   int compute_onset;        /* Non-zero to compute onset strength */
