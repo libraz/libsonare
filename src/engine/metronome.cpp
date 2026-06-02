@@ -31,14 +31,16 @@ void Metronome::prepare(double sample_rate, const transport::TempoMap* tempo_map
   tempo_map_ = tempo_map;
 }
 
-void Metronome::collect_events(int64_t block_start_sample, int num_frames,
-                               MetronomeEventList* out) const noexcept {
+void Metronome::collect_events(int64_t block_start_sample, int num_frames, MetronomeEventList* out,
+                               int lookback_samples) const noexcept {
   if (!out) return;
   out->clear();
   if (!config_.enabled || !tempo_map_ || num_frames <= 0) return;
 
+  const int64_t lookback = std::max(0, lookback_samples);
+  const int64_t window_start_sample = block_start_sample - lookback;
   const int64_t block_end_sample = block_start_sample + num_frames;
-  const double start_ppq = tempo_map_->sample_to_ppq(block_start_sample);
+  const double start_ppq = tempo_map_->sample_to_ppq(window_start_sample);
   const double end_ppq = tempo_map_->sample_to_ppq(block_end_sample);
   const double lo = std::min(start_ppq, end_ppq);
   const double hi = std::max(start_ppq, end_ppq);
@@ -59,13 +61,16 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames,
     ppq = bar_start + beats_from_bar * beat_len;
   }
   // Bound the iteration so a degenerate beat_len can never spin forever.
-  for (int guard = 0; ppq <= hi + kPpqEpsilon && guard < num_frames + 64; ++guard) {
+  const int64_t guard_limit = num_frames + lookback + 64;
+  for (int guard = 0; ppq <= hi + kPpqEpsilon && guard < guard_limit; ++guard) {
     const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(ppq);
     const double beat_len =
         std::max(4.0 / static_cast<double>(std::max(sig.denominator, 1)), kPpqEpsilon);
     const int64_t sample = tempo_map_->ppq_to_sample(ppq);
-    if (sample >= block_start_sample && sample < block_end_sample) {
+    if (sample >= window_start_sample && sample < block_end_sample) {
       const transport::BarBeat beat = tempo_map_->ppq_to_bar_beat(ppq);
+      // Offset is relative to the block start and may be negative for a beat
+      // that began within the look-back window (its click tail continues here).
       out->add({static_cast<int>(sample - block_start_sample), beat.beat == 1, sample});
     }
     // If the next beat would cross into a new (shorter-beat) signature segment,
@@ -88,12 +93,15 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames,
 void Metronome::process(float* const* channels, int num_channels, int num_frames,
                         int64_t block_start_sample) const noexcept {
   if (!channels || num_channels <= 0 || num_frames <= 0) return;
-  MetronomeEventList events;
-  collect_events(block_start_sample, num_frames, &events);
   const int click_len =
       config_.click_samples > 0
           ? config_.click_samples
           : std::max(1, static_cast<int>(std::lround(config_.click_seconds * sample_rate_)));
+  // Look back by the click length so a click that began in a previous sub-block
+  // continues seamlessly into this one rather than being truncated at the
+  // sub-block boundary (the engine renders the block as many short sub-blocks).
+  MetronomeEventList events;
+  collect_events(block_start_sample, num_frames, &events, click_len - 1);
   // Short raised-cosine attack so the click ramps up from silence instead of
   // stepping 0 -> peak, plus an exponential decay forced to exactly zero at the
   // final sample. This removes the start/end discontinuities that caused an
@@ -107,7 +115,12 @@ void Metronome::process(float* const* channels, int num_channels, int num_frames
   for (size_t e = 0; e < events.size; ++e) {
     const MetronomeEvent& event = events.events[e];
     const float gain = event.accent ? config_.accent_gain : config_.beat_gain;
-    for (int i = 0; i < click_len && event.offset + i < num_frames; ++i) {
+    // Render only the portion of the click that lands inside this sub-block.
+    // event.offset may be negative (click began in the look-back window), so the
+    // click index i starts past the part already rendered in earlier sub-blocks.
+    const int i_start = std::max(0, -event.offset);
+    const int i_end = std::min(click_len, num_frames - event.offset);
+    for (int i = i_start; i < i_end; ++i) {
       float env;
       if (i == click_len - 1) {
         // Guarantee the click ends exactly at zero (no hard step at the tail).

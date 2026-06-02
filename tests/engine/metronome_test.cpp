@@ -101,6 +101,40 @@ TEST_CASE("Metronome click envelope ramps up and decays to zero", "[engine][metr
   REQUIRE(left[kClickLen - 2] < 0.1f);
 }
 
+TEST_CASE("Metronome click is continuous across sub-block boundaries", "[engine][metronome]") {
+  // Regression: the click used to be truncated at each sub-block boundary, so a
+  // click straddling a boundary lost its tail. Rendering one click split across
+  // two consecutive sub-blocks must produce the same samples as one whole call.
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  constexpr int kClickLen = 64;
+  constexpr int kTotal = 256;
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+  metro.set_config({true, 0.25f, 0.75f, kClickLen});
+
+  std::array<float, kTotal> whole{};
+  float* whole_ch[] = {whole.data()};
+  metro.process(whole_ch, 1, kTotal, 0);
+
+  // Same render, split at sample 30 (mid-click): the second call starts at
+  // block_start_sample 30 with the buffer pointer advanced to that offset.
+  std::array<float, kTotal> split{};
+  constexpr int kSplit = 30;
+  float* head[] = {split.data()};
+  metro.process(head, 1, kSplit, 0);
+  float* tail[] = {split.data() + kSplit};
+  metro.process(tail, 1, kTotal - kSplit, kSplit);
+
+  for (int i = 0; i < kTotal; ++i) {
+    REQUIRE(split[static_cast<size_t>(i)] == whole[static_cast<size_t>(i)]);
+  }
+  // The click genuinely straddled the split point (non-zero on both sides).
+  REQUIRE(whole[kSplit - 1] > 0.0f);
+  REQUIRE(whole[kSplit + 1] > 0.0f);
+}
+
 TEST_CASE("Metronome count-in ends at requested bar boundary", "[engine][metronome]") {
   sonare::transport::TempoMap tempo;
   tempo.prepare(48000.0);

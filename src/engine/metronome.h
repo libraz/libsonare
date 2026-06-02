@@ -46,8 +46,13 @@ class Metronome {
   void set_config(MetronomeConfig config) noexcept { config_ = config; }
   const MetronomeConfig& config() const noexcept { return config_; }
 
-  void collect_events(int64_t block_start_sample, int num_frames,
-                      MetronomeEventList* out) const noexcept;
+  // Collects beat events whose click could sound inside this block. Beats are
+  // included from `block_start_sample - lookback_samples` up to the block end so
+  // that a click which began in a previous sub-block still has its tail rendered
+  // here (such events have a negative offset). lookback_samples == 0 reproduces
+  // the plain in-block behavior.
+  void collect_events(int64_t block_start_sample, int num_frames, MetronomeEventList* out,
+                      int lookback_samples = 0) const noexcept;
   void process(float* const* channels, int num_channels, int num_frames,
                int64_t block_start_sample) const noexcept;
 
