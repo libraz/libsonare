@@ -180,9 +180,7 @@ def _format_time(seconds: float) -> str:
     return f"{mm}:{ss:02d}"
 
 
-def _parse_pitch_class(value: str):
-    from .types import PitchClass
-
+def _parse_pitch_class(value: str) -> PitchClass:
     names = {
         "C": PitchClass.C,
         "C#": PitchClass.CS,
@@ -208,9 +206,7 @@ def _parse_pitch_class(value: str):
     return names[key]
 
 
-def _parse_mode(value: str):
-    from .types import Mode
-
+def _parse_mode(value: str) -> Mode:
     key = value.lower()
     if key in ("major", "maj"):
         return Mode.MAJOR
@@ -229,9 +225,7 @@ def _parse_mode(value: str):
     raise ValueError(f"invalid mode: {value}")
 
 
-def _parse_modes(value: str):
-    from .types import Mode
-
+def _parse_modes(value: str) -> list[Mode]:
     key = value.lower()
     if key in ("major-minor", "majmin", "diatonic"):
         return [Mode.MAJOR, Mode.MINOR]
@@ -248,9 +242,7 @@ def _parse_modes(value: str):
     return [_parse_mode(item.strip()) for item in value.split(",") if item.strip()]
 
 
-def _parse_key_profile(value: str):
-    from .types import KeyProfile
-
+def _parse_key_profile(value: str) -> KeyProfile:
     names = {
         "ks": KeyProfile.KRUMHANSL_SCHMUCKLER,
         "krumhansl": KeyProfile.KRUMHANSL_SCHMUCKLER,
