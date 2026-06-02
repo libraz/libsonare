@@ -23,6 +23,11 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
                                 float** out, size_t* out_length);
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
+/// Applies a single CONSTANT transposition: the whole buffer is treated as one
+/// note at @p current_midi and shifted by (target_midi - current_midi). This is
+/// not pitch tracking — it does not follow a time-varying melody. For real
+/// time-varying correction use the C++ correct_to_midi_timevarying with a
+/// caller-supplied F0 track (not yet exposed through the C ABI).
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length);
