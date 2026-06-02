@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(libsonare VERSION 1.2.2 LANGUAGES C CXX)
+project(libsonare VERSION 1.2.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +24,7 @@ option(BUILD_MIXING "Build the mixing library" ON)
 option(BUILD_GRAPH "Build the routing graph library" ON)
 
 option(BUILD_FX "Build creative realtime FX processors" ON)
+option(BUILD_ACOUSTIC_SIM "Build geometric room-acoustics simulation (5th reverb engine)" ON)
 option(BUILD_PITCH_EDITOR "Build monophonic pitch editor primitives" ON)
 option(BUILD_VOICE_CHANGER "Build realtime voice changer primitives" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)

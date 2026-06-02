@@ -74,6 +74,10 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
+#ifdef SONARE_HAVE_ACOUSTIC
+#include "effects/acoustic/room_morph.h"
+#include "effects/reverb/room_reverb.h"
+#endif
 #endif
 
 namespace sonare::mastering::api {
@@ -432,6 +436,47 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     }
     return reverb;
   }
+#ifdef SONARE_HAVE_ACOUSTIC
+  if (name == "effects.reverb.room") {
+    // Geometry-driven 5th engine: the RIR is synthesized from the shoebox
+    // dimensions + uniform absorption at prepare() time, then convolved.
+    RoomReverbConfig config;
+    config.dims = {f(params, "lengthM", config.dims.length), f(params, "widthM", config.dims.width),
+                   f(params, "heightM", config.dims.height)};
+    config.source = {f(params, "sourceX", config.source.x), f(params, "sourceY", config.source.y),
+                     f(params, "sourceZ", config.source.z)};
+    config.listener = {f(params, "listenerX", config.listener.x),
+                       f(params, "listenerY", config.listener.y),
+                       f(params, "listenerZ", config.listener.z)};
+    config.absorption = f(params, "absorption", config.absorption);
+    config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order));
+    config.seed = static_cast<unsigned>(
+        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
+    config.max_seconds = f(params, "maxSeconds", config.max_seconds);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<RoomReverb>(config);
+  }
+  if (name == "effects.acoustic.roomMorph") {
+    // Source-reverb tail suppression in front of a target-room convolution. The
+    // target room's RIR is synthesized from its geometry + uniform absorption.
+    effects::acoustic::RoomMorphConfig config;
+    config.target = sonare::acoustic::uniform_shoebox(
+        {f(params, "lengthM", 7.0f), f(params, "widthM", 5.0f), f(params, "heightM", 3.0f)},
+        f(params, "absorption", 0.2f));
+    config.placement.source = {f(params, "sourceX", 1.0f), f(params, "sourceY", 1.0f),
+                               f(params, "sourceZ", 1.2f)};
+    config.placement.listener = {f(params, "listenerX", 5.0f), f(params, "listenerY", 4.0f),
+                                 f(params, "listenerZ", 1.7f)};
+    config.source_tail_suppression =
+        f(params, "sourceTailSuppression", config.source_tail_suppression);
+    config.wet = f(params, "wet", config.wet);
+    config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order));
+    config.seed = static_cast<unsigned>(
+        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
+    config.max_seconds = f(params, "maxSeconds", config.max_seconds);
+    return make<effects::acoustic::RoomMorphProcessor>(config);
+  }
+#endif
   if (name == "effects.modulation.chorus") {
     effects::modulation::ChorusConfig config;
     config.rate_hz = f(params, "rateHz", config.rate_hz);
@@ -578,6 +623,10 @@ std::vector<std::string> insert_factory_names() {
       "effects.reverb.fdn",
       "effects.reverb.velvet",
       "effects.reverb.convolution",
+#ifdef SONARE_HAVE_ACOUSTIC
+      "effects.reverb.room",
+      "effects.acoustic.roomMorph",
+#endif
       "effects.modulation.chorus",
       "effects.modulation.flanger",
       "effects.modulation.phaser",

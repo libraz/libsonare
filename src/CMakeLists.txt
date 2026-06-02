@@ -358,6 +358,12 @@ if(BUILD_MASTERING)
     # Streaming insert factory can build effects.reverb.* processors from sonare_fx.
     target_link_libraries(sonare_mastering PUBLIC sonare_fx)
     target_compile_definitions(sonare_mastering PRIVATE SONARE_HAVE_FX)
+    if(BUILD_ACOUSTIC_SIM)
+      # The geometry-driven effects.reverb.room insert pulls in the acoustic
+      # synthesizer (via sonare_fx's RoomReverb).
+      target_link_libraries(sonare_mastering PUBLIC sonare_acoustic)
+      target_compile_definitions(sonare_mastering PRIVATE SONARE_HAVE_ACOUSTIC)
+    endif()
   endif()
   target_compile_options(sonare_mastering PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mastering PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -477,8 +483,47 @@ if(BUILD_FX)
     ${PROJECT_SOURCE_DIR}/third_party/r8brain
   )
   target_link_libraries(sonare_fx PUBLIC sonare_rt)
+  if(BUILD_ACOUSTIC_SIM)
+    # The geometry-driven RoomReverb synthesizes its RIR via the acoustic module
+    # and convolves it with the existing convolution-reverb path; RoomMorph adds
+    # source-tail suppression in front of a target-room convolution.
+    target_sources(sonare_fx PRIVATE
+      effects/reverb/room_reverb.cpp
+      effects/acoustic/room_morph.cpp
+    )
+    target_link_libraries(sonare_fx PUBLIC sonare_acoustic)
+    target_compile_definitions(sonare_fx PRIVATE SONARE_HAVE_ACOUSTIC)
+  endif()
   target_compile_options(sonare_fx PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_fx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
+if(BUILD_ACOUSTIC_SIM)
+  # Geometric room-acoustics: 3D room model -> image-source early reflections +
+  # statistical late-reverberation tail -> synthesized RIR (the 5th reverb
+  # engine), plus blind room estimation and the room-morph creative FX. The
+  # convolution path is pulled in where the synthesized RIR is applied.
+  add_library(sonare_acoustic STATIC
+    acoustic/room_types.cpp
+    acoustic/material.cpp
+    acoustic/room_model.cpp
+    acoustic/image_source.cpp
+    acoustic/late_reverb.cpp
+    acoustic/rir_synthesizer.cpp
+    analysis/room_estimator.cpp
+  )
+  target_include_directories(sonare_acoustic PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_acoustic SYSTEM PUBLIC
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
+  )
+  target_link_libraries(sonare_acoustic PUBLIC sonare_rt)
+  target_compile_options(sonare_acoustic PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_acoustic PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
 if(BUILD_PITCH_EDITOR)
@@ -547,6 +592,10 @@ if(BUILD_SHARED)
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
   endif()
+  # Always compile the acoustic C ABI translation unit so the public header's
+  # symbols exist in feature-off shared builds; it returns NOT_SUPPORTED unless
+  # the acoustic + FX modules are both linked.
+  list(APPEND SONARE_SHARED_SOURCES sonare_c_acoustic.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_engine.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_voice_changer.cpp)
@@ -591,6 +640,11 @@ if(BUILD_SHARED)
       target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_GRAPH=1)
     endif()
   endif()
+  if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
+    # The offline acoustic C ABI synthesizes RIRs / estimates rooms / morphs.
+    target_link_libraries(sonare_shared PUBLIC sonare_acoustic)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_ACOUSTIC_SIM=1)
+  endif()
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
     target_link_libraries(sonare_shared PUBLIC Threads::Threads)
@@ -622,6 +676,9 @@ if(BUILD_WASM)
   if(BUILD_FX)
     target_compile_options(sonare_fx PUBLIC -msimd128)
   endif()
+  if(BUILD_ACOUSTIC_SIM)
+    target_compile_options(sonare_acoustic PUBLIC -msimd128)
+  endif()
   if(BUILD_PITCH_EDITOR)
     target_compile_options(sonare_pitch_editor PUBLIC -msimd128)
   endif()
@@ -644,6 +701,9 @@ if(BUILD_WASM)
   endif()
   if(BUILD_FX)
     target_compile_options(sonare_fx PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_ACOUSTIC_SIM)
+    target_compile_options(sonare_acoustic PUBLIC -matomics -mbulk-memory)
   endif()
   if(BUILD_PITCH_EDITOR)
     target_compile_options(sonare_pitch_editor PUBLIC -matomics -mbulk-memory)
@@ -679,6 +739,11 @@ if(BUILD_WASM)
       target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
       target_sources(sonare PRIVATE sonare_c_mixing.cpp)
     endif()
+  endif()
+  if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
+    # RIR synthesis + room estimation (acoustic) and the offline morph (fx).
+    target_link_libraries(sonare PRIVATE sonare_acoustic sonare_fx)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
   endif()
   target_compile_options(sonare PRIVATE -msimd128)
   target_link_options(sonare PRIVATE

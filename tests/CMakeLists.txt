@@ -230,6 +230,33 @@ if(BUILD_FX)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_FX=1)
 endif()
 
+if(BUILD_ACOUSTIC_SIM)
+  target_sources(sonare_tests PRIVATE
+    acoustic/room_types_test.cpp
+    acoustic/material_test.cpp
+    acoustic/room_model_test.cpp
+    acoustic/image_source_test.cpp
+    acoustic/late_reverb_test.cpp
+    acoustic/rir_synthesizer_test.cpp
+    acoustic/room_estimator_test.cpp
+  )
+  if(BUILD_FX)
+    # The room-character morph lives in sonare_fx but needs the acoustic module.
+    target_sources(sonare_tests PRIVATE effects/room_morph_test.cpp)
+    target_sources(sonare_tests PRIVATE
+      api/sonare_c_acoustic_test.cpp
+      ${PROJECT_SOURCE_DIR}/src/sonare_c_acoustic.cpp
+    )
+  endif()
+  if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
+    # Cross-engine ISM oracle vs a pyroomacoustics-generated golden; SKIPs when
+    # the fixture is absent (see room_sim/gen_ism_golden.py).
+    target_sources(sonare_tests PRIVATE acoustic/ism_golden_test.cpp)
+  endif()
+  target_link_libraries(sonare_tests PRIVATE sonare_acoustic)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
+endif()
+
 if(BUILD_PITCH_EDITOR)
   target_sources(sonare_tests PRIVATE editing/pitch_editor_test.cpp)
   if(NOT BUILD_VOICE_CHANGER)

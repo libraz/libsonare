@@ -73,6 +73,12 @@
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #endif
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+#include "acoustic/rir_synthesizer.h"
+#include "acoustic/room_model.h"
+#include "analysis/room_estimator.h"
+#include "effects/acoustic/room_morph.h"
+#endif
 #include "cli_support.h"
 #include "quick.h"
 #include "sonare.h"
@@ -156,7 +162,7 @@ void set_json_path(sonare::util::json::Value& root, const std::string& path,
 // Maps the UI macro names (pitch/formant/space/intensity/output) to concrete
 // dsp.* paths so `--set macros.X=...` from the CLI is convenient. This is
 // intentionally CLI-only sugar; the core loader treats `dsp` as authoritative
-// and never derives dsp from macros (see backup/realtime-voice-changer-brushup-plan.md).
+// and never derives dsp from macros.
 // Keep the mapping in sync with `_apply_voice_macro_override` in
 // bindings/python/src/libsonare/cli.py.
 void apply_voice_macro_override(sonare::util::json::Value& root, const std::string& path,
@@ -2595,6 +2601,131 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+namespace {
+
+// Builds a uniform-absorption shoebox + placement from CLI flags.
+sonare::acoustic::ShoeboxRoom cli_room(const CliArgs& args, float def_absorption) {
+  return sonare::acoustic::uniform_shoebox(
+      {args.get_float("length", 7.0f), args.get_float("width", 5.0f),
+       args.get_float("height", 3.0f)},
+      args.get_float("absorption", def_absorption));
+}
+
+sonare::acoustic::SourceListener cli_placement(const CliArgs& args) {
+  return {{args.get_float("source-x", 1.0f), args.get_float("source-y", 1.0f),
+           args.get_float("source-z", 1.2f)},
+          {args.get_float("listener-x", 5.0f), args.get_float("listener-y", 4.0f),
+           args.get_float("listener-z", 1.7f)}};
+}
+
+}  // namespace
+
+int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: synthesize-rir requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  const int sample_rate = args.get_int("sample-rate", 48000);
+  sonare::acoustic::RirSynthConfig cfg;
+  cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
+  cfg.seed = static_cast<unsigned>(std::max(0, args.get_int("seed", static_cast<int>(cfg.seed))));
+  cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
+
+  const auto result =
+      sonare::acoustic::synthesize_rir(cli_room(args, 0.2f), cli_placement(args), sample_rate, cfg);
+  if (sonare::has_error(result.diagnostics)) {
+    std::cerr << color::red << "Error: invalid room geometry (source/listener outside the room)"
+              << color::reset << "\n";
+    return 1;
+  }
+  save_wav(args.output_file, result.rir.data(), result.rir.size(), result.rir.sample_rate());
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("samples", result.rir.size())
+        .kv("sample_rate", result.rir.sample_rate())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved RIR (" << result.rir.size() << " samples) to "
+              << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
+  sonare::RoomEstimateConfig cfg;
+  cfg.aspect_hint_lw = args.get_float("aspect-lw", cfg.aspect_hint_lw);
+  cfg.aspect_hint_lh = args.get_float("aspect-lh", cfg.aspect_hint_lh);
+  cfg.reference_absorption = args.get_float("reference-absorption", cfg.reference_absorption);
+  cfg.prefer_eyring = !args.has("sabine");
+  cfg.acoustic.n_octave_bands = args.get_int("n-bands", cfg.acoustic.n_octave_bands);
+
+  const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("volume", est.volume)
+        .kv("length", est.dims.length)
+        .kv("width", est.dims.width)
+        .kv("height", est.dims.height)
+        .kv("drr_db", est.drr_db)
+        .kv("confidence", est.confidence)
+        .key("rt60_bands")
+        .float_array(est.rt60_bands)
+        .key("absorption_bands")
+        .float_array(est.absorption_bands)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
+    std::cout << "  " << color::blue << "> Room Estimate:" << color::reset << "\n";
+    printf("    Volume:     %.1f m^3\n", est.volume);
+    printf("    Dimensions: %.2f x %.2f x %.2f m\n", est.dims.length, est.dims.width,
+           est.dims.height);
+    printf("    DRR:        %.2f dB\n", est.drr_db);
+    printf("    Confidence: %.2f\n", est.confidence);
+    std::cout << "\n";
+  }
+  return 0;
+}
+
+int cmd_room_morph(const CliArgs& args, const Audio& audio) {
+  if (args.output_file.empty()) {
+    std::cerr << color::red << "Error: room-morph requires output file (-o)" << color::reset
+              << "\n";
+    return 1;
+  }
+  sonare::effects::acoustic::RoomMorphConfig cfg;
+  cfg.target = cli_room(args, 0.2f);
+  cfg.placement = cli_placement(args);
+  cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
+  cfg.wet = args.get_float("wet", cfg.wet);
+  cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
+  cfg.seed = static_cast<unsigned>(std::max(0, args.get_int("seed", static_cast<int>(cfg.seed))));
+  cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
+
+  const Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("samples", result.size())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved morphed audio to " << args.output_file << color::reset
+              << "\n";
+  }
+  return 0;
+}
+#endif  // SONARE_WITH_ACOUSTIC_SIM
+
 int cmd_onset_envelope(const CliArgs& args, const Audio& audio) {
   MelConfig mel_config;
   mel_config.n_fft = args.n_fft;
@@ -3257,6 +3388,13 @@ const std::vector<CommandInfo>& get_commands() {
       {"melody", "Track melody/pitch contour", cmd_melody, true},
       {"boundaries", "Detect structural boundaries", cmd_boundaries, true},
       {"acoustic", "Analyze room acoustics (RT60/EDT/clarity)", cmd_acoustic, true},
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+      {"estimate-room", "Estimate equivalent room (volume/dims/absorption/DRR)", cmd_estimate_room,
+       true},
+      {"synthesize-rir", "Synthesize a room impulse response from geometry (-o out.wav)",
+       cmd_synthesize_rir, false},
+      {"room-morph", "Morph reverberation toward a target room (-o out.wav)", cmd_room_morph, true},
+#endif
       {"lufs", "Measure loudness (LUFS / loudness range)", cmd_lufs, true},
       {"meter", "Measure basic level meters (peak/RMS/crest/true-peak)", cmd_meter, true},
       {"clipping", "Detect clipped sample regions", cmd_clipping, true},
