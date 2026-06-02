@@ -525,7 +525,13 @@ float Crossover::process_fir_delay(float sample, int channel) {
 void Crossover::rebuild_state(int num_channels) {
   const size_t splits = config_.cutoffs_hz.size();
   const size_t bands = splits + 1;
-  const size_t stages = filter_sections(config_.slope, config_.mode).size();
+  // filter_sections() allocates temporary vectors; recompute the stage count
+  // only when the coefficients are dirty (config/sample-rate change) or it has
+  // not been cached yet, so steady-state blocks never allocate here.
+  if (coeffs_dirty_ || cached_section_count_ == 0) {
+    cached_section_count_ = filter_sections(config_.slope, config_.mode).size();
+  }
+  const size_t stages = cached_section_count_;
   const bool shape_matches =
       states_.size() == splits &&
       (splits == 0 || states_[0].size() == static_cast<size_t>(num_channels)) &&

@@ -1168,6 +1168,52 @@ TEST_CASE("TiltEq zero tilt is bypassed", "[mastering][eq]") {
   }
 }
 
+TEST_CASE("LinearPhaseEq stays click-free across mixed (ragged) block sizes", "[mastering][eq]") {
+  // Regression: the partitioned-convolver fast path and the direct fallback kept
+  // disjoint filter state, so a ragged (non-partition-aligned) block processed by
+  // the direct path ran against empty history and lost the convolution tail. The
+  // convolver-driven instance must now match an always-direct reference exactly,
+  // for any sequence of block sizes.
+  const EqBand band{EqBandType::HighShelf, 6000.0f, -4.0f, 0.8f, true};
+
+  LinearPhaseEqConfig direct_config{1024, 257};
+  direct_config.use_partitioned_convolution = false;  // always the direct path
+  LinearPhaseEq reference(direct_config);
+  reference.prepare(48000.0, 128);
+  reference.set_band(0, band);
+
+  LinearPhaseEqConfig conv_config{1024, 257};
+  conv_config.partition_size = 128;  // convolver drives the aligned blocks
+  LinearPhaseEq convolved(conv_config);
+  convolved.prepare(48000.0, 128);
+  convolved.set_band(0, band);
+
+  // Aligned blocks (128) followed by a ragged tail (64), then more aligned and
+  // another ragged block mid-stream — exercises both end-of-stream and
+  // interior raggedness.
+  const std::array<int, 6> block_sizes{128, 128, 64, 128, 96, 128};
+  int total = 0;
+  for (int b : block_sizes) total += b;
+
+  auto input = sine(2000.0f, 48000, total);
+  auto expected = input;
+  auto actual = input;
+
+  const auto run = [&](LinearPhaseEq& eq, std::vector<float>& buffer) {
+    int offset = 0;
+    for (int b : block_sizes) {
+      float* channels[] = {buffer.data() + offset};
+      eq.process(channels, 1, b);
+      offset += b;
+    }
+  };
+  run(reference, expected);
+  run(convolved, actual);
+
+  // FFT-domain convolver vs time-domain direct differ only by float rounding.
+  REQUIRE(max_abs_difference(expected, actual) < 1.0e-3f);
+}
+
 TEST_CASE("LinearPhaseEq exposes symmetric FIR kernel and latency", "[mastering][eq]") {
   LinearPhaseEq eq({1024, 257});
   eq.prepare(48000.0, 512);

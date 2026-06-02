@@ -149,6 +149,11 @@ class Crossover {
   // per-block split path only reinstalls coefficients when this is set or when
   // the channel count changed, so steady-state processing is allocation-free.
   bool coeffs_dirty_ = true;
+  // Cached per-split biquad stage count. filter_sections() builds temporary
+  // vectors, so it is evaluated only on a config/sample-rate change (when
+  // coeffs_dirty_ is set) and reused on every steady-state block to keep the
+  // audio-thread split path allocation-free.
+  size_t cached_section_count_ = 0;
   std::vector<std::vector<SplitChannelState>> states_;
   std::vector<std::vector<CompensationChannelState>> compensation_states_;
   std::vector<std::vector<float>> fir_kernels_;

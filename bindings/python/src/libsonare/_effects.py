@@ -315,7 +315,9 @@ def decompose(
         of shape ``(n_components, n_frames)``.
     """
     lib = _get_lib()
-    c_array, _length = _to_c_float_array(s)
+    c_array, length = _to_c_float_array(s)
+    if length != n_features * n_frames:
+        raise ValueError("s length must equal n_features * n_frames")
     out_w = ctypes.POINTER(ctypes.c_float)()
     out_w_length = ctypes.c_size_t()
     out_h = ctypes.POINTER(ctypes.c_float)()
@@ -367,7 +369,9 @@ def nn_filter(
         ``(n_features, n_frames)``.
     """
     lib = _get_lib()
-    c_array, _length = _to_c_float_array(s)
+    c_array, length = _to_c_float_array(s)
+    if length != n_features * n_frames:
+        raise ValueError("s length must equal n_features * n_frames")
     aggregate_bytes = aggregate.encode("utf-8") if aggregate else None
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()

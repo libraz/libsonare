@@ -1403,7 +1403,9 @@ def mel_to_stft(
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_stft"):
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
-    c_array, _length = _to_c_float_array(mel)
+    c_array, length = _to_c_float_array(mel)
+    if length != n_mels * n_frames:
+        raise ValueError("mel length must equal n_mels * n_frames")
     out = SonareInverseResult()
     rc = lib.sonare_mel_to_stft(
         c_array,
@@ -1457,7 +1459,9 @@ def mel_to_audio(
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_audio"):
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
-    c_array, _length = _to_c_float_array(mel)
+    c_array, length = _to_c_float_array(mel)
+    if length != n_mels * n_frames:
+        raise ValueError("mel length must equal n_mels * n_frames")
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     rc = lib.sonare_mel_to_audio(
@@ -1501,7 +1505,9 @@ def mfcc_to_mel(
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_mel"):
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
-    c_array, _length = _to_c_float_array(mfcc_coeffs)
+    c_array, length = _to_c_float_array(mfcc_coeffs)
+    if length != n_mfcc * n_frames:
+        raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
     out = SonareInverseResult()
     rc = lib.sonare_mfcc_to_mel(
         c_array,
@@ -1554,7 +1560,9 @@ def mfcc_to_audio(
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_audio"):
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
-    c_array, _length = _to_c_float_array(mfcc_coeffs)
+    c_array, length = _to_c_float_array(mfcc_coeffs)
+    if length != n_mfcc * n_frames:
+        raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     rc = lib.sonare_mfcc_to_audio(

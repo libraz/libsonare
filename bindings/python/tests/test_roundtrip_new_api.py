@@ -2,6 +2,8 @@
 
 import math
 
+import pytest
+
 import libsonare as ls
 
 
@@ -61,6 +63,32 @@ def test_mfcc_inverse_roundtrip():
     )
     assert len(out) >= (n_frames - 1) * hop
     assert _is_finite_list(out)
+
+
+def test_inverse_transforms_reject_dim_length_mismatch():
+    # Regression: the inverse/decompose wrappers forwarded a flat matrix plus
+    # declared dims to the C ABI without a length check, so a mismatched length
+    # caused a C-side heap over-read. They must now raise ValueError up front.
+    n_mels, n_frames = 8, 4  # expects 32 elements
+    short = [0.1] * (n_mels * n_frames - 1)
+    with pytest.raises(ValueError):
+        ls.mel_to_stft(short, n_mels, n_frames)
+    with pytest.raises(ValueError):
+        ls.mel_to_audio(short, n_mels, n_frames)
+
+    n_mfcc = 5  # expects 20 elements
+    short_mfcc = [0.1] * (n_mfcc * n_frames - 1)
+    with pytest.raises(ValueError):
+        ls.mfcc_to_mel(short_mfcc, n_mfcc, n_frames)
+    with pytest.raises(ValueError):
+        ls.mfcc_to_audio(short_mfcc, n_mfcc, n_frames)
+
+    n_features = 6  # expects 24 elements
+    short_spec = [0.1] * (n_features * n_frames - 1)
+    with pytest.raises(ValueError):
+        ls.decompose(short_spec, n_features, n_frames, 2)
+    with pytest.raises(ValueError):
+        ls.nn_filter(short_spec, n_features, n_frames)
 
 
 def test_stream_analyzer_abi_and_stats():

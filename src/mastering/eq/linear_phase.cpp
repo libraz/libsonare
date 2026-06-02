@@ -210,11 +210,21 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
     auto& state = states_[static_cast<size_t>(ch)];
     float* samples = channels[ch];
     const int partition_size = active_partition_size();
-    if (state.convolver && partition_size > 0 && (num_samples % partition_size) == 0) {
+    const bool can_use_convolver = state.convolver && !state.direct_fallback &&
+                                   partition_size > 0 && (num_samples % partition_size) == 0;
+    if (can_use_convolver) {
+      // Mirror the inputs into the time-domain history before the convolver
+      // overwrites them, so the direct path stays primed with the real
+      // convolution tail and can take over seamlessly on a later ragged block.
+      feed_history(samples, num_samples, state);
       for (int offset = 0; offset < num_samples; offset += partition_size) {
         state.convolver->process_block(samples + offset, samples + offset);
       }
     } else {
+      // A ragged block cannot be fed to the fixed-block convolver; latch to the
+      // direct path for the rest of the stream (until reset()) since the
+      // convolver's ring would otherwise be permanently misaligned.
+      if (state.convolver) state.direct_fallback = true;
       process_direct(samples, num_samples, state);
     }
   }
@@ -224,6 +234,7 @@ void LinearPhaseEq::reset() {
   for (auto& state : states_) {
     std::fill(state.history.begin(), state.history.end(), 0.0f);
     state.write_index = 0;
+    state.direct_fallback = false;
     if (state.convolver) state.convolver->reset();
   }
 }
@@ -425,6 +436,17 @@ void LinearPhaseEq::process_direct(float* samples, int num_samples, ChannelState
     }
 
     samples[i] = static_cast<float>(y);
+    state.write_index = (state.write_index + 1) % kernel_size;
+  }
+}
+
+void LinearPhaseEq::feed_history(const float* samples, int num_samples, ChannelState& state) const {
+  const size_t kernel_size = state.history.size();
+  if (kernel_size == 0) {
+    return;
+  }
+  for (int i = 0; i < num_samples; ++i) {
+    state.history[state.write_index] = samples[i];
     state.write_index = (state.write_index + 1) % kernel_size;
   }
 }

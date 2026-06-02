@@ -292,7 +292,7 @@ BiquadCoeffs vicanek_high_shelf(float w0, float gain_db) {
   const float b0_unscaled = 0.5f * (w + safe_sqrt(w * w + bb2));
   const float b0 = b0_unscaled * inva0;
   const BiquadCoeffs coeffs{b0, (1.0f - w) * inva0,
-                            -0.25f * bb2 * inva0 * inva0 / std::max(b0_unscaled, 1.0e-12f),
+                            -0.25f * bb2 * inva0 / std::max(b0_unscaled, 1.0e-12f),
                             (1.0f - v) * inva0, -0.25f * aa2 * inva0 * inva0};
   if (endpoint_gain_error_exceeds(coeffs, kPi * 0.999f, gain_db, 1.5f)) {
     return rbj_high_shelf(w0, kButterworthQ, gain_db);

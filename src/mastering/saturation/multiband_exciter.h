@@ -46,6 +46,7 @@ class MultibandExciter : public rt::ProcessorBase {
   int max_block_size_ = 0;
   bool prepared_ = false;
   multiband::Crossover crossover_;
+  multiband::CrossoverScratch scratch_;
   std::vector<Exciter> exciters_;
 };
 

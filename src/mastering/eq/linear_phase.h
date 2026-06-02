@@ -68,6 +68,12 @@ class LinearPhaseEq : public rt::ProcessorBase {
     size_t write_index = 0;
     std::unique_ptr<sonare::rt::PartitionedConvolver> convolver;
     bool convolver_kernel_current = false;
+    // Latched true once a ragged (non-partition-aligned) block forces the
+    // direct path. The partitioned convolver's internal ring can only advance
+    // in whole partitions, so once we skip feeding it a block its state is
+    // permanently out of step with the stream; we stay on the direct path
+    // (whose history is always maintained) until reset().
+    bool direct_fallback = false;
   };
 
   void rebuild_kernel();
@@ -78,6 +84,10 @@ class LinearPhaseEq : public rt::ProcessorBase {
   void reconfigure();
   void ensure_channel_state(int num_channels);
   void process_direct(float* samples, int num_samples, ChannelState& state) const;
+  // Push a block of inputs into the time-domain FIR history ring (no output),
+  // keeping it in lock-step with the partitioned convolver so process_direct
+  // can take over seamlessly on a later ragged block.
+  void feed_history(const float* samples, int num_samples, ChannelState& state) const;
   int active_partition_size() const noexcept;
   void validate_config() const;
   static void validate_band_index(size_t index);

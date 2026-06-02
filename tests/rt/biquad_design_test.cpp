@@ -35,6 +35,25 @@ TEST_CASE("RBJ high-shelf cached design matches direct double design", "[rt][biq
                 sonare::rt::rbj_high_shelf_d(frequency, sample_rate, -3.0, q));
 }
 
+TEST_CASE("Vicanek high-shelf keeps DC/passband at unity across common settings", "[rt][biquad]") {
+  // Regression: the high-shelf b2 numerator carried an extra 1/a0 factor, which
+  // corrupted the passband (DC) gain. The validation guard only samples the HF
+  // endpoint, so for cutoffs >= ~5 kHz the bad coefficients shipped silently.
+  constexpr double sample_rate = 48000.0;
+  const auto db = [](float linear) { return 20.0f * std::log10(std::max(linear, 1.0e-12f)); };
+  for (double fc : {3000.0, 5000.0, 8000.0, 12000.0, 15000.0}) {
+    const float w0 = static_cast<float>(sonare::constants::kTwoPiD * fc / sample_rate);
+    for (float gain_db : {-6.0f, -3.0f, -1.0f, 1.0f, 3.0f, 6.0f}) {
+      const auto coeffs = sonare::rt::vicanek_high_shelf(w0, gain_db);
+      // DC (omega = 0) must stay at unity (0 dB) for a high shelf.
+      REQUIRE_THAT(db(sonare::rt::biquad_magnitude(coeffs, 0.0f)), WithinAbs(0.0f, 0.75f));
+      // High-frequency endpoint must approach the requested shelf gain.
+      const float nyquist = static_cast<float>(sonare::constants::kPi * 0.999);
+      REQUIRE_THAT(db(sonare::rt::biquad_magnitude(coeffs, nyquist)), WithinAbs(gain_db, 1.5f));
+    }
+  }
+}
+
 TEST_CASE("Butterworth stage Q helper matches expected cascade values", "[rt][biquad]") {
   REQUIRE_THAT(sonare::rt::butterworth_stage_q(2, 0),
                WithinAbs(sonare::constants::kButterworthQ, 1.0e-6f));

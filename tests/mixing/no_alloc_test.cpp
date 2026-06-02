@@ -33,6 +33,8 @@
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/multiband_exciter.h"
 #include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
@@ -459,6 +461,47 @@ TEST_CASE("TruePeakLimiter process performs no heap allocation after prepare",
 
   AllocationGuard guard;
   limiter.process(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("MultibandExciter process performs no heap allocation after prepare",
+          "[mastering][saturation][rt]") {
+  constexpr int kBlock = 256;
+  sonare::mastering::saturation::MultibandExciter exciter;
+  exciter.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = i == 0 ? 0.8f : 0.05f;
+    right[static_cast<size_t>(i)] = 0.04f;
+  }
+  float* channels[] = {left.data(), right.data()};
+
+  exciter.process(channels, 2, kBlock);
+  exciter.reset();
+
+  AllocationGuard guard;
+  exciter.process(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("MultibandSaturation process performs no heap allocation after prepare",
+          "[mastering][saturation][rt]") {
+  constexpr int kBlock = 256;
+  sonare::mastering::multiband::MultibandSaturation sat;
+  sat.prepare(48000.0, kBlock);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = i == 0 ? 0.8f : 0.05f;
+    right[static_cast<size_t>(i)] = 0.04f;
+  }
+  float* channels[] = {left.data(), right.data()};
+  sat.process(channels, 2, kBlock);
+  sat.reset();
+  AllocationGuard guard;
+  sat.process(channels, 2, kBlock);
   REQUIRE(guard.count() == 0);
 }
 
