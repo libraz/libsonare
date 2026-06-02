@@ -83,6 +83,17 @@ typedef struct {
 
   float limiter_ceiling_db;
   float limiter_release_ms;
+
+  /// @brief Enables the optional 4x-oversampled inter-sample peak (true-peak)
+  ///        limiter as the final output stage (non-zero = enabled). Mirrors
+  ///        editing::voice_changer::LimiterConfig::enable_isp_limiter. Defaults
+  ///        to 1 (enabled).
+  int limiter_enable_isp_limiter;
+  /// @brief True-peak ceiling in dBTP applied by the ISP limiter when
+  ///        @ref limiter_enable_isp_limiter is non-zero. Mirrors
+  ///        editing::voice_changer::LimiterConfig::isp_ceiling_dbtp. Defaults to
+  ///        -1.0 dBTP.
+  float limiter_isp_ceiling_dbtp;
 } SonareRealtimeVoiceChangerConfig;
 
 // Verify the POD struct layout is stable. The ABI version constant
@@ -91,11 +102,11 @@ typedef struct {
 // FFI boundary (Rust FFI, raw C ABI consumers) read this size at compile
 // time and detect ABI drift before a single byte is exchanged.
 //
-// Layout: 32 float fields + 2 int fields, every member is 4 bytes and
+// Layout: 33 float fields + 3 int fields, every member is 4 bytes and
 // 4-byte aligned -> no struct padding on any target we ship. Exact equality
 // (not >=) so silent padding insertion fails the check too.
 #ifdef __cplusplus
-static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 34u * sizeof(float),
+static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 36u * sizeof(float),
               "SonareRealtimeVoiceChangerConfig unexpected size");
 #endif
 
@@ -226,7 +237,7 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
 /// @brief Compile-time mirror of the runtime ABI version returned by
 ///        @ref sonare_voice_changer_abi_version. Bindings can `static_assert` /
 ///        `assertEqual` the runtime value against this at attach time.
-#define SONARE_VOICE_CHANGER_ABI_VERSION 1u
+#define SONARE_VOICE_CHANGER_ABI_VERSION 2u
 
 /// @brief Returns the runtime ABI version of the
 ///        @ref SonareRealtimeVoiceChangerConfig POD layout.

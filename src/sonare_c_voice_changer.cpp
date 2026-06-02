@@ -102,7 +102,8 @@ namespace {
   X(reverb.damping, reverb_damping)                       \
   X(reverb.seed, reverb_seed)                             \
   X(limiter.ceiling_db, limiter_ceiling_db)               \
-  X(limiter.release_ms, limiter_release_ms)
+  X(limiter.release_ms, limiter_release_ms)               \
+  X(limiter.isp_ceiling_dbtp, limiter_isp_ceiling_dbtp)
 
 editing::voice_changer::RealtimeVoiceChangerConfig vc_config_from_pod(
     const SonareRealtimeVoiceChangerConfig& pod) {
@@ -110,6 +111,9 @@ editing::voice_changer::RealtimeVoiceChangerConfig vc_config_from_pod(
 #define X(cpp_path, pod_field) c.cpp_path = pod.pod_field;
   SONARE_VC_FIELDS(X)
 #undef X
+  // bool <-> int fields are handled explicitly (outside the float-oriented
+  // X-macro) so the POD's non-zero==true convention is preserved.
+  c.limiter.enable_isp_limiter = pod.limiter_enable_isp_limiter != 0;
   return c;
 }
 
@@ -118,6 +122,7 @@ void vc_config_to_pod(const editing::voice_changer::RealtimeVoiceChangerConfig& 
 #define X(cpp_path, pod_field) pod->pod_field = c.cpp_path;
   SONARE_VC_FIELDS(X)
 #undef X
+  pod->limiter_enable_isp_limiter = c.limiter.enable_isp_limiter ? 1 : 0;
 }
 
 /// Single source of truth for the C ↔ C++ preset enum bridge. Adding a new

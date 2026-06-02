@@ -2424,6 +2424,70 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   sonare_free_floats(out);
 }
 
+TEST_CASE("sonare_realtime_voice_changer ISP limiter fields round-trip through the POD config",
+          "[c_api]") {
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_NEUTRAL_MONITOR, &config) ==
+          SONARE_OK);
+  config.limiter_enable_isp_limiter = 0;
+  config.limiter_isp_ceiling_dbtp = -2.5f;
+
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
+  REQUIRE(handle != nullptr);
+
+  SonareRealtimeVoiceChangerConfig read_back{};
+  REQUIRE(sonare_realtime_voice_changer_get_config(handle, &read_back) == SONARE_OK);
+  REQUIRE(read_back.limiter_enable_isp_limiter == 0);
+  REQUIRE(read_back.limiter_isp_ceiling_dbtp == Catch::Approx(-2.5f).margin(0.001f));
+
+  sonare_realtime_voice_changer_destroy(handle);
+}
+
+TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time signature", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_time_signature(engine, 3, 4) == SONARE_OK);
+
+  SonareTransportState state{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  REQUIRE(state.time_signature.numerator == 3);
+  REQUIRE(state.time_signature.denominator == 4);
+  REQUIRE(state.bar_count >= 0);
+  REQUIRE(std::isfinite(state.bar_start_ppq));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_bounce_offline NULLs the owned result on validation failure", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
+
+  SonareEngineBounceOptions bad_options{};
+  bad_options.total_frames = 16;
+  bad_options.block_size = 16;
+  bad_options.num_channels = 0;  // invalid -> early validation failure
+  bad_options.source_sample_rate = 48000;
+  bad_options.target_sample_rate = 48000;
+
+  // Pre-dirty the result so we can prove the failure path overwrites it with NULL
+  // rather than leaving a dangling owned pointer that the free idiom would delete.
+  SonareEngineBounceResult result{};
+  result.interleaved = reinterpret_cast<float*>(0xDEADBEEF);
+  result.frames = 123;
+
+  REQUIRE(sonare_engine_bounce_offline(engine, &bad_options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.interleaved == nullptr);
+  REQUIRE(result.frames == 0);
+  sonare_free_floats(result.interleaved);  // must be a safe no-op on NULL
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

@@ -641,13 +641,19 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out) {
+  // Zero the owned out-pointer/lengths BEFORE any validation early-return so a
+  // failed validation always leaves a NULL owned pointer (matching the analysis
+  // wrappers in sonare_c.cpp). Otherwise the standard
+  // sonare_free_bounce_result(&r) idiom would delete[] an uninitialised pointer.
+  if (out) {
+    *out = {};
+  }
   if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
       options->num_channels <= 0 || options->target_sample_rate <= 0 ||
       options->source_sample_rate <= 0 || options->dither_bits < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  *out = {};
   std::vector<std::vector<float>> channels(
       static_cast<size_t>(options->num_channels),
       std::vector<float>(static_cast<size_t>(options->total_frames), 0.0f));
@@ -851,5 +857,10 @@ SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
   out->loop_start_ppq = state.loop_start_ppq;
   out->loop_end_ppq = state.loop_end_ppq;
   out->sample_rate = state.sample_rate;
+  out->bar_start_ppq = state.bar_start_ppq;
+  out->bar_count = state.bar_count;
+  out->time_signature.numerator = state.time_sig.numerator;
+  out->time_signature.denominator = state.time_sig.denominator;
+  out->time_signature.confidence = 1.0f;
   return SONARE_OK;
 }

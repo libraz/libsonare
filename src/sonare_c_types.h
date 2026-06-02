@@ -168,6 +168,11 @@ typedef struct {
   double loop_start_ppq;
   double loop_end_ppq;
   double sample_rate;
+  /* Musical position derived from the tempo map (computed every block).
+     Appended after the original fields to preserve struct layout. */
+  double bar_start_ppq;               /* PPQ of the current bar's downbeat. */
+  int64_t bar_count;                  /* Zero-based index of the current bar. */
+  SonareTimeSignature time_signature; /* Time signature in effect at this PPQ. */
 } SonareTransportState;
 
 typedef struct {
