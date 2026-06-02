@@ -57,6 +57,15 @@ class Transport {
   int64_t render_frame() const noexcept { return render_frame_; }
   int64_t sample_position() const noexcept { return sample_position_; }
 
+  // Number of process blocks in which collect_loop_boundaries() dropped one or
+  // more loop wraps because the BoundaryList filled to kCapacity. Mirrors
+  // AutomationEngine::boundary_overflow_count() so a too-short loop relative to
+  // the block size (more than kCapacity wraps per block) is observable rather
+  // than silently truncated. Relaxed is sufficient: it is a diagnostic stamp.
+  uint32_t loop_overflow_count() const noexcept {
+    return loop_overflow_count_.load(std::memory_order_relaxed);
+  }
+
  private:
   // Consistent snapshot of the loop region. set_loop (control thread) publishes
   // all three fields atomically via the seqlock guard below; the audio thread
@@ -87,6 +96,9 @@ class Transport {
   // audio-thread read path, so no synchronization is needed; serves as the
   // fallback when a single try-read races a control-thread write.
   mutable LoopState cached_loop_state_{};
+  // Diagnostic overflow counter (see loop_overflow_count()). Incremented on the
+  // audio thread from the const collect_loop_boundaries(), hence mutable atomic.
+  mutable std::atomic<uint32_t> loop_overflow_count_{0};
 };
 
 }  // namespace sonare::transport

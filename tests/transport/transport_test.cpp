@@ -215,3 +215,38 @@ TEST_CASE("Transport playhead exactly on loop_end wraps consistently", "[transpo
   const auto state = transport.snapshot();
   REQUIRE(state.sample_position == 48512);  // loop_start + 512
 }
+
+TEST_CASE("Transport surfaces a loop-boundary overflow counter", "[transport]") {
+  // A loop far shorter than the block can wrap more than BoundaryList::kCapacity
+  // times in a single block. Those extra wraps are dropped; the drop must be
+  // observable via loop_overflow_count() (and BoundaryList::overflowed())
+  // instead of being silently swallowed.
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_segments({{0.0, 120.0, 0.0}});  // 1 ppq == 24000 samples
+
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, &map);
+  REQUIRE(transport.loop_overflow_count() == 0u);
+
+  // loop_len = 100 samples (end_ppq = 100/24000). A 4096-sample block wraps ~40
+  // times, well beyond kCapacity (16).
+  const double end_ppq = 100.0 / 24000.0;
+  transport.set_loop(0.0, end_ppq, true);
+  transport.play();
+
+  sonare::transport::BoundaryList boundaries;
+  REQUIRE(transport.collect_loop_boundaries(4096, &boundaries));
+  REQUIRE(boundaries.size() == sonare::transport::BoundaryList::kCapacity);
+  REQUIRE(boundaries.overflowed());
+  REQUIRE(transport.loop_overflow_count() == 1u);
+
+  // A subsequent overflow increments the counter again.
+  boundaries.clear();
+  REQUIRE(transport.collect_loop_boundaries(4096, &boundaries));
+  REQUIRE(transport.loop_overflow_count() == 2u);
+
+  // prepare() resets the diagnostic stamp.
+  transport.prepare(48000.0, &map);
+  REQUIRE(transport.loop_overflow_count() == 0u);
+}

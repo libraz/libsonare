@@ -28,6 +28,7 @@ void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
   render_frame_ = 0;
   sample_position_ = 0;
   playing_ = false;
+  loop_overflow_count_.store(0, std::memory_order_relaxed);
   write_loop_state({});
 }
 
@@ -169,6 +170,13 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
     // wrap occurs another loop_len of forward travel later.
     position = next_wrap;
     next_wrap += loop_len;
+  }
+  // Surface a dropped-wrap as a diagnostic counter instead of silently
+  // truncating. With a loop shorter than the block / kCapacity wraps the tail
+  // of the block renders from the wrong position; the counter lets hosts detect
+  // the misconfiguration. Mirrors AutomationEngine::collect_boundaries.
+  if (out->overflowed()) {
+    loop_overflow_count_.fetch_add(1, std::memory_order_relaxed);
   }
   return added;
 }
