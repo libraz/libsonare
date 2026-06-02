@@ -6,6 +6,7 @@
 
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::acoustic {
 
@@ -14,17 +15,10 @@ namespace {
 using sonare::constants::kSqrt2;
 using sonare::constants::kTwoPiD;
 
-// Metric Sabine/Eyring coefficient 24 ln(10) / c with c ~= 343 m/s (textbook value).
-constexpr float kSabineCoeff = 0.161f;
+// kSabineCoeff and kMaxAutoSamples are shared via late_reverb.h.
 
 // -60 dB of energy: env(RT60) = 10^-3 in amplitude, i.e. exp(-ln(1000) * t/RT60).
 constexpr double kLn1000 = 6.90775527898213705;
-
-// Safety ceiling for the auto-sized tail length (~22 min at 48 kHz). A near-rigid
-// room yields an unbounded RT60, which would otherwise overflow the length
-// computation; the auto length is clamped here so the result stays allocatable.
-// Callers needing a precise (and possibly larger) length set LateReverbConfig::max_samples.
-constexpr int kMaxAutoSamples = 1 << 26;  // 67,108,864
 
 // Octave-band centres matching the analyzer's split (kDefaultOctaveBands = 6:
 // 125 .. 4000 Hz); higher band counts continue up by octaves.
@@ -170,6 +164,18 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
     for (int i = 0; i < length; ++i) band[static_cast<size_t>(i)] = gaussian(rng);
 
     bandpass_zero_phase(band, center, sample_rate);
+
+    // Normalize each band to unit RMS so its starting level is independent of
+    // the bandpass bandwidth (which grows with centre frequency at fixed Q).
+    // Without this, higher bands contribute disproportionate energy purely as a
+    // filter-bandwidth artifact, tilting the tail spectrum away from the
+    // material-derived per-band decay. The decay envelope (set by RT60) then
+    // governs each band's relative weight.
+    const float band_rms = sonare::rms(band.data(), band.size());
+    if (band_rms > 1e-12f) {
+      const float norm = 1.0f / band_rms;
+      for (float& s : band) s *= norm;
+    }
 
     const double decay_rate = kLn1000 / static_cast<double>(rt60);
     for (int i = 0; i < length; ++i) {

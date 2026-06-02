@@ -39,7 +39,9 @@ Material uniform_material(float absorption, float scattering, int n_bands = kDef
 /// @brief Per-band linear blend of two materials.
 ///
 /// @p t is clamped to [0,1]; t=0 returns @p a, t=1 returns @p b. Continuous in
-/// @p t. If the two materials differ in band count, the shorter length governs.
+/// @p t. The shortest absorption/scattering vector across both inputs governs
+/// the result length, so the returned material always satisfies
+/// absorption.size() == scattering.size().
 Material mix_materials(const Material& a, const Material& b, float t);
 
 }  // namespace sonare::acoustic

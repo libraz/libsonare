@@ -61,14 +61,15 @@ Material uniform_material(float absorption, float scattering, int n_bands) {
 Material mix_materials(const Material& a, const Material& b, float t) {
   const float w = std::clamp(t, 0.0f, 1.0f);
   Material m;
-  const size_t n_abs = std::min(a.absorption.size(), b.absorption.size());
-  const size_t n_sca = std::min(a.scattering.size(), b.scattering.size());
-  m.absorption.resize(n_abs);
-  m.scattering.resize(n_sca);
-  for (size_t i = 0; i < n_abs; ++i) {
+  // Use a single common band count for both vectors so the result preserves the
+  // Material invariant absorption.size() == scattering.size() even if an input
+  // material is itself ragged. The shorter length across all four vectors wins.
+  const size_t n = std::min(
+      {a.absorption.size(), b.absorption.size(), a.scattering.size(), b.scattering.size()});
+  m.absorption.resize(n);
+  m.scattering.resize(n);
+  for (size_t i = 0; i < n; ++i) {
     m.absorption[i] = a.absorption[i] * (1.0f - w) + b.absorption[i] * w;
-  }
-  for (size_t i = 0; i < n_sca; ++i) {
     m.scattering[i] = a.scattering[i] * (1.0f - w) + b.scattering[i] * w;
   }
   return m;

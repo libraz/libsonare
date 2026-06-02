@@ -20,6 +20,20 @@
 
 namespace sonare::acoustic {
 
+/// @brief Metric Sabine/Eyring proportionality constant 24 ln(10) / c with
+///        c ~= 343 m/s (textbook value). Shared by the forward RT60 model
+///        (`sabine_rt60`/`eyring_rt60`) and the room estimator's geometry
+///        inversion so the estimate inverts the synthesis exactly.
+inline constexpr float kSabineCoeff = 0.161f;
+
+/// @brief Safety ceiling for the auto-sized late-tail length in samples
+///        (~22 min at 48 kHz). A near-rigid room yields an unbounded RT60,
+///        which would otherwise overflow the length computation; the auto
+///        length is clamped here so the result stays allocatable. Callers
+///        needing a precise (possibly larger) length set
+///        `LateReverbConfig::max_samples`.
+inline constexpr int kMaxAutoSamples = 1 << 26;  // 67,108,864
+
 /// @brief Sabine reverberation time (s): 0.161 * V / A.
 ///
 /// @param volume          room volume V (m^3)

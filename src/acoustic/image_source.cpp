@@ -13,7 +13,12 @@ using sonare::constants::kPi;
 
 float beta_from_alpha(float alpha) noexcept { return std::sqrt(std::max(0.0f, 1.0f - alpha)); }
 
-// Per-band β for a material over `bands` bands (missing bands -> α=0 -> β=1).
+// Per-band β = sqrt(1 - α) for a material over `bands` bands (missing bands ->
+// α=0 -> β=1). Note: only absorption reduces the specular reflection product;
+// Material::scattering is intentionally NOT applied here. The scattered fraction
+// is diffuse energy that the deterministic image-source method does not model;
+// it is delegated to the statistical late-reverberation tail. This is a
+// deliberate modeling choice, not an oversight.
 std::vector<float> material_beta(const Material& m, size_t bands) {
   std::vector<float> b(bands, 1.0f);
   for (size_t i = 0; i < bands; ++i) {
@@ -22,21 +27,19 @@ std::vector<float> material_beta(const Material& m, size_t bands) {
   return b;
 }
 
-// Common octave-band count across a set of materials (>=1; rigid fallback = 1).
-size_t common_bands_shoebox(const ShoeboxRoom& room) {
+// Common octave-band count across a range of materials: the minimum non-empty
+// absorption length (>=1; rigid/empty fallback = 1).
+template <typename MaterialRange>
+size_t common_bands(const MaterialRange& materials) {
   size_t bands = static_cast<size_t>(-1);
-  for (const auto& w : room.walls) bands = std::min(bands, w.absorption.size());
+  for (const Material& m : materials) bands = std::min(bands, m.absorption.size());
   if (bands == static_cast<size_t>(-1) || bands == 0) return 1;
   return bands;
 }
 
-size_t common_bands_mesh(const PolyhedralRoom& room) {
-  if (room.face_materials.empty()) return 1;
-  size_t bands = static_cast<size_t>(-1);
-  for (const auto& m : room.face_materials) bands = std::min(bands, m.absorption.size());
-  if (bands == static_cast<size_t>(-1) || bands == 0) return 1;
-  return bands;
-}
+size_t common_bands_shoebox(const ShoeboxRoom& room) { return common_bands(room.walls); }
+
+size_t common_bands_mesh(const PolyhedralRoom& room) { return common_bands(room.face_materials); }
 
 // Intersection parameter d of segment A->B with a plane: P = A + d*(B-A).
 // Returns false when the segment is parallel to the plane.
@@ -120,15 +123,17 @@ struct PendingImage {
 };
 
 // True if the open segment A->B is blocked by some mesh face strictly before B.
-// @p ignore_face is the face B lies on (the reflection/destination face), which
-// is excluded so the segment's own endpoint face does not count as an occluder.
-// The endpoint band is a small fraction of the leg, but the explicit face
-// exclusion (not the band alone) is what makes the test robust to leg length.
-bool occluded(const VoxelGrid& grid, const Vec3& a, const Vec3& b, int ignore_face = -1) {
+// @p ignore_face_b is the face B lies on (the reflection/destination face) and
+// @p ignore_face_a the face A lies on (the origin reflection face); BOTH are
+// excluded so neither endpoint's own face (nor an adjacent coplanar triangle of
+// the same wall sharing the endpoint edge) counts as a spurious occluder.
+// Standard ISM occlusion excludes both endpoint faces of a reflection leg.
+bool occluded(const VoxelGrid& grid, const Vec3& a, const Vec3& b, int ignore_face_b = -1,
+              int ignore_face_a = -1) {
   const Vec3 dir = b - a;
   const MeshHit hit = grid.first_hit(a, dir);  // dir spans A->B, so t in [0,1]
   if (!hit.hit) return false;
-  if (hit.face == ignore_face) return false;  // the destination face is not an occluder
+  if (hit.face == ignore_face_b || hit.face == ignore_face_a) return false;
   return hit.t < 1.0f - 1e-4f;
 }
 
@@ -139,6 +144,7 @@ bool validate_path(const PolyhedralRoom& room, const VoxelGrid& grid,
                    const std::vector<Vec3>& partial, const std::vector<int>& chain,
                    const Vec3& source, const Vec3& listener) {
   Vec3 prev = listener;
+  int prev_face = -1;  // the face `prev` lies on (-1 for the listener endpoint)
   for (int k = static_cast<int>(chain.size()) - 1; k >= 0; --k) {
     const int fi = chain[static_cast<size_t>(k)];
     const Triangle& tri = room.faces[static_cast<size_t>(fi)];
@@ -150,10 +156,15 @@ bool validate_path(const PolyhedralRoom& room, const VoxelGrid& grid,
     }
     const Vec3 p = prev + (img - prev) * d;
     if (!point_in_triangle(p, tri)) return false;
-    if (occluded(grid, prev, p, fi)) return false;  // ignore the face p lies on
+    // Ignore both the destination face (fi, where p lies) and the origin face
+    // (prev_face, where prev lies) so neither endpoint's wall self-occludes.
+    if (occluded(grid, prev, p, fi, prev_face)) return false;
     prev = p;
+    prev_face = fi;
   }
-  return !occluded(grid, prev, source);  // last leg: first reflection point -> source
+  // Last leg: first reflection point -> source. `prev` lies on chain[0]'s face;
+  // exclude it as the origin so the reflecting wall does not self-occlude.
+  return !occluded(grid, prev, source, -1, prev_face);
 }
 }  // namespace
 
@@ -263,7 +274,10 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   };
 
   for (const auto& im : images) {
-    if (im.distance < 1e-6f) continue;
+    // Use the negated >-form so a non-finite (NaN) distance is also skipped,
+    // matching the max-delay scan above; NaN < 1e-6f would be false and would
+    // otherwise render a NaN tap into the IR.
+    if (!(im.distance > 1e-6f)) continue;
     const float delay = im.distance / c * sr;
     const float gain = band_gain(im) / (4.0f * kPi * im.distance);
     const int n0 = static_cast<int>(std::lround(delay));

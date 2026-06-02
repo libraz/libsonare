@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -324,4 +325,30 @@ TEST_CASE("Borish rejects the direct path when occluded", "[acoustic][image_sour
   const SourceListener pl{{0.2f, 0.0f, 0.0f}, {0.8f, 0.0f, 0.0f}};  // opposite sides
   const auto images = polyhedral_image_sources(mesh, pl, 1);
   REQUIRE(count_order(images, 0) == 0);  // direct path blocked by the wall
+}
+
+TEST_CASE("synthesize_early_ir skips non-finite image distances", "[acoustic][image_source]") {
+  // A finite reflection plus a hand-built image carrying a NaN distance: the
+  // NaN must not be rendered into the IR (the render-loop and max-delay guards
+  // treat non-finite distances identically). Result must stay all-finite.
+  std::vector<ImageSource> images;
+  ImageSource good;
+  good.order = 0;
+  good.position = {1.0f, 0.0f, 0.0f};
+  good.distance = 1.0f;
+  good.reflection = {1.0f};
+  images.push_back(good);
+
+  ImageSource bad;
+  bad.order = 1;
+  bad.position = {2.0f, 0.0f, 0.0f};
+  bad.distance = std::numeric_limits<float>::quiet_NaN();
+  bad.reflection = {1.0f};
+  images.push_back(bad);
+
+  const Audio ir = synthesize_early_ir(images, 48000);
+  REQUIRE(ir.size() > 0);
+  bool all_finite = true;
+  for (float s : ir) all_finite = all_finite && std::isfinite(s);
+  REQUIRE(all_finite);
 }

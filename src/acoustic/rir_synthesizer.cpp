@@ -4,7 +4,9 @@
 #include <cmath>
 
 #include "acoustic/image_source.h"
+#include "acoustic/late_reverb.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::acoustic {
 
@@ -15,21 +17,19 @@ namespace {
 constexpr float kMinMixingMs = 3.0f;
 constexpr float kMaxMixingMs = 150.0f;
 
-// Safety ceiling for the auto-sized late tail, mirroring synthesize_late_tail's
+// Safety ceiling for the auto-sized late tail. Consumes synthesize_late_tail's
 // own internal cap so the clamp telemetry below does not false-positive (or the
 // length estimate overflow) when a near-rigid room yields an unbounded RT60.
-constexpr double kLateTailCeiling = static_cast<double>(1 << 26);
+constexpr double kLateTailCeiling = static_cast<double>(kMaxAutoSamples);
 
-// RMS over [center - half, center + half], clamped to the buffer.
-float local_rms(const std::vector<float>& x, int center, int half) noexcept {
+// RMS over the half-open sample range [lo, hi), clamped to the buffer. Delegates
+// to the shared sonare::rms primitive over the clamped sub-range.
+float rms_range(const std::vector<float>& x, int lo, int hi) noexcept {
   const int n = static_cast<int>(x.size());
-  if (n == 0) return 0.0f;
-  const int lo = std::max(0, center - half);
-  const int hi = std::min(n, center + half + 1);
+  lo = std::max(0, lo);
+  hi = std::min(n, hi);
   if (hi <= lo) return 0.0f;
-  double sum = 0.0;
-  for (int i = lo; i < hi; ++i) sum += static_cast<double>(x[i]) * x[i];
-  return static_cast<float>(std::sqrt(sum / static_cast<double>(hi - lo)));
+  return sonare::rms(x.data() + lo, static_cast<size_t>(hi - lo));
 }
 
 }  // namespace
@@ -96,10 +96,15 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // Level-match the late tail to the early reflections across the crossover so
   // the splice has no energy discontinuity. A wider window than the crossfade
   // gives a stable estimate of the (sparse, decaying) early-reflection level.
+  // The early window must start strictly AFTER the direct tap: t_mix is clamped
+  // to direct_sample + half_xfade, so a symmetric window would otherwise capture
+  // the (loudest) direct impulse and inflate the early level, over-scaling the
+  // tail in small rooms.
   const int level_half = std::max(half_xfade, static_cast<int>(std::lround(0.005f * sr)));
-  const float early_ref = local_rms(early, t_mix, level_half);
+  const int early_lo = std::max(t_mix - level_half, direct_sample + 1);
+  const float early_ref = rms_range(early, early_lo, t_mix + level_half + 1);
   const int late_center = late.empty() ? 0 : std::min(t_mix, static_cast<int>(late.size()) - 1);
-  const float late_ref = local_rms(late, late_center, level_half);
+  const float late_ref = rms_range(late, late_center - level_half, late_center + level_half + 1);
   float scale = 1.0f;
   if (late_ref > 1e-9f) {
     if (early_ref > 1e-9f) {
@@ -140,7 +145,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
     } else {
       x = static_cast<float>(i - t0) / static_cast<float>(t1 - t0);
     }
-    rir[static_cast<size_t>(i)] = e * std::sqrt(1.0f - x) + l * std::sqrt(x);
+    rir[static_cast<size_t>(i)] = sonare::equal_power_crossfade(e, l, x);
   }
 
   result.rir = Audio::from_vector(std::move(rir), sample_rate);
