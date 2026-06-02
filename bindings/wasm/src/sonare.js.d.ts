@@ -201,6 +201,56 @@ export interface WasmAcousticResult {
   isBlind: boolean;
 }
 
+export interface WasmRoomGeometryOptions {
+  lengthM?: number;
+  widthM?: number;
+  heightM?: number;
+  absorption?: number;
+  sourceX?: number;
+  sourceY?: number;
+  sourceZ?: number;
+  listenerX?: number;
+  listenerY?: number;
+  listenerZ?: number;
+  ismOrder?: number;
+  seed?: number;
+  maxSeconds?: number;
+}
+
+export interface WasmRirSynthOptions extends WasmRoomGeometryOptions {
+  sampleRate?: number;
+}
+
+export interface WasmRirResult {
+  rir: Float32Array;
+  sampleRate: number;
+  hasError: boolean;
+}
+
+export interface WasmRoomEstimateOptions {
+  aspectHintLw?: number;
+  aspectHintLh?: number;
+  referenceAbsorption?: number;
+  preferEyring?: boolean;
+  nOctaveBands?: number;
+}
+
+export interface WasmRoomEstimateResult {
+  volume: number;
+  length: number;
+  width: number;
+  height: number;
+  drrDb: number;
+  confidence: number;
+  absorptionBands: Float32Array;
+  rt60Bands: Float32Array;
+}
+
+export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
+  wet?: number;
+  sourceTailSuppression?: number;
+}
+
 export interface WasmHpssResult {
   harmonic: Float32Array;
   percussive: Float32Array;
@@ -703,6 +753,17 @@ export interface SonareModule {
     minDecayDb: number,
     noiseFloorMarginDb: number,
   ) => WasmAcousticResult;
+  synthesizeRir: (options: WasmRirSynthOptions) => WasmRirResult;
+  estimateRoom: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: WasmRoomEstimateOptions,
+  ) => WasmRoomEstimateResult;
+  roomMorph: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: WasmRoomMorphOptions,
+  ) => Float32Array;
   analyzeWithProgress: (
     samples: Float32Array,
     sampleRate: number,

@@ -60,6 +60,11 @@ import type {
   PitchResult,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
+  RirResult,
+  RirSynthOptions,
+  RoomEstimateOptions,
+  RoomEstimateResult,
+  RoomMorphOptions,
   Section,
   SectionType,
   SendTiming,
@@ -165,6 +170,12 @@ export type {
   PitchResult,
   RealtimeVoiceChangerConfigInput,
   RhythmFeatures,
+  RirResult,
+  RirSynthOptions,
+  RoomEstimateOptions,
+  RoomEstimateResult,
+  RoomGeometryOptions,
+  RoomMorphOptions,
   Section,
   SendTiming,
   SoloProcessor,
@@ -1112,6 +1123,48 @@ export function detectAcoustic(
     noiseFloorMarginDb,
   );
   return result;
+}
+
+/**
+ * Synthesize a room impulse response from shoebox geometry. `hasError` is true
+ * when the source/listener falls outside the room (the RIR is then empty).
+ */
+export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.synthesizeRir(options);
+}
+
+/**
+ * Estimate an equivalent room (volume/dimensions/absorption/DRR) from a
+ * recording or impulse response.
+ */
+export function estimateRoom(
+  samples: Float32Array,
+  sampleRate = 48000,
+  options: RoomEstimateOptions = {},
+): RoomEstimateResult {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.estimateRoom(samples, sampleRate, options);
+}
+
+/**
+ * Morph a recording's reverberation toward a target room (creative FX, not
+ * dereverberation). Returns the morphed samples (input length plus the target
+ * room's reverb tail).
+ */
+export function roomMorph(
+  samples: Float32Array,
+  sampleRate: number,
+  options: RoomMorphOptions = {},
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.roomMorph(samples, sampleRate, options);
 }
 
 /**

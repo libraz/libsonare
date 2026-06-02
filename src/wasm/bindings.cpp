@@ -16,6 +16,9 @@
 #include <string>
 #include <vector>
 
+#include "acoustic/material.h"
+#include "acoustic/rir_synthesizer.h"
+#include "acoustic/room_model.h"
 #include "analysis/acoustic_analyzer.h"
 #include "analysis/beat_analyzer.h"
 #include "analysis/bpm_analyzer.h"
@@ -26,6 +29,7 @@
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "analysis/rhythm_analyzer.h"
+#include "analysis/room_estimator.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
 #include "automation/parameter.h"
@@ -41,6 +45,7 @@
 #include "editing/voice_changer/realtime_voice_changer.h"
 #include "editing/voice_changer/streaming_retune.h"
 #include "editing/voice_changer/voice_changer.h"
+#include "effects/acoustic/room_morph.h"
 #include "effects/decompose.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
@@ -578,6 +583,88 @@ val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
   config.noise_floor_margin_db = noise_floor_margin_db;
   return acousticParametersToVal(detect_acoustic(audio, config));
 }
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
+  return sonare::acoustic::uniform_shoebox(
+      {floatProperty(opts, "lengthM", 7.0f), floatProperty(opts, "widthM", 5.0f),
+       floatProperty(opts, "heightM", 3.0f)},
+      floatProperty(opts, "absorption", def_absorption));
+}
+
+sonare::acoustic::SourceListener placementFromVal(val opts) {
+  return {{floatProperty(opts, "sourceX", 1.0f), floatProperty(opts, "sourceY", 1.0f),
+           floatProperty(opts, "sourceZ", 1.2f)},
+          {floatProperty(opts, "listenerX", 5.0f), floatProperty(opts, "listenerY", 4.0f),
+           floatProperty(opts, "listenerZ", 1.7f)}};
+}
+
+val js_synthesize_rir(val opts) {
+  const int sample_rate = intProperty(opts, "sampleRate", 48000);
+  sonare::acoustic::RirSynthConfig config;
+  config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
+  config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
+  config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
+
+  const auto result = sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f),
+                                                       placementFromVal(opts), sample_rate, config);
+  std::vector<float> rir;
+  if (!result.rir.empty()) {
+    rir.assign(result.rir.data(), result.rir.data() + result.rir.size());
+  }
+  val out = val::object();
+  out.set("rir", vectorToFloat32Array(rir));
+  out.set("sampleRate", result.rir.sample_rate());
+  out.set("hasError", sonare::has_error(result.diagnostics));
+  return out;
+}
+
+val js_estimate_room(val samples, int sample_rate, val opts) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  sonare::RoomEstimateConfig config;
+  config.aspect_hint_lw = floatProperty(opts, "aspectHintLw", config.aspect_hint_lw);
+  config.aspect_hint_lh = floatProperty(opts, "aspectHintLh", config.aspect_hint_lh);
+  config.reference_absorption =
+      floatProperty(opts, "referenceAbsorption", config.reference_absorption);
+  config.prefer_eyring = boolProperty(opts, "preferEyring", true);
+  const int n_bands = intProperty(opts, "nOctaveBands", 0);
+  if (n_bands > 0) config.acoustic.n_octave_bands = n_bands;
+
+  const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
+  val out = val::object();
+  out.set("volume", est.volume);
+  out.set("length", est.dims.length);
+  out.set("width", est.dims.width);
+  out.set("height", est.dims.height);
+  out.set("drrDb", est.drr_db);
+  out.set("confidence", est.confidence);
+  out.set("absorptionBands", vectorToFloat32Array(est.absorption_bands));
+  out.set("rt60Bands", vectorToFloat32Array(est.rt60_bands));
+  return out;
+}
+
+val js_room_morph(val samples, int sample_rate, val opts) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  sonare::effects::acoustic::RoomMorphConfig config;
+  config.target = roomFromVal(opts, 0.2f);
+  config.placement = placementFromVal(opts);
+  config.source_tail_suppression =
+      floatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
+  config.wet = floatProperty(opts, "wet", config.wet);
+  config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
+  config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
+  config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
+
+  const Audio result = sonare::effects::acoustic::room_morph(audio, config);
+  std::vector<float> out;
+  if (!result.empty()) {
+    out.assign(result.data(), result.data() + result.size());
+  }
+  return vectorToFloat32Array(out);
+}
+#endif  // SONARE_WITH_ACOUSTIC_SIM
 
 // Analyze with progress callback
 val js_analyze_with_progress(val samples, int sample_rate, val progress_callback) {
@@ -5882,6 +5969,11 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("analyze", &js_analyze);
   function("analyzeImpulseResponse", &js_analyze_impulse_response);
   function("detectAcoustic", &js_detect_acoustic);
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+  function("synthesizeRir", &js_synthesize_rir);
+  function("estimateRoom", &js_estimate_room);
+  function("roomMorph", &js_room_morph);
+#endif
   function("analyzeWithProgress", &js_analyze_with_progress);
   function("analyzeBpm", &js_analyze_bpm);
   function("analyzeRhythm", &js_analyze_rhythm);
