@@ -729,6 +729,12 @@ TEST_CASE("EqualizerProcessor validates and clears external sidechain buffers", 
   float* audio[] = {left.data(), right.data()};
   REQUIRE_THROWS(eq.process(audio, 2, 128));
 
+  // A sidechain wider than the prepared max_channels (2) is rejected on the
+  // control thread, so the audio-thread detector path never reallocates.
+  std::array<float, 128> third{};
+  const float* tri_key[] = {left.data(), right.data(), third.data()};
+  REQUIRE_THROWS(eq.set_sidechain(tri_key, 3, 128));
+
   REQUIRE_NOTHROW(eq.set_sidechain(nullptr, 0, 0));
 }
 

@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::eq {
+
+using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 using sonare::constants::kTwoPiD;
 
@@ -36,6 +39,9 @@ void PultecEq::prepare(double sample_rate, int max_block_size) {
   }
   sample_rate_ = sample_rate;
   eq_.prepare(sample_rate, max_block_size);
+  // Preallocate component state so the audio-thread process() never resizes
+  // (mirrors the kRealtimePreparedChannels pattern used by ParametricEq/DynamicEq).
+  component_state_.assign(kRealtimePreparedChannels, {});
   update_component_coefficients();
   rebuild();
 }
@@ -201,8 +207,12 @@ void PultecEq::update_component_coefficients() {
 
 void PultecEq::prepare_component_state(int num_channels) {
   if (num_channels <= 0) return;
-  if (component_state_.size() == static_cast<size_t>(num_channels)) return;
-  component_state_.resize(static_cast<size_t>(num_channels));
+  // Steady state: component_state_ is preallocated to kRealtimePreparedChannels
+  // in prepare(), so no audio-thread allocation occurs. Only grow (off the
+  // common path) if a caller exceeds that — and never shrink.
+  if (static_cast<size_t>(num_channels) > component_state_.size()) {
+    component_state_.resize(static_cast<size_t>(num_channels));
+  }
 }
 
 float PultecEq::process_component_sample(float input, int channel) {

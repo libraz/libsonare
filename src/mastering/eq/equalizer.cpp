@@ -391,6 +391,13 @@ void EqualizerProcessor::set_sidechain(const float* const* channels, int num_cha
   if (channels == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "sidechain channels must not be null");
   }
+  // Detector state is preallocated to config_.max_channels in prepare(); reject a
+  // wider sidechain on the control thread so the audio-thread detector path can
+  // never reallocate detector_states_.
+  if (num_channels > config_.max_channels) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sidechain channel count exceeds the prepared max_channels");
+  }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       throw SonareException(ErrorCode::InvalidParameter, "sidechain channel must not be null");

@@ -31,6 +31,7 @@
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/minimum_phase.h"
+#include "mastering/eq/pultec.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
@@ -483,6 +484,30 @@ TEST_CASE("MultibandExciter process performs no heap allocation after prepare",
 
   AllocationGuard guard;
   exciter.process(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("PultecEq process performs no heap allocation after prepare", "[mastering][eq][rt]") {
+  constexpr int kBlock = 256;
+  sonare::mastering::eq::PultecEq eq;
+  // Engage the WDF component model so the per-channel component state path runs.
+  eq.set_component_model(sonare::mastering::eq::PultecComponentModel::Eqp1aWdf);
+  eq.set_output_drive(2.0f);
+  eq.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = i == 0 ? 0.6f : 0.05f;
+    right[static_cast<size_t>(i)] = 0.04f;
+  }
+  float* channels[] = {left.data(), right.data()};
+
+  eq.process(channels, 2, kBlock);
+  eq.reset();
+
+  AllocationGuard guard;
+  eq.process(channels, 2, kBlock);
   REQUIRE(guard.count() == 0);
 }
 
