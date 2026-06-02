@@ -58,6 +58,9 @@
   `BoundaryList::clear()` resets the overflow flag, and the C-API
   `spectral_flatness`/`zero_crossing_rate`/`onset_strength` zero their
   out-parameters on the error path.
+- `detect_key` now stable-sorts key candidates so silent/tonally-empty input
+  deterministically yields the documented C-major fallback on every platform
+  instead of a libstdc++/libc++-dependent winner.
 
 ### Real-time safety
 

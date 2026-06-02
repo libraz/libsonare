@@ -72,9 +72,13 @@ std::vector<KeyCandidate> build_key_candidates(const std::array<float, 12>& mean
     }
   }
 
-  std::sort(candidates.begin(), candidates.end(), [](const KeyCandidate& a, const KeyCandidate& b) {
-    return a.correlation > b.correlation;
-  });
+  // stable_sort so that equal correlations keep insertion order (root 0 = C,
+  // Major first). On silence every candidate correlates to 0, and an unstable
+  // sort would pick a platform-dependent winner (libstdc++ vs libc++); the
+  // stable order yields the documented C-major fallback everywhere.
+  std::stable_sort(
+      candidates.begin(), candidates.end(),
+      [](const KeyCandidate& a, const KeyCandidate& b) { return a.correlation > b.correlation; });
   return candidates;
 }
 
