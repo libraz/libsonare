@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+#include "sonare_c_acoustic.h"
 #include "sonare_c_effects.h"
 #include "sonare_c_features.h"
 #include "sonare_c_mastering.h"
