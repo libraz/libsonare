@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <memory>
 
@@ -17,6 +18,13 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                                          size_t* out_length) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  // The caller asserts the source pitch via current_midi; the clip is shifted by
+  // (target_midi - current_midi). Reject non-finite / out-of-range MIDI so a NaN
+  // does not turn into a NaN f0 and produce garbage output.
+  if (!std::isfinite(current_midi) || !std::isfinite(target_midi) || current_midi < 0.0f ||
+      current_midi > 127.0f || target_midi < 0.0f || target_midi > 127.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::PitchCorrector corrector;

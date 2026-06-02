@@ -37,6 +37,22 @@ struct SonareRealtimeVoiceChanger {
   std::vector<float> planar_scratch;        // num_channels * max_block_size
   std::vector<float*> planar_channel_ptrs;  // num_channels pointers into planar_scratch
 };
+
+// Size the persistent interleaved->planar scratch + channel-pointer table once
+// at construction (realtime-safe: never re-allocated afterward). Shared by both
+// create entry points.
+inline void setup_planar_scratch(SonareRealtimeVoiceChanger* handle, int num_channels,
+                                 int max_block_size) {
+  const size_t scratch_floats =
+      static_cast<size_t>(num_channels) * static_cast<size_t>(max_block_size);
+  handle->planar_scratch.assign(scratch_floats, 0.0f);
+  handle->planar_channel_ptrs.assign(static_cast<size_t>(num_channels), nullptr);
+  for (int ch = 0; ch < num_channels; ++ch) {
+    handle->planar_channel_ptrs[static_cast<size_t>(ch)] =
+        handle->planar_scratch.data() +
+        static_cast<size_t>(ch) * static_cast<size_t>(max_block_size);
+  }
+}
 #endif
 
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
@@ -205,15 +221,7 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   handle->changer.prepare(sample_rate, max_block_size, num_channels);
   handle->max_block_size = max_block_size;
   handle->num_channels = num_channels;
-  const size_t scratch_floats =
-      static_cast<size_t>(num_channels) * static_cast<size_t>(max_block_size);
-  handle->planar_scratch.assign(scratch_floats, 0.0f);
-  handle->planar_channel_ptrs.assign(static_cast<size_t>(num_channels), nullptr);
-  for (int ch = 0; ch < num_channels; ++ch) {
-    handle->planar_channel_ptrs[static_cast<size_t>(ch)] =
-        handle->planar_scratch.data() +
-        static_cast<size_t>(ch) * static_cast<size_t>(max_block_size);
-  }
+  setup_planar_scratch(handle.get(), num_channels, max_block_size);
   *out = handle.release();
   return SONARE_OK;
   SONARE_C_CATCH
@@ -273,17 +281,7 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   handle->changer.prepare(sample_rate, max_block_size, num_channels);
   handle->max_block_size = max_block_size;
   handle->num_channels = num_channels;
-  // Pre-allocate planar scratch + channel-pointer table for interleaved
-  // processing. Realtime-safe: never re-allocated after construction.
-  const size_t scratch_floats =
-      static_cast<size_t>(num_channels) * static_cast<size_t>(max_block_size);
-  handle->planar_scratch.assign(scratch_floats, 0.0f);
-  handle->planar_channel_ptrs.assign(static_cast<size_t>(num_channels), nullptr);
-  for (int ch = 0; ch < num_channels; ++ch) {
-    handle->planar_channel_ptrs[static_cast<size_t>(ch)] =
-        handle->planar_scratch.data() +
-        static_cast<size_t>(ch) * static_cast<size_t>(max_block_size);
-  }
+  setup_planar_scratch(handle.get(), num_channels, max_block_size);
   *out = handle.release();
   return SONARE_OK;
   SONARE_C_CATCH

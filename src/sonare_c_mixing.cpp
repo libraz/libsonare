@@ -762,11 +762,14 @@ SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float sen
   if (!strip) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Reject an out-of-range send index rather than silently returning OK after a
+  // no-op (the underlying ChannelStrip ignores unknown indices).
+  if (index >= strip->scene_strip.sends.size()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   strip->strip.set_send_db(index, send_db);
-  if (index < strip->scene_strip.sends.size()) {
-    strip->scene_strip.sends[index].send_db = send_db;
-  }
+  strip->scene_strip.sends[index].send_db = send_db;
   return SONARE_OK;
   SONARE_C_CATCH
 }

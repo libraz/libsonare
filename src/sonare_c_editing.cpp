@@ -119,6 +119,11 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
                                           float high_percentile, SonareDynamicRangeResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
+  // Negative sizing/percentile params are caller errors; reject them rather than
+  // silently coercing to defaults (positive overrides the default, 0 keeps it).
+  if (window_sec < 0.0f || hop_sec < 0.0f || low_percentile < 0.0f || high_percentile < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   metering::DynamicRangeConfig cfg;
   if (window_sec > 0.0f) cfg.window_sec = window_sec;
   if (hop_sec > 0.0f) cfg.hop_sec = hop_sec;
@@ -253,6 +258,11 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
                                      float db_ref, float db_amin, SonareSpectrumResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
+  // Negative sizing params are caller errors; reject rather than silently
+  // coercing to defaults (positive overrides the default, 0 keeps it).
+  if (n_fft < 0 || octave_fraction < 0 || db_ref < 0.0f || db_amin < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   metering::SpectrumConfig cfg;
   if (n_fft > 0) cfg.n_fft = n_fft;
   if (!is_power_of_two(cfg.n_fft)) return SONARE_ERROR_INVALID_PARAMETER;

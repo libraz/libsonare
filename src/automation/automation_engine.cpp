@@ -1,6 +1,7 @@
 #include "automation/automation_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 namespace sonare::automation {
@@ -123,11 +124,20 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
       non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
-    processor->set_parameter(lane.target_param_id(), lane.value_at(ppq));
+    const float value = lane.value_at(ppq);
+    // Never feed a non-finite breakpoint value into a processor parameter: a
+    // NaN/Inf would poison that processor's state for the rest of the stream.
+    if (!std::isfinite(value)) {
+      continue;
+    }
+    processor->set_parameter(lane.target_param_id(), value);
   }
 }
 
 bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
+  if (!std::isfinite(value)) {
+    return false;
+  }
   rt::ProcessorBase* processor = target_for(param_id);
   if (!processor) {
     unknown_target_count_.fetch_add(1, std::memory_order_relaxed);

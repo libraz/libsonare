@@ -373,9 +373,15 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
     config.hop_length = hop_length;
     Spectrogram spec = Spectrogram::compute(audio, config);
     std::vector<float> result = spectral_centroid(spec, audio.sample_rate());
+    // Allocate before publishing out/out_count so a throwing allocation leaves
+    // both at their cleared values, and an empty result yields (NULL, 0) like
+    // the other feature wrappers rather than a non-NULL zero-length buffer.
+    if (!result.empty()) {
+      auto* buffer = new float[result.size()];
+      std::memcpy(buffer, result.data(), result.size() * sizeof(float));
+      *out = buffer;
+    }
     *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
     return SONARE_OK;
   });
 }
@@ -392,9 +398,15 @@ SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int s
     config.hop_length = hop_length;
     Spectrogram spec = Spectrogram::compute(audio, config);
     std::vector<float> result = spectral_bandwidth(spec, audio.sample_rate());
+    // Allocate before publishing out/out_count so a throwing allocation leaves
+    // both at their cleared values, and an empty result yields (NULL, 0) like
+    // the other feature wrappers rather than a non-NULL zero-length buffer.
+    if (!result.empty()) {
+      auto* buffer = new float[result.size()];
+      std::memcpy(buffer, result.data(), result.size() * sizeof(float));
+      *out = buffer;
+    }
     *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
     return SONARE_OK;
   });
 }
@@ -412,9 +424,15 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
     config.hop_length = hop_length;
     Spectrogram spec = Spectrogram::compute(audio, config);
     std::vector<float> result = spectral_rolloff(spec, audio.sample_rate(), roll_percent);
+    // Allocate before publishing out/out_count so a throwing allocation leaves
+    // both at their cleared values, and an empty result yields (NULL, 0) like
+    // the other feature wrappers rather than a non-NULL zero-length buffer.
+    if (!result.empty()) {
+      auto* buffer = new float[result.size()];
+      std::memcpy(buffer, result.data(), result.size() * sizeof(float));
+      *out = buffer;
+    }
     *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
     return SONARE_OK;
   });
 }
@@ -431,9 +449,15 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
     config.hop_length = hop_length;
     Spectrogram spec = Spectrogram::compute(audio, config);
     std::vector<float> result = spectral_flatness(spec);
+    // Allocate before publishing out/out_count so a throwing allocation leaves
+    // both at their cleared values, and an empty result yields (NULL, 0) like
+    // the other feature wrappers rather than a non-NULL zero-length buffer.
+    if (!result.empty()) {
+      auto* buffer = new float[result.size()];
+      std::memcpy(buffer, result.data(), result.size() * sizeof(float));
+      *out = buffer;
+    }
     *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
     return SONARE_OK;
   });
 }
@@ -447,9 +471,15 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);
+    // Allocate before publishing out/out_count so a throwing allocation leaves
+    // both at their cleared values, and an empty result yields (NULL, 0) like
+    // the other feature wrappers rather than a non-NULL zero-length buffer.
+    if (!result.empty()) {
+      auto* buffer = new float[result.size()];
+      std::memcpy(buffer, result.data(), result.size() * sizeof(float));
+      *out = buffer;
+    }
     *out_count = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
     return SONARE_OK;
   });
 }

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -92,6 +93,11 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
   if (!s || n_features <= 0 || n_frames <= 0 || n_components <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Reject dims whose product would overflow size_t before the core indexes
+  // n_features * n_frames elements of the caller-owned buffer.
+  if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   SONARE_C_TRY
   DecomposeResult result = decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta);
@@ -115,6 +121,11 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
   *out = nullptr;
   *out_length = 0;
   if (!s || n_features <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // Reject dims whose product would overflow size_t before the core indexes
+  // n_features * n_frames elements of the caller-owned buffer.
+  if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   SONARE_C_TRY
   std::string agg = aggregate ? aggregate : "mean";
