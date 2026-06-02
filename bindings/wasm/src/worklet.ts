@@ -1071,9 +1071,11 @@ export class SonareWorkletProcessor {
     ring.records[offset + 5] = meter.correlation;
     ring.records[offset + 6] = encodeFrameHi(meter.frame);
     Atomics.store(ring.header, 0, writeIndex + 1);
-    if (writeIndex + 1 > ring.capacity) {
-      Atomics.store(ring.header, 3, writeIndex + 1 - ring.capacity);
-    }
+    // writeIndex is a free-running monotonic counter, so an overflow guard here
+    // would fire on essentially every write past the first `capacity` records
+    // and store an ever-growing value, not a dropped-record count. Readers
+    // already detect silent overrun via firstReadable = max(readIndex,
+    // writeIndex - capacity), so header slot 3 is left at its initial 0.
   }
 
   private publishSpectrum(left: Float32Array, right: Float32Array): void {
@@ -1099,8 +1101,20 @@ export class SonareWorkletProcessor {
   }
 
   private computeSpectrum(left: Float32Array, right: Float32Array): void {
+    // Coarse per-render-quantum band energy, NOT a full FFT analyzer: each band
+    // is a single-bin DFT (bin = band + 1) evaluated over the current block of n
+    // samples. Bins at or above the block Nyquist (band + 1 > floor(n / 2))
+    // alias, so the evaluated band count is clamped to floor(n / 2) and any
+    // higher bands are pinned to the silence floor. Bin resolution is therefore
+    // tied to the render quantum (typically 128 samples); treat the output as a
+    // rough spectral tilt, not a precise spectrum.
     const n = Math.max(1, Math.min(left.length, right.length));
+    const maxBand = Math.floor(n / 2);
     for (let band = 0; band < this.spectrumBands.length; band++) {
+      if (band >= maxBand) {
+        this.spectrumBands[band] = magnitudeToDb(0);
+        continue;
+      }
       const bin = band + 1;
       let real = 0;
       let imag = 0;
@@ -1126,9 +1140,10 @@ export class SonareWorkletProcessor {
     ring.records[offset + 2] = bands.length;
     ring.records.set(bands.subarray(0, ring.bands), offset + 3);
     Atomics.store(ring.header, 0, writeIndex + 1);
-    if (writeIndex + 1 > ring.capacity) {
-      Atomics.store(ring.header, 4, writeIndex + 1 - ring.capacity);
-    }
+    // See writeMeterRing: header slot 4 (the spectrum-ring overflow slot) is
+    // left at its initial 0; readers detect silent overrun via the
+    // firstReadable = max(readIndex, writeIndex - capacity) clamp. (Slot 3 here
+    // holds the band count and is still written at ring creation.)
   }
 }
 
@@ -1474,9 +1489,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     ring.records[offset + 5] = meter.correlation;
     ring.records[offset + 6] = encodeFrameHi(meter.frame);
     Atomics.store(ring.header, 0, writeIndex + 1);
-    if (writeIndex + 1 > ring.capacity) {
-      Atomics.store(ring.header, 3, writeIndex + 1 - ring.capacity);
-    }
+    // writeIndex is a free-running monotonic counter, so an overflow guard here
+    // would fire on essentially every write past the first `capacity` records
+    // and store an ever-growing value, not a dropped-record count. Readers
+    // already detect silent overrun via firstReadable = max(readIndex,
+    // writeIndex - capacity), so header slot 3 is left at its initial 0.
   }
 
   private commandRingFromSharedBuffer(
@@ -2198,6 +2215,15 @@ export class SonareEngine {
 
   setLoop(startPpq: number, endPpq: number, enabled = true): boolean {
     this.offlineEngine.setLoop(startPpq, endPpq, enabled);
+    // Transport precision contract: the SAB command record carries exactly one
+    // Float64 lane (argFloat) and one Int64 lane (argInt). startPpq travels in
+    // argFloat with full double precision, matching the offline engine; endPpq
+    // is carried as micro-PPQ (round(endPpq * 1e6)) in the integer lane and
+    // divided back by 1e6 on the consumer. Loop ENDS are therefore snapped to
+    // the nearest 1e-6 PPQ over the realtime transport (max 5e-7 PPQ drift),
+    // while loop STARTS and the offline path stay exact. This is intentional:
+    // the record has no second free Float64 lane, and a micro-PPQ grid on the
+    // loop end is well below audible/sample-accurate resolution at any tempo.
     return this.realtimeNode.sendCommand({
       type: SonareEngineCommandType.SetLoop,
       targetId: enabled ? 1 : 0,

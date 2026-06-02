@@ -246,6 +246,46 @@ describe('SonareWorkletProcessor', () => {
     }
   });
 
+  it('clamps requested spectrum bands to the per-block Nyquist bin', () => {
+    // With a block of n samples the single-bin DFT can only resolve bins up to
+    // floor(n / 2); higher bands would alias, so they must be pinned to the
+    // silence floor (magnitudeToDb(0) === -120) regardless of input content.
+    const sampleRate = 48000;
+    const blockSize = 8;
+    const spectra: { bands: Float32Array }[] = [];
+    const processor = new SonareWorkletProcessor(
+      {
+        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sampleRate,
+        blockSize,
+        spectrumIntervalFrames: blockSize,
+        spectrumBands: 8,
+      },
+      { onSpectrum: (spectrum) => spectra.push(spectrum as { bands: Float32Array }) },
+    );
+    try {
+      const vocalL = new Float32Array(blockSize);
+      const vocalR = new Float32Array(blockSize);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+      expect(
+        processor.process(
+          [[vocalL, vocalR]],
+          [[new Float32Array(blockSize), new Float32Array(blockSize)]],
+        ),
+      ).toBe(true);
+      expect(spectra).toHaveLength(1);
+      const bands = spectra[0].bands;
+      expect(bands).toHaveLength(8);
+      // maxBand = floor(8 / 2) = 4: bands 4..7 are above Nyquist and pinned.
+      for (let band = 4; band < 8; band++) {
+        expect(bands[band]).toBe(-120);
+      }
+    } finally {
+      processor.destroy();
+    }
+  });
+
   it('routes messages and meters through a registered processor port', () => {
     const previousProcessor = (
       globalThis as typeof globalThis & { AudioWorkletProcessor?: unknown }
