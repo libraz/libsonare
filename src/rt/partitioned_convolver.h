@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file partitioned_convolver.h
-/// @brief Uniform partitioned FIR convolution using overlap-save FFT blocks.
+/// @brief Uniform partitioned FIR convolution using overlap-add FFT blocks.
 
 #include <complex>
 #include <memory>
@@ -45,7 +45,7 @@ class PartitionedConvolver {
 
   std::vector<std::vector<std::complex<float>>> ir_partitions_;
 
-  // Uniform-partitioned overlap-save (UPOLS) state. A ring of past input
+  // Uniform-partitioned overlap-add (UPOLA) state. A ring of past input
   // spectra is multiply-accumulated against the IR partition spectra in the
   // frequency domain, requiring only a single inverse FFT per block.
   std::vector<std::vector<std::complex<float>>> input_spectrum_ring_;

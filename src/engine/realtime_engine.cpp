@@ -299,6 +299,13 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   if (out == nullptr || num_channels <= 0 || total_frames <= 0) {
     return;
   }
+  // Not prepared: max_block_size_ is still 0. Emit a single kNotPrepared record
+  // instead of looping one frame at a time and flooding telemetry per frame.
+  if (max_block_size_ <= 0) {
+    enqueue_error(TelemetryErrorCode::kNotPrepared, transport_.render_frame(),
+                  transport_.sample_position(), 0);
+    return;
+  }
 
   const int frames_per_block = std::max(1, std::min(block_size, max_block_size_));
   // Reuse the member scratch: size it once here (offline path), then the
@@ -464,9 +471,11 @@ void RealtimeEngine::drain_commands(int64_t block_render_frame, int num_frames) 
     store_pending(command, current_block);
   }
   // Commands beyond the per-block cap stay queued for future blocks; surface
-  // the backlog so hosts can observe the resulting temporal drift.
+  // the deferred backlog so hosts can observe the resulting temporal drift.
+  // This is distinct from kCommandQueueOverflow (commands dropped at push):
+  // here nothing is lost and the value is the remaining queued count.
   if (!commands_.empty()) {
-    enqueue_error(TelemetryErrorCode::kCommandQueueOverflow, block_render_frame,
+    enqueue_error(TelemetryErrorCode::kCommandBacklogDeferred, block_render_frame,
                   transport_.sample_position(), static_cast<uint32_t>(commands_.size_approx()));
   }
 }
@@ -661,10 +670,7 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   constexpr float kSettleEpsilon = 1.0e-6f;
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;
-    float current = slot.smoother.current();
-    for (int step = 0; step < num_steps; ++step) {
-      current = slot.smoother.process();
-    }
+    const float current = slot.smoother.advance(num_steps);
     automation_.set_parameter(slot.target_id, current);
     // Retire the slot once the ramp has effectively settled at its target so
     // the bank does not stay saturated with finished ramps.

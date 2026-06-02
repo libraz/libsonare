@@ -32,6 +32,11 @@ enum class TelemetryErrorCode : uint16_t {
   kAutomationBindTargetOverflow,
   kStaleAutomationLanes,
   kSmoothedParameterCapacity,
+  // Commands left queued because the per-block drain cap was exceeded. Unlike
+  // kCommandQueueOverflow (commands dropped at push because the queue was
+  // full), nothing is lost here: the backlog is deferred to future blocks and
+  // the value carries the remaining queued count, not a dropped count.
+  kCommandBacklogDeferred,
 };
 
 struct Telemetry {

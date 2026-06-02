@@ -14,6 +14,10 @@ class ParamSmoother {
   void reset(float value);
   void set_target(float value);
   float process();
+  /// Advances the one-pole by @p n samples in closed form, equivalent to
+  /// calling process() @p n times but without the per-sample loop. Returns the
+  /// resulting current value. For @p n <= 0 the state is left unchanged.
+  float advance(int n);
 
   float current() const { return current_; }
   float target() const { return target_; }

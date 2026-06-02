@@ -78,15 +78,25 @@ inline std::vector<float> design_windowed_sinc_lowpass(int total_taps, int overs
 inline PolyphaseFir build_polyphase(const std::vector<float>& taps, int oversample_factor) {
   PolyphaseFir fir;
   fir.phases = oversample_factor;
+  // Round up so a prototype whose length is not an exact multiple of the
+  // oversample factor keeps its trailing taps instead of silently truncating
+  // the filter (which would skew its DC gain). Phases that have no coefficient
+  // at the final tap index keep the zero-initialized value.
   fir.taps_per_phase =
-      oversample_factor <= 0 ? 0 : static_cast<int>(taps.size()) / oversample_factor;
+      oversample_factor <= 0
+          ? 0
+          : (static_cast<int>(taps.size()) + oversample_factor - 1) / oversample_factor;
   fir.phase_taps.assign(
       static_cast<size_t>(std::max(0, fir.phases)),
       std::vector<float>(static_cast<size_t>(std::max(0, fir.taps_per_phase)), 0.0f));
   for (int phase = 0; phase < fir.phases; ++phase) {
     for (int tap = 0; tap < fir.taps_per_phase; ++tap) {
-      fir.phase_taps[static_cast<size_t>(phase)][static_cast<size_t>(tap)] =
-          taps[static_cast<size_t>(tap * fir.phases + phase)];
+      const size_t src =
+          static_cast<size_t>(tap) * static_cast<size_t>(fir.phases) + static_cast<size_t>(phase);
+      if (src >= taps.size()) {
+        continue;
+      }
+      fir.phase_taps[static_cast<size_t>(phase)][static_cast<size_t>(tap)] = taps[src];
     }
   }
   return fir;

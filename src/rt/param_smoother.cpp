@@ -33,6 +33,15 @@ float ParamSmoother::process() {
   return current_;
 }
 
+float ParamSmoother::advance(int n) {
+  if (n <= 0) return current_;
+  // Closed form of n iterations of current += coeff * (target - current):
+  //   current = target + (current - target) * (1 - coeff)^n.
+  const float decay = std::pow(1.0f - coefficient_, static_cast<float>(n));
+  current_ = target_ + (current_ - target_) * decay;
+  return current_;
+}
+
 void ParamSmoother::update_coefficient() {
   const float clamped_ms = std::max(time_ms_, 0.0f);
   coefficient_ = time_to_attack_release_rate_f(sample_rate_, clamped_ms);
