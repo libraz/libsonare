@@ -5,6 +5,8 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+import numpy as np
+
 from ._runtime import (
     SonareStreamConfig,
     SonareStreamFrames,
@@ -20,6 +22,8 @@ from ._runtime import (
     StreamPatternScore,
     StreamStats,
     _check,
+    _from_c_float_array,
+    _from_c_int_array,
     _get_lib,
     _to_c_float_array,
 )
@@ -235,28 +239,39 @@ class StreamAnalyzer:
         )
 
 
+def _ptr_to_list(ptr: object, count: int, ctype: type, dtype: object) -> list:
+    """Bulk-copy a C pointer's ``count`` elements into a Python list.
+
+    Materializes a fixed-size view at the pointer's address and lets NumPy do
+    the copy in C (``frombuffer().copy()``), avoiding the per-element Python
+    marshalling that dominated this realtime drain path. The dataclass fields
+    are contractually ``list``, so the bulk ndarray is converted via
+    ``.tolist()``.
+    """
+    if not ptr or count <= 0:
+        return []
+    view = (ctype * count).from_address(ctypes.addressof(ptr.contents))
+    return np.frombuffer(view, dtype=dtype, count=count).tolist()
+
+
 def _floats(ptr: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
     if not ptr or count <= 0:
         return []
-    return [float(ptr[i]) for i in range(count)]
+    return _from_c_float_array(ptr, count).tolist()
 
 
 def _ints(ptr: ctypes.POINTER(ctypes.c_int32), count: int) -> list[int]:
     if not ptr or count <= 0:
         return []
-    return [int(ptr[i]) for i in range(count)]
+    return _from_c_int_array(ptr, count).tolist()
 
 
 def _u8s(ptr: ctypes.POINTER(ctypes.c_uint8), count: int) -> list[int]:
-    if not ptr or count <= 0:
-        return []
-    return [int(ptr[i]) for i in range(count)]
+    return _ptr_to_list(ptr, count, ctypes.c_uint8, np.uint8)
 
 
 def _i16s(ptr: ctypes.POINTER(ctypes.c_int16), count: int) -> list[int]:
-    if not ptr or count <= 0:
-        return []
-    return [int(ptr[i]) for i in range(count)]
+    return _ptr_to_list(ptr, count, ctypes.c_int16, np.int16)
 
 
 def _chord_changes(ptr, count: int) -> list[StreamChordChange]:

@@ -84,7 +84,7 @@ def stft_db(
     _check(rc)
     try:
         total = out_n_bins.value * out_n_frames.value
-        result = [float(out_db[i]) for i in range(total)]
+        result = _float_array_result(out_db, total)
         return (out_n_bins.value, out_n_frames.value, result)
     finally:
         total = out_n_bins.value * out_n_frames.value
@@ -274,7 +274,7 @@ def spectral_centroid(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_count.value)]
+        return _float_array_result(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_floats(out)
@@ -312,7 +312,7 @@ def spectral_bandwidth(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_count.value)]
+        return _float_array_result(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_floats(out)
@@ -353,7 +353,7 @@ def spectral_rolloff(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_count.value)]
+        return _float_array_result(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_floats(out)
@@ -391,7 +391,7 @@ def spectral_flatness(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_count.value)]
+        return _float_array_result(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_floats(out)
@@ -429,7 +429,7 @@ def zero_crossing_rate(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_count.value)]
+        return _float_array_result(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_floats(out)
@@ -467,7 +467,7 @@ def rms_energy(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_count.value)]
+        return _float_array_result(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_floats(out)
@@ -611,7 +611,7 @@ def zero_crossings(
     )
     _check(rc)
     try:
-        return np.asarray([int(out[i]) for i in range(out_count.value)], dtype=np.int32)
+        return _from_c_int_array(out, out_count.value)
     finally:
         if out and out_count.value > 0:
             lib.sonare_free_ints(out)
@@ -1475,7 +1475,7 @@ def mel_to_audio(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_length.value)]
+        return _float_array_result(out, out_length.value)
     finally:
         if out and out_length.value > 0:
             lib.sonare_free_floats(out)
@@ -1573,7 +1573,7 @@ def mfcc_to_audio(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_length.value)]
+        return _float_array_result(out, out_length.value)
     finally:
         if out and out_length.value > 0:
             lib.sonare_free_floats(out)

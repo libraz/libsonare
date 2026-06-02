@@ -158,9 +158,34 @@ def _from_c_float_array(array: object, count: int) -> np.ndarray:
     return np.frombuffer(view, dtype=np.float32, count=count).copy()
 
 
+def _from_c_int_array(array: object, count: int) -> np.ndarray:
+    """Copy a C ``int32*`` (or fixed-length ``c_int32 * N`` array) into numpy.
+
+    Integer mirror of :func:`_from_c_float_array`: accepts a ``ctypes.Array``
+    or ``POINTER(c_int32)`` and returns an independent ``int32`` ndarray so the
+    C-side allocation may be freed immediately afterwards.
+    """
+    if count <= 0:
+        return np.empty(0, dtype=np.int32)
+    if isinstance(array, ctypes.Array):
+        return np.frombuffer(array, dtype=np.int32, count=count).copy()
+    arr_type = ctypes.c_int32 * count
+    view = arr_type.from_address(ctypes.addressof(array.contents))  # type: ignore[union-attr]
+    return np.frombuffer(view, dtype=np.int32, count=count).copy()
+
+
 def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int32], int]:
-    length = len(values)
-    c_array = (ctypes.c_int32 * length)(*values)
+    # Bulk-marshal via NumPy's vectorised C path instead of `(c_int32*N)(*seq)`,
+    # which unpacks every element through Python varargs (mirrors the
+    # zero-copy rewrite of `_to_c_float_array`).
+    buf = np.ascontiguousarray(np.asarray(values, dtype=np.int32)).reshape(-1)
+    length = int(buf.shape[0])
+    if length == 0:  # noqa: SIM108
+        c_array = (ctypes.c_int32 * 0)()
+    else:
+        c_array = (ctypes.c_int32 * length).from_buffer(buf)
+    # Pin the numpy buffer so the backing memory outlives the C call.
+    c_array._np_backing = buf  # type: ignore[attr-defined]
     return c_array, length
 
 
@@ -338,7 +363,9 @@ def _profile_value(profile: KeyProfile | str | None) -> int:
 
 
 def _float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
-    return [float(out[i]) for i in range(count)]
+    # Bulk C-side copy via `_from_c_float_array`, then `.tolist()` to honour the
+    # documented `list[float]` return contract (callers index/iterate as lists).
+    return _from_c_float_array(out, count).tolist()
 
 
 def _optional_float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
@@ -346,11 +373,11 @@ def _optional_float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int
     # blind mode); represent that as an empty list rather than crashing.
     if not out:
         return []
-    return [float(out[i]) for i in range(count)]
+    return _from_c_float_array(out, count).tolist()
 
 
 def _int_array_result(out: ctypes.POINTER(ctypes.c_int), count: int) -> list[int]:
-    return [int(out[i]) for i in range(count)]
+    return _from_c_int_array(out, count).tolist()
 
 
 def _call_float_transform(

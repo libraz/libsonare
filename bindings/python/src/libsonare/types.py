@@ -832,6 +832,9 @@ class EngineMetronomeConfig:
     beat_gain: float = 0.35
     accent_gain: float = 0.7
     click_samples: int = 96
+    # Click duration in seconds; used when click_samples is 0 to derive the click
+    # length from the prepared sample rate. 0.0 selects the engine default (2 ms).
+    click_seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

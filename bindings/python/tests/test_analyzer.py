@@ -487,7 +487,10 @@ def test_mixing_presets_and_stereo_mix() -> None:
         fader_db=[-6.0206],
         input_trim_db=[6.0206],
     )
-    assert result.left == pytest.approx([math.sqrt(0.5), math.sqrt(0.5)], abs=0.004)
+    # +6.02 dB trim and -6.02 dB fader cancel to unity net gain. With the Balance
+    # pan law no longer applying a spurious -3 dB attenuation at center, a centered
+    # signal passes through at unity instead of sqrt(0.5).
+    assert result.left == pytest.approx([1.0, 1.0], abs=0.01)
     assert result.right == pytest.approx([0.0, 0.0], abs=0.0002)
     assert result.sample_rate == 48000
     assert len(result.meters) == 1

@@ -725,12 +725,14 @@ class EngineMetronomeConfig:
     beat_gain: float
     accent_gain: float
     click_samples: int
+    click_seconds: float
     def __init__(
         self,
         enabled: bool = False,
         beat_gain: float = 0.35,
         accent_gain: float = 0.7,
         click_samples: int = 96,
+        click_seconds: float = 0.0,
     ) -> None: ...
 
 class EngineClip:

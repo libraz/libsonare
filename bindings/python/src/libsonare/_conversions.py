@@ -636,7 +636,7 @@ def resample(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_length.value)]
+        return _float_array_result(out, out_length.value)
     finally:
         if out and out_length.value > 0:
             lib.sonare_free_floats(out)

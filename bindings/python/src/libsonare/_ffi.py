@@ -155,6 +155,7 @@ class SonareEngineMetronomeConfig(ctypes.Structure):
         ("beat_gain", ctypes.c_float),
         ("accent_gain", ctypes.c_float),
         ("click_samples", ctypes.c_int),
+        ("click_seconds", ctypes.c_double),
     ]
 
 

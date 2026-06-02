@@ -622,6 +622,7 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.beat_gain = float(config.beat_gain)
     raw.accent_gain = float(config.accent_gain)
     raw.click_samples = int(config.click_samples)
+    raw.click_seconds = float(config.click_seconds)
     return raw
 
 
@@ -631,6 +632,7 @@ def _metronome_from_c(raw: SonareEngineMetronomeConfig) -> EngineMetronomeConfig
         beat_gain=float(raw.beat_gain),
         accent_gain=float(raw.accent_gain),
         click_samples=int(raw.click_samples),
+        click_seconds=float(raw.click_seconds),
     )
 
 
