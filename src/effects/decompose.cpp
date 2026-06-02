@@ -120,6 +120,9 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   if (!std::isfinite(beta)) {
     throw SonareException(ErrorCode::InvalidParameter, "decompose: beta must be finite");
   }
+  if (n_iter < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "decompose: n_iter must be non-negative");
+  }
 
   DecomposeResult out;
   if (init == "random") {

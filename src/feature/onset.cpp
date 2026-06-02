@@ -102,6 +102,9 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
 
   int n_mels = mel_spec.n_mels();
   int n_frames = mel_spec.n_frames();
+  // More bands than Mel bins would give zero-width bands whose column mean is
+  // NaN; require at least one Mel bin per band.
+  SONARE_CHECK(n_bands <= n_mels, ErrorCode::InvalidParameter);
   const float* power = mel_spec.power_data();
 
   // Map power data to Eigen matrix [n_mels x n_frames] (row-major)

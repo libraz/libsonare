@@ -204,8 +204,12 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     const float mod_r = mod_depth_ * std::sin(lfo_phase_r_);
     lfo_phase_l_ += lfo_inc_;
     lfo_phase_r_ += lfo_inc_;
+    // Wrap in both directions so a negative mod_rate (negative lfo_inc_) keeps
+    // the phase bounded instead of drifting unboundedly negative.
     if (lfo_phase_l_ > kTwoPi) lfo_phase_l_ -= kTwoPi;
+    if (lfo_phase_l_ < 0.0f) lfo_phase_l_ += kTwoPi;
     if (lfo_phase_r_ > kTwoPi) lfo_phase_r_ -= kTwoPi;
+    if (lfo_phase_r_ < 0.0f) lfo_phase_r_ += kTwoPi;
 
     // Half-L: cross-coupled from the previous right tail.
     float l = mod_ap_l_.process(tank_in + decay * prev_tail_r, mod_l);

@@ -67,6 +67,11 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
 }
 
 float NoteSegmenter::hz_to_cents(float hz, float reference_hz) {
+  // log2 of a non-positive ratio is NaN/-inf; guard both inputs so a bad
+  // reference (or an unvoiced 0 Hz) cannot poison the cents statistics.
+  if (!(hz > 0.0f) || !(reference_hz > 0.0f)) {
+    return 0.0f;
+  }
   return constants::kCentsPerOctave * std::log2(hz / reference_hz);
 }
 
