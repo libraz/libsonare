@@ -8,18 +8,22 @@ namespace {
 // Minimum delay-buffer length so the buffer is never smaller than a typical
 // chorus range even for tiny configured delays.
 constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms
+// Maximum automatable center delay / modulation depth (each). set_parameter
+// clamps to this so the LFO peak (center + depth) stays within the buffer the
+// prepare() pass sizes for, and a later automation cannot be silently truncated.
+constexpr float kMaxChorusDelayMs = 50.0f;
 }  // namespace
 
 Chorus::Chorus(ChorusConfig config) : config_(config) {}
 
 void Chorus::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  // Size the buffer from the actual maximum modulated delay (center + full LFO
-  // depth) so the configured modulation is not silently clipped, with a 100 ms
-  // floor. The delay line additionally clamps reads to this length at runtime,
-  // so later parameter automation can never cause an out-of-bounds read.
-  const float max_delay_ms =
-      std::max(0.0f, config_.center_delay_ms) + std::max(0.0f, config_.depth_ms);
+  // Size the buffer for the maximum AUTOMATABLE modulated delay (center + depth,
+  // each clamped to kMaxChorusDelayMs by set_parameter), not just the initial
+  // config, so later automation up to the clamped range is fully representable
+  // rather than silently truncated by the delay-line read clamp. The 100 ms
+  // floor keeps a sane minimum. (The read clamp still prevents OOB access.)
+  const float max_delay_ms = 2.0f * kMaxChorusDelayMs;
   const float max_delay_seconds = std::max(kMinDelayBufferSeconds, max_delay_ms * 0.001f);
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(max_delay_seconds)) + 1;
   for (auto& delay : delays_) {
@@ -70,10 +74,10 @@ bool Chorus::set_parameter(unsigned int param_id, float value) {
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      config_.depth_ms = std::max(0.0f, value);
+      config_.depth_ms = std::clamp(value, 0.0f, kMaxChorusDelayMs);
       return true;
     case 2:
-      config_.center_delay_ms = std::max(0.0f, value);
+      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxChorusDelayMs);
       return true;
     case 3:
       config_.dry_wet = value;

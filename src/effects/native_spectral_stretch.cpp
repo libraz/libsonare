@@ -41,7 +41,15 @@ Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio) {
   Audio stretched = native_spectral_time_stretch(audio, 1.0f / ratio);
 
   int effective_sr = static_cast<int>(std::round(static_cast<float>(audio.sample_rate()) * ratio));
-  effective_sr = std::clamp(effective_sr, 1000, 192000);
+  // Reject ratios whose effective rate falls outside the supported resampler
+  // range instead of clamping (which silently changed the ratio -> wrong pitch).
+  constexpr int kMinEffectiveSr = 1000;
+  constexpr int kMaxEffectiveSr = 192000;
+  if (effective_sr < kMinEffectiveSr || effective_sr > kMaxEffectiveSr) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "native_spectral_pitch_shift: ratio out of supported range for this sample rate");
+  }
 
   std::vector<float> result_samples =
       resample(stretched.data(), stretched.size(), effective_sr, audio.sample_rate());

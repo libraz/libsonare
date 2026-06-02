@@ -48,6 +48,12 @@ class BoundaryDetector {
   /// @param chroma Pre-computed chroma
   /// @param sr Sample rate
   /// @param config Boundary detection configuration
+  /// @pre @p mel and @p chroma MUST share the same time base — i.e. both
+  ///      computed with the same hop_length as @p config.hop_length. The two
+  ///      feature streams are combined frame-for-frame (truncated to the
+  ///      shorter), so a hop mismatch silently misaligns MFCC and chroma frames
+  ///      and corrupts the novelty curve. There is no hop metadata on the inputs
+  ///      to verify this, so the caller is responsible for the precondition.
   BoundaryDetector(const MelSpectrogram& mel, const Chroma& chroma, int sr,
                    const BoundaryConfig& config = BoundaryConfig());
 

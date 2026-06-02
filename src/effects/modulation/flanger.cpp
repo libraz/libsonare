@@ -16,14 +16,13 @@ Flanger::Flanger(FlangerConfig config) : config_(config) {}
 
 void Flanger::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  // Size the buffer from the actual maximum modulated delay (center + full LFO
-  // depth) so the configured modulation is not silently clipped at the LFO
-  // peaks, with a 100 ms floor. The delay line additionally clamps reads to
-  // this length at runtime, so later parameter automation can never cause an
-  // out-of-bounds read.
-  const float max_delay_ms =
-      std::max(0.0f, config_.center_delay_ms) + std::max(0.0f, config_.depth_ms);
-  const float buffer_ms = std::max(kMinDelayBufferMs, max_delay_ms);
+  // Size the buffer for the maximum AUTOMATABLE modulated delay, not just the
+  // initial config: set_parameter clamps both center and depth to
+  // kMaxFlangerDelayMs, so the LFO peak can reach center+depth = 2x that. Sizing
+  // to the initial config would let later automation exceed the buffer and be
+  // silently truncated by the delay-line read clamp. The floor keeps a sane
+  // minimum. (The read clamp still prevents any out-of-bounds access.)
+  const float buffer_ms = std::max(kMinDelayBufferMs, 2.0f * kMaxFlangerDelayMs);
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(buffer_ms) * 0.001) + 1;
   for (auto& delay : delays_) {
     delay.prepare(max_delay);

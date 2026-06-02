@@ -44,9 +44,18 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   int original_sr = audio.sample_rate();
   int effective_sr = static_cast<int>(std::round(static_cast<float>(original_sr) * ratio));
 
-  /// Clamp effective sample rate to reasonable bounds
-  if (effective_sr < 1000) effective_sr = 1000;
-  if (effective_sr > 192000) effective_sr = 192000;
+  /// The resample step treats the stretched signal as if sampled at sr*ratio.
+  /// If that effective rate falls outside the supported resampler range, the
+  /// old code silently clamped it, which changed the effective ratio and
+  /// returned wrong-pitch audio. Reject such ratios explicitly instead so the
+  /// caller learns the request is unsupported rather than getting bad output.
+  /// (In-range ratios — roughly +/-2 octaves at 44.1/48 kHz — are unaffected.)
+  constexpr int kMinEffectiveSr = 1000;
+  constexpr int kMaxEffectiveSr = 192000;
+  if (effective_sr < kMinEffectiveSr || effective_sr > kMaxEffectiveSr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "pitch_shift: ratio out of supported range for this sample rate");
+  }
 
   /// Single resample from effective rate to original rate
   std::vector<float> result_samples =

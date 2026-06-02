@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -91,6 +92,20 @@ TEST_CASE("pitch_shift_ratio basic", "[pitch_shift]") {
 
   REQUIRE(!shifted.empty());
   REQUIRE(shifted.sample_rate() == audio.sample_rate());
+}
+
+TEST_CASE("pitch_shift_ratio rejects out-of-range ratios", "[pitch_shift]") {
+  // A ratio whose effective sample rate exceeds the resampler range used to be
+  // silently clamped (wrong pitch); it must now throw instead.
+  Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+  PitchShiftConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+
+  // 22050 * 20 = 441000 Hz effective rate -> out of the supported range.
+  REQUIRE_THROWS_AS(pitch_shift_ratio(audio, 20.0f, config), sonare::SonareException);
+  // A moderate ratio (within ~+/-2 octaves) is still accepted.
+  REQUIRE_NOTHROW(pitch_shift_ratio(audio, 2.0f, config));
 }
 
 TEST_CASE("pitch_shift native spectral backend preserves duration", "[pitch_shift]") {
