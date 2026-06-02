@@ -182,8 +182,33 @@ export type SonareWorkletTransportMessage =
   | SonareEngineTelemetryRecord;
 
 export const SONARE_METER_RING_HEADER_INTS = 4;
-export const SONARE_METER_RING_RECORD_FLOATS = 6;
+// Record layout: [frameLo, peakDbL, peakDbR, rmsDbL, rmsDbR, correlation, frameHi].
+// The sample-frame index is monotonically increasing and quickly exceeds the
+// 2^24 exact-integer range of a single Float32 slot (~349 s at 48 kHz), so it is
+// stored split across two Float32 lanes (low 24 bits + high bits) for exact
+// reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
+export const SONARE_METER_RING_RECORD_FLOATS = 7;
 export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
+
+/** Base for splitting a frame index into two exactly-representable Float32 lanes. */
+const SONARE_FRAME_LANE_BASE = 0x1000000; // 2^24
+
+/** Low 24 bits of a frame index (exact in Float32). */
+export function encodeFrameLo(frame: number): number {
+  const f = Math.max(0, Math.floor(frame));
+  return f % SONARE_FRAME_LANE_BASE;
+}
+
+/** High bits of a frame index above 2^24 (exact in Float32 up to ~2^48). */
+export function encodeFrameHi(frame: number): number {
+  const f = Math.max(0, Math.floor(frame));
+  return Math.floor(f / SONARE_FRAME_LANE_BASE);
+}
+
+/** Reconstruct a frame index from its low/high Float32 lanes. */
+export function decodeFrame(lo: number, hi: number): number {
+  return hi * SONARE_FRAME_LANE_BASE + lo;
+}
 export const SONARE_ENGINE_RING_HEADER_INTS = 5;
 export const SONARE_ENGINE_COMMAND_RECORD_BYTES = 32;
 export const SONARE_ENGINE_TELEMETRY_RECORD_BYTES = 48;
@@ -407,7 +432,7 @@ export function readSonareMeterRingBuffer(
     const offset = (index % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
     meters.push({
       type: 'meter',
-      frame: ring.records[offset],
+      frame: decodeFrame(ring.records[offset], ring.records[offset + 6]),
       peakDbL: ring.records[offset + 1],
       peakDbR: ring.records[offset + 2],
       rmsDbL: ring.records[offset + 3],
@@ -421,9 +446,11 @@ export function readSonareMeterRingBuffer(
 export function sonareSpectrumRingBufferByteLength(capacity: number, bands = 16): number {
   const clampedCapacity = Math.max(1, Math.floor(capacity));
   const clampedBands = Math.max(1, Math.floor(bands));
+  // Record layout: [frameLo, frameHi, bandCount, band0, band1, ...]. frame is
+  // split across two Float32 lanes for exact reconstruction beyond 2^24.
   return (
     SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * (2 + clampedBands) * Float32Array.BYTES_PER_ELEMENT
+    clampedCapacity * (3 + clampedBands) * Float32Array.BYTES_PER_ELEMENT
   );
 }
 
@@ -456,7 +483,7 @@ export function readSonareSpectrumRingBuffer(
   readIndex = 0,
 ): SonareSpectrumRingReadResult {
   const writeIndex = Atomics.load(ring.header, 0);
-  const recordFloats = Atomics.load(ring.header, 2) || 2 + ring.bands;
+  const recordFloats = Atomics.load(ring.header, 2) || 3 + ring.bands;
   const bands = Atomics.load(ring.header, 3) || ring.bands;
   const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
   const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
@@ -464,8 +491,12 @@ export function readSonareSpectrumRingBuffer(
   for (let index = firstReadable; index < writeIndex; index++) {
     const offset = (index % ring.capacity) * recordFloats;
     const values = new Float32Array(bands);
-    values.set(ring.records.subarray(offset + 2, offset + 2 + bands));
-    spectra.push({ type: 'spectrum', frame: ring.records[offset], bands: values });
+    values.set(ring.records.subarray(offset + 3, offset + 3 + bands));
+    spectra.push({
+      type: 'spectrum',
+      frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
+      bands: values,
+    });
   }
   return { nextReadIndex: writeIndex, spectra };
 }
@@ -620,7 +651,7 @@ function spectrumRingFromSharedBuffer(
   const existingBands = Atomics.load(header, 3);
   const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
   const bands = Math.max(1, Math.floor(existingBands || fallbackBands || 16));
-  const recordFloats = 2 + bands;
+  const recordFloats = 3 + bands;
   const minBytes = sonareSpectrumRingBufferByteLength(capacity, bands);
   if (sharedBuffer.byteLength < minBytes) {
     throw new Error('spectrumSharedBuffer is too small for the requested ring capacity.');
@@ -818,9 +849,14 @@ export class SonareWorkletProcessor {
       return true;
     }
     const frames = leftOut.length;
-    if (frames !== this.blockSize) {
-      return false;
-    }
+    // The mixer's realtime heap buffers are sized to blockSize. A render quantum
+    // that differs from blockSize (e.g. a future browser using a quantum other
+    // than 128, or a misconfigured blockSize) must NOT return false here:
+    // returning false permanently terminates the AudioWorkletProcessor and
+    // silently kills the node mid-stream. Instead degrade gracefully by
+    // processing min(frames, blockSize) and zero-filling any remainder, mirroring
+    // the sonare-rt processor's behaviour.
+    const usable = Math.min(frames, this.blockSize);
 
     for (let strip = 0; strip < this.realtime.leftInputs.length; strip++) {
       const input = inputs[strip];
@@ -828,12 +864,12 @@ export class SonareWorkletProcessor {
       const right = input?.[1];
       const leftTarget = this.realtime.leftInputs[strip];
       const rightTarget = this.realtime.rightInputs[strip];
-      if (left && left.length === frames) {
-        leftTarget.set(left);
-        if (right && right.length === frames) {
-          rightTarget.set(right);
+      if (left && left.length >= usable) {
+        leftTarget.set(left.subarray(0, usable));
+        if (right && right.length >= usable) {
+          rightTarget.set(right.subarray(0, usable));
         } else {
-          rightTarget.set(left);
+          rightTarget.set(left.subarray(0, usable));
         }
       } else {
         leftTarget.fill(0);
@@ -841,14 +877,30 @@ export class SonareWorkletProcessor {
       }
     }
 
-    this.realtime.process(frames);
-    leftOut.set(this.realtime.outLeft);
-    if (rightOut) {
-      rightOut.set(this.realtime.outRight);
+    this.realtime.process(usable);
+    if (usable === frames) {
+      leftOut.set(this.realtime.outLeft.subarray(0, usable));
+      if (rightOut) {
+        rightOut.set(this.realtime.outRight.subarray(0, usable));
+      }
+    } else {
+      // frames > blockSize: fill the produced part and zero the remaining tail.
+      leftOut.fill(0);
+      leftOut.set(this.realtime.outLeft.subarray(0, usable));
+      if (rightOut) {
+        rightOut.fill(0);
+        rightOut.set(this.realtime.outRight.subarray(0, usable));
+      }
     }
-    this.processedFrames += frames;
-    this.publishMeter(this.realtime.outLeft, this.realtime.outRight);
-    this.publishSpectrum(this.realtime.outLeft, this.realtime.outRight);
+    this.processedFrames += usable;
+    this.publishMeter(
+      this.realtime.outLeft.subarray(0, usable),
+      this.realtime.outRight.subarray(0, usable),
+    );
+    this.publishSpectrum(
+      this.realtime.outLeft.subarray(0, usable),
+      this.realtime.outRight.subarray(0, usable),
+    );
     return true;
   }
 
@@ -939,12 +991,13 @@ export class SonareWorkletProcessor {
     }
     const writeIndex = Atomics.load(ring.header, 0);
     const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
-    ring.records[offset] = meter.frame;
+    ring.records[offset] = encodeFrameLo(meter.frame);
     ring.records[offset + 1] = meter.peakDbL;
     ring.records[offset + 2] = meter.peakDbR;
     ring.records[offset + 3] = meter.rmsDbL;
     ring.records[offset + 4] = meter.rmsDbR;
     ring.records[offset + 5] = meter.correlation;
+    ring.records[offset + 6] = encodeFrameHi(meter.frame);
     Atomics.store(ring.header, 0, writeIndex + 1);
     if (writeIndex + 1 > ring.capacity) {
       Atomics.store(ring.header, 3, writeIndex + 1 - ring.capacity);
@@ -996,9 +1049,10 @@ export class SonareWorkletProcessor {
     }
     const writeIndex = Atomics.load(ring.header, 0);
     const offset = (writeIndex % ring.capacity) * ring.recordFloats;
-    ring.records[offset] = frame;
-    ring.records[offset + 1] = bands.length;
-    ring.records.set(bands.subarray(0, ring.bands), offset + 2);
+    ring.records[offset] = encodeFrameLo(frame);
+    ring.records[offset + 1] = encodeFrameHi(frame);
+    ring.records[offset + 2] = bands.length;
+    ring.records.set(bands.subarray(0, ring.bands), offset + 3);
     Atomics.store(ring.header, 0, writeIndex + 1);
     if (writeIndex + 1 > ring.capacity) {
       Atomics.store(ring.header, 4, writeIndex + 1 - ring.capacity);
@@ -1164,6 +1218,22 @@ export class SonareRealtimeEngineWorkletProcessor {
   private applyCommand(command: SonareEngineCommandRecord): void {
     const sampleTime = Number(command.sampleTime ?? -1);
     switch (command.type) {
+      case SonareEngineCommandType.SetParam:
+        // paramId is carried in targetId, the new value in argFloat (matches the
+        // SonareEngine.setParam producer). sampleTime is the render frame.
+        this.engine.setParameter(
+          Math.trunc(Number(command.targetId ?? 0)),
+          Number(command.argFloat ?? 0),
+          sampleTime,
+        );
+        break;
+      case SonareEngineCommandType.SetParamSmoothed:
+        this.engine.setParameterSmoothed(
+          Math.trunc(Number(command.targetId ?? 0)),
+          Number(command.argFloat ?? 0),
+          sampleTime,
+        );
+        break;
       case SonareEngineCommandType.TransportPlay:
         this.engine.play(sampleTime);
         break;
@@ -1418,6 +1488,25 @@ export class SonareRtRealtimeEngineRuntime {
   private applyCommand(command: SonareEngineCommandRecord): void {
     const sampleTime = toBigInt64(command.sampleTime, -1n);
     switch (command.type) {
+      case SonareEngineCommandType.SetParam:
+      case SonareEngineCommandType.SetParamSmoothed:
+        // The sonare-rt C ABI (src/wasm/rt_bindings.cpp) does not export a
+        // sonare_rt_engine_set_param entry point, so parameter automation has no
+        // realtime transport on this runtime target. Surface a clear error
+        // telemetry record (rather than silently dropping the command) so hosts
+        // can detect the unsupported path; the embind runtime fully wires this.
+        if (this.telemetryRing) {
+          writeSonareEngineTelemetryRingBuffer(this.telemetryRing, {
+            type: SonareEngineTelemetryType.Error,
+            error: SonareEngineTelemetryError.UnknownTarget,
+            renderFrame: 0,
+            timelineSample: 0,
+            audibleTimelineSample: 0,
+            graphLatencySamplesQ8: 0,
+            value: Number(command.type),
+          });
+        }
+        break;
       case SonareEngineCommandType.TransportPlay:
         this.module._sonare_rt_engine_play(this.engine, sampleTime);
         break;
@@ -1876,10 +1965,17 @@ export class SonareEngine {
   }
 
   setParam(nodeId: string, param: string | number, value: number): boolean {
-    void nodeId;
-    void param;
-    void value;
-    return false;
+    const paramId = this.resolveParamId(nodeId, param);
+    // Mirror the change into the offline engine so a subsequent offline render
+    // reflects the live value, then push a sample-accurate command to the
+    // realtime runtime (mirrors setTempo/setLoop above).
+    this.offlineEngine.setParameter(paramId, value);
+    return this.realtimeNode.sendCommand({
+      type: SonareEngineCommandType.SetParam,
+      targetId: paramId,
+      sampleTime: -1,
+      argFloat: value,
+    });
   }
 
   scheduleParam(
@@ -1918,7 +2014,16 @@ export class SonareEngine {
     void target;
     void solo;
     void mute;
-    return false;
+    // Per-track solo/mute is a Mixer concept (strip-indexed setSoloed/setMuted),
+    // not an engine command: the WASM SonareEngine facade does not own a Mixer
+    // node, so there is no realtime transport for solo/mute on this surface.
+    // Throw a clear error instead of silently returning false (a silent no-op
+    // would leave callers believing the change took effect). Apply solo/mute
+    // directly on a Mixer instance (Mixer.setSoloed/Mixer.setMuted) instead.
+    throw new Error(
+      'SonareEngine.setSoloMute is not supported: solo/mute is a Mixer feature; ' +
+        'use Mixer.setSoloed(stripIndex, ...) / Mixer.setMuted(stripIndex, ...) instead.',
+    );
   }
 
   addClip(

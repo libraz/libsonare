@@ -914,6 +914,10 @@ export interface RealtimeVoiceChangerPodConfig {
   reverb_seed: number;
   limiter_ceiling_db: number;
   limiter_release_ms: number;
+  /** Non-zero enables the 4x-oversampled inter-sample-peak limiter (default enabled). */
+  limiter_enable_isp_limiter: boolean;
+  /** True-peak ceiling in dBTP applied by the ISP limiter (default -1.0). */
+  limiter_isp_ceiling_dbtp: number;
 }
 
 /** Options for {@link StreamingEqualizer.match}. */

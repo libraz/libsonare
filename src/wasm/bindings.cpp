@@ -4657,20 +4657,28 @@ val js_resample(val samples, int src_sr, int target_sr) {
 // ============================================================================
 
 /// @brief Helper to convert uint8 vector to Uint8Array.
+///
+/// Uses the same single-bulk-memcpy path as vectorToFloat32Array/Int32Array: a
+/// non-owning typed_memory_view over the C++ buffer plus a JS-side
+/// TypedArray.prototype.set, avoiding one JS<->WASM boundary crossing per
+/// element (the per-element set() defeats the bandwidth-reduction purpose of the
+/// quantized readFramesU8/readFramesI16 fast paths).
 val vectorToUint8Array(const std::vector<uint8_t>& vec) {
-  val result = val::global("Uint8Array").new_(vec.size());
-  for (size_t i = 0; i < vec.size(); ++i) {
-    result.set(i, vec[i]);
-  }
+  const size_t n = vec.size();
+  val result = val::global("Uint8Array").new_(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, vec.data()));
+  result.call<void>("set", view);
   return result;
 }
 
 /// @brief Helper to convert int16 vector to Int16Array.
 val vectorToInt16Array(const std::vector<int16_t>& vec) {
-  val result = val::global("Int16Array").new_(vec.size());
-  for (size_t i = 0; i < vec.size(); ++i) {
-    result.set(i, vec[i]);
-  }
+  const size_t n = vec.size();
+  val result = val::global("Int16Array").new_(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, vec.data()));
+  result.call<void>("set", view);
   return result;
 }
 
@@ -5138,6 +5146,15 @@ class RealtimeEngineWasm {
     out.set("samplePosition", static_cast<double>(state.sample_position));
     out.set("ppq", state.ppq_position);
     out.set("bpm", state.bpm);
+    out.set("barStartPpq", state.bar_start_ppq);
+    out.set("barCount", static_cast<double>(state.bar_count));
+    val time_signature = val::object();
+    time_signature.set("numerator", state.time_sig.numerator);
+    time_signature.set("denominator", state.time_sig.denominator);
+    // The transport TimeSignature carries no confidence; mirror the C ABI which
+    // reports a fixed 1.0 for the engine-driven (authoritative) time signature.
+    time_signature.set("confidence", 1.0f);
+    out.set("timeSignature", time_signature);
     out.set("loopStartPpq", state.loop_start_ppq);
     out.set("loopEndPpq", state.loop_end_ppq);
     out.set("sampleRate", state.sample_rate);
@@ -5679,41 +5696,43 @@ uint32_t js_voice_changer_abi_version() { return editing::voice_changer::kVoiceC
 // RealtimeVoiceChangerConfig; pod_field is the flat key exposed to JS (matching
 // the Python/C-ABI POD mirror). Calling the C++ accessors directly keeps this
 // binding self-contained: the C-ABI translation unit is not linked into WASM.
-#define SONARE_WASM_VC_FIELDS(X)                          \
-  X(input_gain_db, input_gain_db)                         \
-  X(output_gain_db, output_gain_db)                       \
-  X(wet_mix, wet_mix)                                     \
-  X(retune.semitones, retune_semitones)                   \
-  X(retune.mix, retune_mix)                               \
-  X(retune.grain_size, retune_grain_size)                 \
-  X(formant.factor, formant_factor)                       \
-  X(formant.amount, formant_amount)                       \
-  X(formant.body, formant_body)                           \
-  X(formant.brightness, formant_brightness)               \
-  X(formant.nasal, formant_nasal)                         \
-  X(eq.highpass_hz, eq_highpass_hz)                       \
-  X(eq.body_db, eq_body_db)                               \
-  X(eq.presence_db, eq_presence_db)                       \
-  X(eq.air_db, eq_air_db)                                 \
-  X(gate.threshold_db, gate_threshold_db)                 \
-  X(gate.attack_ms, gate_attack_ms)                       \
-  X(gate.release_ms, gate_release_ms)                     \
-  X(gate.range_db, gate_range_db)                         \
-  X(compressor.threshold_db, compressor_threshold_db)     \
-  X(compressor.ratio, compressor_ratio)                   \
-  X(compressor.attack_ms, compressor_attack_ms)           \
-  X(compressor.release_ms, compressor_release_ms)         \
-  X(compressor.makeup_gain_db, compressor_makeup_gain_db) \
-  X(deesser.frequency_hz, deesser_frequency_hz)           \
-  X(deesser.threshold_db, deesser_threshold_db)           \
-  X(deesser.ratio, deesser_ratio)                         \
-  X(deesser.range_db, deesser_range_db)                   \
-  X(reverb.mix, reverb_mix)                               \
-  X(reverb.time_ms, reverb_time_ms)                       \
-  X(reverb.damping, reverb_damping)                       \
-  X(reverb.seed, reverb_seed)                             \
-  X(limiter.ceiling_db, limiter_ceiling_db)               \
-  X(limiter.release_ms, limiter_release_ms)
+#define SONARE_WASM_VC_FIELDS(X)                            \
+  X(input_gain_db, input_gain_db)                           \
+  X(output_gain_db, output_gain_db)                         \
+  X(wet_mix, wet_mix)                                       \
+  X(retune.semitones, retune_semitones)                     \
+  X(retune.mix, retune_mix)                                 \
+  X(retune.grain_size, retune_grain_size)                   \
+  X(formant.factor, formant_factor)                         \
+  X(formant.amount, formant_amount)                         \
+  X(formant.body, formant_body)                             \
+  X(formant.brightness, formant_brightness)                 \
+  X(formant.nasal, formant_nasal)                           \
+  X(eq.highpass_hz, eq_highpass_hz)                         \
+  X(eq.body_db, eq_body_db)                                 \
+  X(eq.presence_db, eq_presence_db)                         \
+  X(eq.air_db, eq_air_db)                                   \
+  X(gate.threshold_db, gate_threshold_db)                   \
+  X(gate.attack_ms, gate_attack_ms)                         \
+  X(gate.release_ms, gate_release_ms)                       \
+  X(gate.range_db, gate_range_db)                           \
+  X(compressor.threshold_db, compressor_threshold_db)       \
+  X(compressor.ratio, compressor_ratio)                     \
+  X(compressor.attack_ms, compressor_attack_ms)             \
+  X(compressor.release_ms, compressor_release_ms)           \
+  X(compressor.makeup_gain_db, compressor_makeup_gain_db)   \
+  X(deesser.frequency_hz, deesser_frequency_hz)             \
+  X(deesser.threshold_db, deesser_threshold_db)             \
+  X(deesser.ratio, deesser_ratio)                           \
+  X(deesser.range_db, deesser_range_db)                     \
+  X(reverb.mix, reverb_mix)                                 \
+  X(reverb.time_ms, reverb_time_ms)                         \
+  X(reverb.damping, reverb_damping)                         \
+  X(reverb.seed, reverb_seed)                               \
+  X(limiter.ceiling_db, limiter_ceiling_db)                 \
+  X(limiter.release_ms, limiter_release_ms)                 \
+  X(limiter.enable_isp_limiter, limiter_enable_isp_limiter) \
+  X(limiter.isp_ceiling_dbtp, limiter_isp_ceiling_dbtp)
 
 // Validates a preset ordinal against the C++ VoiceCharacterPreset enum range.
 // The C-ABI and C++ enumerators share an identical ordering, so the integer

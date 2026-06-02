@@ -1286,10 +1286,15 @@ export function hpss(
  * @param sampleRate - Sample rate in Hz
  * @returns Harmonic component
  */
-export function harmonic(samples: Float32Array, sampleRate: number): Float32Array {
+export function harmonic(
+  samples: Float32Array,
+  sampleRate: number,
+  options: ValidateOptions = {},
+): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('harmonic', samples, options.validate !== false);
   return module.harmonic(samples, sampleRate);
 }
 
@@ -1300,10 +1305,15 @@ export function harmonic(samples: Float32Array, sampleRate: number): Float32Arra
  * @param sampleRate - Sample rate in Hz
  * @returns Percussive component
  */
-export function percussive(samples: Float32Array, sampleRate: number): Float32Array {
+export function percussive(
+  samples: Float32Array,
+  sampleRate: number,
+  options: ValidateOptions = {},
+): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('percussive', samples, options.validate !== false);
   return module.percussive(samples, sampleRate);
 }
 
@@ -1315,10 +1325,16 @@ export function percussive(samples: Float32Array, sampleRate: number): Float32Ar
  * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
  * @returns Time-stretched audio
  */
-export function timeStretch(samples: Float32Array, sampleRate: number, rate: number): Float32Array {
+export function timeStretch(
+  samples: Float32Array,
+  sampleRate: number,
+  rate: number,
+  options: ValidateOptions = {},
+): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('timeStretch', samples, options.validate !== false);
   return module.timeStretch(samples, sampleRate, rate);
 }
 
@@ -1334,10 +1350,12 @@ export function pitchShift(
   samples: Float32Array,
   sampleRate: number,
   semitones: number,
+  options: ValidateOptions = {},
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('pitchShift', samples, options.validate !== false);
   return module.pitchShift(samples, sampleRate, semitones);
 }
 
@@ -1355,10 +1373,12 @@ export function pitchCorrectToMidi(
   sampleRate = 22050,
   currentMidi = 69.0,
   targetMidi = 69.0,
+  options: ValidateOptions = {},
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('pitchCorrectToMidi', samples, options.validate !== false);
   return module.pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
 }
 
@@ -1378,10 +1398,12 @@ export function noteStretch(
   onsetSample = 0,
   offsetSample = 0,
   stretchRatio = 1.0,
+  options: ValidateOptions = {},
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('noteStretch', samples, options.validate !== false);
   return module.noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
 }
 
@@ -1416,10 +1438,16 @@ export function voiceChange(
  * @param targetDb - Target peak level in dB (default: 0 dB = full scale)
  * @returns Normalized audio
  */
-export function normalize(samples: Float32Array, sampleRate: number, targetDb = 0.0): Float32Array {
+export function normalize(
+  samples: Float32Array,
+  sampleRate: number,
+  targetDb = 0.0,
+  options: ValidateOptions = {},
+): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  assertSamples('normalize', samples, options.validate !== false);
   return module.normalize(samples, sampleRate, targetDb);
 }
 

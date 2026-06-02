@@ -1609,10 +1609,12 @@ describe('SonareWorkletProcessor', () => {
         expect(engine.transport.seekSeconds(1)).toBe(true);
         engine.transport.setTempo(90);
         expect(engine.transport.setLoop(0, 1, true)).toBe(true);
-        expect(engine.setParam('gain-node', 'gain', -6)).toBe(false);
+        expect(engine.setParam('gain-node', 'gain', -6)).toBe(true);
         engine.scheduleParam('gain-node', 'gain', 0.5, -3);
         engine.addAutomationPoint(7, 1, 0);
-        expect(engine.setSoloMute(3, true, false)).toBe(false);
+        // solo/mute is a Mixer feature; the engine facade now throws a clear
+        // error instead of silently returning false (no-op).
+        expect(() => engine.setSoloMute(3, true, false)).toThrow();
         const clipId = engine.addClip(
           0,
           [new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)],

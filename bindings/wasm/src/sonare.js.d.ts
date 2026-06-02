@@ -60,6 +60,8 @@ export interface WasmRealtimeVoiceChangerPodConfig {
   reverb_seed: number;
   limiter_ceiling_db: number;
   limiter_release_ms: number;
+  limiter_enable_isp_limiter: boolean;
+  limiter_isp_ceiling_dbtp: number;
 }
 
 export interface WasmBeatResult {
@@ -528,6 +530,12 @@ export interface WasmEngineTransportState {
   loopStartPpq: number;
   loopEndPpq: number;
   sampleRate: number;
+  /** PPQ of the current bar's downbeat (derived from the tempo map). */
+  barStartPpq: number;
+  /** Zero-based index of the current bar. */
+  barCount: number;
+  /** Time signature in effect at the current PPQ. */
+  timeSignature: { numerator: number; denominator: number; confidence: number };
 }
 
 export interface WasmEngineBounceOptions {

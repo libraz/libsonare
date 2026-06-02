@@ -180,6 +180,10 @@ describe('newly exposed WASM functions', () => {
       expect(cfg).toHaveProperty(field);
       expect(Number.isFinite(cfg[field])).toBe(true);
     }
+    // ISP true-peak limiter fields are now part of the POD surface.
+    expect(cfg).toHaveProperty('limiter_enable_isp_limiter');
+    expect(cfg).toHaveProperty('limiter_isp_ceiling_dbtp');
+    expect(Number.isFinite(cfg.limiter_isp_ceiling_dbtp)).toBe(true);
   });
 
   it('phaseVocoder time-scales the signal', () => {
