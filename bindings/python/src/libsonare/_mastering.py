@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import json
+from collections.abc import Callable, Sequence
+from typing import Any, cast
 
 from ._ffi import (
     SonareEqSnapshot,
@@ -16,7 +19,7 @@ from ._ffi import (
     SonareMasteringStereoResult,
     SonareStreamingPlatform,
 )
-from ._runtime import *  # noqa: F403
+from ._runtime import _check, _get_lib, _to_c_float_array
 from .types import (
     EqSpectrumSnapshot,
     MasteringChainResult,
@@ -67,7 +70,7 @@ def mastering(
         lib.sonare_free_mastering_result(ctypes.byref(out))
 
 
-def _mastering_params(params: dict[str, float | int | bool] | None):
+def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
     items = list((params or {}).items())
     array_type = SonareMasteringParam * len(items)
     key_buffers = [str(key).encode("utf-8") for key, _ in items]
@@ -195,7 +198,7 @@ def mastering_process_stereo(
 
 
 def _flatten_chain_config(
-    config: dict | None,
+    config: dict[str, Any] | None,
     prefix: str = "",
 ) -> dict[str, float]:
     """Flatten a nested chain config dict using dot-notation keys.
@@ -218,7 +221,7 @@ def _flatten_chain_config(
     return flat
 
 
-def _chain_params(config: dict | None):
+def _chain_params(config: dict[str, Any] | None) -> tuple[Any, int]:
     flat = _flatten_chain_config(config)
     items = list(flat.items())
     array_type = SonareMasteringParam * len(items)
@@ -232,19 +235,20 @@ def _chain_params(config: dict | None):
     return array, len(items)
 
 
-def _extract_stages(stages_ptr, count: int) -> list[str]:
+def _extract_stages(stages_ptr: object, count: int) -> list[str]:
     if not stages_ptr or count == 0:
         return []
+    raw_ptr = cast(Any, stages_ptr)
     result: list[str] = []
     for i in range(count):
-        raw = stages_ptr[i]
+        raw = raw_ptr[i]
         result.append(raw.decode("utf-8") if raw else "")
     return result
 
 
 def _make_progress_trampoline(
     on_progress: Callable[[float, str], None],
-) -> SonareMasteringProgressCallback:
+) -> Any:
     """Wrap a Python callback for use as a C SonareMasteringProgressCallback.
 
     The returned object MUST be kept alive across the C call to avoid GC
@@ -264,7 +268,7 @@ def _make_progress_trampoline(
 def mastering_chain(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    config: dict | None = None,
+    config: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> MasteringChainResult:
     """Apply a configurable mastering chain to mono audio.
@@ -338,7 +342,7 @@ def mastering_chain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    config: dict | None = None,
+    config: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> MasteringChainStereoResult:
     """Apply a configurable mastering chain to stereo audio.
@@ -560,7 +564,7 @@ class StreamingMasteringChain:
             ...
     """
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         lib = _get_lib()
         if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
             raise RuntimeError("libsonare was built without streaming mastering chain support")
@@ -654,7 +658,7 @@ class StreamingMasteringChain:
     def __enter__(self) -> StreamingMasteringChain:
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
     def __del__(self) -> None:
@@ -695,7 +699,7 @@ class StreamingEqualizer:
         self.max_block_size = int(max_block_size)
         self._sidechain_refs: object | None = None
 
-    def set_band(self, index: int, band: dict | str) -> None:
+    def set_band(self, index: int, band: dict[str, Any] | str) -> None:
         """Set one EQ band from a JSON string or a Python dict."""
         self._ensure_open()
         payload = band if isinstance(band, str) else json.dumps(band, separators=(",", ":"))
@@ -746,7 +750,7 @@ class StreamingEqualizer:
         self._ensure_open()
         c_array, length = _to_c_float_array(samples)
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
-        channels = channel_array_type(c_array)
+        channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
         _check(self._lib.sonare_eq_set_sidechain(self._handle, channels, ctypes.c_int(1), length))
         self._sidechain_refs = (c_array, channels)
 
@@ -762,7 +766,10 @@ class StreamingEqualizer:
         if left_length != right_length:
             raise ValueError("left and right sidechain lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
-        channels = channel_array_type(left_array, right_array)
+        channels = channel_array_type(
+            ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
+            ctypes.cast(right_array, ctypes.POINTER(ctypes.c_float)),
+        )
         _check(
             self._lib.sonare_eq_set_sidechain(
                 self._handle, channels, ctypes.c_int(2), ctypes.c_int(left_length)
@@ -803,7 +810,7 @@ class StreamingEqualizer:
         self._ensure_open()
         c_array, length = _to_c_float_array(samples)
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
-        channels = channel_array_type(c_array)
+        channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
         _check(self._lib.sonare_eq_process(self._handle, channels, ctypes.c_int(1), length))
         self._sidechain_refs = None
         return [float(c_array[i]) for i in range(length)]
@@ -820,7 +827,10 @@ class StreamingEqualizer:
         if left_length != right_length:
             raise ValueError("left and right channel lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
-        channels = channel_array_type(left_array, right_array)
+        channels = channel_array_type(
+            ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
+            ctypes.cast(right_array, ctypes.POINTER(ctypes.c_float)),
+        )
         _check(
             self._lib.sonare_eq_process(
                 self._handle, channels, ctypes.c_int(2), ctypes.c_int(left_length)
@@ -869,7 +879,7 @@ class StreamingEqualizer:
     def __enter__(self) -> StreamingEqualizer:
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
     def __del__(self) -> None:

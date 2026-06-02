@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 
@@ -131,7 +132,7 @@ def _to_c_float_array(
         # back to a freshly allocated empty array.
         c_array = (ctypes.c_float * 0)()
     else:
-        c_array = (ctypes.c_float * length).from_buffer(buf)
+        c_array = (ctypes.c_float * length).from_buffer(buf)  # type: ignore[arg-type]
     # Defensive: pin the numpy buffer to the ctypes object so callers that
     # only retain ``c_array`` cannot accidentally drop the underlying memory.
     c_array._np_backing = buf  # type: ignore[attr-defined]
@@ -151,11 +152,13 @@ def _from_c_float_array(array: object, count: int) -> np.ndarray:
     if isinstance(array, ctypes.Array):
         # `np.frombuffer` on a `(c_float * N)` shares memory; `.copy()` makes
         # the returned array safe to outlive the source ctypes buffer.
-        return np.frombuffer(array, dtype=np.float32, count=count).copy()
+        floats = np.frombuffer(memoryview(array), dtype=np.float32, count=count)
+        return cast(np.ndarray, floats.copy())
     # POINTER(c_float) path: materialise a fixed-size view at the same address.
+    ptr = cast(Any, array)
     arr_type = ctypes.c_float * count
-    view = arr_type.from_address(ctypes.addressof(array.contents))  # type: ignore[union-attr]
-    return np.frombuffer(view, dtype=np.float32, count=count).copy()
+    view = arr_type.from_address(ctypes.addressof(ptr.contents))
+    return cast(np.ndarray, np.frombuffer(memoryview(view), dtype=np.float32, count=count).copy())
 
 
 def _from_c_int_array(array: object, count: int) -> np.ndarray:
@@ -168,10 +171,12 @@ def _from_c_int_array(array: object, count: int) -> np.ndarray:
     if count <= 0:
         return np.empty(0, dtype=np.int32)
     if isinstance(array, ctypes.Array):
-        return np.frombuffer(array, dtype=np.int32, count=count).copy()
+        ints = np.frombuffer(memoryview(array), dtype=np.int32, count=count)
+        return cast(np.ndarray, ints.copy())
+    ptr = cast(Any, array)
     arr_type = ctypes.c_int32 * count
-    view = arr_type.from_address(ctypes.addressof(array.contents))  # type: ignore[union-attr]
-    return np.frombuffer(view, dtype=np.int32, count=count).copy()
+    view = arr_type.from_address(ctypes.addressof(ptr.contents))
+    return cast(np.ndarray, np.frombuffer(memoryview(view), dtype=np.int32, count=count).copy())
 
 
 def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int32], int]:
@@ -183,7 +188,7 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
     if length == 0:  # noqa: SIM108
         c_array = (ctypes.c_int32 * 0)()
     else:
-        c_array = (ctypes.c_int32 * length).from_buffer(buf)
+        c_array = (ctypes.c_int32 * length).from_buffer(buf)  # type: ignore[arg-type]
     # Pin the numpy buffer so the backing memory outlives the C call.
     c_array._np_backing = buf  # type: ignore[attr-defined]
     return c_array, length
@@ -362,26 +367,26 @@ def _profile_value(profile: KeyProfile | str | None) -> int:
     return int(KeyProfile(profile))
 
 
-def _float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+def _float_array_result(out: object, count: int) -> list[float]:
     # Bulk C-side copy via `_from_c_float_array`, then `.tolist()` to honour the
     # documented `list[float]` return contract (callers index/iterate as lists).
-    return _from_c_float_array(out, count).tolist()
+    return cast(list[float], _from_c_float_array(out, count).tolist())
 
 
-def _optional_float_array_result(out: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+def _optional_float_array_result(out: object, count: int) -> list[float]:
     # A null pointer means the array was not computed (e.g. clarity bands in
     # blind mode); represent that as an empty list rather than crashing.
     if not out:
         return []
-    return _from_c_float_array(out, count).tolist()
+    return cast(list[float], _from_c_float_array(out, count).tolist())
 
 
-def _int_array_result(out: ctypes.POINTER(ctypes.c_int), count: int) -> list[int]:
-    return _from_c_int_array(out, count).tolist()
+def _int_array_result(out: object, count: int) -> list[int]:
+    return cast(list[int], _from_c_int_array(out, count).tolist())
 
 
 def _call_float_transform(
-    fn_name: str, values: Sequence[float] | list[float], *args: object
+    fn_name: str, values: Sequence[float] | list[float] | np.ndarray, *args: object
 ) -> list[float]:
     lib = _get_lib()
     c_array, length = _to_c_float_array(values)

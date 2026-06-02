@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from ._runtime import *  # noqa: F403
+import ctypes
+from collections.abc import Sequence
+
+from ._runtime import (
+    _call_float_transform,
+    _check,
+    _float_array_result,
+    _get_lib,
+    _int_array_result,
+    _to_c_float_array,
+    _to_c_int_array,
+)
 
 
 def hz_to_mel(hz: float) -> float:

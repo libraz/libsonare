@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 
@@ -239,7 +240,7 @@ class StreamAnalyzer:
         )
 
 
-def _ptr_to_list(ptr: object, count: int, ctype: type, dtype: object) -> list:
+def _ptr_to_list(ptr: object, count: int, ctype: Any, dtype: object) -> list[Any]:
     """Bulk-copy a C pointer's ``count`` elements into a Python list.
 
     Materializes a fixed-size view at the pointer's address and lets NumPy do
@@ -250,66 +251,71 @@ def _ptr_to_list(ptr: object, count: int, ctype: type, dtype: object) -> list:
     """
     if not ptr or count <= 0:
         return []
-    view = (ctype * count).from_address(ctypes.addressof(ptr.contents))
-    return np.frombuffer(view, dtype=dtype, count=count).tolist()
+    raw_ptr = cast(Any, ptr)
+    view = (ctype * count).from_address(ctypes.addressof(raw_ptr.contents))
+    values = np.frombuffer(memoryview(view), dtype=cast(Any, dtype), count=count)
+    return cast(list[Any], values.tolist())
 
 
-def _floats(ptr: ctypes.POINTER(ctypes.c_float), count: int) -> list[float]:
+def _floats(ptr: object, count: int) -> list[float]:
     if not ptr or count <= 0:
         return []
-    return _from_c_float_array(ptr, count).tolist()
+    return cast(list[float], _from_c_float_array(ptr, count).tolist())
 
 
-def _ints(ptr: ctypes.POINTER(ctypes.c_int32), count: int) -> list[int]:
+def _ints(ptr: object, count: int) -> list[int]:
     if not ptr or count <= 0:
         return []
-    return _from_c_int_array(ptr, count).tolist()
+    return cast(list[int], _from_c_int_array(ptr, count).tolist())
 
 
-def _u8s(ptr: ctypes.POINTER(ctypes.c_uint8), count: int) -> list[int]:
-    return _ptr_to_list(ptr, count, ctypes.c_uint8, np.uint8)
+def _u8s(ptr: object, count: int) -> list[int]:
+    return cast(list[int], _ptr_to_list(ptr, count, ctypes.c_uint8, np.uint8))
 
 
-def _i16s(ptr: ctypes.POINTER(ctypes.c_int16), count: int) -> list[int]:
-    return _ptr_to_list(ptr, count, ctypes.c_int16, np.int16)
+def _i16s(ptr: object, count: int) -> list[int]:
+    return cast(list[int], _ptr_to_list(ptr, count, ctypes.c_int16, np.int16))
 
 
-def _chord_changes(ptr, count: int) -> list[StreamChordChange]:
+def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
     if not ptr or count <= 0:
         return []
+    raw_ptr = cast(Any, ptr)
     return [
         StreamChordChange(
-            root=int(ptr[i].root),
-            quality=int(ptr[i].quality),
-            start_time=float(ptr[i].start_time),
-            confidence=float(ptr[i].confidence),
+            root=int(raw_ptr[i].root),
+            quality=int(raw_ptr[i].quality),
+            start_time=float(raw_ptr[i].start_time),
+            confidence=float(raw_ptr[i].confidence),
         )
         for i in range(count)
     ]
 
 
-def _bar_chords(ptr, count: int) -> list[StreamBarChord]:
+def _bar_chords(ptr: object, count: int) -> list[StreamBarChord]:
     if not ptr or count <= 0:
         return []
+    raw_ptr = cast(Any, ptr)
     return [
         StreamBarChord(
-            bar_index=int(ptr[i].bar_index),
-            root=int(ptr[i].root),
-            quality=int(ptr[i].quality),
-            start_time=float(ptr[i].start_time),
-            confidence=float(ptr[i].confidence),
+            bar_index=int(raw_ptr[i].bar_index),
+            root=int(raw_ptr[i].root),
+            quality=int(raw_ptr[i].quality),
+            start_time=float(raw_ptr[i].start_time),
+            confidence=float(raw_ptr[i].confidence),
         )
         for i in range(count)
     ]
 
 
-def _pattern_scores(ptr, count: int) -> list[StreamPatternScore]:
+def _pattern_scores(ptr: object, count: int) -> list[StreamPatternScore]:
     if not ptr or count <= 0:
         return []
+    raw_ptr = cast(Any, ptr)
     return [
         StreamPatternScore(
-            name=bytes(ptr[i].name).split(b"\0", 1)[0].decode("utf-8"),
-            score=float(ptr[i].score),
+            name=bytes(raw_ptr[i].name).split(b"\0", 1)[0].decode("utf-8"),
+            score=float(raw_ptr[i].score),
         )
         for i in range(count)
     ]
