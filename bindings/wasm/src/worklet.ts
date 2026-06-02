@@ -341,10 +341,17 @@ export interface SonareEngineSyncMetronomeMessage {
   config: EngineMetronomeConfig;
 }
 
+export interface SonareEngineSyncAutomationMessage {
+  type: 'syncAutomation';
+  paramId: number;
+  points: EngineAutomationPoint[];
+}
+
 export type SonareEngineSyncMessage =
   | SonareEngineSyncClipsMessage
   | SonareEngineSyncMarkersMessage
-  | SonareEngineSyncMetronomeMessage;
+  | SonareEngineSyncMetronomeMessage
+  | SonareEngineSyncAutomationMessage;
 
 export interface SonareEngineTelemetryRecord {
   type: SonareEngineTelemetryType | number;
@@ -424,7 +431,10 @@ function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMessage {
     return false;
   }
   return (
-    value.type === 'syncClips' || value.type === 'syncMarkers' || value.type === 'syncMetronome'
+    value.type === 'syncClips' ||
+    value.type === 'syncMarkers' ||
+    value.type === 'syncMetronome' ||
+    value.type === 'syncAutomation'
   );
 }
 
@@ -1302,6 +1312,9 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.metronomeConfig = resolveMetronomeConfig(message.config);
         this.engine.setMetronome(message.config);
         break;
+      case 'syncAutomation':
+        this.engine.setAutomationLane(message.paramId, message.points);
+        break;
     }
   }
 
@@ -1629,6 +1642,10 @@ export class SonareRtRealtimeEngineRuntime {
         break;
       case 'syncClips':
       case 'syncMarkers':
+      case 'syncAutomation':
+        // The sonare-rt C ABI exposes no set_clips / set_markers /
+        // set_automation_lane, so these mutations cannot reach a live sonare-rt
+        // engine. Surface a clear telemetry error rather than silently dropping.
         if (this.telemetryRing) {
           writeSonareEngineTelemetryRingBuffer(this.telemetryRing, {
             type: SonareEngineTelemetryType.Error,
@@ -2217,6 +2234,11 @@ export class SonareEngine {
     lane.sort((a, b) => a.ppq - b.ppq);
     this.automationLanes.set(paramId, lane);
     this.offlineEngine.setAutomationLane(paramId, lane);
+    // Mirror the lane to the live worklet engine so scheduled automation plays
+    // back in real time, not just in renderOffline(). Lanes can exceed the
+    // fixed-size SAB command record, so they ride an out-of-band 'syncAutomation'
+    // message applied outside process() (like syncClips/syncMarkers).
+    this.postSync({ type: 'syncAutomation', paramId, points: lane });
   }
 
   addAutomationPoint(

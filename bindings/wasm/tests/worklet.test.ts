@@ -1645,6 +1645,11 @@ describe('SonareWorkletProcessor', () => {
             expect.objectContaining({ type: SonareEngineCommandType.SetMetronome }),
           ]),
         );
+        // scheduleParam/addAutomationPoint mirror the lane to the live engine via
+        // an out-of-band 'syncAutomation' message (previously offline-only).
+        expect(posted).toEqual(
+          expect.arrayContaining([expect.objectContaining({ type: 'syncAutomation', paramId: 7 })]),
+        );
       } finally {
         engine.destroy();
       }
