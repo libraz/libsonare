@@ -20,8 +20,8 @@ enum class StretchBackend {
 
 /// @brief Configuration for time stretching.
 struct TimeStretchConfig {
-  int n_fft = 2048;      ///< FFT size for analysis
-  int hop_length = 512;  ///< Hop length for analysis
+  int n_fft = 2048;      ///< FFT size for analysis (used by both backends)
+  int hop_length = 512;  ///< Hop length for analysis (used by both backends)
   StretchBackend backend = StretchBackend::NativeSpectral;
 };
 

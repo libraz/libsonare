@@ -21,7 +21,7 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   SONARE_CHECK(ratio > 0.0f, ErrorCode::InvalidParameter);
 
   if (config.backend == StretchBackend::NativeSpectral) {
-    return native_spectral_pitch_shift_ratio(audio, ratio);
+    return native_spectral_pitch_shift_ratio(audio, ratio, config.n_fft, config.hop_length);
   }
 
   /// @details Pitch shifting = time stretch + resample (librosa-compatible:

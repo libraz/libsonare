@@ -11,7 +11,7 @@ Audio time_stretch(const Audio& audio, float rate, const TimeStretchConfig& conf
   SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
 
   if (config.backend == StretchBackend::NativeSpectral) {
-    return native_spectral_time_stretch(audio, rate);
+    return native_spectral_time_stretch(audio, rate, config.n_fft, config.hop_length);
   }
 
   /// Compute STFT

@@ -150,6 +150,37 @@ TEST_CASE("time_stretch native spectral backend preserves sample rate and ratio"
   REQUIRE_THAT(stretched.duration(), WithinRel(audio.duration() / 0.75f, 0.05f));
 }
 
+TEST_CASE("time_stretch native backend honors non-default n_fft", "[time_stretch]") {
+  // Regression: n_fft/hop_length were silently ignored on the NativeSpectral
+  // path. A non-default analysis size must now actually change the output.
+  Audio audio = create_test_audio(440.0f, 22050, 0.5f);
+
+  TimeStretchConfig default_cfg;
+  default_cfg.backend = StretchBackend::NativeSpectral;  // n_fft=2048, hop=512
+
+  TimeStretchConfig custom_cfg;
+  custom_cfg.backend = StretchBackend::NativeSpectral;
+  custom_cfg.n_fft = 1024;
+  custom_cfg.hop_length = 256;
+
+  Audio default_out = time_stretch(audio, 0.8f, default_cfg);
+  Audio custom_out = time_stretch(audio, 0.8f, custom_cfg);
+
+  REQUIRE(!default_out.empty());
+  REQUIRE(!custom_out.empty());
+
+  // The two analysis settings must produce materially different output; if
+  // n_fft were ignored the buffers would be identical.
+  const size_t n = std::min(default_out.size(), custom_out.size());
+  REQUIRE(n > 0);
+  double diff = 0.0;
+  for (size_t i = 0; i < n; ++i) {
+    diff += std::abs(static_cast<double>(default_out.data()[i]) -
+                     static_cast<double>(custom_out.data()[i]));
+  }
+  REQUIRE(diff > 1e-3);
+}
+
 TEST_CASE("time_stretch phase vocoder backend remains available", "[time_stretch]") {
   Audio audio = create_test_audio(440.0f, 22050, 0.5f);
 

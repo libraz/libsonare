@@ -11,13 +11,18 @@
 
 namespace sonare {
 
-Audio native_spectral_time_stretch(const Audio& audio, float rate) {
+Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, int hop_length) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
 
+  // Guard invalid analysis sizes by falling back to the librosa-matching
+  // defaults so a malformed config never produces an empty/degenerate STFT.
+  if (n_fft <= 0) n_fft = constants::kDefaultNFft;
+  if (hop_length <= 0) hop_length = constants::kDefaultHopLength;
+
   StftConfig stft_config;
-  stft_config.n_fft = constants::kDefaultNFft;
-  stft_config.hop_length = constants::kDefaultHopLength;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
   stft_config.window = WindowType::Hann;
   stft_config.center = true;
 
@@ -32,13 +37,14 @@ Audio native_spectral_time_stretch(const Audio& audio, float rate) {
   return stretched.to_audio(output_samples);
 }
 
-Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio) {
+Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio, int n_fft,
+                                        int hop_length) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(ratio > 0.0f, ErrorCode::InvalidParameter);
 
   // Time-stretch longer by 1/ratio (preserves pitch), then resample as if
   // sampled at sr*ratio back to sr: raises pitch by ratio, restores length.
-  Audio stretched = native_spectral_time_stretch(audio, 1.0f / ratio);
+  Audio stretched = native_spectral_time_stretch(audio, 1.0f / ratio, n_fft, hop_length);
 
   int effective_sr = static_cast<int>(std::round(static_cast<float>(audio.sample_rate()) * ratio));
   // Reject ratios whose effective rate falls outside the supported resampler
