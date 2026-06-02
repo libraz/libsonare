@@ -38,11 +38,28 @@ void GainProcessor::set_gain_db(float gain_db) noexcept {
 }
 
 void GainProcessor::set_vca_offset_db(float offset_db) noexcept {
-  vca_offset_db_.store(offset_db, std::memory_order_relaxed);
+  vca_trim_offset_db_.store(offset_db, std::memory_order_relaxed);
+}
+
+void GainProcessor::add_vca_group_offset_db(float delta_db) noexcept {
+  // VCA-group contributions accumulate (a strip may belong to several groups).
+  // Group membership changes are serialized on the control thread, so a plain
+  // load/store read-modify-write is sufficient here.
+  vca_group_offset_db_.store(vca_group_offset_db_.load(std::memory_order_relaxed) + delta_db,
+                             std::memory_order_relaxed);
 }
 
 float GainProcessor::vca_offset_db() const noexcept {
-  return vca_offset_db_.load(std::memory_order_relaxed);
+  return vca_trim_offset_db_.load(std::memory_order_relaxed) +
+         vca_group_offset_db_.load(std::memory_order_relaxed);
+}
+
+float GainProcessor::vca_trim_offset_db() const noexcept {
+  return vca_trim_offset_db_.load(std::memory_order_relaxed);
+}
+
+float GainProcessor::vca_group_offset_db() const noexcept {
+  return vca_group_offset_db_.load(std::memory_order_relaxed);
 }
 
 }  // namespace sonare::mixing

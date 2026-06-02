@@ -1349,6 +1349,32 @@ TEST_CASE("VcaGroup applies relative gain offset to members", "[mixing]") {
   REQUIRE_THAT(second.vca_offset_db(), WithinAbs(-3.0f, 0.0001f));
 }
 
+TEST_CASE("Manual VCA trim and group membership accumulate independently", "[mixing]") {
+  // Regression: a direct set_vca_offset_db() used to overwrite the strip's whole
+  // offset, discarding every VCA group's accumulated contribution. The manual
+  // trim and the group offset must now sum without either stomping the other.
+  sonare::mixing::GainProcessor gain({0.0f, 0.0f});
+
+  sonare::mixing::VcaGroup group_a;
+  sonare::mixing::VcaGroup group_b;
+  group_a.set_vca_gain_db(-3.0f);
+  group_b.set_vca_gain_db(-2.0f);
+  REQUIRE(group_a.add_member(&gain));
+  REQUIRE(group_b.add_member(&gain));
+  REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-5.0f, 0.0001f));  // -3 + -2
+
+  // A direct manual trim adds on top without disturbing the group total.
+  gain.set_vca_offset_db(1.5f);
+  REQUIRE_THAT(gain.vca_trim_offset_db(), WithinAbs(1.5f, 0.0001f));
+  REQUIRE_THAT(gain.vca_group_offset_db(), WithinAbs(-5.0f, 0.0001f));
+  REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-3.5f, 0.0001f));  // 1.5 + (-5)
+
+  // Removing one group only subtracts its own contribution; the manual trim and
+  // the other group remain intact.
+  REQUIRE(group_b.remove_member(&gain));
+  REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-1.5f, 0.0001f));  // 1.5 + (-3)
+}
+
 TEST_CASE("MixerController computes solo implied mute outside audio thread", "[mixing]") {
   sonare::mixing::ChannelStrip vocal;
   sonare::mixing::ChannelStrip drums;

@@ -928,7 +928,7 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
   for (const auto& member : group.members) {
     for (const auto& strip : mixer->strips) {
       if (strip->id == member) {
-        strip->strip.set_vca_offset_db(strip->strip.vca_offset_db() + gain_db);
+        strip->strip.add_vca_group_offset_db(gain_db);
         break;
       }
     }
@@ -956,7 +956,7 @@ SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
   for (const auto& member : it->members) {
     for (const auto& strip : mixer->strips) {
       if (strip->id == member) {
-        strip->strip.set_vca_offset_db(strip->strip.vca_offset_db() - it->gain_db);
+        strip->strip.add_vca_group_offset_db(-it->gain_db);
         break;
       }
     }
@@ -1170,15 +1170,14 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
     // VCA group offsets (control-only). A strip may belong to several VCA
     // groups, so each group's gain accumulates additively onto the strip's
-    // single offset, matching the runtime VcaGroup delta semantics (summing in
-    // the dB domain is equivalent to multiplying the linear VCA gains). Strip
-    // offsets start at 0 after add_strip, so a plain += yields the sum of all
-    // groups touching a member.
+    // VCA-group offset, matching the runtime VcaGroup delta semantics (summing
+    // in the dB domain is equivalent to multiplying the linear VCA gains). The
+    // group offset is independent of any manual trim a loaded strip carries.
     for (const auto& group : scene.vca_groups) {
       for (const auto& member : group.members) {
         for (const auto& strip : mixer->strips) {
           if (strip->id == member) {
-            strip->strip.set_vca_offset_db(strip->strip.vca_offset_db() + group.gain_db);
+            strip->strip.add_vca_group_offset_db(group.gain_db);
             break;
           }
         }
