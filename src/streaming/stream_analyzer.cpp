@@ -48,6 +48,18 @@ static_assert(static_cast<int>(ChordQuality::Sus2Add4) < kNumChordQualities,
               "bump it in stream_analyzer.h when adding a new quality");
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
+  /// Clamp loop/sizing parameters that the C-ABI validates but that direct
+  /// C++/Node/WASM construction can pass through unchecked. A
+  /// magnitude_downsample of 0 would integer-divide n_bins() by zero when
+  /// sizing the per-frame magnitude vector; a non-positive hop_length would
+  /// stall the frame loop (the read position never advances) so the analyzer
+  /// would emit nothing forever; emit_every_n_frames <= 0 likewise breaks the
+  /// emission throttle. Clamp each to its minimum sane value, mirroring the
+  /// C-ABI guards, so these constructors are safe regardless of binding layer.
+  config_.hop_length = std::max(config_.hop_length, 1);
+  config_.emit_every_n_frames = std::max(config_.emit_every_n_frames, 1);
+  config_.magnitude_downsample = std::max(config_.magnitude_downsample, 1);
+
   /// Onset strength (and therefore progressive BPM) is derived from the
   /// frame-to-frame difference of the log-mel spectrum (see compute_onset()).
   /// If a caller requests onset/BPM but disables the mel path, onset would be

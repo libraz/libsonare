@@ -288,6 +288,33 @@ TEST_CASE("StreamAnalyzer emit_every_n_frames", "[streaming]") {
   REQUIRE(frames.size() > 20);
 }
 
+TEST_CASE("StreamAnalyzer clamps degenerate sizing params", "[streaming][edge]") {
+  // The C-ABI rejects these, but Node/WASM construct StreamAnalyzer directly.
+  // magnitude_downsample == 0 would integer-divide n_bins() by zero when sizing
+  // the per-frame magnitude vector; a non-positive hop_length would stall the
+  // frame loop; emit_every_n_frames <= 0 breaks the emission throttle. The
+  // constructor must clamp each to >= 1 and remain crash-free.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 0;
+  config.emit_every_n_frames = 0;
+  config.magnitude_downsample = 0;
+
+  StreamAnalyzer analyzer(config);
+  REQUIRE(analyzer.config().hop_length >= 1);
+  REQUIRE(analyzer.config().emit_every_n_frames >= 1);
+  REQUIRE(analyzer.config().magnitude_downsample >= 1);
+
+  // Processing must not crash and the magnitude vector must be fully populated
+  // (full n_bins, since downsample clamped to 1).
+  std::vector<float> audio = generate_sine(22050, 440.0f, 22050);
+  analyzer.process(audio.data(), audio.size());
+  auto frames = analyzer.read_frames(4);
+  REQUIRE_FALSE(frames.empty());
+  REQUIRE(frames[0].magnitude.size() == static_cast<size_t>(config.n_bins()));
+}
+
 TEST_CASE("StreamAnalyzer SOA read", "[streaming]") {
   StreamConfig config;
   config.sample_rate = 22050;
