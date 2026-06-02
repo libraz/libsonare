@@ -27,12 +27,18 @@ const SR = 22050;
 function sine(durationSec: number, freqHz: number): Float32Array {
   const n = Math.floor(SR * durationSec);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = 0.5 * Math.sin((2 * Math.PI * freqHz * i) / SR);
+  for (let i = 0; i < n; i++) {
+    out[i] = 0.5 * Math.sin((2 * Math.PI * freqHz * i) / SR);
+  }
   return out;
 }
 
 function allFinite(arr: ArrayLike<number>): boolean {
-  for (let i = 0; i < arr.length; i++) if (!Number.isFinite(arr[i])) return false;
+  for (let i = 0; i < arr.length; i++) {
+    if (!Number.isFinite(arr[i])) {
+      return false;
+    }
+  }
   return arr.length > 0;
 }
 
@@ -77,7 +83,9 @@ describe('newly exposed Node functions', () => {
     const nT = 24;
     const nC = 3;
     const s = new Float32Array(nF * nT);
-    for (let i = 0; i < s.length; i++) s[i] = Math.abs(Math.sin(i));
+    for (let i = 0; i < s.length; i++) {
+      s[i] = Math.abs(Math.sin(i));
+    }
     const r = decompose(s, nF, nT, nC, 20, 2.0);
     expect(r.w.data.length).toBe(nF * nC);
     expect(r.h.data.length).toBe(nC * nT);
@@ -88,7 +96,9 @@ describe('newly exposed Node functions', () => {
     const nF = 12;
     const nT = 20;
     const s = new Float32Array(nF * nT);
-    for (let i = 0; i < s.length; i++) s[i] = Math.abs(Math.cos(i));
+    for (let i = 0; i < s.length; i++) {
+      s[i] = Math.abs(Math.cos(i));
+    }
     const r = nnFilter(s, nF, nT);
     expect(r.rows).toBe(nF);
     expect(r.cols).toBe(nT);
