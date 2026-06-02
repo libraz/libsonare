@@ -1145,28 +1145,51 @@ export function voiceChange(
   return addon.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
 }
 
+export interface VoiceChangeRealtimeOptions extends ValidateOptions {
+  /** Channel count: 1 = mono, 2 = interleaved stereo (L0,R0,L1,R1,...). */
+  channels?: 1 | 2;
+}
+
 export function voiceChangeRealtime(
   samples: Float32Array,
   sampleRate = 48000,
   preset: RealtimeVoiceChangerConfigInput = 'neutral-monitor',
-  options: ValidateOptions = {},
+  options: VoiceChangeRealtimeOptions = {},
 ): Float32Array {
   const validate = options.validate !== false;
   assertSamples('voiceChangeRealtime', samples, validate);
+  const channels = options.channels ?? 1;
+  if (channels !== 1 && channels !== 2) {
+    throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
+  }
   const block = 512;
   const changer = new RealtimeVoiceChanger({
     sampleRate,
     maxBlockSize: block,
-    channels: 1,
+    channels,
     preset,
   });
   const output = new Float32Array(samples.length);
-  for (let pos = 0; pos < samples.length; pos += block) {
-    const inputBlock = samples.subarray(pos, Math.min(samples.length, pos + block));
-    const outputBlock = output.subarray(pos, pos + inputBlock.length);
-    changer.processMonoInto(inputBlock, outputBlock);
+  try {
+    if (channels === 1) {
+      for (let pos = 0; pos < samples.length; pos += block) {
+        const inputBlock = samples.subarray(pos, Math.min(samples.length, pos + block));
+        const outputBlock = output.subarray(pos, pos + inputBlock.length);
+        changer.processMonoInto(inputBlock, outputBlock);
+      }
+    } else {
+      // Interleaved stereo: each block carries `block` frames = block*2 samples,
+      // mirroring the WASM voiceChangeRealtime stereo path.
+      const frameStride = block * 2;
+      for (let pos = 0; pos < samples.length; pos += frameStride) {
+        const inputBlock = samples.subarray(pos, Math.min(samples.length, pos + frameStride));
+        const outputBlock = output.subarray(pos, pos + inputBlock.length);
+        changer.processInterleavedInto(inputBlock, 2, outputBlock);
+      }
+    }
+  } finally {
+    changer.destroy();
   }
-  changer.destroy();
   return output;
 }
 
@@ -1197,7 +1220,16 @@ const VOICE_PRESET_ORDINALS: Record<VoicePresetId, number> = {
 };
 
 function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
-  return typeof preset === 'number' ? preset : VOICE_PRESET_ORDINALS[preset];
+  if (typeof preset === 'number') {
+    return preset;
+  }
+  const ordinal = VOICE_PRESET_ORDINALS[preset];
+  if (ordinal === undefined) {
+    // Mirror the WASM/Python bindings: an unknown preset name is an error, not
+    // a silent `undefined` ordinal that would corrupt the native call.
+    throw new Error(`Unknown voice character preset: ${preset}`);
+  }
+  return ordinal;
 }
 
 /**

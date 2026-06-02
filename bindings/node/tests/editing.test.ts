@@ -9,6 +9,7 @@ import {
   validateRealtimeVoiceChangerPresetJson,
   voiceChange,
   voiceChangeRealtime,
+  voiceCharacterPresetId,
 } from '../src/index.js';
 
 const SR = 22050;
@@ -63,11 +64,30 @@ describe('editing effects', () => {
     const offline = voiceChangeRealtime(tone.subarray(0, 512), SR, 'soft-whisper');
     expect(offline).toBeInstanceOf(Float32Array);
     expect(offline.length).toBe(512);
+
+    // Interleaved stereo path (mirrors the WASM voiceChangeRealtime channels
+    // option): a 512-frame stereo buffer is 1024 interleaved samples.
+    const stereoIn = new Float32Array(1024);
+    for (let i = 0; i < 512; i++) {
+      stereoIn[i * 2] = tone[i] ?? 0;
+      stereoIn[i * 2 + 1] = tone[i] ?? 0;
+    }
+    const stereoOut = voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 2 });
+    expect(stereoOut.length).toBe(1024);
+    expect(() =>
+      voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 3 as unknown as 2 }),
+    ).toThrow(/channels must be 1 or 2/);
     expect(realtimeVoiceChangerPresetNames()).toContain('robot-mascot');
     const presetJson = realtimeVoiceChangerPresetJson('bright-idol');
     expect(presetJson).toContain('bright-idol');
     expect(validateRealtimeVoiceChangerPresetJson(presetJson).ok).toBe(true);
     expect(validateRealtimeVoiceChangerPresetJson('{}').ok).toBe(false);
+
+    // Unknown preset name throws (mirrors WASM/Python) rather than passing an
+    // undefined ordinal to the native call.
+    expect(() => voiceCharacterPresetId('not-a-preset' as never)).toThrow(
+      /Unknown voice character preset/,
+    );
   });
 
   it('exposes editing methods on the Audio class', () => {
