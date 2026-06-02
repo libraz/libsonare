@@ -5,6 +5,8 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+import numpy as np
+
 from ._runtime import (
     AutomationCurve,
     AutomationPoint,
@@ -45,8 +47,10 @@ from ._runtime import (
     SonareMeterTelemetryRecord,
     SonareParameterInfo,
     SonareTransportState,
+    TimeSignature,
     TransportState,
     _check,
+    _from_c_float_array,
     _get_lib,
 )
 
@@ -387,7 +391,9 @@ class RealtimeEngine:
                 self._require_handle(), ptrs, len(arrays), int(frame_count)
             )
         )
-        return [[float(array[i]) for i in range(frame_count)] for array in arrays]
+        return [
+            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
+        ]
 
     def process_with_monitor(
         self, channels: Sequence[Sequence[float]]
@@ -402,8 +408,13 @@ class RealtimeEngine:
                 self._require_handle(), ptrs, monitor_ptrs, len(arrays), int(frame_count)
             )
         )
-        output = [[float(array[i]) for i in range(frame_count)] for array in arrays]
-        monitor = [[float(array[i]) for i in range(frame_count)] for array in monitor_arrays]
+        output = [
+            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
+        ]
+        monitor = [
+            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist()
+            for array in monitor_arrays
+        ]
         return output, monitor
 
     def render_offline(
@@ -415,7 +426,9 @@ class RealtimeEngine:
                 self._require_handle(), ptrs, len(arrays), int(frame_count), int(block_size)
             )
         )
-        return [[float(array[i]) for i in range(frame_count)] for array in arrays]
+        return [
+            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
+        ]
 
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
         raw_options = SonareEngineBounceOptions()
@@ -437,7 +450,9 @@ class RealtimeEngine:
             )
         )
         try:
-            interleaved = [float(raw_result.interleaved[i]) for i in range(raw_result.sample_count)]
+            interleaved = _from_c_float_array(
+                raw_result.interleaved, int(raw_result.sample_count)
+            ).tolist()
         finally:
             if raw_result.interleaved:
                 lib.sonare_free_bounce_result(ctypes.byref(raw_result))
@@ -540,6 +555,13 @@ class RealtimeEngine:
             loop_start_ppq=float(raw.loop_start_ppq),
             loop_end_ppq=float(raw.loop_end_ppq),
             sample_rate=float(raw.sample_rate),
+            bar_start_ppq=float(raw.bar_start_ppq),
+            bar_count=int(raw.bar_count),
+            time_signature=TimeSignature(
+                numerator=int(raw.time_signature.numerator),
+                denominator=int(raw.time_signature.denominator),
+                confidence=float(raw.time_signature.confidence),
+            ),
         )
 
     @staticmethod

@@ -104,6 +104,11 @@ class SonareTransportState(ctypes.Structure):
         ("loop_start_ppq", ctypes.c_double),
         ("loop_end_ppq", ctypes.c_double),
         ("sample_rate", ctypes.c_double),
+        # Musical position derived from the tempo map (computed every block).
+        # Appended after the original fields to preserve struct layout.
+        ("bar_start_ppq", ctypes.c_double),
+        ("bar_count", ctypes.c_int64),
+        ("time_signature", SonareTimeSignature),
     ]
 
 
@@ -687,8 +692,8 @@ SONARE_VC_PRESET_DARK_VILLAIN = 5
 class SonareRealtimeVoiceChangerConfig(ctypes.Structure):
     """Flat POD mirror of editing::voice_changer::RealtimeVoiceChangerConfig.
 
-    Layout matches sonare_c.h exactly: 32 float fields + 2 int fields, no
-    padding. ``sizeof`` must equal ``34 * sizeof(c_float)``.
+    Layout matches sonare_c.h exactly: 33 float fields + 3 int fields, no
+    padding. ``sizeof`` must equal ``36 * sizeof(c_float)`` (ABI version 2).
     """
 
     _fields_ = [
@@ -726,6 +731,9 @@ class SonareRealtimeVoiceChangerConfig(ctypes.Structure):
         ("reverb_seed", ctypes.c_int),
         ("limiter_ceiling_db", ctypes.c_float),
         ("limiter_release_ms", ctypes.c_float),
+        # Appended in ABI version 2 (must stay at the END to match the C layout).
+        ("limiter_enable_isp_limiter", ctypes.c_int),
+        ("limiter_isp_ceiling_dbtp", ctypes.c_float),
     ]
 
 

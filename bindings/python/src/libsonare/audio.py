@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from ._ffi import SONARE_OK, load_library
+from ._runtime import _to_c_float_array
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -236,8 +237,10 @@ class Audio:
             sample_rate: Sample rate in Hz (default 22050).
         """
         lib = _get_lib()
-        length = len(data)
-        c_array = (ctypes.c_float * length)(*data)
+        # Use the shared numpy fast path (zero-copy for contiguous float32
+        # ndarrays, one bulk C-level copy otherwise) instead of the slow
+        # per-element `(c_float * N)(*data)` marshalling.
+        c_array, length = _to_c_float_array(data)
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_buffer(
             c_array,

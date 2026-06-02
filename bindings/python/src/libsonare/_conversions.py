@@ -635,7 +635,8 @@ def resample(
         ctypes.byref(out_length),
     )
     _check(rc)
-    result = [float(out[i]) for i in range(out_length.value)]
-    if out and out_length.value > 0:
-        lib.sonare_free_floats(out)
-    return result
+    try:
+        return [float(out[i]) for i in range(out_length.value)]
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)

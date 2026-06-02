@@ -88,10 +88,23 @@ def _as_float32_buffer(samples: object) -> np.ndarray:
     float32 input, ``np.asarray`` for lists/tuples/array.array).
     """
     if isinstance(samples, np.ndarray):
-        if samples.dtype == np.float32 and samples.flags["C_CONTIGUOUS"] and samples.ndim == 1:
+        if (
+            samples.dtype == np.float32
+            and samples.flags["C_CONTIGUOUS"]
+            and samples.flags["WRITEABLE"]
+            and samples.ndim == 1
+        ):
             return samples
-        # Cast / flatten / make contiguous in a single pass.
-        return np.ascontiguousarray(samples, dtype=np.float32).reshape(-1)
+        # Read-only float32 arrays (e.g. from ``np.frombuffer``, mmap, or
+        # ``setflags(write=False)``) are harmless to the C library (samples are
+        # taken as ``const``) but ``ctypes.from_buffer`` requires a *writable*
+        # buffer. ``np.ascontiguousarray`` returns a read-only array unchanged,
+        # so force a fresh writable copy in that case; otherwise take the cheap
+        # single-pass cast/flatten path.
+        buf = np.ascontiguousarray(samples, dtype=np.float32).reshape(-1)
+        if not buf.flags["WRITEABLE"]:
+            buf = np.array(buf, dtype=np.float32, copy=True, order="C").reshape(-1)
+        return buf
     # list / tuple / array.array / generator → bulk-convert via NumPy's
     # vectorised C path (orders of magnitude faster than `(c_float*N)(*seq)`).
     return np.ascontiguousarray(np.asarray(samples, dtype=np.float32)).reshape(-1)

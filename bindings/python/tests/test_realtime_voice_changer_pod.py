@@ -24,8 +24,8 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 
 def test_pod_struct_size_matches_c_abi() -> None:
-    """sonare_c.h pins ``sizeof(SonareRealtimeVoiceChangerConfig) == 34 * sizeof(float)``."""
-    assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 34 * ctypes.sizeof(ctypes.c_float)
+    """sonare_c.h pins sizeof == 36 * sizeof(float) (ABI v2)."""
+    assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 36 * ctypes.sizeof(ctypes.c_float)
 
 
 def test_pod_dataclass_has_one_field_per_pod_field() -> None:
@@ -97,6 +97,8 @@ def test_set_config_pod_round_trips_through_get_config() -> None:
         cfg.wet_mix = 0.7
         cfg.compressor_ratio = 4.0
         cfg.limiter_release_ms = 80.0
+        cfg.limiter_enable_isp_limiter = 0
+        cfg.limiter_isp_ceiling_dbtp = -2.5
         changer.set_config_pod(cfg)
         round_tripped = changer.config_pod()
         assert round_tripped.input_gain_db == pytest.approx(-3.5, abs=1e-6)
@@ -104,6 +106,8 @@ def test_set_config_pod_round_trips_through_get_config() -> None:
         assert round_tripped.wet_mix == pytest.approx(0.7, abs=1e-6)
         assert round_tripped.compressor_ratio == pytest.approx(4.0, abs=1e-6)
         assert round_tripped.limiter_release_ms == pytest.approx(80.0, abs=1e-6)
+        assert round_tripped.limiter_enable_isp_limiter == 0
+        assert round_tripped.limiter_isp_ceiling_dbtp == pytest.approx(-2.5, abs=1e-6)
     finally:
         changer.close()
 

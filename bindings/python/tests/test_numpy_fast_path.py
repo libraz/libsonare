@@ -58,6 +58,30 @@ def test_to_c_float_array_zero_copy_for_float32_ndarray() -> None:
     assert arr[0] == 99.0
 
 
+def test_to_c_float_array_accepts_read_only_float32_ndarray() -> None:
+    """Read-only float32 input (np.frombuffer / mmap / WRITEABLE=False) must be
+    accepted rather than raising ``TypeError: underlying buffer is not writable``.
+    The C side takes samples as const, so a read-only buffer is harmless; the
+    fast path must fall back to a writable copy instead of crashing."""
+    ro = np.frombuffer(np.arange(8, dtype=np.float32).tobytes(), dtype=np.float32)
+    assert not ro.flags["WRITEABLE"]
+    c_array, length = _to_c_float_array(ro)
+    assert length == 8
+    assert list(c_array)[:3] == [0.0, 1.0, 2.0]
+
+
+def test_samples_api_accepts_read_only_ndarray() -> None:
+    """End-to-end: a samples-accepting public API must accept a read-only array
+    instead of raising ``TypeError: underlying buffer is not writable``."""
+    ro = np.ascontiguousarray(_sine(2048))
+    ro.setflags(write=False)
+    # Must not raise on the read-only input (the regression). rms_energy returns
+    # a per-frame sequence; just assert it produced finite values.
+    result = np.asarray(libsonare.rms_energy(ro), dtype=np.float64)
+    assert result.size > 0
+    assert np.all(np.isfinite(result))
+
+
 def test_to_c_float_array_accepts_list_input() -> None:
     """Plain ``list[float]`` input must still work (back-compat path)."""
     c_array, length = _to_c_float_array([0.0, 0.25, -0.5, 0.75])

@@ -998,6 +998,10 @@ class TransportState:
     loop_start_ppq: float
     loop_end_ppq: float
     sample_rate: float
+    # Musical position derived from the tempo map (computed every block).
+    bar_start_ppq: float
+    bar_count: int
+    time_signature: TimeSignature
 
 
 @dataclass(frozen=True, slots=True)

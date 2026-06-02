@@ -844,7 +844,7 @@ def voice_character_preset_id(preset: int) -> str | None:
 
 @dataclasses.dataclass
 class RealtimeVoiceChangerConfig:
-    """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig` (34 fields).
+    """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig` (36 fields).
 
     Field order matches the C POD struct in ``sonare_c.h``. Values are
     normalised on the C side after :func:`RealtimeVoiceChanger.set_config_pod`,
@@ -885,6 +885,9 @@ class RealtimeVoiceChangerConfig:
     reverb_seed: int = 0
     limiter_ceiling_db: float = 0.0
     limiter_release_ms: float = 50.0
+    # Appended in ABI version 2 (kept at the END to match the C POD layout).
+    limiter_enable_isp_limiter: int = 1
+    limiter_isp_ceiling_dbtp: float = -1.0
 
     @classmethod
     def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:
