@@ -51,7 +51,7 @@ clean:
 rebuild: clean build
 
 format:
-	find src tests bindings/node/src bindings/node/tests \( -name '*.cpp' -o -name '*.h' \) | xargs clang-format -i
+	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | xargs -0 clang-format -i
 	cd bindings/wasm && yarn format
 	cd bindings/node && yarn format
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
