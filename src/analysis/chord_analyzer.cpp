@@ -552,7 +552,24 @@ void ChordAnalyzer::merge_short_segments() {
   for (size_t i = 0; i < chords_.size(); ++i) {
     const Chord& chord = chords_[i];
 
-    if (chord.duration() < config_.min_duration && !merged.empty()) {
+    const bool short_chord = chord.duration() < config_.min_duration;
+    const bool is_last = i + 1 == chords_.size();
+    const bool same_as_prev = !merged.empty() && merged.back().root == chord.root &&
+                              merged.back().quality == chord.quality &&
+                              merged.back().bass == chord.bass;
+
+    if (short_chord && !merged.empty() && is_last && !same_as_prev) {
+      // A short but distinct FINAL chord (e.g. a quick ending tonic) must keep
+      // its own identity: absorbing it into the previous chord's time range
+      // would silently drop the last chord of the progression. Interior short
+      // segments still merge below (they have a following segment to recover).
+      Chord retained = chord;
+      if (pending_start >= 0.0f) {
+        retained.start = pending_start;
+        pending_start = -1.0f;
+      }
+      merged.push_back(retained);
+    } else if (chord.duration() < config_.min_duration && !merged.empty()) {
       // Merge with previous chord
       merged.back().end = chord.end;
     } else if (chord.duration() < config_.min_duration && i + 1 < chords_.size()) {

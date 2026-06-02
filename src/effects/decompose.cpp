@@ -282,7 +282,15 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
         for (size_t q = 0; q < selectors.size(); ++q) vals[q] = S[f * n_frames + selectors[q]];
         const auto mid = vals.begin() + vals.size() / 2;
         std::nth_element(vals.begin(), mid, vals.end());
-        out[f * n_frames + t] = *mid;
+        float median = *mid;
+        // numpy.median (used by librosa.decompose.nn_filter for aggregate=median)
+        // averages the two central elements for an even count; nth_element alone
+        // returns only the upper one.
+        if ((vals.size() % 2) == 0) {
+          const float lower = *std::max_element(vals.begin(), mid);
+          median = 0.5f * (lower + median);
+        }
+        out[f * n_frames + t] = median;
       }
     } else if (aggregate == "min") {
       for (int f = 0; f < n_features; ++f) {

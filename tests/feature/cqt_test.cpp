@@ -3,9 +3,12 @@
 
 #include "feature/cqt.h"
 
+#include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <iterator>
 #include <vector>
 
 #include "util/constants.h"
@@ -242,6 +245,32 @@ TEST_CASE("cqt_to_chroma", "[cqt]") {
     REQUIRE(val >= 0.0f);
     REQUIRE(val <= 1.0f + 1e-6f);
   }
+}
+
+TEST_CASE("cqt_to_chroma honours a non-C-aligned fmin", "[cqt]") {
+  // fmin = A0 (27.5 Hz) means CQT bin 0 is pitch class A, not C. A 440 Hz tone
+  // (A4) must still fold to chroma class A (9); the old `k % n_chroma` fold
+  // ignored fmin and would have reported class 0 (C).
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  CqtConfig config;
+  config.fmin = 27.5f;  // A0
+  config.n_bins = 60;   // 5 octaves @ 12 bpo
+
+  CqtResult result = cqt(audio, config);
+  auto chroma = cqt_to_chroma(result, 12);
+  const int n_frames = result.n_frames();
+  REQUIRE(n_frames > 0);
+
+  // Sum energy per chroma class across frames and find the dominant class.
+  std::array<double, 12> energy{};
+  for (int c = 0; c < 12; ++c) {
+    for (int t = 0; t < n_frames; ++t) {
+      energy[static_cast<size_t>(c)] += chroma[static_cast<size_t>(c) * n_frames + t];
+    }
+  }
+  const auto peak = std::max_element(energy.begin(), energy.end());
+  REQUIRE(std::distance(energy.begin(), peak) == 9);  // A
 }
 
 TEST_CASE("cqt with progress callback", "[cqt]") {

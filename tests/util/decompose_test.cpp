@@ -3,6 +3,7 @@
 
 #include "effects/decompose.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
@@ -35,4 +36,15 @@ TEST_CASE("nn_filter median aggregator", "[util][decompose]") {
   };
   auto out = nn_filter(S.data(), 2, 4, "median", 2, 1);
   REQUIRE(out.size() == 8);
+}
+
+TEST_CASE("nn_filter median averages the two central values for an even count",
+          "[util][decompose]") {
+  // 1 feature, 5 frames, all parallel so cosine similarity is uniform; with
+  // width=1 and k=2, column 2 selects the two lowest-index neighbours {0, 1}.
+  // numpy.median of two values is their mean (15), not the upper one (20).
+  std::vector<float> S{10.0f, 20.0f, 1.0f, 1.0f, 1.0f};
+  auto out = nn_filter(S.data(), /*n_features=*/1, /*n_frames=*/5, "median", /*k=*/2, /*width=*/1);
+  REQUIRE(out.size() == 5);
+  REQUIRE(out[2] == Catch::Approx(15.0f));
 }

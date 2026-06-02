@@ -233,8 +233,12 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     delay_r2_.advance();
 
     // Output taps (read after writes/advance so offsets address valid history).
+    // The 1913-sample tap reads from the delay line following the left decay
+    // diffuser (delay_l2_, length 3720), per the canonical Dattorro topology.
+    // It must NOT read decay_ap_l_ (length 1800): 1913 > 1800 would wrap the
+    // allpass ring and return the wrong node (sample 113).
     const float out_l = delay_l1_.read_at(tap_l_l1a_) + delay_l1_.read_at(tap_l_l1b_) -
-                        decay_ap_l_.read_at(tap_l_apl_) + delay_l2_.read_at(tap_l_l2_) -
+                        delay_l2_.read_at(tap_l_apl_) + delay_l2_.read_at(tap_l_l2_) -
                         delay_r1_.read_at(tap_l_r1_) - decay_ap_r_.read_at(tap_l_apr_) -
                         delay_r2_.read_at(tap_l_r2_);
     const float out_r = delay_r1_.read_at(tap_r_r1a_) + delay_r1_.read_at(tap_r_r1b_) -

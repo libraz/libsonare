@@ -5,6 +5,7 @@
 #include <cmath>
 #include <memory>
 
+#include "core/convert.h"
 #include "core/fft.h"
 #include "core/spectrum.h"
 #include "filters/wavelet.h"
@@ -689,10 +690,27 @@ std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
 
   const auto& mag = cqt_result.magnitude();
 
+  // Derive bins-per-octave from the bin spacing and the pitch class of the
+  // lowest bin from its frequency, so the fold is correct when
+  // bins_per_octave != n_chroma and when fmin is not pitch class 0 (C). A plain
+  // `k % n_chroma` only happens to be right for the 12-bpo, C-aligned case.
+  const auto& freqs = cqt_result.frequencies();
+  int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
+  if (freqs.size() >= 2 && freqs[0] > 0.0f && freqs[1] > freqs[0]) {
+    const float ratio = freqs[1] / freqs[0];
+    bins_per_octave = std::max(1, static_cast<int>(std::lround(1.0f / std::log2(ratio))));
+  }
+  int fmin_pitch_class = 0;
+  if (!freqs.empty() && freqs[0] > 0.0f) {
+    fmin_pitch_class =
+        ((static_cast<int>(std::lround(hz_to_midi(freqs[0]))) % n_chroma) + n_chroma) % n_chroma;
+  }
+
   // Map CQT bins to chroma bins
   for (int t = 0; t < n_frames; ++t) {
     for (int k = 0; k < n_bins; ++k) {
-      int chroma_bin = k % n_chroma;
+      const int within_octave = (k % bins_per_octave) * n_chroma / bins_per_octave;
+      const int chroma_bin = ((within_octave + fmin_pitch_class) % n_chroma + n_chroma) % n_chroma;
       chroma[chroma_bin * n_frames + t] += mag[k * n_frames + t];
     }
   }
