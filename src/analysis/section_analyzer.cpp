@@ -207,6 +207,11 @@ float SectionAnalyzer::compute_section_energy(float start, float end) const {
   end_frame = std::min(static_cast<int>(energy_curve_.size()), end_frame);
 
   if (start_frame >= end_frame) {
+    // A sub-frame (but non-empty) section truncates both bounds to the same
+    // frame; report that frame's energy instead of collapsing to 0.
+    if (start < end && start_frame < static_cast<int>(energy_curve_.size())) {
+      return energy_curve_[static_cast<size_t>(start_frame)];
+    }
     return 0.0f;
   }
 

@@ -194,6 +194,12 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       best_numerator = score_3 > score_4 ? 3 : 4;
       denominator = config_.denominator;
       confidence = std::max(0.0f, confidence - 0.15f);
+    } else {
+      // Only {6} is a candidate and the compound evidence is weak: we cannot
+      // distinguish a compound 6/8 from a simple meter, so keep the reported
+      // signature but lower confidence to reflect the unresolved ambiguity
+      // rather than emitting it as if it were well-supported.
+      confidence = std::max(0.0f, confidence - 0.15f);
     }
   } else if (best_numerator == 3 && compound_score >= config_.compound_subdivision_threshold) {
     best_numerator = 6;

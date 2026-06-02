@@ -117,9 +117,16 @@ void OnsetAnalyzer::detect_onsets() {
 }
 
 void OnsetAnalyzer::backtrack_onsets() {
+  if (onset_strength_.empty()) {
+    return;
+  }
+  const int last_frame = static_cast<int>(onset_strength_.size()) - 1;
   for (auto& onset : onsets_) {
     int frame =
         static_cast<int>(onset.time * static_cast<float>(sr_) / static_cast<float>(hop_length_));
+    // Clamp the derived frame into range: rounding at the final onset can push it
+    // to (or past) onset_strength_.size(), which would read out of bounds.
+    frame = std::clamp(frame, 0, last_frame);
 
     // Find local minimum before onset
     int best_frame = frame;
