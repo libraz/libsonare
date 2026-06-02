@@ -53,11 +53,14 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
                                           int sample_rate, const SonareMasteringParam* params,
                                           size_t param_count,
                                           SonareMasteringChainStereoResult* out) {
-  if (!out || !left || !right || sample_rate <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Match the mono paths: reject non-finite samples and out-of-range
+  // sample_rate/length, not just null pointers.
+  SonareError verr = validate_audio_params(left, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  verr = validate_audio_params(right, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (length == 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->left = nullptr;
   out->right = nullptr;
@@ -150,11 +153,14 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
                                                         SonareMasteringProgressCallback callback,
                                                         void* user_data,
                                                         SonareMasteringChainStereoResult* out) {
-  if (!out || !left || !right || sample_rate <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Match the mono paths: reject non-finite samples and out-of-range
+  // sample_rate/length, not just null pointers.
+  SonareError verr = validate_audio_params(left, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  verr = validate_audio_params(right, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (length == 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->left = nullptr;
   out->right = nullptr;

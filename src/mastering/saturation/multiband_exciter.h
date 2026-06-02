@@ -26,6 +26,10 @@ class MultibandExciter : public rt::ProcessorBase {
   void set_config(const MultibandExciterConfig& config);
   const MultibandExciterConfig& config() const { return config_; }
 
+  /// Reports the crossover delay (non-zero for FIR linear-phase mode) so the
+  /// host can compensate, matching the other multiband processors.
+  int latency_samples() const noexcept override { return crossover_.latency_samples(); }
+
   // Automatable parameters (RT-safe, no allocation, no state reset). Each id is
   // forwarded to every band's Exciter::set_parameter, which updates its config
   // and recomputes any biquad coefficients in place:

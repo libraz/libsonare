@@ -1491,7 +1491,9 @@ export function voiceChangeRealtime(
   if (channels !== 1 && channels !== 2) {
     throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
   }
-  const sampleRate = options.sampleRate ?? 22050;
+  // 48000 matches the Python voice_change_realtime and Node voiceChangeRealtime
+  // convenience wrappers (and the RealtimeVoiceChanger default).
+  const sampleRate = options.sampleRate ?? 48000;
   const blockSize = Math.max(1, Math.floor(options.blockSize ?? 512));
   const changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
   try {

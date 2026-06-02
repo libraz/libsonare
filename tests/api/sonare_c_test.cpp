@@ -1061,6 +1061,26 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_mastering_stereo_result(&linear_eq);
   }
 
+  SECTION("stereo chain rejects non-finite samples like the mono path") {
+    auto samples = generate_sine(440.0f, 22050, 0.3f);
+    SonareMasteringParam params[] = {{"thresholdDb", -24.0}};
+    SonareMasteringChainStereoResult bad{};
+    auto nan_samples = samples;
+    nan_samples[10] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_mastering_chain_stereo(nan_samples.data(), samples.data(), samples.size(), 22050,
+                                          params, 1, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_chain_stereo(samples.data(), nan_samples.data(), samples.size(), 22050,
+                                          params, 1, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    // Out-of-range sample rate is rejected too.
+    REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), 0, params,
+                                          1, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+
+    SonareMasteringChainStereoResult ok{};
+    REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), 22050,
+                                          nullptr, 0, &ok) == SONARE_OK);
+    sonare_free_mastering_chain_stereo_result(&ok);
+  }
+
   SECTION("named processor validation includes processor and parameter name") {
     auto samples = generate_sine(440.0f, 22050, 0.5f);
     SonareMasteringParam params[] = {{"width", 3.5}};

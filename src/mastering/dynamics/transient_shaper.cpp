@@ -43,8 +43,8 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   fast_followers_.assign(channel_count, {});
   slow_followers_.assign(channel_count, {});
   gain_state_db_.assign(channel_count, 0.0f);
-  const size_t lookahead_samples =
-      static_cast<size_t>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
+  lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
+  const size_t lookahead_samples = static_cast<size_t>(std::max(lookahead_samples_, 0));
   lookahead_.assign(channel_count, std::vector<float>(lookahead_samples, 0.0f));
   lookahead_index_.assign(channel_count, 0);
   update_coefficients(config_);

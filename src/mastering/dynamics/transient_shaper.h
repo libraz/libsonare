@@ -63,6 +63,10 @@ class TransientShaper : public rt::ProcessorBase {
   const TransientShaperConfig& config() const { return config_; }
   float last_gain_db() const { return last_gain_db_; }
 
+  /// Reports the lookahead delay so the host can compensate (PDC), matching the
+  /// other lookahead-bearing dynamics processors.
+  int latency_samples() const noexcept override { return lookahead_samples_; }
+
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = attack_gain_db
   //   1 = sustain_gain_db
@@ -123,6 +127,8 @@ class TransientShaper : public rt::ProcessorBase {
   std::vector<float> gain_state_db_;
   std::vector<std::vector<float>> lookahead_;
   std::vector<size_t> lookahead_index_;
+  // Cached lookahead delay in samples (set in prepare()), reported as latency.
+  int lookahead_samples_ = 0;
   float last_gain_db_ = 0.0f;
 };
 

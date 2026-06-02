@@ -869,6 +869,19 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
   if (mixer->buses.size() == before) {
     return SONARE_ERROR_INVALID_PARAMETER;  // no such bus
   }
+  // Drop any connection that referenced the removed bus; otherwise the next
+  // compile would try to wire an edge to/from a node that no longer exists.
+  mixer->connections.erase(std::remove_if(mixer->connections.begin(), mixer->connections.end(),
+                                          [&](const sonare::mixing::api::Connection& connection) {
+                                            return connection.source == bus_id ||
+                                                   connection.destination == bus_id;
+                                          }),
+                           mixer->connections.end());
+  // Strip sends that still target the removed bus are intentionally left in
+  // place: compile_graph re-materializes any unknown send destination as an
+  // implicit aux bus (default-routed to master), so the send stays audible
+  // rather than dangling. ChannelStrip has no remove_send, so dropping the
+  // send would require rebuilding the strip and is out of scope here.
   mixer->compiled_dirty = true;
   return SONARE_OK;
   SONARE_C_CATCH

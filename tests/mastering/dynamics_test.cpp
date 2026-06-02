@@ -634,12 +634,21 @@ TEST_CASE("TransientShaper supports lookahead and gain smoothing", "[mastering][
   TransientShaper shaper({6.0f, 0.0f, 0.0f, 20.0f, 20.0f, 200.0f, 1.0f, 12.0f, 1.0f, 1.0f});
   shaper.prepare(1000.0, 8);
 
+  // The lookahead delay is reported as latency for host PDC (1 ms @ 1 kHz = 1 sample).
+  REQUIRE(shaper.latency_samples() == 1);
+
   std::vector<float> impulse(8, 0.0f);
   impulse[1] = 0.5f;
   process(shaper, impulse);
 
   REQUIRE_THAT(impulse[0], WithinAbs(0.0f, 0.0001f));
   REQUIRE(peak_abs(impulse) > 0.5f);
+}
+
+TEST_CASE("TransientShaper reports zero latency without lookahead", "[mastering][dynamics]") {
+  TransientShaper shaper;  // lookahead_ms defaults to 0
+  shaper.prepare(48000.0, 256);
+  REQUIRE(shaper.latency_samples() == 0);
 }
 
 TEST_CASE("ParallelComp blends dry and compressed signals", "[mastering][dynamics]") {

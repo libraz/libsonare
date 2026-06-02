@@ -62,11 +62,14 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
                                        const float* right, size_t length, int sample_rate,
                                        const SonareMasteringParam* overrides, size_t override_count,
                                        SonareMasteringChainStereoResult* out) {
-  if (!out || !preset_name || !left || !right || sample_rate <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
+  // Match the mono paths: reject non-finite samples and out-of-range
+  // sample_rate/length, not just null pointers.
+  SonareError verr = validate_audio_params(left, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  verr = validate_audio_params(right, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (length == 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->left = nullptr;
   out->right = nullptr;
@@ -133,11 +136,14 @@ SonareError sonare_master_audio_stereo_with_progress(
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out) {
-  if (!out || !preset_name || !left || !right || sample_rate <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
+  // Match the mono paths: reject non-finite samples and out-of-range
+  // sample_rate/length, not just null pointers.
+  SonareError verr = validate_audio_params(left, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  verr = validate_audio_params(right, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (length == 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->left = nullptr;
   out->right = nullptr;

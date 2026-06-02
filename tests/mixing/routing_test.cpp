@@ -538,6 +538,39 @@ TEST_CASE("Routed mixer applies scene bus inserts", "[mixing][routing]") {
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Removing a bus drops connections that referenced it", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 64;
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip lead;
+  lead.id = "lead";
+  scene.strips.push_back(lead);
+  scene.buses.push_back({"master", "master"});
+  scene.buses.push_back({"reverb", "aux"});
+  scene.connections.push_back({"lead", "master"});
+  scene.connections.push_back({"reverb", "master"});  // bus -> master edge
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+
+  // Removing the bus must also drop the reverb->master edge; otherwise the next
+  // compile would try to wire an edge from a node that no longer exists.
+  REQUIRE(sonare_mixer_remove_bus(mixer, "reverb") == SONARE_OK);
+  REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
+
+  std::array<float, kBlock> input{};
+  input.fill(0.5f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixing][routing]") {
   static constexpr int kSr = 48000;
   static constexpr int kBlock = 512;

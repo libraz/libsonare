@@ -486,6 +486,30 @@ TEST_CASE("MultibandExciter can enhance high band while leaving low band close",
   REQUIRE(rms_tail(high, 4096) > high_before * 1.05f);
 }
 
+TEST_CASE("MultibandExciter reports crossover latency for FIR mode", "[mastering][saturation]") {
+  MultibandExciterConfig config;
+  config.crossover = {{1000.0f},
+                      sonare::mastering::multiband::CrossoverSlope::LR4,
+                      sonare::mastering::multiband::CrossoverMode::FirLinearPhase,
+                      257};
+  config.bands = {{3000.0f, 0.0f, 0.0f}, {3000.0f, 6.0f, 0.5f}};
+  MultibandExciter exciter(config);
+  exciter.prepare(48000.0, 1024);
+  // FIR linear-phase crossover introduces kernel/2 latency, which must be
+  // reported for host PDC (matching the other multiband processors).
+  REQUIRE(exciter.latency_samples() == 257 / 2);
+
+  // IIR crossover mode has no reported latency.
+  MultibandExciterConfig iir;
+  iir.crossover = {{1000.0f},
+                   sonare::mastering::multiband::CrossoverSlope::LR2,
+                   sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+  iir.bands = {{3000.0f, 0.0f, 0.0f}, {3000.0f, 6.0f, 0.5f}};
+  MultibandExciter iir_exciter(iir);
+  iir_exciter.prepare(48000.0, 1024);
+  REQUIRE(iir_exciter.latency_samples() == 0);
+}
+
 TEST_CASE("Saturation processors validate configurations", "[mastering][saturation]") {
   REQUIRE_THROWS(Waveshaper({0.0f, -0.1f, 0.0f, 0.0f, WaveshaperCurve::Tanh}));
   REQUIRE_THROWS(SoftClipper({0.0f, 0.0f, 1.0f}));
