@@ -5,7 +5,9 @@
 #include <string>
 #include <vector>
 
+#include "sonare_wrap_key_options.h"
 #include "sonare_wrap_mixer.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_streaming.h"
 #include "sonare_wrap_utils.h"
 
@@ -584,28 +586,30 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   bool use_hpss = false;
   bool loudness_weighted = false;
   float high_pass_hz = 0.0f;
+  std::vector<SonareMode> modes;
+  SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  std::string genre_hint;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object options = info[0].As<Napi::Object>();
-    Napi::Value n_fft_value = options.Get("nFft");
-    Napi::Value hop_value = options.Get("hopLength");
-    Napi::Value hpss_value = options.Get("useHpss");
-    Napi::Value loudness_value = options.Get("loudnessWeighted");
-    Napi::Value high_pass_value = options.Get("highPassHz");
-    if (n_fft_value.IsNumber()) n_fft = n_fft_value.As<Napi::Number>().Int32Value();
-    if (hop_value.IsNumber()) hop_length = hop_value.As<Napi::Number>().Int32Value();
-    if (hpss_value.IsBoolean()) use_hpss = hpss_value.As<Napi::Boolean>().Value();
-    if (loudness_value.IsBoolean()) {
-      loudness_weighted = loudness_value.As<Napi::Boolean>().Value();
-    }
-    if (high_pass_value.IsNumber()) {
-      high_pass_hz = high_pass_value.As<Napi::Number>().FloatValue();
-    }
+    n_fft = node_int_option(options, "nFft", n_fft);
+    hop_length = node_int_option(options, "hopLength", hop_length);
+    use_hpss = node_bool_option(options, "useHpss", use_hpss);
+    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
+    modes = node_modes_option(options);
+    profile = node_profile_from_value(options.Get("profile"));
+    genre_hint = node_genre_hint_option(options);
   }
 
+  // Forward modes/profile/genreHint through the extended entry point so the
+  // instance method honors the same options as the standalone SonareWrap::DetectKey
+  // (binding-node#1).
   SonareKey key{};
-  SonareError err = sonare_detect_key_with_options(
+  SonareError err = sonare_detect_key_with_extended_options(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
-      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz, &key);
+      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz,
+      modes.empty() ? nullptr : modes.data(), modes.size(), profile,
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), &key);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -625,26 +629,31 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
   bool use_hpss = false;
   bool loudness_weighted = false;
   float high_pass_hz = 0.0f;
+  std::vector<SonareMode> modes;
+  SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  std::string genre_hint;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object options = info[0].As<Napi::Object>();
-    Napi::Value n_fft_value = options.Get("nFft");
-    Napi::Value hop_value = options.Get("hopLength");
-    Napi::Value hpss_value = options.Get("useHpss");
-    Napi::Value loudness_value = options.Get("loudnessWeighted");
-    Napi::Value high_pass_value = options.Get("highPassHz");
-    if (n_fft_value.IsNumber()) n_fft = n_fft_value.As<Napi::Number>().Int32Value();
-    if (hop_value.IsNumber()) hop_length = hop_value.As<Napi::Number>().Int32Value();
-    if (hpss_value.IsBoolean()) use_hpss = hpss_value.As<Napi::Boolean>().Value();
-    if (loudness_value.IsBoolean()) loudness_weighted = loudness_value.As<Napi::Boolean>().Value();
-    if (high_pass_value.IsNumber()) high_pass_hz = high_pass_value.As<Napi::Number>().FloatValue();
+    n_fft = node_int_option(options, "nFft", n_fft);
+    hop_length = node_int_option(options, "hopLength", hop_length);
+    use_hpss = node_bool_option(options, "useHpss", use_hpss);
+    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
+    modes = node_modes_option(options);
+    profile = node_profile_from_value(options.Get("profile"));
+    genre_hint = node_genre_hint_option(options);
   }
 
+  // Forward modes/profile/genreHint through the extended entry point so the
+  // instance method matches the standalone SonareWrap::DetectKeyCandidates
+  // (binding-node#1).
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_key_candidates(
+  SonareError err = sonare_detect_key_candidates_with_extended_options(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
-      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz, &candidates,
-      &count);
+      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz,
+      modes.empty() ? nullptr : modes.data(), modes.size(), profile,
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), &candidates, &count);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();

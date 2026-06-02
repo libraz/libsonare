@@ -23,6 +23,7 @@ import {
   detectBpm,
   detectChords,
   detectKey,
+  detectKeyCandidates,
   detectOnsets,
   fixFrames,
   fixLength,
@@ -727,6 +728,37 @@ describe('sonare native binding', () => {
       expect(classKey.mode).toBe(funcKey.mode);
       expect(classKey.name).toBe(funcKey.name);
       audio.destroy();
+    });
+
+    it('native detectKey instance method honors modes/profile/genreHint', () => {
+      // Regression (binding-node#1): the Audio class native instance methods used
+      // to call the non-extended C entry points and silently ignored
+      // modes/profile/genreHint, so the same conceptual call diverged from the
+      // standalone path. They now forward through the *_with_extended_options
+      // entry points, so for identical options the instance method and the
+      // standalone function must produce identical results.
+      const samples = generateSine(440, SR, 1.0);
+      const audio = Audio.fromBuffer(samples, SR);
+      const native = (audio as unknown as { native: Record<string, (opts: unknown) => unknown> })
+        .native;
+      try {
+        const opts = { modes: 'major-minor', profile: 'temperley', genreHint: 'edm' };
+        const instanceKey = native.detectKey(opts) as { root: string; mode: string };
+        const standaloneKey = detectKey(samples, SR, opts);
+        expect(instanceKey.root).toBe(standaloneKey.root);
+        expect(instanceKey.mode).toBe(standaloneKey.mode);
+
+        const instanceCandidates = native.detectKeyCandidates(opts) as Array<{
+          key: { root: string };
+        }>;
+        const standaloneCandidates = detectKeyCandidates(samples, SR, opts);
+        expect(instanceCandidates.length).toBe(standaloneCandidates.length);
+        if (standaloneCandidates.length > 0) {
+          expect(instanceCandidates[0].key.root).toBe(standaloneCandidates[0].key.root);
+        }
+      } finally {
+        audio.destroy();
+      }
     });
 
     it('analyze via class returns beat aliases and rich key', () => {
