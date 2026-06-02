@@ -26,10 +26,14 @@ class NoteEditor {
  private:
   int fade_samples(int sample_rate, int region_length) const noexcept;
   static void apply_edge_fades(std::vector<float>& samples, int fade_samples);
-  /// Equal-power cross-fade across a concatenation seam at @p splice, blending
-  /// @p fade samples on each side. Keeps the seam continuous without the level
-  /// dip a fade-to-zero introduces.
-  static void crossfade_splice(std::vector<float>& samples, int splice, int fade);
+  /// Appends @p src to @p dst with an equal-power overlap-add cross-fade over
+  /// @p fade samples: the left region's tail (the last @p fade samples of @p
+  /// dst) ramps down while the right region's head (the first @p fade samples of
+  /// @p src) ramps up, with temporal direction preserved. Overlapping the two
+  /// regions shortens the result by @p fade and keeps the seam continuous
+  /// without the level dip a fade-to-zero introduces.
+  static void append_with_crossfade(std::vector<float>& dst, const std::vector<float>& src,
+                                    int fade);
   static NoteRegion clamp_region(const Audio& audio, const NoteRegion& region);
 
   NoteEditorConfig config_{};

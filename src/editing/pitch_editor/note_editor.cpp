@@ -54,25 +54,27 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
 
   std::vector<float> stretched_samples(stretched.begin(), stretched.end());
 
+  const std::vector<float> head(audio.begin(), audio.begin() + clipped.onset_sample);
+  const std::vector<float> tail(audio.begin() + clipped.offset_sample, audio.end());
+
+  // Equal-power overlap-add cross-fade at each splice instead of fading the
+  // stretched region to zero at both ends. Fading to silence left a level
+  // dip/gap because the unmodified head and tail meet the splice at full level;
+  // overlapping the regions ramps the left signal down while the right ramps up
+  // over the same time positions, keeping the seam continuous without dropping
+  // the level. `fade` is clamped to half the stretched length (fade_samples), so
+  // the two overlaps never consume the same samples. Splices at the buffer edges
+  // (head or tail empty) have no neighbour to blend with and are left untouched.
+  const int fade = fade_samples(audio.sample_rate(), static_cast<int>(stretched_samples.size()));
+  const int stretched_len = static_cast<int>(stretched_samples.size());
+  const int head_fade = std::min({fade, static_cast<int>(head.size()), stretched_len});
+  const int tail_fade = std::min({fade, stretched_len, static_cast<int>(tail.size())});
+
   std::vector<float> output;
   output.reserve(audio.size() - static_cast<size_t>(length) + stretched_samples.size());
-  output.insert(output.end(), audio.begin(), audio.begin() + clipped.onset_sample);
-  output.insert(output.end(), stretched_samples.begin(), stretched_samples.end());
-  output.insert(output.end(), audio.begin() + clipped.offset_sample, audio.end());
-
-  // Equal-power cross-fade across each splice instead of fading the stretched
-  // region to zero at both ends. Fading to silence left a level dip/gap because
-  // the unmodified head and tail meet the splice at full level; an
-  // equal-power blend of the two sides keeps the seam continuous without
-  // dropping the level. Splices that sit at the buffer edges (head or tail
-  // empty) simply have no neighbour to blend with and are left untouched.
-  const int fade = fade_samples(audio.sample_rate(), static_cast<int>(stretched_samples.size()));
-  const int head_len = clipped.onset_sample;
-  const int stretched_len = static_cast<int>(stretched_samples.size());
-  const int tail_len = static_cast<int>(audio.size()) - clipped.offset_sample;
-
-  crossfade_splice(output, head_len, std::min({fade, head_len, stretched_len}));
-  crossfade_splice(output, head_len + stretched_len, std::min({fade, stretched_len, tail_len}));
+  output.insert(output.end(), head.begin(), head.end());
+  append_with_crossfade(output, stretched_samples, head_fade);
+  append_with_crossfade(output, tail, tail_fade);
 
   return Audio::from_vector(std::move(output), audio.sample_rate());
 }
@@ -83,36 +85,29 @@ int NoteEditor::fade_samples(int sample_rate, int region_length) const noexcept 
   return std::clamp(requested, 0, std::max(0, region_length / 2));
 }
 
-void NoteEditor::crossfade_splice(std::vector<float>& samples, int splice, int fade) {
-  // Equal-power cross-fade over a 2*fade window straddling the splice index.
-  // The window's left half [splice-fade, splice) and right half
-  // [splice, splice+fade) are blended toward each other so the seam is
-  // continuous in both level and slope. Equal-power (sin/cos) weights keep the
-  // summed energy of two decorrelated sides ~constant, avoiding the level dip
-  // that a fade-to-zero produced. A snapshot of the original window is taken
-  // first so the in-place blend reads pre-blend values on both sides.
-  if (fade <= 0) return;
-  const int size = static_cast<int>(samples.size());
-  if (splice - fade < 0 || splice + fade > size) return;
-
-  std::vector<float> window(static_cast<size_t>(2 * fade));
-  for (int k = 0; k < 2 * fade; ++k) {
-    window[static_cast<size_t>(k)] = samples[static_cast<size_t>(splice - fade + k)];
+void NoteEditor::append_with_crossfade(std::vector<float>& dst, const std::vector<float>& src,
+                                       int fade) {
+  // Equal-power overlap-add splice: the last `fade` samples of dst (the left
+  // region's tail) are blended with the first `fade` samples of src (the right
+  // region's head) over a single fade-length zone, so the left signal ramps down
+  // while the right ramps up with temporal direction preserved (a true
+  // cross-fade, not a self-mirror). Equal-power (cos/sin) weights keep the summed
+  // energy of two decorrelated regions ~constant, avoiding the seam level dip.
+  if (fade <= 0 || dst.size() < static_cast<size_t>(fade) ||
+      src.size() < static_cast<size_t>(fade)) {
+    dst.insert(dst.end(), src.begin(), src.end());
+    return;
   }
-  for (int k = 0; k < 2 * fade; ++k) {
-    // phase 0 -> 1 across the window; left side dominates at the start, right
-    // side at the end.
-    const float phase = static_cast<float>(k) / static_cast<float>(2 * fade - 1);
-    const float right_gain = std::sin(0.5f * kPi * phase);
+  const size_t base = dst.size() - static_cast<size_t>(fade);
+  for (int k = 0; k < fade; ++k) {
+    // phase in (0, 1): left_gain ~1 at the start, right_gain ~1 at the end.
+    const float phase = (static_cast<float>(k) + 0.5f) / static_cast<float>(fade);
     const float left_gain = std::cos(0.5f * kPi * phase);
-    // Mirror index reflects the corresponding sample on the opposite side so
-    // the blend uses real signal from both sides rather than fading to zero.
-    const int mirror = 2 * fade - 1 - k;
-    const float left_sample = window[static_cast<size_t>(k)];
-    const float right_sample = window[static_cast<size_t>(mirror)];
-    samples[static_cast<size_t>(splice - fade + k)] =
-        left_gain * left_sample + right_gain * right_sample;
+    const float right_gain = std::sin(0.5f * kPi * phase);
+    dst[base + static_cast<size_t>(k)] =
+        left_gain * dst[base + static_cast<size_t>(k)] + right_gain * src[static_cast<size_t>(k)];
   }
+  dst.insert(dst.end(), src.begin() + fade, src.end());
 }
 
 void NoteEditor::apply_edge_fades(std::vector<float>& samples, int fade_samples) {

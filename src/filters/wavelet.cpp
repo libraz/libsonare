@@ -194,25 +194,35 @@ std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, 
   if (n_input <= 0 || bins_per_octave <= 0 || n_chroma <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "cq_to_chroma: invalid parameters");
   }
+  // Mirrors librosa.filters.cq_to_chroma: np.repeat(eye(n_chroma), n_merge)
+  // builds a column->chroma map, then np.roll(..., -n_merge//2, axis=1) shifts
+  // the columns left by half a merge group to CENTER each output chroma bin on
+  // its CQ bins (n_merge = bins_per_octave / n_chroma). Without this centering
+  // offset every output bin was shifted ~half a merge group when
+  // bins_per_octave > n_chroma. librosa applies no column normalization (each CQ
+  // column is a 0/1 indicator), so none is applied here either.
+  const int n_merge_half = (bins_per_octave / n_chroma) / 2;
+
+  // Pitch-class rotation of the chroma rows. librosa uses
+  // round(mod(hz_to_midi(fmin), 12) * n_chroma/12) with no tuning term; `tuning`
+  // is a libsonare extension that shifts the first bin's pitch class, scaled by
+  // n_chroma/12 like the fmin rotation so it stays correct for n_chroma != 12.
   int pitch_class_offset = 0;
   if (fmin > 0.0f) {
-    pitch_class_offset = static_cast<int>(std::lround(hz_to_midi(fmin) + tuning)) % n_chroma;
+    const double midi_0 = std::fmod(static_cast<double>(hz_to_midi(fmin)) + tuning, 12.0);
+    pitch_class_offset =
+        static_cast<int>(std::lround(midi_0 * (static_cast<double>(n_chroma) / 12.0))) % n_chroma;
     if (pitch_class_offset < 0) pitch_class_offset += n_chroma;
   }
+
   std::vector<float> out(static_cast<size_t>(n_chroma) * n_input, 0.0f);
   for (int i = 0; i < n_input; ++i) {
-    int chroma_bin = ((i % bins_per_octave) * n_chroma) / bins_per_octave;
+    const int col = i % bins_per_octave;
+    const int shifted = (col + n_merge_half) % bins_per_octave;
+    int chroma_bin = (shifted * n_chroma) / bins_per_octave;
     chroma_bin = (chroma_bin + pitch_class_offset) % n_chroma;
     if (chroma_bin < 0) chroma_bin += n_chroma;
     out[chroma_bin * n_input + i] = 1.0f;
-  }
-  // Normalize each CQT bin column so total bin energy is preserved when folded.
-  for (int i = 0; i < n_input; ++i) {
-    float column_sum = 0.0f;
-    for (int c = 0; c < n_chroma; ++c) column_sum += out[c * n_input + i];
-    if (column_sum > 0.0f) {
-      for (int c = 0; c < n_chroma; ++c) out[c * n_input + i] /= column_sum;
-    }
   }
   return out;
 }

@@ -81,6 +81,31 @@ TEST_CASE("cq_to_chroma maps each input bin to a chroma row", "[util][wavelet]")
   }
 }
 
+TEST_CASE("cq_to_chroma centers merge groups like librosa when bins_per_octave > n_chroma",
+          "[util][wavelet]") {
+  // 36 bins/octave folded to 12 chroma: n_merge = 3, so librosa rolls the
+  // repeated identity left by n_merge // 2 = 1 column to center each chroma bin
+  // on its 3 CQ bins. Input bin 2 therefore lands in chroma row 1 (centered),
+  // not row 0 as an uncentered floor mapping would give.
+  auto M = cq_to_chroma(36, 36, 12, /*fmin=*/0.0f);
+  REQUIRE(M.size() == 12 * 36);
+  auto chroma_of = [&](int i) {
+    for (int c = 0; c < 12; ++c) {
+      if (M[c * 36 + i] > 0.5f) return c;
+    }
+    return -1;
+  };
+  REQUIRE(chroma_of(0) == 0);
+  REQUIRE(chroma_of(1) == 0);
+  REQUIRE(chroma_of(2) == 1);  // centered (an uncentered mapping gives 0)
+  REQUIRE(chroma_of(3) == 1);
+  REQUIRE(chroma_of(5) == 2);
+  // Every input column still maps to exactly one chroma row.
+  for (int i = 0; i < 36; ++i) {
+    REQUIRE(chroma_of(i) >= 0);
+  }
+}
+
 TEST_CASE("cq_to_chroma applies fmin and tuning pitch-class offset", "[util][wavelet]") {
   auto tuned = cq_to_chroma(12, 12, 12, 440.0f, 1.0f);
   auto untuned = cq_to_chroma(12, 12, 12, 440.0f, 0.0f);

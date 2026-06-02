@@ -43,6 +43,11 @@ std::vector<float> semitone_filterbank(int n_octaves = 7, int bins_per_octave = 
                                        float fmin = constants::kC1Hz, int sr = 22050);
 
 /// @brief CQT-to-chroma projection matrix.
+/// @details Mirrors `librosa.filters.cq_to_chroma`: merge groups are centered
+/// (roll by `n_merge // 2`, `n_merge = bins_per_octave / n_chroma`) and rows are
+/// rotated by the `fmin` pitch class; no column normalization is applied. The
+/// `tuning` argument is a libsonare extension (librosa has none) that shifts the
+/// first bin's pitch class.
 /// @return Row-major `[n_chroma x n_input]`.
 std::vector<float> cq_to_chroma(int n_input, int bins_per_octave = 12, int n_chroma = 12,
                                 float fmin = 0.0f, float tuning = 0.0f);

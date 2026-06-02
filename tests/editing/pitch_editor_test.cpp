@@ -361,9 +361,16 @@ TEST_CASE("NoteEditor stretches note region to requested length ratio", "[pitch_
   NoteEditor editor({2.0f, sonare::StretchBackend::NativeSpectral});
   const sonare::Audio stretched = editor.stretch_note(audio, region, stretch_ratio);
 
-  const int expected_size =
-      static_cast<int>(audio.size()) - original_region_length +
+  const int stretched_len =
       static_cast<int>(std::ceil(static_cast<float>(original_region_length) * stretch_ratio));
+  // Each of the two splices (head|stretched and stretched|tail) is an
+  // equal-power overlap-add cross-fade, so the regions overlap by one `fade` per
+  // splice and the result is 2*fade samples shorter than a plain concatenation.
+  // fade = round(fade_ms * sr / 1000), clamped to half the stretched length.
+  const int fade =
+      std::min(static_cast<int>(std::round(2.0f * 0.001f * sample_rate)), stretched_len / 2);
+  const int expected_size =
+      static_cast<int>(audio.size()) - original_region_length + stretched_len - 2 * fade;
   REQUIRE_THAT(static_cast<float>(stretched.size()),
                WithinAbs(static_cast<float>(expected_size), 2.0f));
   REQUIRE(stretched.sample_rate() == audio.sample_rate());
