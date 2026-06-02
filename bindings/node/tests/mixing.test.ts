@@ -11,8 +11,11 @@ describe('mixing native binding', () => {
     const result = mixStereo([left], [right], 48000, { inputTrimDb: 6.0206, faderDb: -6.0206 });
     expect(result.left).toBeInstanceOf(Float32Array);
     expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left[0]).toBeCloseTo(Math.SQRT1_2, 2);
-    expect(result.left[1]).toBeCloseTo(Math.SQRT1_2, 2);
+    // +6.02 dB trim and -6.02 dB fader cancel to unity. With the Balance pan law
+    // no longer attenuating a centered signal by 3 dB, the output passes through
+    // at unity instead of sqrt(0.5).
+    expect(result.left[0]).toBeCloseTo(1.0, 2);
+    expect(result.left[1]).toBeCloseTo(1.0, 2);
     expect(Array.from(result.right)).toEqual([0, 0]);
     expect(result.meters).toHaveLength(1);
     expect(Number.isFinite(result.meters[0].peakDbL)).toBe(true);

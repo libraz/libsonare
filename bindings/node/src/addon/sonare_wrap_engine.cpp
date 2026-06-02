@@ -60,6 +60,7 @@ Napi::Object MetronomeToObject(Napi::Env env, const SonareEngineMetronomeConfig&
   out.Set("beatGain", Napi::Number::New(env, config.beat_gain));
   out.Set("accentGain", Napi::Number::New(env, config.accent_gain));
   out.Set("clickSamples", Napi::Number::New(env, config.click_samples));
+  out.Set("clickSeconds", Napi::Number::New(env, config.click_seconds));
   return out;
 }
 
@@ -526,6 +527,9 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
   config.click_samples = obj.Has("clickSamples") && !obj.Get("clickSamples").IsUndefined()
                              ? obj.Get("clickSamples").As<Napi::Number>().Int32Value()
                              : 96;
+  config.click_seconds = obj.Has("clickSeconds") && !obj.Get("clickSeconds").IsUndefined()
+                             ? obj.Get("clickSeconds").As<Napi::Number>().DoubleValue()
+                             : 0.0;
   ThrowIfError(env, sonare_engine_set_metronome(engine_, &config));
   return env.Undefined();
 }

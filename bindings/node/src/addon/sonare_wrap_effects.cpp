@@ -2038,6 +2038,11 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   std::vector<int> intervals = EffectsIntVectorFromValue(info[1]);
+  if (intervals.size() % 2 != 0) {
+    Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   int sr =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
   int align_zeros =

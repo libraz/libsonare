@@ -266,7 +266,7 @@ describe('sonare native binding', () => {
     });
 
     it('converts invalid native arguments into JS exceptions', () => {
-      expect(() => timeStretch(new Float32Array(SR), -1, 2.0)).toThrow(/Invalid parameter/);
+      expect(() => timeStretch(new Float32Array(SR), 2.0, -1)).toThrow(/Invalid parameter/);
     });
 
     it('exposes compatibility numeric and signal utilities', () => {
@@ -438,14 +438,14 @@ describe('sonare native binding', () => {
     });
 
     it('timeStretch changes length', () => {
-      const fast = timeStretch(tone, SR, 2.0);
+      const fast = timeStretch(tone, 2.0, SR);
       expect(fast.length).toBeLessThan(tone.length);
-      const slow = timeStretch(tone, SR, 0.5);
+      const slow = timeStretch(tone, 0.5, SR);
       expect(slow.length).toBeGreaterThan(tone.length);
     });
 
     it('pitchShift returns Float32Array', () => {
-      const result = pitchShift(tone, SR, 2);
+      const result = pitchShift(tone, 2, SR);
       expect(result).toBeInstanceOf(Float32Array);
       expect(result.length).toBeGreaterThan(0);
     });

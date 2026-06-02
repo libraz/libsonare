@@ -1000,6 +1000,11 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
+    Napi::TypeError::New(env, "interleaved length must be a multiple of channels")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
 
   SonareLufsResult lufs{};

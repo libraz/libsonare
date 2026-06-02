@@ -60,6 +60,22 @@ std::vector<int> IntVectorFromValue(const Napi::Value& value) {
   throw Napi::TypeError::New(value.Env(), "Expected Int32Array or number[]");
 }
 
+std::vector<float> FloatVectorFromValue(const Napi::Value& value) {
+  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
+    auto arr = value.As<Napi::Float32Array>();
+    return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
+  }
+  if (value.IsArray()) {
+    auto arr = value.As<Napi::Array>();
+    std::vector<float> out(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      out[i] = arr.Get(i).As<Napi::Number>().FloatValue();
+    }
+    return out;
+  }
+  throw Napi::TypeError::New(value.Env(), "Expected Float32Array or number[]");
+}
+
 int TempogramModeFromValue(const Napi::Value& value) {
   if (value.IsUndefined() || value.IsNull()) return SONARE_TEMPOGRAM_AUTOCORRELATION;
   if (value.IsNumber()) {
@@ -1230,10 +1246,16 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
   int hop =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  std::vector<float> factors;
+  if (info.Length() >= 5 && !info[4].IsUndefined() && !info[4].IsNull()) {
+    factors = FloatVectorFromValue(info[4]);
+  }
+  const float* factors_ptr = factors.empty() ? nullptr : factors.data();
+  size_t n_factors = factors.size();
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_tempogram_ratio(arr.Data(), arr.ElementLength(), win, sr, hop, nullptr,
-                                           0, &out, &count);
+  SonareError err = sonare_tempogram_ratio(arr.Data(), arr.ElementLength(), win, sr, hop,
+                                           factors_ptr, n_factors, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
 }

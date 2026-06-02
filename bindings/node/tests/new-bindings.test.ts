@@ -113,12 +113,12 @@ describe('newly exposed Node functions', () => {
 
   it('timeStretch/pitchShift reject a missing required argument instead of producing NaN', () => {
     const x = sine(0.1, 220);
-    // The required factor follows a defaulted sampleRate; omitting it must throw.
+    // The required factor precedes the defaulted sampleRate; omitting it must throw.
     expect(() => (timeStretch as (s: Float32Array) => Float32Array)(x)).toThrow();
     expect(() => (pitchShift as (s: Float32Array) => Float32Array)(x)).toThrow();
     // Valid calls still work.
-    expect(allFinite(timeStretch(x, SR, 1.25))).toBe(true);
-    expect(allFinite(pitchShift(x, SR, 2))).toBe(true);
+    expect(allFinite(timeStretch(x, 1.25, SR))).toBe(true);
+    expect(allFinite(pitchShift(x, 2, SR))).toBe(true);
   });
 
   it('realtimeVoiceChangerPresetConfig exposes the ISP true-peak limiter fields', () => {

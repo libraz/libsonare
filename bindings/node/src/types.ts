@@ -826,6 +826,8 @@ export interface EngineMetronomeConfig {
   beatGain?: number;
   accentGain?: number;
   clickSamples?: number;
+  /** Click duration in seconds; used when clickSamples is 0 to derive the click length from the sample rate. */
+  clickSeconds?: number;
 }
 
 export interface EngineClip {

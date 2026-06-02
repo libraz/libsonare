@@ -51,6 +51,7 @@ import type {
   PairAnalysis,
   PairProcessor,
   PanLaw,
+  PanMode,
   PitchResult,
   RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
@@ -359,8 +360,14 @@ export class Audio {
     );
   }
 
-  voiceChange(pitchSemitones = 0.0, formantFactor = 1.0): Float32Array {
-    return addon.voiceChange(this.getData(), this.getSampleRate(), pitchSemitones, formantFactor);
+  voiceChange(
+    pitchSemitones = 0.0,
+    formantFactor = 1.0,
+    options: ValidateOptions = {},
+  ): Float32Array {
+    const data = this.getData();
+    assertSamples('voiceChange', data, options.validate !== false);
+    return addon.voiceChange(data, this.getSampleRate(), pitchSemitones, formantFactor);
   }
 
   normalize(targetDb = 0.0): Float32Array {
@@ -524,16 +531,22 @@ export class Audio {
     return addon.nnlsChroma(this.getData(), this.getSampleRate());
   }
 
-  lufs(): LufsResult {
-    return addon.lufs(this.getData(), this.getSampleRate());
+  lufs(options: ValidateOptions = {}): LufsResult {
+    const data = this.getData();
+    assertSamples('lufs', data, options.validate !== false);
+    return addon.lufs(data, this.getSampleRate());
   }
 
-  momentaryLufs(): Float32Array {
-    return addon.momentaryLufs(this.getData(), this.getSampleRate());
+  momentaryLufs(options: ValidateOptions = {}): Float32Array {
+    const data = this.getData();
+    assertSamples('momentaryLufs', data, options.validate !== false);
+    return addon.momentaryLufs(data, this.getSampleRate());
   }
 
-  shortTermLufs(): Float32Array {
-    return addon.shortTermLufs(this.getData(), this.getSampleRate());
+  shortTermLufs(options: ValidateOptions = {}): Float32Array {
+    const data = this.getData();
+    assertSamples('shortTermLufs', data, options.validate !== false);
+    return addon.shortTermLufs(data, this.getSampleRate());
   }
 }
 
@@ -1083,10 +1096,7 @@ export function percussive(samples: Float32Array, sampleRate = 22050): Float32Ar
   return addon.percussive(samples, sampleRate);
 }
 
-export function timeStretch(samples: Float32Array, sampleRate = 22050, rate: number): Float32Array {
-  // `rate` is required but follows a defaulted parameter, so a caller that omits
-  // it would otherwise pass `undefined` straight through to the native layer as
-  // NaN. Reject it explicitly instead of producing silent garbage.
+export function timeStretch(samples: Float32Array, rate: number, sampleRate = 22050): Float32Array {
   if (typeof rate !== 'number' || !Number.isFinite(rate)) {
     throw new TypeError('timeStretch: rate must be a finite number');
   }
@@ -1095,8 +1105,8 @@ export function timeStretch(samples: Float32Array, sampleRate = 22050, rate: num
 
 export function pitchShift(
   samples: Float32Array,
-  sampleRate = 22050,
   semitones: number,
+  sampleRate = 22050,
 ): Float32Array {
   if (typeof semitones !== 'number' || !Number.isFinite(semitones)) {
     throw new TypeError('pitchShift: semitones must be a finite number');
@@ -2165,6 +2175,9 @@ export function phaseVocoder(
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) {
+    throw new TypeError('phaseVocoder: rate must be a finite number');
+  }
   return addon.phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
 }
 
@@ -2417,11 +2430,32 @@ export function vectorNormalize(values: Float32Array, normType = 0, threshold = 
   return addon.vectorNormalize(values, normType, threshold);
 }
 
+/**
+ * Tuning parameters for {@link pcen} (per-channel energy normalization). All
+ * fields are optional; omitted keys fall back to librosa-compatible defaults.
+ */
+export interface PcenOptions {
+  /** Sample rate used to derive the smoothing time constant (default 22050). */
+  sampleRate?: number;
+  /** Hop length used to derive the smoothing time constant (default 512). */
+  hopLength?: number;
+  /** Smoothing filter time constant in seconds (default 0.4). */
+  timeConstant?: number;
+  /** Gain exponent applied to the smoothed energy (default 0.98). */
+  gain?: number;
+  /** Bias added before the power compression (default 2.0). */
+  bias?: number;
+  /** Power exponent of the final compression (default 0.5). */
+  power?: number;
+  /** Numerical floor to avoid division by zero (default 1e-6). */
+  eps?: number;
+}
+
 export function pcen(
   values: Float32Array,
   nBins: number,
   nFrames: number,
-  options: Record<string, number> = {},
+  options: PcenOptions = {},
 ): Float32Array {
   return addon.pcen(values, nBins, nFrames, options);
 }
@@ -2486,8 +2520,9 @@ export function tempogramRatio(
   winLength = 384,
   sampleRate = 22050,
   hopLength = 512,
+  factors?: Float32Array | number[],
 ): Float32Array {
-  return addon.tempogramRatio(tempogramData, winLength, sampleRate, hopLength);
+  return addon.tempogramRatio(tempogramData, winLength, sampleRate, hopLength, factors);
 }
 
 export function nnlsChroma(
@@ -2836,6 +2871,20 @@ function panLawValue(panLaw: PanLaw | number): number {
   return value;
 }
 
+function panModeValue(panMode: PanMode): number {
+  if (typeof panMode === 'number') {
+    return panMode;
+  }
+  const mode = panMode.replace(/_/g, '-').toLowerCase();
+  if (mode === 'stereo-pan' || mode === 'stereopan' || mode === 'pan') {
+    return 1; // SONARE_PAN_MODE_STEREO_PAN
+  }
+  if (mode === 'dual-pan' || mode === 'dualpan') {
+    return 2; // SONARE_PAN_MODE_DUAL_PAN
+  }
+  return 0; // SONARE_PAN_MODE_BALANCE
+}
+
 function meterTapValue(tap: MeterTap | number): number {
   if (typeof tap === 'number') {
     return tap;
@@ -2986,8 +3035,8 @@ export class Mixer {
   }
 
   /** Set a strip's pan position (-1..1) with an optional pan mode. */
-  setPan(strip: StripRef, pan: number, panMode = 0): void {
-    this.native.setPan(strip, pan, panMode);
+  setPan(strip: StripRef, pan: number, panMode: PanMode = 0): void {
+    this.native.setPan(strip, pan, panModeValue(panMode));
   }
 
   /** Set a strip's stereo width (0 = mono, 1 = original, >1 = widened). */
