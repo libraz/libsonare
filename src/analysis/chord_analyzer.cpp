@@ -325,6 +325,10 @@ void ChordAnalyzer::analyze_chords() {
   frame_chords_.resize(n_frames);
   std::vector<float> confidences(n_frames);
   std::vector<ChordHmmObservation> observations;
+  // Retain each frame's smoothed chroma so post-HMM confidences can be recomputed
+  // against the same feature the argmax/Viterbi decision used (the beat-sync path
+  // does the same with its per-beat smoothed chroma).
+  std::vector<std::array<float, 12>> frame_chromas(n_frames);
   if (config_.use_hmm) {
     observations.reserve(n_frames);
   }
@@ -350,6 +354,7 @@ void ChordAnalyzer::analyze_chords() {
     ChordMatch match = find_best_chord_with_confidence(smoothed.data());
     frame_chords_[f] = match.index;
     confidences[f] = match.confidence;
+    frame_chromas[f] = smoothed;
     if (config_.use_hmm) {
       observations.push_back(chord_observation(smoothed.data()));
     }
@@ -359,13 +364,12 @@ void ChordAnalyzer::analyze_chords() {
     auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config());
     if (smoothed_sequence.size() == frame_chords_.size()) {
       frame_chords_ = std::move(smoothed_sequence);
+      // Recompute against the same smoothed chroma used for the decision, not the
+      // raw per-frame chroma, so frame-path confidences are on a scale consistent
+      // with the beat-sync path.
       for (int f = 0; f < n_frames; ++f) {
-        std::array<float, 12> frame_chroma = {};
-        for (int c = 0; c < n_chroma; ++c) {
-          frame_chroma[c] = chroma_.at(c, f);
-        }
         confidences[f] = std::min(
-            1.0f, std::max(0.0f, templates_[frame_chords_[f]].correlate(frame_chroma.data())));
+            1.0f, std::max(0.0f, templates_[frame_chords_[f]].correlate(frame_chromas[f].data())));
       }
     }
   }

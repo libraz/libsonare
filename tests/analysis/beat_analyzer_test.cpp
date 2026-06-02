@@ -215,6 +215,14 @@ TEST_CASE("BeatAnalyzer from onset strength", "[beat_analyzer]") {
 
   // Both should detect similar BPM
   REQUIRE_THAT(analyzer2.bpm(), WithinRel(analyzer1.bpm(), 0.2f));
+
+  // The onset-strength constructor must also populate downbeats via the base
+  // estimate (it cannot use low-frequency-energy observations without audio, but
+  // it should not leave downbeats empty when beats were tracked).
+  if (!analyzer2.beats().empty()) {
+    REQUIRE_FALSE(analyzer2.downbeats().empty());
+    REQUIRE_FALSE(analyzer2.downbeat_indices().empty());
+  }
 }
 
 TEST_CASE("BeatAnalyzer prepends a missed initial grid beat", "[beat_analyzer]") {

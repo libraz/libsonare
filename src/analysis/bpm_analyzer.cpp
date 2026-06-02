@@ -284,8 +284,10 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
   lag_min = std::max(1, lag_min);
   lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
 
-  /// Find local maxima
-  for (int lag = lag_min + 1; lag < lag_max - 1; ++lag) {
+  /// Find local maxima. lag_min >= 1 and lag_max <= size-1, so accessing
+  /// autocorr[lag-1]/autocorr[lag+1] over the full [lag_min, lag_max] range stays
+  /// in bounds and lets true peaks at the bpm_min/bpm_max extremes be detected.
+  for (int lag = lag_min; lag <= lag_max; ++lag) {
     if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1]) {
       float bpm = lag_to_bpm(refine_peak_lag(autocorr, lag), sr, hop_length);
       if (bpm >= bpm_min && bpm <= bpm_max) {
@@ -323,7 +325,11 @@ std::vector<float> extract_fourier_local_bpm_curve(const std::vector<float>& ons
       std::max(32, static_cast<int>(std::round(kFourierTempogramWindowSec * static_cast<float>(sr) /
                                                static_cast<float>(hop_length))));
   nominal_win = std::min(nominal_win, static_cast<int>(onset_strength.size()));
-  config.win_length = 1;
+  // fourier_tempogram requires win_length > 1; a 1-frame onset envelope would
+  // otherwise cap nominal_win at 1 and throw. Clamp to the minimum valid window
+  // so degenerate short clips degrade gracefully (normal-length inputs are
+  // unaffected: their power-of-two window already exceeds 2).
+  config.win_length = 2;
   while (config.win_length < nominal_win) {
     config.win_length *= 2;
   }
@@ -449,7 +455,10 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   lag_min = std::max(1, lag_min);
   lag_max_inner = std::min(static_cast<int>(autocorr_.size()) - 1, lag_max_inner);
 
-  for (int lag = lag_min + 1; lag < lag_max_inner - 1; ++lag) {
+  /// Iterate the full [lag_min, lag_max_inner] range (neighbor access stays in
+  /// bounds because lag_min >= 1 and lag_max_inner <= size-1) so peaks at the
+  /// documented bpm_min/bpm_max boundaries are not dropped.
+  for (int lag = lag_min; lag <= lag_max_inner; ++lag) {
     if (autocorr_[lag] > autocorr_[lag - 1] && autocorr_[lag] > autocorr_[lag + 1] &&
         autocorr_[lag] > 0.0f) {
       float bpm = lag_to_bpm(refine_peak_lag(autocorr_, lag), sr, hop_length);

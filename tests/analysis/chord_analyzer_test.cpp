@@ -118,6 +118,36 @@ TEST_CASE("ChordAnalyzer basic", "[chord_analyzer]") {
   REQUIRE(!chords.empty());
 }
 
+TEST_CASE("ChordAnalyzer frame-path HMM confidence is consistent and sane", "[chord_analyzer]") {
+  // With HMM smoothing on the (non-beat-sync) frame path, the post-Viterbi
+  // confidence must be recomputed against the same smoothed chroma the decision
+  // used (mirroring the beat-sync path), not the raw per-frame chroma. The
+  // resulting per-segment confidences must stay in [0, 1] and be non-trivially
+  // positive for a clean sustained chord.
+  Audio audio = create_c_major(22050, 2.0f);
+
+  ChordConfig config;
+  config.use_triads_only = true;
+  config.use_beat_sync = false;  // exercise the frame path
+  config.use_hmm = true;         // exercise the post-Viterbi confidence recompute
+
+  ChordAnalyzer analyzer(audio, config);
+
+  const auto& chords = analyzer.chords();
+  REQUIRE(!chords.empty());
+
+  float max_confidence = 0.0f;
+  for (const auto& chord : chords) {
+    REQUIRE(chord.confidence >= 0.0f);
+    REQUIRE(chord.confidence <= 1.0f);
+    max_confidence = std::max(max_confidence, chord.confidence);
+  }
+  // A sustained C major correlated against the smoothed chroma should yield a
+  // clearly positive confidence; raw-chroma confidences on the noisy first/last
+  // frames would have dragged this lower.
+  REQUIRE(max_confidence > 0.3f);
+}
+
 TEST_CASE("ChordAnalyzer C major detection", "[chord_analyzer]") {
   Audio audio = create_c_major(22050, 2.0f);
 

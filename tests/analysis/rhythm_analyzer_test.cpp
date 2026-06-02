@@ -56,6 +56,32 @@ Audio create_4_4_pattern(float bpm, int sr = 22050, float duration = 4.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates a 6/8 compound pattern with primary (beat 0) and secondary
+/// (beat 3) accents, the two strong beats of compound duple meter.
+Audio create_6_8_pattern(float bpm, int sr = 22050, float duration = 8.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  float beat_interval = 60.0f / bpm;
+  int click_length = sr / 100;
+  int beat_count = 0;
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    int start = static_cast<int>(t * sr);
+    int pos = beat_count % 6;
+    // Strong on 0 and 3, weak elsewhere (6/8 compound duple).
+    float amplitude = (pos == 0) ? 1.0f : (pos == 3 ? 0.8f : 0.4f);
+
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * amplitude;
+    }
+    beat_count++;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 /// @brief Creates a 3/4 pattern (waltz).
 Audio create_3_4_pattern(float bpm, int sr = 22050, float duration = 6.0f) {
   int n_samples = static_cast<int>(sr * duration);
@@ -198,6 +224,30 @@ TEST_CASE("RhythmAnalyzer syncopation", "[rhythm_analyzer]") {
   // Regular 4/4 pattern should have low syncopation
   REQUIRE(analyzer.syncopation() >= 0.0f);
   REQUIRE(analyzer.syncopation() <= 1.0f);
+}
+
+TEST_CASE("RhythmAnalyzer 6/8 secondary accent is not counted as syncopation",
+          "[rhythm_analyzer]") {
+  // In 6/8 compound meter, bar position 3 is the secondary strong beat. With the
+  // accents placed only on positions 0 and 3 there is no genuine off-beat accent,
+  // so syncopation must stay low. Previously position 3 was treated as off-beat,
+  // which would inflate the score for compound meters.
+  Audio audio = create_6_8_pattern(120.0f, 22050, 8.0f);
+
+  RhythmConfig config;
+  config.start_bpm = 120.0f;
+  RhythmAnalyzer analyzer(audio, config);
+
+  REQUIRE(analyzer.syncopation() >= 0.0f);
+  REQUIRE(analyzer.syncopation() <= 1.0f);
+  // The position-3-is-strong rule only applies when the analyzer actually
+  // detects compound-duple (numerator 6). Meter detection on a synthetic click
+  // track is approximate, so only enforce the "modest syncopation" guarantee
+  // when 6/8 is detected — that is exactly the case the fix governs.
+  if (analyzer.time_signature().numerator == 6) {
+    INFO("detected 6/8: accents on positions 0 and 3 should not read as syncopation");
+    REQUIRE(analyzer.syncopation() < 0.5f);
+  }
 }
 
 TEST_CASE("RhythmAnalyzer features struct", "[rhythm_analyzer]") {

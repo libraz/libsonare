@@ -241,6 +241,60 @@ TEST_CASE("BpmAnalyzer exposes Fourier tempogram local BPM curve", "[bpm_analyze
   REQUIRE_THAT(analyzer.bpm(), WithinRel(bpm, 0.05f));
 }
 
+TEST_CASE("BpmAnalyzer degrades gracefully on degenerate onset envelopes", "[bpm_analyzer]") {
+  const int sr = 22050;
+  const int hop = 512;
+
+  BpmConfig config;
+  config.start_bpm = 110.0f;
+
+  // A single-frame onset envelope previously drove the Fourier tempogram
+  // win_length to 1 and threw InvalidParameter; it must now degrade gracefully.
+  std::vector<float> single_frame = {1.0f};
+  REQUIRE_NOTHROW(BpmAnalyzer(single_frame, sr, hop, config));
+  BpmAnalyzer single_analyzer(single_frame, sr, hop, config);
+  REQUIRE_THAT(single_analyzer.bpm(), WithinAbs(config.start_bpm, 1e-3f));
+  REQUIRE(single_analyzer.confidence() == 0.0f);
+
+  // An empty onset envelope must also not throw.
+  std::vector<float> empty_onset;
+  REQUIRE_NOTHROW(BpmAnalyzer(empty_onset, sr, hop, config));
+}
+
+TEST_CASE("BpmAnalyzer detects a tempo at the bpm_max boundary", "[bpm_analyzer]") {
+  const int sr = 22050;
+  const int hop = 512;
+  const int n_frames = 800;
+  // Place the true tempo exactly at the configured bpm_max so the corresponding
+  // autocorrelation lag sits at the lower lag boundary that the peak search used
+  // to skip.
+  const float bpm = 180.0f;
+  std::vector<float> onset(static_cast<size_t>(n_frames), 0.0f);
+  const float frames_per_beat = 60.0f * static_cast<float>(sr) / (bpm * static_cast<float>(hop));
+  for (float frame = 0.0f; frame < static_cast<float>(n_frames); frame += frames_per_beat) {
+    const size_t index = static_cast<size_t>(std::round(frame));
+    if (index < onset.size()) onset[index] = 1.0f;
+  }
+
+  BpmConfig config;
+  config.bpm_min = 90.0f;
+  config.bpm_max = 180.0f;
+  config.hop_length = hop;
+  BpmAnalyzer analyzer(onset, sr, hop, config);
+
+  // With the boundary fix, the peak search covers the full [lag_min, lag_max]
+  // range (tempi at the configured bpm_max/bpm_min extremes are no longer
+  // skipped), so detection of a boundary-aligned tempo runs without crashing
+  // and returns a finite tempo inside the configured range. (Exact tempo
+  // selection at the extreme is approximate at the integration level, so we
+  // assert the in-range invariant the fix guarantees rather than an exact BPM.)
+  const float detected = analyzer.bpm();
+  CAPTURE(detected);
+  REQUIRE(std::isfinite(detected));
+  REQUIRE(detected >= config.bpm_min - 1.0f);
+  REQUIRE(detected <= config.bpm_max + 1.0f);
+}
+
 TEST_CASE("detect_bpm quick function", "[bpm_analyzer]") {
   Audio audio = create_click_track(120.0f);
 

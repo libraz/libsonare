@@ -181,6 +181,13 @@ BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int
       hop_length_(hop_length),
       config_(config) {
   track_beats();
+  // No audio is available here, so the low-frequency-energy and chord-change
+  // observations the Audio ctor uses cannot be computed. Still run the base
+  // downbeat estimate (beat-strength + phase) with empty observations so this
+  // ctor populates downbeats() like the Audio ctor; callers that have audio
+  // (e.g. MusicAnalyzer) can refine afterwards by calling refine_downbeats()
+  // with the richer observations.
+  refine_downbeats();
 }
 
 float BeatAnalyzer::compute_transition_cost(int from_frame, int to_frame, float period) const {
