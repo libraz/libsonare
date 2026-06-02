@@ -37,9 +37,13 @@ GPL/AGPLなし、モデル重みなし。
   パンモード、幅、センド、FXバス、ゴニオメーター／トゥルーピーク計測、シーンプリセット、
   オフラインステレオレンダリングを備えます。
 - **編集 & クリエイティブFX** — タイムストレッチ／ピッチシフト、ピッチ補正、
-  ノート区間ストレッチ、ボイスチェンジ（ピッチ＋フォルマント）、4種のリバーブエンジン
-  （convolution / Dattorro plate / FDN / velvet-noise）、
+  ノート区間ストレッチ、ボイスチェンジ（ピッチ＋フォルマント）、5種のリバーブエンジン
+  （convolution / Dattorro plate / FDN / velvet-noise、そして幾何ベースのルームエンジン）、
   コーラス／フランジャー／フェイザー、ステレオディレイ、ダッキング。
+- **幾何ベースのルームアコースティクス** — シューボックス形状からルームインパルス
+  レスポンスを合成（`synthesizeRir`）、録音から等価なルームをブラインド推定
+  （`estimateRoom` → 体積／寸法／帯域別吸音率／DRR ＋ 正直な信頼度）、録音の残響を
+  目標ルームへモーフィング（`roomMorph`）。Apache-2.0・依存なし・決定論的。
 - **どこでも同一ライセンス** — スタック全体（C++・C・Python・Node・WASM・CLI）が Apache-2.0。
 
 ## インストール
@@ -96,13 +100,28 @@ const keyWithOptions = detectKey(samples, sampleRate, {
 **音響特性**
 
 ```typescript
-import { analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare';
+import {
+  analyzeImpulseResponse,
+  detectAcoustic,
+  estimateRoom,
+  synthesizeRir,
+  roomMorph,
+} from '@libraz/libsonare';
 
 // 通常音源: ブラインドRT60/EDT推定。ブラインド解析では C50/C80/D50 は NaN。
 const blind = detectAcoustic(samples, sampleRate);
 
 // インパルス応答: ISO方式の RT60/EDT と明瞭度指標。
 const room = analyzeImpulseResponse(irSamples, sampleRate);
+
+// 録音から等価なルームをブラインド推定: 体積／寸法／帯域別吸音率／DRR と信頼度。
+const estimate = estimateRoom(samples, sampleRate);
+
+// シューボックス形状からルームインパルスレスポンスを合成。
+const { rir } = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2 });
+
+// 録音の残響を目標ルームへモーフィング（クリエイティブFX）。
+const morphed = roomMorph(samples, sampleRate, { lengthM: 12, widthM: 9, wet: 0.6 });
 ```
 
 **リズム & コード**
@@ -390,6 +409,9 @@ sonare bpm song.mp3 --json
 
 # 拡張解析（C++ CLI と同等）
 sonare acoustic room.wav --json          # ブラインドRT60/EDT（--ir でIRベースの明瞭度指標）
+sonare estimate-room room.wav --json     # ブラインド推定: 体積／寸法／吸音率／DRR ＋ 信頼度
+sonare synthesize-rir --length 7 --width 5 --height 3 -o rir.wav   # 形状からRIRを合成
+sonare room-morph dry.wav --length 12 --width 9 --wet 0.6 -o morphed.wav  # 目標ルームへモーフィング
 sonare lufs song.wav --series            # EBU R128 integrated/momentary/short-term
 sonare rhythm song.wav --json
 sonare dynamics song.wav --json

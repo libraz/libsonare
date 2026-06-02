@@ -38,9 +38,14 @@ no GPL/AGPL, no model weights.
   with pan modes, width, sends, FX buses, goniometer / true-peak metering,
   scene presets, and offline stereo rendering.
 - **Editing & creative FX** — time stretch / pitch shift, pitch correction,
-  note-region stretch, voice-change pitch + formant controls, four reverb
-  engines (convolution, Dattorro plate, FDN, velvet-noise),
-  chorus / flanger / phaser, stereo delay, and ducking.
+  note-region stretch, voice-change pitch + formant controls, five reverb
+  engines (convolution, Dattorro plate, FDN, velvet-noise, and a geometric
+  room engine), chorus / flanger / phaser, stereo delay, and ducking.
+- **Geometric room acoustics** — synthesize a room impulse response from
+  shoebox geometry (`synthesizeRir`), blindly estimate an equivalent room from
+  a recording (`estimateRoom` → volume / dimensions / per-band absorption /
+  DRR + honest confidence), and morph a recording's reverberation toward a
+  target room (`roomMorph`). Apache-2.0, dependency-free, deterministic.
 - **Everywhere, one license** — Apache-2.0 across the entire stack
   (C++, C, Python, Node, WASM, and CLI).
 
@@ -98,13 +103,29 @@ const keyWithOptions = detectKey(samples, sampleRate, {
 **Room acoustics**
 
 ```typescript
-import { analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare';
+import {
+  analyzeImpulseResponse,
+  detectAcoustic,
+  estimateRoom,
+  synthesizeRir,
+  roomMorph,
+} from '@libraz/libsonare';
 
 // Ordinary audio: blind RT60/EDT estimate. C50/C80/D50 are NaN in blind mode.
 const blind = detectAcoustic(samples, sampleRate);
 
 // Measured impulse response: ISO-style RT60/EDT plus clarity metrics.
 const room = analyzeImpulseResponse(irSamples, sampleRate);
+
+// Blindly estimate an equivalent room from a recording: volume / dimensions /
+// per-band absorption / DRR, with an honest confidence score.
+const estimate = estimateRoom(samples, sampleRate);
+
+// Synthesize a room impulse response from shoebox geometry.
+const { rir } = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2 });
+
+// Morph a recording's reverberation toward a target room (creative FX).
+const morphed = roomMorph(samples, sampleRate, { lengthM: 12, widthM: 9, wet: 0.6 });
 ```
 
 **Rhythm & chords**
@@ -401,6 +422,9 @@ sonare bpm song.mp3 --json
 
 # Extended analysis (parity with the C++ CLI)
 sonare acoustic room.wav --json          # blind RT60/EDT (add --ir for IR-based clarity metrics)
+sonare estimate-room room.wav --json     # blind room: volume/dimensions/absorption/DRR + confidence
+sonare synthesize-rir --length 7 --width 5 --height 3 -o rir.wav   # RIR from shoebox geometry
+sonare room-morph dry.wav --length 12 --width 9 --wet 0.6 -o morphed.wav  # morph toward a target room
 sonare lufs song.wav --series            # EBU R128 integrated/momentary/short-term
 sonare rhythm song.wav --json
 sonare dynamics song.wav --json

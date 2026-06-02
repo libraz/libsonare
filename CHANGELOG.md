@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.3 (2026-06-02)
+
+### New features
+
+- Added a geometric room-acoustics module (built with `BUILD_ACOUSTIC_SIM`):
+  - `synthesize_rir` synthesizes a mono room impulse response from shoebox
+    geometry, combining image-source early reflections with a deterministic,
+    seeded late tail. Invalid geometry is reported via a diagnostics flag rather
+    than an error.
+  - `estimate_room` performs blind equivalent-room estimation from a recording
+    or impulse response, returning volume, representative dimensions,
+    direct-to-reverberant ratio, per-octave-band absorption/RT60, and an honest
+    confidence score.
+  - `room_morph` applies an offline room-character morph toward a target room
+    (a creative effect, not dereverberation).
+  - Streaming `RoomReverb` and `RoomMorphProcessor` engines are reachable
+    through the generic insert API by name (`effects.reverb.room`,
+    `effects.acoustic.roomMorph`).
+- Exposed the new module across the C ABI, Python, Node, and WASM bindings.
+
 ## v1.2.2 (2026-06-02)
 
 ### Breaking changes
