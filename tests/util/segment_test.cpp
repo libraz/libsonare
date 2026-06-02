@@ -52,6 +52,25 @@ TEST_CASE("subsegment refines boundaries", "[util][segment]") {
   REQUIRE(out.size() >= bounds.size());
 }
 
+TEST_CASE("subsegment splits on feature content not fixed width", "[util][segment]") {
+  // Two clips with identical parent boundaries but different content must yield
+  // different interior boundaries placed at the content transition — clustering
+  // splits where the feature vectors change. (Previously subsegment ignored the
+  // data and always emitted fixed equal-width chunks, identical for both.)
+  const std::vector<int> bounds{0, 8};
+
+  std::vector<float> mid_change{0.0f, 0.0f, 0.0f, 0.0f, 5.0f, 5.0f, 5.0f, 5.0f};
+  auto a = subsegment(mid_change.data(), 1, 8, bounds, 2);
+  REQUIRE(std::find(a.begin(), a.end(), 4) != a.end());
+
+  std::vector<float> early_change{0.0f, 0.0f, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f};
+  auto b = subsegment(early_change.data(), 1, 8, bounds, 2);
+  REQUIRE(std::find(b.begin(), b.end(), 2) != b.end());
+
+  // Content-driven: the split positions differ for the two clips.
+  REQUIRE(a != b);
+}
+
 TEST_CASE("agglomerative returns valid label range", "[util][segment]") {
   auto X = identity_features(4, 6);
   auto labels = agglomerative(X.data(), 4, 6, 2);

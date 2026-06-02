@@ -282,26 +282,54 @@ std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags) {
 std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments) {
   if (data == nullptr || rows <= 0 || cols <= 0 || n_segments <= 0) return boundaries;
-  std::vector<int> sorted = boundaries;
+
+  // Normalize the parent boundaries: clamp into [0, cols], add the 0 and cols
+  // endpoints, and drop duplicates so each [a, b) parent span is well-formed.
+  std::vector<int> sorted;
+  sorted.reserve(boundaries.size() + 2);
+  for (int frame : boundaries) {
+    if (frame >= 0 && frame <= cols) sorted.push_back(frame);
+  }
   std::sort(sorted.begin(), sorted.end());
   if (sorted.empty() || sorted.front() != 0) sorted.insert(sorted.begin(), 0);
   if (sorted.back() != cols) sorted.push_back(cols);
+  sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+
+  // Refine each parent span by clustering its column feature vectors and
+  // emitting a sub-boundary wherever the cluster label changes between adjacent
+  // columns (mirroring librosa.segment.subsegment, which clusters the columns
+  // within each segment and splits at label transitions). This makes the output
+  // content-driven rather than fixed equal-width chunks. We reuse the
+  // agglomerative clustering helper (Ward linkage) on the extracted block.
   std::vector<int> out;
-  out.reserve(sorted.size() * n_segments);
+  std::vector<float> block;
   for (size_t s = 0; s + 1 < sorted.size(); ++s) {
-    int a = sorted[s];
-    int b = sorted[s + 1];
-    int len = b - a;
-    int chunk = std::max(1, len / n_segments);
-    for (int q = 0; q < n_segments; ++q) {
-      int idx = a + q * chunk;
-      if (idx < b && std::find(out.begin(), out.end(), idx) == out.end()) {
-        out.push_back(idx);
+    const int a = sorted[s];
+    const int b = sorted[s + 1];
+    const int len = b - a;
+    if (len <= 0) continue;
+    out.push_back(a);  // the parent boundary is always retained
+
+    const int n_seg = std::min(n_segments, len);
+    if (n_seg < 2 || len < 2) continue;  // nothing to subdivide
+
+    // Extract the row-major rows x len column block for [a, b).
+    block.assign(static_cast<size_t>(rows) * static_cast<size_t>(len), 0.0f);
+    for (int r = 0; r < rows; ++r) {
+      for (int c = 0; c < len; ++c) {
+        block[static_cast<size_t>(r) * len + c] = data[static_cast<size_t>(r) * cols + (a + c)];
       }
     }
+
+    const std::vector<int> labels = agglomerative(block.data(), rows, len, n_seg, "ward");
+    const int label_count = static_cast<int>(labels.size());
+    for (int c = 1; c < len && c < label_count; ++c) {
+      if (labels[c] != labels[c - 1]) out.push_back(a + c);
+    }
   }
-  if (std::find(out.begin(), out.end(), cols) == out.end()) out.push_back(cols);
+  out.push_back(cols);
   std::sort(out.begin(), out.end());
+  out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;
 }
 
