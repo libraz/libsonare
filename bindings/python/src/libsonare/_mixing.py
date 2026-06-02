@@ -584,6 +584,26 @@ def mix_stereo(
     if not strips:
         raise ValueError("at least one strip is required")
 
+    # Each per-strip option must have exactly one entry per strip; otherwise the
+    # per-index access below would raise a cryptic IndexError (or silently use
+    # the wrong strip's value). Validate up front with a clear message.
+    n_strips = len(strips)
+    for name, opt in (
+        ("input_trim_db", input_trim_db),
+        ("fader_db", fader_db),
+        ("pan", pan),
+        ("width", width),
+        ("muted", muted),
+    ):
+        if opt is not None and len(opt) != n_strips:
+            raise ValueError(f"mix_stereo: '{name}' must have one entry per strip ({n_strips})")
+    if (
+        isinstance(pan_mode, Sequence)
+        and not isinstance(pan_mode, str)
+        and len(pan_mode) != n_strips
+    ):
+        raise ValueError(f"mix_stereo: 'pan_mode' must have one entry per strip ({n_strips})")
+
     left_arrays: list[ctypes.Array[ctypes.c_float]] = []
     right_arrays: list[ctypes.Array[ctypes.c_float]] = []
     length: int | None = None

@@ -584,7 +584,12 @@ class RealtimeEngine:
 
 
 def _fixed_bytes(value: str, capacity: int) -> bytes:
-    return value.encode("utf-8")[: capacity - 1]
+    # Truncate on a UTF-8 character boundary: slicing the encoded bytes at an
+    # arbitrary offset can split a multi-byte codepoint and leave invalid UTF-8.
+    # Decoding with errors="ignore" drops any partial trailing codepoint.
+    if capacity <= 1:
+        return b""
+    return value.encode("utf-8")[: capacity - 1].decode("utf-8", "ignore").encode("utf-8")
 
 
 def _c_string(value: bytes) -> str:

@@ -497,6 +497,15 @@ def test_mixing_presets_and_stereo_mix() -> None:
     assert math.isfinite(result.meters[0].peak_db_l)
     assert isinstance(result.meters[0].likely_mono_compatible, bool)
 
+    # A per-strip option whose length does not match the strip count raises a
+    # clear ValueError rather than an opaque IndexError deep in the loop.
+    with pytest.raises(ValueError, match="one entry per strip"):
+        libsonare.mix_stereo(
+            [([1.0, 1.0], [0.0, 0.0]), ([1.0, 1.0], [0.0, 0.0])],
+            sample_rate=48000,
+            fader_db=[-6.0206],  # only one entry for two strips
+        )
+
 
 def test_audio_analyze() -> None:
     """Audio.analyze returns a full AnalysisResult with documented silence fallbacks."""

@@ -43,6 +43,15 @@ def test_preset_pod_returns_dataclass_for_known_name() -> None:
     assert cfg.formant_factor == pytest.approx(1.0, abs=1e-6)
 
 
+def test_preset_config_is_canonical_alias_of_preset_pod() -> None:
+    # realtime_voice_changer_preset_config is the canonical name (matching the
+    # other bindings); realtime_voice_changer_preset_pod is the deprecated alias.
+    cfg = libsonare.realtime_voice_changer_preset_config("bright-idol")
+    pod = libsonare.realtime_voice_changer_preset_pod("bright-idol")
+    assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
+    assert cfg == pod
+
+
 def test_preset_pod_accepts_int_ordinal() -> None:
     by_name = libsonare.realtime_voice_changer_preset_pod("bright-idol")
     by_ord = libsonare.realtime_voice_changer_preset_pod(

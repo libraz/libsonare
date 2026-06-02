@@ -947,13 +947,16 @@ def _resolve_preset_ordinal(preset: str | int) -> int:
         raise ValueError(f"unknown voice character preset: {preset!r}") from exc
 
 
-def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChangerConfig:
-    """Return the canonical (normalised) POD config for a built-in preset.
+def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChangerConfig:
+    """Return the canonical (normalised) config for a built-in preset.
 
     Skips the JSON round-trip that ``realtime_voice_changer_preset_json``
     incurs. Accepts either the canonical preset id (``"neutral-monitor"``,
     ...) or the integer ordinal from :data:`SONARE_VC_PRESET_NEUTRAL_MONITOR`
     and friends.
+
+    This is the canonical name shared with the C / Node / WASM ``preset_config``
+    surfaces; :func:`realtime_voice_changer_preset_pod` is a deprecated alias.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_realtime_voice_changer_preset_config"):
@@ -967,6 +970,15 @@ def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChanger
     )
     _check(rc)
     return RealtimeVoiceChangerConfig.from_pod(pod)
+
+
+def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChangerConfig:
+    """Deprecated alias for :func:`realtime_voice_changer_preset_config`.
+
+    Retained for backward compatibility; prefer the ``preset_config`` name,
+    which matches the other language bindings.
+    """
+    return realtime_voice_changer_preset_config(preset)
 
 
 def normalize(
