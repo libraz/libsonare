@@ -20,6 +20,54 @@
     `effects.acoustic.roomMorph`).
 - Exposed the new module across the C ABI, Python, Node, and WASM bindings.
 
+### Concurrency & real-time safety
+
+- `ClipPlayer::clip_count()` now reads a published atomic instead of calling the
+  audio-thread-only `RtPublisher::acquire()`, removing a data race when a host
+  polls clip count (via the C ABI / WASM) during playback.
+
+### DSP & analysis correctness
+
+- Room impulse-response synthesis now measures the early-reflection level over a
+  window that excludes the direct sound, so the late tail is no longer
+  over-scaled in small rooms; per-band late-tail noise is energy-normalized so
+  the tail's spectral balance is set by the materials, not the filter bandwidth.
+- `estimate_tuning` now thresholds piptrack peaks against a single global median
+  (matching librosa); `pitch_tuning` returns the librosa bin left edge.
+- `onset_strength` defaults to `detrend=false` and `tempogram` normalizes each
+  column by its max (L-infinity), both matching librosa defaults. The internal
+  beat/tempo/music analyzers opt into detrend explicitly, preserving behavior.
+- Mel `delta` uses Savitzky-Golay `mode='interp'` at the frame edges; chord
+  per-frame confidence is computed against the smoothed chroma used for the
+  decision; BPM peak picking covers the full tempo range and no longer throws on
+  a single-frame onset envelope; 6/8 syncopation no longer counts the secondary
+  strong beat.
+
+### Bug fixes
+
+- `declip` now honors `lpc_blend`, blending the LPC estimate with the
+  interpolation fallback instead of ignoring the parameter.
+- Stereo dither / output-chain now uses a decorrelated per-channel seed instead
+  of identical noise on both channels.
+- Multiband processors built through the named/insert API now accept a custom
+  number of crossover cutoffs instead of throwing.
+- Time-stretch / pitch-shift honor `n_fft` / `hop_length` on the default
+  spectral backend.
+- Streaming analyzer construction clamps `magnitude_downsample` / `hop_length`
+  to safe values, preventing a divide-by-zero from direct Node/WASM use.
+- `mfcc_to_mel` can invert MFCC liftering when the lifter is supplied.
+
+### Bindings & API consistency
+
+- RIR synthesis exposes `late_model` (Sabine/Eyring), `mixing_time_ms`, and
+  `crossfade_ms` across the C ABI and all bindings; the room estimator forwards
+  its full acoustic config. Node and WASM acoustic entry points now validate
+  sample rate and input like the C ABI / Python.
+- The CLI gained `--max-seconds` (synthesize-rir, room-morph) and
+  `--n-octave-bands` (estimate-room).
+- The absolute-threshold trim is renamed `trim_absolute` to disambiguate it from
+  the librosa-compatible relative-to-peak `trim`.
+
 ## v1.2.2 (2026-06-02)
 
 ### Breaking changes
