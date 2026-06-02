@@ -132,6 +132,44 @@ TEST_CASE("RealtimeEngine records telemetry overflow after drain", "[engine][tel
   REQUIRE(found);
 }
 
+TEST_CASE("RealtimeEngine spreads control boundaries across a large block without overflow",
+          "[engine][telemetry]") {
+  // Regression: a fixed 64-sample control cadence emits frames/64 boundaries,
+  // overflowing the 32-slot boundary list for blocks > ~2048 samples and
+  // freezing automation/smoothing in the tail. The cadence now widens with the
+  // block so all control boundaries fit and the whole block is re-evaluated.
+  constexpr int kBlock = 4096;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  TelemetryCaptureProcessor processor;
+  sonare::automation::AutomationLane lane(11);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {16.0, 1.0f, sonare::automation::CurveType::Linear}});
+  engine.automation().set_lanes({lane});
+  engine.automation().bind_target(11, &processor);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::vector<float> buffer(static_cast<size_t>(kBlock), 0.0f);
+  float* io[] = {buffer.data()};
+  engine.process(io, 1, kBlock);
+
+  bool overflowed = false;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    overflowed =
+        overflowed || (telemetry.type == sonare::engine::TelemetryType::kError &&
+                       telemetry.error == sonare::engine::TelemetryErrorCode::kBoundaryOverflow);
+  }
+  REQUIRE_FALSE(overflowed);
+  // Automation kept evaluating: the parameter was driven to its bound target.
+  REQUIRE(processor.last_param == 11);
+}
+
 TEST_CASE("RealtimeEngine records non realtime-safe automation rejection", "[engine][telemetry]") {
   class NonRtProcessor final : public sonare::rt::ProcessorBase {
    public:

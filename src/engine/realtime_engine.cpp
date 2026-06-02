@@ -188,8 +188,22 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
   // Insert control-period boundaries so automation lanes and engine-level
   // parameter smoothers are re-evaluated at a bounded cadence within the block.
+  // The boundary list is fixed-capacity, so for blocks larger than
+  // kControlPeriod * budget we widen the period to spread the boundaries evenly
+  // across the whole block instead of packing the first ~budget*64 samples and
+  // dropping the rest (which would freeze automation/smoothing in the block's
+  // tail and reintroduce zipper artifacts). Smaller blocks keep the nominal
+  // 64-sample cadence unchanged.
   if (automation_.lane_count() > 0 || any_smoothed_param_active()) {
-    for (int offset = kControlPeriod; offset < frames; offset += kControlPeriod) {
+    // Reserve headroom for the mandatory boundaries (block start/end, loop,
+    // clip, command, marker, automation breakpoints) so control boundaries do
+    // not consume the entire list.
+    constexpr int kControlBoundaryBudget = static_cast<int>(BoundaryList::kCapacity) - 12;
+    int period = kControlPeriod;
+    if (frames > kControlPeriod * kControlBoundaryBudget) {
+      period = (frames + kControlBoundaryBudget - 1) / kControlBoundaryBudget;
+    }
+    for (int offset = period; offset < frames; offset += period) {
       boundary_splitter_.add_automation(offset);
     }
   }
