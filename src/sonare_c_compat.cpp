@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -213,6 +214,12 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
                         int hop_length, float time_constant, float gain, float bias, float power,
                         float eps, float** out, size_t* out_length) {
   if (n_bins < 0 || n_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // Guard against size_t overflow (32-bit on WASM) and bound the product against
+  // kMaxBufferSize before using it as the claimed buffer length.
+  if (n_frames != 0 &&
+      static_cast<size_t>(n_bins) > kMaxBufferSize / static_cast<size_t>(n_frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (validate_buffer(values, static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames)) !=
       SONARE_OK) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -233,6 +240,12 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
 SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, float** out,
                            size_t* out_length) {
   if (n_chroma < 0 || n_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // Guard against size_t overflow (32-bit on WASM) and bound the product against
+  // kMaxBufferSize before using it as the claimed buffer length.
+  if (n_frames != 0 &&
+      static_cast<size_t>(n_chroma) > kMaxBufferSize / static_cast<size_t>(n_frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (validate_buffer(chromagram, static_cast<size_t>(n_chroma) * static_cast<size_t>(n_frames)) !=
       SONARE_OK) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -373,8 +386,22 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, 
 SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
                                     int sample_rate, SonareLufsResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (channels <= 0 || sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (frames > 0 && samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  // Mirror the mono sonare_lufs input contract (validate_audio_params): reject
+  // empty audio, out-of-range sample rate, oversized buffers, and non-finite
+  // samples so both LUFS entry points share one validation policy.
+  if (channels <= 0 || frames == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (static_cast<size_t>(channels) > kMaxBufferSize / frames) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const size_t total = frames * static_cast<size_t>(channels);
+  if (total > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t i = 0; i < total; ++i) {
+    if (!std::isfinite(samples[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   metering::LufsResult result = metering::lufs_interleaved(samples, frames, channels, sample_rate);
   out->integrated_lufs = result.integrated_lufs;

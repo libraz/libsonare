@@ -8,6 +8,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c.h"
@@ -40,40 +41,15 @@ inline std::vector<sonare::mastering::api::Param> to_params(const SonareMasterin
 
 inline sonare::mastering::assistant::AssistantConfig to_assistant_config(
     const SonareMasteringParam* params, size_t count) {
-  sonare::mastering::assistant::AssistantConfig config;
-  for (size_t index = 0; index < count; ++index) {
-    if (!params[index].key) continue;
-    const std::string key = params[index].key;
-    if (key == "targetLufs" || key == "target_lufs") {
-      config.target_lufs = static_cast<float>(params[index].value);
-    } else if (key == "ceilingDb" || key == "ceiling_db") {
-      config.ceiling_db = static_cast<float>(params[index].value);
-    } else if (key == "enableRepair" || key == "enable_repair") {
-      config.enable_repair = params[index].value != 0.0;
-    } else if (key == "preferStreamingSafe" || key == "prefer_streaming_safe") {
-      config.prefer_streaming_safe = params[index].value != 0.0;
-    } else if (key == "speechMonoAmount" || key == "speech_mono_amount") {
-      config.speech_mono_amount = static_cast<float>(params[index].value);
-    }
-  }
-  return config;
+  const std::vector<sonare::mastering::api::Param> parsed = to_params(params, count);
+  return sonare::mastering::assistant::assistant_config_from_params(parsed.data(), parsed.size());
 }
 
 inline sonare::mastering::assistant::AudioProfileConfig to_audio_profile_config(
     const SonareMasteringParam* params, size_t count) {
-  sonare::mastering::assistant::AudioProfileConfig config;
-  for (size_t index = 0; index < count; ++index) {
-    if (!params[index].key) continue;
-    const std::string key = params[index].key;
-    if (key == "nFft" || key == "n_fft") {
-      config.n_fft = static_cast<int>(params[index].value);
-    } else if (key == "hopLength" || key == "hop_length") {
-      config.hop_length = static_cast<int>(params[index].value);
-    } else if (key == "truePeakOversample" || key == "true_peak_oversample") {
-      config.true_peak_oversample = static_cast<int>(params[index].value);
-    }
-  }
-  return config;
+  const std::vector<sonare::mastering::api::Param> parsed = to_params(params, count);
+  return sonare::mastering::assistant::audio_profile_config_from_params(parsed.data(),
+                                                                        parsed.size());
 }
 
 inline void set_mastering_result(const sonare::mastering::api::MonoResult& result,

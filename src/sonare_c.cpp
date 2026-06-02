@@ -871,6 +871,21 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
       options->hmm_beam_width < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Reject out-of-range enum-like fields instead of silently mapping them to a
+  // default (chroma_method only documents 0 = STFT, 1 = NNLS). When key context
+  // is enabled, also require an in-range key_root / key_mode rather than letting
+  // from_c_pitch_class / from_c_mode silently clamp garbage to C / Major.
+  if (options->chroma_method != 0 && options->chroma_method != 1) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->use_key_context != 0) {
+    const int root = static_cast<int>(options->key_root);
+    const int mode = static_cast<int>(options->key_mode);
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
+        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
 
   out->chords = nullptr;
   out->chord_count = 0;

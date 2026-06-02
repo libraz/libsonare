@@ -211,9 +211,12 @@ typedef struct {
   float beat_gain;
   float accent_gain;
   /* Explicit click length in samples. 0 means "use the sample-rate-derived
-     default" (the engine derives the length from its click_seconds default and
-     the prepared sample rate). A negative value is rejected. */
+     default" (the engine derives the length from click_seconds and the prepared
+     sample rate). A negative value is rejected. */
   int click_samples;
+  /* Click duration in seconds, used when click_samples is 0 to derive the click
+     length from the prepared sample rate. Defaults to 0.002 (2 ms). */
+  double click_seconds;
 } SonareEngineMetronomeConfig;
 
 typedef struct {

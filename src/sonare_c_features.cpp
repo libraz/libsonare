@@ -679,6 +679,15 @@ SonareError sonare_resample(const float* samples, size_t length, int src_sr, int
   if (target_sr < kMinSampleRate || target_sr > kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Bound the projected output size (length * target_sr / src_sr) against
+  // kMaxBufferSize, mirroring the input-side ceiling in validate_audio_params.
+  // Compute in double so the multiplication cannot overflow before comparison
+  // (src_sr is already validated >= kMinSampleRate, so the division is safe).
+  const double projected =
+      static_cast<double>(length) * static_cast<double>(target_sr) / static_cast<double>(src_sr);
+  if (projected > static_cast<double>(kMaxBufferSize)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   SONARE_C_TRY
   std::vector<float> result = resample(samples, length, src_sr, target_sr);
@@ -837,7 +846,6 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       !valid_output_format(config->output_format)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
   *out = nullptr;
 
   SONARE_C_TRY
@@ -850,7 +858,12 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.fmax = config->fmax;
   cfg.tuning_ref_hz = config->tuning_ref_hz;
   cfg.window = to_window_type(config->window);
-  cfg.compute_magnitude = config->compute_magnitude != 0;
+  // The SOA read paths (read_frames / read_frames_u8 / read_frames_i16) do not
+  // surface the per-frame magnitude spectrum, so compute_magnitude is forced off
+  // here to avoid silently incurring the per-frame compute cost for a result that
+  // cannot be retrieved through the C ABI. The config field is accepted (so the
+  // default config still constructs) but treated as a no-op.
+  cfg.compute_magnitude = false;
   cfg.compute_mel = config->compute_mel != 0;
   cfg.compute_chroma = config->compute_chroma != 0;
   cfg.compute_onset = config->compute_onset != 0;

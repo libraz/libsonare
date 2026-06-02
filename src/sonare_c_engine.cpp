@@ -11,6 +11,7 @@
 #include "core/resample.h"
 #include "engine/realtime_engine.h"
 #include "metering/lufs.h"
+#include "metering/normalize.h"
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/final/dither.h"
 #endif
@@ -147,7 +148,8 @@ void fill_c_marker(const transport::Marker& marker, SonareEngineMarker* out) {
 }
 
 SonareEngineMetronomeConfig metronome_to_c(const engine::MetronomeConfig& config) {
-  return {config.enabled ? 1 : 0, config.beat_gain, config.accent_gain, config.click_samples};
+  return {config.enabled ? 1 : 0, config.beat_gain, config.accent_gain, config.click_samples,
+          config.click_seconds};
 }
 
 engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& config) {
@@ -155,9 +157,14 @@ engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& conf
   out.enabled = config.enabled != 0;
   out.beat_gain = config.beat_gain;
   out.accent_gain = config.accent_gain;
-  // The C ABI exposes only an explicit sample count; a positive value overrides
-  // the sample-rate-derived click_seconds default, while 0 selects that default.
+  // When click_samples is 0 the engine derives the length from click_seconds and
+  // the prepared sample rate; a positive click_samples overrides that. Treat a
+  // non-positive click_seconds as "use the default" so older callers that leave
+  // the field zero-initialized keep the 2 ms behavior.
   out.click_samples = config.click_samples;
+  if (config.click_seconds > 0.0) {
+    out.click_seconds = config.click_seconds;
+  }
   return out;
 }
 
@@ -428,7 +435,8 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     if (!clip.channels || clip.num_channels <= 0 || clip.num_samples <= 0 ||
         !std::isfinite(clip.start_ppq) || clip.start_ppq < 0.0 || clip.clip_offset_samples < 0 ||
         clip.clip_offset_samples >= clip.num_samples || clip.length_samples <= 0 ||
-        clip.gain < 0.0f || clip.fade_in_samples < 0 || clip.fade_out_samples < 0) {
+        !(std::isfinite(clip.gain) && clip.gain >= 0.0f) || clip.fade_in_samples < 0 ||
+        clip.fade_out_samples < 0) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     auto owned = std::make_shared<engine::ClipAudioStorage>();
@@ -679,15 +687,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                   "facade default to keep cross-binding bounce behaviour identical");
     const float effective_target_lufs =
         options->target_lufs == 0.0f ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS : options->target_lufs;
-    const auto loudness = metering::lufs_interleaved(
-        interleaved.data(), channels[0].size(), options->num_channels, options->target_sample_rate);
-    if (std::isfinite(loudness.integrated_lufs)) {
-      const float gain =
-          std::pow(10.0f, (effective_target_lufs - loudness.integrated_lufs) / 20.0f);
-      for (auto& sample : interleaved) {
-        sample *= gain;
-      }
-    }
+    metering::normalize_interleaved_to_lufs(interleaved, channels[0].size(), options->num_channels,
+                                            options->target_sample_rate, effective_target_lufs);
   }
   if (options->dither != 0) {
 #if defined(SONARE_WITH_MASTERING)
@@ -721,7 +722,7 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          SonareEngineFreezeResult* out) {
   if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
       options->num_channels <= 0 || !std::isfinite(options->start_ppq) ||
-      options->start_ppq < 0.0 || options->gain < 0.0f) {
+      options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
