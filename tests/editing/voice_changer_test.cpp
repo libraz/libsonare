@@ -150,6 +150,14 @@ TEST_CASE("StreamingRetune derives grain size from sample rate unless configured
   StreamingRetune configured({0.0f, 1.0f, 1024});
   configured.prepare(96000.0, 256);
   REQUIRE(configured.grain_size() == 1024);
+
+  // grain_size is structural and fixed at prepare(): a runtime set_config()
+  // (which runs on the audio thread and must not reallocate) keeps the
+  // effective grain size and reports it back through config(), rather than
+  // silently storing a value that never takes effect.
+  configured.set_config({3.0f, 0.5f, 4096});
+  REQUIRE(configured.grain_size() == 1024);
+  REQUIRE(configured.config().grain_size == 1024);
 }
 
 TEST_CASE("StreamingRetune process_block is noexcept on the audio thread",

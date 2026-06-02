@@ -772,6 +772,12 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     return;
   }
 
+  /// Absolute time of full_chroma_history_.front(). Once the chroma history cap
+  /// is hit the surviving history no longer begins at t=0; without this offset
+  /// every retroactive bar start_time would be wrong by the dropped duration.
+  const float history_start_sec =
+      static_cast<float>(full_chroma_history_offset_) * seconds_per_frame;
+
   /// How many complete bars can we detect from full history?
   int retroactive_frames = static_cast<int>(full_chroma_history_.size());
   int retroactive_bars = retroactive_frames / frames_per_bar;
@@ -791,23 +797,14 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     int vote_count = 0;
 
     for (int f = start_frame; f < end_frame; ++f) {
-      /// Average chroma over small window around this frame
-      std::array<float, 12> smoothed = {};
+      /// Median-smooth chroma over a small window around this frame, using the
+      /// same per-bin median as the live tracking path (compute_median_chroma)
+      /// so the retroactive and live chord estimates agree on identical audio.
       int smooth_start = std::max(0, f - kChordSmoothingFrames / 2);
       int smooth_end = std::min(retroactive_frames, f + kChordSmoothingFrames / 2);
-      int smooth_count = smooth_end - smooth_start;
-
-      for (int sf = smooth_start; sf < smooth_end; ++sf) {
-        for (int c = 0; c < 12; ++c) {
-          smoothed[c] += full_chroma_history_[sf][c];
-        }
-      }
-      if (smooth_count > 0) {
-        float inv = 1.0f / smooth_count;
-        for (int c = 0; c < 12; ++c) {
-          smoothed[c] *= inv;
-        }
-      }
+      std::deque<std::array<float, 12>> window(full_chroma_history_.begin() + smooth_start,
+                                               full_chroma_history_.begin() + smooth_end);
+      std::array<float, 12> smoothed = compute_median_chroma(window);
 
       /// Detect chord
       auto [chord, corr] = find_best_chord(smoothed.data(), chord_templates_);
@@ -840,14 +837,14 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     bc.bar_index = bar;
     bc.root = best_root;
     bc.quality = best_quality;
-    bc.start_time = bar * bar_duration_;
+    bc.start_time = history_start_sec + bar * bar_duration_;
     bc.confidence = confidence;
     current_estimate_.bar_chord_progression.push_back(bc);
   }
 
   /// Update bar index to continue from where retroactive detection ended
   current_bar_index_ = retroactive_bars;
-  bar_start_time_ = retroactive_bars * bar_duration_;
+  bar_start_time_ = history_start_sec + retroactive_bars * bar_duration_;
 
   /// Compute voted pattern from all detected bars
   compute_voted_pattern(4);

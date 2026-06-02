@@ -78,6 +78,15 @@ void StreamingRetune::reset() {
 
 void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
   config_ = config;
+  // grain_size is a structural parameter fixed at prepare() time: changing it
+  // would reallocate the grain/ring buffers, which is forbidden here because
+  // set_config runs on the audio thread via RealtimeVoiceChanger snapshot
+  // adoption. Once prepared, report the effective grain size so config() never
+  // advertises a size that is not actually in use; a new grain_size takes
+  // effect on the next prepare().
+  if (grain_size_ > 0) {
+    config_.grain_size = grain_size_;
+  }
   update_ratio();
 }
 
