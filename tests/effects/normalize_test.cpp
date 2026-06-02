@@ -160,6 +160,15 @@ TEST_CASE("detect_silence_boundaries", "[normalize]") {
   REQUIRE(start < end);
 }
 
+TEST_CASE("detect_silence_boundaries rejects non-positive frame/hop", "[normalize]") {
+  Audio audio = create_audio_with_silence();
+  // A zero/negative hop would spin forever; a zero frame_length divides by zero.
+  REQUIRE_THROWS(detect_silence_boundaries(audio, -40.0f, 2048, 0));
+  REQUIRE_THROWS(detect_silence_boundaries(audio, -40.0f, 0, 512));
+  REQUIRE_THROWS(detect_silence_boundaries(audio, -40.0f, 2048, -1));
+  REQUIRE_THROWS(trim(audio, -40.0f, 2048, 0));
+}
+
 TEST_CASE("fade_in", "[normalize]") {
   Audio audio = create_audio_with_amplitude(1.0f, 22050, 1.0f);
 

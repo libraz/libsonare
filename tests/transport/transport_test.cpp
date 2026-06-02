@@ -2,11 +2,43 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <limits>
 
 #include "transport/musical_time.h"
 #include "transport/tempo_map.h"
 
 using Catch::Matchers::WithinAbs;
+
+TEST_CASE("TempoMap::ppq_to_sample guards non-finite input", "[transport]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_segments({{0.0, 120.0, 0.0}});
+  const double inf = std::numeric_limits<double>::infinity();
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  // Non-finite input must not reach llround (UB); it returns 0 instead.
+  REQUIRE(map.ppq_to_sample(nan) == 0);
+  REQUIRE(map.ppq_to_sample(-inf) == 0);
+  REQUIRE(map.ppq_to_sample(inf) == 0);
+  // A finite value still converts normally.
+  REQUIRE(map.ppq_to_sample(1.0) == 24000);
+}
+
+TEST_CASE("Transport::set_loop rejects non-finite bounds", "[transport]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, &map);
+
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  transport.set_loop(2.0, nan, true);
+  auto state = transport.snapshot();
+  REQUIRE_FALSE(state.looping);
+
+  // A valid loop still engages.
+  transport.set_loop(2.0, 4.0, true);
+  state = transport.snapshot();
+  REQUIRE(state.looping);
+}
 
 TEST_CASE("TempoMap converts samples and PPQ across tempo segments", "[transport]") {
   sonare::transport::TempoMap map;

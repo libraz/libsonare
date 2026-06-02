@@ -104,8 +104,13 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
   int n_bins = n_fft / 2 + 1;
 
-  /// Allocate output
-  std::vector<std::complex<float>> spectrum(n_bins * n_frames);
+  /// Allocate output. Compute the element count in size_t so the n_bins*n_frames
+  /// multiply (and the column-major index below) cannot overflow int for long
+  /// inputs; reject sizes that would not fit a vector index.
+  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
+  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
+               ErrorCode::InvalidParameter);
+  std::vector<std::complex<float>> spectrum(total);
 
   /// Create FFT processor
   FFT fft(n_fft);
@@ -146,7 +151,8 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
     // Store in output (column-major: [n_bins x n_frames])
     for (int f = 0; f < n_bins; ++f) {
-      spectrum[f * n_frames + t] = frame_spectrum[f];
+      spectrum[static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] =
+          frame_spectrum[f];
     }
 
     // Report progress
@@ -356,21 +362,29 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
 
+  // Element count in size_t so the n_bins*n_frames multiply and the column-major
+  // index cannot overflow int for large caller-supplied n_frames.
+  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
+  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
+               ErrorCode::InvalidParameter);
+
   // Initialize with random phase
-  std::vector<std::complex<float>> spectrum(n_bins * n_frames);
+  std::vector<std::complex<float>> spectrum(total);
   std::mt19937 rng(42);  // Fixed seed for reproducibility
   std::uniform_real_distribution<float> dist(0.0f, kTwoPi);
 
   for (int f = 0; f < n_bins; ++f) {
     for (int t = 0; t < n_frames; ++t) {
-      float mag = magnitude[f * n_frames + t];
+      const size_t idx =
+          static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
+      float mag = magnitude[idx];
       float phase = dist(rng);
-      spectrum[f * n_frames + t] = std::polar(mag, phase);
+      spectrum[idx] = std::polar(mag, phase);
     }
   }
 
   // Previous complex STFT estimate for the momentum update (librosa's `tprev`).
-  std::vector<std::complex<float>> tprev(n_bins * n_frames, std::complex<float>(0.0f, 0.0f));
+  std::vector<std::complex<float>> tprev(total, std::complex<float>(0.0f, 0.0f));
   const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   // Create spectrogram wrapper for iSTFT
@@ -392,7 +406,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
     // Update phase while preserving magnitude
     for (int f = 0; f < n_bins; ++f) {
       for (int t = 0; t < n_frames; ++t) {
-        int idx = f * n_frames + t;
+        const size_t idx =
+            static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
         float target_mag = magnitude[idx];
 
         std::complex<float> rebuilt = new_spec.at(f, t);

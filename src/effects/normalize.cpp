@@ -83,6 +83,9 @@ Audio normalize_rms(const Audio& audio, float target_db) {
 
 std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float threshold_db,
                                                     int frame_length, int hop_length) {
+  // Reject non-positive frame/hop before any loop or division: a zero/negative
+  // hop_length spins the scan forever and a zero frame_length divides by zero.
+  SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
   if (audio.empty()) return {0, 0};
 
   float threshold_linear = db_to_linear(threshold_db);

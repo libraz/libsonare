@@ -11,7 +11,8 @@
 namespace sonare::graph {
 
 bool Graph::add_node(std::string id, std::unique_ptr<rt::ProcessorBase> processor, int num_ports) {
-  if (id.empty() || node_map_.find(id) != node_map_.end() || !processor || num_ports <= 0) {
+  if (id.empty() || node_map_.find(id) != node_map_.end() || !processor || num_ports <= 0 ||
+      num_ports > Node::kMaxPorts) {
     return false;
   }
   auto new_node = std::make_unique<Node>(id, std::move(processor), num_ports);

@@ -13,6 +13,11 @@ namespace sonare::graph {
 
 class Node {
  public:
+  // Upper bound on per-node ports. num_ports flows in from user-supplied graph
+  // specs (WASM/C engine); bounding it keeps num_ports * max_block_size from
+  // overflowing int and prevents pathological buffer allocations.
+  static constexpr int kMaxPorts = 1024;
+
   Node(std::string id, std::unique_ptr<rt::ProcessorBase> processor, int num_ports);
 
   void prepare(double sample_rate, int max_block_size);

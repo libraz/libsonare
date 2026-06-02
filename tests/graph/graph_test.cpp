@@ -99,6 +99,16 @@ std::unique_ptr<sonare::rt::ProcessorBase> pass() {
 
 }  // namespace
 
+TEST_CASE("Graph rejects out-of-range port counts", "[graph]") {
+  sonare::graph::Graph graph;
+  REQUIRE_FALSE(graph.add_node("zero", pass(), 0));
+  REQUIRE_FALSE(graph.add_node("neg", pass(), -1));
+  // Above the per-node cap: would overflow num_ports * max_block_size.
+  REQUIRE_FALSE(graph.add_node("huge", pass(), sonare::graph::Node::kMaxPorts + 1));
+  // At the cap is accepted.
+  REQUIRE(graph.add_node("ok", pass(), sonare::graph::Node::kMaxPorts));
+}
+
 TEST_CASE("Graph compiles acyclic routing in topological order", "[graph]") {
   sonare::graph::Graph graph;
 

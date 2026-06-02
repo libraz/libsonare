@@ -19,6 +19,9 @@ Node::Node(std::string id, std::unique_ptr<rt::ProcessorBase> processor, int num
   if (num_ports_ <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "node must have at least one port");
   }
+  if (num_ports_ > kMaxPorts) {
+    throw SonareException(ErrorCode::InvalidParameter, "node port count exceeds maximum");
+  }
 }
 
 void Node::prepare(double sample_rate, int max_block_size) {
@@ -26,8 +29,9 @@ void Node::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be positive");
   }
   max_block_size_ = max_block_size;
-  input_.assign(static_cast<size_t>(num_ports_ * max_block_size_), 0.0f);
-  output_.assign(static_cast<size_t>(num_ports_ * max_block_size_), 0.0f);
+  const size_t buffer_size = static_cast<size_t>(num_ports_) * static_cast<size_t>(max_block_size_);
+  input_.assign(buffer_size, 0.0f);
+  output_.assign(buffer_size, 0.0f);
   process_channels_.assign(static_cast<size_t>(num_ports_), nullptr);
   // prepared_ flips true only after the processor's own prepare() has completed
   // without throwing, so process_block() (noexcept, audio thread) can rely on

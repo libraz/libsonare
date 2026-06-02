@@ -159,10 +159,17 @@ double TempoMap::sample_to_ppq(int64_t sample) const noexcept {
 int64_t TempoMap::ppq_to_sample(double ppq) const noexcept {
   const std::vector<TempoSegment>* segments = segments_.load();
   if (!segments || segments->empty()) return 0;
+  // Guard non-finite input: llround on NaN/Inf is undefined behavior (mirrors
+  // the isfinite guard in ppq_duration_to_samples).
+  if (!std::isfinite(ppq)) return 0;
   const size_t index = segment_index_for_ppq(*segments, ppq);
   const TempoSegment& segment = (*segments)[index];
   const double sample = segment.start_sample + segment_samples_at_ppq(segment, sample_rate_, ppq);
-  return static_cast<int64_t>(std::llround(sample));
+  if (!std::isfinite(sample)) return ppq > 0.0 ? std::numeric_limits<int64_t>::max() : 0;
+  const double clamped =
+      std::clamp(sample, static_cast<double>(std::numeric_limits<int64_t>::min()),
+                 static_cast<double>(std::numeric_limits<int64_t>::max()));
+  return static_cast<int64_t>(std::llround(clamped));
 }
 
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {

@@ -1,6 +1,7 @@
 #include "transport/transport.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace sonare::transport {
 namespace {
@@ -103,7 +104,15 @@ void Transport::seek_ppq(double ppq) noexcept {
 }
 
 void Transport::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
-  write_loop_state({start_ppq, end_ppq, enabled && end_ppq > start_ppq});
+  // Reject non-finite bounds so NaN/Inf loop points never reach the audio
+  // thread (a NaN end would also silently disable the loop while leaving the
+  // raw NaN published).
+  const bool valid = std::isfinite(start_ppq) && std::isfinite(end_ppq) && end_ppq > start_ppq;
+  if (!valid) {
+    write_loop_state({0.0, 0.0, false});
+    return;
+  }
+  write_loop_state({start_ppq, end_ppq, enabled});
 }
 
 bool Transport::seek_marker(uint32_t marker_id, const MarkerMap& markers) noexcept {
