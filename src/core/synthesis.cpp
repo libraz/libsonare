@@ -15,8 +15,12 @@ using constants::kTwoPiD;
 
 Audio tone(float frequency, int sr, float duration, float phi, float amplitude) {
   if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "tone: sr must be positive");
-  if (duration < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter, "tone: duration must be non-negative");
+  // Reject non-finite duration explicitly: `duration < 0` is false for NaN, so a
+  // NaN (or +Inf) would slip past the sign check and cast to a huge/garbage size_t,
+  // triggering a runaway allocation.
+  if (!std::isfinite(duration) || duration < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tone: duration must be finite and non-negative");
 
   const size_t n = static_cast<size_t>(duration * static_cast<float>(sr));
   std::vector<float> y(n);
@@ -31,8 +35,10 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
 
 Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
   if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "chirp: sr must be positive");
-  if (duration < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter, "chirp: duration must be non-negative");
+  // See tone(): NaN/Inf duration must be rejected before the size_t cast.
+  if (!std::isfinite(duration) || duration < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "chirp: duration must be finite and non-negative");
 
   const size_t n = static_cast<size_t>(duration * static_cast<float>(sr));
   std::vector<float> y(n);

@@ -10,6 +10,7 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/padding.h"
 #include "util/reflect_padding.h"
 
 namespace sonare {
@@ -19,19 +20,19 @@ using sonare::constants::kTwoPi;
 namespace {
 
 std::vector<float> pad_center(const float* data, size_t size, int pad_length, PadMode pad_mode) {
-  std::vector<float> padded(size + 2 * pad_length, 0.0f);
+  const size_t pad = static_cast<size_t>(std::max(pad_length, 0));
   if (data == nullptr || size == 0) {
-    return padded;
+    return std::vector<float>(size + 2 * pad, 0.0f);
   }
+  // Delegate to the shared padding helpers so the constant-fill and reflect
+  // index math live in one place. With a target size of size + 2*pad,
+  // util::pad_center's centering offset (size_total - size) / 2 reduces to pad,
+  // exactly matching the previous symmetric constant fill; the reflect branch is
+  // identical to reflect_center_pad's reflect_index walk.
   if (pad_mode == PadMode::Constant) {
-    std::copy(data, data + size, padded.begin() + pad_length);
-    return padded;
+    return sonare::pad_center(data, size, size + 2 * pad);
   }
-  for (size_t i = 0; i < padded.size(); ++i) {
-    const int64_t src = static_cast<int64_t>(i) - pad_length;
-    padded[i] = data[reflect_index(src, size)];
-  }
-  return padded;
+  return reflect_center_pad(data, size, static_cast<int>(pad));
 }
 
 }  // namespace

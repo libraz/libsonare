@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "util/constants.h"
@@ -105,4 +106,15 @@ TEST_CASE("clicks rejects invalid params", "[util][synthesis][edge]") {
   REQUIRE_THROWS_AS(clicks({}, 22050, 0, 0.0f, 0.1f), SonareException);
   REQUIRE_THROWS_AS(clicks({}, 22050, 0, 1000.0f, 0.0f), SonareException);
   REQUIRE_THROWS_AS(clicks({}, 22050, -1, 1000.0f, 0.1f), SonareException);
+}
+
+TEST_CASE("tone/chirp reject non-finite duration", "[util][synthesis][edge]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  // duration < 0 is false for NaN, so a NaN/Inf would cast to a huge size_t and
+  // trigger a runaway allocation. The validators must reject these.
+  REQUIRE_THROWS_AS(tone(440.0f, 22050, nan, 0.0f, 1.0f), SonareException);
+  REQUIRE_THROWS_AS(tone(440.0f, 22050, inf, 0.0f, 1.0f), SonareException);
+  REQUIRE_THROWS_AS(chirp(100.0f, 1000.0f, 22050, nan, /*linear=*/true), SonareException);
+  REQUIRE_THROWS_AS(chirp(100.0f, 1000.0f, 22050, inf, /*linear=*/true), SonareException);
 }
