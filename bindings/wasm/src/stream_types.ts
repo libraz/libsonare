@@ -112,7 +112,8 @@ export interface StreamFramesI16 {
  * Configuration for StreamAnalyzer
  */
 export interface StreamConfig {
-  sampleRate: number;
+  /** Sample rate in Hz. Optional for parity with the Node/Python bindings (default 44100). */
+  sampleRate?: number;
   nFft?: number;
   hopLength?: number;
   nMels?: number;

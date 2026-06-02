@@ -4859,7 +4859,7 @@ export class StreamAnalyzer {
       throw new Error('Module not initialized. Call init() first.');
     }
     this.analyzer = new module.StreamAnalyzer(
-      config.sampleRate,
+      config.sampleRate ?? 44100,
       config.nFft ?? 2048,
       config.hopLength ?? 512,
       config.nMels ?? 128,
