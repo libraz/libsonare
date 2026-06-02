@@ -82,10 +82,16 @@ void StreamingReverb::set_config(const StreamingReverbConfig& config, int channe
 }
 
 float StreamingReverb::process_sample(float input) noexcept {
-  if (config_.mix <= 0.0f || allpass_buf_.empty()) return input;
+  if (allpass_buf_.empty()) return input;
 
   const std::size_t cap = comb_buf_[0].size();
   if (cap < 4) return input;
+
+  // When muted (mix<=0) we still advance the comb/allpass delay lines and let
+  // the damping/feedback states decay. Freezing them while muted would resume
+  // from stale pre-mute contents on the next mix>0 block, producing an audible
+  // burst of old material. We only skip the wet contribution to the output.
+  const bool muted = config_.mix <= 0.0f;
 
   float comb_sum = 0.0f;
   for (std::size_t i = 0; i < kNumCombs; ++i) {
@@ -107,6 +113,7 @@ float StreamingReverb::process_sample(float input) noexcept {
   allpass_buf_[allpass_pos_] = ap_in;
   allpass_pos_ = (allpass_pos_ + 1) % ap_cap;
 
+  if (muted) return input;
   return input * (1.0f - config_.mix) + ap_out * config_.mix;
 }
 

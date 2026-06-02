@@ -8,6 +8,14 @@ namespace sonare::editing::pitch_editor {
 ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {}
 
 float ScaleQuantizer::quantize_midi(float midi) const noexcept {
+  // An empty scale (no pitch class enabled) is treated as an explicit chromatic
+  // pass-through: snap to the nearest semitone. Documented here so the fallback
+  // is intentional rather than a silent side effect of the candidate loop never
+  // finding an enabled pitch class.
+  if (config_.mode_mask == 0) {
+    return std::round(midi);
+  }
+
   float best = std::round(midi);
   float best_distance = 1.0e9f;
   const int center = static_cast<int>(std::round(midi));

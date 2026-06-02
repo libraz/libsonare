@@ -791,6 +791,7 @@ RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
   sanitize(c.reverb.time_ms, 320.0f);
   sanitize(c.reverb.damping, 0.55f);
   sanitize(c.limiter.ceiling_db, -1.0f);
+  sanitize(c.limiter.isp_ceiling_dbtp, -1.0f);
   sanitize(c.limiter.release_ms, 50.0f);
 
   c.input_gain_db = std::clamp(c.input_gain_db, -24.0f, 24.0f);
@@ -830,6 +831,8 @@ RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
   // See validate_dsp_section for the -1.0 dBFS ceiling rationale (inter-sample
   // headroom for a sample-domain limiter without 4x oversampling).
   c.limiter.ceiling_db = std::clamp(c.limiter.ceiling_db, -12.0f, -1.0f);
+  // Bounds match validate_dsp_section's [-12, 0] dBTP for the ISP limiter.
+  c.limiter.isp_ceiling_dbtp = std::clamp(c.limiter.isp_ceiling_dbtp, -12.0f, 0.0f);
   c.limiter.release_ms = std::clamp(c.limiter.release_ms, 1.0f, 500.0f);
   return c;
 }

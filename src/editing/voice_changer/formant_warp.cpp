@@ -86,19 +86,20 @@ Audio FormantWarp::process(const Audio& audio) const {
 
     const auto model = sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order);
 
-    // Degenerate frame: pass the raw signal through OLA unchanged. Apply the
-    // synthesis window ONCE to the raw sample (out += s * win), matching the
-    // main path which accumulates time_frame[i] * win. Using `windowed[i]`
-    // (already s * hann[i]) here would double-window to s * hann^2 and create a
-    // weighting discontinuity at the boundary between degenerate and normal
-    // frames.
+    // Degenerate frame: pass the windowed signal through OLA unchanged. The main
+    // path reconstructs the analysis-windowed signal (time_frame[i] ~= s*hann[i])
+    // and then applies the synthesis window, so its effective energy is the
+    // already-windowed sample times one more window. Accumulating
+    // `windowed[i] * win` here (s * hann^2) matches that effective window power
+    // and avoids a level step at the boundary between degenerate and normal
+    // frames; using the raw sample (s * win) would under-weight by one analysis
+    // window factor.
     if (model.variance < kEpsilon || model.ar.size() < 2 || model.ar[0] == 0.0f) {
       for (int i = 0; i < kFrameSize; ++i) {
         const long idx = start + i;
         if (idx < 0 || idx >= static_cast<long>(n)) continue;
-        const float s = x[idx];
         const float win = hann[static_cast<size_t>(i)];
-        out[static_cast<size_t>(idx)] += s * win;
+        out[static_cast<size_t>(idx)] += windowed[static_cast<size_t>(i)] * win;
         norm[static_cast<size_t>(idx)] += win * win;
       }
       continue;
