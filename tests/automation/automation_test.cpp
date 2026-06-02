@@ -5,6 +5,8 @@
 
 #include "automation/automation_engine.h"
 #include "automation/parameter.h"
+#include "mixing/automation_lane.h"
+#include "util/automation_curve.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -56,6 +58,30 @@ TEST_CASE("AutomationLane evaluates hold linear exponential and s-curve breakpoi
                       {1.0, 1.0f, sonare::automation::CurveType::Linear}});
   REQUIRE_THAT(s_curve.value_at(0.5), WithinAbs(0.5f, 1.0e-6f));
   REQUIRE(s_curve.next_breakpoint_after(0.25) == 1.0);
+}
+
+TEST_CASE("Engine and mixer automation lanes share identical curve shapes", "[automation]") {
+  // Regression: the mixer lane previously fell back to linear for any segment
+  // whose endpoints were not both strictly positive, while the engine lane used
+  // a signed-log domain. Both now route through interpolate_curve(), so a
+  // negative-endpoint Exponential segment must produce the same shape on both.
+  using sonare::AutomationCurve;
+  using sonare::interpolate_curve;
+
+  // Negative dB-domain endpoints, midpoint of an Exponential segment.
+  const double engine_mid = interpolate_curve(AutomationCurve::Exponential, -1.0, -4.0, 0.5);
+  REQUIRE(engine_mid < 0.0);  // stays negative, not linearised through 0
+  REQUIRE_THAT(engine_mid, WithinAbs(-2.0, 1.0e-5));
+
+  sonare::mixing::AutomationEvent a{};
+  a.value = -1.0f;
+  a.sample_pos = 0;
+  a.curve = AutomationCurve::Exponential;
+  sonare::mixing::AutomationEvent b{};
+  b.value = -4.0f;
+  b.sample_pos = 100;
+  const float mixer_mid = sonare::mixing::interpolate_automation_value(a, b, 50.0);
+  REQUIRE_THAT(static_cast<double>(mixer_mid), WithinAbs(engine_mid, 1.0e-5));
 }
 
 TEST_CASE("AutomationEngine applies lane values through ProcessorBase set_parameter",

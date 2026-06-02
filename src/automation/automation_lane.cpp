@@ -1,7 +1,6 @@
 #include "automation/automation_lane.h"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 
 namespace sonare::automation {
@@ -10,34 +9,8 @@ namespace {
 float interpolate(const Breakpoint& a, const Breakpoint& b, double ppq) noexcept {
   const double span = b.ppq - a.ppq;
   if (span <= 0.0) return b.value;
-  double t = std::clamp((ppq - a.ppq) / span, 0.0, 1.0);
-  switch (a.curve_to_next) {
-    case CurveType::Hold:
-      return a.value;
-    case CurveType::Exponential: {
-      // Interpolate in a signed, epsilon-shifted log domain so the curve stays
-      // exponential even when an endpoint touches or crosses zero. Plain
-      // log-interpolation is undefined for non-positive values; mixing in a
-      // linear fallback there would emit discontinuous segment shapes.
-      constexpr double kExpEpsilon = 1.0e-9;
-      const double sa = a.value < 0.0 ? -1.0 : 1.0;
-      const double sb = b.value < 0.0 ? -1.0 : 1.0;
-      if (sa == sb) {
-        const double la = std::log(std::abs(a.value) + kExpEpsilon);
-        const double lb = std::log(std::abs(b.value) + kExpEpsilon);
-        return static_cast<float>(sa * (std::exp(la + (lb - la) * t) - kExpEpsilon));
-      }
-      // Endpoints straddle zero: a single signed-log segment is ill-defined, so
-      // fall back to linear interpolation for this segment only.
-      return static_cast<float>(a.value + (b.value - a.value) * t);
-    }
-    case CurveType::SCurve:
-      t = t * t * (3.0 - 2.0 * t);
-      return static_cast<float>(a.value + (b.value - a.value) * t);
-    case CurveType::Linear:
-    default:
-      return static_cast<float>(a.value + (b.value - a.value) * t);
-  }
+  const double t = std::clamp((ppq - a.ppq) / span, 0.0, 1.0);
+  return static_cast<float>(::sonare::interpolate_curve(a.curve_to_next, a.value, b.value, t));
 }
 
 }  // namespace

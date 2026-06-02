@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -55,23 +54,10 @@ inline float interpolate_automation_value(const AutomationEvent& a, const Automa
   const double span = static_cast<double>(b.sample_pos - a.sample_pos);
   if (span <= 0.0) return b.value;
   const double t = std::clamp((sample_pos - static_cast<double>(a.sample_pos)) / span, 0.0, 1.0);
-  switch (a.curve) {
-    case AutomationCurveType::Hold:
-      return a.value;
-    case AutomationCurveType::Exponential:
-      if (a.value > 0.0f && b.value > 0.0f) {
-        return static_cast<float>(
-            std::exp(std::log(a.value) + (std::log(b.value) - std::log(a.value)) * t));
-      }
-      return static_cast<float>(a.value + (b.value - a.value) * t);
-    case AutomationCurveType::SCurve: {
-      const double shaped = t * t * (3.0 - 2.0 * t);
-      return static_cast<float>(a.value + (b.value - a.value) * shaped);
-    }
-    case AutomationCurveType::Linear:
-    default:
-      return static_cast<float>(a.value + (b.value - a.value) * t);
-  }
+  // Delegate to the single canonical curve definition so the engine and mixer
+  // lanes share identical Exponential/SCurve/Hold shapes (they previously
+  // diverged: this path only log-interpolated strictly-positive endpoints).
+  return static_cast<float>(::sonare::interpolate_curve(a.curve, a.value, b.value, t));
 }
 
 // Bounded SPSC queue of AutomationEvent breakpoints with sample-accurate
