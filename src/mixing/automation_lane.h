@@ -65,7 +65,8 @@ inline float interpolate_automation_value(const AutomationEvent& a, const Automa
 //
 // Threading model:
 //   * Producer (control thread): push().
-//   * Consumer (audio thread):   consume_block(), discard_before(), clear().
+//   * Consumer (audio thread):   consume_block(), discard_before().
+//   * Reset (both threads quiesced): clear().
 //
 // The atomic head_/tail_ pair gives the standard SPSC ring guarantees.
 // In addition, the consumer-side fields active_event_ / has_active_event_
@@ -76,6 +77,13 @@ inline float interpolate_automation_value(const AutomationEvent& a, const Automa
 // audio thread (RealtimeEngine, MixingRuntime, MonitorRuntime, and the
 // graph-runtime StripNode all dispatch process_at() from the audio
 // callback). See channel_strip.cpp for the NOTE at the top of process_at().
+//
+// clear() is NOT a plain consumer method: besides the tail pointer it also
+// resets the producer-only fields (last_pushed_sample_/has_last_pushed_sample_)
+// so the monotonic-push guard accepts earlier samples after a reset/seek.
+// Because it touches both producer and consumer state, clear() must only run
+// when BOTH threads are quiesced (e.g. ChannelStrip::reset() with the audio
+// thread stopped) — never concurrently with push() or consume_block().
 class AutomationLane {
  public:
   explicit AutomationLane(size_t capacity = 1024);
@@ -90,8 +98,10 @@ class AutomationLane {
   // on the same lane (both write active_event_/has_active_event_).
   size_t discard_before(int64_t sample_pos) noexcept;
 
-  // Lane reset. Safe to call when the audio thread is stopped (e.g. during
-  // ChannelStrip::reset()).
+  // Lane reset. Resets both consumer (tail) and producer (monotonic-push guard)
+  // state, so it is only safe with BOTH threads quiesced — i.e. neither push()
+  // nor consume_block() running concurrently (e.g. during ChannelStrip::reset()
+  // with the audio thread stopped). NOT a concurrent-safe consumer method.
   void clear() noexcept;
 
   template <typename Callback>

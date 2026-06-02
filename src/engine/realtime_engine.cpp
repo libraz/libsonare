@@ -30,6 +30,9 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   clip_player_.set_tempo_map(&tempo_map_);
   metronome_.prepare(sample_rate, &tempo_map_);
 #if defined(SONARE_WITH_MIXING)
+  // The engine exposes a single master metering tap; its telemetry always
+  // reports target id 0. Multi-tap metering (per-bus/per-strip) is not wired
+  // through this entry point — a configurable target id would be needed first.
   meter_tap_.prepare(sample_rate, max_block_size_, 0, telemetry_capacity);
 #endif
   automation_.prepare(sample_rate, &tempo_map_);

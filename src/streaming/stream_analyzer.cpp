@@ -166,7 +166,14 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples) {
 }
 
 void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t sample_offset) {
-  /// Sync cumulative samples with external offset
+  /// Sync cumulative samples with the caller-supplied original-rate offset.
+  /// NOTE: this overload is only exact when no internal resampling is active.
+  /// When the input sample rate exceeds kMaxDirectSampleRate the analyzer
+  /// resamples (introducing filter latency and a changed sample count), so the
+  /// re-seeded offset cannot account for the resampler's delay — frame-sample
+  /// offsets derived from it are then best-effort/approximate. Use the
+  /// offset-less process() overload (which advances a continuous internal
+  /// position) when resampling is in play.
   cumulative_samples_ = sample_offset;
   cumulative_samples_exact_ = static_cast<double>(sample_offset);
   process_internal(samples, n_samples);

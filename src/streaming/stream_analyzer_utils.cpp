@@ -173,7 +173,20 @@ uint8_t quantize_to_u8(float value, float min_val, float max_val) {
 int16_t quantize_to_i16(float value, float min_val, float max_val) {
   float normalized = (value - min_val) / (max_val - min_val);
   normalized = std::max(0.0f, std::min(1.0f, normalized));
-  return static_cast<int16_t>(normalized * 65535.0f - 32768.0f + 0.5f);
+  // Round-to-nearest and clamp so the endpoints map symmetrically:
+  // normalized 0 -> -32768, normalized 1 -> 32767. The previous
+  // truncating cast turned -32767.5 into -32767, so 0 never reached -32768.
+  long q = std::lround(normalized * 65535.0f - 32768.0f);
+  q = std::max<long>(-32768, std::min<long>(32767, q));
+  return static_cast<int16_t>(q);
+}
+
+float dequantize_from_u8(uint8_t quantized, float min_val, float max_val) {
+  return min_val + (static_cast<float>(quantized) / 255.0f) * (max_val - min_val);
+}
+
+float dequantize_from_i16(int16_t quantized, float min_val, float max_val) {
+  return min_val + ((static_cast<float>(quantized) + 32768.0f) / 65535.0f) * (max_val - min_val);
 }
 
 float single_power_to_db(float power_val, float ref, float amin) {

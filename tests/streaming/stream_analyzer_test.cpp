@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "streaming/stream_analyzer_utils.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -531,6 +533,28 @@ TEST_CASE("StreamAnalyzer quantized output I16", "[streaming]") {
       REQUIRE(v >= -32768);
       REQUIRE(v <= 32767);
     }
+  }
+}
+
+TEST_CASE("quantize/dequantize map endpoints symmetrically", "[streaming]") {
+  using sonare::streaming_detail::dequantize_from_i16;
+  using sonare::streaming_detail::dequantize_from_u8;
+  using sonare::streaming_detail::quantize_to_i16;
+  using sonare::streaming_detail::quantize_to_u8;
+
+  // Endpoints: min -> low extreme, max -> high extreme. The i16 low end used to
+  // truncate to -32767 instead of -32768.
+  REQUIRE(quantize_to_u8(0.0f, 0.0f, 1.0f) == 0);
+  REQUIRE(quantize_to_u8(1.0f, 0.0f, 1.0f) == 255);
+  REQUIRE(quantize_to_i16(0.0f, 0.0f, 1.0f) == -32768);
+  REQUIRE(quantize_to_i16(1.0f, 0.0f, 1.0f) == 32767);
+
+  // Round-trip recovers the value (within [min,max]) to one quantization step.
+  for (float value : {-2.0f, 0.0f, 2.5f, 5.0f, 6.0f}) {
+    REQUIRE_THAT(dequantize_from_u8(quantize_to_u8(value, -2.0f, 6.0f), -2.0f, 6.0f),
+                 Catch::Matchers::WithinAbs(value, 8.0f / 255.0f));
+    REQUIRE_THAT(dequantize_from_i16(quantize_to_i16(value, -2.0f, 6.0f), -2.0f, 6.0f),
+                 Catch::Matchers::WithinAbs(value, 8.0f / 65535.0f));
   }
 }
 

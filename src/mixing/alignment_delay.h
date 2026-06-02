@@ -39,6 +39,11 @@ class AlignmentDelay : public rt::ProcessorBase {
     prepared_channels_ = std::max(1, num_channels);
   }
 
+  // Set the alignment delay. NOTE: these reallocate the per-channel delay-line
+  // and fractional scratch storage (via prepare_storage), so they are NOT
+  // audio-thread safe — call them from the control thread while process() is
+  // not running concurrently (the same contract as prepare()). Changing the
+  // delay during live playback requires quiescing the processing thread first.
   void set_delay_samples(int delay_samples);
   void set_delay_samples_q8(int delay_samples_q8,
                             FractionalDelayMode mode = FractionalDelayMode::Lagrange3);
