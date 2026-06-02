@@ -680,6 +680,26 @@ class MixMeterSnapshot:
     true_peak_db_r: float
     max_true_peak_db: float
     seq: int
+    def __init__(
+        self,
+        peak_db_l: float,
+        peak_db_r: float,
+        rms_db_l: float,
+        rms_db_r: float,
+        correlation: float,
+        mono_compat_width: float,
+        mono_compat_peak: float,
+        mono_compat_side_rms: float,
+        likely_mono_compatible: bool,
+        momentary_lufs: float,
+        short_term_lufs: float,
+        integrated_lufs: float,
+        gain_reduction_db: float,
+        true_peak_db_l: float,
+        true_peak_db_r: float,
+        max_true_peak_db: float,
+        seq: int,
+    ) -> None: ...
 
 class GoniometerPoint:
     left: float
