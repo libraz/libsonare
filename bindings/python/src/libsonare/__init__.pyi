@@ -7,6 +7,9 @@ from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,
 )
 from .analyzer import (
+    RealtimeVoiceChangerConfig as RealtimeVoiceChangerConfig,
+)
+from .analyzer import (
     StreamingEqualizer as StreamingEqualizer,
 )
 from .analyzer import (
@@ -301,10 +304,16 @@ from .analyzer import (
     preemphasis as preemphasis,
 )
 from .analyzer import (
+    realtime_voice_changer_preset_config as realtime_voice_changer_preset_config,
+)
+from .analyzer import (
     realtime_voice_changer_preset_json as realtime_voice_changer_preset_json,
 )
 from .analyzer import (
     realtime_voice_changer_preset_names as realtime_voice_changer_preset_names,
+)
+from .analyzer import (
+    realtime_voice_changer_preset_pod as realtime_voice_changer_preset_pod,
 )
 from .analyzer import (
     remix as remix,
@@ -380,6 +389,9 @@ from .analyzer import (
 )
 from .analyzer import (
     voice_change_realtime as voice_change_realtime,
+)
+from .analyzer import (
+    voice_changer_abi_version as voice_changer_abi_version,
 )
 from .analyzer import (
     voice_character_preset_id as voice_character_preset_id,

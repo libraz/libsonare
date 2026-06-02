@@ -3,7 +3,7 @@
  *
  * @example
  * ```typescript
- * import { init, detectBpm, detectKey, analyze } from '@libraz/sonare';
+ * import { init, detectBpm, detectKey, analyze } from '@libraz/libsonare';
  *
  * await init();
  *
@@ -46,6 +46,7 @@ import type {
   MasteringStereoResult,
   MelodyResult,
   MelPowerResult,
+  MelPowerResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
@@ -70,6 +71,7 @@ import type {
   SendTiming,
   SoloProcessor,
   StereoAnalysis,
+  StftPowerResult,
   StftPowerResult,
   StftResult,
   StreamingEqualizerConfig,
@@ -169,6 +171,7 @@ export type {
   PanMode,
   PitchResult,
   RealtimeVoiceChangerConfigInput,
+  RealtimeVoiceChangerPodConfig,
   RhythmFeatures,
   RirResult,
   RirSynthOptions,
@@ -184,6 +187,7 @@ export type {
   StreamingEqualizerConfig,
   StreamingPlatform,
   StreamingRetuneConfig,
+  TempogramMode,
   Timbre,
   TimeSignature,
   VoicePresetId,
@@ -1133,6 +1137,9 @@ export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
+  if (typeof module.synthesizeRir !== 'function') {
+    throw new Error('libsonare was built without acoustic-simulation support');
+  }
   return module.synthesizeRir(options);
 }
 
@@ -1147,6 +1154,9 @@ export function estimateRoom(
 ): RoomEstimateResult {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
+  }
+  if (typeof module.estimateRoom !== 'function') {
+    throw new Error('libsonare was built without acoustic-simulation support');
   }
   return module.estimateRoom(samples, sampleRate, options);
 }
@@ -1163,6 +1173,9 @@ export function roomMorph(
 ): Float32Array {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
+  }
+  if (typeof module.roomMorph !== 'function') {
+    throw new Error('libsonare was built without acoustic-simulation support');
   }
   return module.roomMorph(samples, sampleRate, options);
 }
@@ -4703,7 +4716,7 @@ export function resample(samples: Float32Array, srcSr: number, targetSr: number)
  *
  * @example
  * ```typescript
- * import { init, Audio } from '@libraz/sonare';
+ * import { init, Audio } from '@libraz/libsonare';
  *
  * await init();
  *
@@ -4970,7 +4983,7 @@ export class Audio {
  *
  * @example
  * ```typescript
- * import { init, StreamAnalyzer } from '@libraz/sonare';
+ * import { init, StreamAnalyzer } from '@libraz/libsonare';
  *
  * await init();
  *

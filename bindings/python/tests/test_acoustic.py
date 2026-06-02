@@ -112,3 +112,32 @@ def test_estimate_room_zero_confidence_for_silence() -> None:
     est = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
     assert est.confidence == 0.0
     assert est.volume == 0.0
+
+
+@acoustic
+def test_synthesize_rir_uses_default_room_dimensions() -> None:
+    # Room dimensions default to 7 x 5 x 3 to match the Node/WASM/CLI bindings.
+    result = libsonare.synthesize_rir()
+    assert result.has_error is False
+    assert result.sample_rate == 48000
+    assert len(result.rir) > 0
+
+
+@acoustic
+def test_synthesize_rir_late_model_is_honored() -> None:
+    # A more absorptive room makes Sabine and Eyring diverge; selecting the model
+    # via prefer_eyring must change the synthesized tail.
+    sabine = libsonare.synthesize_rir(
+        7.0, 5.0, 3.0, absorption=0.4, max_seconds=0.3, prefer_eyring=False
+    )
+    eyring = libsonare.synthesize_rir(
+        7.0, 5.0, 3.0, absorption=0.4, max_seconds=0.3, prefer_eyring=True
+    )
+    assert sabine.rir != eyring.rir
+
+
+@acoustic
+def test_estimate_room_band_arrays_share_length() -> None:
+    rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15)
+    est = libsonare.estimate_room(rir.rir, sample_rate=48000, mode=2, min_decay_db=25.0)
+    assert len(est.absorption_bands) == len(est.rt60_bands)

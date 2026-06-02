@@ -599,12 +599,45 @@ sonare::acoustic::SourceListener placementFromVal(val opts) {
            floatProperty(opts, "listenerZ", 1.7f)}};
 }
 
+// Acoustic sample-rate bounds, kept in sync with the C ABI's
+// sonare_c_detail::kMinSampleRate / kMaxSampleRate so every binding rejects the
+// same out-of-range rates (the C++ functions are otherwise called directly).
+constexpr int kAcousticMinSampleRate = 8000;
+constexpr int kAcousticMaxSampleRate = 384000;
+
+void validateAcousticSampleRate(int sample_rate) {
+  if (sample_rate < kAcousticMinSampleRate || sample_rate > kAcousticMaxSampleRate) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "sampleRate out of supported range [8000, 384000]");
+  }
+}
+
+// Rejects an empty input buffer and any non-finite sample, matching the C ABI's
+// validate_audio_params contract for the estimate/morph entry points.
+void validateAcousticInput(const std::vector<float>& data) {
+  if (data.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "input buffer is empty");
+  }
+  for (const float s : data) {
+    if (!std::isfinite(s)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "input contains NaN or Inf samples");
+    }
+  }
+}
+
 val js_synthesize_rir(val opts) {
   const int sample_rate = intProperty(opts, "sampleRate", 48000);
+  validateAcousticSampleRate(sample_rate);
   sonare::acoustic::RirSynthConfig config;
   config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
+  config.late_model = boolProperty(opts, "preferEyring", true)
+                          ? sonare::acoustic::ReverbModel::Eyring
+                          : sonare::acoustic::ReverbModel::Sabine;
   config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
+  config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
+  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
 
   const auto result = sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f),
                                                        placementFromVal(opts), sample_rate, config);
@@ -620,7 +653,9 @@ val js_synthesize_rir(val opts) {
 }
 
 val js_estimate_room(val samples, int sample_rate, val opts) {
+  validateAcousticSampleRate(sample_rate);
   std::vector<float> data = float32ArrayToVector(samples);
+  validateAcousticInput(data);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   sonare::RoomEstimateConfig config;
   config.aspect_hint_lw = floatProperty(opts, "aspectHintLw", config.aspect_hint_lw);
@@ -630,8 +665,29 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   config.prefer_eyring = boolProperty(opts, "preferEyring", true);
   const int n_bands = intProperty(opts, "nOctaveBands", 0);
   if (n_bands > 0) config.acoustic.n_octave_bands = n_bands;
+  const float min_decay_db = floatProperty(opts, "minDecayDb", 0.0f);
+  if (min_decay_db > 0.0f) config.acoustic.min_decay_db = min_decay_db;
+  const float noise_floor_margin_db = floatProperty(opts, "noiseFloorMarginDb", 0.0f);
+  if (noise_floor_margin_db > 0.0f) config.acoustic.noise_floor_margin_db = noise_floor_margin_db;
+  switch (intProperty(opts, "mode", 0)) {
+    case 1:
+      config.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
+      break;
+    case 2:
+      config.acoustic.mode = sonare::AcousticConfig::Mode::ImpulseResponse;
+      break;
+    default:
+      config.acoustic.mode = sonare::AcousticConfig::Mode::Auto;
+      break;
+  }
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
+  // The estimator always returns equal-length band vectors; report both at the
+  // shared min length so consumers see the same band count as the C ABI/Python.
+  const size_t band_count = std::min(est.absorption_bands.size(), est.rt60_bands.size());
+  std::vector<float> absorption_bands(est.absorption_bands.begin(),
+                                      est.absorption_bands.begin() + band_count);
+  std::vector<float> rt60_bands(est.rt60_bands.begin(), est.rt60_bands.begin() + band_count);
   val out = val::object();
   out.set("volume", est.volume);
   out.set("length", est.dims.length);
@@ -639,13 +695,15 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   out.set("height", est.dims.height);
   out.set("drrDb", est.drr_db);
   out.set("confidence", est.confidence);
-  out.set("absorptionBands", vectorToFloat32Array(est.absorption_bands));
-  out.set("rt60Bands", vectorToFloat32Array(est.rt60_bands));
+  out.set("absorptionBands", vectorToFloat32Array(absorption_bands));
+  out.set("rt60Bands", vectorToFloat32Array(rt60_bands));
   return out;
 }
 
 val js_room_morph(val samples, int sample_rate, val opts) {
+  validateAcousticSampleRate(sample_rate);
   std::vector<float> data = float32ArrayToVector(samples);
+  validateAcousticInput(data);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   sonare::effects::acoustic::RoomMorphConfig config;
   config.target = roomFromVal(opts, 0.2f);
@@ -1076,7 +1134,7 @@ val js_normalize(val samples, int sample_rate, float target_db) {
 val js_trim(val samples, int sample_rate, float threshold_db) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  Audio result = trim(audio, threshold_db);
+  Audio result = trim_absolute(audio, threshold_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }

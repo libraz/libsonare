@@ -4,13 +4,16 @@
 #include <cmath>
 #include <vector>
 
+#include "acoustic/late_reverb.h"
+
 namespace sonare {
 namespace {
 
-// Sabine/Eyring proportionality constant 0.161 = 24 ln(10) / c (c ~= 343 m/s).
-// Matches the forward `sabine_rt60`/`eyring_rt60` so the estimate inverts the
-// synthesis exactly.
-constexpr double kSabineCoeff = 0.161;
+// Consume the SAME Sabine/Eyring proportionality constant the forward
+// `sabine_rt60`/`eyring_rt60` synthesis path uses (promoted to double here), so
+// the geometry estimate inverts the synthesis with identical bit-for-bit
+// coefficients rather than an independently-rounded literal.
+constexpr double kSabineCoeff = static_cast<double>(sonare::acoustic::kSabineCoeff);
 
 // Direct-to-reverberant ratio (dB): energy within +/- 2.5 ms of the strongest
 // peak versus all energy outside that direct window (both the tail after it and

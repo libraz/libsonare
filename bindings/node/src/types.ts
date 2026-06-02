@@ -385,6 +385,12 @@ export interface RoomGeometryOptions {
 
 export interface RirSynthOptions extends RoomGeometryOptions {
   sampleRate?: number;
+  /** Use the Eyring statistical late-tail model (default true); false = Sabine. */
+  preferEyring?: boolean;
+  /** Early/late crossover in ms (0 = auto, ~sqrt(V) ms). */
+  mixingTimeMs?: number;
+  /** Equal-power crossfade width around the mixing time in ms (0 = default). */
+  crossfadeMs?: number;
 }
 
 export interface RirResult {
@@ -399,6 +405,12 @@ export interface RoomEstimateOptions {
   referenceAbsorption?: number;
   preferEyring?: boolean;
   nOctaveBands?: number;
+  /** Analyzer routing: 0 = auto, 1 = blind, 2 = impulse-response. */
+  mode?: number;
+  /** Analyzer decay-fit span in dB (0 = library default). */
+  minDecayDb?: number;
+  /** Analyzer noise-floor margin in dB (0 = library default). */
+  noiseFloorMarginDb?: number;
 }
 
 export interface RoomEstimateResult {

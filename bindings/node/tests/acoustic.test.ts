@@ -39,4 +39,34 @@ describe('geometric room acoustics', () => {
     expect(a.length).toBeGreaterThan(samples.length);
     expect(Array.from(a)).toEqual(Array.from(b));
   });
+
+  it('rejects out-of-range sample rates', () => {
+    expect(() => synthesizeRir({ sampleRate: 0 })).toThrow();
+    expect(() => synthesizeRir({ sampleRate: 500000 })).toThrow();
+    const samples = new Float32Array(1000);
+    samples[0] = 1.0;
+    expect(() => estimateRoom(samples, 0)).toThrow();
+    expect(() => roomMorph(samples, 500000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
+  });
+
+  it('rejects empty and non-finite input buffers', () => {
+    expect(() => estimateRoom(new Float32Array(0), 48000)).toThrow();
+    const bad = new Float32Array(1000);
+    bad[10] = Number.NaN;
+    expect(() => estimateRoom(bad, 48000)).toThrow();
+    expect(() => roomMorph(bad, 48000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
+  });
+
+  it('honors the late-tail model selector', () => {
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.4, maxSeconds: 0.3 };
+    const sabine = synthesizeRir({ ...base, preferEyring: false });
+    const eyring = synthesizeRir({ ...base, preferEyring: true });
+    expect(Array.from(sabine.rir)).not.toEqual(Array.from(eyring.rir));
+  });
+
+  it('emits absorption and rt60 bands at the same length', () => {
+    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const est = estimateRoom(rir.rir, 48000);
+    expect(est.absorptionBands.length).toBe(est.rt60Bands.length);
+  });
 });

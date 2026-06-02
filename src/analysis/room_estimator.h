@@ -53,8 +53,9 @@ struct RoomEstimateConfig {
   float aspect_hint_lh = 1.0f;
 
   /// Mean-absorption prior that anchors the otherwise rank-deficient volume
-  /// scale (see the file header). Clamped to [0.01, 0.99). A value matching the
-  /// true room recovers the true volume; mismatch scales the volume estimate.
+  /// scale (see the file header). Clamped to [0.01, 0.99] (both bounds
+  /// inclusive). A value matching the true room recovers the true volume;
+  /// mismatch scales the volume estimate.
   float reference_absorption = 0.15f;
 
   /// Use Eyring instead of Sabine for bands whose mean absorption exceeds ~0.2,

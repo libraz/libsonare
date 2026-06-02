@@ -56,6 +56,7 @@ FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 StripRef: TypeAlias = int | str
 
 def engine_abi_version() -> int: ...
+def voice_changer_abi_version() -> int: ...
 
 AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int]
@@ -374,6 +375,45 @@ def voice_change(
     formant_factor: float = 1.0,
 ) -> list[float]: ...
 
+class RealtimeVoiceChangerConfig:
+    input_gain_db: float
+    output_gain_db: float
+    wet_mix: float
+    retune_semitones: float
+    retune_mix: float
+    retune_grain_size: int
+    formant_factor: float
+    formant_amount: float
+    formant_body: float
+    formant_brightness: float
+    formant_nasal: float
+    eq_highpass_hz: float
+    eq_body_db: float
+    eq_presence_db: float
+    eq_air_db: float
+    gate_threshold_db: float
+    gate_attack_ms: float
+    gate_release_ms: float
+    gate_range_db: float
+    compressor_threshold_db: float
+    compressor_ratio: float
+    compressor_attack_ms: float
+    compressor_release_ms: float
+    compressor_makeup_gain_db: float
+    deesser_frequency_hz: float
+    deesser_threshold_db: float
+    deesser_ratio: float
+    deesser_range_db: float
+    reverb_mix: float
+    reverb_time_ms: float
+    reverb_damping: float
+    reverb_seed: int
+    limiter_ceiling_db: float
+    limiter_release_ms: float
+    limiter_enable_isp_limiter: int
+    limiter_isp_ceiling_dbtp: float
+    def __init__(self, **kwargs: object) -> None: ...
+
 class RealtimeVoiceChanger:
     def __init__(
         self,
@@ -390,6 +430,8 @@ class RealtimeVoiceChanger:
     def set_config(self, preset: str | Mapping[str, object]) -> None: ...
     def latency_samples(self) -> int: ...
     def config_json(self) -> str: ...
+    def config_pod(self) -> RealtimeVoiceChangerConfig: ...
+    def set_config_pod(self, config: RealtimeVoiceChangerConfig) -> None: ...
     def process_mono(self, samples: FloatSamples) -> np.ndarray: ...
     def process_interleaved(
         self, samples: FloatSamples, channels: int | None = None
@@ -406,8 +448,10 @@ def voice_change_realtime(
     channels: int = 1,
 ) -> np.ndarray: ...
 def realtime_voice_changer_preset_names() -> list[str]: ...
+def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChangerConfig: ...
 def voice_character_preset_id(preset: int) -> str | None: ...
 def realtime_voice_changer_preset_json(name: str) -> str: ...
+def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChangerConfig: ...
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]: ...
 def normalize(
     samples: FloatSamples, sample_rate: int = 22050, target_db: float = 0.0

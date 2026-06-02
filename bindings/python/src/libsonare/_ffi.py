@@ -401,7 +401,10 @@ class SonareRirSynthConfig(ctypes.Structure):
         ("listener_z", ctypes.c_float),
         ("absorption", ctypes.c_float),
         ("max_seconds", ctypes.c_float),
+        ("mixing_time_ms", ctypes.c_float),
+        ("crossfade_ms", ctypes.c_float),
         ("ism_order", ctypes.c_int),
+        ("late_model", ctypes.c_int),
         ("seed", ctypes.c_uint),
     ]
 
@@ -424,8 +427,11 @@ class SonareRoomEstimateConfig(ctypes.Structure):
         ("aspect_hint_lw", ctypes.c_float),
         ("aspect_hint_lh", ctypes.c_float),
         ("reference_absorption", ctypes.c_float),
+        ("min_decay_db", ctypes.c_float),
+        ("noise_floor_margin_db", ctypes.c_float),
         ("prefer_eyring", ctypes.c_int),
         ("n_octave_bands", ctypes.c_int),
+        ("mode", ctypes.c_int),
     ]
 
 

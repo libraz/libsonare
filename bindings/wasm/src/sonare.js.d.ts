@@ -219,6 +219,9 @@ export interface WasmRoomGeometryOptions {
 
 export interface WasmRirSynthOptions extends WasmRoomGeometryOptions {
   sampleRate?: number;
+  preferEyring?: boolean;
+  mixingTimeMs?: number;
+  crossfadeMs?: number;
 }
 
 export interface WasmRirResult {
@@ -233,6 +236,9 @@ export interface WasmRoomEstimateOptions {
   referenceAbsorption?: number;
   preferEyring?: boolean;
   nOctaveBands?: number;
+  mode?: number;
+  minDecayDb?: number;
+  noiseFloorMarginDb?: number;
 }
 
 export interface WasmRoomEstimateResult {
@@ -753,13 +759,15 @@ export interface SonareModule {
     minDecayDb: number,
     noiseFloorMarginDb: number,
   ) => WasmAcousticResult;
-  synthesizeRir: (options: WasmRirSynthOptions) => WasmRirResult;
-  estimateRoom: (
+  // Acoustic-simulation entry points are present only in builds compiled with
+  // SONARE_WITH_ACOUSTIC_SIM; absent otherwise (the wrappers throw a clear error).
+  synthesizeRir?: (options: WasmRirSynthOptions) => WasmRirResult;
+  estimateRoom?: (
     samples: Float32Array,
     sampleRate: number,
     options: WasmRoomEstimateOptions,
   ) => WasmRoomEstimateResult;
-  roomMorph: (
+  roomMorph?: (
     samples: Float32Array,
     sampleRate: number,
     options: WasmRoomMorphOptions,

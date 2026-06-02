@@ -59,8 +59,14 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                  {config->listener_x, config->listener_y, config->listener_z}};
   RirSynthConfig rc;
   rc.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
+  rc.late_model =
+      config->late_model == SONARE_REVERB_MODEL_SABINE ? ReverbModel::Sabine : ReverbModel::Eyring;
   rc.seed = config->seed;
   rc.max_seconds = config->max_seconds;
+  rc.mixing_time_ms = config->mixing_time_ms;
+  // crossfade_ms == 0 means "keep the library default"; a true zero crossfade is
+  // not a useful synthesis setting, so a zeroed POD preserves the C++ default.
+  if (config->crossfade_ms > 0.0f) rc.crossfade_ms = config->crossfade_ms;
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   out->has_error = has_error(res.diagnostics) ? 1 : 0;
@@ -98,6 +104,21 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
     cfg.reference_absorption = config->reference_absorption;
     cfg.prefer_eyring = config->prefer_eyring != 0;
     if (config->n_octave_bands > 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
+    if (config->min_decay_db > 0.0f) cfg.acoustic.min_decay_db = config->min_decay_db;
+    if (config->noise_floor_margin_db > 0.0f) {
+      cfg.acoustic.noise_floor_margin_db = config->noise_floor_margin_db;
+    }
+    switch (config->mode) {
+      case SONARE_ACOUSTIC_MODE_BLIND:
+        cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
+        break;
+      case SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE:
+        cfg.acoustic.mode = sonare::AcousticConfig::Mode::ImpulseResponse;
+        break;
+      default:
+        cfg.acoustic.mode = sonare::AcousticConfig::Mode::Auto;
+        break;
+    }
 
     const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
     out->volume = est.volume;

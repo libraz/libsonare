@@ -19,7 +19,10 @@ SonareRirSynthConfig valid_rir_config() {
   cfg.listener_z = 1.7f;
   cfg.absorption = 0.15f;
   cfg.max_seconds = 0.1f;
+  cfg.mixing_time_ms = 0.0f;
+  cfg.crossfade_ms = 0.0f;
   cfg.ism_order = 3;
+  cfg.late_model = SONARE_REVERB_MODEL_EYRING;
   cfg.seed = 1u;
   return cfg;
 }
@@ -29,8 +32,11 @@ SonareRoomEstimateConfig valid_estimate_config() {
   cfg.aspect_hint_lw = 7.0f / 5.0f;
   cfg.aspect_hint_lh = 7.0f / 3.0f;
   cfg.reference_absorption = 0.15f;
+  cfg.min_decay_db = 0.0f;
+  cfg.noise_floor_margin_db = 0.0f;
   cfg.prefer_eyring = 1;
   cfg.n_octave_bands = 0;
+  cfg.mode = SONARE_ACOUSTIC_MODE_AUTO;
   return cfg;
 }
 
@@ -57,6 +63,37 @@ TEST_CASE("sonare acoustic C API synthesizes and frees RIRs", "[c_api][acoustic]
   sonare_free_rir_synth_result(&result);
   REQUIRE(result.rir == nullptr);
   REQUIRE(result.length == 0);
+}
+
+TEST_CASE("sonare acoustic C API honors the late-tail model selector", "[c_api][acoustic]") {
+  // A more absorptive room makes Sabine and Eyring diverge (Eyring is preferred
+  // for alpha-bar above ~0.2); the two models must produce different tails.
+  SonareRirSynthConfig sabine = valid_rir_config();
+  sabine.absorption = 0.4f;
+  sabine.max_seconds = 0.3f;
+  sabine.late_model = SONARE_REVERB_MODEL_SABINE;
+  SonareRirSynthConfig eyring = sabine;
+  eyring.late_model = SONARE_REVERB_MODEL_EYRING;
+
+  SonareRirSynthResult sabine_rir{};
+  SonareRirSynthResult eyring_rir{};
+  REQUIRE(sonare_synthesize_rir(&sabine, 48000, &sabine_rir) == SONARE_OK);
+  REQUIRE(sonare_synthesize_rir(&eyring, 48000, &eyring_rir) == SONARE_OK);
+  REQUIRE(sabine_rir.has_error == 0);
+  REQUIRE(eyring_rir.has_error == 0);
+  REQUIRE(sabine_rir.length > 0);
+  REQUIRE(eyring_rir.length > 0);
+
+  bool differs = sabine_rir.length != eyring_rir.length;
+  const size_t common =
+      sabine_rir.length < eyring_rir.length ? sabine_rir.length : eyring_rir.length;
+  for (size_t i = 0; i < common && !differs; ++i) {
+    differs = std::abs(sabine_rir.rir[i] - eyring_rir.rir[i]) > 1e-6f;
+  }
+  REQUIRE(differs);
+
+  sonare_free_rir_synth_result(&sabine_rir);
+  sonare_free_rir_synth_result(&eyring_rir);
 }
 
 TEST_CASE("sonare acoustic C API reports invalid geometry as empty RIR", "[c_api][acoustic]") {

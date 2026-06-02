@@ -17,6 +17,17 @@
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
 #define SONARE_ACOUSTIC_ABI_VERSION 1u
 
+/// Statistical late-reverberation RT60 model for RIR synthesis
+/// (SonareRirSynthConfig::late_model). Mirrors sonare::acoustic::ReverbModel.
+#define SONARE_REVERB_MODEL_SABINE 0
+#define SONARE_REVERB_MODEL_EYRING 1
+
+/// Blind/IR acoustic-analyzer routing mode for room estimation
+/// (SonareRoomEstimateConfig::mode). Mirrors AcousticConfig::Mode.
+#define SONARE_ACOUSTIC_MODE_AUTO 0
+#define SONARE_ACOUSTIC_MODE_BLIND 1
+#define SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE 2
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,10 +46,13 @@ typedef struct {
   float listener_x;
   float listener_y;
   float listener_z;
-  float absorption;  /* uniform wall absorption, clamped to [0, 0.999] */
-  float max_seconds; /* hard RIR length cap; 0 = natural length */
-  int ism_order;     /* image-source reflection order (>= 0) */
-  unsigned int seed; /* deterministic late-tail seed */
+  float absorption;     /* uniform wall absorption, clamped to [0, 0.999] */
+  float max_seconds;    /* hard RIR length cap; 0 = natural length */
+  float mixing_time_ms; /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
+  float crossfade_ms;   /* equal-power crossfade width around the mixing time (ms) */
+  int ism_order;        /* image-source reflection order (>= 0) */
+  int late_model;       /* SONARE_REVERB_MODEL_* (Sabine/Eyring) for the late tail */
+  unsigned int seed;    /* deterministic late-tail seed */
 } SonareRirSynthConfig;
 
 /// @brief Synthesized room impulse response (mono). Free with
@@ -52,11 +66,14 @@ typedef struct {
 
 /// @brief Priors + analysis settings for blind room estimation.
 typedef struct {
-  float aspect_hint_lw;       /* length/width shape prior */
-  float aspect_hint_lh;       /* length/height shape prior */
-  float reference_absorption; /* absorption prior anchoring the volume scale */
-  int prefer_eyring;          /* 1 = Eyring model, 0 = Sabine */
-  int n_octave_bands;         /* analyzer band count (0 = library default) */
+  float aspect_hint_lw;        /* length/width shape prior */
+  float aspect_hint_lh;        /* length/height shape prior */
+  float reference_absorption;  /* absorption prior anchoring the volume scale */
+  float min_decay_db;          /* analyzer decay-fit span (dB); 0 = library default */
+  float noise_floor_margin_db; /* analyzer noise-floor margin (dB); 0 = library default */
+  int prefer_eyring;           /* 1 = Eyring model, 0 = Sabine */
+  int n_octave_bands;          /* analyzer band count (0 = library default) */
+  int mode;                    /* SONARE_ACOUSTIC_MODE_* analyzer routing */
 } SonareRoomEstimateConfig;
 
 /// @brief Equivalent-room estimate. Free with sonare_free_room_estimate.
@@ -92,9 +109,9 @@ typedef struct {
 } SonareRoomMorphConfig;
 
 #ifdef __cplusplus
-static_assert(sizeof(SonareRirSynthConfig) == 13u * sizeof(float),
+static_assert(sizeof(SonareRirSynthConfig) == 16u * sizeof(float),
               "SonareRirSynthConfig unexpected size");
-static_assert(sizeof(SonareRoomEstimateConfig) == 5u * sizeof(float),
+static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
 static_assert(sizeof(SonareRoomMorphConfig) == 15u * sizeof(float),
               "SonareRoomMorphConfig unexpected size");

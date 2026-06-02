@@ -860,6 +860,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         aspect_hint_lh=args.aspect_lh,
         reference_absorption=args.reference_absorption,
         prefer_eyring=not args.sabine,
+        n_octave_bands=args.n_octave_bands,
     )
     if args.json:
         print(
@@ -901,6 +902,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         sample_rate=args.sample_rate,
         ism_order=args.ism_order,
         seed=args.seed,
+        max_seconds=args.max_seconds,
     )
     if result.has_error:
         print("Error: invalid room geometry (source/listener outside the room)", file=sys.stderr)
@@ -933,6 +935,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
         wet=args.wet,
         ism_order=args.ism_order,
         seed=args.seed,
+        max_seconds=args.max_seconds,
     )
     _write_wav(args.output, result, sr)
     if args.json:
@@ -1589,6 +1592,12 @@ def main() -> None:
         p.add_argument("--listener-z", type=float, default=1.7)
         p.add_argument("--ism-order", type=int, default=3, help="Image-source reflection order")
         p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed")
+        p.add_argument(
+            "--max-seconds",
+            type=float,
+            default=0.0,
+            help="Hard cap on RIR/tail length in seconds (0 = natural length)",
+        )
 
     estimate_room_p = sub.add_parser(
         "estimate-room", parents=[common], help="Estimate equivalent room from a recording"
@@ -1600,6 +1609,12 @@ def main() -> None:
     )
     estimate_room_p.add_argument(
         "--sabine", action="store_true", help="Use the Sabine model (default Eyring)"
+    )
+    estimate_room_p.add_argument(
+        "--n-octave-bands",
+        type=int,
+        default=0,
+        help="Analyzer octave-band count (0 = library default)",
     )
 
     synth_rir_p = sub.add_parser(

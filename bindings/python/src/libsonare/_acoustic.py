@@ -30,28 +30,37 @@ from .types import RirResult, RoomEstimate
 
 
 def synthesize_rir(
-    length_m: float,
-    width_m: float,
-    height_m: float,
+    length_m: float = 7.0,
+    width_m: float = 5.0,
+    height_m: float = 3.0,
     *,
     source: tuple[float, float, float] = (1.0, 1.0, 1.2),
     listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
     sample_rate: int = 48000,
     ism_order: int = 3,
+    prefer_eyring: bool = True,
     seed: int = 1,
     max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
+    crossfade_ms: float = 0.0,
 ) -> RirResult:
     """Synthesize a room impulse response from shoebox geometry.
 
     Args:
-        length_m, width_m, height_m: Room dimensions in metres.
+        length_m, width_m, height_m: Room dimensions in metres (default
+            7 x 5 x 3, matching the other bindings).
         source, listener: (x, y, z) positions inside the room, in metres.
         absorption: Uniform wall absorption, clamped to [0, 0.999].
         sample_rate: Output sample rate in Hz.
         ism_order: Image-source reflection order.
+        prefer_eyring: Use the Eyring statistical late-tail model (default);
+            False selects Sabine.
         seed: Deterministic late-tail seed.
         max_seconds: Hard RIR length cap (0 = natural length).
+        mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
+        crossfade_ms: Equal-power crossfade width around the mixing time in ms
+            (0 = library default).
 
     Returns:
         A :class:`RirResult`; ``has_error`` is True when the geometry is invalid
@@ -73,7 +82,10 @@ def synthesize_rir(
         listener_z=listener[2],
         absorption=absorption,
         max_seconds=max_seconds,
+        mixing_time_ms=mixing_time_ms,
+        crossfade_ms=crossfade_ms,
         ism_order=ism_order,
+        late_model=1 if prefer_eyring else 0,
         seed=seed,
     )
     out = SonareRirSynthResult()
@@ -102,12 +114,22 @@ def estimate_room(
     reference_absorption: float = 0.15,
     prefer_eyring: bool = True,
     n_octave_bands: int = 0,
+    mode: int = 0,
+    min_decay_db: float = 0.0,
+    noise_floor_margin_db: float = 0.0,
 ) -> RoomEstimate:
     """Estimate an equivalent room from a recording (or impulse response).
 
     The volume scale is anchored by ``reference_absorption`` (the inverse
     problem is rank-deficient by one) and the shape by the aspect hints; the
     returned ``confidence`` reports how well the data support the estimate.
+
+    Args:
+        mode: Analyzer routing -- 0 = auto (impulse-like inputs route to IR
+            analysis), 1 = blind, 2 = impulse-response.
+        min_decay_db: Analyzer decay-fit span in dB (0 = library default).
+        noise_floor_margin_db: Analyzer noise-floor margin in dB (0 = library
+            default).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_estimate_room"):
@@ -117,8 +139,11 @@ def estimate_room(
         aspect_hint_lw=aspect_hint_lw,
         aspect_hint_lh=aspect_hint_lh,
         reference_absorption=reference_absorption,
+        min_decay_db=min_decay_db,
+        noise_floor_margin_db=noise_floor_margin_db,
         prefer_eyring=1 if prefer_eyring else 0,
         n_octave_bands=n_octave_bands,
+        mode=mode,
     )
     out = SonareRoomEstimate()
     rc = lib.sonare_estimate_room(
