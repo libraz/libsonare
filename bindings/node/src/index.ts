@@ -1084,6 +1084,12 @@ export function percussive(samples: Float32Array, sampleRate = 22050): Float32Ar
 }
 
 export function timeStretch(samples: Float32Array, sampleRate = 22050, rate: number): Float32Array {
+  // `rate` is required but follows a defaulted parameter, so a caller that omits
+  // it would otherwise pass `undefined` straight through to the native layer as
+  // NaN. Reject it explicitly instead of producing silent garbage.
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) {
+    throw new TypeError('timeStretch: rate must be a finite number');
+  }
   return addon.timeStretch(samples, sampleRate, rate);
 }
 
@@ -1092,6 +1098,9 @@ export function pitchShift(
   sampleRate = 22050,
   semitones: number,
 ): Float32Array {
+  if (typeof semitones !== 'number' || !Number.isFinite(semitones)) {
+    throw new TypeError('pitchShift: semitones must be a finite number');
+  }
   return addon.pitchShift(samples, sampleRate, semitones);
 }
 

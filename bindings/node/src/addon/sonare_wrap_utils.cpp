@@ -22,6 +22,22 @@ bool IsUint8Array(const Napi::Value& value) {
   return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
 }
 
+bool ValidateMatrixDims(Napi::Env env, const char* fn_name, int rows, int cols, size_t length) {
+  if (rows < 0 || cols < 0) {
+    Napi::RangeError::New(env, std::string(fn_name) + ": dimensions must be non-negative")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  const size_t expected = static_cast<size_t>(rows) * static_cast<size_t>(cols);
+  if (expected != length) {
+    Napi::RangeError::New(env, std::string(fn_name) + ": rows*cols (" + std::to_string(expected) +
+                                   ") must equal input length (" + std::to_string(length) + ")")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
 const char* PitchClassNameLocal(SonarePitchClass pc) {
   static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
   int idx = static_cast<int>(pc);
@@ -144,7 +160,6 @@ Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysi
     for (size_t i = 0; i < analysis.beat_count; ++i) {
       Napi::Object beat = Napi::Object::New(env);
       beat.Set("time", Napi::Number::New(env, static_cast<double>(analysis.beat_times[i])));
-      beat.Set("strength", env.Undefined());
       beats.Set(static_cast<uint32_t>(i), beat);
     }
   }

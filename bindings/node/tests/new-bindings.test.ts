@@ -9,6 +9,7 @@ import {
   nnFilter,
   phaseVocoder,
   pitchPyin,
+  pitchShift,
   pitchTuning,
   pitchYin,
   polyFeatures,
@@ -16,6 +17,7 @@ import {
   remix,
   scaleQuantizeMidi,
   spectralContrast,
+  timeStretch,
   voiceCharacterPresetId,
   zeroCrossings,
 } from '../src/index';
@@ -91,6 +93,29 @@ describe('newly exposed Node functions', () => {
     expect(r.rows).toBe(nF);
     expect(r.cols).toBe(nT);
     expect(allFinite(r.data)).toBe(true);
+  });
+
+  it('decompose/nnFilter reject dims that exceed the input length (no OOB read)', () => {
+    const small = new Float32Array(10);
+    expect(() => decompose(small, 1000, 1000, 3, 20, 2.0)).toThrow();
+    expect(() => nnFilter(small, 1000, 1000)).toThrow();
+  });
+
+  it('timeStretch/pitchShift reject a missing required argument instead of producing NaN', () => {
+    const x = sine(0.1, 220);
+    // The required factor follows a defaulted sampleRate; omitting it must throw.
+    expect(() => (timeStretch as (s: Float32Array) => Float32Array)(x)).toThrow();
+    expect(() => (pitchShift as (s: Float32Array) => Float32Array)(x)).toThrow();
+    // Valid calls still work.
+    expect(allFinite(timeStretch(x, SR, 1.25))).toBe(true);
+    expect(allFinite(pitchShift(x, SR, 2))).toBe(true);
+  });
+
+  it('realtimeVoiceChangerPresetConfig exposes the ISP true-peak limiter fields', () => {
+    const cfg = realtimeVoiceChangerPresetConfig('neutral-monitor') as Record<string, unknown>;
+    expect(typeof cfg.limiterEnableIspLimiter).toBe('boolean');
+    expect(typeof cfg.limiterIspCeilingDbtp).toBe('number');
+    expect(Number.isFinite(cfg.limiterIspCeilingDbtp as number)).toBe(true);
   });
 
   it('remix concatenates interval slices', () => {

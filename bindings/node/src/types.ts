@@ -83,6 +83,10 @@ export interface RealtimeVoiceChangerConfig {
   reverbSeed: number;
   limiterCeilingDb: number;
   limiterReleaseMs: number;
+  /** Whether the inter-sample-peak (true-peak) limiter is enabled (default true). */
+  limiterEnableIspLimiter: boolean;
+  /** Inter-sample-peak limiter ceiling in dBTP (default -1.0). */
+  limiterIspCeilingDbtp: number;
 }
 
 export type KeyProfile =
@@ -136,7 +140,7 @@ export interface AnalysisResult {
   key: Key;
   timeSignature: TimeSignature;
   beatTimes: Float32Array;
-  beats: Array<{ time: number; strength: undefined }>;
+  beats: Array<{ time: number }>;
 }
 
 /** Progress callback for {@link analyzeWithProgress}. */
@@ -779,6 +783,12 @@ export interface EngineTransportState {
   loopEndPpq: number;
   /** Engine sample rate in Hz. */
   sampleRate: number;
+  /** PPQ of the current bar's downbeat (derived from the tempo map). */
+  barStartPpq: number;
+  /** Zero-based index of the current bar. */
+  barCount: number;
+  /** Time signature in effect at the current PPQ. */
+  timeSignature: TimeSignature;
 }
 
 /**

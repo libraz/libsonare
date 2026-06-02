@@ -1952,6 +1952,9 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
   out.Set("reverbSeed", Napi::Number::New(env, config.reverb_seed));
   out.Set("limiterCeilingDb", Napi::Number::New(env, config.limiter_ceiling_db));
   out.Set("limiterReleaseMs", Napi::Number::New(env, config.limiter_release_ms));
+  out.Set("limiterEnableIspLimiter",
+          Napi::Boolean::New(env, config.limiter_enable_isp_limiter != 0));
+  out.Set("limiterIspCeilingDbtp", Napi::Number::New(env, config.limiter_isp_ceiling_dbtp));
   return out;
 }
 
@@ -1967,6 +1970,9 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   int n_features = info[1].As<Napi::Number>().Int32Value();
   int n_frames = info[2].As<Napi::Number>().Int32Value();
   int n_components = info[3].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "decompose", n_features, n_frames, arr.ElementLength())) {
+    return env.Undefined();
+  }
   int n_iter =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 50;
   float beta =
@@ -2002,6 +2008,9 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   int n_features = info[1].As<Napi::Number>().Int32Value();
   int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "nnFilter", n_features, n_frames, arr.ElementLength())) {
+    return env.Undefined();
+  }
   std::string aggregate =
       info.Length() >= 4 && info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "mean";
   int k = info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 7;

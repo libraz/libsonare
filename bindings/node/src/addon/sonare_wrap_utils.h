@@ -16,6 +16,17 @@ namespace sonare_node {
 const char* ErrorMessageForCode(SonareError err);
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
+
+/// @brief Validate that a flat row-major matrix's declared dims match its
+///        backing typed-array length.
+///
+/// Throws a JS RangeError (and returns false) when either dimension is
+/// negative or when rows*cols != length. The C ABI only null-checks pointers,
+/// so this guard must live in the Node layer to prevent out-of-bounds reads
+/// from caller-supplied dims that exceed the buffer.
+///
+/// @return true when the dims are consistent (no exception thrown).
+bool ValidateMatrixDims(Napi::Env env, const char* fn_name, int rows, int cols, size_t length);
 const char* PitchClassNameLocal(SonarePitchClass pc);
 const char* ModeNameLocal(SonareMode mode);
 const char* ChordQualityName(SonareChordQuality quality);

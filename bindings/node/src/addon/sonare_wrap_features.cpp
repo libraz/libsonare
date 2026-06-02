@@ -1046,11 +1046,15 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
     if (opts.Has("power")) power = opts.Get("power").As<Napi::Number>().FloatValue();
     if (opts.Has("eps")) eps = opts.Get("eps").As<Napi::Number>().FloatValue();
   }
+  const int n_bins = info[1].As<Napi::Number>().Int32Value();
+  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "pcen", n_bins, n_frames, arr.ElementLength())) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_pcen(arr.Data(), info[1].As<Napi::Number>().Int32Value(),
-                                info[2].As<Napi::Number>().Int32Value(), sr, hop, time_constant,
-                                gain, bias, power, eps, &out, &count);
+  SonareError err = sonare_pcen(arr.Data(), n_bins, n_frames, sr, hop, time_constant, gain, bias,
+                                power, eps, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
 }
@@ -1063,10 +1067,14 @@ Napi::Value SonareWrap::Tonnetz(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
+  const int n_chroma = info[1].As<Napi::Number>().Int32Value();
+  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "tonnetz", n_chroma, n_frames, arr.ElementLength())) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_tonnetz(arr.Data(), info[1].As<Napi::Number>().Int32Value(),
-                                   info[2].As<Napi::Number>().Int32Value(), &out, &count);
+  SonareError err = sonare_tonnetz(arr.Data(), n_chroma, n_frames, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
 }
@@ -1409,6 +1417,9 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int n_mels = info[1].As<Napi::Number>().Int32Value();
   const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "melToStft", n_mels, n_frames, typed.ElementLength())) {
+    return env.Undefined();
+  }
   const int sr =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
   const int n_fft =
@@ -1451,6 +1462,9 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int n_mels = info[1].As<Napi::Number>().Int32Value();
   const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "melToAudio", n_mels, n_frames, typed.ElementLength())) {
+    return env.Undefined();
+  }
   const int sr =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
   const int n_fft =
@@ -1492,6 +1506,9 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int n_mfcc = info[1].As<Napi::Number>().Int32Value();
   const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "mfccToMel", n_mfcc, n_frames, typed.ElementLength())) {
+    return env.Undefined();
+  }
   const int n_mels =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
 
@@ -1522,6 +1539,9 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int n_mfcc = info[1].As<Napi::Number>().Int32Value();
   const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "mfccToAudio", n_mfcc, n_frames, typed.ElementLength())) {
+    return env.Undefined();
+  }
   const int n_mels =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
   const int sr =
