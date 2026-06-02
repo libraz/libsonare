@@ -304,13 +304,26 @@ inline multiband::CrossoverConfig crossover_config(const ParamMap& params) {
 //
 // Each multiband processor exposes its sub-bands through a `band{i}.<field>`
 // flat-key convention (matching multiband_exciter_config()). The crossover
-// config decides how many bands exist; these helpers iterate the already-sized
-// `bands` vector and overlay any caller-supplied per-band fields onto the
-// factory defaults so they are not silently ignored.
+// config decides how many bands exist; these helpers first resize the `bands`
+// vector to match the crossover (one more band than cutoffs) -- preserving the
+// factory defaults at overlapping indices and default-constructing any extra
+// bands -- then overlay any caller-supplied per-band fields onto those defaults
+// so they are not silently ignored. Resizing here is what lets an arbitrary
+// (non-default) cutoff count reach validate_config() with a matching band count
+// instead of hard-failing the "band count must match crossover" check.
 // ---------------------------------------------------------------------------
+
+// Resize @p bands to `cutoffs + 1` to match the crossover's band count, keeping
+// any existing per-band defaults at overlapping indices.
+template <typename BandConfig>
+inline void resize_bands_to_crossover(std::vector<BandConfig>& bands,
+                                      const multiband::CrossoverConfig& crossover) {
+  bands.resize(crossover.cutoffs_hz.size() + 1);
+}
 
 inline void populate_compressor_bands(multiband::MultibandCompressorConfig& config,
                                       const ParamMap& params) {
+  resize_bands_to_crossover(config.bands, config.crossover);
   for (size_t index = 0; index < config.bands.size(); ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     auto& band = config.bands[index];
@@ -325,6 +338,7 @@ inline void populate_compressor_bands(multiband::MultibandCompressorConfig& conf
 
 inline void populate_expander_bands(multiband::MultibandExpanderConfig& config,
                                     const ParamMap& params) {
+  resize_bands_to_crossover(config.bands, config.crossover);
   for (size_t index = 0; index < config.bands.size(); ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     auto& band = config.bands[index];
@@ -338,6 +352,7 @@ inline void populate_expander_bands(multiband::MultibandExpanderConfig& config,
 
 inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
                                    const ParamMap& params) {
+  resize_bands_to_crossover(config.bands, config.crossover);
   for (size_t index = 0; index < config.bands.size(); ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     auto& band = config.bands[index];
@@ -349,6 +364,7 @@ inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
 
 inline void populate_saturation_bands(multiband::MultibandSaturationConfig& config,
                                       const ParamMap& params) {
+  resize_bands_to_crossover(config.bands, config.crossover);
   for (size_t index = 0; index < config.bands.size(); ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     auto& band = config.bands[index];

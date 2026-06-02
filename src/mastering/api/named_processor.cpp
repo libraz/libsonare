@@ -1,6 +1,7 @@
 #include "mastering/api/named_processor.h"
 
 #include <cmath>
+#include <cstdint>
 #include <sstream>
 
 #include "core/audio.h"
@@ -172,9 +173,17 @@ TrimRange detect_trim_range(const std::vector<float>& mono, int sample_rate,
   return range;
 }
 
+// Per-channel decorrelation offset XORed into the dither RNG seed. Without this,
+// both stereo channels seed std::mt19937 identically and produce bit-identical
+// (fully correlated) dither + noise-shaper feedback, which collapses the dither
+// noise to a mono phantom centre. The left channel uses channel_index 0 (no
+// change, so its output stays bit-identical to the mono path); the right channel
+// uses channel_index 1, shifting only its noise.
+constexpr uint32_t kDitherChannelSeedSalt = 0x9E3779B9u;
+
 void configure_processor(const std::string& name, const ParamMap& params,
                          std::vector<float>& samples, int sample_rate, int& latency_samples,
-                         float& applied_gain_db) {
+                         float& applied_gain_db, int channel_index = 0) {
   if (name == "dynamics.brickwallLimiter") {
     dynamics::BrickwallLimiter p(detail::brickwall_limiter_config(params));
     run_processor(p, samples, sample_rate, latency_samples);
@@ -421,16 +430,27 @@ void configure_processor(const std::string& name, const ParamMap& params,
     config.type = static_cast<final::DitherType>(i(params, "type", 2));
     config.target_bits = i(params, "targetBits", config.target_bits);
     config.seed = static_cast<uint32_t>(i(params, "seed", config.seed));
+    // Decorrelate the dither noise across stereo channels (no-op for the left
+    // channel, channel_index 0).
+    config.seed ^= static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt;
     auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
     auto out = final::dither(audio, config);
     samples.assign(out.data(), out.data() + out.size());
   } else if (name == "final.outputChain") {
-    final::OutputChainConfig config;
-    config.target_bits = i(params, "targetBits", config.target_bits);
-    config.dither_type = static_cast<final::DitherType>(i(params, "ditherType", 2));
-    config.clamp = b(params, "clamp", config.clamp);
+    final::DitherConfig dither_config;
+    dither_config.target_bits = i(params, "targetBits", dither_config.target_bits);
+    dither_config.type = static_cast<final::DitherType>(i(params, "ditherType", 2));
+    // Decorrelate the dither noise across stereo channels (no-op for the left
+    // channel, channel_index 0). output_chain() applies the default DitherConfig
+    // seed to both channels, so replicate its dither + bit-depth steps here with
+    // a per-channel seed instead of routing through output_chain() directly.
+    dither_config.seed ^= static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt;
+    final::BitDepthConfig bit_depth_config;
+    bit_depth_config.target_bits = dither_config.target_bits;
+    bit_depth_config.clamp = b(params, "clamp", bit_depth_config.clamp);
     auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-    auto out = final::output_chain(audio, config);
+    auto dithered = final::dither(audio, dither_config);
+    auto out = final::bit_depth(dithered, bit_depth_config);
     samples.assign(out.data(), out.data() + out.size());
   } else {
     for (const std::string& stereo_name : stereo_processor_names()) {
@@ -574,8 +594,11 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     int right_latency = 0;
     float left_gain_db = 0.0f;
     float right_gain_db = 0.0f;
-    configure_processor(name, map, result.left, sample_rate, left_latency, left_gain_db);
-    configure_processor(name, map, result.right, sample_rate, right_latency, right_gain_db);
+    // Pass distinct channel indices so seed-driven processors (the dither /
+    // output-chain path) decorrelate L and R; index 0 keeps the left channel
+    // bit-identical to the mono path.
+    configure_processor(name, map, result.left, sample_rate, left_latency, left_gain_db, 0);
+    configure_processor(name, map, result.right, sample_rate, right_latency, right_gain_db, 1);
     if (result.left.size() != result.right.size()) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "stereo processor produced mismatched channel lengths: " + name);

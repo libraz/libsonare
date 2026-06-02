@@ -72,9 +72,13 @@ float interpolate_fallback(const std::vector<float>& samples, size_t start, size
 /// be smoothly interpolated, not anchored at the threshold.
 void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_t end,
                                 const DeclipConfig& config) {
-  // Step 1 – cubic / linear initialisation of the unknown region.
+  // Step 1 – cubic / linear initialisation of the unknown region. Keep a copy of
+  // the interpolated baseline so the final LPC estimate can be blended against it
+  // (config.lpc_blend); the fallback gets weight (1 - lpc_blend).
+  std::vector<float> baseline(end - start);
   for (size_t j = start; j < end; ++j) {
     samples[j] = interpolate_fallback(samples, start, end, j);
+    baseline[j - start] = samples[j];
   }
 
   const size_t n = samples.size();
@@ -99,6 +103,10 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
   if (nrows <= 0) return;
 
   const int iters = std::max(config.iterations, 1);
+  // Blend weight for the LPC estimate vs. the Step-1 interpolation baseline,
+  // clamped to [0, 1]. blend == 1 reproduces the pure-LPC behaviour; blend == 0
+  // leaves the cubic / linear interpolation untouched.
+  const float blend = std::clamp(config.lpc_blend, 0.0f, 1.0f);
 
   for (int outer = 0; outer < iters; ++outer) {
     // Step 2a – AR estimation from the full signal (known + current estimate).
@@ -160,12 +168,14 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
     const Eigen::VectorXf x_u = solver.solve(Atrhs);
     if (!x_u.allFinite()) break;
 
-    // Step 2e – write the LDLT estimate back into the unknown positions.
-    // No clipping constraint is applied: see the function-level note for why
-    // we treat declip as a general gap-filler rather than a strict
-    // clipping-consistency reconstructor.
+    // Step 2e – write the LDLT estimate back into the unknown positions, blended
+    // against the Step-1 interpolation baseline by config.lpc_blend. No clipping
+    // constraint is applied: see the function-level note for why we treat declip
+    // as a general gap-filler rather than a strict clipping-consistency
+    // reconstructor.
     for (int j = 0; j < nu; ++j) {
-      samples[static_cast<size_t>(unknown_idx[static_cast<size_t>(j)])] = x_u[j];
+      const size_t idx = static_cast<size_t>(unknown_idx[static_cast<size_t>(j)]);
+      samples[idx] = blend * x_u[j] + (1.0f - blend) * baseline[idx - start];
     }
   }
 }

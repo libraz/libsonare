@@ -150,6 +150,62 @@ TEST_CASE("Declip uses LPC reconstruction when enough context is available",
   REQUIRE(result[20] < 0.9f);
 }
 
+TEST_CASE("Declip lpc_blend interpolates between LPC and fallback", "[mastering][repair]") {
+  // Long enough decaying signal with a clipped run so the LPC refinement path
+  // actually runs (n >= 32, order >= 4) and produces an estimate that differs
+  // from the cubic / linear interpolation baseline. The decaying baseline starts
+  // BELOW the 0.9 clip threshold so only the inserted run [20,22] is detected as
+  // clipped (a leading near-1.0 baseline would itself be flagged/reconstructed).
+  std::vector<float> samples(96, 0.0f);
+  samples[0] = 0.8f;
+  for (size_t i = 1; i < samples.size(); ++i) samples[i] = 0.95f * samples[i - 1];
+  samples[20] = 1.0f;
+  samples[21] = 1.0f;
+  samples[22] = 1.0f;
+  const auto audio = Audio::from_vector(samples, 48000);
+
+  const auto pure_lpc = declip(audio, {0.9f, 12, 2, 1.0f});
+  const auto pure_interp = declip(audio, {0.9f, 12, 2, 0.0f});
+
+  for (size_t i = 20; i <= 22; ++i) {
+    REQUIRE(std::isfinite(pure_interp[i]));
+    REQUIRE(std::isfinite(pure_lpc[i]));
+  }
+
+  // The two extremes must differ at the reconstructed samples: if lpc_blend was
+  // ignored the outputs would be bit-identical (the pre-fix bug).
+  bool extremes_differ = false;
+  for (size_t i = 20; i <= 22; ++i) {
+    if (std::abs(pure_lpc[i] - pure_interp[i]) > 1e-5f) extremes_differ = true;
+  }
+  REQUIRE(extremes_differ);
+
+  // Samples outside the clipped run must be untouched by any blend setting.
+  for (size_t i = 0; i < samples.size(); ++i) {
+    if (i < 20 || i > 22) {
+      REQUIRE(pure_lpc[i] == pure_interp[i]);
+    }
+  }
+}
+
+TEST_CASE("Declip lpc_blend=1.0 reproduces unblended LPC behaviour", "[mastering][repair]") {
+  // Guard that blend == 1.0 is a true no-op relative to the historical full-LPC
+  // overwrite: blend 1.0 writes 1.0 * x_u + 0.0 * baseline == x_u, so it must
+  // match the existing "uses LPC reconstruction" expectations exactly.
+  std::vector<float> samples(96, 0.0f);
+  samples[0] = 1.0f;
+  for (size_t i = 1; i < samples.size(); ++i) samples[i] = 0.95f * samples[i - 1];
+  samples[20] = 1.0f;
+  samples[21] = 1.0f;
+  samples[22] = 1.0f;
+
+  const auto result = declip(Audio::from_vector(samples, 48000), {0.9f, 12, 2, 1.0f});
+
+  REQUIRE(result[20] > result[21]);
+  REQUIRE(result[21] > result[22]);
+  REQUIRE(result[20] < 0.9f);
+}
+
 namespace {
 
 // Generate a sine wave + low-amplitude noise, then hard-clip at +/- threshold.

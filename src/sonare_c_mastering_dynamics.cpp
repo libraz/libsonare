@@ -1,6 +1,7 @@
 #include <cstring>
 #include <vector>
 
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -83,9 +84,11 @@ void clear_float_output(float** out, size_t* out_length) {
 template <typename Processor>
 void run_processor_offline(Processor& processor, std::vector<float>& samples, int sample_rate,
                            int* out_latency_samples) {
-  processor.prepare(sample_rate, static_cast<int>(samples.size()));
-  float* channels[] = {samples.data()};
-  processor.process(channels, 1, static_cast<int>(samples.size()));
+  // Latency-compensate via the shared mono runner so this direct C-ABI path
+  // returns time-aligned output, matching sonare_mastering_apply_processor()
+  // (internal::run_processor_mono). Without this, a non-zero lookahead (e.g.
+  // the transient shaper's lookahead_ms) would leave the output time-shifted.
+  sonare::mastering::api::internal::run_processor_mono(processor, samples, sample_rate);
   if (out_latency_samples) *out_latency_samples = processor.latency_samples();
 }
 

@@ -21,6 +21,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/multiband/multiband_compressor.h"
@@ -31,6 +32,7 @@
 
 namespace {
 
+using sonare::mastering::api::apply_named_processor_stereo;
 using sonare::mastering::api::chain_config_from_json;
 using sonare::mastering::api::chain_config_to_json;
 using sonare::mastering::api::make_insert;
@@ -179,4 +181,98 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
   REQUIRE(c.sidechain_hpf_hz == 180.0f);
   REQUIRE(c.pdr_time_ms == 22.0f);
   REQUIRE(c.pdr_release_scale == 0.75f);
+}
+
+// --- M5: stereo dither decorrelation --------------------------------------
+
+TEST_CASE("final.dither decorrelates stereo channels", "[mastering][final][param_wiring]") {
+  // Both channels start identical (silent). With correlated dither the two
+  // channels would receive bit-identical noise (collapsing to a mono phantom
+  // centre); the per-channel seed salt must make the right channel differ while
+  // the left channel stays bit-identical to the mono path.
+  const std::vector<float> silence(256, 0.0f);
+  const auto result =
+      apply_named_processor_stereo("final.dither", silence.data(), silence.data(), silence.size(),
+                                   48000, {{"type", 2.0}, {"targetBits", 16.0}});
+
+  REQUIRE(result.left.size() == silence.size());
+  REQUIRE(result.right.size() == silence.size());
+
+  // The left channel matches the mono dither output bit-for-bit.
+  const auto mono = sonare::mastering::api::apply_named_processor(
+      "final.dither", silence.data(), silence.size(), 48000, {{"type", 2.0}, {"targetBits", 16.0}});
+  REQUIRE(result.left == mono.samples);
+
+  // The right channel must differ from the left at some sample.
+  bool channels_differ = false;
+  for (size_t i = 0; i < silence.size(); ++i) {
+    if (result.left[i] != result.right[i]) channels_differ = true;
+  }
+  REQUIRE(channels_differ);
+}
+
+TEST_CASE("final.outputChain decorrelates stereo channels", "[mastering][final][param_wiring]") {
+  // outputChain dithers then quantizes; with NoiseShaped dither the per-channel
+  // seed must decorrelate L and R the same way final.dither does. Use a low-bit
+  // target so the dither noise is large enough to survive quantization.
+  const std::vector<float> silence(256, 0.0f);
+  const auto result = apply_named_processor_stereo(
+      "final.outputChain", silence.data(), silence.data(), silence.size(), 48000,
+      {{"ditherType", 2.0}, {"targetBits", 8.0}, {"clamp", 1.0}});
+
+  REQUIRE(result.left.size() == silence.size());
+  REQUIRE(result.right.size() == silence.size());
+
+  bool channels_differ = false;
+  for (size_t i = 0; i < silence.size(); ++i) {
+    if (result.left[i] != result.right[i]) channels_differ = true;
+  }
+  REQUIRE(channels_differ);
+}
+
+// --- M6: custom crossover band count --------------------------------------
+
+TEST_CASE("multiband custom cutoff count builds and processes",
+          "[mastering][multiband][param_wiring]") {
+  using sonare::mastering::multiband::MultibandCompressor;
+  using sonare::mastering::multiband::MultibandExpander;
+  using sonare::mastering::multiband::MultibandLimiter;
+  using sonare::mastering::multiband::MultibandSaturation;
+
+  // A 3-cutoff crossover implies 4 bands; before the fix the bands vector kept
+  // its 3-band default and validate_config threw "band count must match
+  // crossover". Each insert must now build without throwing and expose 4 bands.
+  SECTION("compressor") {
+    auto processor = make_insert(
+        "multiband.compressor",
+        R"({"cutoff0Hz":120,"cutoff1Hz":1000,"cutoff2Hz":6000,"band3.thresholdDb":-9})");
+    auto* mb = dynamic_cast<MultibandCompressor*>(processor.get());
+    REQUIRE(mb != nullptr);
+    REQUIRE(mb->config().bands.size() == 4);
+    REQUIRE(mb->config().bands.at(3).threshold_db == -9.0f);
+  }
+
+  SECTION("expander") {
+    auto processor =
+        make_insert("multiband.expander", R"({"cutoff0Hz":120,"cutoff1Hz":1000,"cutoff2Hz":6000})");
+    auto* mb = dynamic_cast<MultibandExpander*>(processor.get());
+    REQUIRE(mb != nullptr);
+    REQUIRE(mb->config().bands.size() == 4);
+  }
+
+  SECTION("limiter") {
+    auto processor =
+        make_insert("multiband.limiter", R"({"cutoff0Hz":120,"cutoff1Hz":1000,"cutoff2Hz":6000})");
+    auto* mb = dynamic_cast<MultibandLimiter*>(processor.get());
+    REQUIRE(mb != nullptr);
+    REQUIRE(mb->config().bands.size() == 4);
+  }
+
+  SECTION("saturation") {
+    auto processor = make_insert("multiband.saturation",
+                                 R"({"cutoff0Hz":120,"cutoff1Hz":1000,"cutoff2Hz":6000})");
+    auto* mb = dynamic_cast<MultibandSaturation*>(processor.get());
+    REQUIRE(mb != nullptr);
+    REQUIRE(mb->config().bands.size() == 4);
+  }
 }
