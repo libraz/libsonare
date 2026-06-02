@@ -186,7 +186,13 @@ void RhythmAnalyzer::detect_time_signature() {
   // Pass the beat-aligned onset strength envelope (matching BeatAnalyzer) so
   // estimate_meter can resolve simple-vs-compound meter from the audio instead
   // of being forced into the empty-envelope 6/8 fallback.
-  features_.time_signature = estimate_meter(onset_strength_, beats_).time_signature;
+  //
+  // Keep the full MeterResult so the downbeat phase (which beat index the first
+  // downbeat falls on) can offset the strong-beat classification in
+  // compute_syncopation(), matching how BeatAnalyzer aligns its downbeats.
+  MeterResult meter = estimate_meter(onset_strength_, beats_);
+  features_.time_signature = meter.time_signature;
+  downbeat_phase_ = meter.downbeat_phase;
 }
 
 void RhythmAnalyzer::detect_groove_type() {
@@ -225,8 +231,10 @@ void RhythmAnalyzer::compute_syncopation() {
   int count = 0;
 
   for (size_t i = 0; i < beats_.size(); ++i) {
-    // Determine position within bar
-    int bar_position = static_cast<int>(i) % beats_per_bar;
+    // Determine position within bar, offset by the estimated downbeat phase so
+    // bar_position == 0 lands on the actual downbeat (consistent with BeatAnalyzer).
+    int bar_position =
+        ((static_cast<int>(i) - downbeat_phase_) % beats_per_bar + beats_per_bar) % beats_per_bar;
 
     // Strong beats are typically 0 (downbeat) and 2 (for 4/4)
     bool is_strong_beat = (bar_position == 0) || (beats_per_bar == 4 && bar_position == 2) ||

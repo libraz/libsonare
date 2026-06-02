@@ -120,6 +120,12 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
 
 std::vector<int> DynamicsAnalyzer::loudness_histogram(int n_bins, float min_db,
                                                       float max_db) const {
+  // Guard against degenerate parameters that would yield an empty/negative-sized
+  // histogram, a NaN/inf bin_width, or an out-of-bounds bin index.
+  if (n_bins <= 0 || max_db <= min_db) {
+    return {};
+  }
+
   std::vector<int> histogram(n_bins, 0);
 
   float bin_width = (max_db - min_db) / static_cast<float>(n_bins);
@@ -128,7 +134,7 @@ std::vector<int> DynamicsAnalyzer::loudness_histogram(int n_bins, float min_db,
     if (rms < min_db || rms > max_db) continue;
 
     int bin = static_cast<int>((rms - min_db) / bin_width);
-    bin = std::min(bin, n_bins - 1);
+    bin = std::clamp(bin, 0, n_bins - 1);
     histogram[bin]++;
   }
 

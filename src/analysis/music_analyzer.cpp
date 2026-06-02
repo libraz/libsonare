@@ -85,7 +85,7 @@ KeyAnalyzer& MusicAnalyzer::key_analyzer() {
 }
 
 BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
-  if (!beat_analyzer_) {
+  std::call_once(beat_analyzer_once_, [this]() {
     BeatConfig beat_config;
     beat_config.bpm_min = config_.bpm_min;
     beat_config.bpm_max = config_.bpm_max;
@@ -97,12 +97,12 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
                                                     config_.hop_length, beat_config);
     beat_analyzer_->refine_downbeats(
         low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_));
-  }
+  });
   return *beat_analyzer_;
 }
 
 ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
-  if (!chord_analyzer_) {
+  std::call_once(chord_analyzer_once_, [this]() {
     ChordConfig chord_config;
     chord_config.n_fft = config_.n_fft;
     chord_config.hop_length = config_.hop_length;
@@ -136,33 +136,33 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
         chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
     beat_analyzer_->refine_downbeats(
         low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_), chord_changes);
-  }
+  });
   return *chord_analyzer_;
 }
 
 OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
-  if (!onset_analyzer_) {
+  std::call_once(onset_analyzer_once_, [this]() {
     OnsetDetectConfig onset_config;
     onset_config.n_fft = config_.n_fft;
     onset_config.hop_length = config_.hop_length;
     // Use cached onset strength to avoid recomputation
     onset_analyzer_ = std::make_unique<OnsetAnalyzer>(onset_strength(), analysis_sr_,
                                                       config_.hop_length, onset_config);
-  }
+  });
   return *onset_analyzer_;
 }
 
 DynamicsAnalyzer& MusicAnalyzer::dynamics_analyzer() {
-  if (!dynamics_analyzer_) {
+  std::call_once(dynamics_analyzer_once_, [this]() {
     DynamicsConfig dynamics_config;
     dynamics_config.hop_length = config_.hop_length;
     dynamics_analyzer_ = std::make_unique<DynamicsAnalyzer>(audio_, dynamics_config);
-  }
+  });
   return *dynamics_analyzer_;
 }
 
 RhythmAnalyzer& MusicAnalyzer::rhythm_analyzer() {
-  if (!rhythm_analyzer_) {
+  std::call_once(rhythm_analyzer_once_, [this]() {
     RhythmConfig rhythm_config;
     rhythm_config.bpm_min = config_.bpm_min;
     rhythm_config.bpm_max = config_.bpm_max;
@@ -171,72 +171,72 @@ RhythmAnalyzer& MusicAnalyzer::rhythm_analyzer() {
     rhythm_config.hop_length = config_.hop_length;
     // Use cached beat_analyzer to avoid recomputation
     rhythm_analyzer_ = std::make_unique<RhythmAnalyzer>(beat_analyzer(), rhythm_config);
-  }
+  });
   return *rhythm_analyzer_;
 }
 
 TimbreAnalyzer& MusicAnalyzer::timbre_analyzer() {
-  if (!timbre_analyzer_) {
+  std::call_once(timbre_analyzer_once_, [this]() {
     TimbreConfig timbre_config;
     timbre_config.n_fft = config_.n_fft;
     timbre_config.hop_length = config_.hop_length;
     // Use cached spectrogram and mel spectrogram to avoid recomputation
     timbre_analyzer_ =
         std::make_unique<TimbreAnalyzer>(spectrogram(), mel_spectrogram(), timbre_config);
-  }
+  });
   return *timbre_analyzer_;
 }
 
 MelodyAnalyzer& MusicAnalyzer::melody_analyzer() {
-  if (!melody_analyzer_) {
+  std::call_once(melody_analyzer_once_, [this]() {
     MelodyConfig melody_config;
     melody_config.hop_length = config_.hop_length;
     melody_analyzer_ = std::make_unique<MelodyAnalyzer>(audio_, melody_config);
-  }
+  });
   return *melody_analyzer_;
 }
 
 SectionAnalyzer& MusicAnalyzer::section_analyzer() {
-  if (!section_analyzer_) {
+  std::call_once(section_analyzer_once_, [this]() {
     SectionConfig section_config;
     section_config.n_fft = config_.n_fft;
     section_config.hop_length = config_.hop_length;
     // Use cached boundary_detector's boundaries to avoid recomputation
     section_analyzer_ = std::make_unique<SectionAnalyzer>(
         audio_, boundary_detector().boundary_times(), section_config);
-  }
+  });
   return *section_analyzer_;
 }
 
 BoundaryDetector& MusicAnalyzer::boundary_detector() {
-  if (!boundary_detector_) {
+  std::call_once(boundary_detector_once_, [this]() {
     BoundaryConfig boundary_config;
     boundary_config.n_fft = config_.n_fft;
     boundary_config.hop_length = config_.hop_length;
     // Use cached mel_spectrogram and chroma to avoid recomputation
     boundary_detector_ = std::make_unique<BoundaryDetector>(mel_spectrogram(), chroma(),
                                                             analysis_sr_, boundary_config);
-  }
+  });
   return *boundary_detector_;
 }
 
 const Spectrogram& MusicAnalyzer::spectrogram() {
-  if (!spectrogram_) {
+  std::call_once(spectrogram_once_, [this]() {
     spectrogram_ = std::make_unique<Spectrogram>(
         Spectrogram::compute(analysis_audio_, make_stft_config(config_.n_fft, config_.hop_length)));
-  }
+  });
   return *spectrogram_;
 }
 
 const Chroma& MusicAnalyzer::chroma() {
-  if (!chroma_) {
+  std::call_once(chroma_once_, [this]() {
     chroma_ = std::make_unique<Chroma>(Chroma::from_spectrogram(spectrogram(), analysis_sr_));
-  }
+  });
   return *chroma_;
 }
 
 const Chroma& MusicAnalyzer::harmonic_chroma() {
-  if (!harmonic_chroma_) {
+  std::call_once(harmonic_chroma_once_, [this]() {
     // Optimized implementation following bpm-detector's key detection algorithm:
     // 1. HPSS to extract harmonic content (margin=3.0)
     // 2. High-pass filter (80Hz, 4th order Butterworth)
@@ -313,26 +313,26 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
 
     harmonic_chroma_ = std::make_unique<Chroma>(
         Chroma(std::move(chroma_features), 12, n_frames, analysis_sr, chroma_hop));
-  }
+  });
   return *harmonic_chroma_;
 }
 
 const MelSpectrogram& MusicAnalyzer::mel_spectrogram() {
-  if (!mel_spectrogram_) {
+  std::call_once(mel_spectrogram_once_, [this]() {
     MelFilterConfig mel_filter_config;
     mel_filter_config.n_mels = constants::kDefaultNMels;
     mel_spectrogram_ = std::make_unique<MelSpectrogram>(
         MelSpectrogram::from_spectrogram(spectrogram(), analysis_sr_, mel_filter_config));
-  }
+  });
   return *mel_spectrogram_;
 }
 
 const std::vector<float>& MusicAnalyzer::onset_strength() {
-  if (!onset_strength_computed_) {
+  std::call_once(onset_strength_once_, [this]() {
     OnsetConfig onset_config;
     onset_strength_ = compute_onset_strength(mel_spectrogram(), onset_config);
     onset_strength_computed_ = true;
-  }
+  });
   return onset_strength_;
 }
 

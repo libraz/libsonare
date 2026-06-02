@@ -20,6 +20,11 @@ namespace {
 constexpr float kRepetitionSimilarity = 0.80f;
 /// @brief Energy below which a section is treated as low-energy (Intro/Outro/Instrumental).
 constexpr float kLowEnergyThreshold = 0.35f;
+/// @brief How far below the loudest repeated section a repeated section may sit and still
+/// count as a Chorus. Deliberately narrower than kLowEnergyThreshold so that genuinely
+/// lower-energy repeats fall through to the Verse branch instead of nearly all repeats
+/// collapsing into Chorus.
+constexpr float kChorusEnergyMargin = 0.15f;
 /// @brief Vocal-likelihood below which a non-boundary low/mid section is Instrumental.
 constexpr float kInstrumentalVocalThreshold = 0.40f;
 /// @brief Lower edge of the vocal energy band in Hz.
@@ -389,7 +394,7 @@ void SectionAnalyzer::classify_sections() {
     } else if (is_last && is_low_energy) {
       type = SectionType::Outro;
       confidence = 0.6f + 0.3f * (1.0f - desc.energy);
-    } else if (is_repeated && desc.energy >= best_repeat_energy - kLowEnergyThreshold &&
+    } else if (is_repeated && desc.energy >= best_repeat_energy - kChorusEnergyMargin &&
                !low_vocal) {
       // Repeated, high-energy, vocal section => Chorus. Confidence reflects how
       // strongly it matches its repetitions.

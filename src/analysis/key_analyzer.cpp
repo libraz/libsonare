@@ -324,11 +324,17 @@ void KeyAnalyzer::analyze() {
     float distinctiveness = std::min(gap / 0.2f, 1.0f);  // Gap of 0.2 = full confidence
     float confidence = normalized_corr * 0.5f + distinctiveness * 0.5f;
 
+    // Runner-up candidates report a raw-correlation confidence rescaled to [0, 1].
     for (auto& candidate : candidates_) {
       float rel_corr = (candidate.correlation + 1.0f) / 2.0f;
       candidate.key.confidence = rel_corr;
     }
 
+    // Only the best candidate (== key()) carries the gap-based confidence that
+    // blends correlation strength with distinctiveness from the runner-up. This is
+    // intentionally on a different scale than the runner-up confidences above, so
+    // consumers should not compare candidates_[0].confidence against the rest as a
+    // ranking metric (candidates are already ordered by raw correlation).
     candidates_[0].key.confidence = std::min(confidence, 1.0f);
     key_ = candidates_[0].key;
   } else {
@@ -350,12 +356,39 @@ Key detect_key(const Audio& audio, const KeyConfig& config) {
 
 namespace {
 
+/// @brief Reduce an extended/seventh chord quality to its underlying triad base.
+///
+/// Diatonic scoring only models the three triad qualities (Major/Minor/Diminished),
+/// so a Imaj7 or V7 would otherwise score as non-diatonic and deflate the key
+/// estimate on seventh-heavy jazz/pop material. Map each extended quality onto the
+/// triad it is built on; qualities without a clear triad base (Sus*, Unknown,
+/// Augmented) are passed through unchanged so they remain non-diatonic.
+ChordQuality reduce_to_triad(ChordQuality quality) {
+  switch (quality) {
+    case ChordQuality::Dominant7:
+    case ChordQuality::Major7:
+    case ChordQuality::Add9:
+    case ChordQuality::Major9:
+    case ChordQuality::Dominant9:
+      return ChordQuality::Major;
+    case ChordQuality::Minor7:
+    case ChordQuality::MinorAdd9:
+      return ChordQuality::Minor;
+    case ChordQuality::Dim7:
+    case ChordQuality::HalfDim7:
+      return ChordQuality::Diminished;
+    default:
+      return quality;
+  }
+}
+
 /// @brief Check if a chord is diatonic in a given major key.
 /// @param chord_root Chord root pitch class
 /// @param chord_quality Chord quality
 /// @param key_root Key root pitch class
 /// @return true if chord is diatonic
 bool is_diatonic_major(PitchClass chord_root, ChordQuality chord_quality, PitchClass key_root) {
+  chord_quality = reduce_to_triad(chord_quality);
   int interval = (static_cast<int>(chord_root) - static_cast<int>(key_root) + 12) % 12;
 
   // Diatonic chords in major key:
@@ -407,10 +440,11 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     const Chord& last = chords.back();
     const Chord& second_last = chords[chords.size() - 2];
 
-    // Check for V-I cadence (perfect cadence)
+    // Check for V-I cadence (perfect cadence). Reduce extended qualities to their
+    // triad base so a V7-I (the canonical cadence) is recognized like a V-I.
     int interval = (static_cast<int>(last.root) - static_cast<int>(second_last.root) + 12) % 12;
-    if (interval == 5 && second_last.quality == ChordQuality::Major &&
-        last.quality == ChordQuality::Major) {
+    if (interval == 5 && reduce_to_triad(second_last.quality) == ChordQuality::Major &&
+        reduce_to_triad(last.quality) == ChordQuality::Major) {
       // Second last is V, last is I
       cadence_tonic = last.root;
       has_cadence = true;
@@ -438,16 +472,17 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
 
     for (const auto& chord : chords) {
       float duration = std::max(0.0f, chord.duration());
+      ChordQuality triad = reduce_to_triad(chord.quality);
       if (is_diatonic_major(chord.root, chord.quality, key_root)) {
         major_score += duration;
 
         // Bonus for tonic chord
-        if (chord.root == key_root && chord.quality == ChordQuality::Major) {
+        if (chord.root == key_root && triad == ChordQuality::Major) {
           major_tonic_score += duration * 0.5f;
         }
         // Bonus for dominant chord
         int interval = (static_cast<int>(chord.root) - key_idx + 12) % 12;
-        if (interval == 7 && chord.quality == ChordQuality::Major) {
+        if (interval == 7 && triad == ChordQuality::Major) {
           major_tonic_score += duration * 0.3f;
         }
       }
@@ -462,14 +497,14 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     // Add bonus if first and last chords are the tonic
     float bookend_bonus = 0.0f;
     if (first_last_same && chords.front().root == key_root &&
-        chords.front().quality == ChordQuality::Major) {
+        reduce_to_triad(chords.front().quality) == ChordQuality::Major) {
       bookend_bonus = total_duration * 0.3f;
     }
 
     // Add bonus if first chord is the tonic (common in pop)
     float first_chord_bonus = 0.0f;
     if (!chords.empty() && chords.front().root == key_root &&
-        chords.front().quality == ChordQuality::Major) {
+        reduce_to_triad(chords.front().quality) == ChordQuality::Major) {
       first_chord_bonus = total_duration * 0.15f;
     }
 
@@ -491,33 +526,33 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     for (const auto& chord : chords) {
       float duration = std::max(0.0f, chord.duration());
       int interval = (static_cast<int>(chord.root) - static_cast<int>(minor_root) + 12) % 12;
+      ChordQuality triad = reduce_to_triad(chord.quality);
 
       bool is_diatonic_minor = false;
       switch (interval) {
         case 0:
-          is_diatonic_minor = (chord.quality == ChordQuality::Minor);
+          is_diatonic_minor = (triad == ChordQuality::Minor);
           if (is_diatonic_minor) minor_tonic_score += duration * 0.5f;
           break;
         case 2:
-          is_diatonic_minor =
-              (chord.quality == ChordQuality::Diminished || chord.quality == ChordQuality::Minor);
+          is_diatonic_minor = (triad == ChordQuality::Diminished || triad == ChordQuality::Minor);
           break;
         case 3:
-          is_diatonic_minor = (chord.quality == ChordQuality::Major);
+          is_diatonic_minor = (triad == ChordQuality::Major);
           break;
         case 5:
-          is_diatonic_minor = (chord.quality == ChordQuality::Minor);
+          is_diatonic_minor = (triad == ChordQuality::Minor);
           break;
         case 7:
-          is_diatonic_minor = (chord.quality == ChordQuality::Minor ||
-                               chord.quality == ChordQuality::Major);  // Harmonic minor
-          if (chord.quality == ChordQuality::Major) minor_tonic_score += duration * 0.3f;
+          is_diatonic_minor =
+              (triad == ChordQuality::Minor || triad == ChordQuality::Major);  // Harmonic minor
+          if (triad == ChordQuality::Major) minor_tonic_score += duration * 0.3f;
           break;
         case 8:
-          is_diatonic_minor = (chord.quality == ChordQuality::Major);
+          is_diatonic_minor = (triad == ChordQuality::Major);
           break;
         case 10:
-          is_diatonic_minor = (chord.quality == ChordQuality::Major);
+          is_diatonic_minor = (triad == ChordQuality::Major);
           break;
         default:
           break;

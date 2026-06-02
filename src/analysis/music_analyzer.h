@@ -110,6 +110,11 @@ class MusicAnalyzer {
   KeyAnalyzer& key_analyzer();
 
   /// @brief Returns beat analyzer.
+  /// @note The downbeats are preliminary on first access: they are refined from
+  ///       low-frequency-energy and beat-strength evidence only. Chord-change
+  ///       evidence is folded in lazily when chord_analyzer() is first invoked,
+  ///       which re-refines the same BeatAnalyzer. For chord-informed downbeats,
+  ///       call chord_analyzer() (or analyze()) before reading downbeats().
   BeatAnalyzer& beat_analyzer();
 
   /// @brief Returns chord analyzer.

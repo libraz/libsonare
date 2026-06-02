@@ -123,6 +123,11 @@ std::vector<int> viterbi_chord_sequence(const std::vector<ChordHmmObservation>& 
   // The emission term is a template-correlation score scaled by emission_weight
   // (not a true log-probability); emission_weight is tuned to balance these
   // correlations against the log-domain transition scores accumulated below.
+  // Because emission is linear while transitions are log-domain, the effective
+  // smoothing depends on the chroma front-end's correlation magnitude scale: if a
+  // different front-end (e.g. NNLS vs STFT) shifts those magnitudes, emission_weight
+  // must be re-tuned. This is an intentional, deterministic heuristic, not a true
+  // MAP decode.
   scores[0].resize(beams[0].size());
   backtrack[0].assign(beams[0].size(), -1);
   for (size_t j = 0; j < beams[0].size(); ++j) {
