@@ -103,9 +103,14 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model) {
       d.length * d.width,   // kWallZMax
   }};
 
-  size_t n_bands = 0;
-  for (const Material& w : room.walls) n_bands = std::max(n_bands, w.absorption.size());
-  if (n_bands == 0) n_bands = static_cast<size_t>(kDefaultOctaveBands);
+  // Shared octave-band reconciliation (MAX non-empty count, repeat-last padding)
+  // so this RT60 path and the image-source specular path agree on band layout.
+  size_t n_bands = reconcile_band_count(room.walls);
+  // An all-rigid/empty room collapses to a single band above; keep the historical
+  // default band count so the synthesized tail spans the full octave split.
+  bool any_material = false;
+  for (const Material& w : room.walls) any_material = any_material || !w.absorption.empty();
+  if (!any_material) n_bands = static_cast<size_t>(kDefaultOctaveBands);
 
   const float volume = shoebox_volume(room);
   const float surface = shoebox_surface_area(room);
@@ -115,9 +120,8 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model) {
   for (size_t b = 0; b < n_bands; ++b) {
     float absorption_area = 0.0f;
     for (size_t w = 0; w < kShoeboxWallCount; ++w) {
-      const std::vector<float>& a = room.walls[w].absorption;
-      // Bands past a material's length reuse its last coefficient (rigid if empty).
-      const float alpha = a.empty() ? 0.0f : (b < a.size() ? a[b] : a.back());
+      // Shared repeat-last padding (rigid/empty material reads as α=0).
+      const float alpha = material_alpha_at(room.walls[w], b);
       absorption_area += wall_area[w] * alpha;
     }
     if (model == ReverbModel::Sabine) {

@@ -144,6 +144,28 @@ TEST_CASE("point_inside_mesh on a closed cube", "[acoustic][room_model]") {
   REQUIRE_FALSE(point_inside_mesh(cube, {-0.5f, 0.5f, 0.5f}));
 }
 
+TEST_CASE("point_inside_mesh treats on-face points as inside (boundary-inclusive)",
+          "[acoustic][room_model]") {
+  const auto cube = unit_cube();
+  // A point exactly on a face (e.g. a speaker flush against a wall) must count as
+  // inside, matching point_inside_shoebox; the parity ray-cast would otherwise
+  // skip the very face the point sits on and report it outside.
+  REQUIRE(point_inside_mesh(cube, {0.5f, 0.5f, 0.0f}));  // on the z=0 floor
+  REQUIRE(point_inside_mesh(cube, {0.0f, 0.5f, 0.5f}));  // on the x=0 wall
+  REQUIRE(point_inside_mesh(cube, {0.5f, 1.0f, 0.5f}));  // on the y=1 wall
+}
+
+TEST_CASE("polyhedral validation accepts a source flush against a wall", "[acoustic][room_model]") {
+  PolyhedralRoom room;
+  room.faces = unit_cube();
+  room.face_materials = {make_material(MaterialPreset::Wood)};
+  // Source on the floor face (z=0), listener interior: no source_outside_room.
+  SourceListener pl{{0.5f, 0.5f, 0.0f}, {0.4f, 0.4f, 0.5f}};
+  const auto d = validate_polyhedral(room, pl);
+  REQUIRE_FALSE(has_error(d));
+  REQUIRE_FALSE(has_code(d, "acoustic.source_outside_room"));
+}
+
 TEST_CASE("voxel grid first_hit matches brute force", "[acoustic][room_model]") {
   // Asymmetric origins/directions so hits land in face interiors.
   const std::vector<RayCase> cube_rays{

@@ -157,3 +157,93 @@ TEST_CASE("synthesized RIR round-trips RT60 within 10%", "[acoustic][rir]") {
   REQUIRE(std::isfinite(params.c50));
   REQUIRE(std::isfinite(params.d50));
 }
+
+namespace {
+// Uniform room with an explicit per-wall scattering coefficient.
+ShoeboxRoom uniform_room_scatter(float length, float width, float height, float absorption,
+                                 float scattering) {
+  ShoeboxRoom room;
+  room.dims = {length, width, height};
+  for (Material& w : room.walls) w = uniform_material(absorption, scattering);
+  return room;
+}
+}  // namespace
+
+namespace {
+// Energy in the late region (after `from` samples) of an RIR.
+double late_energy(const Audio& a, size_t from) {
+  double e = 0.0;
+  for (size_t i = from; i < a.size(); ++i) e += static_cast<double>(a[i]) * a[i];
+  return e;
+}
+}  // namespace
+
+TEST_CASE("wall scattering biases the early/late energy balance and the RIR", "[acoustic][rir]") {
+  const int sr = 48000;
+  const SourceListener pl{{2.0f, 1.5f, 1.5f}, {6.0f, 4.5f, 1.8f}};
+  // Two rooms identical in geometry, absorption and seed; only wall scattering
+  // differs. Rougher surfaces diffuse more specular energy into the late field,
+  // so the spliced RIR genuinely changes and carries more diffuse late energy.
+  const ShoeboxRoom smooth = uniform_room_scatter(8.0f, 6.0f, 3.5f, 0.12f, 0.0f);
+  const ShoeboxRoom rough = uniform_room_scatter(8.0f, 6.0f, 3.5f, 0.12f, 0.8f);
+
+  REQUIRE(shoebox_mean_scattering(rough) > shoebox_mean_scattering(smooth));
+  REQUIRE_THAT(shoebox_mean_scattering(smooth), WithinRel(0.0f, 1e-6f));
+
+  RirSynthConfig cfg;  // auto mixing time (mixing_time_ms == 0) so scattering applies
+  cfg.ism_order = 3;
+  const Audio smooth_rir = synthesize_rir(smooth, pl, sr, cfg).rir;
+  const Audio rough_rir = synthesize_rir(rough, pl, sr, cfg).rir;
+  REQUIRE(smooth_rir.size() > 0);
+  REQUIRE(rough_rir.size() > 0);
+
+  bool differs = smooth_rir.size() != rough_rir.size();
+  const size_t common = std::min(smooth_rir.size(), rough_rir.size());
+  for (size_t i = 0; i < common && !differs; ++i) {
+    differs = (smooth_rir[i] != rough_rir[i]);
+  }
+  REQUIRE(differs);
+
+  // The diffuse late field carries more energy for the rougher room. Measure well
+  // past the (auto) crossover so the comparison is dominated by the late tail.
+  const size_t late_from = static_cast<size_t>(0.08f * sr);
+  REQUIRE(late_energy(rough_rir, late_from) > late_energy(smooth_rir, late_from));
+
+  // The diffusion is a material property, so the energy bias survives even an
+  // explicit mixing_time_ms override (which only fixes the crossover position):
+  // the rougher room still reads louder in the late field.
+  RirSynthConfig fixed = cfg;
+  fixed.mixing_time_ms = 30.0f;
+  const Audio smooth_fixed = synthesize_rir(smooth, pl, sr, fixed).rir;
+  const Audio rough_fixed = synthesize_rir(rough, pl, sr, fixed).rir;
+  REQUIRE(smooth_fixed.size() == rough_fixed.size());
+  REQUIRE(late_energy(rough_fixed, late_from) > late_energy(smooth_fixed, late_from));
+}
+
+TEST_CASE("fully-rigid room yields an early-only RIR, not abrupt silence", "[acoustic][rir]") {
+  const int sr = 48000;
+  // Rigid walls (default-constructed materials: no absorption) => every band
+  // RT60 == 0 => empty late tail. The RIR must keep its early reflections past
+  // the would-be mixing time instead of crossfading to silence.
+  ShoeboxRoom rigid;
+  rigid.dims = {7.0f, 5.0f, 3.0f};  // walls default-constructed: rigid
+  const SourceListener pl{{1.5f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+
+  const RirSynthResult res = synthesize_rir(rigid, pl, sr, {/*ism_order=*/3});
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  REQUIRE(has_code(res.diagnostics, "acoustic.no_late_tail"));
+  REQUIRE(res.rir.size() > 0);
+
+  // Past the auto mixing time (capped at 150 ms) the early reflections survive:
+  // there is non-trivial energy in the late region, not a silenced tail. Compare
+  // against the standalone early-only IR, which the rigid RIR must equal.
+  const std::vector<ImageSource> images = shoebox_image_sources(rigid, pl, 3);
+  const Audio early = synthesize_early_ir(images, sr);
+  const size_t n = std::min(res.rir.size(), early.size());
+  REQUIRE(n > 0);
+  bool matches_early = true;
+  for (size_t i = 0; i < n && matches_early; ++i) {
+    matches_early = (std::fabs(res.rir[i] - early[i]) < 1e-6f);
+  }
+  REQUIRE(matches_early);
+}

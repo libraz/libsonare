@@ -8,8 +8,10 @@ namespace sonare::acoustic {
 namespace {
 // Nominal octave-band coefficients (125 / 250 / 500 / 1k / 2k / 4k Hz),
 // drawn from standard architectural-acoustics tables. Absorption is the
-// dominant term for RT60; scattering is a coarse texture estimate used by the
-// ray-tracing late tail.
+// dominant term for RT60; scattering is a coarse surface-texture estimate that
+// the RIR synthesizer uses to bias the early/late energy split and mixing time
+// (rougher surfaces diffuse specular energy into the late field sooner — see
+// rir_synthesizer.cpp), NOT a full ray-traced late tail.
 struct PresetTable {
   std::array<float, kDefaultOctaveBands> absorption;
   std::array<float, kDefaultOctaveBands> scattering;
@@ -56,6 +58,12 @@ Material uniform_material(float absorption, float scattering, int n_bands) {
   m.absorption.assign(static_cast<size_t>(n), std::clamp(absorption, 0.0f, 1.0f));
   m.scattering.assign(static_cast<size_t>(n), std::clamp(scattering, 0.0f, 1.0f));
   return m;
+}
+
+float material_alpha_at(const Material& material, size_t band, float empty_value) {
+  if (material.absorption.empty()) return empty_value;
+  if (band < material.absorption.size()) return material.absorption[band];
+  return material.absorption.back();  // repeat-last padding (shared policy)
 }
 
 Material mix_materials(const Material& a, const Material& b, float t) {

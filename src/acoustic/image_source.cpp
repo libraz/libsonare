@@ -13,33 +13,29 @@ using sonare::constants::kPi;
 
 float beta_from_alpha(float alpha) noexcept { return std::sqrt(std::max(0.0f, 1.0f - alpha)); }
 
-// Per-band β = sqrt(1 - α) for a material over `bands` bands (missing bands ->
-// α=0 -> β=1). Note: only absorption reduces the specular reflection product;
-// Material::scattering is intentionally NOT applied here. The scattered fraction
-// is diffuse energy that the deterministic image-source method does not model;
-// it is delegated to the statistical late-reverberation tail. This is a
-// deliberate modeling choice, not an oversight.
+// Per-band β = sqrt(1 - α) for a material over `bands` bands, padding past the
+// material's length with its last coefficient via the shared `material_alpha_at`
+// policy (an empty/rigid material reads α=0 -> β=1). Note: only absorption
+// reduces the specular reflection product; Material::scattering is intentionally
+// NOT applied here. The scattered fraction is diffuse energy that the
+// deterministic image-source method does not model; it is delegated to the
+// statistical late-reverberation tail (which biases its early/late split by the
+// room's mean scattering). This is a deliberate modeling choice, not an oversight.
 std::vector<float> material_beta(const Material& m, size_t bands) {
   std::vector<float> b(bands, 1.0f);
   for (size_t i = 0; i < bands; ++i) {
-    b[i] = beta_from_alpha(i < m.absorption.size() ? m.absorption[i] : 0.0f);
+    b[i] = beta_from_alpha(material_alpha_at(m, i));
   }
   return b;
 }
 
-// Common octave-band count across a range of materials: the minimum non-empty
-// absorption length (>=1; rigid/empty fallback = 1).
-template <typename MaterialRange>
-size_t common_bands(const MaterialRange& materials) {
-  size_t bands = static_cast<size_t>(-1);
-  for (const Material& m : materials) bands = std::min(bands, m.absorption.size());
-  if (bands == static_cast<size_t>(-1) || bands == 0) return 1;
-  return bands;
+// Octave-band count shared with the late-tail RT60 path: the MAXIMUM non-empty
+// material band count, with repeat-last padding (see `reconcile_band_count`).
+size_t common_bands_shoebox(const ShoeboxRoom& room) { return reconcile_band_count(room.walls); }
+
+size_t common_bands_mesh(const PolyhedralRoom& room) {
+  return reconcile_band_count(room.face_materials);
 }
-
-size_t common_bands_shoebox(const ShoeboxRoom& room) { return common_bands(room.walls); }
-
-size_t common_bands_mesh(const PolyhedralRoom& room) { return common_bands(room.face_materials); }
 
 // Intersection parameter d of segment A->B with a plane: P = A + d*(B-A).
 // Returns false when the segment is parallel to the plane.

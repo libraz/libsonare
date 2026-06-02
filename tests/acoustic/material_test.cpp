@@ -1,5 +1,6 @@
 #include "acoustic/material.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -83,4 +84,29 @@ TEST_CASE("uniform material is constant across bands", "[acoustic][material]") {
   REQUIRE(m.absorption.size() == static_cast<size_t>(kDefaultOctaveBands));
   for (float a : m.absorption) REQUIRE_THAT(a, WithinAbs(0.3f, 1e-6f));
   for (float s : m.scattering) REQUIRE_THAT(s, WithinAbs(0.2f, 1e-6f));
+}
+
+TEST_CASE("shared band reconciliation uses the max non-empty count", "[acoustic][material]") {
+  // The image-source and late-tail paths share this rule: the MAXIMUM non-empty
+  // band count wins, with a rigid/all-empty set collapsing to a single band.
+  const Material three = uniform_material(0.5f, 0.3f, 3);
+  const Material six = make_material(MaterialPreset::Concrete);  // 6 bands
+  const std::array<Material, 3> mixed{{three, six, Material{}}};
+  REQUIRE(reconcile_band_count(mixed) == 6);
+
+  const std::array<Material, 2> all_empty{{Material{}, Material{}}};
+  REQUIRE(reconcile_band_count(all_empty) == 1);
+}
+
+TEST_CASE("material_alpha_at applies repeat-last padding", "[acoustic][material]") {
+  const Material three = uniform_material(0.4f, 0.0f, 3);
+  // In-range bands read directly; bands past the end reuse the last coefficient.
+  REQUIRE_THAT(material_alpha_at(three, 0), WithinAbs(0.4f, 1e-6f));
+  REQUIRE_THAT(material_alpha_at(three, 2), WithinAbs(0.4f, 1e-6f));
+  REQUIRE_THAT(material_alpha_at(three, 5), WithinAbs(0.4f, 1e-6f));  // repeat-last
+
+  // A rigid (empty) material reads as the supplied empty value (0 by default).
+  const Material empty;
+  REQUIRE_THAT(material_alpha_at(empty, 0), WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(material_alpha_at(empty, 4, /*empty_value=*/0.7f), WithinAbs(0.7f, 1e-6f));
 }

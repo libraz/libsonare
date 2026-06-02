@@ -69,6 +69,33 @@ float shoebox_surface_area(const ShoeboxRoom& room) noexcept {
   return room_surface_area(room.dims);
 }
 
+float shoebox_mean_scattering(const ShoeboxRoom& room) noexcept {
+  const float lx = room.dims.length, ly = room.dims.width, lz = room.dims.height;
+  // Per-wall areas, indexed by ShoeboxWall (mirrors shoebox_reverb_time).
+  const std::array<float, kShoeboxWallCount> wall_area{{
+      ly * lz,  // kWallXMin
+      ly * lz,  // kWallXMax
+      lx * lz,  // kWallYMin
+      lx * lz,  // kWallYMax
+      lx * ly,  // kWallZMin
+      lx * ly,  // kWallZMax
+  }};
+  float weighted = 0.0f;
+  float total_area = 0.0f;
+  for (size_t w = 0; w < kShoeboxWallCount; ++w) {
+    const std::vector<float>& s = room.walls[w].scattering;
+    float mean = 0.0f;
+    if (!s.empty()) {
+      for (float v : s) mean += v;
+      mean /= static_cast<float>(s.size());
+    }
+    weighted += wall_area[w] * mean;
+    total_area += wall_area[w];
+  }
+  if (total_area <= 0.0f) return 0.0f;
+  return std::clamp(weighted / total_area, 0.0f, 1.0f);
+}
+
 Plane wall_plane(const ShoeboxRoom& room, ShoeboxWall wall) noexcept {
   const float lx = room.dims.length, ly = room.dims.width, lz = room.dims.height;
   switch (wall) {
@@ -267,6 +294,18 @@ bool point_inside_shoebox(const ShoeboxRoom& room, const Vec3& p) noexcept {
 }
 
 bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexcept {
+  // Boundary-inclusive, matching point_inside_shoebox: a point lying exactly on
+  // a face (e.g. a speaker placed against a wall) counts as inside. The parity
+  // cast below would otherwise reject it — ray_triangle_intersect's t < kEps
+  // guard skips the very face the point sits on, flipping the crossing parity.
+  constexpr float kOnFaceEps = 1e-4f;
+  for (const auto& tri : faces) {
+    const Vec3 n = triangle_normal(tri);  // |n| == 2*area
+    const float n_len = length(n);
+    if (n_len < 1e-12f) continue;  // degenerate face
+    const float dist = std::fabs(dot(p - tri.a, n)) / n_len;
+    if (dist <= kOnFaceEps && point_in_triangle(p, tri)) return true;
+  }
   // Parity ray cast; odd crossing count => inside a closed mesh. A generic
   // (non-axis-aligned, asymmetric) direction avoids grazing the shared edges of
   // axis-aligned meshes, which would otherwise double-count and flip the parity.

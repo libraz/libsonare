@@ -17,6 +17,19 @@ namespace {
 constexpr float kMinMixingMs = 3.0f;
 constexpr float kMaxMixingMs = 150.0f;
 
+// Fraction by which fully-rough walls (mean scattering = 1) pull the auto mixing
+// time earlier: at scattering = 1 the auto mixing time is (1 - this) of the
+// purely volume-derived sqrt(V) ms. Bounded so the shift stays physically sane
+// and the mixing time never collapses to zero.
+constexpr float kScatterMixingShift = 0.4f;
+
+// Relative boost applied to the level-matched late tail per unit mean scattering
+// (scale *= 1 + this * mean_scattering). Bounded so a fully-rough room adds at
+// most this fraction of diffuse energy; keeps the early/late balance monotonic
+// in scattering even when the mixing time is pinned or clamped to the direct
+// arrival.
+constexpr float kScatterLateBoost = 0.5f;
+
 // Safety ceiling for the auto-sized late tail. Consumes synthesize_late_tail's
 // own internal cap so the clamp telemetry below does not false-positive (or the
 // length estimate overflow) when a near-rigid room yields an unbounded RT60.
@@ -75,11 +88,25 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const std::vector<float> early(early_audio.begin(), early_audio.end());
   const std::vector<float> late(late_audio.begin(), late_audio.end());
 
+  // Mean wall scattering (rough surfaces) biases the early/late split: rougher
+  // walls diffuse specular energy into the diffuse late field both *sooner* (an
+  // earlier auto mixing time) and *more strongly* (a higher relative late level).
+  // Both uses are bounded and monotonic in mean_scattering; an explicit
+  // config.mixing_time_ms override skips the timing shift but keeps the energy
+  // bias (the diffusion is a material property, not a crossover choice).
+  const float mean_scattering = shoebox_mean_scattering(room);  // [0,1]
+
   // Mixing time: the early/late crossover. Auto estimate ~ sqrt(V) ms (physical
-  // mixing time grows with room volume), clamped to a sensible range.
+  // mixing time grows with room volume), pulled earlier by scattering, clamped
+  // to a sensible range.
   const float volume = shoebox_volume(room);
-  float mixing_ms =
-      config.mixing_time_ms > 0.0f ? config.mixing_time_ms : std::sqrt(std::max(volume, 0.0f));
+  float mixing_ms;
+  if (config.mixing_time_ms > 0.0f) {
+    mixing_ms = config.mixing_time_ms;
+  } else {
+    const float scatter_factor = 1.0f - kScatterMixingShift * mean_scattering;
+    mixing_ms = std::sqrt(std::max(volume, 0.0f)) * scatter_factor;
+  }
   mixing_ms = std::clamp(mixing_ms, kMinMixingMs, kMaxMixingMs);
   const int half_xfade = std::max(
       1, static_cast<int>(std::lround(std::max(0.0f, config.crossfade_ms) * 0.001f * sr * 0.5f)));
@@ -116,6 +143,12 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
       scale = (1.0f / (4.0f * sonare::constants::kPi * d_mix)) / late_ref;
     }
   }
+  // Scattering bias: rough surfaces feed proportionally more energy into the
+  // diffuse late field, so boost the level-matched tail by up to
+  // kScatterLateBoost at mean_scattering == 1 (1 + kScatterLateBoost * s). This
+  // is the part of the scattering effect that survives an explicit/clamped
+  // mixing time, keeping the early/late balance monotonic in mean_scattering.
+  scale *= 1.0f + kScatterLateBoost * mean_scattering;
 
   int length = std::max(static_cast<int>(early.size()), static_cast<int>(late.size()));
   if (cap > 0) {
@@ -127,6 +160,17 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   }
   if (length < 1) length = 1;
 
+  // A fully-rigid room (every band RT60 == 0) yields no late tail. Crossfading
+  // such a buffer would ramp x toward 1 past t1 and silence the early
+  // reflections, leaving an abruptly truncated RIR. Fall back to early-only (no
+  // crossfade) and note it, so the geometric energy is preserved.
+  const bool no_late_tail = late.empty();
+  if (no_late_tail) {
+    result.diagnostics.push_back(
+        {Diagnostic::Severity::Warning, "acoustic.no_late_tail",
+         "room is effectively rigid (RT60 ~ 0); RIR is early reflections only"});
+  }
+
   // Equal-power crossfade (decorrelated early vs. noise late => energy-preserving):
   // early-only before t0, late-only after t1, ramping across [t0, t1]. t0 >= the
   // direct arrival (enforced above) so the direct sound is rendered at full level.
@@ -135,6 +179,10 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   std::vector<float> rir(static_cast<size_t>(length), 0.0f);
   for (int i = 0; i < length; ++i) {
     const float e = i < static_cast<int>(early.size()) ? early[static_cast<size_t>(i)] : 0.0f;
+    if (no_late_tail) {
+      rir[static_cast<size_t>(i)] = e;  // early-only: never fade toward silence
+      continue;
+    }
     const float l =
         (i < static_cast<int>(late.size()) ? late[static_cast<size_t>(i)] : 0.0f) * scale;
     float x;

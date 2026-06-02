@@ -44,7 +44,11 @@ struct RirSynthResult {
 /// the chosen model) at the mixing time. The late tail is level-matched to the
 /// early reflections across the crossover so there is no energy discontinuity.
 /// Output length follows the longest band RT60, clamped to @p config.max_seconds
-/// (a Warning diagnostic is emitted when the clamp truncates the tail).
+/// (a Warning diagnostic is emitted when the clamp truncates the tail). When the
+/// room is effectively rigid (every band RT60 ~ 0) there is no late tail, so the
+/// RIR is the early reflections alone (no crossfade-to-silence) and an
+/// `acoustic.no_late_tail` Warning is emitted. The auto mixing time is also
+/// pulled slightly earlier for rooms with high mean wall scattering.
 RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
                               int sample_rate, const RirSynthConfig& config = {});
 

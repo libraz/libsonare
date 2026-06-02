@@ -4,6 +4,7 @@
 /// @brief Frequency-dependent surface materials (octave-band absorption and
 ///        scattering) and building-material presets for room acoustics.
 
+#include <cstddef>
 #include <vector>
 
 #include "acoustic/room_types.h"
@@ -43,5 +44,32 @@ Material uniform_material(float absorption, float scattering, int n_bands = kDef
 /// the result length, so the returned material always satisfies
 /// absorption.size() == scattering.size().
 Material mix_materials(const Material& a, const Material& b, float t);
+
+/// @brief Shared octave-band reconciliation rule for a set of wall/face materials.
+///
+/// Both the image-source method (specular reflection product) and the late-tail
+/// RT60 model must agree on how many octave bands a multi-material room has and
+/// how to read a coefficient past a given material's length. To keep the two
+/// paths consistent this is the single source of truth:
+///   * reconciliation rule: the MAXIMUM non-empty band count across the
+///     materials (so no material's frequency detail is dropped);
+///   * padding policy: a coefficient requested past a material's length reuses
+///     that material's LAST coefficient (an empty material reads as @p empty_value).
+/// Returns at least 1 (a rigid/all-empty room collapses to a single band).
+template <typename MaterialRange>
+std::size_t reconcile_band_count(const MaterialRange& materials) {
+  std::size_t bands = 0;
+  for (const Material& m : materials) {
+    if (m.absorption.size() > bands) bands = m.absorption.size();
+  }
+  return bands == 0 ? 1u : bands;
+}
+
+/// @brief Absorption coefficient of @p material at octave band @p band under the
+///        shared repeat-last padding policy (see `reconcile_band_count`).
+///
+/// An empty material returns @p empty_value (0 = rigid by default); otherwise
+/// bands at or past the material's length reuse its last coefficient.
+float material_alpha_at(const Material& material, std::size_t band, float empty_value = 0.0f);
 
 }  // namespace sonare::acoustic

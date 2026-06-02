@@ -170,3 +170,43 @@ TEST_CASE("room_morph is deterministic", "[effects][acoustic][room_morph]") {
   REQUIRE(a.size() == b.size());
   for (size_t i = 0; i < a.size(); ++i) REQUIRE(a[i] == b[i]);
 }
+
+TEST_CASE("room_morph exposes the late-tail synthesis controls",
+          "[effects][acoustic][room_morph]") {
+  using sonare::acoustic::ReverbModel;
+  const int sr = 48000;
+  std::vector<float> samples(4000, 0.0f);
+  samples[0] = 1.0f;
+  const Audio rec = Audio::from_vector(std::vector<float>(samples), sr);
+
+  // An absorptive target makes Sabine and Eyring diverge, so swapping late_model
+  // (now plumbed through RoomMorphConfig) must change the rendered target tail.
+  RoomMorphConfig sabine;
+  sabine.target = uniform_room(12.0f, 9.0f, 5.0f, 0.4f);
+  sabine.placement = {{2.0f, 2.0f, 1.5f}, {8.0f, 6.0f, 1.7f}};
+  sabine.wet = 1.0f;
+  sabine.source_tail_suppression = 0.0f;
+  sabine.max_seconds = 0.3f;
+  sabine.late_model = ReverbModel::Sabine;
+
+  RoomMorphConfig eyring = sabine;
+  eyring.late_model = ReverbModel::Eyring;
+
+  const Audio a = room_morph(rec, sabine);
+  const Audio b = room_morph(rec, eyring);
+  bool differs = a.size() != b.size();
+  const size_t common = std::min(a.size(), b.size());
+  for (size_t i = 0; i < common && !differs; ++i) differs = (a[i] != b[i]);
+  REQUIRE(differs);
+
+  // The mixing-time / crossfade overrides are accepted and produce a usable,
+  // deterministic render (exercises the new pass-through fields end to end).
+  RoomMorphConfig pinned = eyring;
+  pinned.mixing_time_ms = 35.0f;
+  pinned.crossfade_ms = 12.0f;
+  const Audio p1 = room_morph(rec, pinned);
+  const Audio p2 = room_morph(rec, pinned);
+  REQUIRE(p1.size() == p2.size());
+  REQUIRE(p1.size() > rec.size());
+  for (size_t i = 0; i < p1.size(); ++i) REQUIRE(p1[i] == p2[i]);
+}

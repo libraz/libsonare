@@ -38,6 +38,9 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   rc.ism_order = config_.ism_order;
   rc.seed = config_.seed;
   rc.max_seconds = config_.max_seconds;
+  rc.late_model = config_.late_model;
+  rc.mixing_time_ms = config_.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
+  rc.crossfade_ms = config_.crossfade_ms;
   const RirSynthResult res = synthesize_rir(config_.target, config_.placement, sr, rc);
 
   reverb_.prepare(sample_rate, max_block_size);

@@ -23,7 +23,8 @@
 
 #include <vector>
 
-#include "acoustic/room_model.h"  // ShoeboxRoom, SourceListener
+#include "acoustic/late_reverb.h"  // ReverbModel
+#include "acoustic/room_model.h"   // ShoeboxRoom, SourceListener
 #include "core/audio.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "rt/processor_base.h"
@@ -43,10 +44,15 @@ struct RoomMorphConfig {
   /// Target-room mix in [0, 1]. 0 = suppressed dry only; 1 = target room only.
   float wet = 0.5f;
 
-  /// Target-RIR synthesis controls (see rir_synthesizer.h).
+  /// Target-RIR synthesis controls (see rir_synthesizer.h). Defaults preserve the
+  /// historical behaviour (Eyring late model, auto mixing time, 5 ms crossfade).
   int ism_order = 3;
   unsigned seed = 1u;
   float max_seconds = 0.0f;  ///< 0 = natural target RIR length
+  sonare::acoustic::ReverbModel late_model =
+      sonare::acoustic::ReverbModel::Eyring;  ///< statistical tail RT60 model
+  float mixing_time_ms = 0.0f;                ///< early/late crossover; 0 = auto (~sqrt(V) ms)
+  float crossfade_ms = 5.0f;                  ///< equal-power crossfade width around mixing time
 };
 
 /// @brief Offline room-character morph.

@@ -56,6 +56,17 @@ float shoebox_volume(const ShoeboxRoom& room) noexcept;
 /// @brief Total interior surface area (m^2) of a shoebox room.
 float shoebox_surface_area(const ShoeboxRoom& room) noexcept;
 
+/// @brief Area-weighted mean scattering coefficient of a shoebox's walls in
+///        [0,1] (0 for fully specular/empty materials).
+///
+/// Each wall's scattering is collapsed to the mean over its octave bands, then
+/// area-weighted across the six walls. The RIR synthesizer reads this to bias
+/// the early/late split and mixing time: rougher (higher-scattering) surfaces
+/// diffuse specular energy into the late field sooner. This is a coarse,
+/// bounded, monotonic use of the material scattering term — not a ray-traced
+/// late tail.
+float shoebox_mean_scattering(const ShoeboxRoom& room) noexcept;
+
 /// @brief Inward-facing plane of a shoebox wall (a point on the wall + the
 ///        unit normal pointing into the room). Used by the image-source method.
 Plane wall_plane(const ShoeboxRoom& room, ShoeboxWall wall) noexcept;
@@ -118,11 +129,14 @@ class VoxelGrid {
 /// @brief True if @p p lies within the (closed) shoebox interior.
 bool point_inside_shoebox(const ShoeboxRoom& room, const Vec3& p) noexcept;
 
-/// @brief True if @p p lies inside a closed mesh (parity ray-cast count).
+/// @brief True if @p p lies inside or on the boundary of a closed mesh.
 ///
-/// Assumes a watertight (closed) mesh. The parity cast uses a fixed asymmetric
-/// direction chosen to avoid grazing axis-aligned shared edges; an open mesh or
-/// a mesh whose faces align with that direction may misclassify boundary cases.
+/// Boundary-inclusive (matching `point_inside_shoebox`): a point lying exactly
+/// on a face is reported as inside. Interior points use a parity ray-cast (odd
+/// crossing count) with a fixed asymmetric direction chosen to avoid grazing
+/// axis-aligned shared edges. Assumes a watertight (closed) mesh; an open mesh
+/// or a mesh whose faces align with that direction may misclassify interior
+/// boundary cases.
 bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexcept;
 
 /// @brief Validate shoebox geometry and placement; never throws.
