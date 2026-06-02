@@ -6,8 +6,11 @@ import {
   detectDownbeats,
   detectKey,
   detectKeyCandidates,
+  estimateRoom,
   masterAudio,
   masteringPresetNames,
+  roomMorph,
+  synthesizeRir,
 } from '../../bindings/node/src/index.js';
 import type {
   AcousticResult,
@@ -15,6 +18,8 @@ import type {
   KeyCandidate,
   MasteringChainResult,
   MasteringPreset,
+  RirResult,
+  RoomEstimateResult,
 } from '../../bindings/node/src/types.js';
 
 const samples = new Float32Array([0.0, 0.1, -0.1, 0.0]);
@@ -24,6 +29,21 @@ const presets: MasteringPreset[] = masteringPresetNames();
 const mastered: MasteringChainResult = masterAudio(samples, 22050, 'aiMusic');
 const acoustic: AcousticResult = analyzeImpulseResponse(irSamples, 48000);
 const blindAcoustic: AcousticResult = detectAcoustic(irSamples, 48000);
+const rir: RirResult = synthesizeRir({
+  lengthM: 6.0,
+  widthM: 5.0,
+  heightM: 3.0,
+  absorption: 0.2,
+});
+const roomEstimate: RoomEstimateResult = estimateRoom(irSamples, 48000, {
+  preferEyring: true,
+});
+const morphed: Float32Array = roomMorph(samples, 22050, {
+  lengthM: 6.0,
+  widthM: 5.0,
+  heightM: 3.0,
+  wet: 0.4,
+});
 const downbeats: Float32Array = detectDownbeats(samples, 22050);
 const chords: ChordAnalysisResult = detectChords(
   samples,
@@ -63,6 +83,11 @@ masterAudio(samples, 22050, 'invalidPreset');
 presets satisfies MasteringPreset[];
 acoustic.rt60Bands satisfies Float32Array;
 blindAcoustic.isBlind satisfies boolean;
+rir.rir satisfies Float32Array;
+rir.hasError satisfies boolean;
+roomEstimate.rt60Bands satisfies Float32Array;
+roomEstimate.confidence satisfies number;
+morphed satisfies Float32Array;
 downbeats satisfies Float32Array;
 chords.chords satisfies ChordAnalysisResult['chords'];
 cyclic.data satisfies Float32Array;

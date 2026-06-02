@@ -100,6 +100,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
       Napi::Function::New(env, &SonareWrap::AnalyzeImpulseResponse, "analyzeImpulseResponse"));
   exports.Set("detectAcoustic",
               Napi::Function::New(env, &SonareWrap::DetectAcoustic, "detectAcoustic"));
+  exports.Set("synthesizeRir",
+              Napi::Function::New(env, &SonareWrap::SynthesizeRir, "synthesizeRir"));
+  exports.Set("estimateRoom", Napi::Function::New(env, &SonareWrap::EstimateRoom, "estimateRoom"));
+  exports.Set("roomMorph", Napi::Function::New(env, &SonareWrap::RoomMorph, "roomMorph"));
   exports.Set("analyzeRhythm",
               Napi::Function::New(env, &SonareWrap::AnalyzeRhythm, "analyzeRhythm"));
   exports.Set("analyzeDynamics",

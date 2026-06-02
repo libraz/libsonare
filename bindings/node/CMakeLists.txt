@@ -32,6 +32,7 @@ set(BUILD_GRAPH ON CACHE BOOL "" FORCE)
 set(BUILD_FX ON CACHE BOOL "" FORCE)
 set(BUILD_PITCH_EDITOR ON CACHE BOOL "" FORCE)
 set(BUILD_VOICE_CHANGER ON CACHE BOOL "" FORCE)
+set(BUILD_ACOUSTIC_SIM ON CACHE BOOL "" FORCE)
 
 # Optional: enable FFmpeg-backed decoding (M4A/AAC/FLAC/OGG/Opus/...). Forwarded
 # from the npm build via SONARE_FFMPEG (handled in scripts/build-native.mjs):
@@ -48,6 +49,7 @@ set(ADDON_SOURCES
   src/addon/addon.cpp
   src/addon/sonare_wrap_engine.cpp
   src/addon/sonare_wrap.cpp
+  src/addon/sonare_wrap_acoustic.cpp
   src/addon/sonare_wrap_analysis.cpp
   src/addon/sonare_wrap_effects.cpp
   src/addon/sonare_wrap_features.cpp
@@ -91,6 +93,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
   sonare_engine
   sonare_voice_changer
+  sonare_acoustic
   ${CMAKE_JS_LIB}
 )
 
@@ -101,6 +104,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   SONARE_WITH_MIXING=1
   SONARE_WITH_PITCH_EDITOR=1
   SONARE_WITH_VOICE_CHANGER=1
+  SONARE_WITH_ACOUSTIC_SIM=1
 )
 
 if(MSVC)

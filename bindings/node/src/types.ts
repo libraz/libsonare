@@ -366,6 +366,57 @@ export interface AcousticResult {
   isBlind: boolean;
 }
 
+/** Shoebox geometry + placement shared by RIR synthesis and the room morph. */
+export interface RoomGeometryOptions {
+  lengthM?: number;
+  widthM?: number;
+  heightM?: number;
+  absorption?: number;
+  sourceX?: number;
+  sourceY?: number;
+  sourceZ?: number;
+  listenerX?: number;
+  listenerY?: number;
+  listenerZ?: number;
+  ismOrder?: number;
+  seed?: number;
+  maxSeconds?: number;
+}
+
+export interface RirSynthOptions extends RoomGeometryOptions {
+  sampleRate?: number;
+}
+
+export interface RirResult {
+  rir: Float32Array;
+  sampleRate: number;
+  hasError: boolean;
+}
+
+export interface RoomEstimateOptions {
+  aspectHintLw?: number;
+  aspectHintLh?: number;
+  referenceAbsorption?: number;
+  preferEyring?: boolean;
+  nOctaveBands?: number;
+}
+
+export interface RoomEstimateResult {
+  volume: number;
+  length: number;
+  width: number;
+  height: number;
+  drrDb: number;
+  confidence: number;
+  absorptionBands: Float32Array;
+  rt60Bands: Float32Array;
+}
+
+export interface RoomMorphOptions extends RoomGeometryOptions {
+  wet?: number;
+  sourceTailSuppression?: number;
+}
+
 export interface LufsResult {
   integratedLufs: number;
   momentaryLufs: number;

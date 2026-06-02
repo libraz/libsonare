@@ -57,6 +57,11 @@ import type {
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerOptions,
   RhythmResult,
+  RirResult,
+  RirSynthOptions,
+  RoomEstimateOptions,
+  RoomEstimateResult,
+  RoomMorphOptions,
   Section,
   SendTiming,
   SoloProcessor,
@@ -882,6 +887,40 @@ export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32
 
 export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResult {
   return addon.analyze(samples, sampleRate);
+}
+
+/**
+ * Synthesize a room impulse response from shoebox geometry. `hasError` is true
+ * when the source/listener falls outside the room (the RIR is then empty).
+ */
+export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
+  return addon.synthesizeRir(options);
+}
+
+/**
+ * Estimate an equivalent room (volume/dimensions/absorption/DRR) from a
+ * recording or impulse response. The volume scale is anchored by
+ * `referenceAbsorption`; `confidence` reports how well the data support it.
+ */
+export function estimateRoom(
+  samples: Float32Array,
+  sampleRate = 48000,
+  options: RoomEstimateOptions = {},
+): RoomEstimateResult {
+  return addon.estimateRoom(samples, sampleRate, options);
+}
+
+/**
+ * Morph a recording's reverberation toward a target room (creative FX, not
+ * dereverberation). Returns the morphed samples (input length plus the target
+ * room's reverb tail).
+ */
+export function roomMorph(
+  samples: Float32Array,
+  sampleRate: number,
+  options: RoomMorphOptions = {},
+): Float32Array {
+  return addon.roomMorph(samples, sampleRate, options);
 }
 
 /**
@@ -3283,6 +3322,12 @@ export type {
   PanMode,
   PitchResult,
   RhythmResult,
+  RirResult,
+  RirSynthOptions,
+  RoomEstimateOptions,
+  RoomEstimateResult,
+  RoomGeometryOptions,
+  RoomMorphOptions,
   Section,
   SectionTypeOrdinal,
   SendTiming,

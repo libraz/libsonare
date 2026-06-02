@@ -52,6 +52,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value AnalyzeBpm(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeImpulseResponse(const Napi::CallbackInfo& info);
   static Napi::Value DetectAcoustic(const Napi::CallbackInfo& info);
+  static Napi::Value SynthesizeRir(const Napi::CallbackInfo& info);
+  static Napi::Value EstimateRoom(const Napi::CallbackInfo& info);
+  static Napi::Value RoomMorph(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeRhythm(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeDynamics(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeTimbre(const Napi::CallbackInfo& info);
