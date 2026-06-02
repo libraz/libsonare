@@ -36,7 +36,9 @@ inline constexpr int kVoiceChangerPresetSchemaVersion = 1;
 ///          with the compile-time expectation. Separate from the JSON schema
 ///          version because JSON bindings (Python/Node) tolerate layout drift
 ///          while POD bindings (Rust FFI, raw C ABI consumers) do not.
-inline constexpr std::uint32_t kVoiceChangerAbiVersion = 1u;
+// v2: added limiter_enable_isp_limiter (int) and limiter_isp_ceiling_dbtp
+//     (float) to SonareRealtimeVoiceChangerConfig.
+inline constexpr std::uint32_t kVoiceChangerAbiVersion = 2u;
 
 enum class VoiceCharacterPreset {
   NeutralMonitor,
