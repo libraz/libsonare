@@ -409,6 +409,43 @@ TEST_CASE("Chorus mono output folds both voices instead of clobbering", "[fx]") 
   REQUIRE(right_only_diff > 1e-2);  // Not just the (buggy) right channel.
 }
 
+TEST_CASE("Chorus constructor clamps delay like set_parameter", "[fx]") {
+  // Regression: the constructor stored raw config (center/depth) without the
+  // clamp set_parameter applies, so an out-of-range constructed delay was
+  // silently truncated by the read clamp instead of clamped consistently.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 4096;
+  // 200 ms center delay is far past the 50 ms automation clamp.
+  const sonare::effects::modulation::ChorusConfig oob_config{0.8f, 6.0f, 200.0f, 0.5f};
+
+  std::vector<float> ctor_l = sine_input(kSamples, kSampleRate);
+  std::vector<float> ctor_r = ctor_l;
+  float* ctor_ch[] = {ctor_l.data(), ctor_r.data()};
+  sonare::effects::modulation::Chorus ctor_fx(oob_config);
+  ctor_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  ctor_fx.process(ctor_ch, 2, kSamples);
+
+  // Reference: construct at default, then drive center_delay to the same
+  // out-of-range value via set_parameter (which clamps to 50 ms).
+  std::vector<float> auto_l = sine_input(kSamples, kSampleRate);
+  std::vector<float> auto_r = auto_l;
+  float* auto_ch[] = {auto_l.data(), auto_r.data()};
+  sonare::effects::modulation::ChorusConfig base_config{0.8f, 6.0f, 14.0f, 0.5f};
+  sonare::effects::modulation::Chorus auto_fx(base_config);
+  auto_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  REQUIRE(auto_fx.set_parameter(2, 200.0f));  // center_delay_ms -> clamped to 50
+  auto_fx.process(auto_ch, 2, kSamples);
+
+  // Both paths land on the same clamped delay, so outputs must match.
+  double diff = 0.0;
+  for (int i = 0; i < kSamples; ++i) {
+    diff += std::abs(static_cast<double>(ctor_l[static_cast<size_t>(i)]) -
+                     static_cast<double>(auto_l[static_cast<size_t>(i)]));
+  }
+  REQUIRE(all_finite(ctor_l));
+  REQUIRE(diff < 1e-3);
+}
+
 TEST_CASE("Flanger mono output folds both voices instead of clobbering", "[fx]") {
   constexpr int kSampleRate = 48000;
   constexpr int kSamples = 4096;

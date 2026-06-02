@@ -14,7 +14,15 @@ constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms
 constexpr float kMaxChorusDelayMs = 50.0f;
 }  // namespace
 
-Chorus::Chorus(ChorusConfig config) : config_(config) {}
+Chorus::Chorus(ChorusConfig config) : config_(config) {
+  // Apply the same delay clamp the automation path (set_parameter) enforces so
+  // the construction path can never request a center/depth larger than the
+  // buffer prepare() sizes for. Without this, an out-of-range constructed delay
+  // would be silently truncated by the ModDelayLine read clamp instead of
+  // clamped consistently with set_parameter.
+  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxChorusDelayMs);
+  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxChorusDelayMs);
+}
 
 void Chorus::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
