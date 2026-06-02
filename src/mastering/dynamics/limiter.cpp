@@ -200,6 +200,11 @@ void Limiter::validate_config(const LimiterConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "limiter timing values must be non-negative");
   }
+  if (!std::isfinite(config.threshold_db)) {
+    // A non-finite threshold becomes a non-finite ceiling (db_to_linear) and
+    // poisons every gain in the block; reject it here (matches BrickwallLimiter).
+    throw SonareException(ErrorCode::InvalidParameter, "limiter threshold must be finite");
+  }
 }
 
 void Limiter::prepare_buffers(int num_channels) {

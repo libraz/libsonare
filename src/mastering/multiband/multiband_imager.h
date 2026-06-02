@@ -34,6 +34,10 @@ class MultibandImager : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  // Reports the linear-phase FIR crossover delay (0 in the zero-latency IIR
+  // modes) so host plugin-delay-compensation stays correct. The per-band
+  // imaging stages add no latency.
+  int latency_samples() const noexcept override { return crossover_.latency_samples(); }
 
   void set_config(const MultibandImagerConfig& config);
   const MultibandImagerConfig& config() const { return config_; }

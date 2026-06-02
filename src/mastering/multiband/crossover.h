@@ -96,6 +96,14 @@ class Crossover {
   const CrossoverConfig& config() const { return config_; }
   int num_bands() const { return static_cast<int>(config_.cutoffs_hz.size()) + 1; }
 
+  /// @brief Processing latency introduced by the crossover, in samples.
+  /// @details Only the linear-phase FIR mode adds latency: each band is delayed
+  /// by `fir_kernel_size / 2` samples so the bands stay phase-aligned. All IIR
+  /// modes (Linkwitz-Riley/Butterworth/Bessel) are zero-latency and return 0.
+  int latency_samples() const {
+    return config_.mode == CrossoverMode::FirLinearPhase ? config_.fir_kernel_size / 2 : 0;
+  }
+
  private:
   using Biquad = rt::BiquadState;
 

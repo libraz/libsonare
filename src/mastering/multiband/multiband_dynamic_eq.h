@@ -23,6 +23,11 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  // Reports the linear-phase FIR crossover delay (0 in the zero-latency IIR
+  // modes) so host plugin-delay-compensation stays correct. The per-band
+  // DynamicEq processors are zero-latency (the detector lookahead does not
+  // delay the audio path).
+  int latency_samples() const noexcept override { return crossover_.latency_samples(); }
 
   // Number of automatable parameters per crossover band: every crossover band
   // owns a full DynamicEq, so it spans kMaxBands * DynamicEq::kParamsPerBand

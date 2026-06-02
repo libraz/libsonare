@@ -125,6 +125,14 @@ bool ParametricEq::set_parameter(unsigned int param_id, float value) {
     return false;
   }
   EqBand band = bands_[band_index];
+  // Tilt band types have no coefficient design here (make_coefficients throws
+  // for them). set_parameter is the RT-safe automation path, so skip rather than
+  // throw on the audio thread; the throwing path stays reserved for the control-
+  // thread set_band(). A tilt type can never be validly installed in the first
+  // place (set_band itself throws), so this is purely defensive.
+  if (band.type == EqBandType::TiltShelf || band.type == EqBandType::FlatTilt) {
+    return false;
+  }
   switch (param_id % 3u) {
     case 0:
       // Clamp to the open interval (0 Hz, Nyquist) so coefficient design never

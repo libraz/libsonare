@@ -120,7 +120,20 @@ bool MultibandDynamicEq::set_parameter(unsigned int param_id, float value) {
     return false;
   }
   const unsigned int local_id = param_id % kParamsPerCrossoverBand;
-  return processors_[crossover_band].set_parameter(local_id, value);
+  if (!processors_[crossover_band].set_parameter(local_id, value)) {
+    return false;
+  }
+  // Keep config_ in sync so config() and a subsequent set_config() observe the
+  // automated value (mirrors MultibandCompressor::set_parameter). Only the band
+  // the local id addresses changed; copy it back when it is within the stored
+  // config (the inner DynamicEq keeps up to kMaxBands slots, config may hold
+  // fewer).
+  const size_t dyn_band = local_id / eq::DynamicEq::kParamsPerBand;
+  auto& bands = config_.bands[crossover_band];
+  if (dyn_band < bands.size()) {
+    bands[dyn_band] = processors_[crossover_band].band(dyn_band);
+  }
+  return true;
 }
 
 void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config) {

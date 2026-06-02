@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -15,12 +16,27 @@ namespace sonare::mastering::eq {
 
 using sonare::constants::kFloorDb;
 using sonare::constants::kTwoPiD;
+using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 void DynamicEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0))
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   sample_rate_ = sample_rate;
   eq_.prepare(sample_rate, max_block_size);
+  // Preallocate every band's per-channel detector state up front so the audio-
+  // thread process()/ensure_detector path never allocates: kRealtimePreparedChannels
+  // channels and a lookahead ring sized to the maximum supported lookahead. The
+  // live FIFO length (look_size) is then varied within this capacity without
+  // resizing, mirroring the fixed-size limiter lookahead.
+  max_lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * kMaxLookaheadMs * 0.001));
+  for (auto& detector : detectors_) {
+    detector.channels.assign(kRealtimePreparedChannels, {});
+    for (auto& channel : detector.channels) {
+      channel.look_ring.assign(static_cast<size_t>(std::max(max_lookahead_samples_, 0)), 0.0f);
+      channel.look_size = 0;
+      channel.look_pos = 0;
+    }
+  }
   prepared_ = true;
   rebuild();
 }
@@ -266,6 +282,13 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
   if (!band.enabled) {
     return;
   }
+  if (band.type == EqBandType::TiltShelf || band.type == EqBandType::FlatTilt) {
+    // The underlying ParametricEq backend has no tilt coefficient design and
+    // would throw from rebuild() — reject on this control-thread path so a tilt
+    // band can never be installed and later trip the RT automation path.
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "dynamic EQ band type does not support TiltShelf/FlatTilt");
+  }
   if (!(band.frequency_hz > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
   }
@@ -300,8 +323,18 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
   DetectorState& state = detectors_[index];
   const DynamicEqBand& band = bands_[index];
 
+  // Reject blocks wider than the prepared per-channel state; the audio thread
+  // never resizes (which would malloc), matching the limiter pattern.
+  if (static_cast<size_t>(num_channels) > state.channels.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared DynamicEq detector state");
+  }
+
+  // Clamp the lookahead to the capacity preallocated in prepare() so the ring is
+  // never reallocated on the audio thread (automation past the bound saturates).
   const int lookahead_samples =
-      std::max(0, static_cast<int>(std::round(sample_rate_ * band.lookahead_ms * 0.001)));
+      std::clamp(static_cast<int>(std::round(sample_rate_ * band.lookahead_ms * 0.001)), 0,
+                 max_lookahead_samples_);
 
   // (Re)design the bandpass prototype and timing only when the relevant band
   // fields change — coefficient design is double-precision and not free.
@@ -331,22 +364,28 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
     state.release_ms = band.release_ms;
   }
 
-  const bool channels_changed = static_cast<int>(state.channels.size()) != num_channels;
+  // The per-channel state is preallocated in prepare(); channels_changed here
+  // means the observed channel count differs from the previous block (no
+  // allocation, just a re-seed of the now-active channels' coefficients).
+  const bool channels_changed = state.active_channels != num_channels;
   const bool lookahead_changed =
       state.lookahead_ms != band.lookahead_ms || state.lookahead_samples != lookahead_samples;
   if (channels_changed) {
-    state.channels.assign(static_cast<size_t>(num_channels), {});
+    state.active_channels = num_channels;
   }
   if (lookahead_changed) {
     state.lookahead_samples = lookahead_samples;
     state.lookahead_ms = band.lookahead_ms;
   }
 
-  // Propagate fresh coefficients (and resize the lookahead ring) only when
+  // Propagate fresh coefficients (and re-window the lookahead ring) only when
   // something relevant changed; the per-sample filter state (z1/z2) and ring
-  // contents are otherwise preserved across blocks for continuity.
+  // contents are otherwise preserved across blocks for continuity. The ring is
+  // never resized here — its live FIFO length (look_size) is set within the
+  // capacity preallocated in prepare(), and the newly active window is zeroed.
   if (design_changed || channels_changed || lookahead_changed) {
-    for (auto& channel : state.channels) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      DetectorChannel& channel = state.channels[static_cast<size_t>(ch)];
       const auto copy = [&](DetectorBiquad& f) {
         f.b0 = state.prototype.b0;
         f.b1 = state.prototype.b1;
@@ -356,8 +395,9 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
       };
       copy(channel.filter_a);
       copy(channel.filter_b);
-      if (channel.look_ring.size() != static_cast<size_t>(lookahead_samples)) {
-        channel.look_ring.assign(static_cast<size_t>(lookahead_samples), 0.0f);
+      if (channel.look_size != static_cast<size_t>(lookahead_samples)) {
+        channel.look_size = static_cast<size_t>(lookahead_samples);
+        std::fill(channel.look_ring.begin(), channel.look_ring.begin() + channel.look_size, 0.0f);
         channel.look_pos = 0;
       }
     }
@@ -407,7 +447,7 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
         // continuous stream described above.
         const float oldest = dc.look_ring[dc.look_pos];
         dc.look_ring[dc.look_pos] = channels[ch][i];
-        dc.look_pos = (dc.look_pos + 1) % dc.look_ring.size();
+        dc.look_pos = (dc.look_pos + 1) % dc.look_size;
         step(oldest);
       } else {
         step(channels[ch][i]);

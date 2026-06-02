@@ -95,7 +95,18 @@ class EqualizerProcessor : public rt::ProcessorBase {
     double filter_b_z1 = 0.0;
     double filter_b_z2 = 0.0;
     double envelope = 0.0;
+    // Lookahead delay ring of pre-filter input samples. Preallocated in prepare()
+    // to the maximum supported lookahead; only the first look_size entries form
+    // the live FIFO, so the detector consumes a CONTINUOUS stream across blocks
+    // instead of repeating the final sample for the last look_size positions of
+    // every block (which systematically under-detected at each boundary).
+    std::vector<float> look_ring;
+    size_t look_size = 0;
+    size_t look_pos = 0;
   };
+  // Maximum per-band detector lookahead the detector ring is preallocated for.
+  // Lookahead past this bound saturates so the audio-thread path never resizes.
+  static constexpr float kMaxDetectorLookaheadMs = 20.0f;
   float band_detector_db(size_t band_index, const float* const* channels, int num_channels,
                          int num_samples, double sample_rate, const EqBand& band);
   static float rms_db(const float* const* channels, int num_channels, int num_samples) noexcept;
@@ -122,6 +133,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   PhaseMode phase_mode_ = PhaseMode::ZeroLatency;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  // Detector lookahead ring capacity (samples) preallocated in prepare().
+  int max_detector_lookahead_samples_ = 0;
   bool prepared_ = false;
   bool has_mid_side_bands_ = false;
   bool has_dynamic_bands_ = false;

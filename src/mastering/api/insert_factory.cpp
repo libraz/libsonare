@@ -382,6 +382,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     }
     config.damping = f(params, "damping", config.damping);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    // Figure-8 tank modulation (the plate's chorused tail); wire both fields so
+    // they are reachable at construction, matching Velvet's full-field mapping.
+    config.mod_rate_hz = f(params, "modRateHz", config.mod_rate_hz);
+    config.mod_depth_samples = f(params, "modDepthSamples", config.mod_depth_samples);
     // pre_delay_samples is defined at the reverb's reference rate (header
     // comment), so convert preDelayMs using kReferenceSampleRate; prepare()
     // rescales the resulting sample count to the working sample rate.
@@ -419,9 +423,14 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // Constructs as a near-passthrough until an IR is supplied. The IR cannot be
     // expressed through the scalar JSON params, so callers that need a working
     // convolution insert must use make_insert_with_ir(); via plain make_insert()
-    // the convolver stays a passthrough. dryWet/decay are not part of
-    // ConvolutionReverb's config, so no params are translated.
-    return make<ConvolutionReverb>();
+    // the convolver stays a passthrough. dryWet is the one configurable scalar:
+    // apply it via set_parameter(0) so it is honored at construction (matching
+    // the sibling reverbs) rather than silently dropped.
+    auto reverb = make<ConvolutionReverb>();
+    if (params.find("dryWet") != params.end()) {
+      reverb->set_parameter(0, f(params, "dryWet", 1.0f));
+    }
+    return reverb;
   }
   if (name == "effects.modulation.chorus") {
     effects::modulation::ChorusConfig config;

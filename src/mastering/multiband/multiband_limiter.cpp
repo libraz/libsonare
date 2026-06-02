@@ -86,10 +86,13 @@ int MultibandLimiter::latency_samples() const noexcept {
   // All bands share the same lookahead configuration, so the per-band limiter
   // latency is uniform; report band 0's latency. Guard against an empty band
   // list (e.g. before prepare()).
+  // The linear-phase FIR crossover delays every band; add it to the per-band
+  // limiter lookahead so host plugin-delay-compensation stays correct.
+  const int crossover_latency = crossover_.latency_samples();
   if (limiters_.empty()) {
-    return 0;
+    return crossover_latency;
   }
-  return limiters_[0].latency_samples();
+  return crossover_latency + limiters_[0].latency_samples();
 }
 
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {

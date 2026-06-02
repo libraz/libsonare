@@ -87,6 +87,11 @@ class DynamicEq : public rt::ProcessorBase {
   // Skip re-applying a band's coefficients when the smoothed gain has not moved
   // by at least this many dB since the last applied value (steady state).
   static constexpr float kGainEpsilonDb = 1.0e-3f;
+  // Maximum per-band detector lookahead the audio-thread path supports. The
+  // lookahead rings are preallocated to this many samples (at the prepare()
+  // sample rate) so process()/ensure_detector never allocate; a band requesting
+  // more is clamped to this bound, mirroring the fixed-size limiter lookahead.
+  static constexpr float kMaxLookaheadMs = 20.0f;
 
   // Persistent per-(band, channel) sidechain detector state. Kept across blocks
   // so the bandpass filter, envelope follower and lookahead delay all evolve
@@ -109,8 +114,12 @@ class DynamicEq : public rt::ProcessorBase {
     double envelope = 0.0;
     // Lookahead delay ring of pre-filter input samples. The detector consumes a
     // sample that is `lookahead_samples` ahead of the audio position, drawing
-    // the tail from the previous block so the horizon is continuous.
+    // the tail from the previous block so the horizon is continuous. The vector
+    // is preallocated in prepare() to the maximum supported lookahead; only the
+    // first `look_size` entries are the live FIFO, so the modulo wrap uses
+    // look_size (not look_ring.size()) and changing the lookahead never resizes.
     std::vector<float> look_ring;
+    size_t look_size = 0;
     size_t look_pos = 0;
     void reset() {
       filter_a.reset();
@@ -121,7 +130,8 @@ class DynamicEq : public rt::ProcessorBase {
     }
   };
   struct DetectorState {
-    std::vector<DetectorChannel> channels;  // one per audio/sidechain channel
+    std::vector<DetectorChannel> channels;  // preallocated to kRealtimePreparedChannels
+    int active_channels = -1;               // observed channel count (-1 until first block)
     int lookahead_samples = 0;
     // Cached design inputs so coefficients/ring are only rebuilt on change.
     float frequency_hz = -1.0f;
@@ -152,6 +162,8 @@ class DynamicEq : public rt::ProcessorBase {
 
   ParametricEq eq_;
   double sample_rate_ = 48000.0;
+  // Lookahead ring capacity (samples) preallocated in prepare() from kMaxLookaheadMs.
+  int max_lookahead_samples_ = 0;
   bool prepared_ = false;
   std::array<DynamicEqBand, kMaxBands> bands_{};
   std::array<float, kMaxBands> last_band_detector_db_{};

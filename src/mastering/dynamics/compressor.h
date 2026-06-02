@@ -67,17 +67,20 @@ class Compressor : public rt::ProcessorBase {
   const CompressorConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
-  // Automatable parameters (RT-safe, no allocation, no state reset):
+  // Automatable parameters (control-thread; no audio-state reset):
   //   0 = threshold_db
   //   1 = ratio (clamped to >= 1)
   //   2 = attack_ms (clamped to >= 0)
   //   3 = release_ms (clamped to >= 0)
   //   4 = makeup_gain_db
   //
-  // set_parameter mutates the control-thread mirror (config_) directly and is
-  // declared RT-safe. It MUST NOT be called concurrently with set_config(); the
-  // single-producer hand-off contract of RtPublisher covers either path
-  // individually, not both at once.
+  // set_parameter mutates the control-thread mirror (config_) and publishes it
+  // as a new snapshot for the audio thread to adopt on the next block. It is
+  // therefore NOT realtime-safe under the snapshot model — the shared_ptr
+  // allocation matches set_config() (same contract as Limiter::set_parameter).
+  // It MUST NOT be called concurrently with set_config(); the single-producer
+  // hand-off contract of RtPublisher covers either path individually, not both
+  // at once.
   bool set_parameter(unsigned int param_id, float value) override;
 
  private:

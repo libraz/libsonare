@@ -280,7 +280,7 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
   // HPF is LTI, filtering each source channel and averaging is identical to
   // averaging then filtering, so mono summing keeps its meaning while never
   // sharing HPF state across output channels.
-  float sum = 0.0f;
+  float abs_sum = 0.0f;
   float peak = 0.0f;
   for (int ch = 0; ch < source_channels; ++ch) {
     float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
@@ -291,11 +291,15 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
       hpf_y1_[idx] = y;
       s = y;
     }
-    sum += s;
+    // Sum magnitudes, not signed amplitudes: a signed sum collapses toward zero
+    // for an anti-correlated (out-of-phase) stereo key, making a loud key read
+    // as silence and the ducking fail to trigger. The mean of |s| stays
+    // representative regardless of inter-channel phase.
+    abs_sum += std::abs(s);
     peak = std::max(peak, std::abs(s));
   }
   if (cfg.mono_summing) {
-    return sum / static_cast<float>(std::max(source_channels, 1));
+    return abs_sum / static_cast<float>(std::max(source_channels, 1));
   }
   return peak;
 }

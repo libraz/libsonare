@@ -47,8 +47,11 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
 
   const double attack = sonare::time_to_attack_release_rate(sample_rate, band.dyn.attack_ms);
   const double release = sonare::time_to_attack_release_rate(sample_rate, band.dyn.release_ms);
+  // Clamp the lookahead to the ring capacity preallocated in prepare() so the
+  // audio-thread path never reallocates (automation past the bound saturates).
   const int lookahead_samples =
-      static_cast<int>(std::round(sample_rate * band.dyn.lookahead_ms * 0.001));
+      std::clamp(static_cast<int>(std::round(sample_rate * band.dyn.lookahead_ms * 0.001)), 0,
+                 max_detector_lookahead_samples_);
 
   auto& states = detector_states_[band_index];
   // States are preallocated in prepare(); only grow if a wider channel count is
@@ -67,10 +70,34 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
   double sum = 0.0;
   for (int ch = 0; ch < num_channels; ++ch) {
     DetectorState& s = states[static_cast<size_t>(ch)];
+    // Re-window the persistent lookahead ring when the lookahead changes. The
+    // ring is preallocated; offline/unprepared paths that grew states above may
+    // have an unsized ring, so grow it here (only off the audio thread).
+    const size_t look = static_cast<size_t>(std::max(lookahead_samples, 0));
+    if (s.look_size != look) {
+      if (s.look_ring.size() < look) {
+        s.look_ring.assign(look, 0.0f);
+      } else {
+        std::fill(s.look_ring.begin(), s.look_ring.begin() + look, 0.0f);
+      }
+      s.look_size = look;
+      s.look_pos = 0;
+    }
     double envelope = s.envelope;
+    // The detector consumes a continuous stream: a per-channel FIFO carries the
+    // last `look` input samples from the previous block into this one, so a
+    // transient near a block boundary is still detected (within ~look samples)
+    // instead of the final sample being repeated.
     for (int i = 0; i < num_samples; ++i) {
-      const int src = std::min(num_samples - 1, i + std::max(lookahead_samples, 0));
-      const double stage_a = biquad(channels[ch][src], s.filter_a_z1, s.filter_a_z2);
+      float input;
+      if (look > 0) {
+        input = s.look_ring[s.look_pos];
+        s.look_ring[s.look_pos] = channels[ch][i];
+        s.look_pos = (s.look_pos + 1) % look;
+      } else {
+        input = channels[ch][i];
+      }
+      const double stage_a = biquad(input, s.filter_a_z1, s.filter_a_z2);
       const double rectified = std::abs(biquad(stage_a, s.filter_b_z1, s.filter_b_z2));
       const double coeff = rectified > envelope ? attack : release;
       envelope += coeff * (rectified - envelope);

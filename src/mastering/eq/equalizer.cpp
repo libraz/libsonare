@@ -66,9 +66,16 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   smoothed_gain_db_.fill(0.0f);
   auto_threshold_db_.fill(kFloorDb);
   // Preallocate persistent detector state per band so the audio-thread detector
-  // never resizes. Sized to the IIR backend's prepared channel capacity.
+  // never resizes. Sized to the IIR backend's prepared channel capacity, with
+  // each channel's lookahead ring preallocated to the maximum supported lookahead.
+  max_detector_lookahead_samples_ =
+      static_cast<int>(std::round(sample_rate_ * kMaxDetectorLookaheadMs * 0.001));
   for (auto& states : detector_states_) {
     states.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), DetectorState{});
+    for (auto& state : states) {
+      state.look_ring.assign(static_cast<size_t>(std::max(max_detector_lookahead_samples_, 0)),
+                             0.0f);
+    }
   }
   validate_backend_capacity(bands_, phase_mode_);
   rebuild_iir();
@@ -172,7 +179,15 @@ void EqualizerProcessor::reset() {
   last_detector_db_ = kFloorDb;
   last_band_detector_db_.fill(kFloorDb);
   for (auto& states : detector_states_) {
-    std::fill(states.begin(), states.end(), DetectorState{});
+    for (auto& state : states) {
+      // Zero the filter/envelope state and the live lookahead window without
+      // releasing the preallocated ring (a default-assign would free it).
+      state.filter_a_z1 = state.filter_a_z2 = 0.0;
+      state.filter_b_z1 = state.filter_b_z2 = 0.0;
+      state.envelope = 0.0;
+      std::fill(state.look_ring.begin(), state.look_ring.end(), 0.0f);
+      state.look_pos = 0;
+    }
   }
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
