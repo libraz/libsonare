@@ -135,9 +135,12 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
     for (int n = 0; n < Lk; ++n) {
       const int idx = s + n;
       const float angle = constants::kTwoPi * f * static_cast<float>(idx) / static_cast<float>(sr);
-      const float w =
-          0.5f *
-          (1.0f - std::cos(constants::kTwoPi * static_cast<float>(n) / static_cast<float>(Lk)));
+      // scipy.signal.get_window returns [1.0] for a length-1 window; the generic
+      // periodic-Hann formula would instead give 0 here (cos(0) == 1), zeroing
+      // the single-sample kernel before normalization. Special-case it.
+      const float w = Lk == 1 ? 1.0f
+                              : 0.5f * (1.0f - std::cos(constants::kTwoPi * static_cast<float>(n) /
+                                                        static_cast<float>(Lk)));
       const std::complex<float> v(w * std::cos(angle), w * std::sin(angle));
       out[slot_offset + n] = v;
       l1 += std::abs(v);

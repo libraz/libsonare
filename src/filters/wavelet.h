@@ -18,17 +18,21 @@ namespace sonare {
 /// common length `n_fft = next_pow2(max(lengths))` and the result is a flat
 /// `[n_filters x n_fft]` row-major matrix; @p n_fft_out (if non-null)
 /// receives the chosen `n_fft`.
-/// @param Q If positive, overrides the default length rule so that each
-///          kernel is sized to `ceil(Q * sr / freq)` (rounded up to an odd
-///          number). Use this for librosa-style explicit Q-factor control.
+/// @param Q If positive, overrides the default length rule so each kernel
+///          length is `Q * sr / freq` (the raw, unrounded value from
+///          @ref wavelet_lengths). Use this for librosa-style explicit
+///          Q-factor control.
 std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
                                          float window_param = 1.0f, bool is_cqt = true,
                                          bool pad_fft = false, float Q = 0.0f,
                                          int* n_fft_out = nullptr);
 
 /// @brief Lengths of each wavelet kernel computed in @ref wavelet.
-/// @param Q If positive, overrides the default length rule (`window_param * sr / freq`)
-///          and uses `ceil(Q * sr / freq)` instead.
+/// @details Returns the RAW fractional lengths to match librosa exactly (no
+///          ceiling, no odd-length rounding); callers floor/ceil as needed.
+///          The default rule is `window_param * sr / freq`.
+/// @param Q If positive, overrides the default rule and uses `Q * sr / freq`
+///          (still returned as a raw fractional value).
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr,
                                    float window_param = 1.0f, float Q = 0.0f);
 

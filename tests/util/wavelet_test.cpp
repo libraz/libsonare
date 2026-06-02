@@ -38,6 +38,18 @@ TEST_CASE("wavelet returns complex kernels of expected total length", "[util][wa
   REQUIRE(kernels.size() == total);
 }
 
+TEST_CASE("wavelet length-1 kernel is non-zero (scipy get_window Nx==1)", "[util][wavelet]") {
+  // A frequency at/above Nyquist yields a single-sample kernel (L < 2). The
+  // periodic-Hann window value at n==0 would be 0, zeroing the kernel; scipy's
+  // get_window returns 1.0 for a length-1 window, so the kernel must survive.
+  std::vector<float> freqs{44100.0f};  // L = 22050 / 44100 = 0.5 -> Lk == 1
+  auto L = wavelet_lengths(freqs, 22050, 1.0f);
+  REQUIRE(L[0] < 2.0f);
+  auto kernels = wavelet(freqs, 22050, 1.0f, true);
+  REQUIRE(kernels.size() == 1);
+  REQUIRE(std::abs(kernels[0]) > 0.5f);
+}
+
 TEST_CASE("semitone_filterbank produces n_filters rows of 6 coeffs", "[util][wavelet]") {
   auto fb = semitone_filterbank(2, 12, 100.0f, 22050);
   REQUIRE(fb.size() == 24 * 6);
