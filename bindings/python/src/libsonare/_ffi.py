@@ -2079,6 +2079,16 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    lib.sonare_voice_change_realtime.restype = ctypes.c_int32
+    lib.sonare_voice_change_realtime.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
 
     lib.sonare_realtime_voice_changer_create_json.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_create_json.argtypes = [

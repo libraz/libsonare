@@ -95,7 +95,7 @@ def _parse_kv_params(value: str) -> dict[str, float]:
     return params
 
 
-def _load_voice_preset_pack(path: str, preset_id: str) -> dict:
+def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
         pack = json.load(fh)
     presets = pack.get("presets")
@@ -108,17 +108,17 @@ def _load_voice_preset_pack(path: str, preset_id: str) -> dict:
         raise ValueError(f"duplicate preset id in preset pack: {preset_id}")
     if not matches:
         raise ValueError(f"preset not found in preset pack: {preset_id}")
-    return matches[0]
+    return cast(dict[str, Any], matches[0])
 
 
-def _parse_voice_set_value(raw: str):
+def _parse_voice_set_value(raw: str) -> object:
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
         return raw
 
 
-def _set_nested_value(root: dict, path: str, value) -> None:
+def _set_nested_value(root: dict[str, Any], path: str, value: object) -> None:
     parts = [part for part in path.split(".") if part]
     if not parts:
         raise ValueError("empty --set path")
@@ -132,11 +132,11 @@ def _set_nested_value(root: dict, path: str, value) -> None:
     cursor[parts[-1]] = value
 
 
-def _apply_voice_macro_override(root: dict, path: str, value) -> None:
+def _apply_voice_macro_override(root: dict[str, Any], path: str, value: object) -> None:
     # Maps the UI macro names (pitch/formant/space/intensity/output) to
     # concrete dsp.* paths so `--set macros.X=...` from the CLI is convenient.
     # CLI-only sugar; the core loader treats `dsp` as authoritative and never
-    # derives dsp from macros (see backup/realtime-voice-changer-brushup-plan.md).
+    # derives dsp from macros.
     # Keep the mapping in sync with `apply_voice_macro_override` in
     # tools/sonare_cli.cpp.
     if not isinstance(value, (int, float)):
@@ -153,10 +153,15 @@ def _apply_voice_macro_override(root: dict, path: str, value) -> None:
         _set_nested_value(root, "dsp.outputGainDb", value)
 
 
-def _apply_voice_sets(preset: str | dict, assignments: list[str] | None) -> str | dict:
+def _apply_voice_sets(
+    preset: str | dict[str, Any], assignments: list[str] | None
+) -> str | dict[str, Any]:
     if not assignments:
         return preset
-    root = json.loads(preset) if isinstance(preset, str) else json.loads(json.dumps(preset))
+    root = cast(
+        dict[str, Any],
+        json.loads(preset) if isinstance(preset, str) else json.loads(json.dumps(preset)),
+    )
     for group in assignments:
         for assignment in [item for item in group.split(",") if item]:
             if "=" not in assignment:
@@ -751,7 +756,10 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         else:
             preset = args.preset
         preset = _apply_voice_sets(preset, args.set)
-        result = voice_change_realtime(samples, sample_rate=sr, preset=preset)
+        result = [
+            float(sample)
+            for sample in voice_change_realtime(samples, sample_rate=sr, preset=preset)
+        ]
     else:
         result = voice_change(
             samples,
@@ -799,8 +807,8 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
 
     if args.preset:
         preset = _load_voice_preset_pack(args.file, args.preset)
-        preset = _apply_voice_sets(preset, args.set)
-        text = json.dumps(preset)
+        updated_preset = _apply_voice_sets(preset, args.set)
+        text = json.dumps(updated_preset)
     else:
         with open(args.file, encoding="utf-8") as fh:
             text = fh.read()

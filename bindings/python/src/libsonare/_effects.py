@@ -3,13 +3,59 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import dataclasses
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
 import numpy as np
 
-from ._runtime import *  # noqa: F403
+from ._ffi import (
+    SONARE_COMPRESSOR_DETECTOR_LOG_RMS,
+    SONARE_COMPRESSOR_DETECTOR_PEAK,
+    SONARE_COMPRESSOR_DETECTOR_RMS,
+    SONARE_DECRACKLE_MODE_MEDIAN,
+    SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE,
+    SONARE_DENOISE_MODE_LOG_MMSE,
+    SONARE_DENOISE_MODE_MMSE_STSA,
+    SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
+    SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA,
+    SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,
+    SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
+    SONARE_OK,
+    SONARE_TRIM_SILENCE_MODE_LUFS_GATED,
+    SONARE_TRIM_SILENCE_MODE_PEAK,
+    SONARE_VC_PRESET_BRIGHT_IDOL,
+    SONARE_VC_PRESET_DARK_VILLAIN,
+    SONARE_VC_PRESET_DEEP_NARRATOR,
+    SONARE_VC_PRESET_NEUTRAL_MONITOR,
+    SONARE_VC_PRESET_ROBOT_MASCOT,
+    SONARE_VC_PRESET_SOFT_WHISPER,
+    SonareCompressorConfig,
+    SonareDeclickConfig,
+    SonareDeclipConfig,
+    SonareDecrackleConfig,
+    SonareDehumConfig,
+    SonareDenoiseClassicalConfig,
+    SonareDereverbClassicalConfig,
+    SonareGateConfig,
+    SonareHpssResult,
+    SonareRealtimeVoiceChangerConfig,
+    SonareTransientShaperConfig,
+    SonareTrimSilenceConfig,
+)
+from ._runtime import (
+    _as_float32_buffer,
+    _check,
+    _float_array_result,
+    _from_c_float_array,
+    _get_lib,
+    _to_c_float_array,
+    _to_c_int_array,
+    _validate_samples,
+)
+from .types import HpssResult
 
 
 def hpss(
@@ -703,8 +749,8 @@ class RealtimeVoiceChanger:
             out_block = out_buf[pos : pos + length]
             # `from_buffer` requires C-contiguous memory; slices of a
             # contiguous 1-D float32 array are guaranteed contiguous.
-            c_in = (ctypes.c_float * length).from_buffer(in_block)
-            c_out = (ctypes.c_float * length).from_buffer(out_block)
+            c_in = (ctypes.c_float * length).from_buffer(in_block)  # type: ignore[arg-type]
+            c_out = (ctypes.c_float * length).from_buffer(out_block)  # type: ignore[arg-type]
             rc = self._lib.sonare_realtime_voice_changer_process_mono(
                 self._handle, c_in, c_out, ctypes.c_size_t(length)
             )
@@ -735,8 +781,12 @@ class RealtimeVoiceChanger:
             end = start + block_frames * ch
             in_block = in_buf[start:end]
             out_block = out_buf[start:end]
-            c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(in_block)
-            c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(out_block)
+            c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(
+                in_block  # type: ignore[arg-type]
+            )
+            c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(
+                out_block  # type: ignore[arg-type]
+            )
             rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
                 self._handle,
                 c_in,
@@ -772,8 +822,8 @@ class RealtimeVoiceChanger:
             length = min(step, total - pos)
             l_block = out_left[pos : pos + length]
             r_block = out_right[pos : pos + length]
-            c_left = (ctypes.c_float * length).from_buffer(l_block)
-            c_right = (ctypes.c_float * length).from_buffer(r_block)
+            c_left = (ctypes.c_float * length).from_buffer(l_block)  # type: ignore[arg-type]
+            c_right = (ctypes.c_float * length).from_buffer(r_block)  # type: ignore[arg-type]
             rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
                 self._handle, c_left, c_right, ctypes.c_size_t(length)
             )
@@ -800,13 +850,28 @@ def voice_change_realtime(
     """
     if channels < 1 or channels > 2:
         raise ValueError("channels must be 1 or 2")
-    _validate_samples("voice_change_realtime", samples, validate=True)
-    with RealtimeVoiceChanger(
-        sample_rate, preset, max_block_size=128, channels=channels
-    ) as changer:
-        if channels == 1:
-            return changer.process_mono(samples)
-        return changer.process_interleaved(samples, channels=channels)
+    in_buf = _validate_samples("voice_change_realtime", samples, validate=True)
+    if channels == 2 and int(in_buf.shape[0]) % 2 != 0:
+        raise ValueError("voice_change_realtime: interleaved stereo input length must be even")
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(in_buf)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_voice_change_realtime(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        _voice_config_to_json(preset),
+        ctypes.c_int(channels),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _from_c_float_array(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
 
 
 def realtime_voice_changer_preset_names() -> list[str]:
@@ -875,7 +940,7 @@ def voice_character_preset_id(preset: int) -> str | None:
     raw = _get_lib().sonare_voice_character_preset_id(ctypes.c_int(preset))
     if not raw:
         return None
-    return raw.decode("utf-8")
+    return cast(str, raw.decode("utf-8"))
 
 
 @dataclasses.dataclass
@@ -928,12 +993,12 @@ class RealtimeVoiceChangerConfig:
     @classmethod
     def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:
         """Copy field-for-field out of a ctypes struct."""
-        return cls(**{name: getattr(pod, name) for name, _ in pod._fields_})
+        return cls(**{name: getattr(pod, name) for name, *_ in pod._fields_})
 
     def to_pod(self) -> SonareRealtimeVoiceChangerConfig:
         """Copy field-for-field into a freshly allocated ctypes struct."""
         out = SonareRealtimeVoiceChangerConfig()
-        for name, _ in out._fields_:
+        for name, *_ in out._fields_:
             setattr(out, name, getattr(self, name))
         return out
 
@@ -1237,10 +1302,10 @@ def _coerce_trim_silence_mode(value: int | str) -> int:
 
 
 def _run_repair(
-    lib_fn,
+    lib_fn: Any,
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    config,
+    config: Any,
 ) -> np.ndarray:
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
@@ -1453,10 +1518,10 @@ def _coerce_compressor_detector(value: int | str) -> int:
 
 
 def _run_dynamics(
-    lib_fn,
-    samples,
+    lib_fn: Any,
+    samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    config,
+    config: Any,
     *,
     fn_name: str = "mastering_dynamics",
     validate: bool = True,

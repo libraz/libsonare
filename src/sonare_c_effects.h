@@ -37,6 +37,18 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);
+/// @brief Convenience offline wrapper around the realtime voice changer chain.
+/// @details Creates a temporary @ref SonareRealtimeVoiceChanger from @p preset,
+///          processes the whole mono or interleaved stereo buffer in realtime-
+///          sized blocks, and destroys the handle before returning. @p preset
+///          may be NULL/empty (neutral-monitor), a preset id, or a full JSON
+///          config document accepted by @ref sonare_realtime_voice_changer_create_json.
+///          @p channels must be 1 (mono) or 2 (interleaved stereo).
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_voice_change_realtime(const float* samples, size_t length, int sample_rate,
+                                         const char* preset, int channels, float** out,
+                                         size_t* out_length);
 
 /// @brief Flat POD mirror of @c editing::voice_changer::RealtimeVoiceChangerConfig
 ///        for C callers that want to avoid the JSON round-trip.

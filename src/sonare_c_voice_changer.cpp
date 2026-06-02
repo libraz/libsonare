@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <memory>
@@ -72,6 +73,57 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, pitch_semitones, formant_factor, out,
                               out_length);
+#endif
+}
+
+SonareError sonare_voice_change_realtime(const float* samples, size_t length, int sample_rate,
+                                         const char* preset, int channels, float** out,
+                                         size_t* out_length) {
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+  if (channels < 1 || channels > 2) return SONARE_ERROR_INVALID_PARAMETER;
+  if (channels == 2 && length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  constexpr int kBlockSize = 128;
+  SonareRealtimeVoiceChanger* raw_handle = nullptr;
+  err = sonare_realtime_voice_changer_create_json(
+      preset && preset[0] != '\0' ? preset : "neutral-monitor", sample_rate, kBlockSize, channels,
+      &raw_handle);
+  if (err != SONARE_OK) return err;
+  std::unique_ptr<SonareRealtimeVoiceChanger, decltype(&sonare_realtime_voice_changer_destroy)>
+      handle(raw_handle, sonare_realtime_voice_changer_destroy);
+
+  std::unique_ptr<float[]> output(new float[length]);
+  if (channels == 1) {
+    for (size_t pos = 0; pos < length; pos += static_cast<size_t>(kBlockSize)) {
+      const size_t block = std::min(static_cast<size_t>(kBlockSize), length - pos);
+      err = sonare_realtime_voice_changer_process_mono(handle.get(), samples + pos,
+                                                       output.get() + pos, block);
+      if (err != SONARE_OK) return err;
+    }
+  } else {
+    const size_t frames = length / 2;
+    for (size_t frame = 0; frame < frames; frame += static_cast<size_t>(kBlockSize)) {
+      const size_t block_frames = std::min(static_cast<size_t>(kBlockSize), frames - frame);
+      const size_t offset = frame * 2;
+      err = sonare_realtime_voice_changer_process_interleaved(
+          handle.get(), samples + offset, output.get() + offset, block_frames, channels);
+      if (err != SONARE_OK) return err;
+    }
+  }
+
+  *out_length = length;
+  *out = release_array(output);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, preset, channels, out, out_length);
 #endif
 }
 

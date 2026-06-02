@@ -2,6 +2,8 @@
 
 import math
 
+import pytest
+
 import libsonare
 from libsonare import Audio
 
@@ -123,6 +125,11 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
     # is initialized identically and the reverb seed is shared per instance).
     for i in range(n):
         assert result[2 * i] == result[2 * i + 1]
+
+
+def test_realtime_voice_changer_rejects_odd_interleaved_stereo_length() -> None:
+    with pytest.raises(ValueError, match="interleaved stereo input length must be even"):
+        libsonare.voice_change_realtime([0.0, 0.1, 0.2], channels=2)
 
 
 def test_editing_audio_methods() -> None:

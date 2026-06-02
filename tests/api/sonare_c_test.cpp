@@ -2444,6 +2444,52 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   sonare_free_floats(out);
 }
 
+TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo buffers",
+          "[c_api][voice_changer]") {
+  std::vector<float> mono(384);
+  for (size_t i = 0; i < mono.size(); ++i) {
+    mono[i] = 0.05f *
+              std::sin(2.0f * 3.14159265358979323846f * 220.0f * static_cast<float>(i) / 48000.0f);
+  }
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutral-monitor", 1, &out,
+                                       &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == mono.size());
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(out[i]));
+  }
+  sonare_free_floats(out);
+
+  std::vector<float> stereo(mono.size() * 2);
+  for (size_t i = 0; i < mono.size(); ++i) {
+    stereo[i * 2] = mono[i];
+    stereo[i * 2 + 1] = -mono[i];
+  }
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size(), 48000, "soft-whisper", 2, &out,
+                                       &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == stereo.size());
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(out[i]));
+  }
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size() - 1, 48000, "soft-whisper", 2,
+                                       &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutral-monitor", 3, &out,
+                                       &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("sonare_realtime_voice_changer ISP limiter fields round-trip through the POD config",
           "[c_api]") {
   SonareRealtimeVoiceChangerConfig config{};

@@ -42,7 +42,6 @@ node = [
   "analyze_async",          # libuv async variant, JS-only
   "analyze_with_progress",  # progress-callback variant, JS-only
   "*with_progress",
-  "voice_change_realtime",  # realtime voice changer ergonomic wrapper (also python)
   "master_audio_async",         # libuv async variant, JS-only
   "master_audio_stereo_async",  # libuv async variant, JS-only
 ]
@@ -55,9 +54,7 @@ wasm = [
   "analyze_with_progress",
 ]
 
-python = [
-  "voice_change_realtime",  # realtime voice changer ergonomic wrapper (also node)
-]
+python = []
 
 # ---------------------------------------------------------------------------
 # [coverage] — canonical C functions allowed to be ABSENT on a surface.
