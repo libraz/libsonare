@@ -59,6 +59,7 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips) {
     if (a.start_sample != b.start_sample) return a.start_sample < b.start_sample;
     return a.id < b.id;
   });
+  clip_count_.store(clips.size(), std::memory_order_relaxed);
   clips_.publish(std::make_shared<const std::vector<ClipSchedule>>(std::move(clips)));
 }
 
@@ -126,9 +127,11 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
 }
 
 size_t ClipPlayer::clip_count() const noexcept {
-  clips_.acquire();
-  const std::vector<ClipSchedule>* clips = clips_.current();
-  return clips ? clips->size() : 0;
+  // Lock-free read of the control-thread-published count. Must NOT call
+  // clips_.acquire() here: acquire() is the audio thread's exclusive
+  // single-consumer operation on the RtPublisher SPSC rings, and clip_count()
+  // is reachable from the control/host thread (C ABI, WASM) during playback.
+  return clip_count_.load(std::memory_order_relaxed);
 }
 
 float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position, FadeCurve curve) noexcept {

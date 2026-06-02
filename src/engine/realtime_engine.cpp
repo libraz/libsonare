@@ -364,6 +364,13 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
     out = Telemetry{};
     out.type = TelemetryType::kError;
     out.error = TelemetryErrorCode::kCommandQueueOverflow;
+    // render_frame()/sample_position() read plain int64_t transport counters
+    // written by the audio thread without synchronization. On 64-bit targets
+    // these are naturally-aligned aligned loads (no tearing); on a hypothetical
+    // 32-bit target a torn read could momentarily report a half-updated value.
+    // This is a benign, best-effort diagnostic stamp on an overflow-error
+    // telemetry record, not a control value, so the unsynchronized read is
+    // intentional and acceptable.
     out.render_frame = transport_.render_frame();
     out.timeline_sample = transport_.sample_position();
     out.audible_timeline_sample = audible_timeline_sample(out.timeline_sample);

@@ -4,6 +4,7 @@
 /// @brief Timeline sample-accurate audio clip player.
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -93,6 +94,10 @@ class ClipPlayer final : public rt::ProcessorBase {
   /// block start before process_at / collect_boundaries. RT-safe, no alloc.
   void acquire_clips() noexcept { clips_.acquire(); }
 
+  /// Number of scheduled clips. Safe to poll from the control/host thread
+  /// while audio is rendering: reads a published atomic rather than calling
+  /// the audio-thread-only RtPublisher::acquire().
+
   void process_at(float* const* channels, int num_channels, int num_samples,
                   int64_t timeline_sample) noexcept;
   void collect_boundaries(int64_t block_start_sample, int num_frames,
@@ -109,6 +114,9 @@ class ClipPlayer final : public rt::ProcessorBase {
   int64_t timeline_sample_ = 0;
   const transport::TempoMap* tempo_map_ = nullptr;
   mutable rt::RtPublisher<std::vector<ClipSchedule>> clips_;
+  // Published by set_clips() on the control thread; read lock-free by
+  // clip_count() so host polling never races the audio thread's acquire().
+  std::atomic<size_t> clip_count_{0};
 };
 
 }  // namespace sonare::engine

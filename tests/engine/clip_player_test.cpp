@@ -116,6 +116,39 @@ TEST_CASE("ClipPlayer loop wraps mid-block from the correct source positions",
   REQUIRE(out_l[7] == 40.0f);
 }
 
+TEST_CASE(
+    "ClipPlayer clip_count reflects published clips without touching the audio-thread acquire",
+    "[engine][clip_player]") {
+  std::array<float, 2> source{1.0f, 1.0f};
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+
+  // Count is correct immediately after publish, with no process()/acquire()
+  // call having run on the audio thread yet (host polling before playback).
+  REQUIRE(player.clip_count() == 0);
+  player.set_clips({{1, {channels, 1, 2}, 0.0, 0, 0, 2, false, 1.0f, 0, 0},
+                    {2, {channels, 1, 2}, 0.0, 4, 0, 2, false, 1.0f, 0, 0}});
+  REQUIRE(player.clip_count() == 2);
+
+  // Polling clip_count() repeatedly (control thread) must NOT consume the
+  // published snapshot: the audio thread's acquire_clips() still adopts it.
+  for (int i = 0; i < 100; ++i) {
+    REQUIRE(player.clip_count() == 2);
+  }
+  player.acquire_clips();
+  std::array<float, 8> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 8, 0);
+  REQUIRE(out_l[0] == 1.0f);
+  REQUIRE(out_l[4] == 1.0f);
+
+  // A subsequent publish updates the count straight away.
+  player.set_clips({});
+  REQUIRE(player.clip_count() == 0);
+}
+
 TEST_CASE("ClipPlayer precomputes clip start from PPQ when tempo map is bound",
           "[engine][clip_player]") {
   sonare::transport::TempoMap tempo;

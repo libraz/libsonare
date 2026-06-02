@@ -65,6 +65,12 @@ class ProcessorBase {
   // processing callback. Most processors either implement set_parameter as an
   // in-place scalar/coefficient update or do not implement it at all; processors
   // that rebuild kernels, resize buffers, or reset audio state must override.
+  //
+  // WARNING: the default returns true and assumes set_parameter performs only
+  // in-place scalar updates. Any processor whose set_parameter allocates, locks,
+  // or rebuilds state (kernels, buffers, FFT plans, etc.) MUST override this to
+  // return false for the affected param_ids — otherwise an allocating parameter
+  // is silently reported RT-safe and may be applied from the audio callback.
   virtual bool parameter_is_realtime_safe(unsigned int param_id) const noexcept {
     (void)param_id;
     return true;
