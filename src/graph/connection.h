@@ -13,6 +13,11 @@ struct Connection {
   std::string dest_node;
   int dest_port = 0;
 
+  // Mixing intent for an edge into a destination port. NOTE: the compiled graph
+  // makes the per-port result an order-independent sum — the first edge into a
+  // port always overwrites (clearing the buffer) and every later edge adds —
+  // regardless of this flag. The flag is retained for API compatibility and to
+  // express intent; it no longer makes the result depend on connection order.
   enum class Mix {
     Replace,
     Add,

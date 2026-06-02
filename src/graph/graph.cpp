@@ -148,6 +148,19 @@ bool Graph::compile() {
     incoming_by_topo_[static_cast<size_t>(topo_index_.at(dest_id))].push_back(
         static_cast<int>(connection_index));
   }
+  // Group each node's incoming edges by destination port (stable, so insertion
+  // order is preserved within a port). process_block() then treats the first
+  // edge into each port as an overwrite and the rest as adds, making the mixed
+  // result a port-wise sum that is independent of connection insertion order
+  // (it previously depended on it: a Replace edge processed after an Add wiped
+  // the accumulated contribution). The first-edge overwrite also clears any
+  // stale buffer contents from the previous block.
+  for (std::vector<int>& edges : incoming_by_topo_) {
+    std::stable_sort(edges.begin(), edges.end(), [this](int lhs, int rhs) {
+      return connections_[static_cast<size_t>(lhs)].dest_port <
+             connections_[static_cast<size_t>(rhs)].dest_port;
+    });
+  }
 
   std::unordered_map<std::string, int> latency_to_node_q8;
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
@@ -256,6 +269,11 @@ void Graph::process_block(int num_samples) noexcept {
 
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
     Node* current = topo_order_[topo_position];
+    // Edges are grouped by dest_port (stable). The first edge into each port
+    // overwrites (establishing the buffer and clearing last block's contents);
+    // every subsequent edge into the same port adds. This makes the per-port
+    // result an order-independent sum regardless of each edge's mix flag.
+    int prev_dest_port = -1;
     for (const int connection_index : incoming_by_topo_[topo_position]) {
       RuntimeConnection& runtime_connection =
           runtime_connections_[static_cast<size_t>(connection_index)];
@@ -271,6 +289,9 @@ void Graph::process_block(int num_samples) noexcept {
               ? nullptr
               : &runtime_connection.fractional_delay_lines[0];
 
+      const bool first_for_port = dest_port != prev_dest_port;
+      prev_dest_port = dest_port;
+
       for (int i = 0; i < num_samples; ++i) {
         float value = source[i];
         if (fractional_delay_line != nullptr) {
@@ -279,7 +300,7 @@ void Graph::process_block(int num_samples) noexcept {
         } else if (delay_line != nullptr) {
           value = delay_line->process(value);
         }
-        if (runtime_connection.connection.mix == Connection::Mix::Replace) {
+        if (first_for_port) {
           dest[i] = value;
         } else {
           dest[i] += value;
