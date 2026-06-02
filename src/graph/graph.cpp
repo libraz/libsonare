@@ -100,10 +100,14 @@ bool Graph::compile() {
     ++indegree[connection.dest_node];
   }
 
+  // Seed the ready queue by iterating nodes_ (stable insertion order) rather
+  // than the unordered_map indegree, whose iteration order is unspecified.
+  // This makes topo_order()/topo_order_ids() reproducible across runs and
+  // platforms; independent nodes are processed in the order they were added.
   std::queue<std::string> ready;
-  for (const auto& entry : indegree) {
-    if (entry.second == 0) {
-      ready.push(entry.first);
+  for (const auto& node_ptr : nodes_) {
+    if (indegree[node_ptr->id()] == 0) {
+      ready.push(node_ptr->id());
     }
   }
 

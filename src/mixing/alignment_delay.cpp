@@ -2,15 +2,29 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include "rt/fractional_delay.h"
 
 namespace sonare::mixing {
 
+namespace {
+
+// Largest integer delay whose Q8 representation (<< 8) fits in a signed int.
+// Clamp here so a pathological delay request cannot overflow the shift into a
+// negative (or wrapped) sample count.
+constexpr int kMaxIntegerDelay = std::numeric_limits<int>::max() >> 8;
+
+int clamp_integer_delay(int delay_samples) noexcept {
+  return std::min(std::max(0, delay_samples), kMaxIntegerDelay);
+}
+
+}  // namespace
+
 AlignmentDelay::AlignmentDelay(int delay_samples)
-    : delay_samples_(std::max(0, delay_samples)),
-      delay_samples_q8_(std::max(0, delay_samples) << 8) {}
+    : delay_samples_(clamp_integer_delay(delay_samples)),
+      delay_samples_q8_(clamp_integer_delay(delay_samples) << 8) {}
 
 void AlignmentDelay::prepare(double, int) {
   prepared_channels_ = std::max(prepared_channels_, 2);
@@ -53,7 +67,7 @@ void AlignmentDelay::reset() {
 }
 
 void AlignmentDelay::set_delay_samples(int delay_samples) {
-  delay_samples_ = std::max(0, delay_samples);
+  delay_samples_ = clamp_integer_delay(delay_samples);
   delay_samples_q8_ = delay_samples_ << 8;
   fractional_mode_ = FractionalDelayMode::None;
   prepare_storage();

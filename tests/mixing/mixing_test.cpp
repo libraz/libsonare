@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -1377,6 +1378,21 @@ TEST_CASE("AlignmentDelay reports and applies integer latency", "[mixing]") {
   REQUIRE_THAT(mono[0], WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(mono[1], WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(mono[2], WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("AlignmentDelay clamps pathological delays so the Q8 shift never overflows", "[mixing]") {
+  // delay_samples_q8_ is delay_samples << 8; an unclamped huge request would
+  // overflow signed int and wrap to a negative Q8 latency. The clamp keeps both
+  // the integer and Q8 reports non-negative and monotonic.
+  sonare::mixing::AlignmentDelay delay(std::numeric_limits<int>::max());
+  REQUIRE(delay.delay_samples() >= 0);
+  REQUIRE(delay.delay_samples_q8() >= 0);
+  REQUIRE(delay.delay_samples_q8() == (delay.delay_samples() << 8));
+
+  delay.set_delay_samples(std::numeric_limits<int>::max());
+  REQUIRE(delay.delay_samples() >= 0);
+  REQUIRE(delay.delay_samples_q8() >= 0);
+  REQUIRE(delay.delay_samples_q8() == (delay.delay_samples() << 8));
 }
 
 TEST_CASE("AlignmentDelay reports Q8 fractional latency and interpolates impulse", "[mixing]") {

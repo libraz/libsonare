@@ -157,7 +157,11 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   int64_t position = sample_position_;
   int64_t next_wrap = loop_end;
   bool added = false;
-  while (next_wrap > position && next_wrap <= block_end) {
+  // Use >= (not >) so a playhead sitting exactly on loop_end at block start is
+  // reported as a wrap at offset 0, matching advance()'s `>= loop_end` wrap.
+  // Otherwise the sub-block splitter and the post-advance position snapshot
+  // disagree on the exact-boundary frame (e.g. after seeking onto loop_end).
+  while (next_wrap >= position && next_wrap <= block_end) {
     const int offset = static_cast<int>(next_wrap - sample_position_);
     if (!out->add({offset, render_frame_ + offset, loop_end})) break;
     added = true;

@@ -191,3 +191,27 @@ TEST_CASE("Transport loop boundaries and wrap are sample accurate", "[transport]
   REQUIRE(state.sample_position == 48272);
   REQUIRE_THAT(state.ppq_position, WithinAbs(2.0113333333333334, 1.0e-9));
 }
+
+TEST_CASE("Transport playhead exactly on loop_end wraps consistently", "[transport]") {
+  // A playhead seeked exactly onto loop_end while looping must be reported as a
+  // wrap at offset 0 by collect_loop_boundaries, matching advance()'s wrap, so
+  // the sub-block splitter and the post-advance snapshot agree.
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, &map);
+  transport.set_loop(2.0, 4.0, true);  // loop_start=48000, loop_end=96000
+  transport.play();
+  transport.seek_ppq(4.0);  // sample_position == loop_end
+
+  sonare::transport::BoundaryList boundaries;
+  REQUIRE(transport.collect_loop_boundaries(512, &boundaries));
+  REQUIRE(boundaries.size() == 1);
+  REQUIRE(boundaries[0].offset == 0);
+  REQUIRE(boundaries[0].timeline_sample == 96000);
+
+  transport.advance(512);
+  const auto state = transport.snapshot();
+  REQUIRE(state.sample_position == 48512);  // loop_start + 512
+}

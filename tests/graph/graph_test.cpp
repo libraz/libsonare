@@ -131,6 +131,25 @@ TEST_CASE("Graph compiles acyclic routing in topological order", "[graph]") {
   REQUIRE_THAT(output[3], WithinAbs(8.0f, 0.0001f));
 }
 
+TEST_CASE("Graph topological order of independent nodes follows insertion order", "[graph]") {
+  // Independent (unconnected, indegree-0) nodes must compile into a stable,
+  // reproducible order derived from add_node insertion order — not the
+  // unspecified iteration order of the internal hash map.
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("zeta", pass(), 1));
+  REQUIRE(graph.add_node("alpha", pass(), 1));
+  REQUIRE(graph.add_node("mike", pass(), 1));
+  REQUIRE(graph.add_node("bravo", pass(), 1));
+  REQUIRE(graph.compile());
+
+  const std::vector<std::string> expected{"zeta", "alpha", "mike", "bravo"};
+  REQUIRE(graph.topo_order_ids() == expected);
+
+  // Recompiling the same topology yields the identical order.
+  REQUIRE(graph.compile());
+  REQUIRE(graph.topo_order_ids() == expected);
+}
+
 TEST_CASE("Graph audio-thread methods are no-ops on an uncompiled graph", "[graph][noexcept]") {
   // Regression: process_block() and clear_inputs() are noexcept and must
   // early-return harmlessly when the graph has not been compiled, so a throw
