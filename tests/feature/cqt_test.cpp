@@ -247,6 +247,31 @@ TEST_CASE("cqt_to_chroma", "[cqt]") {
   }
 }
 
+TEST_CASE("cqt_to_chroma preserves L-inf normalization after fold refactor", "[cqt]") {
+  // cqt_to_chroma was refactored to share its bin->pitch-class accumulation with
+  // a helper, but must keep its observable behavior: sum CQT magnitudes per pitch
+  // class, then L-inf normalize each frame. For a single dominant tone every
+  // non-silent frame must therefore peak at exactly 1.0 in the dominant class.
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  CqtConfig config;
+  config.n_bins = 36;  // 3 octaves
+
+  CqtResult result = cqt(audio, config);
+  auto chroma = cqt_to_chroma(result, 12);
+  const int n_frames = result.n_frames();
+  REQUIRE(n_frames > 0);
+
+  for (int t = 0; t < n_frames; ++t) {
+    float max_val = 0.0f;
+    for (int c = 0; c < 12; ++c) {
+      max_val = std::max(max_val, chroma[static_cast<size_t>(c) * n_frames + t]);
+    }
+    // A frame is either silent (no energy folded) or L-inf normalized to peak 1.0.
+    REQUIRE((max_val == 0.0f || std::abs(max_val - 1.0f) <= 1e-5f));
+  }
+}
+
 TEST_CASE("cqt_to_chroma honours a non-C-aligned fmin", "[cqt]") {
   // fmin = A0 (27.5 Hz) means CQT bin 0 is pitch class A, not C. A 440 Hz tone
   // (A4) must still fold to chroma class A (9); the old `k % n_chroma` fold

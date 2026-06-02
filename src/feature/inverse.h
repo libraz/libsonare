@@ -44,15 +44,23 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 /// @param n_mfcc Number of MFCCs.
 /// @param n_frames Number of time frames.
 /// @param n_mels Number of Mel bins to reconstruct (default 128).
+/// @param lifter Cepstral lifter factor that was applied when computing the MFCC
+///        (default 0 = none). When non-zero the lift window is divided back out
+///        before the inverse DCT, matching
+///        `librosa.feature.inverse.mfcc_to_mel(..., lifter=...)`. Must match the
+///        value passed to @ref MelSpectrogram::mfcc.
 /// @return Mel power spectrogram [n_mels x n_frames] row-major.
-std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels = 128);
+std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels = 128,
+                               float lifter = 0.0f);
 
 /// @brief Reconstructs audio directly from MFCC.
 /// @details Calls @ref mfcc_to_mel, then @ref mel_to_audio with the provided
 /// MelConfig (which must match the configuration that produced the MFCC).
 /// @param sr Sample rate of the original audio (Hz), threaded through to
 ///        @ref mel_to_audio.
+/// @param lifter Cepstral lifter factor applied to the MFCC (default 0 = none),
+///        forwarded to @ref mfcc_to_mel so liftered MFCCs round-trip correctly.
 Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig& mel_config,
-                    int n_iter = 32, int sr = constants::kDefaultSampleRate);
+                    int n_iter = 32, int sr = constants::kDefaultSampleRate, float lifter = 0.0f);
 
 }  // namespace sonare

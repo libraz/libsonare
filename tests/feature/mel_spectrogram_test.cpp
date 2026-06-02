@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "feature/inverse.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -175,6 +176,53 @@ TEST_CASE("MelSpectrogram mfcc with liftering", "[mel_spectrogram]") {
   }
 }
 
+TEST_CASE("mfcc_to_mel inverts MFCC liftering when the lifter is passed back",
+          "[mel_spectrogram][inverse]") {
+  Audio audio = create_test_audio();
+
+  MelConfig config;
+  config.n_mels = 40;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+
+  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+
+  const int n_mfcc = 13;
+  const float lifter = 22.0f;
+  const int n_frames = mel.n_frames();
+
+  std::vector<float> mfcc_no_lift = mel.mfcc(n_mfcc, 0.0f);
+  std::vector<float> mfcc_lift = mel.mfcc(n_mfcc, lifter);
+
+  // Dividing the lift window back out must recover the unliftered inversion
+  // exactly, so the liftered MFCC round-trips to the same mel power.
+  std::vector<float> mel_from_lift =
+      mfcc_to_mel(mfcc_lift.data(), n_mfcc, n_frames, config.n_mels, lifter);
+  std::vector<float> mel_from_no_lift =
+      mfcc_to_mel(mfcc_no_lift.data(), n_mfcc, n_frames, config.n_mels, 0.0f);
+
+  REQUIRE(mel_from_lift.size() == mel_from_no_lift.size());
+  for (size_t i = 0; i < mel_from_lift.size(); ++i) {
+    const float tol = std::max(1e-4f, std::abs(mel_from_no_lift[i]) * 1e-4f);
+    REQUIRE_THAT(mel_from_lift[i], WithinAbs(mel_from_no_lift[i], tol));
+  }
+
+  // If the lifter is NOT passed back, the liftered MFCC inverts incorrectly,
+  // diverging from the unliftered reference. This confirms the lifter argument
+  // is actually doing something.
+  std::vector<float> mel_lift_unrecovered =
+      mfcc_to_mel(mfcc_lift.data(), n_mfcc, n_frames, config.n_mels, 0.0f);
+  bool diverges = false;
+  for (size_t i = 0; i < mel_lift_unrecovered.size(); ++i) {
+    if (std::abs(mel_lift_unrecovered[i] - mel_from_no_lift[i]) >
+        std::max(1e-3f, std::abs(mel_from_no_lift[i]) * 1e-2f)) {
+      diverges = true;
+      break;
+    }
+  }
+  REQUIRE(diverges);
+}
+
 TEST_CASE("MelSpectrogram delta", "[mel_spectrogram]") {
   Audio audio = create_test_audio();
 
@@ -193,6 +241,29 @@ TEST_CASE("MelSpectrogram delta", "[mel_spectrogram]") {
   // Delta values should be finite
   for (float val : delta) {
     REQUIRE(std::isfinite(val));
+  }
+}
+
+TEST_CASE("MelSpectrogram delta matches Savitzky-Golay mode=interp on edges", "[mel_spectrogram]") {
+  // For a perfectly linear feature y[t] = a + b*t, the first-order Savitzky-Golay
+  // derivative (librosa's delta with mode='interp') is exactly the slope b at
+  // EVERY frame, including the first/last width/2 frames. Edge-clamped regression
+  // would under-estimate the boundary frames; mode='interp' fits the boundary
+  // window and recovers the true slope.
+  const int n_frames = 20;
+  const int width = 9;
+  const float a = 3.0f;
+  const float b = 0.7f;
+  std::vector<float> feature(n_frames);
+  for (int t = 0; t < n_frames; ++t) {
+    feature[t] = a + b * static_cast<float>(t);
+  }
+
+  std::vector<float> d = MelSpectrogram::delta(feature.data(), 1, n_frames, width);
+  REQUIRE(d.size() == feature.size());
+  for (int t = 0; t < n_frames; ++t) {
+    CAPTURE(t, d[t]);
+    REQUIRE_THAT(d[t], WithinAbs(b, 1e-4f));
   }
 }
 

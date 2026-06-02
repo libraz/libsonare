@@ -678,23 +678,22 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
   return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
 }
 
-std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
-  if (cqt_result.empty()) {
-    return {};
-  }
+namespace {
 
-  int n_bins = cqt_result.n_bins();
-  int n_frames = cqt_result.n_frames();
+/// @brief Accumulates CQT magnitudes onto pitch classes (the bin -> chroma fold).
+/// @details Shared by the CQT->chroma reductions so the bins-per-octave /
+/// fmin-pitch-class mapping lives in one place. @p counts (length @p n_chroma)
+/// receives the number of CQT bins folded onto each pitch class so callers can
+/// choose summed or mean aggregation. The fold is correct when
+/// bins_per_octave != n_chroma and when fmin is not pitch class 0 (C); a plain
+/// `k % n_chroma` only happens to be right for the 12-bpo, C-aligned case.
+std::vector<float> accumulate_cqt_pitch_classes(const std::vector<float>& mag, int n_bins,
+                                                int n_frames, int n_chroma,
+                                                const std::vector<float>& freqs,
+                                                std::vector<int>* counts) {
+  std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
+  if (counts) counts->assign(n_chroma, 0);
 
-  std::vector<float> chroma(n_chroma * n_frames, 0.0f);
-
-  const auto& mag = cqt_result.magnitude();
-
-  // Derive bins-per-octave from the bin spacing and the pitch class of the
-  // lowest bin from its frequency, so the fold is correct when
-  // bins_per_octave != n_chroma and when fmin is not pitch class 0 (C). A plain
-  // `k % n_chroma` only happens to be right for the 12-bpo, C-aligned case.
-  const auto& freqs = cqt_result.frequencies();
   int bins_per_octave = static_cast<int>(constants::kSemitonesPerOctave);
   if (freqs.size() >= 2 && freqs[0] > 0.0f && freqs[1] > freqs[0]) {
     const float ratio = freqs[1] / freqs[0];
@@ -706,16 +705,36 @@ std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
         ((static_cast<int>(std::lround(hz_to_midi(freqs[0]))) % n_chroma) + n_chroma) % n_chroma;
   }
 
-  // Map CQT bins to chroma bins
-  for (int t = 0; t < n_frames; ++t) {
-    for (int k = 0; k < n_bins; ++k) {
-      const int within_octave = (k % bins_per_octave) * n_chroma / bins_per_octave;
-      const int chroma_bin = ((within_octave + fmin_pitch_class) % n_chroma + n_chroma) % n_chroma;
+  for (int k = 0; k < n_bins; ++k) {
+    const int within_octave = (k % bins_per_octave) * n_chroma / bins_per_octave;
+    const int chroma_bin = ((within_octave + fmin_pitch_class) % n_chroma + n_chroma) % n_chroma;
+    if (counts) (*counts)[chroma_bin] += 1;
+    for (int t = 0; t < n_frames; ++t) {
       chroma[chroma_bin * n_frames + t] += mag[k * n_frames + t];
     }
   }
+  return chroma;
+}
 
-  // Normalize each frame
+}  // namespace
+
+std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
+  if (cqt_result.empty()) {
+    return {};
+  }
+
+  int n_bins = cqt_result.n_bins();
+  int n_frames = cqt_result.n_frames();
+
+  // Sum CQT magnitudes per pitch class. NOTE: this departs from librosa's
+  // unnormalized cq_to_chroma fold by additionally L-inf normalizing each frame
+  // below; the divergent normalization is intentional for this entry point and is
+  // kept bit-for-bit. The chroma_cqt/bass_chroma path uses wrap_cqt_to_chroma
+  // (mean aggregation + caller-controlled normalization) instead.
+  std::vector<float> chroma = accumulate_cqt_pitch_classes(
+      cqt_result.magnitude(), n_bins, n_frames, n_chroma, cqt_result.frequencies(), nullptr);
+
+  // Normalize each frame (L-inf)
   for (int t = 0; t < n_frames; ++t) {
     float max_val = 0.0f;
     for (int c = 0; c < n_chroma; ++c) {

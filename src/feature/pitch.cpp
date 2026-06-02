@@ -714,31 +714,46 @@ float pitch_tuning(const std::vector<float>& frequencies, float resolution, int 
       peak = i;
     }
   }
-  return (static_cast<float>(peak) + 0.5f) / static_cast<float>(n_bins) - 0.5f;
+  // librosa returns the left edge of the winning bin:
+  // np.linspace(-0.5, 0.5, num=n_bins, endpoint=False)[argmax] == peak / n_bins - 0.5.
+  return static_cast<float>(peak) / static_cast<float>(n_bins) - 0.5f;
 }
 
 float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resolution,
                       int bins_per_octave) {
   PiptrackResult pp = piptrack(audio, n_fft, hop_length);
+
+  // librosa.feature.estimate_tuning thresholds piptrack peaks against a SINGLE
+  // global median taken over the magnitudes at all positive-pitch locations
+  // (across every frame), then keeps the pitches whose magnitude meets it. A
+  // per-frame median would admit low-energy peaks from quiet frames that the
+  // global threshold suppresses.
+  std::vector<float> pitch_mags;
+  pitch_mags.reserve(pp.pitches.size());
+  for (int k = 0; k < pp.n_bins; ++k) {
+    for (int t = 0; t < pp.n_frames; ++t) {
+      const std::size_t idx = static_cast<std::size_t>(k) * pp.n_frames + t;
+      if (pp.pitches[idx] > 0.0f) {
+        pitch_mags.push_back(pp.magnitudes[idx]);
+      }
+    }
+  }
+  if (pitch_mags.empty()) {
+    return pitch_tuning({}, resolution, bins_per_octave);
+  }
+  const std::size_t mid = pitch_mags.size() / 2;
+  std::nth_element(pitch_mags.begin(), pitch_mags.begin() + static_cast<std::ptrdiff_t>(mid),
+                   pitch_mags.end());
+  const float global_threshold = pitch_mags[mid];
+
   std::vector<float> freqs;
   freqs.reserve(pp.pitches.size());
-  // Filter: keep peaks above the per-frame median magnitude (librosa default).
-  for (int t = 0; t < pp.n_frames; ++t) {
-    float thresh = 0.0f;
-    std::vector<float> col_mags;
-    col_mags.reserve(pp.n_bins);
-    for (int k = 0; k < pp.n_bins; ++k) {
-      float m = pp.magnitudes[k * pp.n_frames + t];
-      if (m > 0.0f) col_mags.push_back(m);
-    }
-    if (!col_mags.empty()) {
-      std::sort(col_mags.begin(), col_mags.end());
-      thresh = col_mags[col_mags.size() / 2];
-    }
-    for (int k = 0; k < pp.n_bins; ++k) {
-      float p = pp.pitches[k * pp.n_frames + t];
-      float m = pp.magnitudes[k * pp.n_frames + t];
-      if (p > 0.0f && m >= thresh) freqs.push_back(p);
+  for (int k = 0; k < pp.n_bins; ++k) {
+    for (int t = 0; t < pp.n_frames; ++t) {
+      const std::size_t idx = static_cast<std::size_t>(k) * pp.n_frames + t;
+      const float p = pp.pitches[idx];
+      const float m = pp.magnitudes[idx];
+      if (p > 0.0f && m >= global_threshold) freqs.push_back(p);
     }
   }
   return pitch_tuning(freqs, resolution, bins_per_octave);

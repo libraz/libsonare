@@ -145,22 +145,61 @@ std::vector<float> MelSpectrogram::delta(const float* features, int n_features, 
   int half_width = width / 2;
   std::vector<float> out(n_features * n_frames, 0.0f);
 
-  // Compute denominator for regression
+  // Compute denominator for the centered first-order regression (Savitzky-Golay
+  // polyorder=1, deriv=1): weight at offset i is i / (2 * sum_{1..h} i^2).
   float denom = 0.0f;
   for (int i = 1; i <= half_width; ++i) {
     denom += static_cast<float>(i * i);
   }
   denom *= 2.0f;
 
+  // librosa uses scipy.signal.savgol_filter(..., mode='interp'): the first and
+  // last half_width frames are not edge-clamped but evaluated from a degree-1
+  // polynomial fit to the leading/trailing `width`-sample window. For a linear
+  // fit the derivative is constant across the window, so every boundary frame on
+  // each side takes the least-squares slope of that boundary window. The fit only
+  // needs frames inside the boundary window, so it requires width <= n_frames;
+  // shorter signals fall back to edge clamping (matching scipy, which switches to
+  // 'constant' padding when the window exceeds the data length).
+  const bool use_interp_edges = (width <= n_frames);
+
+  // Least-squares slope of the degree-1 fit to `width` consecutive samples
+  // starting at `base`. Window x-coordinates are 0..width-1 centered at the mean,
+  // so the slope is sum((j - mean_j) * y_j) / sum((j - mean_j)^2).
+  auto boundary_slope = [&](const float* row, int base) {
+    const float mean_j = static_cast<float>(width - 1) / 2.0f;
+    float num = 0.0f;
+    for (int j = 0; j < width; ++j) {
+      num += (static_cast<float>(j) - mean_j) * row[base + j];
+    }
+    // sum_{j=0}^{width-1} (j - mean_j)^2 == width * (width^2 - 1) / 12.
+    const float ss = static_cast<float>(width) * (static_cast<float>(width) * width - 1.0f) / 12.0f;
+    return num / ss;
+  };
+
   // Compute delta for each feature and frame
   for (int k = 0; k < n_features; ++k) {
+    const float* row = features + static_cast<std::size_t>(k) * n_frames;
+    float left_slope = 0.0f;
+    float right_slope = 0.0f;
+    if (use_interp_edges) {
+      left_slope = boundary_slope(row, 0);
+      right_slope = boundary_slope(row, n_frames - width);
+    }
     for (int t = 0; t < n_frames; ++t) {
+      if (use_interp_edges && t < half_width) {
+        out[k * n_frames + t] = left_slope;
+        continue;
+      }
+      if (use_interp_edges && t >= n_frames - half_width) {
+        out[k * n_frames + t] = right_slope;
+        continue;
+      }
       float sum = 0.0f;
       for (int i = 1; i <= half_width; ++i) {
         int t_plus = std::min(t + i, n_frames - 1);
         int t_minus = std::max(t - i, 0);
-        sum += static_cast<float>(i) *
-               (features[k * n_frames + t_plus] - features[k * n_frames + t_minus]);
+        sum += static_cast<float>(i) * (row[t_plus] - row[t_minus]);
       }
       out[k * n_frames + t] = sum / denom;
     }

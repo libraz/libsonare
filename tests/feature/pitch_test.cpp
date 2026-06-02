@@ -453,6 +453,52 @@ TEST_CASE("pyin caps max_period at frame_length/2 for reliable lags", "[pitch][e
   REQUIRE_THAT(mean_f0, WithinRel(220.0f, 0.05f));
 }
 
+TEST_CASE("pitch_tuning returns the librosa bin left edge", "[pitch]") {
+  // A single frequency ~0.3 of a semitone sharp of A4 has residual frac ~= 0.3.
+  // With resolution=0.01 (n_bins=100) the measured residual lands in the bin
+  // covering 0.30, and librosa returns that bin's LEFT edge
+  // (np.linspace(-0.5, 0.5, 100, endpoint=False)), i.e. 0.29 or 0.30 depending
+  // on which side of the bin boundary the residual falls — NOT the bin center
+  // 0.305 that the pre-fix code returned. Accept the adjacent left-edge bins
+  // (half-bin tolerance) but exclude the old center convention.
+  const float freq = sonare::constants::kA4Hz * std::pow(2.0f, 0.3f / 12.0f);
+  const float tuning = pitch_tuning({freq}, 0.01f, 12);
+  REQUIRE_THAT(tuning, WithinAbs(0.295f, 0.0075f));
+
+  // An exactly in-tune A4 (residual 0) lands in bin 50; left edge is 0.0.
+  const float in_tune = pitch_tuning({sonare::constants::kA4Hz}, 0.01f, 12);
+  REQUIRE_THAT(in_tune, WithinAbs(0.0f, 1e-4f));
+}
+
+TEST_CASE("estimate_tuning uses a global magnitude median", "[pitch]") {
+  // Build an uneven-energy signal: a loud in-tune A4 segment followed by a quiet
+  // detuned segment. librosa thresholds piptrack peaks against ONE global median
+  // over all positive-pitch magnitudes, which suppresses the quiet detuned peaks,
+  // so the estimate should track the loud in-tune content (~0 tuning) rather than
+  // being pulled toward the quiet detuned segment as a per-frame median would.
+  const int sr = 22050;
+  const float seg = 1.0f;
+  const int n_seg = static_cast<int>(sr * seg);
+  std::vector<float> samples;
+  samples.reserve(static_cast<size_t>(2) * n_seg);
+
+  const float a4 = sonare::constants::kA4Hz;
+  const float detuned = a4 * std::pow(2.0f, 0.4f / 12.0f);  // 0.4 semitone sharp
+  for (int i = 0; i < n_seg; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples.push_back(0.9f * std::sin(2.0f * sonare::constants::kPiD * a4 * t));
+  }
+  for (int i = 0; i < n_seg; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples.push_back(0.02f * std::sin(2.0f * sonare::constants::kPiD * detuned * t));
+  }
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  const float tuning = estimate_tuning(audio);
+  // The loud in-tune segment dominates the global-median-thresholded peaks.
+  REQUIRE_THAT(tuning, WithinAbs(0.0f, 0.1f));
+}
+
 TEST_CASE("yin_track with fill_na", "[pitch]") {
   // Generate audio with some silence
   std::vector<float> samples(22050, 0.0f);  // 1 second silence
