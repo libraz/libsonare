@@ -36,6 +36,10 @@ ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_r
     }
   }
 
+  // clipping_ratio is the fraction of ALL clipped samples (including short runs
+  // below min_region_samples), whereas `regions` lists only runs at/above that
+  // length. The two counts intentionally differ: the ratio measures total clip
+  // exposure, the regions are the significant runs worth surfacing.
   result.clipping_ratio =
       static_cast<float>(result.clipped_samples) / static_cast<float>(audio.size());
   return result;

@@ -91,7 +91,8 @@ TEST_CASE("meter silence returns non-finite peak and rms", "[meter]") {
 
   REQUIRE(!std::isfinite(metering::peak_db(audio)));
   REQUIRE(!std::isfinite(metering::rms_db(audio)));
-  REQUIRE(std::isinf(metering::crest_factor_db(audio)));
+  // Crest factor of silence is undefined; reported as a usable 0 dB, not +inf.
+  REQUIRE_THAT(metering::crest_factor_db(audio), WithinAbs(0.0f, 0.0f));
 }
 
 TEST_CASE("true peak matches sample peak when oversampling is disabled", "[meter]") {

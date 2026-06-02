@@ -49,7 +49,9 @@ float crest_factor_db(const Audio& audio) {
   const float peak = peak_db(audio);
   const float rms = rms_db(audio);
   if (!std::isfinite(peak) || !std::isfinite(rms)) {
-    return std::numeric_limits<float>::infinity();
+    // Silent/empty input has no meaningful peak-to-RMS ratio. Return 0 dB (a
+    // usable neutral) rather than +inf, which callers cannot average or display.
+    return 0.0f;
   }
   return peak - rms;
 }
