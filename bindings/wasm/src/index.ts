@@ -712,6 +712,34 @@ export class RealtimeEngine {
     return this.native.process(channels);
   }
 
+  /**
+   * Allocates persistent per-channel WASM-heap scratch for the zero-copy
+   * `getChannelBuffer` / `processPrepared` realtime path. Call once (off the
+   * audio thread) before driving `processPrepared` from an AudioWorklet so the
+   * render callback never allocates on the C++/JS heap.
+   */
+  prepareChannels(numChannels: number, maxFrames: number): void {
+    this.native.prepareChannels(numChannels, maxFrames);
+  }
+
+  /**
+   * Returns a Float32Array view onto the persistent WASM-heap scratch for one
+   * channel (valid for up to `numFrames`). Fill it, call `processPrepared`, then
+   * read the same view back. Re-acquire after WASM memory growth.
+   */
+  getChannelBuffer(channel: number, numFrames: number): Float32Array {
+    return this.native.getChannelBuffer(channel, numFrames);
+  }
+
+  /**
+   * Runs the engine in place over the prepared per-channel scratch buffers.
+   * Allocation-free: safe to call on the AudioWorklet render thread after
+   * `prepareChannels`.
+   */
+  processPrepared(numFrames: number): void {
+    this.native.processPrepared(numFrames);
+  }
+
   processWithMonitor(channels: Float32Array[]): WasmEngineProcessWithMonitorResult {
     return this.native.processWithMonitor(channels);
   }
@@ -1428,6 +1456,63 @@ export function voiceChange(
   }
   assertSamples('voiceChange', samples, options.validate !== false);
   return module.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
+}
+
+/** Options for the offline {@link voiceChangeRealtime} convenience wrapper. */
+export interface VoiceChangeRealtimeOptions extends ValidateOptions {
+  sampleRate?: number;
+  /** Voice-changer preset id or full config object. */
+  preset?: RealtimeVoiceChangerConfigInput;
+  /** Channel count (1 = mono, 2 = interleaved stereo). */
+  channels?: 1 | 2;
+  /** Block size for the internal render loop (default 512). */
+  blockSize?: number;
+}
+
+/**
+ * Applies the realtime voice-changer chain to a whole buffer in one call.
+ *
+ * Constructs and prepares a {@link RealtimeVoiceChanger}, runs the block loop
+ * for the caller, then disposes it — matching the Python `voice_change_realtime`
+ * and Node `voiceChangeRealtime` convenience wrappers. For mono, `samples` is a
+ * plain mono buffer; for stereo, `samples` is interleaved (L0,R0,L1,R1,...).
+ *
+ * @returns The processed buffer (same layout/length as the input).
+ */
+export function voiceChangeRealtime(
+  samples: Float32Array,
+  options: VoiceChangeRealtimeOptions = {},
+): Float32Array {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  assertSamples('voiceChangeRealtime', samples, options.validate !== false);
+  const channels = options.channels ?? 1;
+  if (channels !== 1 && channels !== 2) {
+    throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
+  }
+  const sampleRate = options.sampleRate ?? 22050;
+  const blockSize = Math.max(1, Math.floor(options.blockSize ?? 512));
+  const changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+  try {
+    changer.prepare(sampleRate, blockSize, channels);
+    const out = new Float32Array(samples.length);
+    if (channels === 1) {
+      for (let offset = 0; offset < samples.length; offset += blockSize) {
+        const block = samples.subarray(offset, Math.min(offset + blockSize, samples.length));
+        out.set(changer.processMono(block), offset);
+      }
+    } else {
+      const frameStride = blockSize * 2;
+      for (let offset = 0; offset < samples.length; offset += frameStride) {
+        const block = samples.subarray(offset, Math.min(offset + frameStride, samples.length));
+        out.set(changer.processInterleaved(block, 2), offset);
+      }
+    }
+    return out;
+  } finally {
+    changer.delete();
+  }
 }
 
 /**

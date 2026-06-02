@@ -1627,7 +1627,9 @@ describe('SonareWorkletProcessor', () => {
         engine.setMetronome({ enabled: true, clickSamples: 16 });
         const markerId = engine.addMarker(0, 'start');
         expect(markerId).toBeGreaterThan(0);
-        expect(engine.seekMarker(markerId)).toBe(false);
+        // seekMarker now reaches the realtime engine (previously a no-op that
+        // always returned false); it returns true like the sibling transport ops.
+        expect(engine.seekMarker(markerId)).toBe(true);
         const rendered = await engine.renderOffline(128);
         expect(rendered).toHaveLength(2);
         expect(rendered[0]).toHaveLength(128);

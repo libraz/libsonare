@@ -67,6 +67,7 @@
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
@@ -95,6 +96,7 @@
 #include "metering/clipping.h"
 #include "metering/dynamic_range.h"
 #include "metering/lufs.h"
+#include "metering/normalize.h"
 #include "metering/phase_scope.h"
 #include "metering/spectrum.h"
 #include "metering/stereo.h"
@@ -294,29 +296,9 @@ void processStereo(sonare::rt::ProcessorBase& processor, std::vector<float>& lef
   mastering::api::internal::run_processor_stereo(processor, left, right, sample_rate);
 }
 
-std::vector<float> monoMix(const std::vector<float>& left, const std::vector<float>& right) {
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
-  std::vector<float> mono(left.size());
-  for (size_t i = 0; i < left.size(); ++i) {
-    mono[i] = 0.5f * (left[i] + right[i]);
-  }
-  return mono;
-}
-
 float integratedLufs(const std::vector<float>& samples, int sample_rate) {
   Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
   return metering::lufs(audio).integrated_lufs;
-}
-
-void applyGainDb(std::vector<float>& left, std::vector<float>& right, float gain_db) {
-  const float gain = db_to_linear(gain_db);
-  for (size_t i = 0; i < left.size(); ++i) {
-    left[i] *= gain;
-    right[i] *= gain;
-  }
 }
 
 val chordToVal(const Chord& chord_result) {
@@ -3042,20 +3024,8 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
 std::string js_mastering_assistant_suggest(val samples, int sample_rate, val params_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
-  mastering::assistant::AssistantConfig config;
-  for (const auto& param : params) {
-    if (param.key == "targetLufs" || param.key == "target_lufs") {
-      config.target_lufs = static_cast<float>(param.value);
-    } else if (param.key == "ceilingDb" || param.key == "ceiling_db") {
-      config.ceiling_db = static_cast<float>(param.value);
-    } else if (param.key == "enableRepair" || param.key == "enable_repair") {
-      config.enable_repair = param.value != 0.0;
-    } else if (param.key == "preferStreamingSafe" || param.key == "prefer_streaming_safe") {
-      config.prefer_streaming_safe = param.value != 0.0;
-    } else if (param.key == "speechMonoAmount" || param.key == "speech_mono_amount") {
-      config.speech_mono_amount = static_cast<float>(param.value);
-    }
-  }
+  const mastering::assistant::AssistantConfig config =
+      mastering::assistant::assistant_config_from_params(params.data(), params.size());
   const auto result =
       mastering::assistant::suggest_chain(data.data(), data.size(), sample_rate, config);
   return mastering::assistant::assistant_result_to_json(result);
@@ -3064,16 +3034,8 @@ std::string js_mastering_assistant_suggest(val samples, int sample_rate, val par
 std::string js_mastering_audio_profile(val samples, int sample_rate, val params_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
-  mastering::assistant::AudioProfileConfig config;
-  for (const auto& param : params) {
-    if (param.key == "nFft" || param.key == "n_fft") {
-      config.n_fft = static_cast<int>(param.value);
-    } else if (param.key == "hopLength" || param.key == "hop_length") {
-      config.hop_length = static_cast<int>(param.value);
-    } else if (param.key == "truePeakOversample" || param.key == "true_peak_oversample") {
-      config.true_peak_oversample = static_cast<int>(param.value);
-    }
-  }
+  const mastering::assistant::AudioProfileConfig config =
+      mastering::assistant::audio_profile_config_from_params(params.data(), params.size());
   const auto profile =
       mastering::assistant::analyze_audio_profile(data.data(), data.size(), sample_rate, config);
   return mastering::assistant::audio_profile_to_json(profile);
@@ -5034,6 +4996,13 @@ class RealtimeEngineWasm {
   }
 
   void setAutomationLane(int param_id, val points) {
+    // NOTE: this surfaces a non-RT-safe parameter synchronously (a throw),
+    // whereas setParameter/setParameterSmoothed and the canonical C API
+    // (sonare_engine_set_automation_lane) report the same misuse asynchronously
+    // via kNonRealtimeSafeParameter telemetry. The synchronous throw is kept
+    // here intentionally because setAutomationLane is a control-thread (offline)
+    // setter, so an immediate, actionable error is preferable to a deferred
+    // telemetry record; the queued realtime writes keep the telemetry contract.
     if (!parameters_.parameter_is_realtime_safe(static_cast<uint32_t>(param_id))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "parameter is not realtime safe");
@@ -5174,6 +5143,15 @@ class RealtimeEngineWasm {
     metronome.beat_gain = floatProperty(config, "beatGain", 0.35f);
     metronome.accent_gain = floatProperty(config, "accentGain", 0.7f);
     metronome.click_samples = intProperty(config, "clickSamples", 96);
+    // clickSeconds is optional: a value > 0 overrides the engine's 2 ms default
+    // click length (parity with the C-ABI/Python/Node click_seconds field). A
+    // missing or 0 value leaves the struct default in place.
+    const double click_seconds = hasProperty(config, "clickSeconds")
+                                     ? objectProperty(config, "clickSeconds").as<double>()
+                                     : 0.0;
+    if (click_seconds > 0.0) {
+      metronome.click_seconds = click_seconds;
+    }
     engine_.set_metronome_config(metronome);
   }
 
@@ -5184,6 +5162,7 @@ class RealtimeEngineWasm {
     out.set("beatGain", config.beat_gain);
     out.set("accentGain", config.accent_gain);
     out.set("clickSamples", config.click_samples);
+    out.set("clickSeconds", config.click_seconds);
     return out;
   }
 
@@ -5321,14 +5300,24 @@ class RealtimeEngineWasm {
       schedule.id = static_cast<uint32_t>(intProperty(clip_val, "id", i + 1));
       schedule.buffer = {pointers.data(), channel_count, num_samples};
       schedule.start_ppq = objectProperty(clip_val, "startPpq").as<double>();
-      schedule.clip_offset_samples = intProperty(clip_val, "clipOffsetSamples", 0);
+      // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
+      // them at full 64-bit precision (like length_samples below) so large
+      // offsets above 2^31 samples do not silently truncate/sign-flip.
+      schedule.clip_offset_samples =
+          hasProperty(clip_val, "clipOffsetSamples")
+              ? objectProperty(clip_val, "clipOffsetSamples").as<int64_t>()
+              : 0;
       schedule.length_samples = hasProperty(clip_val, "lengthSamples")
                                     ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
                                     : num_samples;
       schedule.loop = boolProperty(clip_val, "loop", false);
       schedule.gain = floatProperty(clip_val, "gain", 1.0f);
-      schedule.fade_in_samples = intProperty(clip_val, "fadeInSamples", 0);
-      schedule.fade_out_samples = intProperty(clip_val, "fadeOutSamples", 0);
+      schedule.fade_in_samples = hasProperty(clip_val, "fadeInSamples")
+                                     ? objectProperty(clip_val, "fadeInSamples").as<int64_t>()
+                                     : 0;
+      schedule.fade_out_samples = hasProperty(clip_val, "fadeOutSamples")
+                                      ? objectProperty(clip_val, "fadeOutSamples").as<int64_t>()
+                                      : 0;
       schedules.push_back(schedule);
     }
     engine_.set_clips(std::move(schedules));
@@ -5384,6 +5373,57 @@ class RealtimeEngineWasm {
     ChannelBlock block = readChannels(channels_val);
     engine_.process(block.pointers.data(), static_cast<int>(block.storage.size()), block.frames);
     return channelsToJs(block);
+  }
+
+  // ---- Zero-copy "prepared" realtime path ------------------------------
+  // The AudioWorklet render thread fills the per-channel input views (returned
+  // as typed_memory_views onto persistent WASM-heap storage), calls
+  // processPrepared(numFrames) which runs engine_.process() IN PLACE, then reads
+  // the same views back. No std::vector or JS Float32Array is allocated per
+  // quantum, so process() never touches the C++/JS heap allocators on the audio
+  // thread (mirrors RealtimeVoiceChanger's prepared API). Call
+  // prepareChannels(numChannels, maxFrames) once on the main thread first.
+  void prepareChannels(int num_channels, int max_frames) {
+    if (num_channels <= 0 || max_frames <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeEngine.prepareChannels: dimensions must be positive");
+    }
+    prepared_channels_ = num_channels;
+    prepared_capacity_ = max_frames;
+    prepared_storage_.assign(static_cast<size_t>(num_channels),
+                             std::vector<float>(static_cast<size_t>(max_frames), 0.0f));
+    prepared_ptrs_.clear();
+    prepared_ptrs_.reserve(prepared_storage_.size());
+    for (auto& channel : prepared_storage_) {
+      prepared_ptrs_.push_back(channel.data());
+    }
+  }
+
+  val getChannelBuffer(int channel, int num_frames) {
+    if (channel < 0 || channel >= prepared_channels_) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeEngine.getChannelBuffer: channel out of range; call "
+                                    "prepareChannels() first");
+    }
+    if (num_frames <= 0 || num_frames > prepared_capacity_) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeEngine.getChannelBuffer: out-of-range frame count");
+    }
+    return val(typed_memory_view(static_cast<size_t>(num_frames),
+                                 prepared_storage_[static_cast<size_t>(channel)].data()));
+  }
+
+  void processPrepared(int num_frames) {
+    if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "RealtimeEngine.processPrepared: prepareChannels() must be "
+                                    "called first");
+    }
+    if (num_frames <= 0 || num_frames > prepared_capacity_) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeEngine.processPrepared: out-of-range frame count");
+    }
+    engine_.process(prepared_ptrs_.data(), prepared_channels_, num_frames);
   }
 
   val processWithMonitor(val channels_val) {
@@ -5446,14 +5486,8 @@ class RealtimeEngineWasm {
       // sentinel handling in sonare_engine_bounce_offline.
       const float target_lufs =
           floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
-      const auto loudness =
-          metering::lufs_interleaved(interleaved.data(), frames, num_channels, target_sample_rate);
-      if (std::isfinite(loudness.integrated_lufs)) {
-        const float gain = std::pow(10.0f, (target_lufs - loudness.integrated_lufs) / 20.0f);
-        for (auto& sample : interleaved) {
-          sample *= gain;
-        }
-      }
+      metering::normalize_interleaved_to_lufs(interleaved, frames, num_channels, target_sample_rate,
+                                              target_lufs);
     }
 
     const int dither = intProperty(options_val, "dither", 0);
@@ -5511,7 +5545,13 @@ class RealtimeEngineWasm {
     schedule.id = static_cast<uint32_t>(intProperty(options_val, "clipId", 1));
     if (schedule.id == 0) schedule.id = 1;
     schedule.buffer = {clip_ptrs_.back().data(), num_channels, total_frames};
-    schedule.start_ppq = floatProperty(options_val, "startPpq", 0.0f);
+    // Read startPpq at full double precision to match setClips() and the
+    // double-typed ClipSchedule.start_ppq field; a Float32 read would quantize a
+    // frozen clip at a large PPQ position to a different sample than the same
+    // clip placed via setClips.
+    schedule.start_ppq = hasProperty(options_val, "startPpq")
+                             ? objectProperty(options_val, "startPpq").as<double>()
+                             : 0.0;
     schedule.clip_offset_samples = 0;
     schedule.length_samples = total_frames;
     schedule.loop = false;
@@ -5679,6 +5719,11 @@ class RealtimeEngineWasm {
   std::vector<std::vector<const float*>> clip_ptrs_;
   std::vector<std::vector<float>> capture_storage_;
   std::vector<float*> capture_ptrs_;
+  // Persistent per-channel scratch for the zero-copy prepared process() path.
+  std::vector<std::vector<float>> prepared_storage_;
+  std::vector<float*> prepared_ptrs_;
+  int prepared_channels_ = 0;
+  int prepared_capacity_ = 0;
 };
 
 // ============================================================================
@@ -5975,6 +6020,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .function("captureStatus", &RealtimeEngineWasm::captureStatus)
       .function("capturedAudio", &RealtimeEngineWasm::capturedAudio)
       .function("process", &RealtimeEngineWasm::process)
+      .function("prepareChannels", &RealtimeEngineWasm::prepareChannels)
+      .function("getChannelBuffer", &RealtimeEngineWasm::getChannelBuffer)
+      .function("processPrepared", &RealtimeEngineWasm::processPrepared)
       .function("processWithMonitor", &RealtimeEngineWasm::processWithMonitor)
       .function("renderOffline", &RealtimeEngineWasm::renderOffline)
       .function("bounceOffline", &RealtimeEngineWasm::bounceOffline)

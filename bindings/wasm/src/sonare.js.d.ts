@@ -452,6 +452,8 @@ export interface WasmEngineMetronomeConfig {
   beatGain?: number;
   accentGain?: number;
   clickSamples?: number;
+  /** Optional click length in seconds; > 0 overrides the engine 2 ms default. */
+  clickSeconds?: number;
 }
 
 export interface WasmEngineGraphNode {
@@ -623,6 +625,9 @@ export interface WasmRealtimeEngine {
   captureStatus: () => WasmEngineCaptureStatus;
   capturedAudio: () => Float32Array[];
   process: (channels: Float32Array[]) => Float32Array[];
+  prepareChannels: (numChannels: number, maxFrames: number) => void;
+  getChannelBuffer: (channel: number, numFrames: number) => Float32Array;
+  processPrepared: (numFrames: number) => void;
   processWithMonitor: (channels: Float32Array[]) => WasmEngineProcessWithMonitorResult;
   renderOffline: (channels: Float32Array[], blockSize: number) => Float32Array[];
   bounceOffline: (options: WasmEngineBounceOptions) => WasmEngineBounceResult;
@@ -1711,6 +1716,8 @@ export interface WasmAnalyzerStats {
 
 export interface WasmFrameBuffer {
   nFrames: number;
+  /** Number of mel bands; flat `mel` is `[nFrames * nMels]` row-major. */
+  nMels: number;
   timestamps: Float32Array;
   mel: Float32Array;
   chroma: Float32Array;

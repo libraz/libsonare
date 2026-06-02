@@ -72,6 +72,8 @@ export interface AnalyzerStats {
  */
 export interface FrameBuffer {
   nFrames: number;
+  /** Number of mel bands; flat `mel` is `[nFrames * nMels]` row-major. */
+  nMels: number;
   timestamps: Float32Array;
   mel: Float32Array;
   chroma: Float32Array;

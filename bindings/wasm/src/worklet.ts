@@ -46,6 +46,8 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   commandRingCapacity?: number;
   telemetrySharedBuffer?: SharedArrayBuffer;
   telemetryRingCapacity?: number;
+  meterSharedBuffer?: SharedArrayBuffer;
+  meterRingCapacity?: number;
 }
 
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
@@ -262,6 +264,29 @@ interface WorkletTransport {
   onSpectrum?: (spectrum: SonareWorkletSpectrumSnapshot) => void;
 }
 
+interface ResolvedMetronomeConfig {
+  beatGain: number;
+  accentGain: number;
+  clickSamples: number;
+}
+
+// Fallback metronome gains/click length used by the worklet consumer until the
+// host posts a 'syncMetronome' config. Aligned with the embind setMetronome
+// defaults (src/wasm/bindings.cpp) so offline and realtime metronomes match.
+const DEFAULT_METRONOME_CONFIG: ResolvedMetronomeConfig = {
+  beatGain: 0.35,
+  accentGain: 0.7,
+  clickSamples: 96,
+};
+
+function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedMetronomeConfig {
+  return {
+    beatGain: config.beatGain ?? DEFAULT_METRONOME_CONFIG.beatGain,
+    accentGain: config.accentGain ?? DEFAULT_METRONOME_CONFIG.accentGain,
+    clickSamples: config.clickSamples ?? DEFAULT_METRONOME_CONFIG.clickSamples,
+  };
+}
+
 export interface SonareMeterRingBuffer {
   sharedBuffer: SharedArrayBuffer;
   header: Int32Array;
@@ -294,6 +319,32 @@ export interface SonareEngineCommandRecord {
   argFloat?: number;
   argInt?: number | bigint;
 }
+
+// Out-of-band control messages posted from the main-thread SonareEngine facade
+// to the worklet engine processor over node.port. Unlike SonareEngineCommandRecord
+// (a small POD POSTed/ringed every block) these carry bulk/structured payloads
+// (clip audio buffers, marker lists, metronome config) that cannot fit the
+// fixed-size SAB command record, so they are applied OUTSIDE process() — the
+// audio-thread equivalent of the engine's control-thread RtPublisher setters.
+export interface SonareEngineSyncClipsMessage {
+  type: 'syncClips';
+  clips: EngineClip[];
+}
+
+export interface SonareEngineSyncMarkersMessage {
+  type: 'syncMarkers';
+  markers: EngineMarker[];
+}
+
+export interface SonareEngineSyncMetronomeMessage {
+  type: 'syncMetronome';
+  config: EngineMetronomeConfig;
+}
+
+export type SonareEngineSyncMessage =
+  | SonareEngineSyncClipsMessage
+  | SonareEngineSyncMarkersMessage
+  | SonareEngineSyncMetronomeMessage;
 
 export interface SonareEngineTelemetryRecord {
   type: SonareEngineTelemetryType | number;
@@ -366,6 +417,15 @@ function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
 
 function isEngineCommandRecord(value: unknown): value is SonareEngineCommandRecord {
   return isRecord(value) && typeof value.type === 'number';
+}
+
+function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMessage {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+  return (
+    value.type === 'syncClips' || value.type === 'syncMarkers' || value.type === 'syncMetronome'
+  );
 }
 
 function isRealtimeVoiceChangerMessage(value: unknown): value is SonareRealtimeVoiceChangerMessage {
@@ -712,8 +772,10 @@ function writeEngineCommandRecord(
   view.setUint32(offset, command.type, true);
   view.setUint32(offset + 4, command.targetId ?? 0, true);
   view.setBigInt64(offset + 8, toBigInt64(command.sampleTime, -1n), true);
-  view.setFloat32(offset + 16, command.argFloat ?? 0, true);
-  view.setUint32(offset + 20, 0, true);
+  // argFloat occupies a full 8-byte Float64 slot (replacing the old Float32 +
+  // 4-byte pad) so PPQ scalars carried here keep full double precision over the
+  // SAB transport, matching the engine's double-precision seek/loop contract.
+  view.setFloat64(offset + 16, command.argFloat ?? 0, true);
   view.setBigInt64(offset + 24, toBigInt64(command.argInt, 0n), true);
 }
 
@@ -722,7 +784,7 @@ function readEngineCommandRecord(view: DataView, offset: number): SonareEngineCo
     type: view.getUint32(offset, true),
     targetId: view.getUint32(offset + 4, true),
     sampleTime: Number(view.getBigInt64(offset + 8, true)),
-    argFloat: view.getFloat32(offset + 16, true),
+    argFloat: view.getFloat64(offset + 16, true),
     argInt: Number(view.getBigInt64(offset + 24, true)),
   };
 }
@@ -1077,17 +1139,21 @@ export class SonareRealtimeEngineWorkletProcessor {
   private closed = false;
   private commandRing?: SonareEngineCommandRingBuffer;
   private telemetryRing?: SonareEngineTelemetryRingBuffer;
+  private meterRing?: SharedMeterRingWriter;
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
   private lastMeterFrame = Number.NEGATIVE_INFINITY;
-  // Pre-allocated worst-case input scratch buffers. The main thread allocates
-  // these in the constructor; process() reuses them via subarray() so it never
-  // touches the V8 heap allocator (which would risk GC stalls on the audio
-  // thread). One scratch buffer per channel sized to blockSize.
-  private readonly channelScratch: Float32Array[];
-  // Reused array of subarray views passed to engine.process() each block.
-  // Pre-allocating this array avoids growing-array allocations from .push().
-  private readonly channelScratchViews: Float32Array[];
+  // Latest metronome gains/click length pushed via 'syncMetronome'. The
+  // SetMetronome command only toggles enabled state; the config arrives here.
+  private metronomeConfig: ResolvedMetronomeConfig = { ...DEFAULT_METRONOME_CONFIG };
+  // Zero-copy prepared realtime path: persistent per-channel views onto the
+  // engine's WASM-heap scratch (acquired once on the main thread via
+  // getChannelBuffer). process() writes the AudioWorklet input straight into
+  // these views, calls engine.processPrepared(frames) which runs the engine IN
+  // PLACE, then reads the same views back — no std::vector or JS Float32Array is
+  // allocated per render quantum (the old engine.process() round-tripped fresh
+  // arrays on both heaps every block, an RT-safety hazard).
+  private channelBuffers: Float32Array[];
 
   constructor(
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
@@ -1113,13 +1179,16 @@ export class SonareRealtimeEngineWorkletProcessor {
           options.telemetryRingCapacity,
         )
       : undefined;
+    this.meterRing = options.meterSharedBuffer
+      ? meterRingFromSharedBuffer(options.meterSharedBuffer, options.meterRingCapacity)
+      : undefined;
     this.engine = new RealtimeEngine(this.sampleRate, this.blockSize);
-    // Worst-case allocation: channelCount full-blockSize Float32Arrays.
-    this.channelScratch = new Array(this.channelCount);
-    this.channelScratchViews = new Array(this.channelCount);
+    // Allocate persistent WASM-heap scratch (worst case: channelCount channels x
+    // blockSize frames) and acquire the per-channel heap views once.
+    this.engine.prepareChannels(this.channelCount, this.blockSize);
+    this.channelBuffers = new Array(this.channelCount);
     for (let ch = 0; ch < this.channelCount; ch++) {
-      this.channelScratch[ch] = new Float32Array(this.blockSize);
-      this.channelScratchViews[ch] = this.channelScratch[ch];
+      this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
     }
   }
 
@@ -1147,39 +1216,51 @@ export class SonareRealtimeEngineWorkletProcessor {
     // `frames > this.blockSize` branch already returns early, so this is
     // defensive — but we warn once if it ever fires so the contract violation
     // is visible.
-    const scratchCapacity = this.channelScratch[0]?.length ?? 0;
     let usableFrames = frames;
-    if (usableFrames > scratchCapacity) {
+    if (usableFrames > this.blockSize) {
       if (!SonareRealtimeEngineWorkletProcessor.warnedChannelScratchOverflow) {
         SonareRealtimeEngineWorkletProcessor.warnedChannelScratchOverflow = true;
         // biome-ignore lint/suspicious/noConsole: realtime-safety diagnostic.
         console.warn(
           `SonareRealtimeEngineWorkletProcessor: requested ${usableFrames} frames ` +
-            `exceeds pre-allocated capacity ${scratchCapacity}; clamping.`,
+            `exceeds pre-allocated capacity ${this.blockSize}; clamping.`,
         );
       }
-      usableFrames = scratchCapacity;
-    }
-    const input = inputs[0];
-    // Reuse the scratch buffers via subarray() — these are views over the
-    // pre-allocated Float32Array storage and do not allocate on the heap.
-    for (let ch = 0; ch < this.channelCount; ch++) {
-      const scratch = this.channelScratch[ch];
-      const source = input?.[ch];
-      if (source && source.length === usableFrames) {
-        scratch.set(source, 0);
-      } else {
-        scratch.fill(0, 0, usableFrames);
-      }
-      this.channelScratchViews[ch] = scratch.subarray(0, usableFrames);
+      usableFrames = this.blockSize;
     }
 
-    const processed = this.engine.process(this.channelScratchViews);
+    // Defend against WASM linear-memory growth detaching the cached heap views:
+    // if any view's backing ArrayBuffer has been detached (byteLength === 0),
+    // re-acquire all of them. This is a control-flow check (no allocation in the
+    // common case where memory did not grow).
+    if ((this.channelBuffers[0]?.byteLength ?? 0) === 0) {
+      this.reacquireChannelBuffers();
+    }
+
+    const input = inputs[0];
+    // Write the AudioWorklet input straight into the engine's WASM-heap views;
+    // no per-block heap allocation.
+    for (let ch = 0; ch < this.channelCount; ch++) {
+      const dst = this.channelBuffers[ch];
+      const source = input?.[ch];
+      if (source && source.length === usableFrames) {
+        dst.set(source.subarray(0, usableFrames));
+      } else {
+        dst.fill(0, 0, usableFrames);
+      }
+    }
+
+    // Run the engine in place over the prepared scratch (allocation-free).
+    this.engine.processPrepared(usableFrames);
+
     for (let ch = 0; ch < output.length; ch++) {
       const target = output[ch];
-      const source = processed[ch] ?? processed[0];
+      const source = this.channelBuffers[ch] ?? this.channelBuffers[0];
       if (source) {
-        target.set(source.subarray(0, target.length));
+        target.set(source.subarray(0, Math.min(target.length, usableFrames)));
+        if (target.length > usableFrames) {
+          target.fill(0, usableFrames);
+        }
       } else {
         target.fill(0);
       }
@@ -1189,9 +1270,38 @@ export class SonareRealtimeEngineWorkletProcessor {
     return true;
   }
 
+  private reacquireChannelBuffers(): void {
+    for (let ch = 0; ch < this.channelCount; ch++) {
+      this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
+    }
+  }
+
   receiveCommand(command: SonareEngineCommandRecord): void {
     if (!this.closed) {
       this.applyCommand(command);
+    }
+  }
+
+  // Applies an out-of-band control-plane sync message. Runs on the AudioWorklet
+  // global scope but OUTSIDE process() (the message-port callback), so the
+  // bulk/allocating engine setters (setClips/setMarkers) are safe here — they
+  // never run on the realtime render path. This is the audio-thread equivalent
+  // of the engine's control-thread RtPublisher setters.
+  receiveSync(message: SonareEngineSyncMessage): void {
+    if (this.closed) {
+      return;
+    }
+    switch (message.type) {
+      case 'syncClips':
+        this.engine.setClips(message.clips);
+        break;
+      case 'syncMarkers':
+        this.engine.setMarkers(message.markers);
+        break;
+      case 'syncMetronome':
+        this.metronomeConfig = resolveMetronomeConfig(message.config);
+        this.engine.setMetronome(message.config);
+        break;
     }
   }
 
@@ -1260,19 +1370,30 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.armCapture(Boolean(command.argInt));
         break;
       case SonareEngineCommandType.Punch:
+        // Both endpoints already arrive as samples (see SonareEngine.punch);
+        // do NOT re-scale by sampleRate.
         this.engine.setCapturePunch(
           Number(command.argInt ?? 0),
-          Math.max(0, Math.round(Number(command.argFloat ?? 0) * this.sampleRate)),
+          Math.max(0, Math.round(Number(command.argFloat ?? 0))),
           true,
         );
         break;
       case SonareEngineCommandType.SetMetronome:
+        // Metronome config (beatGain/accentGain/clickSamples/clickSeconds) is
+        // delivered out-of-band via the 'syncMetronome' message so it carries
+        // the caller's full config; the command only toggles enabled state as a
+        // sample-aligned fallback.
         this.engine.setMetronome({
           enabled: Boolean(command.argInt),
-          beatGain: 0.25,
-          accentGain: 0.75,
-          clickSamples: 64,
+          beatGain: this.metronomeConfig.beatGain,
+          accentGain: this.metronomeConfig.accentGain,
+          clickSamples: this.metronomeConfig.clickSamples,
         });
+        break;
+      case SonareEngineCommandType.SeekMarker:
+        // The realtime engine's markers are kept in sync via 'syncMarkers'
+        // (RtPublisher-style swap), so a queued kSeekMarker resolves correctly.
+        this.engine.seekMarker(Math.trunc(Number(command.targetId ?? 0)), sampleTime);
         break;
       default:
         this.publishTelemetryRecord({
@@ -1303,7 +1424,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private publishMeters(): void {
-    if (!this.transport || this.meterIntervalFrames <= 0) {
+    if (this.meterIntervalFrames <= 0 || (!this.transport && !this.meterRing)) {
       return;
     }
     for (const item of this.engine.drainMeterTelemetry(64)) {
@@ -1312,8 +1433,36 @@ export class SonareRealtimeEngineWorkletProcessor {
         continue;
       }
       this.lastMeterFrame = meter.frame;
-      this.transport.onMeter?.(meter);
-      this.transport.postMessage?.(meter);
+      // Prefer the lock-free SAB meter ring (matching the telemetry path and
+      // SonareWorkletProcessor); only fall back to structured-clone postMessage
+      // when no ring was provided, so we do not allocate/post from the audio
+      // render callback in SAB mode.
+      if (this.meterRing) {
+        this.writeMeterRing(meter);
+      } else {
+        this.transport?.onMeter?.(meter);
+        this.transport?.postMessage?.(meter);
+      }
+    }
+  }
+
+  private writeMeterRing(meter: SonareWorkletMeterSnapshot): void {
+    const ring = this.meterRing;
+    if (!ring) {
+      return;
+    }
+    const writeIndex = Atomics.load(ring.header, 0);
+    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    ring.records[offset] = encodeFrameLo(meter.frame);
+    ring.records[offset + 1] = meter.peakDbL;
+    ring.records[offset + 2] = meter.peakDbR;
+    ring.records[offset + 3] = meter.rmsDbL;
+    ring.records[offset + 4] = meter.rmsDbR;
+    ring.records[offset + 5] = meter.correlation;
+    ring.records[offset + 6] = encodeFrameHi(meter.frame);
+    Atomics.store(ring.header, 0, writeIndex + 1);
+    if (writeIndex + 1 > ring.capacity) {
+      Atomics.store(ring.header, 3, writeIndex + 1 - ring.capacity);
     }
   }
 
@@ -1355,6 +1504,7 @@ export class SonareRtRealtimeEngineRuntime {
   private readonly telemetryFramesPtr: number;
   private readonly commandRing?: SonareEngineCommandRingBuffer;
   private readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
+  private metronomeConfig: ResolvedMetronomeConfig = { ...DEFAULT_METRONOME_CONFIG };
   private closed = false;
 
   constructor(options: SonareRtRealtimeEngineRuntimeOptions) {
@@ -1450,6 +1600,50 @@ export class SonareRtRealtimeEngineRuntime {
     return true;
   }
 
+  receiveCommand(command: SonareEngineCommandRecord): void {
+    if (!this.closed) {
+      this.applyCommand(command);
+    }
+  }
+
+  // Out-of-band control sync for the sonare-rt runtime. The sonare-rt C ABI
+  // (src/wasm/rt_bindings.cpp) exposes set_metronome_enabled and seek_marker but
+  // NOT set_clips / set_markers, so clip/marker mutations cannot be applied to a
+  // live sonare-rt engine. We honor the metronome config and surface a clear
+  // telemetry error for the unsupported clip/marker paths instead of silently
+  // dropping them. The default 'embind' runtime wires all three fully.
+  receiveSync(message: SonareEngineSyncMessage): void {
+    if (this.closed) {
+      return;
+    }
+    switch (message.type) {
+      case 'syncMetronome':
+        this.metronomeConfig = resolveMetronomeConfig(message.config);
+        this.module._sonare_rt_engine_set_metronome_enabled(
+          this.engine,
+          message.config.enabled ? 1 : 0,
+          this.metronomeConfig.beatGain,
+          this.metronomeConfig.accentGain,
+          this.metronomeConfig.clickSamples,
+        );
+        break;
+      case 'syncClips':
+      case 'syncMarkers':
+        if (this.telemetryRing) {
+          writeSonareEngineTelemetryRingBuffer(this.telemetryRing, {
+            type: SonareEngineTelemetryType.Error,
+            error: SonareEngineTelemetryError.UnknownTarget,
+            renderFrame: 0,
+            timelineSample: 0,
+            audibleTimelineSample: 0,
+            graphLatencySamplesQ8: 0,
+            value: 0,
+          });
+        }
+        break;
+    }
+  }
+
   destroy(): void {
     if (this.closed) {
       return;
@@ -1542,10 +1736,12 @@ export class SonareRtRealtimeEngineRuntime {
         this.module._sonare_rt_engine_set_capture_armed(this.engine, command.argInt ? 1 : 0);
         break;
       case SonareEngineCommandType.Punch:
+        // Both endpoints already arrive as samples (see SonareEngine.punch);
+        // do NOT re-scale by sampleRate.
         this.module._sonare_rt_engine_set_capture_punch(
           this.engine,
           toBigInt64(command.argInt, 0n),
-          BigInt(Math.trunc(Number(command.argFloat ?? 0) * this.sampleRate)),
+          BigInt(Math.max(0, Math.round(Number(command.argFloat ?? 0)))),
           1,
         );
         break;
@@ -1553,9 +1749,9 @@ export class SonareRtRealtimeEngineRuntime {
         this.module._sonare_rt_engine_set_metronome_enabled(
           this.engine,
           command.argInt ? 1 : 0,
-          0.25,
-          0.75,
-          64,
+          this.metronomeConfig.beatGain,
+          this.metronomeConfig.accentGain,
+          this.metronomeConfig.clickSamples,
         );
         break;
       case SonareEngineCommandType.SeekMarker:
@@ -1644,8 +1840,10 @@ export class SonareRealtimeEngineNode {
   readonly capabilities: SonareRealtimeEngineNodeCapabilities;
   readonly commandRing?: SonareEngineCommandRingBuffer;
   readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
+  readonly meterRing?: SonareMeterRingBuffer;
   readonly ready: Promise<void>;
   private telemetryReadIndex = 0;
+  private meterReadIndex = 0;
   private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
   private resolveReady!: () => void;
@@ -1657,11 +1855,13 @@ export class SonareRealtimeEngineNode {
     capabilities: SonareRealtimeEngineNodeCapabilities,
     commandRing?: SonareEngineCommandRingBuffer,
     telemetryRing?: SonareEngineTelemetryRingBuffer,
+    meterRing?: SonareMeterRingBuffer,
   ) {
     this.node = node;
     this.capabilities = capabilities;
     this.commandRing = commandRing;
     this.telemetryRing = telemetryRing;
+    this.meterRing = meterRing;
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -1732,6 +1932,14 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createSonareEngineTelemetryRingBuffer(options.telemetryRingCapacity ?? 128)
         : undefined;
+    // Meter ring: only the embind runtime publishes engine meters into a SAB
+    // ring (the sonare-rt runtime owns its own meter transport). Lock-free
+    // meter delivery matches the telemetry path and keeps the audio render
+    // callback allocation-free in SAB mode.
+    const meterRing =
+      mode === 'sab' && runtimeTarget === 'embind'
+        ? createSonareMeterRingBuffer(options.meterRingCapacity ?? 128)
+        : undefined;
     const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       runtimeTarget,
@@ -1744,6 +1952,8 @@ export class SonareRealtimeEngineNode {
       commandRingCapacity: commandRing?.capacity,
       telemetrySharedBuffer: telemetryRing?.sharedBuffer,
       telemetryRingCapacity: telemetryRing?.capacity,
+      meterSharedBuffer: meterRing?.sharedBuffer,
+      meterRingCapacity: meterRing?.capacity,
     };
     const factory =
       options.nodeFactory ??
@@ -1770,6 +1980,7 @@ export class SonareRealtimeEngineNode {
       },
       commandRing,
       telemetryRing,
+      meterRing,
     );
   }
 
@@ -1818,6 +2029,21 @@ export class SonareRealtimeEngineNode {
       this.emitTelemetry(telemetry);
     }
     return read.telemetry;
+  }
+
+  // Drains any meters published into the SAB meter ring (embind SAB mode) and
+  // forwards them to onMeter listeners. In postMessage mode meters arrive via
+  // node.port.onmessage instead, so this is a no-op then.
+  pollMeters(): SonareWorkletMeterSnapshot[] {
+    if (!this.meterRing) {
+      return [];
+    }
+    const read = readSonareMeterRingBuffer(this.meterRing, this.meterReadIndex);
+    this.meterReadIndex = read.nextReadIndex;
+    for (const meter of read.meters) {
+      this.emitMeter(meter);
+    }
+    return read.meters;
   }
 
   onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
@@ -2064,16 +2290,25 @@ export class SonareEngine {
     const inSample = this.ppqToApproxSample(inPpq);
     const outSample = this.ppqToApproxSample(outPpq);
     this.offlineEngine.setCapturePunch(inSample, outSample, true);
+    // Carry BOTH endpoints as already-converted SAMPLES so the realtime engine
+    // agrees with the offline engine. The previous code sent the raw PPQ out
+    // point and let the consumer multiply by sampleRate (treating PPQ as
+    // seconds), which ignored tempo and produced a punch-out ~2x too large at
+    // 120 BPM. argInt = in sample, argFloat = out sample (full-precision double).
     return this.realtimeNode.sendCommand({
       type: SonareEngineCommandType.Punch,
       sampleTime: -1,
       argInt: inSample,
-      argFloat: outPpq,
+      argFloat: outSample,
     });
   }
 
   setMetronome(opts: EngineMetronomeConfig): void {
     this.offlineEngine.setMetronome(opts);
+    // The full config (beatGain/accentGain/clickSamples/clickSeconds) cannot fit
+    // the fixed-size SAB command record, so it is delivered out-of-band; the
+    // SetMetronome command then toggles enabled state on the audio thread.
+    this.postSync({ type: 'syncMetronome', config: opts });
     this.realtimeNode.sendCommand({
       type: SonareEngineCommandType.SetMetronome,
       sampleTime: -1,
@@ -2090,7 +2325,15 @@ export class SonareEngine {
 
   seekMarker(markerId: number): boolean {
     this.offlineEngine.seekMarker(markerId);
-    return false;
+    // Forward to the live worklet engine. Its marker set is kept in sync via the
+    // 'syncMarkers' message (see syncMarkers), so a queued kSeekMarker resolves
+    // the marker id to its frame on the audio thread. Returns the sendCommand
+    // result (previously this method always returned a misleading `false`).
+    return this.realtimeNode.sendCommand({
+      type: SonareEngineCommandType.SeekMarker,
+      targetId: markerId,
+      sampleTime: -1,
+    });
   }
 
   async renderOffline(totalFrames: number): Promise<Float32Array[]> {
@@ -2114,6 +2357,10 @@ export class SonareEngine {
     return this.realtimeNode.pollTelemetry();
   }
 
+  pollMeters(): SonareWorkletMeterSnapshot[] {
+    return this.realtimeNode.pollMeters();
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -2126,11 +2373,29 @@ export class SonareEngine {
   }
 
   private syncClips(): void {
-    this.offlineEngine.setClips(Array.from(this.clips.values()));
+    const clips = Array.from(this.clips.values());
+    this.offlineEngine.setClips(clips);
+    // Push the full clip set to the live worklet engine over the message port.
+    // Clip audio buffers are too large for the fixed-size SAB command record, so
+    // they ride a structured-clone 'syncClips' message applied OUTSIDE the audio
+    // render callback (the audio-thread equivalent of an RtPublisher swap).
+    this.postSync({ type: 'syncClips', clips });
   }
 
   private syncMarkers(): void {
-    this.offlineEngine.setMarkers(Array.from(this.markers.values()).sort((a, b) => a.ppq - b.ppq));
+    const markers = Array.from(this.markers.values()).sort((a, b) => a.ppq - b.ppq);
+    this.offlineEngine.setMarkers(markers);
+    this.postSync({ type: 'syncMarkers', markers });
+  }
+
+  // Posts an out-of-band control-sync message to the worklet engine processor.
+  // Sync messages use a string `type` so the worklet's message handler routes
+  // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
+  private postSync(message: SonareEngineSyncMessage): void {
+    if (this.destroyed) {
+      return;
+    }
+    this.realtimeNode.node.port.postMessage(message);
   }
 
   private resolveParamId(nodeId: string, param: string | number): number {
@@ -2232,6 +2497,14 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       return !this.destroyed;
     }
 
+    // The cached heap views can detach if WASM linear memory grows (the embind
+    // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
+    // (byteLength === 0) before touching them; in the common no-growth case this
+    // is a cheap branch with no allocation.
+    if (this.monoInput.byteLength === 0) {
+      this.reacquireBuffers();
+    }
+
     const input = inputs[0];
     const requestedFrames = output[0]?.length ?? 0;
     const requestedChannels = Math.min(this.channelCount, output.length);
@@ -2291,6 +2564,20 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     }
     this.destroyed = true;
     this.changer.delete();
+  }
+
+  // Re-acquires the cached WASM-heap views after a memory-growth detachment.
+  // The underlying C++ vectors are pre-warmed (ensure_*_capacity ran at prepare
+  // time), so getMono*/getPlanar* return fresh views onto the SAME storage
+  // without reallocating it.
+  private reacquireBuffers(): void {
+    this.monoInput = this.changer.getMonoInputBuffer(this.blockSize);
+    this.monoOutput = this.changer.getMonoOutputBuffer(this.blockSize);
+    if (this.channelCount > 1) {
+      for (let ch = 0; ch < this.channelCount; ch++) {
+        this.planarChannels[ch] = this.changer.getPlanarChannelBuffer(ch, this.blockSize);
+      }
+    }
   }
 
   /**
@@ -2450,6 +2737,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
       const onMessage = (event: { data: unknown }) => {
         if (isEngineCommandRecord(event.data)) {
           this.bridge?.receiveCommand(event.data);
+          this.rtBridge?.receiveCommand(event.data);
+        } else if (isEngineSyncMessage(event.data)) {
+          this.bridge?.receiveSync(event.data);
+          this.rtBridge?.receiveSync(event.data);
         }
       };
       if (port?.addEventListener) {
