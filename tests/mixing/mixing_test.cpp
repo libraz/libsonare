@@ -391,8 +391,12 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
   std::array<float, 4> out_r{};
   REQUIRE(sonare_mixer_process_stereo(restored, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
                                       out_l.size()) == SONARE_OK);
-  REQUIRE(out_l[0] > 0.0f);
-  REQUIRE(out_l[0] < 1.0f);
+  // The restored strip applies +6 dB input trim and -3 dB fader (+3 dB net,
+  // ~1.41x) before a slight-right balance pan. With the Balance pan law no longer
+  // applying a spurious -3 dB center attenuation, the left output is legitimately
+  // boosted above unity (~1.3), confirming the round-tripped trim/fader/pan.
+  REQUIRE(out_l[0] > 1.0f);
+  REQUIRE(out_l[0] < 2.0f);
   sonare_mixer_destroy(restored);
 }
 

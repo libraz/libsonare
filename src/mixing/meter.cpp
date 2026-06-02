@@ -96,6 +96,8 @@ void MeterProcessor::reset() {
 void MeterProcessor::reset_integrated() noexcept {
   hist_count_.fill(0);
   hist_energy_.fill(0.0);
+  integrated_lufs_ = kFloorDb;
+  histogram_dirty_ = false;
 }
 
 void MeterProcessor::process(float* const* channels, int num_channels, int num_samples) {
@@ -251,6 +253,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
             if (bin >= 0 && bin < kHistBins) {
               ++hist_count_[static_cast<size_t>(bin)];
               hist_energy_[static_cast<size_t>(bin)] += block_energy;
+              histogram_dirty_ = true;
             }
           }
         }
@@ -265,28 +268,34 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     }
 
     // Gated integrated loudness via the bounded histogram (libebur128-style).
-    uint64_t abs_count = 0;
-    double abs_energy = 0.0;
-    for (int b = 0; b < kHistBins; ++b) {
-      abs_count += hist_count_[static_cast<size_t>(b)];
-      abs_energy += hist_energy_[static_cast<size_t>(b)];
-    }
-    if (abs_count > 0) {
-      const double preliminary = abs_energy / static_cast<double>(abs_count);
-      const double relative_gate_lufs = static_cast<double>(energy_to_lufs(preliminary)) - 10.0;
-      const int gate_bin =
-          static_cast<int>(std::ceil((relative_gate_lufs - kHistLowLufs) / kHistBinLu));
+    // The two O(kHistBins) scans only need to run when a new gating block was
+    // committed this block; otherwise the cached value is reused unchanged.
+    if (histogram_dirty_) {
+      histogram_dirty_ = false;
+      uint64_t abs_count = 0;
+      double abs_energy = 0.0;
+      for (int b = 0; b < kHistBins; ++b) {
+        abs_count += hist_count_[static_cast<size_t>(b)];
+        abs_energy += hist_energy_[static_cast<size_t>(b)];
+      }
+      if (abs_count > 0) {
+        const double preliminary = abs_energy / static_cast<double>(abs_count);
+        const double relative_gate_lufs = static_cast<double>(energy_to_lufs(preliminary)) - 10.0;
+        const int gate_bin =
+            static_cast<int>(std::ceil((relative_gate_lufs - kHistLowLufs) / kHistBinLu));
 
-      uint64_t rel_count = 0;
-      double rel_energy = 0.0;
-      for (int b = std::max(0, gate_bin); b < kHistBins; ++b) {
-        rel_count += hist_count_[static_cast<size_t>(b)];
-        rel_energy += hist_energy_[static_cast<size_t>(b)];
-      }
-      if (rel_count > 0) {
-        next.integrated_lufs = energy_to_lufs(rel_energy / static_cast<double>(rel_count));
+        uint64_t rel_count = 0;
+        double rel_energy = 0.0;
+        for (int b = std::max(0, gate_bin); b < kHistBins; ++b) {
+          rel_count += hist_count_[static_cast<size_t>(b)];
+          rel_energy += hist_energy_[static_cast<size_t>(b)];
+        }
+        if (rel_count > 0) {
+          integrated_lufs_ = energy_to_lufs(rel_energy / static_cast<double>(rel_count));
+        }
       }
     }
+    next.integrated_lufs = integrated_lufs_;
   }
 
   publish(next);

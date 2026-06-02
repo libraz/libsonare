@@ -905,11 +905,14 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
     group.members.emplace_back(members[i]);
   }
   // Apply the group's gain offset to the live ChannelStrip of each member, the
-  // same control-only path scene load uses (last group touching a strip wins).
+  // same control-only path scene load uses. A strip may belong to several VCA
+  // groups, so this group's gain accumulates additively onto the strip's single
+  // offset (matching the runtime VcaGroup delta semantics) rather than
+  // overwriting any contribution from other groups.
   for (const auto& member : group.members) {
     for (const auto& strip : mixer->strips) {
       if (strip->id == member) {
-        strip->strip.set_vca_offset_db(gain_db);
+        strip->strip.set_vca_offset_db(strip->strip.vca_offset_db() + gain_db);
         break;
       }
     }
@@ -931,11 +934,13 @@ SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
   if (it == mixer->vca_groups.end()) {
     return SONARE_ERROR_INVALID_PARAMETER;  // no such group
   }
-  // Clear the live gain offset on the removed group's members.
+  // Subtract only this group's contribution from each member's offset,
+  // preserving any offset still owed by other VCA groups the strip belongs to
+  // (mirrors the runtime VcaGroup::remove_member delta semantics).
   for (const auto& member : it->members) {
     for (const auto& strip : mixer->strips) {
       if (strip->id == member) {
-        strip->strip.set_vca_offset_db(0.0f);
+        strip->strip.set_vca_offset_db(strip->strip.vca_offset_db() - it->gain_db);
         break;
       }
     }
@@ -1147,12 +1152,17 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       mixer->buses.push_back({"master", "master"});
     }
 
-    // VCA group offsets (control-only; last group touching a strip wins).
+    // VCA group offsets (control-only). A strip may belong to several VCA
+    // groups, so each group's gain accumulates additively onto the strip's
+    // single offset, matching the runtime VcaGroup delta semantics (summing in
+    // the dB domain is equivalent to multiplying the linear VCA gains). Strip
+    // offsets start at 0 after add_strip, so a plain += yields the sum of all
+    // groups touching a member.
     for (const auto& group : scene.vca_groups) {
       for (const auto& member : group.members) {
         for (const auto& strip : mixer->strips) {
           if (strip->id == member) {
-            strip->strip.set_vca_offset_db(group.gain_db);
+            strip->strip.set_vca_offset_db(strip->strip.vca_offset_db() + group.gain_db);
             break;
           }
         }

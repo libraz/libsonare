@@ -51,8 +51,11 @@ struct Strip {
   bool soloed = false;
   bool solo_safe = false;
   int pan_mode = 0;  // 0 = balance (matches SONARE_PAN_MODE_*).
-  float dual_pan_left = 0.0f;
-  float dual_pan_right = 0.0f;
+  // Default to the panner's identity dual-pan routing (hard L / hard R) so a
+  // DualPan strip without explicit dual-pan values preserves the stereo image
+  // instead of collapsing to mono. Matches PannerProcessor's runtime defaults.
+  float dual_pan_left = -1.0f;
+  float dual_pan_right = 1.0f;
   bool polarity_invert_left = false;
   bool polarity_invert_right = false;
   int pan_law = 0;  // 0 = Const3dB (matches PanLaw enum order).

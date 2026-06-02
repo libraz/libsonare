@@ -226,7 +226,9 @@ class ChannelStrip : public rt::ProcessorBase {
   PannerProcessor panner_;
   StereoWidthProcessor width_;
   sonare::mastering::eq::ParametricEq eq_;
-  MeterProcessor pre_meter_;
+  // Both taps measure true-peak so a metering UI sees real inter-sample peaks
+  // pre- and post-fader rather than a floor reading on the pre-fader tap.
+  MeterProcessor pre_meter_{{true, true, 4}};
   MeterProcessor post_meter_{{true, true, 4}};
   GoniometerBuffer<kGoniometerCapacity> goniometer_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> pre_inserts_;

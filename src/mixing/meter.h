@@ -107,6 +107,11 @@ class MeterProcessor : public rt::ProcessorBase {
   static constexpr double kHistBinLu = 0.1;
   std::array<uint64_t, kHistBins> hist_count_{};
   std::array<double, kHistBins> hist_energy_{};
+  // Cached gated integrated loudness. The two histogram scans are O(kHistBins)
+  // and only change when a new gating block is committed, so the result is
+  // recomputed only when the histogram is dirty and otherwise reused.
+  float integrated_lufs_ = constants::kFloorDb;
+  bool histogram_dirty_ = false;
 };
 
 }  // namespace sonare::mixing
