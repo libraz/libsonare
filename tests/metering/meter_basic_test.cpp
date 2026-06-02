@@ -232,6 +232,32 @@ TEST_CASE("LUFS relative gate ignores much quieter tail", "[meter]") {
   REQUIRE_THAT(mixed_loudness.integrated_lufs, WithinAbs(loud_only_loudness.integrated_lufs, 1.0f));
 }
 
+TEST_CASE("LRA interpolates percentiles for small block counts", "[meter][lufs]") {
+  // With only two gated short-term blocks the old nearest-rank (floor) indexing
+  // collapsed the 10th and 95th percentiles onto the same sample and returned
+  // 0 LU even though the two values differ. Interpolation must yield the proper
+  // span: 0.10 -> -19.0, 0.95 -> -10.5, range 8.5 LU.
+  const float lra = metering::lra_from_short_term_blocks({-20.0f, -10.0f});
+  REQUIRE_THAT(lra, WithinAbs(8.5f, 0.05f));
+}
+
+TEST_CASE("LUFS short clip reports integrated loudness but no momentary/short-term",
+          "[meter][lufs]") {
+  // 200 ms is shorter than both the 400 ms momentary window and the 3 s
+  // short-term window. The momentary/short-term meters are strict (no
+  // measurement until a full window exists) and must report -inf, while the
+  // offline integrated loudness still measures the whole clip (metering#2).
+  const Audio audio = make_sine(0.5f, 48000, 0.2f);
+
+  const auto result = metering::lufs(audio);
+  REQUIRE(std::isfinite(result.integrated_lufs));
+  REQUIRE(!std::isfinite(result.momentary_lufs));
+  REQUIRE(!std::isfinite(result.short_term_lufs));
+
+  REQUIRE(metering::momentary_lufs(audio).empty());
+  REQUIRE(metering::short_term_lufs(audio).empty());
+}
+
 TEST_CASE("LUFS curves expose momentary and short term blocks", "[meter]") {
   const Audio audio = make_sine(0.5f, 48000, 4.0f);
 

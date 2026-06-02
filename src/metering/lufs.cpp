@@ -125,25 +125,33 @@ double mean_square(const double* data, size_t start, size_t length) {
   return sum_sq / static_cast<double>(length);
 }
 
+// When `allow_partial_window` is false (momentary/short-term meters) the window
+// is NOT clamped down to the signal length: a signal shorter than the requested
+// window emits zero blocks, so the scalar meter reports -inf ("no measurement")
+// rather than a value measured over a sub-spec window (metering#2), matching the
+// ebur128_loudness_range guard. When true (offline integrated loudness for
+// finite clips), the window is clamped to the whole signal so a short clip still
+// yields a measurable loudness over the audio that exists.
 std::vector<double> block_energies(const std::vector<double>& samples, int sample_rate,
-                                   float duration_sec, float overlap) {
+                                   float duration_sec, float overlap,
+                                   bool allow_partial_window = false) {
   if (samples.empty()) return {};
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
-  const size_t clamped_block = std::min(block_size, samples.size());
+  const size_t window = allow_partial_window ? std::min(block_size, samples.size()) : block_size;
   // Ceiling is 0.99 (not 0.95) so the short-term 100 ms hop @ 3 s window
-  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives the clamp. A 0.95
-  // ceiling would round the hop up to 150 ms and break EBU R128 short-term/LRA.
+  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives. A 0.95 ceiling would
+  // round the hop up to 150 ms and break EBU R128 short-term/LRA.
   const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
-  const size_t hop = std::max<size_t>(
-      1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
+  const size_t hop =
+      std::max<size_t>(1, static_cast<size_t>(std::round(window * (1.0f - clamped_overlap))));
 
-  // Emit only complete blocks (ITU-R BS.1770-4): a trailing partial block would
-  // be averaged over its own short length, inflating its energy and contaminating
-  // the momentary/short-term/gating statistics.
+  // Emit only complete `window` blocks (ITU-R BS.1770-4): a trailing partial
+  // block would be averaged over its own short length, inflating its energy and
+  // contaminating the momentary/short-term/gating statistics.
   std::vector<double> energies;
-  for (size_t start = 0; start + clamped_block <= samples.size(); start += hop) {
-    energies.push_back(mean_square(samples.data(), start, clamped_block));
+  for (size_t start = 0; start + window <= samples.size(); start += hop) {
+    energies.push_back(mean_square(samples.data(), start, window));
   }
   return energies;
 }
@@ -159,30 +167,31 @@ std::vector<std::vector<double>> k_weighted_channels(const float* interleaved, s
   return weighted_channels;
 }
 
+// See block_energies for the `allow_partial_window` contract (metering#2).
 std::vector<double> block_energies_weighted_channels(
     const std::vector<std::vector<double>>& weighted_channels, size_t frames, int channels,
-    int sample_rate, float duration_sec, float overlap) {
+    int sample_rate, float duration_sec, float overlap, bool allow_partial_window = false) {
   if (weighted_channels.empty() || frames == 0) return {};
 
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
-  const size_t clamped_block = std::min(block_size, frames);
+  const size_t window = allow_partial_window ? std::min(block_size, frames) : block_size;
   // Ceiling is 0.99 (not 0.95) so the short-term 100 ms hop @ 3 s window
-  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives the clamp. A 0.95
-  // ceiling would round the hop up to 150 ms and break EBU R128 short-term/LRA.
+  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives. A 0.95 ceiling would
+  // round the hop up to 150 ms and break EBU R128 short-term/LRA.
   const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
-  const size_t hop = std::max<size_t>(
-      1, static_cast<size_t>(std::round(clamped_block * (1.0f - clamped_overlap))));
+  const size_t hop =
+      std::max<size_t>(1, static_cast<size_t>(std::round(window * (1.0f - clamped_overlap))));
 
-  // Emit only complete blocks (ITU-R BS.1770-4); a trailing partial block would
-  // inflate its mean-square energy and contaminate the gated loudness.
+  // Emit only complete `window` blocks (ITU-R BS.1770-4); a trailing partial
+  // block would inflate its mean-square energy and contaminate the gated
+  // loudness.
   std::vector<double> energies;
-  for (size_t start = 0; start + clamped_block <= frames; start += hop) {
+  for (size_t start = 0; start + window <= frames; start += hop) {
     double energy = 0.0;
     for (int channel = 0; channel < channels; ++channel) {
-      energy +=
-          bs1770_channel_weight(channel, channels) *
-          mean_square(weighted_channels[static_cast<size_t>(channel)].data(), start, clamped_block);
+      energy += bs1770_channel_weight(channel, channels) *
+                mean_square(weighted_channels[static_cast<size_t>(channel)].data(), start, window);
     }
     energies.push_back(energy);
   }
@@ -231,10 +240,21 @@ float last_or_silence(const std::vector<float>& values) {
   return values.empty() ? -std::numeric_limits<float>::infinity() : values.back();
 }
 
-size_t percentile_index(size_t count, double percentile) {
-  if (count == 0) return 0;
-  const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(count - 1);
-  return static_cast<size_t>(std::floor(position));
+// Interpolated percentile on an ascending-sorted vector: linear interpolation
+// between the bracketing ranks, matching dynamic_range.cpp's percentile_sorted
+// so the two windowed-distribution range metrics stay consistent. The previous
+// nearest-rank (floor) selection collapsed the 10th and 95th percentiles onto
+// the same sample for very small block counts -- e.g. exactly 2 gated blocks
+// gave low_index == high_index == 0 and thus LRA 0 LU even when the two
+// short-term values differed by many LU (metering#1).
+double percentile_sorted(const std::vector<float>& sorted, double percentile) {
+  if (sorted.empty()) return 0.0;
+  const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(sorted.size() - 1);
+  const size_t low = static_cast<size_t>(std::floor(position));
+  const size_t high = static_cast<size_t>(std::ceil(position));
+  if (low == high) return static_cast<double>(sorted[low]);
+  const double frac = position - static_cast<double>(low);
+  return static_cast<double>(sorted[low]) * (1.0 - frac) + static_cast<double>(sorted[high]) * frac;
 }
 
 float short_term_overlap_for(int sample_rate, float duration_sec) {
@@ -269,9 +289,12 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
   SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
 
   const auto weighted_channels = k_weighted_channels(samples, frames, channels, sample_rate);
-  const std::vector<double> integrated_blocks =
-      block_energies_weighted_channels(weighted_channels, frames, channels, sample_rate,
-                                       config.block_duration_sec, config.block_overlap);
+  // Integrated loudness is an offline whole-clip measurement: allow the gating
+  // window to shrink to the signal so a sub-400 ms clip still yields a value.
+  // Momentary/short-term below stay strict (no measurement until a full window).
+  const std::vector<double> integrated_blocks = block_energies_weighted_channels(
+      weighted_channels, frames, channels, sample_rate, config.block_duration_sec,
+      config.block_overlap, /*allow_partial_window=*/true);
   // ITU-R BS.1770-4 Annex 2: momentary uses a fixed 75% overlap (100 ms hop @ 400 ms),
   // independent of `config.block_overlap` (which controls integrated gating density).
   const std::vector<float> momentary = energies_to_lufs(
@@ -348,9 +371,9 @@ float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
   if (gated.size() < 2) return 0.0f;
 
   std::sort(gated.begin(), gated.end());
-  const size_t low_index = percentile_index(gated.size(), 0.10);
-  const size_t high_index = percentile_index(gated.size(), 0.95);
-  return gated[high_index] - gated[low_index];
+  const double low = percentile_sorted(gated, 0.10);
+  const double high = percentile_sorted(gated, 0.95);
+  return static_cast<float>(high - low);
 }
 
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) {
