@@ -28,6 +28,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
 
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
+  const bool stereo = right != left;
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
     const float in_r = right[i];
@@ -38,8 +39,14 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
     const float delayed_l = delays_[0].process(feed_l, delay_l);
     const float delayed_r = delays_[1].process(feed_r, delay_r);
     feedback_state_ = {delayed_l, delayed_r};
-    left[i] = dry * in_l + wet * delayed_l;
-    right[i] = dry * in_r + wet * delayed_r;
+    if (stereo) {
+      left[i] = dry * in_l + wet * delayed_l;
+      right[i] = dry * in_r + wet * delayed_r;
+    } else {
+      // Mono: collapse the two delay taps into the single output buffer so it
+      // is not written twice with different values.
+      left[i] = dry * in_l + wet * 0.5f * (delayed_l + delayed_r);
+    }
   }
 }
 

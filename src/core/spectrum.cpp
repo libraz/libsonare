@@ -369,8 +369,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
     }
   }
 
-  // Previous angles for momentum
-  std::vector<float> prev_angles(n_bins * n_frames, 0.0f);
+  // Previous complex STFT estimate for the momentum update (librosa's `tprev`).
+  std::vector<std::complex<float>> tprev(n_bins * n_frames, std::complex<float>(0.0f, 0.0f));
   const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   // Create spectrogram wrapper for iSTFT
@@ -395,19 +395,22 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
         int idx = f * n_frames + t;
         float target_mag = magnitude[idx];
 
-        std::complex<float> new_val = new_spec.at(f, t);
-        float new_angle = std::arg(new_val);
+        std::complex<float> rebuilt = new_spec.at(f, t);
 
-        // Apply momentum using the common phase-vocoder convention:
-        //   rebuilt = (1 + momentum) * new_angles - momentum * prev_angles
-        // High momentum extrapolates the phase update, accelerating convergence.
-        float updated_angle = new_angle;
-        if (iter > 0 && config.momentum > 0.0f) {
-          updated_angle = (1.0f + config.momentum) * new_angle - config.momentum * prev_angles[idx];
+        // librosa's fast Griffin-Lim momentum, operating in the complex plane:
+        //   angles  = rebuilt - (momentum / (1 + momentum)) * tprev
+        //   angles /= |angles| + eps
+        //   estimate = target_mag * angles
+        // This preserves magnitude weighting and avoids the 2*pi phase-wrap
+        // discontinuities of scalar-angle extrapolation.
+        std::complex<float> angles = rebuilt;
+        if (config.momentum > 0.0f) {
+          angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
         }
+        const float norm = std::abs(angles) + 1e-16f;
 
-        prev_angles[idx] = new_angle;  // Store un-extrapolated angle for next iteration
-        spectrum[idx] = std::polar(target_mag, updated_angle);
+        tprev[idx] = rebuilt;  // Store the full complex estimate for next iter.
+        spectrum[idx] = (target_mag / norm) * angles;
       }
     }
   }

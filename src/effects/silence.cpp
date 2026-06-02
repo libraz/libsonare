@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -48,7 +49,7 @@ std::vector<bool> non_silent_frames(const std::vector<float>& rms, float top_db)
   float peak = 0.0f;
   for (float r : rms) peak = std::max(peak, r);
   if (peak <= 0.0f) return mask;
-  const float thr = peak * std::pow(10.0f, -top_db / 20.0f);
+  const float thr = peak * db_to_linear(-top_db);
   for (std::size_t i = 0; i < rms.size(); ++i) {
     mask[i] = rms[i] > thr;
   }

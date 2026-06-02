@@ -94,6 +94,10 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
 
   // Build the click waveform: 2**(0 .. -10) * sin(2*pi*f*n/sr)
   const int click_n = static_cast<int>(static_cast<float>(sr) * click_duration);
+  if (click_n <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "clicks: click_duration too short for sr (rounds to 0 samples)");
+  }
   std::vector<float> click(click_n);
   const double w = kTwoPiD * static_cast<double>(frequency) / static_cast<double>(sr);
   // logspace(0, -10, num=click_n, base=2)

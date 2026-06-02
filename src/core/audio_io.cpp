@@ -316,13 +316,19 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
     drwav_uninit(&wav);
     SONARE_CHECK_MSG(written == n_samples, ErrorCode::DecodeFailed, "Failed to write all samples");
   } else {
-    // 24-bit: convert float to int32 (upper 24 bits)
-    std::vector<int32_t> int_samples(n_samples);
+    // 24-bit: pack as tightly packed 3-byte little-endian samples. dr_wav's
+    // writer is a raw byte copy (bytesToWrite = frames * channels * 24 / 8) with
+    // no width/stride conversion, so a 4-byte int32 buffer would be read
+    // misaligned. Build the exact 3-byte-per-sample byte stream it expects.
+    std::vector<uint8_t> bytes(n_samples * 3);
     for (size_t i = 0; i < n_samples; ++i) {
       float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
-      int_samples[i] = static_cast<int32_t>(clamped * 8388607.0f);  // 2^23 - 1
+      int32_t v = static_cast<int32_t>(clamped * 8388607.0f);  // 2^23 - 1
+      bytes[i * 3 + 0] = static_cast<uint8_t>(v & 0xFF);
+      bytes[i * 3 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+      bytes[i * 3 + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
     }
-    drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, int_samples.data());
+    drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, bytes.data());
     drwav_uninit(&wav);
     SONARE_CHECK_MSG(written == n_samples, ErrorCode::DecodeFailed, "Failed to write all samples");
   }

@@ -72,8 +72,11 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
       float y = b * s + d[k];
       d[k] = (1.0f - b) * y;
       float smooth = std::pow(y + config.eps, -config.gain);
-      float compressed =
-          std::pow(s * smooth + config.bias, config.power) - std::pow(config.bias, config.power);
+      // librosa special-cases power==0 as logarithmic compression
+      // (S_out = log1p(S * smooth)); the power law would yield 1 - 1 = 0.
+      float compressed = config.power == 0.0f ? std::log1p(s * smooth)
+                                              : std::pow(s * smooth + config.bias, config.power) -
+                                                    std::pow(config.bias, config.power);
       out[k * n_frames + t] = compressed;
     }
   }

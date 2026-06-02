@@ -10,6 +10,7 @@
 #include <stdexcept>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -125,18 +126,36 @@ float note_to_hz(const std::string& note) {
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {
+  if (sr <= 0 || hop_length <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "frames_to_time: sr and hop_length must be positive");
+  }
   return static_cast<float>(frames) * static_cast<float>(hop_length) / static_cast<float>(sr);
 }
 
 int time_to_frames(float time, int sr, int hop_length) {
+  if (sr <= 0 || hop_length <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "time_to_frames: sr and hop_length must be positive");
+  }
   // Use floor for deterministic frame conversion.
   return static_cast<int>(
       std::floor(time * static_cast<float>(sr) / static_cast<float>(hop_length)));
 }
 
-float samples_to_time(int samples, int sr) { return static_cast<float>(samples) / sr; }
+float samples_to_time(int samples, int sr) {
+  if (sr <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "samples_to_time: sr must be positive");
+  }
+  return static_cast<float>(samples) / sr;
+}
 
-int time_to_samples(float time, int sr) { return static_cast<int>(time * sr); }
+int time_to_samples(float time, int sr) {
+  if (sr <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "time_to_samples: sr must be positive");
+  }
+  return static_cast<int>(time * sr);
+}
 
 int frames_to_samples(int frames, int hop_length, int n_fft) {
   const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
@@ -177,6 +196,11 @@ float bin_to_hz(int bin, int sr, int n_fft) {
                             static_cast<double>(n_fft));
 }
 
-int hz_to_bin(float hz, int sr, int n_fft) { return static_cast<int>(std::round(hz * n_fft / sr)); }
+int hz_to_bin(float hz, int sr, int n_fft) {
+  if (sr <= 0 || n_fft <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "hz_to_bin: sr and n_fft must be positive");
+  }
+  return static_cast<int>(std::round(hz * n_fft / sr));
+}
 
 }  // namespace sonare
