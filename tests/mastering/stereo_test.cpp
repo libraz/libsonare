@@ -207,6 +207,31 @@ TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") 
   REQUIRE(rms_tail(side_signal(left, right), 4096) < 0.000001f);
 }
 
+TEST_CASE("Imager preserves energy when narrowing", "[mastering][stereo]") {
+  // preserve_energy used to gate on width > 1 only, so narrowing (width < 1)
+  // shrank the side and dropped total energy uncompensated. It must now hold
+  // total energy roughly constant for any width != 1.
+  auto mid = sine(1000.0f, 48000, 48000, 0.25f);
+  auto side = sine(1500.0f, 48000, 48000, 0.15f);
+  auto left = mid;
+  auto right = mid;
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] += side[i];
+    right[i] -= side[i];
+  }
+  const float side_before = rms_tail(side_signal(left, right), 4096);
+  const float energy_before = stereo_rms_tail(left, right, 4096);
+
+  Imager narrow({0.5f, 0.0f, 0.0f, true});  // width < 1, preserve_energy = true
+  narrow.prepare(48000.0, 1024);
+  process_stereo(narrow, left, right);
+
+  // The side genuinely narrowed, yet total energy is preserved.
+  REQUIRE(rms_tail(side_signal(left, right), 4096) < side_before);
+  REQUIRE(stereo_rms_tail(left, right, 4096) > energy_before * 0.97f);
+  REQUIRE(stereo_rms_tail(left, right, 4096) < energy_before * 1.03f);
+}
+
 TEST_CASE("Imager decorrelates widened side signal", "[mastering][stereo]") {
   auto left = sine(1000.0f, 48000, 48000, 0.25f);
   auto right = sine(1000.0f, 48000, 48000, -0.25f);

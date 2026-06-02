@@ -1885,6 +1885,38 @@ TEST_CASE("MidSideEq requires stereo input", "[mastering][eq]") {
   REQUIRE_THROWS(eq.process(channels, 1, static_cast<int>(mono.size())));
 }
 
+TEST_CASE("MidSideEq processes blocks wider than prepared without reallocating",
+          "[mastering][eq]") {
+  // Prepared with a positive max block, a wider one-shot block is chunked
+  // internally (no audio-thread reallocation) and yields the same result as
+  // processing it in prepared-size pieces.
+  auto make = []() {
+    auto l = sine(1000.0f, 48000, 1024, 0.3f);
+    auto r = sine(1500.0f, 48000, 1024, 0.2f);
+    return std::pair{l, r};
+  };
+
+  MidSideEq whole;
+  whole.prepare(48000.0, 256);
+  whole.set_mid_band(0, {EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true});
+  auto [wl, wr] = make();
+  float* wc[] = {wl.data(), wr.data()};
+  REQUIRE_NOTHROW(whole.process(wc, 2, 1024));  // 1024 > prepared 256 -> chunked
+
+  MidSideEq piecewise;
+  piecewise.prepare(48000.0, 256);
+  piecewise.set_mid_band(0, {EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true});
+  auto [pl, pr] = make();
+  for (int start = 0; start < 1024; start += 256) {
+    float* pc[] = {pl.data() + start, pr.data() + start};
+    piecewise.process(pc, 2, 256);
+  }
+  for (int i = 0; i < 1024; ++i) {
+    REQUIRE_THAT(wl[static_cast<size_t>(i)], WithinAbs(pl[static_cast<size_t>(i)], 1e-5f));
+    REQUIRE_THAT(wr[static_cast<size_t>(i)], WithinAbs(pr[static_cast<size_t>(i)], 1e-5f));
+  }
+}
+
 TEST_CASE("GraphicEq exposes 31 bands and nearest band lookup", "[mastering][eq]") {
   GraphicEq eq;
   eq.prepare(48000.0, 512);

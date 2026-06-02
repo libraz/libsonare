@@ -135,7 +135,10 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         gain_state = smoothing * gain_state + (1.0f - smoothing) * ride_db;
         const float gain_db = gain_state + cfg.output_gain_db;
         channels[ch][i] *= db_to_linear(gain_db);
-        if (std::abs(ride_db) > std::abs(largest_abs_gain)) largest_abs_gain = ride_db;
+        // Report the smoothed gain state (as the linked branch does), not the
+        // pre-smoothing ride target, so last_gain_db_ means the same thing in
+        // both detection modes.
+        if (std::abs(gain_state) > std::abs(largest_abs_gain)) largest_abs_gain = gain_state;
       }
     }
   }

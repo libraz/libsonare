@@ -35,8 +35,10 @@ void DuckingProcessor::set_key_input(const float* const* channels, int num_chann
 void DuckingProcessor::clear_key_input() { router_.clear_sidechain(); }
 
 void DuckingProcessor::set_config(const DuckingConfig& config) {
+  // Apply to the router first: if to_router_config / set_config rejects the
+  // values, config_ is left untouched rather than diverging from the router.
+  router_.set_config(to_router_config(config));
   config_ = config;
-  router_.set_config(to_router_config(config_));
 }
 
 bool DuckingProcessor::set_parameter(unsigned int param_id, float value) {

@@ -49,6 +49,11 @@ class MidSideEq : public rt::ProcessorBase {
   ParametricEq side_eq_;
   std::vector<float> mid_buffer_;
   std::vector<float> side_buffer_;
+  // Block size the RT scratch buffers were sized for in prepare(). When > 0,
+  // process() chunks wider blocks to this size instead of reallocating on the
+  // audio thread; 0 means "unbounded/offline" (ensure_buffers may grow off the
+  // RT path on the first call).
+  int max_block_size_ = 0;
 };
 
 }  // namespace sonare::mastering::eq

@@ -406,101 +406,93 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
     mark_enabled(flags.multiband_comp, v);
     return true;
   }
-  if (key == "dynamics.multibandComp.lowCutoffHz") {
-    if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 1) {
-      cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[0] = vf;
+  // Per-band/per-cutoff writes used to silently no-op (while still returning
+  // true) when the indexed band/cutoff did not exist on a shrunk config, so a
+  // caller's value was dropped without any error. Route them through helpers
+  // that throw InvalidParameter for an out-of-range index instead.
+  auto band_at = [&](size_t index) -> auto& {
+    auto& bands = cfg.dynamics.multiband_comp.config.bands;
+    if (index >= bands.size()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "multiband band index out of range: " + key);
     }
+    return bands[index];
+  };
+  auto cutoff_at = [&](size_t index) -> auto& {
+    auto& cutoffs = cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz;
+    if (index >= cutoffs.size()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "multiband cutoff index out of range: " + key);
+    }
+    return cutoffs[index];
+  };
+  if (key == "dynamics.multibandComp.lowCutoffHz") {
+    cutoff_at(0) = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.highCutoffHz") {
-    if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2) {
-      cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[1] = vf;
-    }
+    cutoff_at(1) = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.lowThresholdDb") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
-      cfg.dynamics.multiband_comp.config.bands[0].threshold_db = vf;
-    }
+    band_at(0).threshold_db = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.lowRatio") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
-      cfg.dynamics.multiband_comp.config.bands[0].ratio = vf;
-    }
+    band_at(0).ratio = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.lowAttackMs") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
-      cfg.dynamics.multiband_comp.config.bands[0].attack_ms = vf;
-    }
+    band_at(0).attack_ms = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.lowReleaseMs") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
-      cfg.dynamics.multiband_comp.config.bands[0].release_ms = vf;
-    }
+    band_at(0).release_ms = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.midThresholdDb") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
-      cfg.dynamics.multiband_comp.config.bands[1].threshold_db = vf;
-    }
+    band_at(1).threshold_db = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.midRatio") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
-      cfg.dynamics.multiband_comp.config.bands[1].ratio = vf;
-    }
+    band_at(1).ratio = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.midAttackMs") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
-      cfg.dynamics.multiband_comp.config.bands[1].attack_ms = vf;
-    }
+    band_at(1).attack_ms = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.midReleaseMs") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
-      cfg.dynamics.multiband_comp.config.bands[1].release_ms = vf;
-    }
+    band_at(1).release_ms = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.highThresholdDb") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
-      cfg.dynamics.multiband_comp.config.bands[2].threshold_db = vf;
-    }
+    band_at(2).threshold_db = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.highRatio") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
-      cfg.dynamics.multiband_comp.config.bands[2].ratio = vf;
-    }
+    band_at(2).ratio = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.highAttackMs") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
-      cfg.dynamics.multiband_comp.config.bands[2].attack_ms = vf;
-    }
+    band_at(2).attack_ms = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
   if (key == "dynamics.multibandComp.highReleaseMs") {
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
-      cfg.dynamics.multiband_comp.config.bands[2].release_ms = vf;
-    }
+    band_at(2).release_ms = vf;
     mark_field(flags.multiband_comp);
     return true;
   }
@@ -720,11 +712,16 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
   if (flags.multiband_comp.any_key_seen) {
     cfg.dynamics.multiband_comp.enabled = resolve_enabled(flags.multiband_comp);
   }
-  if (flags.tape.any_key_seen) {
+  // Color stages (tape/exciter): in the OVERRIDES path we only honor an
+  // explicit `enabled`. Recomputing from any_key_seen && meaningful here would
+  // let a single param override silently disable a stage the preset enabled
+  // (the meaningful predicate can be false even though the preset opted in).
+  // The parse-from-scratch path keeps the auto-engage behavior.
+  if (flags.tape.enabled_explicit) {
     cfg.saturation.tape.enabled = resolve_color_enabled(
         flags.tape, saturation::tape_engages_color(cfg.saturation.tape.config));
   }
-  if (flags.exciter.any_key_seen) {
+  if (flags.exciter.enabled_explicit) {
     cfg.saturation.exciter.enabled = resolve_color_enabled(
         flags.exciter, saturation::exciter_engages_color(cfg.saturation.exciter.config));
   }

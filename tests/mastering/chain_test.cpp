@@ -62,6 +62,35 @@ TEST_CASE("parse_chain_config_params honors explicit enabled=false", "[mastering
   REQUIRE_FALSE(config.dynamics.compressor.enabled);
 }
 
+TEST_CASE("multiband override rejects an out-of-range band index", "[mastering][chain]") {
+  // On a config shrunk below the indexed band, a per-band override used to be
+  // silently dropped while still reporting success; it must now throw.
+  MasteringChainConfig cfg;
+  cfg.dynamics.multiband_comp.config.bands.resize(2);  // no band index 2
+  Param high[] = {{"dynamics.multibandComp.highRatio", 4.0}};
+  REQUIRE_THROWS_AS(apply_chain_config_overrides(cfg, high, 1), sonare::SonareException);
+  // An in-range band still applies without throwing.
+  Param low[] = {{"dynamics.multibandComp.lowRatio", 3.0}};
+  REQUIRE_NOTHROW(apply_chain_config_overrides(cfg, low, 1));
+  REQUIRE_THAT(cfg.dynamics.multiband_comp.config.bands[0].ratio, WithinAbs(3.0f, 1e-6f));
+}
+
+TEST_CASE("color-stage override does not silently disable a preset stage", "[mastering][chain]") {
+  // A preset with tape enabled, then an override of a tape param without an
+  // explicit `enabled`, must leave tape enabled (it previously recomputed
+  // enabled from any_key_seen && meaningful and could turn it off).
+  MasteringChainConfig cfg;
+  cfg.saturation.tape.enabled = true;
+  Param override_params[] = {{"saturation.tape.driveDb", 1.0}};
+  apply_chain_config_overrides(cfg, override_params, 1);
+  REQUIRE(cfg.saturation.tape.enabled);
+
+  // An explicit enabled=false still wins.
+  Param disable[] = {{"saturation.tape.enabled", 0.0}};
+  apply_chain_config_overrides(cfg, disable, 1);
+  REQUIRE_FALSE(cfg.saturation.tape.enabled);
+}
+
 TEST_CASE("MasteringChain processes stereo audio with stereo stage", "[mastering][chain]") {
   std::vector<float> left(22050, 0.1f);
   std::vector<float> right(22050, -0.1f);

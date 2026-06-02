@@ -70,6 +70,12 @@ struct EqBand {
   EqBandType type = EqBandType::Peak;
   float frequency_hz = 1000.0f;
   float gain_db = 0.0f;
+  // Resonance / slope. NOTE: for LowShelf/HighShelf bands with
+  // coeff_mode == Vicanek, q is IGNORED — the Vicanek matched-Z shelf design
+  // has no Q/S parameter and uses a fixed shelf slope. q is still stored and
+  // reported back verbatim, so a reflected q on a Vicanek shelf does not
+  // describe the applied response. Use coeff_mode == Rbj for Q-controllable
+  // shelves. (Peak/pass/notch bands honor q in both modes.)
   float q = sonare::constants::kButterworthQ;
   bool enabled = false;
   BiquadCoeffMode coeff_mode = BiquadCoeffMode::Rbj;

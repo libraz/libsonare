@@ -75,7 +75,10 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
       const float mix = config_.decorrelation_amount * extra_width;
       ms.side = (1.0f - mix) * ms.side + mix * decorated_side * config_.width;
     }
-    if (config_.preserve_energy && config_.width > 1.0f) {
+    // Preserve energy for any width change, not just widening: narrowing
+    // (width < 1) also alters the mid/side energy and should be compensated.
+    // (Matches MultibandImager and the documented intent.)
+    if (config_.preserve_energy && config_.width != 1.0f) {
       const float widened_energy = ms.mid * ms.mid + ms.side * ms.side;
       if (widened_energy > 0.0f && original_energy > 0.0f) {
         const float scale = std::sqrt(original_energy / widened_energy);

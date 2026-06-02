@@ -217,6 +217,9 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
       case EqBandType::Notch:
         return from_common(sonare::rt::vicanek_notch(w0f, qf));
       case EqBandType::LowShelf:
+        // Vicanek matched-Z shelves have a fixed slope and no Q/S parameter, so
+        // band.q is intentionally not passed here (it is honored only by the RBJ
+        // shelves below). See EqBand::q for the reflected-value caveat.
         return from_common(sonare::rt::vicanek_low_shelf(w0f, band.gain_db));
       case EqBandType::HighShelf:
         return from_common(sonare::rt::vicanek_high_shelf(w0f, band.gain_db));
