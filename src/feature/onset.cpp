@@ -188,7 +188,7 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 
   if (n_frames > lag) {
     int diff_frames = n_frames - lag;
-    // Sum of |mag[:, f+lag] - mag[:, f]| over bins (auto-vectorized — TIE with Eigen per §10.2.2).
+    // Sum of |mag[:, f+lag] - mag[:, f]| over bins (auto-vectorized, on par with Eigen).
     // magnitude is row-major [n_bins x n_frames].
     for (int f = 0; f < diff_frames; ++f) {
       float sum = 0.0f;

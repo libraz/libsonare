@@ -5,9 +5,8 @@
 /// repair.denoise, eq.tilt, dynamics.deesser, dynamics.transientShaper,
 /// dynamics.compressor, dynamics.multibandComp, saturation.tape,
 /// saturation.exciter, spectral.airBand, stereo.imager, stereo.monoMaker,
-/// maximizer.truePeakLimiter, loudness). Numbers are an initial pass derived
-/// from backup/mastering-demo-plan.md §6.1-6.6; they will be tuned in a
-/// follow-up phase.
+/// maximizer.truePeakLimiter, loudness). The numbers below are conservative
+/// starting points intended to be refined per program material.
 
 #include "mastering/api/presets.h"
 

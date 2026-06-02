@@ -427,7 +427,7 @@ void StreamAnalyzer::compute_stft(const float* frame_start) {
 
 void StreamAnalyzer::compute_mel() {
   /// Apply mel filterbank GEMV: mel = filterbank @ power
-  /// Eigen GEMV is ~10x faster than scalar at M=128, N=1025 (see Phase 0 §10.2.4)
+  /// Eigen GEMV is ~10x faster than scalar at M=128, N=1025.
   const int n_mels = config_.n_mels;
   const int n_bins = config_.n_bins();
 

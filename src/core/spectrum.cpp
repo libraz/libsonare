@@ -222,7 +222,7 @@ const std::vector<float>& Spectrogram::power() const {
         power_cache_[i] = m * m;
       }
     } else {
-      // re² + im² without sqrt (auto-vectorized by compiler — TIE with Eigen per §10.2.2)
+      // re² + im² without sqrt (auto-vectorized by the compiler, on par with Eigen).
       for (size_t i = 0; i < data_.size(); ++i) {
         const float re = data_[i].real();
         const float im = data_[i].imag();
