@@ -87,6 +87,16 @@ TEST_CASE("bin_to_hz does not overflow at high sample rates", "[convert]") {
   }
 }
 
+TEST_CASE("frames_to_samples saturates instead of overflowing int", "[convert]") {
+  // frames * hop_length is computed in 64-bit and clamped to int, so a huge
+  // frame index (long files) cannot wrap to a negative sample position (UB).
+  const int huge = std::numeric_limits<int>::max();
+  REQUIRE(frames_to_samples(huge, 512, 2048) == std::numeric_limits<int>::max());
+  // Normal values are unaffected.
+  REQUIRE(frames_to_samples(10, 512, 0) == 5120);
+  REQUIRE(frames_to_samples(10, 512, 2048) == 5120 + 1024);
+}
+
 TEST_CASE("hz_to_note / note_to_hz", "[convert]") {
   REQUIRE(hz_to_note(440.0f) == "A4");
   REQUIRE(hz_to_note(261.63f) == "C4");

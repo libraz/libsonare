@@ -11,7 +11,10 @@ namespace {
 float derive_b(float time_constant, int sr, int hop_length) {
   // librosa: T = time_constant * sr / hop_length, b = (sqrt(1 + 4 T^2) - 1) / (2 T^2)
   if (time_constant <= 0.0f || sr <= 0 || hop_length <= 0) {
-    return 0.025f;  // Fallback close to librosa's default at sr=22050.
+    // Signal the bad parameters rather than substituting a magic coefficient
+    // that happens to pass the (0,1] range check and silently mis-normalizes.
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "pcen: time_constant, sr, and hop_length must be positive");
   }
   double T = static_cast<double>(time_constant) * static_cast<double>(sr) /
              static_cast<double>(hop_length);

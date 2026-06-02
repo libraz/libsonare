@@ -8,6 +8,23 @@
 namespace sonare::transport {
 namespace {
 
+// Shared "find the last element whose key <= x" binary search used by all three
+// segment lookups below, so the boundary semantics live in one place.
+template <class Vec, class KeyFn>
+size_t last_index_at_or_before(const Vec& v, double x, KeyFn key) noexcept {
+  size_t lo = 0;
+  size_t hi = v.size();
+  while (lo + 1 < hi) {
+    const size_t mid = lo + (hi - lo) / 2;
+    if (key(v[mid]) <= x) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
 constexpr double kMinBpm = 1.0e-6;
 // A ramp is treated as constant when the BPM change is below this, both to fall
 // through to the exact legacy constant-tempo math and to avoid catastrophic
@@ -244,47 +261,19 @@ double TempoMap::bar_start_ppq_in(const std::vector<TimeSignatureSegment>& time_
 
 size_t TempoMap::segment_index_for_sample(const std::vector<TempoSegment>& segments,
                                           double sample) noexcept {
-  size_t lo = 0;
-  size_t hi = segments.size();
-  while (lo + 1 < hi) {
-    const size_t mid = lo + (hi - lo) / 2;
-    if (segments[mid].start_sample <= sample) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
+  return last_index_at_or_before(segments, sample,
+                                 [](const TempoSegment& s) { return s.start_sample; });
 }
 
 size_t TempoMap::segment_index_for_ppq(const std::vector<TempoSegment>& segments,
                                        double ppq) noexcept {
-  size_t lo = 0;
-  size_t hi = segments.size();
-  while (lo + 1 < hi) {
-    const size_t mid = lo + (hi - lo) / 2;
-    if (segments[mid].start_ppq <= ppq) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
+  return last_index_at_or_before(segments, ppq, [](const TempoSegment& s) { return s.start_ppq; });
 }
 
 size_t TempoMap::time_signature_index_for_ppq(
     const std::vector<TimeSignatureSegment>& time_signatures, double ppq) noexcept {
-  size_t lo = 0;
-  size_t hi = time_signatures.size();
-  while (lo + 1 < hi) {
-    const size_t mid = lo + (hi - lo) / 2;
-    if (time_signatures[mid].start_ppq <= ppq) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
+  return last_index_at_or_before(time_signatures, ppq,
+                                 [](const TimeSignatureSegment& s) { return s.start_ppq; });
 }
 
 }  // namespace sonare::transport

@@ -157,16 +157,28 @@ int time_to_samples(float time, int sr) {
   return static_cast<int>(time * sr);
 }
 
+namespace {
+// Compute frames*hop + offset in 64-bit and saturate into the int return type,
+// so large frame indices (long files) cannot overflow int (UB). Mirrors the
+// double-precision promotion already used by bin_to_hz.
+int frame_index_to_sample(int frame, int hop_length, int offset) noexcept {
+  const int64_t value =
+      static_cast<int64_t>(frame) * static_cast<int64_t>(hop_length) + static_cast<int64_t>(offset);
+  return static_cast<int>(
+      std::clamp<int64_t>(value, std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
+}
+}  // namespace
+
 int frames_to_samples(int frames, int hop_length, int n_fft) {
   const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
-  return frames * hop_length + offset;
+  return frame_index_to_sample(frames, hop_length, offset);
 }
 
 std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_length, int n_fft) {
   const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
   std::vector<int> out;
   out.reserve(frames.size());
-  for (int f : frames) out.push_back(f * hop_length + offset);
+  for (int f : frames) out.push_back(frame_index_to_sample(f, hop_length, offset));
   return out;
 }
 
