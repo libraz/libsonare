@@ -20,6 +20,13 @@ typedef enum {
 } SonarePanMode;
 
 typedef enum {
+  SONARE_PAN_LAW_CONST_3DB = 0,
+  SONARE_PAN_LAW_CONST_4P5DB = 1,
+  SONARE_PAN_LAW_CONST_6DB = 2,
+  SONARE_PAN_LAW_LINEAR_0DB = 3
+} SonarePanLaw;
+
+typedef enum {
   SONARE_SEND_TIMING_PRE_FADER = 0,
   SONARE_SEND_TIMING_POST_FADER = 1
 } SonareSendTiming;

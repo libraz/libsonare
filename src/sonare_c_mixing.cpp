@@ -602,7 +602,9 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode) {
   // the time we mirror it into the scene strip the value is already validated.
   strip->strip.set_pan_mode(to_pan_mode(pan_mode));
   strip->strip.set_pan(pan);
-  strip->scene_strip.pan = pan;
+  // Clamp the cached scene pan to the processor's valid range so save/reload is
+  // faithful, matching set_dual_pan (which already clamps) and the live panner.
+  strip->scene_strip.pan = std::clamp(pan, -1.0f, 1.0f);
   strip->scene_strip.pan_mode = pan_mode;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -615,7 +617,10 @@ SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float 
   SONARE_C_TRY
   strip->strip.set_pan_mode(sonare::mixing::PanMode::DualPan);
   strip->strip.set_dual_pan(left_pan, right_pan);
-  strip->scene_strip.pan = 0.5f * (left_pan + right_pan);
+  // Cache the nominal pan from the clamped L/R so the scene round-trips the same
+  // value sonare_mixer_to_scene_json will export for a DualPan strip.
+  strip->scene_strip.pan =
+      0.5f * (std::clamp(left_pan, -1.0f, 1.0f) + std::clamp(right_pan, -1.0f, 1.0f));
   strip->scene_strip.pan_mode = SONARE_PAN_MODE_DUAL_PAN;
   strip->scene_strip.dual_pan_left = std::clamp(left_pan, -1.0f, 1.0f);
   strip->scene_strip.dual_pan_right = std::clamp(right_pan, -1.0f, 1.0f);
@@ -1213,12 +1218,18 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
     scene_strip.id = strip->id;
     scene_strip.input_trim_db = strip->strip.input_trim_db();
     scene_strip.fader_db = strip->strip.fader_db();
-    scene_strip.pan = strip->strip.pan();
+    scene_strip.pan_mode = from_pan_mode(strip->strip.pan_mode());
+    // For a DualPan strip the live ChannelStrip pan_ is never updated by
+    // set_dual_pan (it drives the L/R pair directly), so reading strip.pan()
+    // would export the stale default and disagree with the cached nominal pan
+    // that set_dual_pan computed from the clamped L/R. Keep the cached value for
+    // DualPan; otherwise mirror the live processor pan.
+    scene_strip.pan = scene_strip.pan_mode == SONARE_PAN_MODE_DUAL_PAN ? strip->scene_strip.pan
+                                                                       : strip->strip.pan();
     scene_strip.width = strip->strip.width();
     scene_strip.muted = strip->strip.muted();
     scene_strip.soloed = strip->strip.soloed();
     scene_strip.solo_safe = strip->strip.solo_safe();
-    scene_strip.pan_mode = from_pan_mode(strip->strip.pan_mode());
     scene_strip.pan_law = from_pan_law(strip->strip.pan_law());
     // ChannelStrip exposes no dual-pan getters; reuse the cached scene values.
     scene_strip.dual_pan_left = strip->scene_strip.dual_pan_left;

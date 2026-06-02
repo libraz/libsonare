@@ -13,6 +13,17 @@ namespace sonare::mixing {
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
+namespace {
+// Finite cap for the side/mid width ratio. When the mid (mono) signal collapses
+// to near-zero while side energy remains (e.g. a fully anti-phase L = -R pair),
+// the raw sqrt(side/mid) ratio diverges to +Inf. A +Inf would propagate
+// verbatim into the meter snapshot and through the C ABI into JSON/host
+// telemetry, where it is non-serializable and breaks downstream consumers.
+// Clamp to a large but finite sentinel that still unambiguously signals
+// "extreme width / mono incompatible".
+constexpr float kMaxMonoCompatWidth = 1.0e6f;
+}  // namespace
+
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
   const size_t c = static_cast<size_t>(channel);
   // Pre-filter (high shelf) then RLB high-pass, both Direct Form II transposed
@@ -200,9 +211,8 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     if (mid_energy > static_cast<double>(kEpsilon)) {
       next.mono_compat_width = static_cast<float>(std::sqrt(side_energy / mid_energy));
     } else {
-      next.mono_compat_width = side_energy > static_cast<double>(kEpsilon)
-                                   ? std::numeric_limits<float>::infinity()
-                                   : 0.0f;
+      next.mono_compat_width =
+          side_energy > static_cast<double>(kEpsilon) ? kMaxMonoCompatWidth : 0.0f;
     }
     next.likely_mono_compatible = next.correlation >= config_.mono_compat_correlation_threshold;
   }

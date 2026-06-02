@@ -163,6 +163,32 @@ class AddProcessor final : public sonare::rt::ProcessorBase {
   float offset_ = 0.0f;
 };
 
+// Reports a gain reduction proportional to the loudest sample seen in the most
+// recent process() call (GR = -10 * max|sample|). Used to verify the segmented
+// process path aggregates the block-representative (most-negative) GR across
+// segments rather than only reflecting the final segment's value.
+class PeakGainReductionProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    float peak = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) {
+        continue;
+      }
+      for (int i = 0; i < num_samples; ++i) {
+        peak = std::max(peak, std::abs(channels[ch][i]));
+      }
+    }
+    last_gr_db_ = -10.0f * peak;
+  }
+  void reset() override { last_gr_db_ = 0.0f; }
+  float last_gain_reduction_db() const override { return last_gr_db_; }
+
+ private:
+  float last_gr_db_ = 0.0f;
+};
+
 TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
   for (float pan : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
     const auto gains = sonare::mixing::compute_pan_gains(pan, sonare::mixing::PanLaw::Const3dB);
@@ -303,7 +329,11 @@ TEST_CASE("Meter snapshot exposes mono compatibility fields", "[mixing]") {
   snapshot = meter.snapshot();
 
   REQUIRE_THAT(snapshot.correlation, WithinAbs(-1.0f, 0.0001f));
+  // Anti-phase (mid -> 0, side present) drives the raw width ratio to +Inf; the
+  // meter must clamp it to a large but FINITE sentinel so it stays serializable
+  // through the C ABI / JSON telemetry rather than emitting +Inf.
   REQUIRE(snapshot.mono_compat_width > 1000.0f);
+  REQUIRE(std::isfinite(snapshot.mono_compat_width));
   REQUIRE_THAT(snapshot.mono_compat_peak, WithinAbs(0.0f, 0.0001f));
   REQUIRE_FALSE(snapshot.likely_mono_compatible);
 }
@@ -415,6 +445,10 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   REQUIRE(scene_json.find("\"panMode\":2") != std::string::npos);
   REQUIRE(scene_json.find("\"dualPanLeft\":1") != std::string::npos);
   REQUIRE(scene_json.find("\"dualPanRight\":-0.5") != std::string::npos);
+  // The exported nominal pan must reflect the computed 0.5*(L+R) = 0.25 that
+  // set_dual_pan cached, not the live ChannelStrip pan_ (which set_dual_pan
+  // never updates and would export as the stale default 0).
+  REQUIRE(scene_json.find("\"pan\":0.25") != std::string::npos);
   sonare_free_string(json);
   sonare_mixer_destroy(mixer);
 
@@ -427,6 +461,7 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   REQUIRE(restored_scene_json.find("\"panMode\":2") != std::string::npos);
   REQUIRE(restored_scene_json.find("\"dualPanLeft\":1") != std::string::npos);
   REQUIRE(restored_scene_json.find("\"dualPanRight\":-0.5") != std::string::npos);
+  REQUIRE(restored_scene_json.find("\"pan\":0.25") != std::string::npos);
   sonare_free_string(restored_json);
   sonare_mixer_destroy(restored);
 }
@@ -1079,6 +1114,29 @@ TEST_CASE("ChannelStrip applies fader automation at block sample offsets", "[mix
   }
   REQUIRE_THAT(strip.fader_db(), WithinAbs(-6.0206f, 0.0001f));
   REQUIRE(strip.meter_snapshot().seq == 1);
+}
+
+TEST_CASE("ChannelStrip segmented path reports block-max gain reduction", "[mixing]") {
+  // With sample-accurate automation, process_at() splits the block into
+  // segments. The pre-insert's last_gain_reduction_db() reflects only the most
+  // recently processed segment, so the reported aggregate must track the
+  // block-representative (most-negative) GR across all segments, not just the
+  // final one. Here the loud leading segment (GR -10 dB) precedes a quiet
+  // trailing segment (GR -1 dB); the snapshot must report -10 dB.
+  std::array<float, 6> left{1.0f, 1.0f, 0.1f, 0.1f, 0.1f, 0.1f};
+  std::array<float, 6> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<PeakGainReductionProcessor>());
+  strip.prepare(48000.0, 6);
+  // A width automation event at offset 2 forces a segment boundary there.
+  REQUIRE(strip.schedule_width_automation(102, 1.0f));
+  strip.process_at(channels, 2, 6, 100);
+
+  // First segment peak 1.0 -> GR -10 dB; final segment peak 0.1 -> GR -1 dB.
+  // The reported GR must be the block max (-10), not the last segment (-1).
+  REQUIRE_THAT(strip.meter_snapshot().gain_reduction_db, WithinAbs(-10.0f, 0.0001f));
 }
 
 TEST_CASE("ChannelStrip reset clears pending automation lanes", "[mixing]") {

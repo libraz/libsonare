@@ -246,6 +246,13 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   size_t width_index = 0;
   size_t insert_index = 0;
   int cursor = 0;
+  // Track the block-representative (most-negative) gain reduction across every
+  // segment. last_gain_reduction_db() reflects only the most recently processed
+  // segment, so sampling it once after the loop would report the final
+  // segment's GR rather than the block maximum. Accumulate the per-segment max
+  // so the segmented path agrees with the unsegmented path's block-level value.
+  float pre_gain_reduction_db = 0.0f;
+  float post_gain_reduction_db = 0.0f;
   while (cursor < num_samples) {
     while (fader_index < fader_count && fader_events[fader_index].offset == cursor) {
       apply_automation_event(fader_events[fader_index++].event);
@@ -268,6 +275,10 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     const int segment_samples = std::max(0, next_offset - cursor);
     if (segment_samples > 0) {
       process_segment(channels, num_channels, cursor, segment_samples, cursor);
+      pre_gain_reduction_db =
+          std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(pre_inserts_));
+      post_gain_reduction_db =
+          std::min(post_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
       cursor += segment_samples;
     } else {
       // Defensive guard for duplicate or unsorted offsets; consume matching events next loop.
@@ -275,9 +286,9 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     }
   }
 
-  const float pre_gain_reduction_db = aggregate_gain_reduction_db(pre_inserts_);
-  const float post_gain_reduction_db =
-      std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+  // post GR is clamped to be no less aggressive than pre GR for snapshot
+  // consistency, matching the unsegmented path.
+  post_gain_reduction_db = std::min(pre_gain_reduction_db, post_gain_reduction_db);
 
   float* pre_meter_channels[kPreparedChannels]{};
   const int meter_rows = std::min<int>(num_channels, kPreparedChannels);
