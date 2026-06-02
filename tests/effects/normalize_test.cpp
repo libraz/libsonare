@@ -133,10 +133,10 @@ TEST_CASE("normalize_rms", "[normalize]") {
   REQUIRE_THAT(normalized_rms, WithinAbs(-10.0f, 0.5f));
 }
 
-TEST_CASE("trim silence", "[normalize]") {
+TEST_CASE("trim_absolute silence", "[normalize]") {
   Audio audio = create_audio_with_silence();
 
-  Audio trimmed = trim(audio, -40.0f);
+  Audio trimmed = trim_absolute(audio, -40.0f);
 
   // Trimmed should be shorter
   REQUIRE(trimmed.size() < audio.size());
@@ -166,7 +166,7 @@ TEST_CASE("detect_silence_boundaries rejects non-positive frame/hop", "[normaliz
   REQUIRE_THROWS(detect_silence_boundaries(audio, -40.0f, 2048, 0));
   REQUIRE_THROWS(detect_silence_boundaries(audio, -40.0f, 0, 512));
   REQUIRE_THROWS(detect_silence_boundaries(audio, -40.0f, 2048, -1));
-  REQUIRE_THROWS(trim(audio, -40.0f, 2048, 0));
+  REQUIRE_THROWS(trim_absolute(audio, -40.0f, 2048, 0));
 }
 
 TEST_CASE("fade_in", "[normalize]") {

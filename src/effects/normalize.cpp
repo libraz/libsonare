@@ -137,7 +137,7 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
   return {start, end};
 }
 
-Audio trim(const Audio& audio, float threshold_db, int frame_length, int hop_length) {
+Audio trim_absolute(const Audio& audio, float threshold_db, int frame_length, int hop_length) {
   if (audio.empty()) return audio;
 
   auto [start, end] = detect_silence_boundaries(audio, threshold_db, frame_length, hop_length);

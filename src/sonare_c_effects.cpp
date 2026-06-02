@@ -78,8 +78,9 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
 
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length) {
-  return run_mono_offline(samples, length, sample_rate, out, out_length,
-                          [threshold_db](const Audio& a) { return trim(a, threshold_db); });
+  return run_mono_offline(
+      samples, length, sample_rate, out, out_length,
+      [threshold_db](const Audio& a) { return trim_absolute(a, threshold_db); });
 }
 
 SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,

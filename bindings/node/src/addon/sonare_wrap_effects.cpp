@@ -1847,7 +1847,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -60.0f;
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::Audio result = sonare::trim(audio, threshold_db);
+  sonare::Audio result = sonare::trim_absolute(audio, threshold_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)

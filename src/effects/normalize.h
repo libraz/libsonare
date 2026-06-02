@@ -19,14 +19,22 @@ Audio normalize(const Audio& audio, float target_db = 0.0f);
 /// @return Normalized audio
 Audio normalize_rms(const Audio& audio, float target_db = -20.0f);
 
-/// @brief Trims silence from the beginning and end of audio.
+/// @brief Trims silence from the beginning and end of audio using an ABSOLUTE
+///        RMS threshold.
+/// @details Frames whose RMS is below @p threshold_db (an absolute dBFS level)
+///          are treated as silence. This is NOT librosa-compatible — for the
+///          librosa-style relative-to-peak behavior use sonare::trim(const
+///          float*, ...) / sonare::trim(const std::vector<float>&, ...) in
+///          src/effects/silence.h, which interprets its threshold as `top_db`
+///          BELOW the peak RMS (note the opposite default sign: +60 vs -60 dB).
 /// @param audio Input audio
-/// @param threshold_db Silence threshold in dB (samples below this are considered silence)
+/// @param threshold_db Absolute silence threshold in dBFS (frames below this
+///        are considered silence)
 /// @param frame_length Frame length for silence detection in samples
 /// @param hop_length Hop length for silence detection in samples
 /// @return Trimmed audio
-Audio trim(const Audio& audio, float threshold_db = -60.0f, int frame_length = 2048,
-           int hop_length = 512);
+Audio trim_absolute(const Audio& audio, float threshold_db = -60.0f, int frame_length = 2048,
+                    int hop_length = 512);
 
 /// @brief Finds the start and end indices of non-silent audio.
 /// @param audio Input audio
