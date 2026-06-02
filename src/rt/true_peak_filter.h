@@ -30,6 +30,19 @@ class TruePeakFilter {
   float process(const float* const* input, int num_channels, int num_samples) const;
   void upsample(const float* const* input, float* const* output_oversampled, int num_channels,
                 int num_samples) const;
+
+  /// @warning Block-boundary continuity: the polyphase reconstruction uses a
+  /// centered stencil that needs `latency_samples()` (taps_per_phase/2) FUTURE
+  /// base-rate samples. process()/upsample() and the upsample_with_history()
+  /// overloads keep only PAST history, never a forward look-ahead, so the last
+  /// ~latency_samples() base samples of every block are interpolated with a
+  /// zero-padded (truncated) forward kernel. This slightly UNDER-reads the true
+  /// inter-sample peak right at each block boundary. The error vanishes for
+  /// whole-signal / one-shot use (a single call covering the entire signal).
+  /// For sample-exact streaming true-peak measurement, the caller must feed an
+  /// explicit look-ahead delay so a sample's full forward stencil is available
+  /// before its oversampled value is consumed.
+  ///
   /// Internal-history overload: uses the member history + scratch buffers sized
   /// by prepare(). RT-safe (no allocation) once prepared for >= num_channels and
   /// >= num_samples.
