@@ -6,86 +6,86 @@ import numpy as np
 from numpy.typing import NDArray
 
 class PitchClass(IntEnum):
-    C: PitchClass
-    CS: PitchClass
-    D: PitchClass
-    DS: PitchClass
-    E: PitchClass
-    F: PitchClass
-    FS: PitchClass
-    G: PitchClass
-    GS: PitchClass
-    A: PitchClass
-    AS: PitchClass
-    B: PitchClass
+    C = 0
+    CS = 1
+    D = 2
+    DS = 3
+    E = 4
+    F = 5
+    FS = 6
+    G = 7
+    GS = 8
+    A = 9
+    AS = 10
+    B = 11
 
 class Mode(IntEnum):
-    MAJOR: Mode
-    MINOR: Mode
-    DORIAN: Mode
-    PHRYGIAN: Mode
-    LYDIAN: Mode
-    MIXOLYDIAN: Mode
-    LOCRIAN: Mode
+    MAJOR = 0
+    MINOR = 1
+    DORIAN = 2
+    PHRYGIAN = 3
+    LYDIAN = 4
+    MIXOLYDIAN = 5
+    LOCRIAN = 6
 
 class KeyProfile(IntEnum):
-    KRUMHANSL_SCHMUCKLER: KeyProfile
-    TEMPERLEY: KeyProfile
-    SHAATH: KeyProfile
-    FARALDO_EDMT: KeyProfile
-    FARALDO_EDMA: KeyProfile
-    FARALDO_EDMM: KeyProfile
-    BELLMAN_BUDGE: KeyProfile
+    KRUMHANSL_SCHMUCKLER = 0
+    TEMPERLEY = 1
+    SHAATH = 2
+    FARALDO_EDMT = 3
+    FARALDO_EDMA = 4
+    FARALDO_EDMM = 5
+    BELLMAN_BUDGE = 6
 
 class AutomationCurve(IntEnum):
-    LINEAR: AutomationCurve
-    EXPONENTIAL: AutomationCurve
-    HOLD: AutomationCurve
-    S_CURVE: AutomationCurve
+    LINEAR = 0
+    EXPONENTIAL = 1
+    HOLD = 2
+    S_CURVE = 3
 
 class PanLaw(IntEnum):
-    CONST_3DB: PanLaw
-    CONST_4_5DB: PanLaw
-    CONST_6DB: PanLaw
-    LINEAR_0DB: PanLaw
+    CONST_3DB = 0
+    CONST_4_5DB = 1
+    CONST_6DB = 2
+    LINEAR_0DB = 3
 
 class MeterTap(IntEnum):
-    PRE_FADER: MeterTap
-    POST_FADER: MeterTap
+    PRE_FADER = 0
+    POST_FADER = 1
 
 class SendTiming(IntEnum):
-    PRE_FADER: SendTiming
-    POST_FADER: SendTiming
+    PRE_FADER = 0
+    POST_FADER = 1
 
 class SectionType(IntEnum):
-    INTRO: SectionType
-    VERSE: SectionType
-    PRE_CHORUS: SectionType
-    CHORUS: SectionType
-    BRIDGE: SectionType
-    INSTRUMENTAL: SectionType
-    OUTRO: SectionType
-    UNKNOWN: SectionType
+    INTRO = 0
+    VERSE = 1
+    PRE_CHORUS = 2
+    CHORUS = 3
+    BRIDGE = 4
+    INSTRUMENTAL = 5
+    OUTRO = 6
+    UNKNOWN = 7
 
 class EngineTelemetryType(IntEnum):
-    PROCESS_BLOCK: EngineTelemetryType
-    ERROR: EngineTelemetryType
+    PROCESS_BLOCK = 0
+    ERROR = 1
 
 class EngineTelemetryError(IntEnum):
-    NONE: EngineTelemetryError
-    COMMAND_QUEUE_OVERFLOW: EngineTelemetryError
-    PENDING_COMMAND_OVERFLOW: EngineTelemetryError
-    BOUNDARY_OVERFLOW: EngineTelemetryError
-    TELEMETRY_OVERFLOW: EngineTelemetryError
-    CAPTURE_OVERFLOW: EngineTelemetryError
-    MAX_BLOCK_EXCEEDED: EngineTelemetryError
-    UNKNOWN_TARGET: EngineTelemetryError
-    NON_REALTIME_SAFE_PARAMETER: EngineTelemetryError
-    NOT_PREPARED: EngineTelemetryError
-    NON_QUEUEABLE_COMMAND: EngineTelemetryError
-    AUTOMATION_BIND_TARGET_OVERFLOW: EngineTelemetryError
-    STALE_AUTOMATION_LANES: EngineTelemetryError
-    SMOOTHED_PARAMETER_CAPACITY: EngineTelemetryError
+    NONE = 0
+    COMMAND_QUEUE_OVERFLOW = 1
+    PENDING_COMMAND_OVERFLOW = 2
+    BOUNDARY_OVERFLOW = 3
+    TELEMETRY_OVERFLOW = 4
+    CAPTURE_OVERFLOW = 5
+    MAX_BLOCK_EXCEEDED = 6
+    UNKNOWN_TARGET = 7
+    NON_REALTIME_SAFE_PARAMETER = 8
+    NOT_PREPARED = 9
+    NON_QUEUEABLE_COMMAND = 10
+    AUTOMATION_BIND_TARGET_OVERFLOW = 11
+    STALE_AUTOMATION_LANES = 12
+    SMOOTHED_PARAMETER_CAPACITY = 13
 
 class Key:
     root: PitchClass
@@ -194,6 +194,43 @@ class AcousticResult:
     def c80Bands(self) -> list[float]: ...
     @property
     def isBlind(self) -> bool: ...
+
+class RirResult:
+    rir: list[float]
+    sample_rate: int
+    has_error: bool
+    def __init__(self, rir: list[float], sample_rate: int, has_error: bool) -> None: ...
+    @property
+    def sampleRate(self) -> int: ...
+    @property
+    def hasError(self) -> bool: ...
+
+class RoomEstimate:
+    volume: float
+    length: float
+    width: float
+    height: float
+    drr_db: float
+    confidence: float
+    absorption_bands: list[float]
+    rt60_bands: list[float]
+    def __init__(
+        self,
+        volume: float,
+        length: float,
+        width: float,
+        height: float,
+        drr_db: float,
+        confidence: float,
+        absorption_bands: list[float],
+        rt60_bands: list[float],
+    ) -> None: ...
+    @property
+    def drrDb(self) -> float: ...
+    @property
+    def absorptionBands(self) -> list[float]: ...
+    @property
+    def rt60Bands(self) -> list[float]: ...
 
 class LufsResult:
     integrated_lufs: float
@@ -654,6 +691,13 @@ class MixResult:
     right: list[float]
     sample_rate: int
     meters: list[MixMeterSnapshot]
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        sample_rate: int,
+        meters: list[MixMeterSnapshot],
+    ) -> None: ...
 
 class EngineTelemetry:
     type: EngineTelemetryType
@@ -835,12 +879,12 @@ class EngineFreezeResult:
     def __init__(self, clip_id: int, frames: int, num_channels: int) -> None: ...
 
 class EngineGraphNodeType(IntEnum):
-    PASS_THROUGH: EngineGraphNodeType
-    GAIN: EngineGraphNodeType
+    PASS_THROUGH = 0
+    GAIN = 1
 
 class EngineGraphMix(IntEnum):
-    REPLACE: EngineGraphMix
-    ADD: EngineGraphMix
+    REPLACE = 0
+    ADD = 1
 
 class EngineGraphNode:
     id: str
@@ -1162,3 +1206,31 @@ class StreamStats:
     accumulated_seconds: float
     used_frames: int
     updated: bool
+    def __init__(
+        self,
+        total_frames: int,
+        total_samples: int,
+        duration_seconds: float,
+        bpm: float,
+        bpm_confidence: float,
+        bpm_candidate_count: int,
+        key: int,
+        key_minor: bool,
+        key_confidence: float,
+        chord_root: int,
+        chord_quality: int,
+        chord_confidence: float,
+        chord_start_time: float,
+        current_bar: int,
+        bar_duration: float,
+        chord_progression: list[StreamChordChange],
+        bar_chord_progression: list[StreamBarChord],
+        voted_pattern: list[StreamBarChord],
+        pattern_length: int,
+        detected_pattern_name: str,
+        detected_pattern_score: float,
+        all_pattern_scores: list[StreamPatternScore],
+        accumulated_seconds: float,
+        used_frames: int,
+        updated: bool,
+    ) -> None: ...

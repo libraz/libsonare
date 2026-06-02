@@ -386,6 +386,87 @@ class SonareAcousticResult(ctypes.Structure):
     ]
 
 
+class SonareRirSynthConfig(ctypes.Structure):
+    """Maps to SonareRirSynthConfig in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("length_m", ctypes.c_float),
+        ("width_m", ctypes.c_float),
+        ("height_m", ctypes.c_float),
+        ("source_x", ctypes.c_float),
+        ("source_y", ctypes.c_float),
+        ("source_z", ctypes.c_float),
+        ("listener_x", ctypes.c_float),
+        ("listener_y", ctypes.c_float),
+        ("listener_z", ctypes.c_float),
+        ("absorption", ctypes.c_float),
+        ("max_seconds", ctypes.c_float),
+        ("ism_order", ctypes.c_int),
+        ("seed", ctypes.c_uint),
+    ]
+
+
+class SonareRirSynthResult(ctypes.Structure):
+    """Maps to SonareRirSynthResult in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("rir", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("sample_rate", ctypes.c_int),
+        ("has_error", ctypes.c_int),
+    ]
+
+
+class SonareRoomEstimateConfig(ctypes.Structure):
+    """Maps to SonareRoomEstimateConfig in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("aspect_hint_lw", ctypes.c_float),
+        ("aspect_hint_lh", ctypes.c_float),
+        ("reference_absorption", ctypes.c_float),
+        ("prefer_eyring", ctypes.c_int),
+        ("n_octave_bands", ctypes.c_int),
+    ]
+
+
+class SonareRoomEstimate(ctypes.Structure):
+    """Maps to SonareRoomEstimate in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("volume", ctypes.c_float),
+        ("length_m", ctypes.c_float),
+        ("width_m", ctypes.c_float),
+        ("height_m", ctypes.c_float),
+        ("drr_db", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+        ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
+        ("rt60_bands", ctypes.POINTER(ctypes.c_float)),
+        ("band_count", ctypes.c_size_t),
+    ]
+
+
+class SonareRoomMorphConfig(ctypes.Structure):
+    """Maps to SonareRoomMorphConfig in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("length_m", ctypes.c_float),
+        ("width_m", ctypes.c_float),
+        ("height_m", ctypes.c_float),
+        ("source_x", ctypes.c_float),
+        ("source_y", ctypes.c_float),
+        ("source_z", ctypes.c_float),
+        ("listener_x", ctypes.c_float),
+        ("listener_y", ctypes.c_float),
+        ("listener_z", ctypes.c_float),
+        ("absorption", ctypes.c_float),
+        ("source_tail_suppression", ctypes.c_float),
+        ("wet", ctypes.c_float),
+        ("max_seconds", ctypes.c_float),
+        ("ism_order", ctypes.c_int),
+        ("seed", ctypes.c_uint),
+    ]
+
+
 class SonareRhythmResult(ctypes.Structure):
     """Maps to SonareRhythmResult in sonare_c.h."""
 
@@ -1605,6 +1686,39 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         ctypes.POINTER(SonareChordAnalysisResult),
     ]
 
+    if hasattr(lib, "sonare_synthesize_rir"):
+        lib.sonare_synthesize_rir.restype = ctypes.c_int32
+        lib.sonare_synthesize_rir.argtypes = [
+            ctypes.POINTER(SonareRirSynthConfig),
+            ctypes.c_int,
+            ctypes.POINTER(SonareRirSynthResult),
+        ]
+        lib.sonare_free_rir_synth_result.restype = None
+        lib.sonare_free_rir_synth_result.argtypes = [ctypes.POINTER(SonareRirSynthResult)]
+
+    if hasattr(lib, "sonare_estimate_room"):
+        lib.sonare_estimate_room.restype = ctypes.c_int32
+        lib.sonare_estimate_room.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareRoomEstimateConfig),
+            ctypes.POINTER(SonareRoomEstimate),
+        ]
+        lib.sonare_free_room_estimate.restype = None
+        lib.sonare_free_room_estimate.argtypes = [ctypes.POINTER(SonareRoomEstimate)]
+
+    if hasattr(lib, "sonare_room_morph"):
+        lib.sonare_room_morph.restype = ctypes.c_int32
+        lib.sonare_room_morph.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareRoomMorphConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     if hasattr(lib, "sonare_analyze_sections"):
         lib.sonare_analyze_sections.restype = ctypes.c_int32
         lib.sonare_analyze_sections.argtypes = [
@@ -2339,7 +2453,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
-    for _name, _cfg in (
+    for _name, _repair_cfg in (
         ("sonare_mastering_repair_declip", SonareDeclipConfig),
         ("sonare_mastering_repair_decrackle", SonareDecrackleConfig),
         ("sonare_mastering_repair_dehum", SonareDehumConfig),
@@ -2353,7 +2467,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.POINTER(ctypes.c_float),
                 ctypes.c_size_t,
                 ctypes.c_int,
-                ctypes.POINTER(_cfg),
+                ctypes.POINTER(_repair_cfg),
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
             ]
@@ -2361,7 +2475,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     # --- Mastering: offline dynamics processors ---
     # The dynamics signature appends `int* out_latency_samples` to the repair
     # shape, so we register it separately from the repair loop above.
-    for _name, _cfg in (
+    for _name, _dynamics_cfg in (
         ("sonare_mastering_dynamics_compressor", SonareCompressorConfig),
         ("sonare_mastering_dynamics_gate", SonareGateConfig),
         ("sonare_mastering_dynamics_transient_shaper", SonareTransientShaperConfig),
@@ -2373,7 +2487,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
                 ctypes.POINTER(ctypes.c_float),
                 ctypes.c_size_t,
                 ctypes.c_int,
-                ctypes.POINTER(_cfg),
+                ctypes.POINTER(_dynamics_cfg),
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
                 ctypes.POINTER(ctypes.c_int),

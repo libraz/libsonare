@@ -18,6 +18,9 @@ key_candidates: list[libsonare.KeyCandidate] = libsonare.detect_key_candidates(
 analysis: libsonare.AnalysisResult = libsonare.analyze(samples)
 acoustic: libsonare.AcousticResult = libsonare.analyze_impulse_response(ir_samples)
 blind_acoustic: libsonare.AcousticResult = libsonare.detect_acoustic(ir_samples)
+rir: libsonare.RirResult = libsonare.synthesize_rir(6.0, 5.0, 3.0, absorption=0.2)
+room_estimate: libsonare.RoomEstimate = libsonare.estimate_room(ir_samples, prefer_eyring=True)
+morphed: list[float] = libsonare.room_morph(samples, 22050, 6.0, 5.0, 3.0, wet=0.4)
 chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     samples,
     use_hmm=True,
@@ -38,6 +41,11 @@ assert_type(key_candidates[0].correlation, float)
 assert_type(analysis.beatTimes, list[float])
 assert_type(acoustic.rt60Bands, list[float])
 assert_type(blind_acoustic.isBlind, bool)
+assert_type(rir.rir, list[float])
+assert_type(rir.has_error, bool)
+assert_type(room_estimate.rt60_bands, list[float])
+assert_type(room_estimate.confidence, float)
+assert_type(morphed, list[float])
 assert_type(chords.chords, list[libsonare.Chord])
 assert_type(cyclic_frames, int)
 assert_type(cyclic_data, list[float])

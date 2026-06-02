@@ -91,6 +91,9 @@ from .analyzer import (
     engine_abi_version as engine_abi_version,
 )
 from .analyzer import (
+    estimate_room as estimate_room,
+)
+from .analyzer import (
     estimate_tuning as estimate_tuning,
 )
 from .analyzer import (
@@ -313,6 +316,9 @@ from .analyzer import (
     rms_energy as rms_energy,
 )
 from .analyzer import (
+    room_morph as room_morph,
+)
+from .analyzer import (
     samples_to_frames as samples_to_frames,
 )
 from .analyzer import (
@@ -338,6 +344,9 @@ from .analyzer import (
 )
 from .analyzer import (
     stft_db as stft_db,
+)
+from .analyzer import (
+    synthesize_rir as synthesize_rir,
 )
 from .analyzer import (
     tempogram as tempogram,
@@ -542,6 +551,12 @@ from .types import (
 )
 from .types import (
     RhythmResult as RhythmResult,
+)
+from .types import (
+    RirResult as RirResult,
+)
+from .types import (
+    RoomEstimate as RoomEstimate,
 )
 from .types import (
     Section as Section,

@@ -84,6 +84,7 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 # Domain facade modules re-export the shared runtime via `from ._runtime import *`.
 # The aggregate `__all__` is resolved at runtime; ruff cannot see through the star
 # import, so F405 is unavoidable here. mypy (strict) still catches genuine undefined names.
+"**/_acoustic.py" = ["F405"]
 "**/_analysis.py" = ["F405"]
 "**/_conversions.py" = ["F405"]
 "**/_effects.py" = ["F405"]

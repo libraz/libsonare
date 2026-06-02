@@ -295,6 +295,49 @@ class AcousticResult:
     def c50Bands(self) -> list[float]:  # noqa: N802
         return self.c50_bands
 
+
+@dataclass(frozen=True, slots=True)
+class RirResult:
+    """Room impulse response synthesized from shoebox geometry."""
+
+    rir: list[float]
+    sample_rate: int
+    has_error: bool
+
+    @property
+    def sampleRate(self) -> int:  # noqa: N802
+        return self.sample_rate
+
+    @property
+    def hasError(self) -> bool:  # noqa: N802
+        return self.has_error
+
+
+@dataclass(frozen=True, slots=True)
+class RoomEstimate:
+    """Blind equivalent-room estimate (volume/dimensions/absorption/DRR)."""
+
+    volume: float
+    length: float
+    width: float
+    height: float
+    drr_db: float
+    confidence: float
+    absorption_bands: list[float]
+    rt60_bands: list[float]
+
+    @property
+    def drrDb(self) -> float:  # noqa: N802
+        return self.drr_db
+
+    @property
+    def absorptionBands(self) -> list[float]:  # noqa: N802
+        return self.absorption_bands
+
+    @property
+    def rt60Bands(self) -> list[float]:  # noqa: N802
+        return self.rt60_bands
+
     @property
     def c80Bands(self) -> list[float]:  # noqa: N802
         return self.c80_bands

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from ._acoustic import (
+    estimate_room,
+    room_morph,
+    synthesize_rir,
+)
 from ._analysis import (
     analyze,
     analyze_bpm,
@@ -174,6 +179,9 @@ from ._mixing import (
 __all__ = [
     "analyze",
     "analyze_bpm",
+    "estimate_room",
+    "room_morph",
+    "synthesize_rir",
     "analyze_dynamics",
     "analyze_impulse_response",
     "analyze_melody",

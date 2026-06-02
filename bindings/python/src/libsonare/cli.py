@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any, cast
+
+from .types import KeyProfile, Mode, PitchClass
 
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
@@ -63,7 +66,7 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
         wav.writeframes(bytes(frames))
 
 
-def _array_stats(vals: list[float]) -> dict:
+def _array_stats(vals: list[float]) -> dict[str, float | int]:
     """Summary statistics for a numeric array (avoids dumping huge arrays)."""
     import statistics
 
@@ -588,7 +591,7 @@ def cmd_spectral(args: argparse.Namespace) -> int:
     nf = args.n_fft
     hl = args.hop_length
 
-    def _stats(vals: list[float]) -> dict:
+    def _stats(vals: list[float]) -> dict[str, float]:
         if not vals:
             return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
         return {
@@ -692,7 +695,7 @@ def cmd_pitch_correct(args: argparse.Namespace) -> int:
         _write_wav(args.output, result, sr)
 
     if args.json:
-        payload: dict = {"length": len(result), "sample_rate": sr}
+        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
         if args.output:
             payload["output"] = args.output
         print(json.dumps(payload))
@@ -719,7 +722,7 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
         _write_wav(args.output, result, sr)
 
     if args.json:
-        payload: dict = {"length": len(result), "sample_rate": sr}
+        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
         if args.output:
             payload["output"] = args.output
         print(json.dumps(payload))
@@ -735,7 +738,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     if args.preset or args.preset_json or args.preset_pack or args.set:
-        preset: str | dict
+        preset: str | dict[str, Any]
         if args.preset_json:
             with open(args.preset_json, encoding="utf-8") as fh:
                 preset = json.load(fh)
@@ -761,7 +764,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         _write_wav(args.output, result, sr)
 
     if args.json:
-        payload: dict = {"length": len(result), "sample_rate": sr}
+        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
         if args.output:
             payload["output"] = args.output
         print(json.dumps(payload))
@@ -843,6 +846,99 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
         print(f"    D50:        {result.d50:.3f}")
         print(f"    Confidence: {result.confidence:.1%}")
         print(f"    Blind:      {result.is_blind}")
+    return 0
+
+
+def cmd_estimate_room(args: argparse.Namespace) -> int:
+    from . import estimate_room
+
+    samples, sr = _load_audio(args.file)
+    est = estimate_room(
+        samples,
+        sample_rate=sr,
+        aspect_hint_lw=args.aspect_lw,
+        aspect_hint_lh=args.aspect_lh,
+        reference_absorption=args.reference_absorption,
+        prefer_eyring=not args.sabine,
+    )
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "volume": round(est.volume, 3),
+                    "length": round(est.length, 3),
+                    "width": round(est.width, 3),
+                    "height": round(est.height, 3),
+                    "drr_db": round(est.drr_db, 3),
+                    "confidence": round(est.confidence, 4),
+                    "rt60_bands": [round(b, 4) for b in est.rt60_bands],
+                    "absorption_bands": [round(b, 4) for b in est.absorption_bands],
+                }
+            )
+        )
+    else:
+        print("  Room estimate:")
+        print(f"    Volume:     {est.volume:.1f} m^3")
+        print(f"    Dimensions: {est.length:.2f} x {est.width:.2f} x {est.height:.2f} m")
+        print(f"    DRR:        {est.drr_db:.2f} dB")
+        print(f"    Confidence: {est.confidence:.1%}")
+    return 0
+
+
+def cmd_synthesize_rir(args: argparse.Namespace) -> int:
+    from . import synthesize_rir
+
+    if not args.output:
+        print("Error: synthesize-rir requires --output", file=sys.stderr)
+        return 1
+    result = synthesize_rir(
+        args.length,
+        args.width,
+        args.height,
+        source=(args.source_x, args.source_y, args.source_z),
+        listener=(args.listener_x, args.listener_y, args.listener_z),
+        absorption=args.absorption,
+        sample_rate=args.sample_rate,
+        ism_order=args.ism_order,
+        seed=args.seed,
+    )
+    if result.has_error:
+        print("Error: invalid room geometry (source/listener outside the room)", file=sys.stderr)
+        return 1
+    _write_wav(args.output, result.rir, result.sample_rate)
+    if args.json:
+        print(json.dumps({"output": args.output, "samples": len(result.rir)}))
+    else:
+        print(f"  Saved RIR ({len(result.rir)} samples) to {args.output}")
+    return 0
+
+
+def cmd_room_morph(args: argparse.Namespace) -> int:
+    from . import room_morph
+
+    if not args.output:
+        print("Error: room-morph requires --output", file=sys.stderr)
+        return 1
+    samples, sr = _load_audio(args.file)
+    result = room_morph(
+        samples,
+        sr,
+        args.length,
+        args.width,
+        args.height,
+        source=(args.source_x, args.source_y, args.source_z),
+        listener=(args.listener_x, args.listener_y, args.listener_z),
+        absorption=args.absorption,
+        source_tail_suppression=args.suppression,
+        wet=args.wet,
+        ism_order=args.ism_order,
+        seed=args.seed,
+    )
+    _write_wav(args.output, result, sr)
+    if args.json:
+        print(json.dumps({"output": args.output, "samples": len(result)}))
+    else:
+        print(f"  Saved morphed audio ({len(result)} samples) to {args.output}")
     return 0
 
 
@@ -948,7 +1044,7 @@ def cmd_timbre(args: argparse.Namespace) -> int:
 
 
 def cmd_lufs(args: argparse.Namespace) -> int:
-    from . import lufs, momentary_lufs, short_term_lufs
+    from ._features import lufs, momentary_lufs, short_term_lufs
 
     samples, sr = _load_audio(args.file)
     r = lufs(samples, sample_rate=sr)
@@ -983,7 +1079,7 @@ def cmd_lufs(args: argparse.Namespace) -> int:
 
 
 def cmd_onset_envelope(args: argparse.Namespace) -> int:
-    from . import onset_envelope
+    from ._conversions import onset_envelope
 
     samples, sr = _load_audio(args.file)
     env = onset_envelope(
@@ -1002,7 +1098,7 @@ def cmd_onset_envelope(args: argparse.Namespace) -> int:
 
 
 def cmd_nnls_chroma(args: argparse.Namespace) -> int:
-    from . import nnls_chroma
+    from ._conversions import nnls_chroma
 
     samples, sr = _load_audio(args.file)
     n_frames, data = nnls_chroma(samples, sample_rate=sr)
@@ -1035,7 +1131,7 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
 
 
 def cmd_tempogram(args: argparse.Namespace) -> int:
-    from . import onset_envelope, tempogram
+    from ._conversions import onset_envelope, tempogram
 
     samples, sr = _load_audio(args.file)
     env = onset_envelope(
@@ -1065,7 +1161,7 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
 
 
 def cmd_plp(args: argparse.Namespace) -> int:
-    from . import onset_envelope, plp
+    from ._conversions import onset_envelope, plp
 
     samples, sr = _load_audio(args.file)
     env = onset_envelope(
@@ -1479,6 +1575,48 @@ def main() -> None:
     # Analysis commands
     acoustic_p = sub.add_parser("acoustic", parents=[common], help="Estimate acoustic parameters")
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
+
+    def _add_room_geometry(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--length", type=float, default=7.0, help="Room length (m)")
+        p.add_argument("--width", type=float, default=5.0, help="Room width (m)")
+        p.add_argument("--height", type=float, default=3.0, help="Room height (m)")
+        p.add_argument("--absorption", type=float, default=0.2, help="Uniform wall absorption")
+        p.add_argument("--source-x", type=float, default=1.0)
+        p.add_argument("--source-y", type=float, default=1.0)
+        p.add_argument("--source-z", type=float, default=1.2)
+        p.add_argument("--listener-x", type=float, default=5.0)
+        p.add_argument("--listener-y", type=float, default=4.0)
+        p.add_argument("--listener-z", type=float, default=1.7)
+        p.add_argument("--ism-order", type=int, default=3, help="Image-source reflection order")
+        p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed")
+
+    estimate_room_p = sub.add_parser(
+        "estimate-room", parents=[common], help="Estimate equivalent room from a recording"
+    )
+    estimate_room_p.add_argument("--aspect-lw", type=float, default=1.0, help="length/width prior")
+    estimate_room_p.add_argument("--aspect-lh", type=float, default=1.0, help="length/height prior")
+    estimate_room_p.add_argument(
+        "--reference-absorption", type=float, default=0.15, help="absorption prior"
+    )
+    estimate_room_p.add_argument(
+        "--sabine", action="store_true", help="Use the Sabine model (default Eyring)"
+    )
+
+    synth_rir_p = sub.add_parser(
+        "synthesize-rir", parents=[common], help="Synthesize a room impulse response from geometry"
+    )
+    _add_room_geometry(synth_rir_p)
+    synth_rir_p.add_argument("--sample-rate", type=int, default=48000, help="Output sample rate")
+
+    room_morph_p = sub.add_parser(
+        "room-morph", parents=[common], help="Morph reverberation toward a target room"
+    )
+    _add_room_geometry(room_morph_p)
+    room_morph_p.add_argument("--wet", type=float, default=0.5, help="Target-room mix [0,1]")
+    room_morph_p.add_argument(
+        "--suppression", type=float, default=0.5, help="Source-tail suppression [0,1]"
+    )
+
     sub.add_parser("rhythm", parents=[common], help="Analyze rhythm primitives")
     sub.add_parser("dynamics", parents=[common], help="Analyze dynamics/loudness")
     sub.add_parser("timbre", parents=[common], help="Analyze timbre/spectral shape")
@@ -1604,6 +1742,8 @@ def main() -> None:
         "note-stretch",
         "voice-change",
         "acoustic",
+        "estimate-room",
+        "room-morph",
         "rhythm",
         "dynamics",
         "timbre",
@@ -1648,6 +1788,9 @@ def main() -> None:
         "voice-preset": cmd_voice_preset,
         "voice-preset-validate": cmd_voice_preset_validate,
         "acoustic": cmd_acoustic,
+        "estimate-room": cmd_estimate_room,
+        "synthesize-rir": cmd_synthesize_rir,
+        "room-morph": cmd_room_morph,
         "rhythm": cmd_rhythm,
         "dynamics": cmd_dynamics,
         "timbre": cmd_timbre,
