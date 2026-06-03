@@ -252,6 +252,7 @@ TEST_CASE("StreamAnalyzer clamps degenerate sizing params", "[streaming][edge]")
   config.hop_length = 0;
   config.emit_every_n_frames = 0;
   config.magnitude_downsample = 0;
+  config.compute_magnitude = true;  // off by default; enable to exercise sizing
 
   StreamAnalyzer analyzer(config);
   REQUIRE(analyzer.config().hop_length >= 1);

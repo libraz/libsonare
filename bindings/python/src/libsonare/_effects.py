@@ -898,6 +898,11 @@ def voice_change_realtime(
     When ``channels`` > 1 the input must be interleaved (LRLR…) and the
     output is returned interleaved in the same layout.
 
+    The chain's processing latency (retune grain + ISP-limiter lookahead) is
+    compensated internally — a silent tail is flushed and the leading pre-roll
+    is dropped — so the result is time-aligned with the input rather than
+    shifted by the chain latency.
+
     Returns a ``numpy.ndarray`` of dtype ``float32`` (changed from
     ``list[float]`` in the prior implementation). ``len(result)`` still
     equals ``len(samples)`` so existing length-based assertions keep

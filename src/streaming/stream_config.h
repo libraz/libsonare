@@ -33,9 +33,15 @@ struct StreamConfig {
   WindowType window = WindowType::Hann;  ///< Window function type
 
   // Feature computation flags
-  bool compute_magnitude = true;  ///< Compute magnitude spectrum
-  bool compute_mel = true;        ///< Compute mel spectrogram
-  bool compute_chroma = true;     ///< Compute chromagram
+  /// @brief Populate StreamFrame::magnitude (raw per-frame magnitude spectrum).
+  /// @details Defaults to false: no SOA read path surfaces the per-frame
+  /// magnitude, so enabling it only costs a per-frame allocation+copy on the
+  /// realtime path with no readable result (centroid/flatness use a separate
+  /// internal buffer). The flat C ABI rejects a non-zero value for the same
+  /// reason, so leaving it off keeps the default config portable across surfaces.
+  bool compute_magnitude = false;  ///< Compute magnitude spectrum (not surfaced; see above)
+  bool compute_mel = true;         ///< Compute mel spectrogram
+  bool compute_chroma = true;      ///< Compute chromagram
   /// @brief Compute onset strength (spectral flux of the log-mel spectrum).
   /// @details Onset strength — and the progressive BPM estimate built on top of
   ///          it — is derived from the mel path. When @c compute_onset is true

@@ -52,7 +52,7 @@ export class StreamAnalyzer {
       config.fmin ?? 0,
       config.fmax ?? 0,
       config.tuningRefHz ?? 440,
-      config.computeMagnitude ?? true,
+      config.computeMagnitude ?? false,
       config.computeMel ?? true,
       config.computeChroma ?? true,
       config.computeOnset ?? true,

@@ -122,6 +122,8 @@ export interface StreamConfig {
   fmin?: number;
   fmax?: number;
   tuningRefHz?: number;
+  /** Compute the per-frame magnitude spectrum. Defaults to false: no read path
+   *  surfaces it, so enabling it only burns realtime CPU with no readable result. */
   computeMagnitude?: boolean;
   computeMel?: boolean;
   computeChroma?: boolean;

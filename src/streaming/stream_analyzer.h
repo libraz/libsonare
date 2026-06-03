@@ -143,7 +143,15 @@ class StreamAnalyzer {
   void read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
                                  const QuantizeConfig& qconfig = QuantizeConfig());
 
-  /// @brief Resets analyzer state for new stream.
+  /// @brief Resets per-stream analysis state for a new stream.
+  /// @details Clears cumulative samples, frame counts, overlap/output buffers,
+  /// chroma history, bar/pattern tracking and the resampler. It deliberately
+  /// RETAINS the config-affecting setters — normalization gain
+  /// (@ref set_normalization_gain), expected duration (@ref set_expected_duration)
+  /// and tuning reference / chroma filterbank (@ref set_tuning_ref_hz) — so a
+  /// reused analyzer keeps its calibration across clips. Re-call those setters
+  /// after reset() if the next stream needs different values. This is why it is
+  /// NOT equivalent to constructing a fresh analyzer.
   /// @param base_sample_offset Starting sample offset (default 0)
   void reset(size_t base_sample_offset = 0);
 

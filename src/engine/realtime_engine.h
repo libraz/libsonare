@@ -97,6 +97,11 @@ class RealtimeEngine {
   void process(float* const* io, int num_channels, int num_frames) noexcept;
   void process_with_monitor(float* const* io, float* const* monitor_out, int num_channels,
                             int num_frames) noexcept;
+  /// @brief Renders @p total_frames of output offline from the CURRENT transport
+  /// position. NOT idempotent: it advances the transport like @c process, so a
+  /// second call renders the NEXT span, not a re-render of the same one. To bounce
+  /// the same span again, seek the transport back to 0 (push a
+  /// kTransportSeekSample command with arg 0) before re-calling.
   void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size);
 
   bool push_command(const rt::Command& command) noexcept;

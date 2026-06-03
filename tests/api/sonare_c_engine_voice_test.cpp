@@ -120,6 +120,41 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
                                        &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("sonare_voice_change_realtime compensates chain latency (no silent pre-roll)",
+          "[c_api][voice_changer]") {
+  // A character preset (soft-whisper) carries retune-grain latency. A naive
+  // length-in/length-out render would prepend ~latency samples of silent
+  // pre-roll and truncate the tail. The offline wrapper now skips the pre-roll
+  // and flushes the tail, so a steady full-amplitude tone has real signal right
+  // at the front rather than a silent gap.
+  std::vector<float> tone(8192);
+  for (size_t i = 0; i < tone.size(); ++i) {
+    tone[i] =
+        0.3f * std::sin(sonare::constants::kTwoPi * 220.0f * static_cast<float>(i) / 48000.0f);
+  }
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_voice_change_realtime(tone.data(), tone.size(), 48000, "soft-whisper", 1, &out,
+                                       &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == tone.size());
+
+  auto window_rms = [&](size_t begin, size_t end) {
+    double sum = 0.0;
+    for (size_t i = begin; i < end; ++i) sum += static_cast<double>(out[i]) * out[i];
+    return std::sqrt(sum / static_cast<double>(end - begin));
+  };
+  const double front_rms = window_rms(0, 512);
+  const double total_rms = window_rms(0, out_length);
+  REQUIRE(total_rms > 0.0);
+  // With the latency bug the leading window would be near-silent pre-roll; with
+  // compensation it carries energy comparable to the rest of the signal.
+  REQUIRE(front_rms > 0.25 * total_rms);
+
+  sonare_free_floats(out);
+}
+
 TEST_CASE("sonare_realtime_voice_changer ISP limiter fields round-trip through the POD config",
           "[c_api]") {
   SonareRealtimeVoiceChangerConfig config{};

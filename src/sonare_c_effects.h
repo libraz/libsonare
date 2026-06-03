@@ -44,6 +44,11 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 ///          may be NULL/empty (neutral-monitor), a preset id, or a full JSON
 ///          config document accepted by @ref sonare_realtime_voice_changer_create_json.
 ///          @p channels must be 1 (mono) or 2 (interleaved stereo).
+/// @details The chain's processing latency (retune grain + ISP-limiter lookahead)
+///          is compensated: an equal-length silent tail is flushed and the
+///          leading @c latency_samples of pre-roll are dropped, so the returned
+///          buffer is the same length as @p samples AND time-aligned with the
+///          input (no head silence / tail truncation).
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
 SonareError sonare_voice_change_realtime(const float* samples, size_t length, int sample_rate,
