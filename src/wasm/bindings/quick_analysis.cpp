@@ -533,8 +533,6 @@ val js_analyze_with_progress(val samples, int sample_rate, val progress_callback
   return analysisResultToVal(result);
 }
 
-void registerQuickDetailedAnalysisBindings();
-
 void registerQuickAnalysisBindings() {
   // Quick API (high-level)
   function("detectBpm", &js_detect_bpm);

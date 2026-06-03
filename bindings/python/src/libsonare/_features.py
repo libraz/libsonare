@@ -1210,6 +1210,64 @@ def metering_vectorscope(
         lib.sonare_free_vectorscope_result(ctypes.byref(out))
 
 
+def metering_vectorscope_decimated(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    max_points: int = 0,
+    *,
+    validate: bool = True,
+) -> VectorscopeReport:
+    """Display-sized mid/side vectorscope for a (left, right) stereo pair.
+
+    ``max_points`` upper-bounds the returned point count; pass 0 (or a value
+    >= the buffer length) for one point per sample (identical to
+    :func:`metering_vectorscope`). Otherwise the input is deterministically
+    decimated, keeping the largest-radius sample of each contiguous bucket.
+    """
+    left_buf = _validate_samples(
+        "metering_vectorscope_decimated", left, validate=validate, arg_name="left"
+    )
+    right_buf = _validate_samples(
+        "metering_vectorscope_decimated", right, validate=validate, arg_name="right"
+    )
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_metering_vectorscope_decimated"):
+        raise RuntimeError("libsonare was built without sonare_metering_vectorscope_decimated")
+    left_array, left_len = _to_c_float_array(left_buf)
+    right_array, right_len = _to_c_float_array(right_buf)
+    if left_len != right_len:
+        raise ValueError(
+            "metering_vectorscope_decimated: left and right buffers must have the same length"
+        )
+    out = SonareVectorscopeResult()
+    rc = lib.sonare_metering_vectorscope_decimated(
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_len),
+        ctypes.c_int(sample_rate),
+        ctypes.c_size_t(max_points),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        count = int(out.point_count)
+        if count == 0:
+            mid = np.empty(0, dtype=np.float32)
+            side = np.empty(0, dtype=np.float32)
+        else:
+            arr_type = SonareVectorscopePoint * count
+            view = arr_type.from_address(ctypes.addressof(out.points.contents))
+            mid = np.empty(count, dtype=np.float32)
+            side = np.empty(count, dtype=np.float32)
+            for i in range(count):
+                mid[i] = view[i].mid
+                side[i] = view[i].side
+        return VectorscopeReport(mid=mid, side=side)
+    finally:
+        lib.sonare_free_vectorscope_result(ctypes.byref(out))
+
+
 def metering_phase_scope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -1268,6 +1326,78 @@ def metering_phase_scope(
         lib.sonare_free_phase_scope_result(ctypes.byref(out))
 
 
+def metering_phase_scope_decimated(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    max_points: int = 0,
+    *,
+    validate: bool = True,
+) -> PhaseScopeReport:
+    """Display-sized phase-scope (Lissajous + summary stats) for a stereo pair.
+
+    ``max_points`` upper-bounds the returned point count; pass 0 (or a value
+    >= the buffer length) for one point per sample. Otherwise the point cloud is
+    deterministically decimated (largest-radius sample per bucket). The summary
+    stats are always computed over the full-resolution signal.
+    """
+    left_buf = _validate_samples(
+        "metering_phase_scope_decimated", left, validate=validate, arg_name="left"
+    )
+    right_buf = _validate_samples(
+        "metering_phase_scope_decimated", right, validate=validate, arg_name="right"
+    )
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_metering_phase_scope_decimated"):
+        raise RuntimeError("libsonare was built without sonare_metering_phase_scope_decimated")
+    left_array, left_len = _to_c_float_array(left_buf)
+    right_array, right_len = _to_c_float_array(right_buf)
+    if left_len != right_len:
+        raise ValueError(
+            "metering_phase_scope_decimated: left and right buffers must have the same length"
+        )
+    out = SonarePhaseScopeResult()
+    rc = lib.sonare_metering_phase_scope_decimated(
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_len),
+        ctypes.c_int(sample_rate),
+        ctypes.c_size_t(max_points),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        count = int(out.point_count)
+        if count == 0:
+            mid = np.empty(0, dtype=np.float32)
+            side = np.empty(0, dtype=np.float32)
+            radius = np.empty(0, dtype=np.float32)
+            angle = np.empty(0, dtype=np.float32)
+        else:
+            arr_type = SonarePhaseScopePoint * count
+            view = arr_type.from_address(ctypes.addressof(out.points.contents))
+            mid = np.empty(count, dtype=np.float32)
+            side = np.empty(count, dtype=np.float32)
+            radius = np.empty(count, dtype=np.float32)
+            angle = np.empty(count, dtype=np.float32)
+            for i in range(count):
+                mid[i] = view[i].mid
+                side[i] = view[i].side
+                radius[i] = view[i].radius
+                angle[i] = view[i].angle_rad
+        return PhaseScopeReport(
+            mid=mid,
+            side=side,
+            radius=radius,
+            angle_rad=angle,
+            correlation=float(out.correlation),
+            average_abs_angle_rad=float(out.average_abs_angle_rad),
+            max_radius=float(out.max_radius),
+        )
+    finally:
+        lib.sonare_free_phase_scope_result(ctypes.byref(out))
+
+
 def metering_spectrum(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -1279,7 +1409,12 @@ def metering_spectrum(
     *,
     validate: bool = True,
 ) -> SpectrumReport:
-    """Single-frame magnitude / power / dB spectrum view.
+    """Welch-averaged magnitude / power / dB spectrum over the whole buffer.
+
+    This is NOT a single-frame snapshot: the signal is split into Hann-windowed,
+    50%-overlapping ``n_fft``-length frames whose power spectra are averaged
+    across the entire input (Welch's method), so transients are smeared by the
+    averaging. For a true single-frame FFT use :func:`metering_spectrum_frame`.
 
     Pass 0 for ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` to use
     the library defaults (2048 / 3 / 1.0 / kEpsilon).
@@ -1318,20 +1453,77 @@ def metering_spectrum(
         lib.sonare_free_spectrum_result(ctypes.byref(out))
 
 
+def metering_spectrum_frame(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    frame_offset: int = 0,
+    n_fft: int = 0,
+    apply_octave_smoothing: bool = False,
+    octave_fraction: int = 0,
+    db_ref: float = 0.0,
+    db_amin: float = 0.0,
+    *,
+    validate: bool = True,
+) -> SpectrumReport:
+    """True single-frame magnitude / power / dB spectrum (one Hann-windowed FFT).
+
+    Unlike :func:`metering_spectrum` (Welch-averaged), this is a single
+    ``n_fft``-length FFT for spectrum-analyzer "moment" snapshots. The frame
+    spans ``[frame_offset, frame_offset + n_fft)``; samples past the end are
+    zero-padded. Pass 0 for ``frame_offset`` for the first frame and 0 for
+    ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the library
+    defaults (2048 / 3 / 1.0 / kEpsilon).
+    """
+    sample_buf = _validate_samples("metering_spectrum_frame", samples, validate=validate)
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_metering_spectrum_frame"):
+        raise RuntimeError("libsonare was built without sonare_metering_spectrum_frame")
+    c_array, length = _to_c_float_array(sample_buf)
+    out = SonareSpectrumResult()
+    rc = lib.sonare_metering_spectrum_frame(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_size_t(frame_offset),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(1 if apply_octave_smoothing else 0),
+        ctypes.c_int(octave_fraction),
+        ctypes.c_float(db_ref),
+        ctypes.c_float(db_amin),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        count = int(out.bin_count)
+        return SpectrumReport(
+            frequencies=_from_c_float_array(out.frequencies, count),
+            magnitude=_from_c_float_array(out.magnitude, count),
+            power=_from_c_float_array(out.power, count),
+            db=_from_c_float_array(out.db, count),
+            n_fft=int(out.n_fft),
+            sample_rate=int(out.sample_rate),
+        )
+    finally:
+        lib.sonare_free_spectrum_result(ctypes.byref(out))
+
+
 def metering_dynamic_range(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     window_sec: float = 0.0,
     hop_sec: float = 0.0,
-    low_percentile: float = 0.0,
-    high_percentile: float = 0.0,
+    low_percentile: float = -1.0,
+    high_percentile: float = -1.0,
     *,
     validate: bool = True,
 ) -> DynamicRangeReport:
     """Sliding-window dynamic range (high_percentile - low_percentile, in dB).
 
-    Pass 0.0 for any parameter to use the library default
-    (window=3 s, hop=1 s, low=0.10, high=0.95).
+    Pass 0.0 for ``window_sec`` / ``hop_sec`` to use the library default
+    (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile`` a
+    NEGATIVE value (the default ``-1.0``) selects the library default percentiles
+    (low=0.10, high=0.95); ``0.0`` is a real request for the 0th percentile (the
+    minimum-RMS window), not the default.
     """
     sample_buf = _validate_samples("metering_dynamic_range", samples, validate=validate)
     lib = _get_lib()

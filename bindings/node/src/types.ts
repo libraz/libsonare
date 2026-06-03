@@ -1184,7 +1184,11 @@ export interface ProjectCompileResult {
 
 /** Options for {@link Project.bounce}. Zero / omitted fields take native defaults. */
 export interface ProjectBounceOptions {
-  /** Render length in frames at the output sample rate. */
+  /**
+   * Render length in frames at the output sample rate. Omit / `<= 0` lets the
+   * native side auto-derive the length from the arrangement (musical end plus
+   * any instrument release tail). It does NOT produce an empty render.
+   */
   totalFrames?: number;
   /** Render block size; <= 0 / omit => 128. */
   blockSize?: number;
@@ -1194,4 +1198,36 @@ export interface ProjectBounceOptions {
   sampleRate?: number;
   /** Host-instrument PDC (samples) fed to the compiler. */
   instrumentLatencySamples?: number;
+}
+
+/** Oscillator waveform for the {@link BuiltinInstrumentConfig built-in synth}. */
+export type SynthWaveform = 'sine' | 'saw' | 'square' | 'triangle';
+
+/**
+ * Patch for the built-in minimal polyphonic oscillator synth used by
+ * {@link Project.bounceWithBuiltinInstrument} /
+ * {@link Project.bounceWithBuiltinInstruments}. Every numeric field uses
+ * "0 / omit => sensible default", so an empty object is the default sine patch
+ * and callers override only what they need.
+ */
+export interface BuiltinInstrumentConfig {
+  /**
+   * MIDI destination id this patch renders (the value set by
+   * {@link Project.setTrackMidiDestination}). Defaults to `0`.
+   */
+  destinationId?: number;
+  /** Oscillator waveform: a {@link SynthWaveform} name or numeric enum (0=sine). */
+  waveform?: SynthWaveform | number;
+  /** Master output gain (linear); 0 / omit => 0.2. */
+  gain?: number;
+  /** ADSR attack in ms; 0 / omit => 5. */
+  attackMs?: number;
+  /** ADSR decay in ms; 0 / omit => 60. */
+  decayMs?: number;
+  /** ADSR sustain level [0, 1]; 0 / omit => 0.7. */
+  sustain?: number;
+  /** ADSR release in ms; 0 / omit => 120. */
+  releaseMs?: number;
+  /** Max simultaneous voices; 0 / omit => 16, clamped to [1, 64]. */
+  polyphony?: number;
 }

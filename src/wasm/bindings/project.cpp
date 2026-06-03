@@ -364,11 +364,10 @@ struct ProjectWasm {
     return out;
   }
 
-  // Compiles + renders the project offline to interleaved float audio, returning
-  // a Float32Array. Uses C-ABI defaults (project sample rate, 2 channels, block
-  // 128) when no options are provided; total_frames defaults to 0, which yields
-  // an empty render for an empty project.
-  val bounce(val options) {
+  // Parses a JS bounce-options object into the flat C POD. A missing /
+  // null/undefined object leaves the zero-init defaults (which the C ABI maps to
+  // project sample rate, 2 channels, block 128, and auto-derived length).
+  static SonareProjectBounceOptions bounceOptionsFromVal(val options) {
     SonareProjectBounceOptions opts{};
     if (!options.isUndefined() && !options.isNull()) {
       if (hasProperty(options, "totalFrames")) {
@@ -387,12 +386,122 @@ struct ProjectWasm {
         opts.instrument_latency_samples = options["instrumentLatencySamples"].as<int>();
       }
     }
+    return opts;
+  }
+
+  // Reads a single { destinationId?, waveform?, gain?, attack?, decay?,
+  // sustain?, release?, polyphony? } object into a built-in synth binding. Every
+  // numeric synth field is "0 => default" per the C ABI, so unset fields stay 0.
+  // `waveform` accepts the ordinal or a string ("sine"/"saw"/"square"/
+  // "triangle").
+  static SonareBuiltinInstrumentBinding builtinBindingFromVal(val desc) {
+    SonareBuiltinInstrumentBinding binding{};
+    if (desc.isUndefined() || desc.isNull()) {
+      return binding;
+    }
+    if (hasProperty(desc, "destinationId")) {
+      binding.destination_id = desc["destinationId"].as<uint32_t>();
+    }
+    if (hasProperty(desc, "waveform")) {
+      val wf = desc["waveform"];
+      if (wf.typeOf().as<std::string>() == "string") {
+        const std::string s = wf.as<std::string>();
+        binding.config.waveform = s == "saw"        ? SONARE_SYNTH_WAVEFORM_SAW
+                                  : s == "square"   ? SONARE_SYNTH_WAVEFORM_SQUARE
+                                  : s == "triangle" ? SONARE_SYNTH_WAVEFORM_TRIANGLE
+                                                    : SONARE_SYNTH_WAVEFORM_SINE;
+      } else {
+        binding.config.waveform = wf.as<int>();
+      }
+    }
+    if (hasProperty(desc, "gain")) {
+      binding.config.gain = desc["gain"].as<float>();
+    }
+    if (hasProperty(desc, "attackMs")) {
+      binding.config.attack_ms = desc["attackMs"].as<float>();
+    }
+    if (hasProperty(desc, "decayMs")) {
+      binding.config.decay_ms = desc["decayMs"].as<float>();
+    }
+    if (hasProperty(desc, "sustain")) {
+      binding.config.sustain = desc["sustain"].as<float>();
+    }
+    if (hasProperty(desc, "releaseMs")) {
+      binding.config.release_ms = desc["releaseMs"].as<float>();
+    }
+    if (hasProperty(desc, "polyphony")) {
+      binding.config.polyphony = desc["polyphony"].as<int>();
+    }
+    return binding;
+  }
+
+  // Normalizes the bounceWithBuiltinInstrument `instrument(s)` argument into a
+  // vector of bindings. Accepts an array of binding objects, a single binding
+  // object (treated as one element), or null/undefined (one default-destination
+  // sine patch so a freshly built MIDI project still makes sound).
+  static std::vector<SonareBuiltinInstrumentBinding> builtinBindingsFromVal(val bindings) {
+    std::vector<SonareBuiltinInstrumentBinding> out;
+    if (bindings.isUndefined() || bindings.isNull()) {
+      out.push_back(SonareBuiltinInstrumentBinding{});
+      return out;
+    }
+    if (val::global("Array").call<bool>("isArray", bindings)) {
+      const size_t count = bindings["length"].as<size_t>();
+      if (count == 0) {
+        out.push_back(SonareBuiltinInstrumentBinding{});
+        return out;
+      }
+      out.reserve(count);
+      for (size_t i = 0; i < count; ++i) {
+        out.push_back(builtinBindingFromVal(bindings[i]));
+      }
+      return out;
+    }
+    out.push_back(builtinBindingFromVal(bindings));
+    return out;
+  }
+
+  // Compiles + renders the project offline to interleaved float audio (silent
+  // for MIDI tracks, which have no instrument bound). Uses C-ABI defaults
+  // (project sample rate, 2 channels, block 128) when no options are provided.
+  // When totalFrames is omitted (or <= 0) the C ABI auto-derives the render
+  // length from the arrangement, so an arrangement with content renders without
+  // the caller computing a frame count; an empty project yields an empty buffer.
+  // To make MIDI tracks audible use bounceWithBuiltinInstrument.
+  val bounce(val options) {
+    SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
     float* interleaved = nullptr;
     size_t len = 0;
     const SonareError err = sonare_project_bounce(project_.get(), &opts, &interleaved, &len);
     if (err != SONARE_OK) {
       sonare_free_floats(interleaved);
       throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to bounce project");
+    }
+    std::vector<float> samples(interleaved, interleaved + len);
+    sonare_free_floats(interleaved);
+    return vectorToFloat32Array(samples);
+  }
+
+  // Compiles + renders the project, routing MIDI tracks through the built-in
+  // oscillator synth so a MIDI-only arrangement bounces to audible audio.
+  // @p bindings is an array of { destinationId?, ...synthConfig } objects (a
+  // single object is accepted too); a missing / empty array routes every MIDI
+  // track through one default-destination (0) sine patch. Every synth-config
+  // field is optional and "0 => sensible default" per the C ABI. When
+  // options.totalFrames is omitted the render length is auto-derived from the
+  // arrangement plus the synth release tail.
+  val bounceWithBuiltinInstrument(val bindings, val options) {
+    std::vector<SonareBuiltinInstrumentBinding> synths = builtinBindingsFromVal(bindings);
+    SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
+    float* interleaved = nullptr;
+    size_t len = 0;
+    const SonareError err = sonare_project_bounce_with_builtin_instruments(
+        project_.get(), &opts, synths.empty() ? nullptr : synths.data(), synths.size(),
+        &interleaved, &len);
+    if (err != SONARE_OK) {
+      sonare_free_floats(interleaved);
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to bounce project with built-in instrument");
     }
     std::vector<float> samples(interleaved, interleaved + len);
     sonare_free_floats(interleaved);
@@ -435,7 +544,8 @@ void registerProjectBindings() {
       .function("autoTempo", &ProjectWasm::autoTempo)
       .function("snapToGrid", &ProjectWasm::snapToGrid)
       .function("compile", &ProjectWasm::compile)
-      .function("bounce", &ProjectWasm::bounce);
+      .function("bounce", &ProjectWasm::bounce)
+      .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument);
   function("projectAbiVersion", &js_project_abi_version);
 #endif
 }

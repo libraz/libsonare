@@ -163,10 +163,10 @@ describe('Sonare WASM Project', () => {
     const project = buildProject();
     try {
       project.setSampleRate(48000);
-      // total_frames must be > 0 for the C-ABI bounce (an empty/zero render is
-      // rejected). An empty project bounces to silence; that is enough to assert
-      // same-build repeatability. We compare within a small tolerance rather than
-      // requiring cross-platform bit-exactness.
+      // An explicit totalFrames pins the render length; the project bounces to
+      // silence here (MIDI tracks have no instrument bound), which is enough to
+      // assert same-build repeatability. We compare within a small tolerance
+      // rather than requiring cross-platform bit-exactness.
       const options = { totalFrames: 256, blockSize: 128, numChannels: 2, sampleRate: 48000 };
 
       const first = project.bounce(options);
@@ -178,6 +178,97 @@ describe('Sonare WASM Project', () => {
       for (let i = 0; i < first.length; i++) {
         expect(second[i]).toBeCloseTo(first[i], 6);
       }
+    } finally {
+      project.delete();
+    }
+  });
+
+  function buildMidiOnlyProject(): Project {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const { clipId } = project.addMidiClip(0, 4);
+    // A short held note so the built-in synth produces sustained tone.
+    project.setMidiEvents(clipId, [
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(3, 0, 0, 60, 0),
+    ]);
+    return project;
+  }
+
+  function maxAbs(buffer: Float32Array): number {
+    let peak = 0;
+    for (let i = 0; i < buffer.length; i++) {
+      const v = Math.abs(buffer[i]);
+      if (v > peak) {
+        peak = v;
+      }
+    }
+    return peak;
+  }
+
+  it('bounces a MIDI-only project through the built-in instrument to non-silent audio', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      // Without an instrument the same MIDI project bounces to silence.
+      const silent = project.bounce({ totalFrames: 48000, numChannels: 2, sampleRate: 48000 });
+      expect(silent).toBeInstanceOf(Float32Array);
+      expect(maxAbs(silent)).toBe(0);
+
+      // Routing the built-in synth makes it audible.
+      const audible = project.bounceWithBuiltinInstrument(
+        { waveform: 'saw', gain: 0.5 },
+        { totalFrames: 48000, numChannels: 2, sampleRate: 48000 },
+      );
+      expect(audible).toBeInstanceOf(Float32Array);
+      expect(audible.length).toBe(48000 * 2);
+      expect(maxAbs(audible)).toBeGreaterThan(0.01);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('bounceWithBuiltinInstrument auto-derives length when totalFrames is omitted', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      // No totalFrames: the C ABI auto-derives the render length from the
+      // arrangement (musical end + synth release tail).
+      const audio = project.bounceWithBuiltinInstrument({}, { numChannels: 2, sampleRate: 48000 });
+      expect(audio).toBeInstanceOf(Float32Array);
+      expect(audio.length).toBeGreaterThan(0);
+      expect(maxAbs(audio)).toBeGreaterThan(0.01);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('bounce auto-derives length for a MIDI project when totalFrames is omitted', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      // The README WASM quick-start shape: bounce({ numChannels }) with no
+      // totalFrames must now produce a buffer (auto-derived length), not error.
+      const audio = project.bounce({ numChannels: 2, sampleRate: 48000 });
+      expect(audio).toBeInstanceOf(Float32Array);
+      expect(audio.length).toBeGreaterThan(0);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('bounceWithBuiltinInstrument accepts a default patch and per-destination array', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      // Default ({}) sine patch.
+      const def = project.bounceWithBuiltinInstrument({}, { totalFrames: 24000, numChannels: 1 });
+      expect(def.length).toBe(24000);
+      expect(maxAbs(def)).toBeGreaterThan(0.01);
+
+      // Array of bindings (single destination 0 here).
+      const arr = project.bounceWithBuiltinInstrument([{ destinationId: 0, waveform: 'square' }], {
+        totalFrames: 24000,
+        numChannels: 1,
+      });
+      expect(arr.length).toBe(24000);
+      expect(maxAbs(arr)).toBeGreaterThan(0.01);
     } finally {
       project.delete();
     }

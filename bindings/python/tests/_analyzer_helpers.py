@@ -32,6 +32,11 @@ def _ffmpeg_cli() -> str | None:
     return shutil.which("ffmpeg")
 
 
+def _all_finite(values) -> bool:
+    """Return True when every value in the iterable is finite (no NaN/Inf)."""
+    return all(math.isfinite(v) for v in values)
+
+
 def _has_ffmpeg_build_support() -> bool:
     """Return whether the loaded libsonare was compiled with FFmpeg support.
 
@@ -59,6 +64,7 @@ __all__ = [
     "sys",
     "tempfile",
     "wave",
+    "_all_finite",
     "_ffmpeg_cli",
     "_generate_sine",
     "_has_ffmpeg_build_support",

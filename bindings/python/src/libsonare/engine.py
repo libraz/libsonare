@@ -610,7 +610,10 @@ def _fixed_bytes(value: str, capacity: int) -> bytes:
 
 
 def _c_string(value: bytes) -> str:
-    return value.split(b"\0", 1)[0].decode("utf-8")
+    # Fixed-size C name buffers can hold a truncated multi-byte codepoint, so
+    # use a replacement fallback rather than letting a decode error abort a
+    # whole batch of results.
+    return value.split(b"\0", 1)[0].decode("utf-8", "replace")
 
 
 def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:

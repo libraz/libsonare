@@ -46,6 +46,61 @@ int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback
                              : static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
 }
 
+float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
+  Napi::Value value = obj.Get(key);
+  return value.IsUndefined() ? fallback : value.As<Napi::Number>().FloatValue();
+}
+
+// Fills `options` from a JS bounce-options object (zero-initialized on entry).
+void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* options) {
+  options->total_frames = Int64Property(obj, "totalFrames", 0);
+  options->block_size = IntProperty(obj, "blockSize", 0);
+  options->num_channels = IntProperty(obj, "numChannels", 0);
+  options->sample_rate = IntProperty(obj, "sampleRate", 0);
+  options->instrument_latency_samples = IntProperty(obj, "instrumentLatencySamples", 0);
+}
+
+// Maps a waveform name to its SonareSynthWaveform enum value, or -1 if unknown.
+int WaveformFromName(const std::string& name) {
+  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
+  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
+  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
+  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
+  return -1;
+}
+
+// Parses a JS instrument descriptor into a built-in synth binding. Throws a
+// JS exception (and returns false) on an unknown waveform name. A zero-init
+// config is the native default sine patch, so only present fields are set.
+bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
+                            SonareBuiltinInstrumentBinding* binding) {
+  binding->destination_id = obj.Get("destinationId").IsUndefined()
+                                ? 0u
+                                : obj.Get("destinationId").As<Napi::Number>().Uint32Value();
+  SonareBuiltinSynthConfig& config = binding->config;
+  Napi::Value waveform = obj.Get("waveform");
+  if (waveform.IsString()) {
+    const std::string name = waveform.As<Napi::String>().Utf8Value();
+    const int mapped = WaveformFromName(name);
+    if (mapped < 0) {
+      Napi::TypeError::New(env, "Unknown synth waveform name: '" + name +
+                                    "' (expected sine, saw, square, or triangle)")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    config.waveform = mapped;
+  } else if (waveform.IsNumber()) {
+    config.waveform = waveform.As<Napi::Number>().Int32Value();
+  }
+  config.gain = FloatProperty(obj, "gain", 0.0f);
+  config.attack_ms = FloatProperty(obj, "attackMs", 0.0f);
+  config.decay_ms = FloatProperty(obj, "decayMs", 0.0f);
+  config.sustain = FloatProperty(obj, "sustain", 0.0f);
+  config.release_ms = FloatProperty(obj, "releaseMs", 0.0f);
+  config.polyphony = IntProperty(obj, "polyphony", 0);
+  return true;
+}
+
 }  // namespace
 
 Napi::FunctionReference ProjectWrap::constructor;
@@ -78,6 +133,8 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),
           InstanceMethod<&ProjectWrap::Compile>("compile"),
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
+          InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
+              "bounceWithBuiltinInstruments"),
           InstanceMethod<&ProjectWrap::Destroy>("destroy"),
           StaticMethod<&ProjectWrap::FromJson>("fromJson"),
       });
@@ -493,16 +550,50 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SonareProjectBounceOptions options{};
   if (info.Length() > 0 && info[0].IsObject()) {
-    Napi::Object obj = info[0].As<Napi::Object>();
-    options.total_frames = Int64Property(obj, "totalFrames", 0);
-    options.block_size = IntProperty(obj, "blockSize", 0);
-    options.num_channels = IntProperty(obj, "numChannels", 0);
-    options.sample_rate = IntProperty(obj, "sampleRate", 0);
-    options.instrument_latency_samples = IntProperty(obj, "instrumentLatencySamples", 0);
+    FillBounceOptions(info[0].As<Napi::Object>(), &options);
   }
   float* interleaved = nullptr;
   size_t len = 0;
   ThrowIfError(env, sonare_project_bounce(project_, &options, &interleaved, &len));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Float32Array out = Napi::Float32Array::New(env, len);
+  if (len > 0 && interleaved != nullptr) {
+    std::memcpy(out.Data(), interleaved, len * sizeof(float));
+  }
+  if (interleaved != nullptr) sonare_free_floats(interleaved);
+  return out;
+}
+
+Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectBounceOptions options{};
+  if (info.Length() > 0 && info[0].IsObject()) {
+    FillBounceOptions(info[0].As<Napi::Object>(), &options);
+  }
+  std::vector<SonareBuiltinInstrumentBinding> bindings;
+  if (info.Length() > 1 && info[1].IsArray()) {
+    Napi::Array arr = info[1].As<Napi::Array>();
+    bindings.reserve(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      Napi::Value element = arr.Get(i);
+      if (!element.IsObject()) {
+        Napi::TypeError::New(env,
+                             "bounceWithBuiltinInstruments: instrument bindings must be objects")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      SonareBuiltinInstrumentBinding binding{};
+      if (!ParseBuiltinInstrument(env, element.As<Napi::Object>(), &binding)) {
+        return env.Undefined();  // exception already pending
+      }
+      bindings.push_back(binding);
+    }
+  }
+  float* interleaved = nullptr;
+  size_t len = 0;
+  ThrowIfError(env, sonare_project_bounce_with_builtin_instruments(
+                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
+                        bindings.size(), &interleaved, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array out = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {

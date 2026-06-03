@@ -14,7 +14,7 @@ import math
 import numpy as np
 import pytest
 
-from libsonare import Project, project_abi_version
+from libsonare import BuiltinSynthConfig, Project, project_abi_version
 from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
 
 
@@ -139,6 +139,77 @@ def test_bounce_is_bit_exact_across_two_renders() -> None:
         assert second.shape == first.shape
         # Deterministic: same project + options => bit-identical output.
         assert np.array_equal(first, second)
+    finally:
+        project.close()
+
+
+def _build_midi_only_project() -> Project:
+    """A MIDI-only arrangement: one MIDI track + clip with a sustained note."""
+    project = Project()
+    project.set_sample_rate(48000.0)
+    _track, clip = project.add_midi_clip(0.0, 4.0)
+    project.set_midi_events(
+        clip,
+        [
+            Project.midi_note_on(0.0, 0, 0, 60, 100),
+            Project.midi_note_off(2.0, 0, 0, 60, 0),
+        ],
+    )
+    return project
+
+
+def test_bounce_with_builtin_instrument_produces_non_silent_audio() -> None:
+    """Flagship: a MIDI-only project bounced through the built-in synth is audible."""
+    project = _build_midi_only_project()
+    try:
+        # Silent baseline: plain bounce has no instrument bound -> MIDI is silence.
+        silent = project.bounce(
+            total_frames=48000, block_size=128, num_channels=2, sample_rate=48000
+        )
+        assert float(np.max(np.abs(silent))) == 0.0
+
+        audio = project.bounce_with_builtin_instrument(
+            total_frames=48000, block_size=128, num_channels=2, sample_rate=48000
+        )
+        assert audio.shape == (48000, 2)
+        assert audio.dtype == np.float32
+        assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
+def test_bounce_with_builtin_instrument_auto_derives_length() -> None:
+    """Omitting total_frames lets the native layer derive the render length."""
+    project = _build_midi_only_project()
+    try:
+        audio = project.bounce_with_builtin_instrument(num_channels=2, sample_rate=48000)
+        assert audio.ndim == 2
+        assert audio.shape[0] > 0
+        assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
+def test_bounce_with_builtin_instrument_accepts_waveform_patch() -> None:
+    """A non-default patch (named waveform + overrides) still renders audibly."""
+    project = _build_midi_only_project()
+    try:
+        patch = BuiltinSynthConfig(waveform="saw", gain=0.3, polyphony=8)
+        audio = project.bounce_with_builtin_instrument(
+            patch, total_frames=24000, num_channels=2, sample_rate=48000
+        )
+        assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
+def test_bounce_auto_derives_length_when_total_frames_omitted() -> None:
+    """bounce() with total_frames omitted no longer renders empty (C auto-derives)."""
+    project, *_ = _build_project()
+    try:
+        audio = project.bounce(num_channels=2, sample_rate=48000)
+        assert audio.ndim == 2
+        assert audio.shape[0] > 0
     finally:
         project.close()
 

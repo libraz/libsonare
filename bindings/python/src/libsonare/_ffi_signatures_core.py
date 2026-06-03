@@ -642,6 +642,12 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_version.restype = ctypes.c_char_p
     lib.sonare_version.argtypes = []
 
+    # sonare_abi_version: aggregate ABI version folding every subsystem ABI macro
+    # into one 32-bit value (see sonare_c.h).
+    if hasattr(lib, "sonare_abi_version"):
+        lib.sonare_abi_version.restype = ctypes.c_uint32
+        lib.sonare_abi_version.argtypes = []
+
     lib.sonare_engine_abi_version.restype = ctypes.c_uint32
     lib.sonare_engine_abi_version.argtypes = []
 

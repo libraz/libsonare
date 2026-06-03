@@ -336,6 +336,8 @@ export type {
 } from './metering';
 export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale';
 export type {
+  BuiltinSynthBinding,
+  BuiltinSynthWaveform,
   ProjectBounceOptions,
   ProjectClipDesc,
   ProjectCompileResult,

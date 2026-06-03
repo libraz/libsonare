@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -27,6 +28,30 @@ float float_option(const Napi::Object& object, const char* key, float fallback) 
 bool bool_option(const Napi::Object& object, const char* key, bool fallback) {
   Napi::Value value = object.Get(key);
   return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
+}
+
+// Marshals a SonareSpectrumResult into the JS spectrum object shape shared by
+// meteringSpectrum (Welch-averaged) and meteringSpectrumFrame (single frame).
+Napi::Value EmitSpectrumResult(Napi::Env env, const SonareSpectrumResult& result) {
+  const size_t bytes = result.bin_count * sizeof(float);
+  auto freq = Napi::Float32Array::New(env, result.bin_count);
+  auto mag = Napi::Float32Array::New(env, result.bin_count);
+  auto pwr = Napi::Float32Array::New(env, result.bin_count);
+  auto db = Napi::Float32Array::New(env, result.bin_count);
+  if (result.bin_count > 0) {
+    std::memcpy(freq.Data(), result.frequencies, bytes);
+    std::memcpy(mag.Data(), result.magnitude, bytes);
+    std::memcpy(pwr.Data(), result.power, bytes);
+    std::memcpy(db.Data(), result.db, bytes);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("frequencies", freq);
+  out.Set("magnitude", mag);
+  out.Set("power", pwr);
+  out.Set("db", db);
+  out.Set("nFft", Napi::Number::New(env, result.n_fft));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  return out;
 }
 
 }  // namespace
@@ -284,10 +309,12 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
   float hop_sec =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
+  // The C ABI treats 0.0 as a literal 0th percentile and a NEGATIVE value as
+  // "use the library default", so omitted percentiles pass -1.0f (default).
   float low_p =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : -1.0f;
   float high_p =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : -1.0f;
   SonareDynamicRangeResult result{};
   SonareError err = sonare_metering_dynamic_range(typed.Data(), typed.ElementLength(), sr,
                                                   window_sec, hop_sec, low_p, high_p, &result);
@@ -466,9 +493,13 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   }
   int sr =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
+  size_t max_points =
+      info.Length() >= 4 && info[3].IsNumber()
+          ? static_cast<size_t>(std::max<int64_t>(0, info[3].As<Napi::Number>().Int64Value()))
+          : 0;
   SonareVectorscopeResult result{};
-  SonareError err =
-      sonare_metering_vectorscope(left.Data(), right.Data(), left.ElementLength(), sr, &result);
+  SonareError err = sonare_metering_vectorscope_decimated(
+      left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -503,9 +534,13 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   }
   int sr =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
+  size_t max_points =
+      info.Length() >= 4 && info[3].IsNumber()
+          ? static_cast<size_t>(std::max<int64_t>(0, info[3].As<Napi::Number>().Int64Value()))
+          : 0;
   SonarePhaseScopeResult result{};
-  SonareError err =
-      sonare_metering_phase_scope(left.Data(), right.Data(), left.ElementLength(), sr, &result);
+  SonareError err = sonare_metering_phase_scope_decimated(
+      left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -563,23 +598,44 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
-  const size_t bytes = result.bin_count * sizeof(float);
-  auto freq = Napi::Float32Array::New(env, result.bin_count);
-  auto mag = Napi::Float32Array::New(env, result.bin_count);
-  auto pwr = Napi::Float32Array::New(env, result.bin_count);
-  auto db = Napi::Float32Array::New(env, result.bin_count);
-  if (result.bin_count > 0) {
-    std::memcpy(freq.Data(), result.frequencies, bytes);
-    std::memcpy(mag.Data(), result.magnitude, bytes);
-    std::memcpy(pwr.Data(), result.power, bytes);
-    std::memcpy(db.Data(), result.db, bytes);
+  return EmitSpectrumResult(env, result);
+}
+
+Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "meteringSpectrumFrame: expected Float32Array samples")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
   }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("frequencies", freq);
-  out.Set("magnitude", mag);
-  out.Set("power", pwr);
-  out.Set("db", db);
-  out.Set("nFft", Napi::Number::New(env, result.n_fft));
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
-  return out;
+  auto typed = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  size_t frame_offset =
+      info.Length() >= 3 && info[2].IsNumber()
+          ? static_cast<size_t>(std::max<int64_t>(0, info[2].As<Napi::Number>().Int64Value()))
+          : 0;
+  int n_fft = 0;
+  int smooth = 0;
+  int octave = 0;
+  float db_ref = 0.0f;
+  float db_amin = 0.0f;
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    Napi::Object opts = info[3].As<Napi::Object>();
+    n_fft = int_option(opts, "nFft", 0);
+    smooth = bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
+    octave = int_option(opts, "octaveFraction", 0);
+    db_ref = float_option(opts, "dbRef", 0.0f);
+    db_amin = float_option(opts, "dbAmin", 0.0f);
+  }
+  SonareSpectrumResult result{};
+  SonareError err =
+      sonare_metering_spectrum_frame(typed.Data(), typed.ElementLength(), sr, frame_offset, n_fft,
+                                     smooth, octave, db_ref, db_amin, &result);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
+  return EmitSpectrumResult(env, result);
 }

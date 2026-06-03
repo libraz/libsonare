@@ -55,6 +55,7 @@ TempogramMode: TypeAlias = Literal["autocorrelation", "auto", "ac", "cosine"]
 FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 StripRef: TypeAlias = int | str
 
+def abi_version() -> int: ...
 def engine_abi_version() -> int: ...
 def voice_changer_abi_version() -> int: ...
 
@@ -838,6 +839,15 @@ def decompose(
     n_iter: int = 50,
     beta: float = 2.0,
 ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
+def decompose_with_init(
+    s: FloatSamples,
+    n_features: int,
+    n_frames: int,
+    n_components: int,
+    n_iter: int = 50,
+    beta: float = 2.0,
+    init: str = "random",
+) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
 def nn_filter(
     s: FloatSamples,
     n_features: int,
@@ -1071,8 +1081,24 @@ def metering_stereo_width(
 def metering_vectorscope(
     left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
 ) -> VectorscopeReport: ...
+def metering_vectorscope_decimated(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    max_points: int = 0,
+    *,
+    validate: bool = True,
+) -> VectorscopeReport: ...
 def metering_phase_scope(
     left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+) -> PhaseScopeReport: ...
+def metering_phase_scope_decimated(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    max_points: int = 0,
+    *,
+    validate: bool = True,
 ) -> PhaseScopeReport: ...
 def metering_spectrum(
     samples: FloatSamples,
@@ -1082,6 +1108,18 @@ def metering_spectrum(
     octave_fraction: int = 0,
     db_ref: float = 0.0,
     db_amin: float = 0.0,
+) -> SpectrumReport: ...
+def metering_spectrum_frame(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    frame_offset: int = 0,
+    n_fft: int = 0,
+    apply_octave_smoothing: bool = False,
+    octave_fraction: int = 0,
+    db_ref: float = 0.0,
+    db_amin: float = 0.0,
+    *,
+    validate: bool = True,
 ) -> SpectrumReport: ...
 def metering_peak_db(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
@@ -1115,8 +1153,8 @@ def metering_dynamic_range(
     sample_rate: int = 22050,
     window_sec: float = 0.0,
     hop_sec: float = 0.0,
-    low_percentile: float = 0.0,
-    high_percentile: float = 0.0,
+    low_percentile: float = -1.0,
+    high_percentile: float = -1.0,
     *,
     validate: bool = True,
 ) -> DynamicRangeReport: ...

@@ -25,6 +25,35 @@ export interface ProjectBounceOptions {
   instrumentLatencySamples?: number;
 }
 
+/** Oscillator waveform for the built-in synth. */
+export type BuiltinSynthWaveform = 'sine' | 'saw' | 'square' | 'triangle' | 0 | 1 | 2 | 3;
+
+/**
+ * Built-in synth patch + MIDI routing for
+ * {@link Project.bounceWithBuiltinInstrument}. Every field is optional; a
+ * non-positive (or omitted) numeric field falls back to the C-ABI default
+ * (gain 0.2, attack 5ms, decay 60ms, sustain 0.7, release 120ms, 16 voices),
+ * so `{}` is a usable default sine patch.
+ */
+export interface BuiltinSynthBinding {
+  /** MIDI destination id this patch answers to (default 0; see {@link Project.setTrackMidiDestination}). */
+  destinationId?: number;
+  /** Oscillator waveform (default `'sine'`). */
+  waveform?: BuiltinSynthWaveform;
+  /** Master output gain, linear (0 => 0.2). */
+  gain?: number;
+  /** ADSR attack in ms (0 => 5). */
+  attackMs?: number;
+  /** ADSR decay in ms (0 => 60). */
+  decayMs?: number;
+  /** ADSR sustain level [0,1] (0 => 0.7). */
+  sustain?: number;
+  /** ADSR release in ms (0 => 120). */
+  releaseMs?: number;
+  /** Max simultaneous voices (0 => 16, clamped to [1, 64]). */
+  polyphony?: number;
+}
+
 /** Track kind for {@link Project.addTrack}. */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
 
@@ -118,6 +147,10 @@ interface WasmProject {
   snapToGrid: (ppq: number, strength: number) => number;
   compile: () => ProjectCompileResult;
   bounce: (options: ProjectBounceOptions) => Float32Array;
+  bounceWithBuiltinInstrument: (
+    bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,
+    options: ProjectBounceOptions,
+  ) => Float32Array;
   delete: () => void;
 }
 
@@ -499,11 +532,47 @@ export class Project {
   }
 
   /**
-   * Compile + render the project offline to interleaved float audio. With no
-   * options (or `totalFrames` of 0) an empty project yields an empty buffer.
+   * Compile + render the project offline to interleaved float audio. MIDI
+   * tracks render silently here (no instrument is bound) — use
+   * {@link bounceWithBuiltinInstrument} to make MIDI audible.
+   *
+   * When `totalFrames` is omitted (or `<= 0`) the render length is auto-derived
+   * from the arrangement, so a project with content renders without computing a
+   * frame count; an empty project yields an empty buffer.
+   *
+   * @example
+   * ```typescript
+   * const audio = project.bounce({ numChannels: 2 });
+   * ```
    */
   bounce(options: ProjectBounceOptions = {}): Float32Array {
     return this.native.bounce(options);
+  }
+
+  /**
+   * Compile + render the project offline, routing MIDI tracks through the
+   * built-in oscillator synth so a MIDI-only arrangement bounces to audible
+   * audio. Pass a {@link BuiltinSynthBinding} (or an array of them) to choose
+   * the patch and MIDI destination; omit it (or pass `{}`) for one
+   * default-destination sine patch.
+   *
+   * Like {@link bounce}, omitting `totalFrames` auto-derives the render length
+   * from the arrangement plus the synth's release tail.
+   *
+   * @example
+   * ```typescript
+   * // MIDI-only project -> non-silent stereo audio.
+   * const audio = project.bounceWithBuiltinInstrument(
+   *   { waveform: 'saw' },
+   *   { numChannels: 2 },
+   * );
+   * ```
+   */
+  bounceWithBuiltinInstrument(
+    instrument: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> = {},
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithBuiltinInstrument(instrument, options);
   }
 
   /** Release the underlying WASM object. Safe to call only once. */

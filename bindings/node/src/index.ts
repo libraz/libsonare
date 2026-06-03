@@ -52,6 +52,8 @@ import type {
   PanLaw,
   PanMode,
   PitchResult,
+  BuiltinInstrumentConfig,
+  SynthWaveform,
   ProjectBounceOptions,
   ProjectClipDesc,
   ProjectCompileResult,
@@ -124,6 +126,11 @@ export class Audio {
     return new Audio(addon.Audio.fromFile(path));
   }
 
+  /**
+   * Wrap raw mono float samples as an {@link Audio}. `sampleRate` defaults to
+   * `22050` (the librosa default) when omitted. Note: this diverges from the
+   * WASM binding, where `sampleRate` is required and has no default.
+   */
   static fromBuffer(samples: Float32Array, sampleRate = 22050): Audio {
     return new Audio(addon.Audio.fromBuffer(samples, sampleRate));
   }
@@ -1081,9 +1088,45 @@ export class Project {
    * Compile + render the project offline to an interleaved float buffer
    * (`totalFrames * channels` samples). Deterministic: the same project +
    * options yields a bit-identical array within one build.
+   *
+   * Omitting `options.totalFrames` (or passing `<= 0`) auto-derives the render
+   * length from the arrangement rather than producing an empty render.
+   *
+   * MIDI tracks routed to a destination render as silence here, because no
+   * instrument is bound. To audition MIDI through the built-in synth, use
+   * {@link bounceWithBuiltinInstrument} / {@link bounceWithBuiltinInstruments}.
    */
   bounce(options: ProjectBounceOptions = {}): Float32Array {
     return this.native.bounce(options);
+  }
+
+  /**
+   * Like {@link bounce}, but renders MIDI tracks routed to a destination
+   * through the built-in oscillator synth so a MIDI-only arrangement bounces
+   * to audible audio. Each entry of `instruments` binds a
+   * {@link BuiltinInstrumentConfig} patch to a `destinationId` (default `0`).
+   * An empty array renders silence, identical to {@link bounce}.
+   */
+  bounceWithBuiltinInstruments(
+    options: ProjectBounceOptions = {},
+    instruments: BuiltinInstrumentConfig[] = [],
+  ): Float32Array {
+    return this.native.bounceWithBuiltinInstruments(options, instruments);
+  }
+
+  /**
+   * Convenience wrapper over {@link bounceWithBuiltinInstruments} for the
+   * common single-instrument case. Pass a {@link BuiltinInstrumentConfig}
+   * (e.g. `{ waveform: 'saw', destinationId: 0 }`) or a bare
+   * {@link SynthWaveform} name to bind one built-in synth patch.
+   */
+  bounceWithBuiltinInstrument(
+    options: ProjectBounceOptions = {},
+    instrument: BuiltinInstrumentConfig | SynthWaveform = {},
+  ): Float32Array {
+    const config: BuiltinInstrumentConfig =
+      typeof instrument === 'string' ? { waveform: instrument } : instrument;
+    return this.native.bounceWithBuiltinInstruments(options, [config]);
   }
 
   /** Release the underlying native project. Safe to call only once. */
@@ -1121,6 +1164,15 @@ function trackKindValue(kind: ProjectTrackDesc['kind']): number {
 
 export function version(): string {
   return addon.version();
+}
+
+/**
+ * Aggregate native ABI version: the per-subsystem ABI macros folded into one
+ * 32-bit value. It bumps whenever any flat C POD layout changes, so callers can
+ * detect an incompatible prebuilt native binary.
+ */
+export function abiVersion(): number {
+  return addon.abiVersion();
 }
 
 /**
@@ -1599,6 +1651,8 @@ export type {
   PanLaw,
   PanMode,
   PitchResult,
+  BuiltinInstrumentConfig,
+  SynthWaveform,
   ProjectBounceOptions,
   ProjectClipDesc,
   ProjectCompileResult,

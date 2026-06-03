@@ -27,6 +27,8 @@ from typing import SupportsFloat, cast
 import numpy as np
 
 from ._runtime import (
+    SonareBuiltinInstrumentBinding,
+    SonareBuiltinSynthConfig,
     SonareMidiEventPod,
     SonareProjectBounceOptions,
     SonareProjectClipDesc,
@@ -37,6 +39,20 @@ from ._runtime import (
     _get_lib,
     _to_c_float_array,
 )
+
+# Built-in synth waveform ordinals (mirror SonareSynthWaveform).
+SYNTH_WAVEFORM_SINE = 0
+SYNTH_WAVEFORM_SAW = 1
+SYNTH_WAVEFORM_SQUARE = 2
+SYNTH_WAVEFORM_TRIANGLE = 3
+
+_SYNTH_WAVEFORM_NAMES = {
+    "sine": SYNTH_WAVEFORM_SINE,
+    "saw": SYNTH_WAVEFORM_SAW,
+    "sawtooth": SYNTH_WAVEFORM_SAW,
+    "square": SYNTH_WAVEFORM_SQUARE,
+    "triangle": SYNTH_WAVEFORM_TRIANGLE,
+}
 
 # Must match SONARE_PROJECT_ABI_VERSION (src/sonare_c_project.h) and the other
 # bindings' expected project ABI constant. A mismatch means the loaded native
@@ -63,6 +79,46 @@ class ProjectDiagnostic:
     code: int
     severity: int
     target_id: int
+
+
+@dataclass(frozen=True)
+class BuiltinSynthConfig:
+    """Patch for the built-in polyphonic oscillator synth (see
+    :meth:`Project.bounce_with_builtin_instrument`).
+
+    Every numeric field uses "0 (or non-positive) => sensible default", so a
+    default-constructed config is the default sine patch; override only what you
+    need. ``waveform`` may be an ordinal (0=sine, 1=saw, 2=square, 3=triangle)
+    or a name (``"sine"`` / ``"saw"`` / ``"square"`` / ``"triangle"``).
+    """
+
+    waveform: str | int = SYNTH_WAVEFORM_SINE
+    gain: float = 0.0
+    attack_ms: float = 0.0
+    decay_ms: float = 0.0
+    sustain: float = 0.0
+    release_ms: float = 0.0
+    polyphony: int = 0
+
+    def _to_c(self) -> SonareBuiltinSynthConfig:
+        return SonareBuiltinSynthConfig(
+            waveform=_synth_waveform_value(self.waveform),
+            gain=float(self.gain),
+            attack_ms=float(self.attack_ms),
+            decay_ms=float(self.decay_ms),
+            sustain=float(self.sustain),
+            release_ms=float(self.release_ms),
+            polyphony=int(self.polyphony),
+        )
+
+
+def _synth_waveform_value(waveform: str | int) -> int:
+    if isinstance(waveform, int):
+        return waveform
+    key = waveform.lower()
+    if key not in _SYNTH_WAVEFORM_NAMES:
+        raise ValueError(f"unknown synth waveform: {waveform}")
+    return _SYNTH_WAVEFORM_NAMES[key]
 
 
 @dataclass(frozen=True)
@@ -676,7 +732,12 @@ class Project:
         Returns a ``(frames, channels)`` float32 ndarray. Deterministic: the
         same project + options yields a bit-identical array within one build.
         Zero-valued options take native defaults (project sample rate, 2
-        channels, block 128).
+        channels, block 128). Omitting ``total_frames`` (or passing <= 0) makes
+        the native layer auto-derive the render length from the arrangement.
+
+        Note: MIDI tracks render to silence here because no instrument is bound;
+        use :meth:`bounce_with_builtin_instrument` to render MIDI through the
+        built-in synth.
         """
         lib = _get_lib()
         options = SonareProjectBounceOptions(
@@ -692,6 +753,83 @@ class Project:
             lib.sonare_project_bounce(
                 self._require_handle(),
                 ctypes.byref(options),
+                ctypes.byref(out),
+                ctypes.byref(out_len),
+            )
+        )
+        try:
+            interleaved = _from_c_float_array(out, int(out_len.value))
+        finally:
+            if out and out_len.value > 0:
+                lib.sonare_free_floats(out)
+        channels = num_channels if num_channels > 0 else 2
+        if channels > 0 and interleaved.size % channels == 0:
+            return interleaved.reshape(-1, channels)
+        return interleaved.reshape(-1, 1)
+
+    def bounce_with_builtin_instrument(
+        self,
+        instrument: BuiltinSynthConfig | None = None,
+        *,
+        destination_id: int = 0,
+        instruments: Sequence[tuple[int, BuiltinSynthConfig]] | None = None,
+        total_frames: int = 0,
+        block_size: int = 0,
+        num_channels: int = 0,
+        sample_rate: int = 0,
+        instrument_latency_samples: int = 0,
+    ) -> np.ndarray:
+        """Compile + render the project, driving MIDI tracks through the built-in synth.
+
+        Unlike :meth:`bounce`, MIDI tracks routed to a bound destination render
+        through the built-in polyphonic oscillator synth, so a MIDI-only
+        arrangement produces audible (non-silent) output without the caller
+        supplying its own instrument callbacks.
+
+        Args:
+            instrument: Patch bound to ``destination_id`` (default 0). Pass
+                ``None`` for the default sine patch. Ignored when ``instruments``
+                is given.
+            destination_id: Destination id for ``instrument`` (matches
+                :meth:`set_track_midi_destination`; default 0).
+            instruments: Optional explicit list of ``(destination_id, patch)``
+                bindings, overriding ``instrument`` / ``destination_id``.
+            total_frames: Render length in frames; <= 0 auto-derives the length
+                from the arrangement (musical end + the synth's release tail).
+            block_size / num_channels / sample_rate / instrument_latency_samples:
+                As :meth:`bounce` (0 takes native defaults).
+
+        Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
+        fixed project + options + patch.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_bounce_with_builtin_instruments"):
+            raise RuntimeError("libsonare was built without the built-in instrument bounce ABI")
+        if instruments is None:
+            patch = instrument if instrument is not None else BuiltinSynthConfig()
+            bindings = [(int(destination_id), patch)]
+        else:
+            bindings = [(int(dst), patch) for dst, patch in instruments]
+        count = len(bindings)
+        c_bindings = (SonareBuiltinInstrumentBinding * count)()
+        for i, (dst, patch) in enumerate(bindings):
+            c_bindings[i].destination_id = dst
+            c_bindings[i].config = patch._to_c()
+        options = SonareProjectBounceOptions(
+            total_frames=int(total_frames),
+            block_size=int(block_size),
+            num_channels=int(num_channels),
+            sample_rate=int(sample_rate),
+            instrument_latency_samples=int(instrument_latency_samples),
+        )
+        out = ctypes.POINTER(ctypes.c_float)()
+        out_len = ctypes.c_size_t()
+        _check(
+            lib.sonare_project_bounce_with_builtin_instruments(
+                self._require_handle(),
+                ctypes.byref(options),
+                c_bindings if count else None,
+                ctypes.c_size_t(count),
                 ctypes.byref(out),
                 ctypes.byref(out_len),
             )

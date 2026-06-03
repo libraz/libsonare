@@ -102,9 +102,11 @@ export function meteringDynamicRange(
   samples: Float32Array,
   sampleRate = 22050,
   windowSec = 0,
+  // The native side treats a NEGATIVE percentile as "use the library default"
+  // (0 is a literal 0th percentile), so omitted percentiles default to -1.
   hopSec = 0,
-  lowPercentile = 0,
-  highPercentile = 0,
+  lowPercentile = -1,
+  highPercentile = -1,
   options: ValidateOptions = {},
 ): DynamicRangeReport {
   assertSamples('meteringDynamicRange', samples, options.validate !== false);
@@ -149,7 +151,7 @@ export interface SpectrumOptions {
   dbAmin?: number;
 }
 
-/** Single-frame magnitude / power / dB spectrum returned by `meteringSpectrum`. */
+/** Magnitude / power / dB spectrum returned by the metering spectrum functions. */
 export interface SpectrumReport {
   frequencies: Float32Array;
   magnitude: Float32Array;
@@ -172,7 +174,10 @@ export function meteringStereoCorrelation(
   return addon.meteringStereoCorrelation(left, right, sampleRate);
 }
 
-/** Side / mid energy ratio: 0 = pure mono, ~1 = wide stereo. */
+/**
+ * Side / mid energy ratio, clamped to `[0, 2]`: 0 = pure mono, ~1 = wide
+ * stereo, 2 = fully decorrelated / out-of-phase.
+ */
 export function meteringStereoWidth(
   left: Float32Array,
   right: Float32Array,
@@ -185,33 +190,57 @@ export function meteringStereoWidth(
   return addon.meteringStereoWidth(left, right, sampleRate);
 }
 
-/** Per-sample mid/side point series (one entry per input frame). */
+/** Options for the decimated scope functions. */
+export interface ScopeOptions extends ValidateOptions {
+  /**
+   * Upper bound on the returned point count. Omit / `0` (or a value `>= length`)
+   * yields one point per input sample; otherwise the point cloud is
+   * deterministically decimated to at most `maxPoints` points (keeping the
+   * largest-radius sample per bucket) for display-sized output.
+   */
+  maxPoints?: number;
+}
+
+/**
+ * Mid/side vectorscope point series. By default emits one point per input
+ * sample; pass `maxPoints` to get a display-sized decimated point set.
+ */
 export function meteringVectorscope(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  options: ValidateOptions = {},
+  options: ScopeOptions = {},
 ): VectorscopeReport {
   const validate = options.validate !== false;
   assertSamples('meteringVectorscope', left, validate, 'left');
   assertSamples('meteringVectorscope', right, validate, 'right');
-  return addon.meteringVectorscope(left, right, sampleRate);
+  return addon.meteringVectorscope(left, right, sampleRate, options.maxPoints ?? 0);
 }
 
-/** Phase-scope point series plus summary stats. */
+/**
+ * Phase-scope point series plus summary stats. By default emits one point per
+ * input sample; pass `maxPoints` to decimate the point cloud for display. The
+ * summary stats are always computed over the full-resolution signal.
+ */
 export function meteringPhaseScope(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  options: ValidateOptions = {},
+  options: ScopeOptions = {},
 ): PhaseScopeReport {
   const validate = options.validate !== false;
   assertSamples('meteringPhaseScope', left, validate, 'left');
   assertSamples('meteringPhaseScope', right, validate, 'right');
-  return addon.meteringPhaseScope(left, right, sampleRate);
+  return addon.meteringPhaseScope(left, right, sampleRate, options.maxPoints ?? 0);
 }
 
-/** Single-frame spectrum view (uses the first `nFft` samples of `samples`). */
+/**
+ * Welch-averaged magnitude / power / dB spectrum over the WHOLE signal. This is
+ * NOT a single-frame snapshot: the signal is split into Hann-windowed,
+ * 50%-overlapping `nFft`-length frames whose power spectra are averaged across
+ * the entire input, so transients are smeared by the averaging. For a true
+ * single-frame FFT of one window, use {@link meteringSpectrumFrame}.
+ */
 export function meteringSpectrum(
   samples: Float32Array,
   sampleRate = 22050,
@@ -220,6 +249,23 @@ export function meteringSpectrum(
   const validate = options?.validate !== false;
   assertSamples('meteringSpectrum', samples, validate);
   return addon.meteringSpectrum(samples, sampleRate, options ?? {});
+}
+
+/**
+ * True single-frame magnitude / power / dB spectrum (one Hann-windowed
+ * `nFft`-length FFT), for spectrum-analyzer "moment" snapshots that must not be
+ * time-averaged like {@link meteringSpectrum}. The analysis frame spans
+ * `[frameOffset, frameOffset + nFft)`; samples past the end are zero-padded.
+ */
+export function meteringSpectrumFrame(
+  samples: Float32Array,
+  sampleRate = 22050,
+  frameOffset = 0,
+  options?: SpectrumOptions & ValidateOptions,
+): SpectrumReport {
+  const validate = options?.validate !== false;
+  assertSamples('meteringSpectrumFrame', samples, validate);
+  return addon.meteringSpectrumFrame(samples, sampleRate, frameOffset, options ?? {});
 }
 
 /**

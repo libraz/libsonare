@@ -1,18 +1,6 @@
 import {
-  analyze,
-  analyzeWithProgress,
-  chordFunctionalAnalysis,
-  detectBeats,
-  detectBpm,
-  detectChords,
-  detectDownbeats,
-  detectKey,
-  detectKeyCandidates,
-  detectOnsets,
-} from './quick_analysis';
-import {
-  hpss,
   harmonic,
+  hpss,
   masterAudio,
   mastering,
   masteringChain,
@@ -66,13 +54,25 @@ import type {
   MelodyResult,
   MelSpectrogramResult,
   MfccResult,
+  Mode,
   PitchClass,
   PitchResult,
   SoloProcessor,
   StftResult,
 } from './public_types';
+import {
+  analyze,
+  analyzeWithProgress,
+  chordFunctionalAnalysis,
+  detectBeats,
+  detectBpm,
+  detectChords,
+  detectDownbeats,
+  detectKey,
+  detectKeyCandidates,
+  detectOnsets,
+} from './quick_analysis';
 import type { ProgressCallback, WasmNnlsChromaResult } from './sonare.js';
-import { Mode } from './public_types';
 
 // ============================================================================
 // Audio Class
@@ -221,10 +221,10 @@ export class Audio {
   }
 
   masterAudio(
-    presetName: MasteringPreset,
+    presetName: MasteringPreset = 'pop',
     overrides: Record<string, number | boolean> | null = null,
   ): MasteringChainResult {
-    return masterAudio(this._samples, this._sampleRate, presetName, overrides);
+    return masterAudio(this._samples, this._sampleRate, presetName, overrides ?? {});
   }
 
   masteringProcess(

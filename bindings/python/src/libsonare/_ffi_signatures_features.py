@@ -577,6 +577,17 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareVectorscopeResult),
     ]
 
+    if hasattr(lib, "sonare_metering_vectorscope_decimated"):
+        lib.sonare_metering_vectorscope_decimated.restype = ctypes.c_int32
+        lib.sonare_metering_vectorscope_decimated.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareVectorscopeResult),
+        ]
+
     lib.sonare_free_vectorscope_result.restype = None
     lib.sonare_free_vectorscope_result.argtypes = [ctypes.POINTER(SonareVectorscopeResult)]
 
@@ -588,6 +599,17 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(SonarePhaseScopeResult),
     ]
+
+    if hasattr(lib, "sonare_metering_phase_scope_decimated"):
+        lib.sonare_metering_phase_scope_decimated.restype = ctypes.c_int32
+        lib.sonare_metering_phase_scope_decimated.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonarePhaseScopeResult),
+        ]
 
     lib.sonare_free_phase_scope_result.restype = None
     lib.sonare_free_phase_scope_result.argtypes = [ctypes.POINTER(SonarePhaseScopeResult)]
@@ -604,6 +626,21 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.POINTER(SonareSpectrumResult),
     ]
+
+    if hasattr(lib, "sonare_metering_spectrum_frame"):
+        lib.sonare_metering_spectrum_frame.restype = ctypes.c_int32
+        lib.sonare_metering_spectrum_frame.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.POINTER(SonareSpectrumResult),
+        ]
 
     lib.sonare_free_spectrum_result.restype = None
     lib.sonare_free_spectrum_result.argtypes = [ctypes.POINTER(SonareSpectrumResult)]

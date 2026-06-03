@@ -898,6 +898,11 @@ Napi::Value SonareWrap::Version(const Napi::CallbackInfo& info) {
   return Napi::String::New(env, sonare_version());
 }
 
+Napi::Value SonareWrap::AbiVersion(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  return Napi::Number::New(env, sonare_abi_version());
+}
+
 Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);

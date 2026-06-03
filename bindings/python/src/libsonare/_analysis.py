@@ -897,6 +897,19 @@ def version() -> str:
     return v.decode("utf-8") if v else ""
 
 
+def abi_version() -> int:
+    """Return the aggregate libsonare C ABI version.
+
+    Folds every subsystem ABI macro into a single 32-bit value (see
+    ``sonare_c.h``), letting a prebuilt binding detect an incompatible native
+    library. Returns 0 when the loaded library predates this symbol.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_abi_version"):
+        return 0
+    return int(lib.sonare_abi_version())
+
+
 def engine_abi_version() -> int:
     """Return the realtime engine ABI version used for binding compatibility checks."""
     return int(_get_lib().sonare_engine_abi_version())

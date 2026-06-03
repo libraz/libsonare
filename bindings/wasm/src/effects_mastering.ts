@@ -19,8 +19,8 @@ import type {
 } from './public_types';
 import type { ProgressCallback } from './sonare.js';
 import { RealtimeVoiceChanger } from './streaming_mixing';
-import { assertSamples } from './validation';
 import type { ValidateOptions } from './validation';
+import { assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -733,8 +733,8 @@ export function masteringPresetNames(): MasteringPreset[] {
 export function masterAudio(
   samples: Float32Array,
   sampleRate = 22050,
-  presetName: MasteringPreset,
-  overrides: Record<string, number | boolean> | null = null,
+  presetName: MasteringPreset = 'pop',
+  overrides: Record<string, number | boolean> = {},
 ): MasteringChainResult {
   return requireModule().masterAudio(presetName, samples, sampleRate, overrides);
 }
@@ -753,8 +753,8 @@ export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  presetName: MasteringPreset,
-  overrides: Record<string, number | boolean> | null = null,
+  presetName: MasteringPreset = 'pop',
+  overrides: Record<string, number | boolean> = {},
 ): MasteringStereoChainResult {
   if (left.length !== right.length) {
     throw new Error('Stereo channel lengths must match.');

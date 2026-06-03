@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import Project as Project
 from ._project import project_abi_version as project_abi_version
 from .analyzer import (
@@ -16,6 +17,9 @@ from .analyzer import (
 )
 from .analyzer import (
     StreamingMasteringChain as StreamingMasteringChain,
+)
+from .analyzer import (
+    abi_version as abi_version,
 )
 from .analyzer import (
     amplitude_to_db as amplitude_to_db,
@@ -64,6 +68,9 @@ from .analyzer import (
 )
 from .analyzer import (
     decompose as decompose,
+)
+from .analyzer import (
+    decompose_with_init as decompose_with_init,
 )
 from .analyzer import (
     deemphasis as deemphasis,
@@ -228,7 +235,13 @@ from .analyzer import (
     metering_phase_scope as metering_phase_scope,
 )
 from .analyzer import (
+    metering_phase_scope_decimated as metering_phase_scope_decimated,
+)
+from .analyzer import (
     metering_spectrum as metering_spectrum,
+)
+from .analyzer import (
+    metering_spectrum_frame as metering_spectrum_frame,
 )
 from .analyzer import (
     metering_stereo_correlation as metering_stereo_correlation,
@@ -238,6 +251,9 @@ from .analyzer import (
 )
 from .analyzer import (
     metering_vectorscope as metering_vectorscope,
+)
+from .analyzer import (
+    metering_vectorscope_decimated as metering_vectorscope_decimated,
 )
 from .analyzer import (
     mfcc as mfcc,

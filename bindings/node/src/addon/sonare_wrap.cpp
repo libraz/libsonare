@@ -148,6 +148,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MeteringPhaseScope, "meteringPhaseScope"));
   exports.Set("meteringSpectrum",
               Napi::Function::New(env, &SonareWrap::MeteringSpectrum, "meteringSpectrum"));
+  exports.Set("meteringSpectrumFrame", Napi::Function::New(env, &SonareWrap::MeteringSpectrumFrame,
+                                                           "meteringSpectrumFrame"));
   exports.Set("scaleQuantizeMidi",
               Napi::Function::New(env, &SonareWrap::ScaleQuantizeMidi, "scaleQuantizeMidi"));
   exports.Set(
@@ -157,6 +159,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
       "scalePitchClassEnabled",
       Napi::Function::New(env, &SonareWrap::ScalePitchClassEnabled, "scalePitchClassEnabled"));
   exports.Set("version", Napi::Function::New(env, &SonareWrap::Version, "version"));
+  exports.Set("abiVersion", Napi::Function::New(env, &SonareWrap::AbiVersion, "abiVersion"));
   exports.Set("hasFfmpegSupport",
               Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
 

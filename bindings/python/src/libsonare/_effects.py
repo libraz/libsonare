@@ -392,6 +392,61 @@ def decompose(
             lib.sonare_free_floats(out_h)
 
 
+def decompose_with_init(
+    s: Sequence[float] | list[float],
+    n_features: int,
+    n_frames: int,
+    n_components: int,
+    n_iter: int = 50,
+    beta: float = 2.0,
+    init: str = "random",
+) -> tuple[np.ndarray, np.ndarray]:
+    """NMF with a selectable initialiser (librosa.decompose.decompose, ``init``).
+
+    Identical to :func:`decompose` but exposes the initialisation strategy:
+    ``"random"`` (default) or ``"nndsvd"`` (the SVD-based warm start, which tends
+    to converge in fewer iterations).
+
+    Returns:
+        Tuple ``(w, h)`` of float32 arrays: ``w`` of shape
+        ``(n_features, n_components)`` and ``h`` of shape
+        ``(n_components, n_frames)``.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_decompose_with_init"):
+        raise RuntimeError("libsonare was built without sonare_decompose_with_init")
+    c_array, length = _to_c_float_array(s)
+    if length != n_features * n_frames:
+        raise ValueError("s length must equal n_features * n_frames")
+    out_w = ctypes.POINTER(ctypes.c_float)()
+    out_w_length = ctypes.c_size_t()
+    out_h = ctypes.POINTER(ctypes.c_float)()
+    out_h_length = ctypes.c_size_t()
+    rc = lib.sonare_decompose_with_init(
+        c_array,
+        ctypes.c_int(n_features),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(n_components),
+        ctypes.c_int(n_iter),
+        ctypes.c_float(beta),
+        init.encode("utf-8") if init else None,
+        ctypes.byref(out_w),
+        ctypes.byref(out_w_length),
+        ctypes.byref(out_h),
+        ctypes.byref(out_h_length),
+    )
+    _check(rc)
+    try:
+        w = _from_c_float_array(out_w, out_w_length.value).reshape(n_features, n_components)
+        h = _from_c_float_array(out_h, out_h_length.value).reshape(n_components, n_frames)
+        return (w, h)
+    finally:
+        if out_w and out_w_length.value > 0:
+            lib.sonare_free_floats(out_w)
+        if out_h and out_h_length.value > 0:
+            lib.sonare_free_floats(out_h)
+
+
 def nn_filter(
     s: Sequence[float] | list[float],
     n_features: int,

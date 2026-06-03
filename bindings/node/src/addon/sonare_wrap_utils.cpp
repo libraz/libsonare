@@ -124,16 +124,21 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
 
 std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object) {
   std::vector<sonare::mastering::api::Param> params;
+  Napi::Env env = object.Env();
   Napi::Array names = object.GetPropertyNames();
   for (uint32_t index = 0; index < names.Length(); ++index) {
     Napi::Value key_value = names.Get(index);
     Napi::Value value = object.Get(key_value);
-    if (key_value.IsString() && value.IsNumber()) {
-      params.push_back(
-          {key_value.As<Napi::String>().Utf8Value(), value.As<Napi::Number>().DoubleValue()});
-    } else if (key_value.IsString() && value.IsBoolean()) {
-      params.push_back({key_value.As<Napi::String>().Utf8Value(),
-                        value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
+    const std::string key = key_value.As<Napi::String>().Utf8Value();
+    if (value.IsNumber()) {
+      params.push_back({key, value.As<Napi::Number>().DoubleValue()});
+    } else if (value.IsBoolean()) {
+      params.push_back({key, value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
+    } else {
+      Napi::TypeError::New(
+          env, "Parameter '" + key + "' must be a number or boolean (got an unsupported type)")
+          .ThrowAsJavaScriptException();
+      return params;
     }
   }
   return params;

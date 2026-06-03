@@ -52,6 +52,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   // -- compile / render --
   Napi::Value Compile(const Napi::CallbackInfo& info);
   Napi::Value Bounce(const Napi::CallbackInfo& info);
+  Napi::Value BounceWithBuiltinInstruments(const Napi::CallbackInfo& info);
 
   void Destroy(const Napi::CallbackInfo& info);
 

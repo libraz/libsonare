@@ -233,4 +233,85 @@ describe('Project native binding', () => {
   it('throws cleanly on malformed fromJson input', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();
   });
+
+  /** A MIDI-only project: one MIDI clip holding a sustained note routed to dest 0. */
+  function buildMidiOnlyProject(): Project {
+    const project = Project.create();
+    project.setSampleRate(48000);
+    const { trackId, clipId } = project.addMidiClip(0, 4);
+    project.setTrackMidiDestination(trackId, 0);
+    project.setMidiEvents(clipId, [
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(2, 0, 0, 60, 0),
+    ]);
+    return project;
+  }
+
+  function peak(audio: Float32Array): number {
+    let p = 0;
+    for (let i = 0; i < audio.length; i++) {
+      const a = Math.abs(audio[i]);
+      if (a > p) p = a;
+    }
+    return p;
+  }
+
+  it('bounces a MIDI-only project to silence without a bound instrument', () => {
+    const project = buildMidiOnlyProject();
+    const audio = project.bounce({ totalFrames: 4096, numChannels: 2, sampleRate: 48000 });
+    expect(audio.length).toBe(4096 * 2);
+    expect(peak(audio)).toBe(0);
+    project.destroy();
+  });
+
+  it('bounces MIDI through the built-in synth to non-silent audio', () => {
+    const project = buildMidiOnlyProject();
+    const audio = project.bounceWithBuiltinInstrument(
+      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      { waveform: 'saw', destinationId: 0, gain: 0.5 },
+    );
+    expect(audio.length).toBe(4096 * 2);
+    expect(peak(audio)).toBeGreaterThan(0);
+    project.destroy();
+  });
+
+  it('accepts a bare waveform name and an explicit bindings array', () => {
+    const project = buildMidiOnlyProject();
+    const byName = project.bounceWithBuiltinInstrument(
+      { totalFrames: 2048, numChannels: 1, sampleRate: 48000 },
+      'sine',
+    );
+    expect(peak(byName)).toBeGreaterThan(0);
+
+    const byArray = project.bounceWithBuiltinInstruments(
+      { totalFrames: 2048, numChannels: 1, sampleRate: 48000 },
+      [{ destinationId: 0, waveform: 'square' }],
+    );
+    expect(peak(byArray)).toBeGreaterThan(0);
+    project.destroy();
+  });
+
+  it('auto-derives the render length when totalFrames is omitted', () => {
+    const project = buildMidiOnlyProject();
+    const audio = project.bounceWithBuiltinInstrument(
+      { numChannels: 2, sampleRate: 48000 },
+      { waveform: 'triangle' },
+    );
+    expect(audio.length).toBeGreaterThan(0);
+    expect(peak(audio)).toBeGreaterThan(0);
+    project.destroy();
+  });
+
+  it('rejects an unknown built-in synth waveform name', () => {
+    const project = buildMidiOnlyProject();
+    expect(() =>
+      project.bounceWithBuiltinInstrument(
+        { totalFrames: 1024 },
+        {
+          waveform: 'noise' as unknown as 'sine',
+        },
+      ),
+    ).toThrow(/waveform/);
+    project.destroy();
+  });
 });

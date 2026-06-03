@@ -160,12 +160,20 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 50;
   float beta =
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2.0f;
+  // Optional 7th arg selects the initialiser ("random" | "nndsvd"). When given,
+  // route through the with-init variant for the NNDSVD warm-start.
+  std::string init =
+      info.Length() >= 7 && info[6].IsString() ? info[6].As<Napi::String>().Utf8Value() : "";
   float* out_w = nullptr;
   size_t out_w_length = 0;
   float* out_h = nullptr;
   size_t out_h_length = 0;
-  SonareError err = sonare_decompose(arr.Data(), n_features, n_frames, n_components, n_iter, beta,
-                                     &out_w, &out_w_length, &out_h, &out_h_length);
+  SonareError err =
+      init.empty()
+          ? sonare_decompose(arr.Data(), n_features, n_frames, n_components, n_iter, beta, &out_w,
+                             &out_w_length, &out_h, &out_h_length)
+          : sonare_decompose_with_init(arr.Data(), n_features, n_frames, n_components, n_iter, beta,
+                                       init.c_str(), &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) return EffectsCheckCResult(env, err);
   Napi::Object w = Napi::Object::New(env);
   w.Set("rows", Napi::Number::New(env, n_features));

@@ -117,6 +117,23 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    # sonare_decompose_with_init (selectable NMF initialiser; two flat matrices)
+    if hasattr(lib, "sonare_decompose_with_init"):
+        lib.sonare_decompose_with_init.restype = ctypes.c_int32
+        lib.sonare_decompose_with_init.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_nn_filter (matrix: n_features x n_frames)
     lib.sonare_nn_filter.restype = ctypes.c_int32
     lib.sonare_nn_filter.argtypes = [

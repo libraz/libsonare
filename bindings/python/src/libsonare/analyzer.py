@@ -8,6 +8,7 @@ from ._acoustic import (
     synthesize_rir,
 )
 from ._analysis import (
+    abi_version,
     analyze,
     analyze_bpm,
     analyze_dynamics,
@@ -70,6 +71,7 @@ from ._effects import (
     RealtimeVoiceChanger,
     RealtimeVoiceChangerConfig,
     decompose,
+    decompose_with_init,
     harmonic,
     hpss,
     hpss_with_residual,
@@ -198,6 +200,7 @@ __all__ = [
     "detect_key",
     "detect_key_candidates",
     "detect_onsets",
+    "abi_version",
     "engine_abi_version",
     "voice_changer_abi_version",
     "has_ffmpeg_support",
@@ -258,6 +261,7 @@ __all__ = [
     "chroma",
     "cqt",
     "decompose",
+    "decompose_with_init",
     "ebur128_loudness_range",
     "estimate_tuning",
     "hpss_with_residual",

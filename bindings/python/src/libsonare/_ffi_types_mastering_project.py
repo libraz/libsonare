@@ -204,6 +204,40 @@ class SonareMidiEventPod(ctypes.Structure):
     ]
 
 
+# Built-in synth waveform ordinals (mirror SonareSynthWaveform).
+SONARE_SYNTH_WAVEFORM_SINE = 0
+SONARE_SYNTH_WAVEFORM_SAW = 1
+SONARE_SYNTH_WAVEFORM_SQUARE = 2
+SONARE_SYNTH_WAVEFORM_TRIANGLE = 3
+
+
+class SonareBuiltinSynthConfig(ctypes.Structure):
+    """Maps to SonareBuiltinSynthConfig in sonare_c_project.h.
+
+    Every numeric field uses "0 (or non-positive) => sensible default", so a
+    zero-initialized config is the default sine patch.
+    """
+
+    _fields_ = [
+        ("waveform", ctypes.c_int),
+        ("gain", ctypes.c_float),
+        ("attack_ms", ctypes.c_float),
+        ("decay_ms", ctypes.c_float),
+        ("sustain", ctypes.c_float),
+        ("release_ms", ctypes.c_float),
+        ("polyphony", ctypes.c_int),
+    ]
+
+
+class SonareBuiltinInstrumentBinding(ctypes.Structure):
+    """Maps to SonareBuiltinInstrumentBinding in sonare_c_project.h."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("config", SonareBuiltinSynthConfig),
+    ]
+
+
 # --- Error codes ---
 
 SONARE_OK = 0

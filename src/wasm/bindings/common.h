@@ -161,5 +161,6 @@ void registerEffectsAudioBindings();
 void registerMasteringChainBindings();
 void registerMasteringApiBindings();
 void registerQuickAnalysisBindings();
+void registerQuickDetailedAnalysisBindings();
 
 #endif  // __EMSCRIPTEN__
