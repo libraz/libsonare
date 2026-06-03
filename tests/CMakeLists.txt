@@ -110,6 +110,7 @@ add_executable(sonare_tests
   api/sonare_c_mastering_test.cpp
   api/sonare_c_mastering_repair_test.cpp
   api/sonare_c_features_metering_test.cpp
+  api/sonare_c_abi_version_test.cpp
   api/sonare_c_engine_voice_test.cpp
   api/sonare_c_mixing_features_test.cpp
   api/sonare_c_features_extra_test.cpp

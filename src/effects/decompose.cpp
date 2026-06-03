@@ -206,6 +206,12 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
     throw SonareException(ErrorCode::InvalidParameter,
                           "nn_filter: aggregate must be mean/median/min/max");
   }
+  // librosa rejects a negative exclusion width (it would silently disable the
+  // |i-j| < width time-exclusion band and yield a degenerate self-including
+  // filter). Mirror that rejection instead of treating width<0 as width=0.
+  if (width < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "nn_filter: width must be non-negative");
+  }
   if (k <= 0) k = std::min(5, n_frames);
 
   // Pre-compute column norms for cosine similarity.

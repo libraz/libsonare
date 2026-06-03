@@ -77,8 +77,14 @@ typedef struct {
 /// @brief Sliding-window dynamic range (high_percentile_db - low_percentile_db).
 /// @param window_sec Analysis window length in seconds (0.0 = library default 3.0).
 /// @param hop_sec Hop between windows in seconds (0.0 = library default 1.0).
-/// @param low_percentile Lower percentile in [0,1] (0.0 = library default 0.10).
-/// @param high_percentile Upper percentile in [0,1] (0.0 = library default 0.95).
+/// @param low_percentile Lower percentile in [0,1]. Pass a NEGATIVE value (e.g.
+///        -1.0f) for the library default (0.10). 0.0f is a real request for the
+///        0th percentile (the minimum-RMS window), not the default.
+/// @param high_percentile Upper percentile in [0,1]. Pass a NEGATIVE value (e.g.
+///        -1.0f) for the library default (0.95). 0.0f is a real request for the
+///        0th percentile, not the default.
+/// @note low_percentile == high_percentile is accepted and yields a 0-LU range
+///       (dynamic_range_db == 0); only an inverted pair (low > high) is rejected.
 SonareError sonare_metering_dynamic_range(const float* samples, size_t length, int sample_rate,
                                           float window_sec, float hop_sec, float low_percentile,
                                           float high_percentile, SonareDynamicRangeResult* out);
@@ -112,8 +118,23 @@ typedef struct {
 } SonareVectorscopeResult;
 
 /// @brief Per-sample mid/side point series for the (left, right) buffer.
+/// @warning This emits one point per input sample. For real-length audio that is
+///          millions of points (hundreds of MB once marshalled across a binding).
+///          Prefer @ref sonare_metering_vectorscope_decimated for a display-sized
+///          point set.
 SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
                                         int sample_rate, SonareVectorscopeResult* out);
+
+/// @brief Display-sized mid/side vectorscope.
+/// @param max_points Upper bound on the returned point count. Pass 0 (or a value
+///        >= @p length) to get one point per sample, identical to
+///        @ref sonare_metering_vectorscope. Otherwise the core deterministically
+///        decimates the input to at most @p max_points points, keeping the
+///        largest-radius sample of each contiguous bucket so transient stereo
+///        peaks survive the down-sample.
+SonareError sonare_metering_vectorscope_decimated(const float* left, const float* right,
+                                                  size_t length, int sample_rate, size_t max_points,
+                                                  SonareVectorscopeResult* out);
 
 void sonare_free_vectorscope_result(SonareVectorscopeResult* result);
 
@@ -136,8 +157,23 @@ typedef struct {
 } SonarePhaseScopeResult;
 
 /// @brief Phase-scope (Lissajous + summary stats) for a stereo pair.
+/// @warning Emits one point per input sample; see the warning on
+///          @ref sonare_metering_vectorscope. Prefer
+///          @ref sonare_metering_phase_scope_decimated for display use.
 SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
                                         int sample_rate, SonarePhaseScopeResult* out);
+
+/// @brief Display-sized phase-scope (Lissajous + summary stats).
+/// @param max_points Upper bound on the returned point count. Pass 0 (or a value
+///        >= @p length) for one point per sample. Otherwise the point cloud is
+///        deterministically decimated to at most @p max_points points (keeping
+///        the largest-radius sample per bucket). The summary stats
+///        (@c correlation, @c average_abs_angle_rad, @c max_radius) are always
+///        computed over the full-resolution signal and are unaffected by
+///        @p max_points.
+SonareError sonare_metering_phase_scope_decimated(const float* left, const float* right,
+                                                  size_t length, int sample_rate, size_t max_points,
+                                                  SonarePhaseScopeResult* out);
 
 void sonare_free_phase_scope_result(SonarePhaseScopeResult* result);
 
@@ -153,8 +189,13 @@ typedef struct {
   int sample_rate;
 } SonareSpectrumResult;
 
-/// @brief Single-frame magnitude / power / dB spectrum for the first
-///        @c n_fft samples of @p samples.
+/// @brief Welch-averaged magnitude / power / dB spectrum over the WHOLE buffer.
+/// @details This is NOT a single-frame snapshot. The signal is split into
+///          Hann-windowed, 50%-overlapping @c n_fft-length frames whose power
+///          spectra are averaged across the entire input (Welch's method), so the
+///          result is a time-averaged spectrum rather than a single moment.
+///          Transients are smeared by the averaging. For a true single-frame FFT
+///          of one @c n_fft-length window, use @ref sonare_metering_spectrum_frame.
 /// @param n_fft FFT size. Pass 0 for the library default (2048).
 /// @param apply_octave_smoothing Non-zero applies fractional-octave smoothing
 ///        to magnitude (power and dB are rederived from the smoothed magnitude).
@@ -166,6 +207,25 @@ typedef struct {
 SonareError sonare_metering_spectrum(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int apply_octave_smoothing, int octave_fraction,
                                      float db_ref, float db_amin, SonareSpectrumResult* out);
+
+/// @brief True single-frame magnitude / power / dB spectrum (one Hann-windowed
+///        @c n_fft-length FFT), for spectrum-analyzer "moment" snapshots that
+///        must not be time-averaged like @ref sonare_metering_spectrum.
+/// @param frame_offset Sample index where the analysis frame begins. The frame
+///        spans [@p frame_offset, @p frame_offset + n_fft); samples past the end
+///        of the buffer are zero-padded. Pass 0 for the first frame.
+/// @param n_fft FFT size. Pass 0 for the library default (2048).
+/// @param apply_octave_smoothing Non-zero applies fractional-octave smoothing
+///        to magnitude (power and dB are rederived from the smoothed magnitude).
+/// @param octave_fraction Smoothing fraction (e.g. 3 = 1/3-octave). Pass 0 for
+///        the library default (3).
+/// @param db_ref Linear reference for the dB conversion. Pass 0.0f for 1.0.
+/// @param db_amin Linear floor used to avoid log(0). Pass 0.0f for the library
+///        default (sonare::constants::kEpsilon).
+SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, int sample_rate,
+                                           size_t frame_offset, int n_fft,
+                                           int apply_octave_smoothing, int octave_fraction,
+                                           float db_ref, float db_amin, SonareSpectrumResult* out);
 
 void sonare_free_spectrum_result(SonareSpectrumResult* result);
 

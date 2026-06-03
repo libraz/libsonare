@@ -24,11 +24,40 @@ std::string primary_genre(const AudioProfile& profile) {
 }
 
 api::Preset preset_for_genre(const std::string& genre) {
+  // Every genre label produced by infer_genres() maps to a distinct catalogue
+  // preset; the genre label is the camelCase preset identifier wherever a 1:1
+  // preset exists. Genres that share a preset (no dedicated voicing) fall
+  // through to the closest catalogue entry. Any preset reachable here is also
+  // reachable as a candidate from infer_genres(), so the suggester can in
+  // principle recommend the full catalogue rather than collapsing to Pop.
+  if (genre == "pop") return api::Preset::Pop;
   if (genre == "edm") return api::Preset::EDM;
+  if (genre == "acoustic") return api::Preset::Acoustic;
   if (genre == "hipHop") return api::Preset::HipHop;
-  if (genre == "classical") return api::Preset::Classical;
+  if (genre == "aiMusic") return api::Preset::AIMusic;
   if (genre == "speech") return api::Preset::Speech;
   if (genre == "ambient") return api::Preset::Ambient;
+  if (genre == "lofi") return api::Preset::Lofi;
+  if (genre == "classical") return api::Preset::Classical;
+  if (genre == "drumAndBass") return api::Preset::DrumAndBass;
+  if (genre == "techno") return api::Preset::Techno;
+  if (genre == "metal") return api::Preset::Metal;
+  if (genre == "trap") return api::Preset::Trap;
+  if (genre == "rnb") return api::Preset::RnB;
+  if (genre == "jazz") return api::Preset::Jazz;
+  if (genre == "jpop") return api::Preset::JPop;
+  if (genre == "kpop") return api::Preset::KPop;
+  if (genre == "trance") return api::Preset::Trance;
+  if (genre == "gameOst") return api::Preset::GameOst;
+  // Platform / delivery targets are reachable via AssistantConfig.target_platform
+  // rather than genre inference, but accept their identifiers too so a caller
+  // who injects them as a candidate gets the matching preset.
+  if (genre == "streaming") return api::Preset::Streaming;
+  if (genre == "youtube") return api::Preset::YouTube;
+  if (genre == "broadcast") return api::Preset::Broadcast;
+  if (genre == "podcast") return api::Preset::Podcast;
+  if (genre == "audiobook") return api::Preset::Audiobook;
+  if (genre == "cinema") return api::Preset::Cinema;
   return api::Preset::Pop;
 }
 

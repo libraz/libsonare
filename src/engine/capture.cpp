@@ -5,16 +5,21 @@
 namespace sonare::engine {
 
 void CaptureSink::prepare(CaptureSegment segment) noexcept {
-  segment_ = segment;
+  control_state_.segment = segment;
+  control_.store(control_state_);  // publish the whole snapshot atomically
   reset();
 }
 
-void CaptureSink::arm(bool armed) noexcept { armed_ = armed; }
+void CaptureSink::arm(bool armed) noexcept {
+  control_state_.armed = armed;
+  control_.store(control_state_);
+}
 
 void CaptureSink::set_punch(int64_t start_sample, int64_t end_sample, bool enabled) noexcept {
-  punch_start_sample_ = start_sample;
-  punch_end_sample_ = end_sample;
-  punch_enabled_ = enabled && end_sample > start_sample;
+  control_state_.punch_start_sample = start_sample;
+  control_state_.punch_end_sample = end_sample;
+  control_state_.punch_enabled = enabled && end_sample > start_sample;
+  control_.store(control_state_);
 }
 
 void CaptureSink::reset() noexcept {
@@ -24,24 +29,30 @@ void CaptureSink::reset() noexcept {
 
 void CaptureSink::process(const float* const* input, int num_channels, int num_frames,
                           int64_t timeline_sample) noexcept {
-  if (!armed_ || !input || !segment_.channels || num_channels <= 0 || num_frames <= 0 ||
-      segment_.num_channels <= 0 || segment_.capacity_frames <= 0) {
+  // Read a single consistent snapshot of the published control state. The
+  // seqlock returns either the old or new whole snapshot, never a torn mix, when
+  // racing a control-thread store().
+  const Control control = snapshot();
+  if (!control.armed || !input || !control.segment.channels || num_channels <= 0 ||
+      num_frames <= 0 || control.segment.num_channels <= 0 ||
+      control.segment.capacity_frames <= 0) {
     return;
   }
 
-  const int channels = std::min(num_channels, segment_.num_channels);
+  const int channels = std::min(num_channels, control.segment.num_channels);
   for (int i = 0; i < num_frames; ++i) {
     const int64_t sample = timeline_sample + i;
-    if (punch_enabled_ && (sample < punch_start_sample_ || sample >= punch_end_sample_)) {
+    if (control.punch_enabled &&
+        (sample < control.punch_start_sample || sample >= control.punch_end_sample)) {
       continue;
     }
-    if (captured_frames_ >= segment_.capacity_frames) {
+    if (captured_frames_ >= control.segment.capacity_frames) {
       overflow_count_.bump();
       continue;
     }
     for (int ch = 0; ch < channels; ++ch) {
-      if (!input[ch] || !segment_.channels[ch]) continue;
-      segment_.channels[ch][captured_frames_] = input[ch][i];
+      if (!input[ch] || !control.segment.channels[ch]) continue;
+      control.segment.channels[ch][captured_frames_] = input[ch][i];
     }
     ++captured_frames_;
   }

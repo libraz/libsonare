@@ -1,7 +1,6 @@
 #include "mastering/saturation/waveshaper.h"
 
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
@@ -98,6 +97,20 @@ void Waveshaper::validate_config(const WaveshaperConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "waveshaper mix must be in [0, 1]");
   }
+  // ADAA1 (first-order antiderivative anti-aliasing) is only implemented for the
+  // odd Tanh/Arctan curves; the Asymmetric curve has no ADAA antiderivative
+  // here and there is no oversampling fallback in this processor. Rather than
+  // silently degrading to direct (aliasing-prone) evaluation in release builds
+  // (where the historical assert is compiled out), reject the unsupported
+  // combination so callers get a clear, actionable error instead of audible
+  // aliasing they cannot detect.
+  if (config.curve == WaveshaperCurve::Asymmetric &&
+      config.aliasing == sonare::rt::AliasingControl::Adaa1) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "waveshaper ADAA1 anti-aliasing is not supported for the Asymmetric curve; "
+        "use AliasingControl::None or a Tanh/Arctan curve");
+  }
 }
 
 void Waveshaper::ensure_state(int num_channels) {
@@ -111,14 +124,10 @@ void Waveshaper::ensure_state(int num_channels) {
 
 float Waveshaper::shape_sample(float sample, int channel) {
   // ADAA1 (first-order antiderivative anti-aliasing) is only implemented for the
-  // odd Tanh/Arctan curves. The Asymmetric curve has no ADAA antiderivative
-  // here, so even when Adaa1 is requested it falls back to direct evaluation and
-  // may alias at high drive / low sample rate. This is an intentional,
-  // documented limitation rather than a silent no-op.
-  assert((config_.curve != WaveshaperCurve::Asymmetric ||
-          config_.aliasing != sonare::rt::AliasingControl::Adaa1) &&
-         "ADAA1 is not implemented for the Asymmetric waveshaper curve; it falls "
-         "back to direct (aliasing-prone) evaluation");
+  // odd Tanh/Arctan curves. The Asymmetric + Adaa1 combination is rejected up
+  // front by validate_config(), so it can never reach this point; the
+  // Asymmetric branch below remains only as defensive direct evaluation for any
+  // future non-Adaa1 aliasing mode that is not separately handled.
   if (config_.aliasing != sonare::rt::AliasingControl::Adaa1 ||
       config_.curve == WaveshaperCurve::Asymmetric) {
     return shape(sample, config_);

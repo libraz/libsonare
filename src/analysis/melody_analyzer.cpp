@@ -12,8 +12,44 @@ MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
     : config_(config), sr_(audio.sample_rate()) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Detect pitch frame by frame using the librosa-grade FFT-based YIN in feature/pitch.
-  // Confidence is derived from the CMNDF minimum (1 - d'(tau*)) inside yin_with_confidence.
+  if (config.use_pyin) {
+    // pYIN path: Viterbi-smoothed contour with (optional) frame centering, so
+    // the contour and timestamps match librosa.pyin(center=...). Frame i is
+    // centered at i*hop_length when center=true.
+    PitchConfig pc;
+    pc.frame_length = config.frame_length;
+    pc.hop_length = config.hop_length;
+    pc.fmin = config.fmin;
+    pc.fmax = config.fmax;
+    pc.threshold = config.threshold;
+    pc.fill_na = true;  // emit 0 (unvoiced) instead of NaN so downstream stays finite
+    pc.center = config.center;
+    PitchResult res = pyin(audio, pc);
+
+    const float inv_sr = 1.0f / sr_;
+    for (int i = 0; i < res.n_frames(); ++i) {
+      float frequency = res.f0[i];
+      if (!std::isfinite(frequency) || frequency <= 0.0f) frequency = 0.0f;
+
+      PitchPoint point;
+      // librosa.pyin(center=True) timestamps frame i at i*hop_length (the pad
+      // shifts each window so its center lands there). The left-aligned plain
+      // YIN path below instead uses start/sr.
+      point.time = static_cast<float>(i) * config.hop_length * inv_sr;
+      point.frequency = frequency;
+      point.confidence = (frequency > 0.0f) ? res.voiced_prob[i] : 0.0f;
+      contour_.pitches.push_back(point);
+    }
+
+    compute_contour_features();
+    return;
+  }
+
+  // Plain-YIN path (default). Detect pitch frame by frame using the FFT-based
+  // YIN in feature/pitch. Confidence is derived from the CMNDF minimum
+  // (1 - d'(tau*)) inside yin_with_confidence. NOTE: no Viterbi smoothing and
+  // no frame centering — frame i is LEFT-aligned (time = start/sr), diverging
+  // from librosa.pyin(center=True). See MelodyConfig::use_pyin.
   const float* samples = audio.data();
   size_t n_samples = audio.size();
 

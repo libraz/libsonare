@@ -117,6 +117,25 @@ TEST_CASE("Waveshaper supports ADAA for tanh and arctan curves", "[mastering][sa
   REQUIRE(arctan_signal[0] < 1.0f);
 }
 
+TEST_CASE("Waveshaper rejects ADAA1 + Asymmetric instead of silently aliasing",
+          "[mastering][saturation]") {
+  // The Asymmetric curve has no ADAA antiderivative and no oversampling
+  // fallback, so requesting Adaa1 with it must error at construction rather than
+  // silently degrade to direct (aliasing-prone) evaluation in release builds.
+  REQUIRE_THROWS(Waveshaper(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Asymmetric, sonare::rt::AliasingControl::Adaa1}));
+
+  // set_config must reject the same combination on an already-constructed,
+  // valid instance.
+  Waveshaper shaper({0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Asymmetric});
+  REQUIRE_THROWS(shaper.set_config(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Asymmetric, sonare::rt::AliasingControl::Adaa1}));
+
+  // Asymmetric with no anti-aliasing (or with None) is still valid.
+  REQUIRE_NOTHROW(Waveshaper(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Asymmetric, sonare::rt::AliasingControl::None}));
+}
+
 TEST_CASE("SoftClipper and HardClipper constrain peaks", "[mastering][saturation]") {
   std::vector<float> soft = {-2.0f, -0.5f, 0.5f, 2.0f};
   std::vector<float> hard = soft;

@@ -3,6 +3,28 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/// @brief ABI version of the flat analysis / feature POD structs declared in
+///        this header (SonareKey, SonareAnalysisResult, the feature result
+///        structs, SonareChordDetectionOptions, ...). Bump on ANY layout change
+///        to one of those structs. Mirrors the project / engine / voice /
+///        acoustic per-subsystem versioning pattern. Exposed at runtime through
+///        the aggregate sonare_abi_version() so a prebuilt binding can detect a
+///        struct-layout mismatch before exchanging a single byte.
+#define SONARE_FEATURE_ABI_VERSION 1u
+
+/// @brief Single aggregate C-ABI version. Encodes the per-subsystem versions so a
+///        prebuilt binding linked against a different libsonare can detect a
+///        layout/contract mismatch with one comparison. The byte layout is:
+///          bits  0..7  : SONARE_FEATURE_ABI_VERSION
+///          bits  8..15 : SONARE_PROJECT_ABI_VERSION
+///          bits 16..23 : SONARE_VOICE_CHANGER_ABI_VERSION
+///          bits 24..31 : SONARE_ACOUSTIC_ABI_VERSION
+///        The RT command-queue / engine ABI keeps its own dedicated accessor
+///        (sonare_engine_abi_version) because it versions a SharedArrayBuffer
+///        record layout independent of these PODs.
+/// @note  Defined in the top-level sonare_c.h once every subsystem macro is in
+///        scope; do not redefine it here.
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -430,8 +452,20 @@ const char* sonare_error_message(SonareError error);
 
 /// @brief Returns the detailed message for the most recent error on the calling thread.
 /// @details The returned string is owned by libsonare and valid until the next API call on
-///   the same thread that records or clears an error. Returns an empty string ("") when no
-///   detailed message has been recorded. The pointer is never NULL.
+///   the same thread. The pointer is never NULL; returns an empty string ("") when no
+///   detailed message is currently recorded.
+///
+///   CONTRACT (read carefully):
+///   - Every public C-ABI call CLEARS the thread-local message on entry, so a
+///     detailed message can never leak from an earlier, unrelated call.
+///   - A message is recorded ONLY on the caught-C++-exception return path (the
+///     library mapped a thrown sonare::SonareException / std::exception to a
+///     SonareError). For those, this returns the exception's what() text.
+///   - Validation early-returns that produce an error code WITHOUT throwing
+///     (e.g. a NULL out-pointer, an out-of-range sample rate, a non-finite input
+///     sample) record NO message: this returns "" even though the call failed.
+///     Use sonare_error_message(SonareError) for a human-readable string for ANY
+///     error code; use this only for the extra detail of exception-path errors.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_error_message(void);
 
@@ -674,6 +708,25 @@ typedef struct {
   int detect_inversions;
   int chroma_method;  // 0 = STFT, 1 = NNLS
 } SonareChordDetectionOptions;
+
+#ifdef __cplusplus
+// Layout guards for the previously-unversioned analysis / feature PODs. Any
+// padding / reorder / member add/remove trips one of these, forcing a bump of
+// SONARE_FEATURE_ABI_VERSION (and thus a change in the aggregate
+// sonare_abi_version()). Sizes are spelled in terms of the dominant member so
+// the asserts survive benign ABI-equivalent typedef differences across targets.
+static_assert(sizeof(SonareKey) == 3u * sizeof(int), "SonareKey layout changed");
+static_assert(sizeof(SonareKeyCandidate) == sizeof(SonareKey) + sizeof(float),
+              "SonareKeyCandidate layout changed");
+static_assert(sizeof(SonareTimeSignature) == 2u * sizeof(int) + sizeof(float),
+              "SonareTimeSignature layout changed");
+static_assert(offsetof(SonareAnalysisResult, beat_times) ==
+                  sizeof(float) + sizeof(float) + sizeof(SonareKey) + sizeof(SonareTimeSignature),
+              "SonareAnalysisResult scalar prefix layout changed");
+static_assert(offsetof(SonareAnalysisResult, beat_count) ==
+                  offsetof(SonareAnalysisResult, beat_times) + sizeof(float*),
+              "SonareAnalysisResult tail layout changed");
+#endif
 
 #ifdef __cplusplus
 }

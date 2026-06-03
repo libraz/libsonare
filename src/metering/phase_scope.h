@@ -22,6 +22,18 @@ struct PhaseScopeResult {
   float max_radius = 0.0f;
 };
 
+/// @brief Phase scope with one point per input sample.
 PhaseScopeResult phase_scope(const float* left, const float* right, size_t length);
+
+/// @brief Display-sized phase scope.
+/// @param max_points Upper bound on the number of returned @c points. When 0, or
+///        when @p length <= @p max_points, every sample is emitted. Otherwise the
+///        point series is deterministically decimated to at most @p max_points
+///        points (keeping the largest-radius sample per stride so transients
+///        survive). The summary stats (@c correlation, @c average_abs_angle_rad,
+///        @c max_radius) are always computed over the full-resolution signal, so
+///        they are unaffected by decimation.
+PhaseScopeResult phase_scope(const float* left, const float* right, size_t length,
+                             size_t max_points);
 
 }  // namespace sonare::metering

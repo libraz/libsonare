@@ -258,15 +258,36 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info) {
   if (!engine || !info || info->max_value < info->min_value) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
+  // Stage the name/unit strings in the deque. std::deque keeps pointers to its
+  // existing elements valid across push_back/pop_back at the ends, so the raw
+  // const char* the registry holds for previously-added parameters are not
+  // invalidated, and we can pop_back our two stagings if the registry rejects
+  // the entry (duplicate id) — avoiding the previous unbounded leak on re-add.
   engine->parameter_strings.push_back(fixed_text(info->name, sizeof(info->name)));
   const char* name = engine->parameter_strings.back().c_str();
   engine->parameter_strings.push_back(fixed_text(info->unit, sizeof(info->unit)));
   const char* unit = engine->parameter_strings.back().c_str();
-  engine->parameters.add({info->id, name, unit, info->min_value, info->max_value,
-                          info->default_value, info->rt_safe != 0,
-                          curve_from_int(info->default_curve)});
+  const bool added = engine->parameters.add({info->id, name, unit, info->min_value, info->max_value,
+                                             info->default_value, info->rt_safe != 0,
+                                             curve_from_int(info->default_curve)});
+  if (!added) {
+    // Reclaim the two strings we just staged; the registry kept no reference to
+    // them. The order matters: pop the most recent (unit) first.
+    engine->parameter_strings.pop_back();
+    engine->parameter_strings.pop_back();
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  // Clear the registry first (it holds raw pointers into parameter_strings),
+  // then release the backing strings so no dangling pointer ever exists.
+  engine->parameters.clear();
+  engine->parameter_strings.clear();
+  return SONARE_OK;
 }
 
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count) {

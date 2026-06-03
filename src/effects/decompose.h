@@ -22,7 +22,9 @@ struct DecomposeResult {
 /// @param n_features Feature dimension (rows).
 /// @param n_frames Number of time frames.
 /// @param n_components Target number of components (k).
-/// @param n_iter Number of multiplicative update iterations.
+/// @param n_iter Number of multiplicative update iterations. @warning Passing
+///        n_iter==0 is accepted by the core but returns the raw init matrices
+///        (a degenerate, meaningless factorisation); the C ABI rejects it.
 /// @param solver Algorithm name (only "mu" is supported currently).
 /// @param beta Beta value for the divergence: 2 = Frobenius (default), 1 =
 ///        Kullback-Leibler, 0 = Itakura-Saito. Fractional values are accepted
@@ -39,7 +41,8 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
 /// @details Mirrors `librosa.decompose.nn_filter`. For each frame, the k
 /// nearest neighbour frames (by cosine similarity, with frames within `width`
 /// time excluded) are aggregated. Supported aggregators: "mean", "median",
-/// "min", "max".
+/// "min", "max". @p width must be >= 0 (negative values are rejected, mirroring
+/// librosa, rather than silently disabling the time-exclusion band).
 /// @return Smoothed spectrogram [n_features x n_frames] row-major.
 std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
                              const std::string& aggregate = "mean", int k = 5, int width = 1);

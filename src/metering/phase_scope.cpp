@@ -20,25 +20,60 @@ void validate_stereo_buffers(const float* left, const float* right, size_t lengt
 
 }  // namespace
 
+namespace {
+
+PhaseScopePoint make_point(const float* left, const float* right, size_t i) {
+  PhaseScopePoint point;
+  point.mid = (left[i] + right[i]) * kInvSqrt2;
+  point.side = (left[i] - right[i]) * kInvSqrt2;
+  point.radius = std::sqrt(point.mid * point.mid + point.side * point.side);
+  point.angle_rad = std::atan2(point.side, point.mid);
+  return point;
+}
+
+}  // namespace
+
 PhaseScopeResult phase_scope(const float* left, const float* right, size_t length) {
+  return phase_scope(left, right, length, 0);
+}
+
+PhaseScopeResult phase_scope(const float* left, const float* right, size_t length,
+                             size_t max_points) {
   validate_stereo_buffers(left, right, length);
 
   PhaseScopeResult result;
-  result.points.resize(length);
   result.correlation = correlation(left, right, length);
 
+  // Summary stats are computed over the full-resolution signal regardless of the
+  // requested point budget, so decimation only affects the returned point cloud.
   double abs_angle_sum = 0.0;
   for (size_t i = 0; i < length; ++i) {
-    PhaseScopePoint& point = result.points[i];
-    point.mid = (left[i] + right[i]) * kInvSqrt2;
-    point.side = (left[i] - right[i]) * kInvSqrt2;
-    point.radius = std::sqrt(point.mid * point.mid + point.side * point.side);
-    point.angle_rad = std::atan2(point.side, point.mid);
+    const PhaseScopePoint point = make_point(left, right, i);
     abs_angle_sum += std::abs(point.angle_rad);
     result.max_radius = std::max(result.max_radius, point.radius);
   }
-
   result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
+
+  if (max_points == 0 || length <= max_points) {
+    result.points.resize(length);
+    for (size_t i = 0; i < length; ++i) result.points[i] = make_point(left, right, i);
+    return result;
+  }
+
+  // Deterministic decimation into max_points contiguous buckets, keeping the
+  // largest-radius sample of each bucket so transient peaks are preserved.
+  result.points.reserve(max_points);
+  for (size_t b = 0; b < max_points; ++b) {
+    const size_t begin = (b * length) / max_points;
+    const size_t end = ((b + 1) * length) / max_points;
+    if (begin >= end) continue;
+    PhaseScopePoint best = make_point(left, right, begin);
+    for (size_t i = begin + 1; i < end; ++i) {
+      const PhaseScopePoint p = make_point(left, right, i);
+      if (p.radius > best.radius) best = p;
+    }
+    result.points.push_back(best);
+  }
   return result;
 }
 

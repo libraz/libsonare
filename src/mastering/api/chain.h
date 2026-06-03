@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -240,11 +241,34 @@ class MasteringChain {
 // repair.denoise or loudness (those require whole-signal buffering).
 // ---------------------------------------------------------------------------
 
+/// @brief Optional construction parameters for StreamingMasteringChain.
+///
+/// The streaming chain cannot measure whole-signal integrated LUFS, so the
+/// loudness stage (which every built-in preset enables) normally cannot run in
+/// a realtime preview. To let a preset's streaming preview match its offline
+/// render, the caller may precompute the loudness normalization gain offline
+/// (e.g. `target_lufs - measured_integrated_lufs`) and supply it here. When
+/// provided and `config.loudness.enabled` is set, the chain applies that fixed
+/// gain per block before the loudness stage's true-peak limiter instead of
+/// throwing. The true-peak ceiling is still enforced live by the
+/// `maximizer.truePeakLimiter` stage that the loudness config enables.
+struct StreamingMasteringChainOptions {
+  /// Precomputed static loudness gain in dB. NaN (the default) means "not
+  /// provided"; in that case an enabled loudness stage still throws.
+  float loudness_static_gain_db = std::numeric_limits<float>::quiet_NaN();
+};
+
 class StreamingMasteringChain {
  public:
-  /// @brief Construct with a configuration. Throws std::invalid_argument if
-  /// the configuration enables non-streaming stages (repair.denoise, loudness).
+  /// @brief Construct with a configuration. Throws SonareException if the
+  /// configuration enables non-streaming stages (repair.*, loudness).
   explicit StreamingMasteringChain(MasteringChainConfig config);
+
+  /// @brief Construct with a configuration and streaming options. When the
+  /// configuration enables loudness, @p options.loudness_static_gain_db must be
+  /// finite; the chain then applies that fixed gain per block (see
+  /// @ref StreamingMasteringChainOptions). Repair stages are still rejected.
+  StreamingMasteringChain(MasteringChainConfig config, StreamingMasteringChainOptions options);
   ~StreamingMasteringChain();
 
   StreamingMasteringChain(const StreamingMasteringChain&) = delete;
@@ -282,6 +306,11 @@ class StreamingMasteringChain {
   std::vector<std::string> stage_names_;
   int prepared_channels_ = 0;
   int max_block_size_ = 0;
+  // Precomputed loudness normalization gain (linear). 1.0 when the loudness
+  // stage is disabled or no static gain was supplied. Applied per block before
+  // the true-peak limiter so a preset's streaming preview can match its
+  // offline-rendered loudness without measuring whole-signal LUFS live.
+  float loudness_static_gain_linear_ = 1.0f;
 };
 
 // ---------------------------------------------------------------------------

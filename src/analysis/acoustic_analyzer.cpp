@@ -11,6 +11,20 @@ namespace sonare {
 
 using namespace acoustic_detail;
 
+namespace {
+
+// Octave-band centre frequency for band index i, matching the synthesizer's
+// convention in src/acoustic/late_reverb.cpp (octave_center_hz): band 0 = 125
+// Hz, each subsequent band one octave higher. Generating the centres from the
+// same formula (instead of a fixed 6-entry table) lets the analyzer honor
+// n_octave_bands > 6 instead of silently truncating; bands whose passband
+// exceeds Nyquist fall out as NaN inside filter_octave_band, which is reported
+// rather than dropped. This keeps analyzer and synth band axes aligned so an
+// estimate->synthesize round-trip does not lose high bands.
+float octave_band_center_hz(int band) { return 125.0f * std::pow(2.0f, static_cast<float>(band)); }
+
+}  // namespace
+
 AcousticAnalyzer::AcousticAnalyzer(const Audio& audio, const AcousticConfig& config)
     : AcousticAnalyzer(
           audio, config,
@@ -44,16 +58,17 @@ void AcousticAnalyzer::analyze_impulse_response(const Audio& ir) {
   parameters_ = analyze_band(ir.data(), ir.size(), ir.sample_rate(), config_.min_decay_db);
   parameters_.is_blind = false;
 
-  static constexpr float kOctaveCenters[] = {125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f};
-  const int n_bands =
-      std::min<int>(config_.n_octave_bands, static_cast<int>(std::size(kOctaveCenters)));
+  // Generate as many octave centres as requested (125 Hz, 250 Hz, ...) rather
+  // than capping at a fixed 6-entry table; centres above Nyquist resolve to NaN
+  // bands via filter_octave_band instead of being silently dropped.
+  const int n_bands = config_.n_octave_bands;
   parameters_.rt60_bands.reserve(n_bands);
   parameters_.edt_bands.reserve(n_bands);
   parameters_.c50_bands.reserve(n_bands);
   parameters_.c80_bands.reserve(n_bands);
 
   for (int i = 0; i < n_bands; ++i) {
-    const std::vector<float> filtered = filter_octave_band(ir, kOctaveCenters[i]);
+    const std::vector<float> filtered = filter_octave_band(ir, octave_band_center_hz(i));
     if (filtered.empty()) {
       parameters_.rt60_bands.push_back(nan_value());
       parameters_.edt_bands.push_back(nan_value());
@@ -108,14 +123,16 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
     parameters_.confidence = global.confidence;
   }
 
-  static constexpr float kOctaveCenters[] = {125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f};
-  const int n_bands =
-      std::min<int>(config_.n_octave_bands, static_cast<int>(std::size(kOctaveCenters)));
+  // Generate as many octave centres as requested (125 Hz, 250 Hz, ...) rather
+  // than capping at a fixed 6-entry table; centres above Nyquist resolve to NaN
+  // bands via filter_octave_band instead of being silently dropped.
+  const int n_bands = config_.n_octave_bands;
   parameters_.rt60_bands.reserve(n_bands);
   parameters_.edt_bands.reserve(n_bands);
 
   for (int i = 0; i < n_bands; ++i) {
-    const std::vector<float> filtered = filter_octave_band(audio, kOctaveCenters[i]);
+    const float center = octave_band_center_hz(i);
+    const std::vector<float> filtered = filter_octave_band(audio, center);
     if (filtered.empty()) {
       parameters_.rt60_bands.push_back(nan_value());
       parameters_.edt_bands.push_back(nan_value());
@@ -123,17 +140,17 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
     }
 
     const float ratio = kSqrt2;
-    BlindRt60Estimate band = weighted_subband_average(subband_estimates, kOctaveCenters[i] / ratio,
-                                                      kOctaveCenters[i] * ratio);
+    BlindRt60Estimate band =
+        weighted_subband_average(subband_estimates, center / ratio, center * ratio);
     const BlindRt60Estimate low_frequency_anchor =
         std::isfinite(parameters_.rt60) && parameters_.confidence > 0.0f ? global : subband;
-    if (kOctaveCenters[i] < 1000.0f &&
+    if (center < 1000.0f &&
         (band.confidence <= 0.0f ||
          (std::isfinite(low_frequency_anchor.rt60) && std::isfinite(band.rt60) &&
           band.rt60 < low_frequency_anchor.rt60 * 0.7f))) {
-      band = estimate_from_frequency_model(frequency_model, kOctaveCenters[i]);
+      band = estimate_from_frequency_model(frequency_model, center);
       if (band.confidence <= 0.0f) {
-        band = extrapolate_low_frequency_rt60(low_frequency_anchor, kOctaveCenters[i]);
+        band = extrapolate_low_frequency_rt60(low_frequency_anchor, center);
       }
     }
     if (band.confidence <= 0.0f) {

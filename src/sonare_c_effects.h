@@ -274,6 +274,58 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
 ///          libsonare was built.
 uint32_t sonare_voice_changer_abi_version(void);
 
+/// @section engine_threading Thread safety (RealtimeEngine)
+/// @details The engine surface (`sonare_engine_*`) is built around two roles:
+/// the AUDIO thread (the render callback) and one CONTROL thread (the host / UI
+/// thread that drives the transport and edits state). Unless noted otherwise a
+/// given engine handle has exactly one of each; do not call from more than one
+/// control thread without external serialization.
+///
+/// AUDIO-thread functions (realtime-safe: no allocation, no lock, no throw —
+/// call only from the render callback):
+/// - `sonare_engine_process`, `sonare_engine_process_with_monitor`.
+///
+/// CONTROL-thread, realtime-safe hand-off (lock-free, non-allocating; safe to
+/// call concurrently with `sonare_engine_process` on the same handle, adopted
+/// at the next block boundary). These either enqueue a command on the engine's
+/// lock-free command queue or publish through a lock-free snapshot:
+/// - Transport / tempo / loop: `sonare_engine_play`, `sonare_engine_stop`,
+///   `sonare_engine_seek_sample`, `sonare_engine_seek_ppq`,
+///   `sonare_engine_set_tempo`, `sonare_engine_set_time_signature`,
+///   `sonare_engine_set_loop`, `sonare_engine_seek_marker`,
+///   `sonare_engine_set_loop_from_markers`.
+/// - Live parameter / MIDI: `sonare_engine_set_parameter`,
+///   `sonare_engine_set_parameter_smoothed`, `sonare_engine_push_midi_cc`,
+///   `sonare_engine_push_midi_panic`.
+/// - Capture control: `sonare_engine_set_capture_buffer`,
+///   `sonare_engine_arm_capture`, `sonare_engine_set_capture_punch`,
+///   `sonare_engine_reset_capture`. (These publish the capture state through a
+///   lock-free snapshot adopted by the audio thread; the backing capture buffer
+///   passed to `set_capture_buffer` must outlive capture and must not be freed
+///   while the engine is armed.) Note `reset_capture` clears the captured-frame
+///   counter and so should be issued while not actively capturing.
+///
+/// CONTROL-thread, NON realtime-safe (allocate / build internal structures —
+/// call only from the control thread, and NOT concurrently with
+/// `sonare_engine_process` unless your engine build documents otherwise; these
+/// are intended to be issued between renders or while stopped):
+/// - Lifecycle: `sonare_engine_create`, `sonare_engine_destroy`,
+///   `sonare_engine_prepare`.
+/// - Topology / registration: `sonare_engine_set_graph`,
+///   `sonare_engine_set_clips`, `sonare_engine_add_parameter`,
+///   `sonare_engine_set_automation_lane`, `sonare_engine_set_markers`,
+///   `sonare_engine_set_metronome`.
+/// - Offline render: `sonare_engine_render_offline`,
+///   `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline` (these own
+///   the audio role internally; do not also call them from a render callback).
+///
+/// CONTROL-thread read-back (safe to call concurrently with the audio thread;
+/// returns a consistent snapshot, may lag the audio thread by up to one block):
+/// - `sonare_engine_get_transport_state`, `sonare_engine_capture_status`,
+///   `sonare_engine_parameter_*`, `sonare_engine_*_count`,
+///   `sonare_engine_marker*`, `sonare_engine_metronome`,
+///   `sonare_engine_drain_telemetry`, `sonare_engine_drain_meter_telemetry`.
+///   The drain functions are single-consumer: drive them from one thread only.
 SonareError sonare_engine_create(SonareRealtimeEngine** out);
 void sonare_engine_destroy(SonareRealtimeEngine* engine);
 SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
@@ -289,8 +341,20 @@ SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int n
                                              int denominator);
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
                                    int enabled);
+/// @brief Registers a parameter's metadata for automation UIs.
+/// @details Control-thread only (allocates the name/unit string copies). Returns
+///   @c SONARE_ERROR_INVALID_PARAMETER if @p info is NULL, the value range is
+///   inverted, or a parameter with the same id is already registered (duplicate
+///   ids are rejected, not replaced — clear and re-register to change metadata).
+///   On rejection no backing strings are retained, so repeated re-registration
+///   does not leak.
 SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info);
+/// @brief Removes all registered parameters and releases their backing strings.
+/// @details Control-thread only. Use before re-registering a parameter id to
+///   change its metadata (add() rejects duplicate ids). Not realtime-safe; do
+///   not call concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine);
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count);
 SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
                                                   SonareParameterInfo* out);
@@ -411,15 +475,41 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
 /// @param n_features Feature dimension (rows). Must be > 0.
 /// @param n_frames Number of time frames. Must be > 0.
 /// @param n_components Target number of components (k). Must be > 0.
-/// @param n_iter Number of multiplicative-update iterations.
+/// @param n_iter Number of multiplicative-update iterations. Must be > 0
+///        (n_iter==0 would return the raw init matrices and is rejected).
 /// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
 /// @param out_w Receives the [n_features x n_components] component matrix.
 /// @param out_w_length Receives n_features * n_components.
 /// @param out_h Receives the [n_components x n_frames] activation matrix.
 /// @param out_h_length Receives n_components * n_frames.
+/// @note Uses deterministic random initialisation. For the SVD-based NNDSVD
+///       warm-start (faster convergence), use @ref sonare_decompose_with_init.
 SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
                              int n_iter, float beta, float** out_w, size_t* out_w_length,
                              float** out_h, size_t* out_h_length);
+
+/// @brief Non-negative matrix factorisation with a selectable initialiser
+///        (mirror of @c sonare::decompose with the @c init argument).
+/// @details Identical to @ref sonare_decompose but exposes the initialisation
+///          strategy so callers can opt into the NNDSVD warm-start, which tends
+///          to converge in fewer iterations. Both output matrices are
+///          heap-allocated row-major and MUST be released with
+///          @ref sonare_free_floats.
+/// @param s Input spectrogram [n_features x n_frames] row-major (non-negative).
+/// @param n_features Feature dimension (rows). Must be > 0.
+/// @param n_frames Number of time frames. Must be > 0.
+/// @param n_components Target number of components (k). Must be > 0.
+/// @param n_iter Number of multiplicative-update iterations. Must be > 0.
+/// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
+/// @param init Initialiser: "random" (default if NULL) or "nndsvd".
+/// @param out_w Receives the [n_features x n_components] component matrix.
+/// @param out_w_length Receives n_features * n_components.
+/// @param out_h Receives the [n_components x n_frames] activation matrix.
+/// @param out_h_length Receives n_components * n_frames.
+SonareError sonare_decompose_with_init(const float* s, int n_features, int n_frames,
+                                       int n_components, int n_iter, float beta, const char* init,
+                                       float** out_w, size_t* out_w_length, float** out_h,
+                                       size_t* out_h_length);
 
 /// @brief Nearest-neighbour filter for spectrogram denoising
 ///        (mirror of @c sonare::nn_filter / librosa.decompose.nn_filter).
@@ -430,7 +520,8 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
 /// @param n_frames Number of time frames. Must be > 0.
 /// @param aggregate Aggregator: "mean", "median", "min" or "max". NULL = "mean".
 /// @param k Number of nearest neighbours.
-/// @param width Time exclusion half-width.
+/// @param width Time exclusion half-width. Must be >= 0 (negative widths are
+///        rejected, mirroring librosa, instead of silently disabling exclusion).
 /// @param out Receives the smoothed spectrogram buffer.
 /// @param out_length Receives n_features * n_frames.
 SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const char* aggregate,

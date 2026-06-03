@@ -32,10 +32,29 @@ struct MelodyConfig {
   int frame_length = 2048;  ///< Frame length in samples
   int hop_length = 256;     ///< Hop length in samples
   float threshold = 0.1f;   ///< YIN threshold (lower = stricter)
+
+  /// @brief Use the pYIN tracker (Viterbi-smoothed) instead of plain per-frame
+  ///        YIN. Defaults to false to preserve the historical contour; set to
+  ///        true for a less octave-jumpy contour aligned with sonare::pyin.
+  bool use_pyin = false;
+  /// @brief When @ref use_pyin is true, reflect-pad by frame_length/2 before
+  ///        framing so frame i is centered at i*hop_length (matches
+  ///        librosa.pyin(center=True)). Ignored by the plain-YIN path, whose
+  ///        frame i covers [i*hop_length, i*hop_length+frame_length) (left
+  ///        aligned, NOT centered).
+  bool center = true;
 };
 
-/// @brief Melody analyzer using simplified YIN algorithm.
-/// @details Detects pitch from monophonic audio and extracts melody characteristics.
+/// @brief Melody analyzer using YIN (or, optionally, pYIN) pitch detection.
+/// @details Detects pitch from monophonic audio and extracts melody
+/// characteristics.
+///
+/// @note Divergence from librosa: by default (`use_pyin = false`) this uses
+/// plain per-frame YIN with NO Viterbi smoothing and NO frame centering, so the
+/// contour is noisier / more octave-jumpy than `librosa.pyin` and frame
+/// timestamps are LEFT-aligned (`time = start/sr`), not centered. Set
+/// `use_pyin = true` (and keep `center = true`) for a contour and timestamps
+/// that match `librosa.pyin(center=True)` semantics.
 class MelodyAnalyzer {
  public:
   /// @brief Constructs melody analyzer from audio.

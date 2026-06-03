@@ -47,8 +47,17 @@ SonareError copy_int_vector(const std::vector<int>& values, int** out, size_t* o
   return SONARE_OK;
 }
 
+// Shared input-buffer guard for the compat / transform functions. EMPTY
+// (length == 0) is allowed (these are pure array transforms with a well-defined
+// empty result); a NULL buffer with length > 0 is rejected; and any non-finite
+// (NaN / Inf) sample is rejected so a NaN can never silently propagate through a
+// transform. The non-finite policy is uniform with validate_audio_params; see
+// the INPUT-BUFFER POLICY block in sonare_c_features.h.
 SonareError validate_buffer(const float* values, size_t length) {
   if (length > 0 && values == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t i = 0; i < length; ++i) {
+    if (!std::isfinite(values[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
   return SONARE_OK;
 }
 

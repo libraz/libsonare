@@ -38,7 +38,7 @@ float audio_rms_db(const Audio& audio) {
 
 }  // namespace
 
-Audio apply_gain(const Audio& audio, float gain_db) {
+Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
   if (audio.empty()) return audio;
 
   float gain_linear = db_to_linear(gain_db);
@@ -48,14 +48,16 @@ Audio apply_gain(const Audio& audio, float gain_db) {
 
   for (size_t i = 0; i < audio.size(); ++i) {
     samples[i] = data[i] * gain_linear;
-    /// Clip to [-1, 1]
-    samples[i] = std::max(-1.0f, std::min(1.0f, samples[i]));
+    if (clip) {
+      /// Hard-clip to [-1, 1] (opt-out via the clip flag).
+      samples[i] = std::max(-1.0f, std::min(1.0f, samples[i]));
+    }
   }
 
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
-Audio normalize(const Audio& audio, float target_db) {
+Audio normalize(const Audio& audio, float target_db, bool clip) {
   if (audio.empty()) return audio;
 
   float current_peak = audio_peak_db(audio);
@@ -65,10 +67,10 @@ Audio normalize(const Audio& audio, float target_db) {
   }
 
   float gain = target_db - current_peak;
-  return apply_gain(audio, gain);
+  return apply_gain(audio, gain, clip);
 }
 
-Audio normalize_rms(const Audio& audio, float target_db) {
+Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
   if (audio.empty()) return audio;
 
   float current_rms = audio_rms_db(audio);
@@ -78,7 +80,7 @@ Audio normalize_rms(const Audio& audio, float target_db) {
   }
 
   float gain = target_db - current_rms;
-  return apply_gain(audio, gain);
+  return apply_gain(audio, gain, clip);
 }
 
 std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float threshold_db,

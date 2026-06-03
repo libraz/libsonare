@@ -1,5 +1,22 @@
 #include "c_api/features_internal.h"
 
+namespace {
+
+// Validates that an inverse-transform input buffer holds exactly
+// rows * n_frames floats. Returns SONARE_OK on a match, otherwise
+// SONARE_ERROR_INVALID_PARAMETER. Guards the product against size_t overflow
+// (32-bit WASM) before comparing. @p rows and @p n_frames are assumed already
+// validated as > 0 by the caller (each *_checked validates them first).
+SonareError check_inverse_input_length(size_t input_length, int rows, int n_frames) {
+  const size_t r = static_cast<size_t>(rows);
+  const size_t f = static_cast<size_t>(n_frames);
+  if (f != 0 && r > sonare_c_detail::kMaxBufferSize / f) return SONARE_ERROR_INVALID_PARAMETER;
+  if (input_length != r * f) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+
+}  // namespace
+
 SonareError sonare_mel_to_stft(const float* mel, int n_mels, int n_frames, int sample_rate,
                                int n_fft, float fmin, float fmax, SonareInverseResult* out) {
   if (!out || !mel) return SONARE_ERROR_INVALID_PARAMETER;
@@ -79,6 +96,53 @@ SonareError sonare_mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, in
   Audio audio = mfcc_to_audio(mfcc, n_mfcc, n_frames, config, n_iter, sample_rate);
   return fill_audio_samples(audio, out, out_length);
   SONARE_C_CATCH
+}
+
+SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, int n_mels,
+                                       int n_frames, int sample_rate, int n_fft, float fmin,
+                                       float fmax, SonareInverseResult* out) {
+  if (!out || !mel) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return sonare_mel_to_stft(mel, n_mels, n_frames, sample_rate, n_fft, fmin, fmax, out);
+}
+
+SonareError sonare_mel_to_audio_checked(const float* mel, size_t input_length, int n_mels,
+                                        int n_frames, int sample_rate, int n_fft, int hop_length,
+                                        float fmin, float fmax, int n_iter, float** out,
+                                        size_t* out_length) {
+  if (!out || !out_length || !mel) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return sonare_mel_to_audio(mel, n_mels, n_frames, sample_rate, n_fft, hop_length, fmin, fmax,
+                             n_iter, out, out_length);
+}
+
+SonareError sonare_mfcc_to_mel_checked(const float* mfcc, size_t input_length, int n_mfcc,
+                                       int n_frames, int n_mels, SonareInverseResult* out) {
+  if (!out || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return sonare_mfcc_to_mel(mfcc, n_mfcc, n_frames, n_mels, out);
+}
+
+SonareError sonare_mfcc_to_audio_checked(const float* mfcc, size_t input_length, int n_mfcc,
+                                         int n_frames, int n_mels, int sample_rate, int n_fft,
+                                         int hop_length, float fmin, float fmax, int n_iter,
+                                         float** out, size_t* out_length) {
+  if (!out || !out_length || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return sonare_mfcc_to_audio(mfcc, n_mfcc, n_frames, n_mels, sample_rate, n_fft, hop_length, fmin,
+                              fmax, n_iter, out, out_length);
 }
 
 void sonare_free_inverse_result(SonareInverseResult* result) {

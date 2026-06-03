@@ -138,6 +138,17 @@ typedef struct {
   float* data;  /* rows * n_frames, row-major */
 } SonareInverseResult;
 
+/* UNCHECKED-LENGTH CONTRACT (the four inverse functions below):
+   each reads exactly (rows * n_frames) floats from its input matrix, where rows
+   is n_mels for the mel_* functions and n_mfcc for the mfcc_* functions. The
+   functions CANNOT verify that the caller's buffer is actually that long, so a
+   wrong n_frames / n_mels / n_mfcc relative to the real allocation is a heap
+   over-read (undefined behaviour). Prefer the *_checked variants further below,
+   which take an explicit input_length and return SONARE_ERROR_INVALID_PARAMETER
+   when it does not equal rows * n_frames. The unchecked forms are retained for
+   ABI back-compat; each *_checked variant delegates to its unchecked form after
+   validating the length. */
+
 /// @brief Approximate inverse of a Mel filterbank (Mel power -> STFT power).
 /// @param mel Mel power spectrogram [n_mels x n_frames] row-major.
 /// @param n_mels Number of Mel bands.
@@ -147,6 +158,9 @@ typedef struct {
 /// @param fmin Minimum Mel frequency in Hz (0.0 for librosa default).
 /// @param fmax Maximum Mel frequency in Hz (0.0 = sr/2).
 /// @param out Receives an [(n_fft/2 + 1) x n_frames] STFT power matrix.
+/// @warning Reads n_mels * n_frames floats from @p mel without verifying the
+///          buffer length; see the UNCHECKED-LENGTH CONTRACT above. Use
+///          sonare_mel_to_stft_checked to have the length validated.
 SonareError sonare_mel_to_stft(const float* mel, int n_mels, int n_frames, int sample_rate,
                                int n_fft, float fmin, float fmax, SonareInverseResult* out);
 
@@ -193,6 +207,46 @@ SonareError sonare_mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 SonareError sonare_mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                  int sample_rate, int n_fft, int hop_length, float fmin, float fmax,
                                  int n_iter, float** out, size_t* out_length);
+
+/* ----------------------------------------------------------------------------
+   Length-checked inverse variants (recommended)
+
+   Each variant takes an explicit @p input_length (number of floats actually
+   present in the input matrix) and returns SONARE_ERROR_INVALID_PARAMETER when
+   it does not exactly match the size implied by the declared dimensions
+   (n_mels * n_frames for the mel_* forms, n_mfcc * n_frames for the mfcc_*
+   forms). On a valid length they behave identically to the unchecked forms (and
+   delegate to them). This turns a wrong-dimension call from a heap over-read
+   into a clean error. The size product is also bounded so a 32-bit (WASM)
+   size_t cannot overflow before the comparison. NaN/Inf in the matrix is NOT
+   inspected (inverse transforms are tolerant of non-finite cells); only the
+   buffer length is validated.
+   ---------------------------------------------------------------------------- */
+
+/// @brief Length-checked sonare_mel_to_stft. @p input_length must equal
+///        n_mels * n_frames.
+SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, int n_mels,
+                                       int n_frames, int sample_rate, int n_fft, float fmin,
+                                       float fmax, SonareInverseResult* out);
+
+/// @brief Length-checked sonare_mel_to_audio. @p input_length must equal
+///        n_mels * n_frames.
+SonareError sonare_mel_to_audio_checked(const float* mel, size_t input_length, int n_mels,
+                                        int n_frames, int sample_rate, int n_fft, int hop_length,
+                                        float fmin, float fmax, int n_iter, float** out,
+                                        size_t* out_length);
+
+/// @brief Length-checked sonare_mfcc_to_mel. @p input_length must equal
+///        n_mfcc * n_frames.
+SonareError sonare_mfcc_to_mel_checked(const float* mfcc, size_t input_length, int n_mfcc,
+                                       int n_frames, int n_mels, SonareInverseResult* out);
+
+/// @brief Length-checked sonare_mfcc_to_audio. @p input_length must equal
+///        n_mfcc * n_frames.
+SonareError sonare_mfcc_to_audio_checked(const float* mfcc, size_t input_length, int n_mfcc,
+                                         int n_frames, int n_mels, int sample_rate, int n_fft,
+                                         int hop_length, float fmin, float fmax, int n_iter,
+                                         float** out, size_t* out_length);
 
 /// @brief Frees the matrix held by a SonareInverseResult.
 void sonare_free_inverse_result(SonareInverseResult* result);
@@ -305,6 +359,21 @@ int sonare_time_to_frames(float time, int sr, int hop_length);
 
 int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
 int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
+
+/* INPUT-BUFFER POLICY for the compat / transform functions below
+   (power_to_db, amplitude_to_db, db_to_power, db_to_amplitude, preemphasis,
+   deemphasis, trim_silence, split_silence, frame_signal, pad_center, fix_length,
+   peak_pick, vector_normalize, pcen, tonnetz, and the tempogram/plp family):
+
+   - EMPTY input (length == 0) is ALLOWED and yields an empty result
+     (*out == NULL, *out_length == 0). This differs from the offline
+     audio-analysis entry points (validate_audio_params), where empty audio is
+     rejected, because these are pure array transforms with a well-defined empty
+     result.
+   - A NULL buffer with length > 0 is rejected with SONARE_ERROR_INVALID_PARAMETER.
+   - NON-FINITE samples (NaN / Inf) are rejected with
+     SONARE_ERROR_INVALID_PARAMETER, matching validate_audio_params, so a NaN can
+     never silently propagate through these transforms. */
 
 SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,
                                float top_db, float** out, size_t* out_length);

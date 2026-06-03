@@ -38,6 +38,11 @@ struct MeterConfig {
   /// @brief When false, all LUFS work is skipped and LUFS fields stay at the floor.
   bool measure_lufs = true;
   bool measure_true_peak = false;
+  /// @brief Requested true-peak oversample factor. The realtime meter implements
+  /// 2x, 4x, and 8x; values are resolved to the nearest supported factor: 16x is
+  /// offline-only and clamps to 8x (use offline metering::true_peak for true 16x),
+  /// 2x is honored, and unsupported low factors (1, 3) are raised to the
+  /// BS.1770-4 4x minimum.
   int true_peak_oversample = 4;
   float mono_compat_correlation_threshold = 0.0f;
 };

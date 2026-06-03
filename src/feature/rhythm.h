@@ -3,9 +3,10 @@
 /// @file rhythm.h
 /// @brief Rhythm-domain features: tempogram and Fourier tempogram.
 /// @details tempogram() and fourier_tempogram() mirror librosa.feature.tempogram
-///          and librosa.feature.fourier_tempogram. tempogram_ratio() is NOT
-///          librosa-compatible: see its declaration below for what it actually
-///          computes.
+///          and librosa.feature.fourier_tempogram. tempogram_ratio() and
+///          cyclic_tempogram() are NOT drop-in librosa equivalents: see their
+///          declarations below for what they actually compute and how they
+///          diverge from librosa.
 
 #include <vector>
 
@@ -59,6 +60,15 @@ std::vector<float> fourier_tempogram(const Audio& audio,
 /// @details Tempo bins are folded into one octave [bpm_min, 2*bpm_min), so
 ///          octave-equivalent tempi such as 60, 120, and 240 BPM contribute
 ///          to the same cyclic tempo class.
+/// @warning APPROXIMATE / custom — this is NOT numerically compatible with
+///          librosa's cyclic tempogram. It performs a direct phase-fold of each
+///          Fourier-tempogram bin: the bin's BPM is mapped to a phase
+///          `frac(log2(bpm / bpm_min))`, rounded to the nearest of @p n_bins
+///          cyclic classes, and the magnitudes are summed into that class with
+///          no interpolation and no per-class normalization. librosa instead
+///          resamples onto a log-tempo axis and averages octave-equivalent
+///          bins, so absolute values and bin alignment will differ. Use it as a
+///          tempo-class energy summary, not as a librosa replacement.
 /// @param onset_envelope Pre-computed onset strength envelope
 /// @param sr Sample rate
 /// @param bpm_min Lower tempo of the cyclic octave

@@ -363,13 +363,36 @@ TEST_CASE("sonare_metering_dynamic_range", "[c_api]") {
       }
     }
     SonareDynamicRangeResult result = {};
-    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), sr, 0.0f, 0.0f, 0.0f,
-                                          0.0f, &result) == SONARE_OK);
+    // Negative percentiles select the library defaults (0.0 now means a literal
+    // 0th percentile, so the default sentinel is negative).
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), sr, 0.0f, 0.0f, -1.0f,
+                                          -1.0f, &result) == SONARE_OK);
     REQUIRE(result.window_count > 0);
     REQUIRE(result.window_rms_db != nullptr);
     REQUIRE(result.dynamic_range_db > 0.0f);
     sonare_free_dynamic_range_result(&result);
     REQUIRE(result.window_rms_db == nullptr);
+  }
+
+  SECTION("0th and 100th percentile select true min/max (sentinel reachable)") {
+    int sr = 48000;
+    int total = sr * 5;
+    std::vector<float> samples(total, 0.0f);
+    auto loud = generate_sine(440.0f, sr, 0.5f);
+    for (int i = 0; i < 5; ++i) {
+      int offset = i * sr;
+      float amp = (i % 2 == 0) ? 0.8f : 0.05f;
+      for (size_t j = 0; j < loud.size() && offset + j < samples.size(); ++j) {
+        samples[offset + j] = loud[j] * amp;
+      }
+    }
+    SonareDynamicRangeResult result = {};
+    // low = 0.0 (true min window), high = 1.0 (true max window): both are real
+    // requests now, not "default", and yield the widest range.
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), sr, 0.0f, 0.0f, 0.0f,
+                                          1.0f, &result) == SONARE_OK);
+    REQUIRE(result.dynamic_range_db > 0.0f);
+    sonare_free_dynamic_range_result(&result);
   }
 
   SECTION("rejects inverted percentiles") {

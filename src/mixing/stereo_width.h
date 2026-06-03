@@ -10,8 +10,15 @@
 
 namespace sonare::mixing {
 
+/// @note The width factor is clamped to the range [0, 2] everywhere it is set
+///       (constructor and @ref set_width): 0 collapses to mono, 1 preserves the
+///       original image, 2 is the maximum widening. Values outside [0, 2] are
+///       clamped, NOT honored — a request of 3 or 4 behaves as 2.
 class StereoWidthProcessor : public rt::ProcessorBase {
  public:
+  /// @brief Constructs the processor.
+  /// @param width Initial width factor, clamped to [0, 2] (see class note).
+  /// @param smoothing_ms Parameter-smoothing time constant in milliseconds.
   explicit StereoWidthProcessor(float width = 1.0f, float smoothing_ms = 5.0f);
 
   void prepare(double sample_rate, int max_block_size) override;

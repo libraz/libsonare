@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
 #include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
@@ -137,6 +138,64 @@ TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][cha
   MasteringChainConfig config;
   config.loudness.enabled = true;
   REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
+}
+
+TEST_CASE("StreamingMasteringChain options constructor requires finite gain when loudness enabled",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.loudness.enabled = true;
+  // Default options leave loudness_static_gain_db = NaN -> must still throw.
+  REQUIRE_THROWS_AS(StreamingMasteringChain(config, StreamingMasteringChainOptions{}),
+                    sonare::SonareException);
+}
+
+TEST_CASE("StreamingMasteringChain accepts loudness as a precomputed static gain",
+          "[mastering][chain][streaming]") {
+  // A preset config (every preset enables loudness) must be previewable in the
+  // streaming chain once the caller supplies a precomputed static gain.
+  MasteringChainConfig config = preset_config(Preset::Pop);
+  REQUIRE(config.loudness.enabled);
+
+  StreamingMasteringChainOptions options;
+  options.loudness_static_gain_db = 6.0f;
+  StreamingMasteringChain chain(config, options);
+  chain.prepare(44100.0, 512, 2);
+
+  // The loudness stage appears as a named stage in the streaming chain.
+  const auto& names = chain.stage_names();
+  REQUIRE(std::find(names.begin(), names.end(), "loudness.optimize") != names.end());
+
+  std::vector<float> left(512, 0.05f);
+  std::vector<float> right(512, 0.05f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
+
+  // The static +6 dB gain (then ceiling limiting) must raise the level versus a
+  // chain built from the same config with loudness disabled.
+  MasteringChainConfig no_loud = config;
+  no_loud.loudness.enabled = false;
+  StreamingMasteringChain ref(std::move(no_loud));
+  ref.prepare(44100.0, 512, 2);
+  std::vector<float> rleft(512, 0.05f);
+  std::vector<float> rright(512, 0.05f);
+  float* rchannels[] = {rleft.data(), rright.data()};
+  ref.process_block(rchannels, 2, 512);
+
+  // After settling, the loudness preview block should be louder than the
+  // loudness-disabled reference (static gain applied).
+  REQUIRE(std::abs(left[256]) > std::abs(rleft[256]));
+}
+
+TEST_CASE("StreamingMasteringChain options constructor ignores gain when loudness disabled",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  StreamingMasteringChainOptions options;
+  options.loudness_static_gain_db = 6.0f;  // ignored: loudness not enabled
+  StreamingMasteringChain chain(std::move(config), options);
+  chain.prepare(44100.0, 512, 1);
+  const auto& names = chain.stage_names();
+  REQUIRE(std::find(names.begin(), names.end(), "loudness.optimize") == names.end());
 }
 
 TEST_CASE("StreamingMasteringChain processes mono blocks", "[mastering][chain][streaming]") {

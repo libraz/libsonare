@@ -173,6 +173,11 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
   }
   if (onset_envelope.empty()) return {};
 
+  // NOTE: custom / approximate phase-fold, NOT librosa-compatible. Each Fourier
+  // bin's BPM is mapped to a cyclic phase frac(log2(bpm/bpm_min)) and rounded to
+  // the nearest class, then magnitudes are summed (no interpolation, no
+  // per-class normalization). librosa resamples onto a log-tempo axis instead,
+  // so absolute values and bin alignment differ. See header @warning.
   const std::vector<float> ft = fourier_tempogram(onset_envelope, sr, config);
   const int n_frames = static_cast<int>(onset_envelope.size());
   const int fourier_bins = config.win_length / 2 + 1;

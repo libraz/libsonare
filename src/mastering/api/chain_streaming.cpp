@@ -1,6 +1,7 @@
 /// @file chain_streaming.cpp
 /// @brief Streaming implementation of the high-level mastering chain.
 
+#include <cmath>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -18,9 +19,44 @@
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
 #include "rt/processor_base.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
+namespace {
+
+// Reject the chain stages that fundamentally require whole-signal buffering and
+// therefore cannot run block-by-block. Loudness is handled separately because
+// it can be approximated with a precomputed static gain (see the
+// options-taking constructor below).
+void reject_non_streaming_repair(const MasteringChainConfig& config) {
+  if (config.repair.declick.enabled) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.declick");
+  }
+  if (config.repair.declip.enabled) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.declip");
+  }
+  if (config.repair.decrackle.enabled) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.decrackle");
+  }
+  if (config.repair.dehum.enabled) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.dehum");
+  }
+  if (config.repair.dereverb.enabled) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.dereverb");
+  }
+  if (config.repair.denoise.enabled) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain does not support repair.denoise");
+  }
+}
+
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // StreamingMasteringChain
@@ -28,38 +64,37 @@ namespace sonare::mastering::api {
 
 struct StreamingMasteringChain::Impl {
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
+  // Optional final loudness limiter (gain + true-peak limit), present only when
+  // the loudness stage is enabled and a precomputed static gain was supplied.
+  // The static gain is applied in process_block() immediately before this
+  // limiter, mirroring the offline chain's loudness stage (gain -> limiter).
+  std::unique_ptr<rt::ProcessorBase> loudness_limiter;
 };
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
-  if (config_.repair.declick.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.declick");
-  }
-  if (config_.repair.declip.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.declip");
-  }
-  if (config_.repair.decrackle.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.decrackle");
-  }
-  if (config_.repair.dehum.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.dehum");
-  }
-  if (config_.repair.dereverb.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.dereverb");
-  }
-  if (config_.repair.denoise.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.denoise");
-  }
+  reject_non_streaming_repair(config_);
   if (config_.loudness.enabled) {
     throw SonareException(
         ErrorCode::InvalidParameter,
-        "StreamingMasteringChain does not support loudness (whole-signal LUFS required)");
+        "StreamingMasteringChain does not support loudness without a precomputed static gain "
+        "(whole-signal LUFS required); construct with StreamingMasteringChainOptions and supply "
+        "loudness_static_gain_db, e.g. target_lufs - measured_integrated_lufs");
+  }
+}
+
+StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
+                                                 StreamingMasteringChainOptions options)
+    : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
+  reject_non_streaming_repair(config_);
+  if (config_.loudness.enabled) {
+    if (!std::isfinite(options.loudness_static_gain_db)) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          "StreamingMasteringChain: loudness is enabled but loudness_static_gain_db is not finite; "
+          "supply a precomputed static gain (e.g. target_lufs - measured_integrated_lufs)");
+    }
+    loudness_static_gain_linear_ = ::sonare::db_to_linear(options.loudness_static_gain_db);
   }
 }
 
@@ -159,6 +194,25 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
               "maximizer.truePeakLimiter");
   }
 
+  // 12. loudness (precomputed static gain + dedicated true-peak limiter).
+  // Built only when loudness is enabled (which requires a finite static gain,
+  // enforced in the options constructor). The static gain itself is applied in
+  // process_block(); here we prepare the matching final limiter that mirrors the
+  // offline chain's loudness stage so the streaming preview's ceiling behaviour
+  // matches the offline render.
+  impl_->loudness_limiter.reset();
+  if (config_.loudness.enabled) {
+    mastering::maximizer::TruePeakLimiterConfig limiter_config;
+    limiter_config.ceiling_db = config_.loudness.ceiling_db;
+    limiter_config.oversample_factor = config_.loudness.true_peak_oversample;
+    limiter_config.release_ms = config_.loudness.release_ms;
+    limiter_config.apply_gain_at_input_rate = config_.loudness.apply_gain_at_input_rate;
+    auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
+    limiter->prepare(sample_rate, max_block_size);
+    impl_->loudness_limiter = std::move(limiter);
+    stage_names_.emplace_back("loudness.optimize");
+  }
+
   prepared_channels_ = num_channels;
   max_block_size_ = max_block_size;
 }
@@ -185,11 +239,27 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
   for (auto& proc : impl_->processors) {
     proc->process(channels, num_channels, num_samples);
   }
+  // Loudness stage: apply the precomputed static gain, then the dedicated
+  // true-peak limiter (mirrors the offline chain's loudness stage order). The
+  // gain is 1.0 (no-op) unless the chain was constructed with a finite
+  // loudness_static_gain_db and the config enables loudness.
+  if (impl_->loudness_limiter) {
+    if (loudness_static_gain_linear_ != 1.0f) {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        float* buffer = channels[ch];
+        for (int i = 0; i < num_samples; ++i) buffer[i] *= loudness_static_gain_linear_;
+      }
+    }
+    impl_->loudness_limiter->process(channels, num_channels, num_samples);
+  }
 }
 
 void StreamingMasteringChain::reset() {
   for (auto& proc : impl_->processors) {
     proc->reset();
+  }
+  if (impl_->loudness_limiter) {
+    impl_->loudness_limiter->reset();
   }
 }
 
@@ -197,6 +267,9 @@ int StreamingMasteringChain::latency_samples() const noexcept {
   int total = 0;
   for (const auto& proc : impl_->processors) {
     total += proc->latency_samples();
+  }
+  if (impl_->loudness_limiter) {
+    total += impl_->loudness_limiter->latency_samples();
   }
   return total;
 }

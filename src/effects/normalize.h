@@ -8,16 +8,28 @@
 namespace sonare {
 
 /// @brief Normalizes audio to a target peak level.
+/// @details Internally applies a gain via @ref apply_gain. With the default
+///          target of 0 dB this is at full scale and @p clip is harmless, but
+///          a positive @p target_db would clip; see @p clip.
 /// @param audio Input audio
 /// @param target_db Target peak level in dB (default 0 dB = full scale)
+/// @param clip If true (default), the output is hard-clipped to [-1, 1]; pass
+///        false to leave the signal unclipped.
 /// @return Normalized audio
-Audio normalize(const Audio& audio, float target_db = 0.0f);
+Audio normalize(const Audio& audio, float target_db = 0.0f, bool clip = true);
 
 /// @brief Normalizes audio using RMS level.
+/// @details Applies a uniform gain to bring the signal RMS to @p target_db. Note
+///          that because peaks sit well above the RMS level, RMS normalisation
+///          to a loud target routinely drives samples past full scale. With the
+///          default @p clip = true those overshoots are hard-clipped to [-1, 1]
+///          (introducing audible distortion); pass @p clip = false to preserve
+///          the unclipped (possibly >1) signal and manage headroom downstream.
 /// @param audio Input audio
 /// @param target_db Target RMS level in dB
+/// @param clip If true (default), hard-clip the output to [-1, 1]
 /// @return Normalized audio
-Audio normalize_rms(const Audio& audio, float target_db = -20.0f);
+Audio normalize_rms(const Audio& audio, float target_db = -20.0f, bool clip = true);
 
 /// @brief Trims silence from the beginning and end of audio using an ABSOLUTE
 ///        RMS threshold.
@@ -47,13 +59,17 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
 
 /// @brief Applies gain to audio.
 ///
-/// Output samples are hard-clipped to the [-1, 1] range after gain is applied,
-/// so the result is silently saturated when the gain would exceed full scale.
+/// When @p clip is true (the default, preserving historical behavior) output
+/// samples are hard-clipped to the [-1, 1] range after gain is applied, so the
+/// result is silently saturated when the gain would exceed full scale. Pass
+/// @p clip = false to leave the gained signal unclipped (e.g. when the caller
+/// applies its own limiter/headroom management downstream).
 ///
 /// @param audio Input audio
 /// @param gain_db Gain in dB (positive = louder, negative = quieter)
-/// @return Audio with applied gain (clipped to [-1, 1])
-Audio apply_gain(const Audio& audio, float gain_db);
+/// @param clip If true, hard-clip the output to [-1, 1]; if false, no clipping
+/// @return Audio with applied gain (clipped to [-1, 1] when @p clip is true)
+Audio apply_gain(const Audio& audio, float gain_db, bool clip = true);
 
 /// @brief Applies fade in to audio.
 /// @param audio Input audio

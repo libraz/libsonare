@@ -544,6 +544,22 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     int right_latency = 0;
     float left_gain_db = 0.0f;
     float right_gain_db = 0.0f;
+    // Generic stereo fallback: run the mono processor independently on each
+    // channel. This is correct for memoryless / linear / per-sample stages
+    // (EQ, gain, saturation, ...) where channel independence is desired.
+    //
+    // CAVEAT for content-dependent repair stages (repair.declick,
+    // repair.declip, repair.decrackle): these detect and reconstruct localized
+    // defect regions from the channel's own content, so running them per channel
+    // can reconstruct *different* sample regions on L vs R. That can shift the
+    // stereo image slightly around a repaired transient. Unlike
+    // repair.trimSilence (handled above with a single mono-derived range), these
+    // algorithms expose no detect/apply split, so deriving a shared mono defect
+    // map is not possible without changing the core repair APIs; the per-channel
+    // behavior is therefore intentional and documented here. Callers needing
+    // bit-matched stereo repair should pre-detect on the mono mix and apply the
+    // correction themselves, or run repair before stereo processing.
+    //
     // Pass distinct channel indices so seed-driven processors (the dither /
     // output-chain path) decorrelate L and R; index 0 keeps the left channel
     // bit-identical to the mono path.

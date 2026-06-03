@@ -21,6 +21,29 @@ TEST_CASE("decompose returns non-negative W and H of expected shape", "[util][de
   for (float v : r.H) REQUIRE(v >= 0.0f);
 }
 
+TEST_CASE("decompose nndsvd init produces valid non-negative factorization", "[util][decompose]") {
+  std::vector<float> S{
+      1.0f, 2.0f, 1.0f, 2.0f, 4.0f, 2.0f, 0.5f, 1.0f, 0.5f,
+  };
+  auto r = decompose(S.data(), 3, 3, /*n_components=*/2, /*n_iter=*/50, "mu", 2.0f, "nndsvd");
+  REQUIRE(r.W.size() == 3 * 2);
+  REQUIRE(r.H.size() == 2 * 3);
+  for (float v : r.W) REQUIRE(v >= 0.0f);
+  for (float v : r.H) REQUIRE(v >= 0.0f);
+}
+
+TEST_CASE("decompose rejects an unknown init strategy", "[util][decompose]") {
+  std::vector<float> S{1.0f, 2.0f, 3.0f, 4.0f};
+  REQUIRE_THROWS(decompose(S.data(), 2, 2, /*n_components=*/1, /*n_iter=*/10, "mu", 2.0f, "bogus"));
+}
+
+TEST_CASE("nn_filter rejects a negative width", "[util][decompose]") {
+  std::vector<float> S{
+      1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+  };
+  REQUIRE_THROWS(nn_filter(S.data(), 2, 4, "mean", 2, /*width=*/-1));
+}
+
 TEST_CASE("nn_filter preserves shape and stays non-negative", "[util][decompose]") {
   std::vector<float> S{
       1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,

@@ -37,9 +37,20 @@ struct SectionConfig {
   int kernel_size = 64;             ///< Checkerboard kernel size
 };
 
-/// @brief Section analyzer for detecting song structure.
-/// @details Combines boundary detection with energy analysis to classify
-/// sections into types like Intro, Verse, Chorus, Bridge, and Outro.
+/// @brief Section analyzer producing a heuristic song-structure estimate.
+/// @details Combines boundary detection with energy / chroma / vocal-band
+/// analysis to split the track and classify each segment into Intro, Verse,
+/// Chorus, Bridge, Instrumental and Outro.
+///
+/// @warning This is a fixed-threshold heuristic, NOT a trained structure
+/// detector. The boundary positions are generally usable, but the *labels*
+/// (Verse vs Chorus vs Bridge, etc.) are best-effort and will be wrong on many
+/// real songs, especially material that does not follow a conventional
+/// pop/verse-chorus form; a track with no detected boundaries collapses to a
+/// single whole-track "Verse". Treat @ref form / per-section @ref Section::type
+/// as hints, not ground truth. For downstream algorithms prefer the raw signals
+/// — @ref boundary_times (segment boundaries) and @ref section_self_similarity
+/// (the chroma cosine self-similarity matrix) — and apply your own thresholds.
 class SectionAnalyzer {
  public:
   /// @brief Constructs section analyzer from audio.
@@ -73,6 +84,15 @@ class SectionAnalyzer {
 
   /// @brief Returns section boundaries in seconds.
   std::vector<float> boundary_times() const;
+
+  /// @brief Returns the raw section-level self-similarity matrix.
+  /// @details Row-major @c count() x @c count() matrix of chroma cosine
+  /// similarities in [0, 1]; entry (i, j) is the similarity between section i and
+  /// section j (the diagonal is ~1). This is the unthresholded signal that the
+  /// built-in labeller consumes — exposed so callers can apply their own
+  /// repetition thresholds / clustering instead of the fixed heuristic. Returns
+  /// an empty vector when there are no sections.
+  std::vector<float> section_self_similarity() const;
 
  private:
   void analyze();

@@ -1,7 +1,9 @@
 #include "engine/capture.h"
 
 #include <array>
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
+#include <thread>
 
 TEST_CASE("CaptureSink captures only armed punch range with sample accuracy", "[engine][capture]") {
   std::array<float, 8> in_l{0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
@@ -71,6 +73,97 @@ TEST_CASE("CaptureSink stops recording when disarmed mid-region", "[engine][capt
   // The slot after the disarm point was never written.
   REQUIRE(cap_l[4] == -1.0f);
   REQUIRE(sink.overflow_count() == 0);
+}
+
+TEST_CASE("CaptureSink publishes each control-thread setter to readers", "[engine][capture]") {
+  std::array<float, 8> cap_l{};
+  float* capture[] = {cap_l.data()};
+
+  sonare::engine::CaptureSink sink;
+
+  // Defaults before any setter: disarmed, no punch.
+  REQUIRE_FALSE(sink.armed());
+  REQUIRE_FALSE(sink.punch_enabled());
+
+  sink.prepare({capture, 1, 8});
+  sink.arm(true);
+  REQUIRE(sink.armed());
+
+  // A coherent punch window must be readable in full after a single setter call
+  // (whole-snapshot publish: enabled implies both endpoints are visible).
+  sink.set_punch(120, 140, true);
+  REQUIRE(sink.punch_enabled());
+  REQUIRE(sink.punch_start_sample() == 120);
+  REQUIRE(sink.punch_end_sample() == 140);
+
+  // Re-publishing the same fields through a different setter must not disturb the
+  // previously published punch window.
+  sink.arm(false);
+  REQUIRE_FALSE(sink.armed());
+  REQUIRE(sink.punch_enabled());
+  REQUIRE(sink.punch_start_sample() == 120);
+  REQUIRE(sink.punch_end_sample() == 140);
+
+  // Disabling punch with an empty range is normalized to disabled.
+  sink.set_punch(200, 200, true);
+  REQUIRE_FALSE(sink.punch_enabled());
+}
+
+TEST_CASE("CaptureSink hands a coherent snapshot across control/audio threads",
+          "[engine][capture]") {
+  // The control thread continuously re-publishes the capture control state while
+  // the audio thread reads snapshots and processes. The published values must
+  // always be observed in-range (no torn 64-bit endpoint, no garbage), and the
+  // run must complete without a crash. ThreadSanitizer (if enabled) additionally
+  // flags any data race between the writer's store() and the readers' load().
+  //
+  // Each public accessor is its own seqlock read, so start/end may legitimately
+  // come from adjacent generations; we therefore assert each field independently
+  // lies within the range the writer ever published rather than a cross-field
+  // relation. A torn 64-bit read would surface as an out-of-range value.
+  std::array<float, 64> in_l{};
+  for (size_t i = 0; i < in_l.size(); ++i) in_l[i] = static_cast<float>(i);
+  const float* input[] = {in_l.data()};
+
+  std::array<float, 4096> cap_l{};
+  float* capture[] = {cap_l.data()};
+
+  sonare::engine::CaptureSink sink;
+  sink.prepare({capture, 1, static_cast<int64_t>(cap_l.size())});
+
+  std::atomic<bool> stop{false};
+  std::atomic<bool> torn{false};
+  constexpr int kIterations = 20000;
+  constexpr int64_t kMinStart = 100;
+  constexpr int64_t kMaxStart = 100 + 499;  // i % 500 ranges over [0, 499]
+
+  // Prime an in-range window so the reader never observes the pre-publish zeros.
+  sink.set_punch(kMinStart, kMinStart + 20, true);
+
+  std::thread control([&] {
+    for (int i = 0; i < kIterations && !stop.load(); ++i) {
+      const int64_t start = kMinStart + (i % 500);
+      sink.arm((i & 1) != 0);
+      sink.set_punch(start, start + 20, (i & 2) != 0);
+    }
+    stop.store(true);
+  });
+
+  std::thread audio([&] {
+    while (!stop.load()) {
+      const int64_t s = sink.punch_start_sample();
+      const int64_t e = sink.punch_end_sample();
+      // A torn 64-bit read or a data race would surface as an out-of-range value.
+      if (s < kMinStart || s > kMaxStart) torn.store(true);
+      if (e < kMinStart + 20 || e > kMaxStart + 20) torn.store(true);
+      sink.process(input, 1, static_cast<int>(in_l.size()), 0);
+    }
+  });
+
+  control.join();
+  audio.join();
+
+  REQUIRE_FALSE(torn.load());
 }
 
 TEST_CASE("Capture boundaries include punch in and out offsets", "[engine][capture]") {

@@ -51,6 +51,8 @@ const char* sonare_version(void) { return SONARE_VERSION_STRING; }
 
 uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }
 
+uint32_t sonare_abi_version(void) { return SONARE_ABI_VERSION; }
+
 int sonare_has_ffmpeg_support(void) {
 #ifdef SONARE_WITH_FFMPEG
   return 1;

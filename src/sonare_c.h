@@ -22,6 +22,34 @@ extern "C" {
 #include "sonare_c_types.h"
 
 // ============================================================================
+// ABI version
+// ============================================================================
+
+/// @brief Compile-time aggregate of every per-subsystem ABI version. Packs the
+///        subsystem macros into one 32-bit value (see sonare_abi_version()).
+///        Byte layout (LSB first):
+///          bits  0..7  : SONARE_FEATURE_ABI_VERSION
+///          bits  8..15 : SONARE_PROJECT_ABI_VERSION
+///          bits 16..23 : SONARE_VOICE_CHANGER_ABI_VERSION
+///          bits 24..31 : SONARE_ACOUSTIC_ABI_VERSION
+#define SONARE_ABI_VERSION                                          \
+  (((uint32_t)(SONARE_FEATURE_ABI_VERSION) & 0xFFu) |               \
+   (((uint32_t)(SONARE_PROJECT_ABI_VERSION) & 0xFFu) << 8) |        \
+   (((uint32_t)(SONARE_VOICE_CHANGER_ABI_VERSION) & 0xFFu) << 16) | \
+   (((uint32_t)(SONARE_ACOUSTIC_ABI_VERSION) & 0xFFu) << 24))
+
+/// @brief Returns the aggregate C-ABI version of the loaded libsonare.
+/// @details A prebuilt language binding compares this against its compile-time
+///   @ref SONARE_ABI_VERSION to detect a struct-layout / contract mismatch before
+///   exchanging any POD across the boundary. The value packs the per-subsystem
+///   versions (feature / project / voice-changer / acoustic) as documented on
+///   @ref SONARE_ABI_VERSION. The RT command-queue ABI keeps its own dedicated
+///   accessor (@ref sonare_engine_abi_version) and is NOT folded in here.
+/// @return The packed aggregate ABI version; always equals @ref SONARE_ABI_VERSION
+///   at the time this translation unit was compiled.
+uint32_t sonare_abi_version(void);
+
+// ============================================================================
 // Editing - Scale quantizer (12-TET pitch target picker)
 // ============================================================================
 

@@ -119,17 +119,31 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
                                           float high_percentile, SonareDynamicRangeResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
-  // Negative sizing/percentile params are caller errors; reject them rather than
-  // silently coercing to defaults (positive overrides the default, 0 keeps it).
-  if (window_sec < 0.0f || hop_sec < 0.0f || low_percentile < 0.0f || high_percentile < 0.0f) {
+  // window_sec / hop_sec keep the "0 = library default" convention (a 0-second
+  // window is meaningless). The percentiles instead use a NEGATIVE sentinel for
+  // "default" so that 0.0 is a real request for the 0th percentile (the true
+  // minimum-RMS window); 0.0 previously meant "default" and made the 0th
+  // percentile unreachable.
+  if (window_sec < 0.0f || hop_sec < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   metering::DynamicRangeConfig cfg;
   if (window_sec > 0.0f) cfg.window_sec = window_sec;
   if (hop_sec > 0.0f) cfg.hop_sec = hop_sec;
-  if (low_percentile > 0.0f) cfg.low_percentile = low_percentile;
-  if (high_percentile > 0.0f) cfg.high_percentile = high_percentile;
-  if (cfg.low_percentile >= cfg.high_percentile) {
+  // A negative value (e.g. -1) selects the library default; 0.0 .. 1.0 are taken
+  // verbatim. Values > 1.0 are out of range. The core additionally validates the
+  // [0,1] range, but we range-check here so the sentinel decode stays explicit.
+  if (low_percentile >= 0.0f) {
+    if (low_percentile > 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
+    cfg.low_percentile = low_percentile;
+  }
+  if (high_percentile >= 0.0f) {
+    if (high_percentile > 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
+    cfg.high_percentile = high_percentile;
+  }
+  // The core accepts low == high (a valid 0-LU range), so only reject a strictly
+  // inverted pair (low > high) here instead of the previous low >= high guard.
+  if (cfg.low_percentile > cfg.high_percentile) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -192,14 +206,10 @@ SonareError sonare_metering_stereo_width(const float* left, const float* right, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
-                                        int sample_rate, SonareVectorscopeResult* out) {
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_stereo_pair(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  std::memset(out, 0, sizeof(*out));
-  SONARE_C_TRY
-  std::vector<metering::VectorscopePoint> points = metering::vectorscope(left, right, length);
+namespace {
+
+SonareError fill_vectorscope_result(const std::vector<metering::VectorscopePoint>& points,
+                                    SonareVectorscopeResult* out) {
   out->point_count = points.size();
   if (!points.empty()) {
     std::unique_ptr<SonareVectorscopePoint[]> tmp(new SonareVectorscopePoint[points.size()]);
@@ -210,6 +220,30 @@ SonareError sonare_metering_vectorscope(const float* left, const float* right, s
     out->points = release_array(tmp);
   }
   return SONARE_OK;
+}
+
+}  // namespace
+
+SonareError sonare_metering_vectorscope(const float* left, const float* right, size_t length,
+                                        int sample_rate, SonareVectorscopeResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_pair(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  std::memset(out, 0, sizeof(*out));
+  SONARE_C_TRY
+  return fill_vectorscope_result(metering::vectorscope(left, right, length), out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_metering_vectorscope_decimated(const float* left, const float* right,
+                                                  size_t length, int sample_rate, size_t max_points,
+                                                  SonareVectorscopeResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_pair(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  std::memset(out, 0, sizeof(*out));
+  SONARE_C_TRY
+  return fill_vectorscope_result(metering::vectorscope(left, right, length, max_points), out);
   SONARE_C_CATCH
 }
 
@@ -220,14 +254,10 @@ void sonare_free_vectorscope_result(SonareVectorscopeResult* result) {
   result->point_count = 0;
 }
 
-SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
-                                        int sample_rate, SonarePhaseScopeResult* out) {
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_stereo_pair(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  std::memset(out, 0, sizeof(*out));
-  SONARE_C_TRY
-  metering::PhaseScopeResult result = metering::phase_scope(left, right, length);
+namespace {
+
+SonareError fill_phase_scope_result(const metering::PhaseScopeResult& result,
+                                    SonarePhaseScopeResult* out) {
   out->correlation = result.correlation;
   out->average_abs_angle_rad = result.average_abs_angle_rad;
   out->max_radius = result.max_radius;
@@ -243,6 +273,30 @@ SonareError sonare_metering_phase_scope(const float* left, const float* right, s
     out->points = release_array(tmp);
   }
   return SONARE_OK;
+}
+
+}  // namespace
+
+SonareError sonare_metering_phase_scope(const float* left, const float* right, size_t length,
+                                        int sample_rate, SonarePhaseScopeResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_pair(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  std::memset(out, 0, sizeof(*out));
+  SONARE_C_TRY
+  return fill_phase_scope_result(metering::phase_scope(left, right, length), out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_metering_phase_scope_decimated(const float* left, const float* right,
+                                                  size_t length, int sample_rate, size_t max_points,
+                                                  SonarePhaseScopeResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_pair(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  std::memset(out, 0, sizeof(*out));
+  SONARE_C_TRY
+  return fill_phase_scope_result(metering::phase_scope(left, right, length, max_points), out);
   SONARE_C_CATCH
 }
 
@@ -253,43 +307,84 @@ void sonare_free_phase_scope_result(SonarePhaseScopeResult* result) {
   result->point_count = 0;
 }
 
+namespace {
+
+// Decode the shared spectrum config knobs (n_fft / smoothing / dB) from the C
+// args, applying the "0 = default, negative = error" convention. Returns false
+// (and the error code via *err) on an invalid value.
+bool decode_spectrum_config(int n_fft, int apply_octave_smoothing, int octave_fraction,
+                            float db_ref, float db_amin, metering::SpectrumConfig* cfg,
+                            SonareError* err) {
+  if (n_fft < 0 || octave_fraction < 0 || db_ref < 0.0f || db_amin < 0.0f) {
+    *err = SONARE_ERROR_INVALID_PARAMETER;
+    return false;
+  }
+  if (n_fft > 0) cfg->n_fft = n_fft;
+  if (!is_power_of_two(cfg->n_fft)) {
+    *err = SONARE_ERROR_INVALID_PARAMETER;
+    return false;
+  }
+  cfg->apply_octave_smoothing = apply_octave_smoothing != 0;
+  if (octave_fraction > 0) cfg->octave_fraction = octave_fraction;
+  if (db_ref > 0.0f) cfg->db_ref = db_ref;
+  if (db_amin > 0.0f) cfg->db_amin = db_amin;
+  return true;
+}
+
+SonareError fill_spectrum_result(const metering::SpectrumResult& result,
+                                 SonareSpectrumResult* out) {
+  out->n_fft = result.n_fft;
+  out->sample_rate = result.sample_rate;
+  out->bin_count = result.frequencies.size();
+  if (out->bin_count == 0) return SONARE_OK;
+  const size_t bytes = out->bin_count * sizeof(float);
+  std::unique_ptr<float[]> freq(new float[out->bin_count]);
+  std::unique_ptr<float[]> mag(new float[out->bin_count]);
+  std::unique_ptr<float[]> pwr(new float[out->bin_count]);
+  std::unique_ptr<float[]> db(new float[out->bin_count]);
+  std::memcpy(freq.get(), result.frequencies.data(), bytes);
+  std::memcpy(mag.get(), result.magnitude.data(), bytes);
+  std::memcpy(pwr.get(), result.power.data(), bytes);
+  std::memcpy(db.get(), result.db.data(), bytes);
+  out->frequencies = release_array(freq);
+  out->magnitude = release_array(mag);
+  out->power = release_array(pwr);
+  out->db = release_array(db);
+  return SONARE_OK;
+}
+
+}  // namespace
+
 SonareError sonare_metering_spectrum(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int apply_octave_smoothing, int octave_fraction,
                                      float db_ref, float db_amin, SonareSpectrumResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
-  // Negative sizing params are caller errors; reject rather than silently
-  // coercing to defaults (positive overrides the default, 0 keeps it).
-  if (n_fft < 0 || octave_fraction < 0 || db_ref < 0.0f || db_amin < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   metering::SpectrumConfig cfg;
-  if (n_fft > 0) cfg.n_fft = n_fft;
-  if (!is_power_of_two(cfg.n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-  cfg.apply_octave_smoothing = apply_octave_smoothing != 0;
-  if (octave_fraction > 0) cfg.octave_fraction = octave_fraction;
-  if (db_ref > 0.0f) cfg.db_ref = db_ref;
-  if (db_amin > 0.0f) cfg.db_amin = db_amin;
+  SonareError err = SONARE_OK;
+  if (!decode_spectrum_config(n_fft, apply_octave_smoothing, octave_fraction, db_ref, db_amin, &cfg,
+                              &err)) {
+    return err;
+  }
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    metering::SpectrumResult result = metering::spectrum(audio, cfg);
-    out->n_fft = result.n_fft;
-    out->sample_rate = result.sample_rate;
-    out->bin_count = result.frequencies.size();
-    if (out->bin_count == 0) return SONARE_OK;
-    const size_t bytes = out->bin_count * sizeof(float);
-    std::unique_ptr<float[]> freq(new float[out->bin_count]);
-    std::unique_ptr<float[]> mag(new float[out->bin_count]);
-    std::unique_ptr<float[]> pwr(new float[out->bin_count]);
-    std::unique_ptr<float[]> db(new float[out->bin_count]);
-    std::memcpy(freq.get(), result.frequencies.data(), bytes);
-    std::memcpy(mag.get(), result.magnitude.data(), bytes);
-    std::memcpy(pwr.get(), result.power.data(), bytes);
-    std::memcpy(db.get(), result.db.data(), bytes);
-    out->frequencies = release_array(freq);
-    out->magnitude = release_array(mag);
-    out->power = release_array(pwr);
-    out->db = release_array(db);
-    return SONARE_OK;
+    return fill_spectrum_result(metering::spectrum(audio, cfg), out);
+  });
+}
+
+SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, int sample_rate,
+                                           size_t frame_offset, int n_fft,
+                                           int apply_octave_smoothing, int octave_fraction,
+                                           float db_ref, float db_amin, SonareSpectrumResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  metering::SpectrumConfig cfg;
+  SonareError err = SONARE_OK;
+  if (!decode_spectrum_config(n_fft, apply_octave_smoothing, octave_fraction, db_ref, db_amin, &cfg,
+                              &err)) {
+    return err;
+  }
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    return fill_spectrum_result(metering::spectrum_frame(audio, frame_offset, cfg), out);
   });
 }
 

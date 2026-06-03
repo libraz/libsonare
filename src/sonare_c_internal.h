@@ -43,6 +43,12 @@ constexpr size_t kMaxBufferSize = 500000000;
 
 std::string& last_error_storage();
 void set_last_error(const char* msg);
+/// @brief Clears the thread-local detailed-error message.
+/// @details Called at the entry of every public C-ABI call (via SONARE_C_TRY and
+///          the run_offline / run_mono_offline helpers) so a message recorded by
+///          an earlier call can never leak into an unrelated later call. See the
+///          @ref sonare_last_error_message contract in sonare_c.h.
+void clear_last_error();
 SonareError map_sonare_exception(const SonareException& e);
 /// @brief Validates an offline audio buffer shared by every run_*_offline entry.
 /// @details EMPTY-AUDIO POLICY: a NULL @p samples or @c length == 0 is rejected
@@ -53,6 +59,17 @@ SonareError map_sonare_exception(const SonareException& e);
 ///          source of truth for that policy; all C-ABI offline functions funnel
 ///          through it (directly or via run_offline / run_mono_offline), so the
 ///          empty-input contract is uniform across the whole C API.
+///
+///          PERFORMANCE NOTE: the non-finite check is an O(n) scan run on EVERY
+///          offline call. For a pipeline that calls several offline functions on
+///          the SAME long buffer this re-scans the buffer each time. This is an
+///          accepted trade-off (the buffer is caller-owned and may be mutated
+///          between calls, so the result cannot be safely cached here). Callers
+///          that need to run many analyses over one immutable buffer should
+///          instead decode once into a SonareAudio handle
+///          (sonare_audio_from_buffer) and use the handle-based analysis entry
+///          points (sonare_audio_* in sonare_c_types.h), which validate the
+///          buffer at construction time and never re-scan per analysis.
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate);
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);
@@ -125,6 +142,9 @@ inline const char* join_names(const std::vector<std::string>& values, std::strin
 template <typename Fn>
 SonareError run_mono_offline(const float* samples, size_t length, int sample_rate, float** out,
                              size_t* out_length, Fn process) {
+  // Clear any stale detailed-error message from an earlier call so a validation
+  // early-return (which records no message) cannot leak an unrelated one.
+  clear_last_error();
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -165,6 +185,9 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
 ///          without constructing an Audio). @p body must return SonareError.
 template <typename Fn>
 SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn body) {
+  // Clear any stale detailed-error message from an earlier call (see
+  // run_mono_offline for the rationale / the sonare_last_error_message contract).
+  clear_last_error();
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   try {
@@ -204,7 +227,14 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
     return SONARE_ERROR_NOT_SUPPORTED;         \
   } while (false)
 
-#define SONARE_C_TRY try {
+// Clears any stale detailed-error message before running the guarded body so a
+// message recorded by an earlier call can never leak. The catch arms below set a
+// fresh message on every caught-exception path. Validation early-returns that
+// occur BEFORE SONARE_C_TRY record no message; sonare_last_error_message is
+// therefore the empty string after such a return (see its header contract).
+#define SONARE_C_TRY                   \
+  sonare_c_detail::clear_last_error(); \
+  try {
 #define SONARE_C_CATCH                                                                  \
   }                                                                                     \
   catch (const sonare::SonareException& e) {                                            \

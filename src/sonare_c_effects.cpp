@@ -83,9 +83,10 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
       [threshold_db](const Audio& a) { return trim_absolute(a, threshold_db); });
 }
 
-SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
-                             int n_iter, float beta, float** out_w, size_t* out_w_length,
-                             float** out_h, size_t* out_h_length) {
+SonareError sonare_decompose_with_init(const float* s, int n_features, int n_frames,
+                                       int n_components, int n_iter, float beta, const char* init,
+                                       float** out_w, size_t* out_w_length, float** out_h,
+                                       size_t* out_h_length) {
   if (!out_w || !out_w_length || !out_h || !out_h_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out_w = nullptr;
   *out_w_length = 0;
@@ -94,6 +95,11 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
   if (!s || n_features <= 0 || n_frames <= 0 || n_components <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // n_iter==0 would skip all multiplicative-update iterations and return the
+  // raw (random or NNDSVD) init matrices: a plausible-shaped but meaningless
+  // factorisation. Reject it at the boundary so callers cannot get garbage
+  // that reports SONARE_OK.
+  if (n_iter <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   // Reject dims whose product would overflow size_t before the core indexes
   // n_features * n_frames elements of the caller-owned buffer.
   if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
@@ -101,7 +107,9 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
   }
 
   SONARE_C_TRY
-  DecomposeResult result = decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta);
+  std::string init_str = init ? init : "random";
+  DecomposeResult result =
+      decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta, init_str);
 
   std::unique_ptr<float[]> w(new float[result.W.size()]);
   std::memcpy(w.get(), result.W.data(), result.W.size() * sizeof(float));
@@ -114,6 +122,14 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
   *out_h = release_array(h);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
+                             int n_iter, float beta, float** out_w, size_t* out_w_length,
+                             float** out_h, size_t* out_h_length) {
+  // Backward-compatible delegation: original ABI always used random init.
+  return sonare_decompose_with_init(s, n_features, n_frames, n_components, n_iter, beta, "random",
+                                    out_w, out_w_length, out_h, out_h_length);
 }
 
 SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const char* aggregate,

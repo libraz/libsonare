@@ -22,6 +22,21 @@ namespace {
 // Clamp to a large but finite sentinel that still unambiguously signals
 // "extreme width / mono incompatible".
 constexpr float kMaxMonoCompatWidth = 1.0e6f;
+
+// Map a requested true-peak oversample factor to one the realtime polyphase
+// TruePeakFilter implements (2, 4, 8). The offline metering::true_peak path
+// additionally supports 16x, but the RT filter has no 16x design, so 16 is
+// resolved to 8 (the highest RT-compliant factor) instead of silently
+// substituting a mislabeled filter. Factors below the BS.1770-4 4x minimum that
+// the RT filter does not support (1, 3) are raised to 4; an explicit 2x request
+// is honored (it previously fell through to 4x). Use the offline
+// metering::true_peak when a genuine 16x measurement is required.
+int resolve_true_peak_oversample(int requested) noexcept {
+  if (requested >= 16) return 8;
+  if (requested >= 8) return 8;
+  if (requested == 2) return 2;
+  return 4;
+}
 }  // namespace
 
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
@@ -41,10 +56,11 @@ void MeterProcessor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = std::max(0, max_block_size);
   if (config_.measure_true_peak) {
-    // ITU-R BS.1770-4 mandates at least 4x oversampling for true-peak
-    // measurement; clamp anything below 4 up to 4 while still honoring 8x.
-    const int requested = config_.true_peak_oversample;
-    const int oversample = requested >= 8 ? 8 : 4;
+    // Resolve the requested factor to one the RT TruePeakFilter implements.
+    // See resolve_true_peak_oversample(): 16x is offline-only and clamps to 8x
+    // here, 2x is honored, and unsupported low factors are raised to the
+    // BS.1770-4 4x minimum.
+    const int oversample = resolve_true_peak_oversample(config_.true_peak_oversample);
     true_peak_filter_ = rt::TruePeakFilter(kTruePeakChannels, oversample);
     // Pre-size the filter's cross-block history + scratch so the per-block
     // upsample path is allocation-free, and preallocate our own oversampled

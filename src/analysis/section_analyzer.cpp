@@ -461,4 +461,9 @@ float SectionAnalyzer::duration() const {
 
 std::vector<float> SectionAnalyzer::boundary_times() const { return boundaries_; }
 
+std::vector<float> SectionAnalyzer::section_self_similarity() const {
+  if (sections_.empty()) return {};
+  return self_similarity(build_descriptors());
+}
+
 }  // namespace sonare
