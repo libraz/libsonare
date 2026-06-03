@@ -51,6 +51,20 @@ if(BUILD_ARRANGEMENT)
     sonare_arrangement sonare_serialize sonare_midi sonare_mir
   )
   target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
+  if(BUILD_MIXING)
+    # project_bounce.cpp renders per-track channel strips through the mixer C ABI
+    # (sonare_mixer_from_scene_json / _process_stereo), whose translation units
+    # and routing graph are not in any static lib the CLI already links. Compile
+    # them in (BUILD_MIXING implies BUILD_GRAPH, see the top-level CMakeLists).
+    target_sources(sonare PRIVATE
+      ${PROJECT_SOURCE_DIR}/src/sonare_c_mixing.cpp
+      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
+      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
+      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
+    )
+    target_link_libraries(sonare PRIVATE sonare_graph)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
+  endif()
 endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 

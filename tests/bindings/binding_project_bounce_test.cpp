@@ -167,6 +167,99 @@ TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") 
   sonare_project_destroy(project);
 }
 
+namespace {
+
+// Replaces the first occurrence of `from` in `text` with `to`. REQUIRE-guards
+// that the token was present so a serializer schema change fails loudly here
+// rather than silently skipping the channel-strip wiring.
+std::string replace_first(std::string text, const std::string& from, const std::string& to) {
+  const size_t pos = text.find(from);
+  REQUIRE(pos != std::string::npos);
+  text.replace(pos, from.size(), to);
+  return text;
+}
+
+// Peak absolute amplitude of an interleaved buffer.
+float buffer_peak(const float* data, size_t len) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::abs(data[i]));
+  return peak;
+}
+
+// Deserializes project JSON into a new handle (REQUIRE-guards success).
+SonareProject* deserialize_project(const std::string& json) {
+  SonareProject* project = nullptr;
+  char* diag = nullptr;
+  REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, &diag) == SONARE_OK);
+  REQUIRE(project != nullptr);
+  sonare_free_string(diag);
+  return project;
+}
+
+}  // namespace
+
+TEST_CASE("bounce renders per-track channel-strip effects (HIGH-02)", "[project]") {
+  // A single MIDI track routed to the built-in synth, bound to a mixer channel
+  // strip. Before the fix the bounce dropped the strip entirely; now it renders
+  // the track's stem through the scene's mixer, so a muted strip silences the
+  // bounce and a transparent strip preserves it. MIDI content survives
+  // serialization (host-supplied audio sample stores do not), so the synth
+  // regenerates the stem the strip then processes.
+  SonareProject* base = nullptr;
+  REQUIRE(sonare_project_create(&base) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(base, 48000.0) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(base, 0.0, 4.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20903C40u;  // note-on, note 60, vel 64
+  events[0].data1 = 0u;
+  events[1].ppq = 3.0;
+  events[1].data0 = 0x20803C00u;  // note-off, note 60
+  events[1].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(base, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(base, track, 0) == SONARE_OK);
+  const std::string json_plain = serialize(base);
+  sonare_project_destroy(base);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 0;
+
+  auto builtin_bounce_peak = [&](const std::string& json) {
+    SonareProject* project = deserialize_project(json);
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                           &out_len) == SONARE_OK);
+    const float peak = buffer_peak(out, out_len);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return peak;
+  };
+
+  // Reference: the unmodified project auditions the synth audibly.
+  REQUIRE(builtin_bounce_peak(json_plain) > 0.0f);
+
+  // Bind the track to a muted strip; the bounce must now fall silent.
+  const std::string json_muted = replace_first(
+      replace_first(json_plain, "\"strips\":[]", "\"strips\":[{\"id\":\"s0\",\"muted\":true}]"),
+      "\"channel_strip_ref\":\"\"", "\"channel_strip_ref\":\"s0\"");
+  REQUIRE(builtin_bounce_peak(json_muted) == Catch::Approx(0.0f).margin(1e-6));
+
+  // A transparent (unity-fader) strip must keep the audio flowing through the
+  // mixer path rather than dropping it.
+  const std::string json_unity = replace_first(
+      replace_first(json_plain, "\"strips\":[]", "\"strips\":[{\"id\":\"s0\",\"faderDb\":0.0}]"),
+      "\"channel_strip_ref\":\"\"", "\"channel_strip_ref\":\"s0\"");
+  REQUIRE(builtin_bounce_peak(json_unity) > 0.0f);
+}
+
 TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

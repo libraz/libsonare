@@ -76,6 +76,10 @@ struct ClipSchedule {
   /// extensions can use it to associate pre-baked warped storage with this
   /// schedule.
   uint32_t warp_ref_id = 0;
+  /// Control-plane source-track id carried from the arrangement clip. The clip
+  /// player never reads it on the audio thread; the offline bounce uses it to
+  /// group clips into per-track stems for channel-strip mixing. 0 = unset.
+  uint32_t track_id = 0;
   float gain = 1.0f;
   int64_t fade_in_samples = 0;
   int64_t fade_out_samples = 0;

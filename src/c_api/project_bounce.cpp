@@ -1,7 +1,14 @@
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include <functional>
+#include <set>
+
 #include "midi/builtin_synth.h"
+#if defined(SONARE_WITH_MIXING)
+#include "mixing/api/scene.h"
+#include "sonare_c_mixing.h"
+#endif
 
 namespace {
 
@@ -58,13 +65,193 @@ int64_t arrangement_end_frames(const arr::CompiledTimeline& timeline) noexcept {
   return end;
 }
 
+// Renders the compiled timeline offline through a fresh engine into `channels`
+// (num_channels deinterleaved buffers of length render_frames). `keep` selects
+// which clips to include by track id (a null/empty function keeps everything),
+// so the channel-strip bounce can isolate one track's audio into a dry stem.
+// The hosted instruments are reset and re-registered per render so a stem starts
+// from a clean voice state; only clips whose track passes `keep` fire events.
+void render_timeline(const arr::CompiledTimeline& timeline,
+                     const std::function<bool(uint32_t)>& keep,
+                     const std::vector<HostedInstrument>& instruments, double sample_rate,
+                     int block_size, int num_channels, int64_t render_frames,
+                     std::vector<std::vector<float>>* channels) {
+  arr::CompiledTimeline filtered = timeline;  // copy re-points marker name pointers
+  if (keep) {
+    filtered.audio_clips.erase(
+        std::remove_if(filtered.audio_clips.begin(), filtered.audio_clips.end(),
+                       [&](const sonare::engine::ClipSchedule& c) { return !keep(c.track_id); }),
+        filtered.audio_clips.end());
+    filtered.midi_clips.erase(
+        std::remove_if(filtered.midi_clips.begin(), filtered.midi_clips.end(),
+                       [&](const sonare::midi::MidiClipSchedule& c) { return !keep(c.track_id); }),
+        filtered.midi_clips.end());
+  }
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(sample_rate, block_size);
+  arr::apply_to_engine(filtered, engine);
+  for (const HostedInstrument& hosted : instruments) {
+    hosted.instrument->reset();
+    engine.set_midi_instrument(hosted.destination_id, hosted.instrument);
+  }
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  engine.push_command(play);
+
+  channels->assign(static_cast<size_t>(num_channels),
+                   std::vector<float>(static_cast<size_t>(render_frames), 0.0f));
+  std::vector<float*> ptrs;
+  ptrs.reserve(channels->size());
+  for (auto& channel : *channels) ptrs.push_back(channel.data());
+  engine.render_offline(ptrs.data(), num_channels, render_frames, block_size);
+  for (const HostedInstrument& hosted : instruments) {
+    engine.set_midi_instrument(hosted.destination_id, nullptr);
+  }
+}
+
+#if defined(SONARE_WITH_MIXING)
+// Resolved Track->Strip routing for a channel-strip bounce: the scene strip ids
+// in their canonical order (= the mixer's process_stereo input index order),
+// each strip's set of source tracks, and the union of all bound tracks.
+struct MixerRouting {
+  std::vector<std::string> strip_ids;
+  std::vector<std::set<uint32_t>> strip_tracks;  // index-aligned with strip_ids
+  std::set<uint32_t> bound_tracks;
+};
+
+// Resolves the compiled timeline's mixer bindings against its scene. Only
+// bindings whose strip actually exists in the scene are honored; a binding to a
+// missing strip leaves its track unbound (rendered dry into the master).
+MixerRouting resolve_mixer_routing(const arr::CompiledTimeline& timeline) {
+  MixerRouting routing;
+  std::map<std::string, size_t> index_of;
+  for (const auto& strip : timeline.mixer.scene.strips) {
+    index_of.emplace(strip.id, routing.strip_ids.size());
+    routing.strip_ids.push_back(strip.id);
+    routing.strip_tracks.emplace_back();
+  }
+  for (const auto& binding : timeline.mixer.bindings) {
+    const auto it = index_of.find(binding.strip_id);
+    if (it == index_of.end()) continue;  // strip not in scene -> track stays unbound
+    routing.strip_tracks[it->second].insert(binding.track_id);
+    routing.bound_tracks.insert(binding.track_id);
+  }
+  return routing;
+}
+
+// Channel-strip bounce (HIGH-02): renders each bound track as an isolated dry
+// stereo stem and sums the stems through the scene's mixer so per-track EQ,
+// inserts, pan, fader, sends and buses are applied. Tracks bound to no scene
+// strip are rendered into a separate dry stem and summed straight into the
+// master. `frames`/`pdc` are precomputed by the caller; stems are aligned to
+// [0, frames) after dropping the leading PDC fill.
+SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
+                                 const std::vector<HostedInstrument>& instruments,
+                                 const MixerRouting& routing, double sample_rate, int block_size,
+                                 int num_channels, int64_t frames, int64_t pdc,
+                                 float** out_interleaved, size_t* out_len) {
+  const size_t strip_count = routing.strip_ids.size();
+  // Stems are stereo (the mixer is stereo): one per strip plus one direct stem.
+  const uint64_t stem_floats = static_cast<uint64_t>(frames) * 2u * (strip_count + 1u);
+  if (stem_floats > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+
+  const int64_t render_frames = frames + pdc;
+  auto stem_aligned = [&](const std::function<bool(uint32_t)>& keep) {
+    std::vector<std::vector<float>> ch;
+    render_timeline(timeline, keep, instruments, sample_rate, block_size, /*num_channels=*/2,
+                    render_frames, &ch);
+    for (auto& c : ch) {
+      if (pdc > 0) c.erase(c.begin(), c.begin() + pdc);
+      c.resize(static_cast<size_t>(frames));
+    }
+    return ch;
+  };
+
+  // One stereo stem per strip (silent if the strip has no source track).
+  std::vector<std::vector<std::vector<float>>> stems;
+  stems.reserve(strip_count);
+  for (size_t i = 0; i < strip_count; ++i) {
+    const std::set<uint32_t>& tracks = routing.strip_tracks[i];
+    if (tracks.empty()) {
+      stems.emplace_back(2, std::vector<float>(static_cast<size_t>(frames), 0.0f));
+      continue;
+    }
+    stems.push_back(stem_aligned([&tracks](uint32_t t) { return tracks.count(t) != 0; }));
+  }
+
+  // Direct stem: every track NOT bound to a scene strip (dry to master).
+  const std::set<uint32_t>& bound = routing.bound_tracks;
+  std::vector<std::vector<float>> direct =
+      stem_aligned([&bound](uint32_t t) { return bound.count(t) == 0; });
+
+  // Build the mixer from the scene and sum the strip stems block by block.
+  const std::string scene_json = sonare::mixing::api::scene_to_json(timeline.mixer.scene);
+  SonareMixer* mixer =
+      sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(sample_rate), block_size);
+  if (mixer == nullptr) return SONARE_ERROR_INVALID_STATE;
+
+  std::vector<float> master_l(static_cast<size_t>(frames), 0.0f);
+  std::vector<float> master_r(static_cast<size_t>(frames), 0.0f);
+  std::vector<const float*> in_l(strip_count, nullptr);
+  std::vector<const float*> in_r(strip_count, nullptr);
+  SonareError err = SONARE_OK;
+  for (int64_t off = 0; off < frames; off += block_size) {
+    const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, frames - off));
+    for (size_t i = 0; i < strip_count; ++i) {
+      in_l[i] = stems[i][0].data() + off;
+      in_r[i] = stems[i][1].data() + off;
+    }
+    err = sonare_mixer_process_stereo(mixer, in_l.data(), in_r.data(), strip_count,
+                                      master_l.data() + off, master_r.data() + off, n);
+    if (err != SONARE_OK) break;
+  }
+  sonare_mixer_destroy(mixer);
+  if (err != SONARE_OK) return err;
+
+  // Unbound tracks bypass the strips and sum straight into the master.
+  for (int64_t i = 0; i < frames; ++i) {
+    master_l[static_cast<size_t>(i)] += direct[0][static_cast<size_t>(i)];
+    master_r[static_cast<size_t>(i)] += direct[1][static_cast<size_t>(i)];
+  }
+
+  // Interleave into the requested channel count: mono downmixes the stereo
+  // master; channels beyond stereo are left silent.
+  const size_t total = static_cast<size_t>(frames) * static_cast<size_t>(num_channels);
+  std::unique_ptr<float[]> interleaved(new float[total]);
+  for (int64_t f = 0; f < frames; ++f) {
+    const float l = master_l[static_cast<size_t>(f)];
+    const float r = master_r[static_cast<size_t>(f)];
+    for (int ch = 0; ch < num_channels; ++ch) {
+      float v = 0.0f;
+      if (num_channels == 1) {
+        v = 0.5f * (l + r);
+      } else if (ch == 0) {
+        v = l;
+      } else if (ch == 1) {
+        v = r;
+      }
+      interleaved[static_cast<size_t>(f) * num_channels + ch] = v;
+    }
+  }
+  *out_interleaved = interleaved.release();
+  *out_len = total;
+  return SONARE_OK;
+}
+#endif  // SONARE_WITH_MIXING
+
 // Shared bounce core: validates options, compiles, registers any hosted
 // instruments per destination, renders offline, and writes the interleaved
 // result. `instruments` may be empty for a silent MIDI bounce. When
 // opts.total_frames <= 0 the render length is auto-derived from the compiled
 // timeline (plus the longest hosted-instrument release tail) so a caller can
-// bounce a MIDI-only arrangement without computing a length by hand. Returns
-// through the SONARE_C_TRY/CATCH guard of the caller.
+// bounce a MIDI-only arrangement without computing a length by hand. When the
+// project routes tracks through mixer channel strips (under SONARE_WITH_MIXING)
+// the render fans out into per-track stems summed through the scene's mixer so
+// channel-strip FX are applied; otherwise a single offline render is used.
+// Returns through the SONARE_C_TRY/CATCH guard of the caller.
 SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                               const std::vector<HostedInstrument>& instruments,
                               float** out_interleaved, size_t* out_len) {
@@ -92,20 +279,26 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       project->history.project(), project->history.midi_content(), project->audio, config);
   if (!compiled.timeline.has_value()) return SONARE_ERROR_INVALID_STATE;
 
-  sonare::engine::RealtimeEngine engine;
-  engine.prepare(sample_rate, block_size);
-  arr::apply_to_engine(*compiled.timeline, engine);
-
-  // Register the hosted instruments per destination. The engine borrows the
-  // pointers; the owning storage lives in the caller for the whole render. Track
-  // the longest release tail so an auto-derived length is not truncated.
+  // Validate the hosted instruments and derive the project's PDC + longest tail
+  // on a throwaway engine (latency depends only on the registered instruments,
+  // not on the timeline), so both the single-render and the per-track-stem paths
+  // share one render length and delay.
   int64_t instrument_tail = 0;
-  for (const HostedInstrument& hosted : instruments) {
-    if (hosted.instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-    if (!engine.set_midi_instrument(hosted.destination_id, hosted.instrument)) {
-      return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
+  int64_t pdc = 0;
+  {
+    sonare::engine::RealtimeEngine probe;
+    probe.prepare(sample_rate, block_size);
+    for (const HostedInstrument& hosted : instruments) {
+      if (hosted.instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+      if (!probe.set_midi_instrument(hosted.destination_id, hosted.instrument)) {
+        return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
+      }
+      instrument_tail = std::max<int64_t>(instrument_tail, hosted.instrument->tail_samples());
     }
-    instrument_tail = std::max<int64_t>(instrument_tail, hosted.instrument->tail_samples());
+    pdc = static_cast<int64_t>(probe.midi_instrument_latency_samples());
+    for (const HostedInstrument& hosted : instruments) {
+      probe.set_midi_instrument(hosted.destination_id, nullptr);
+    }
   }
 
   // Determine the render length: caller-supplied, or auto-derived from the
@@ -122,40 +315,30 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  sonare::rt::Command play{};
-  play.type = sonare::rt::CommandType::kTransportPlay;
-  play.sample_time = -1;
-  engine.push_command(play);
-
-  // Plugin-delay compensation: a hosted instrument with internal latency makes
-  // the engine delay every source by the project's total latency so clip and
-  // instrument audio stay phase-aligned. To return musical time [0, frames)
-  // aligned to output sample 0, render `pdc` extra frames and drop the leading
-  // `pdc` (the delay-line fill). With no latency-bearing instrument pdc == 0 and
-  // the result is identical to a plain bounce.
-  const int64_t pdc = static_cast<int64_t>(engine.midi_instrument_latency_samples());
-  const int64_t render_frames = frames + pdc;
   const size_t total = static_cast<size_t>(frames) * static_cast<size_t>(num_channels);
   if (frames == 0) {
     // Empty arrangement (or zero-length request): a valid empty render.
     *out_interleaved = new float[1];
     *out_len = 0;
-    for (const HostedInstrument& hosted : instruments) {
-      engine.set_midi_instrument(hosted.destination_id, nullptr);
-    }
     return SONARE_OK;
   }
-  std::vector<std::vector<float>> channels(
-      static_cast<size_t>(num_channels),
-      std::vector<float>(static_cast<size_t>(render_frames), 0.0f));
-  std::vector<float*> ptrs;
-  ptrs.reserve(channels.size());
-  for (auto& channel : channels) ptrs.push_back(channel.data());
-  engine.render_offline(ptrs.data(), num_channels, render_frames, block_size);
-  // Detach the borrowed instruments before they leave scope.
-  for (const HostedInstrument& hosted : instruments) {
-    engine.set_midi_instrument(hosted.destination_id, nullptr);
+
+#if defined(SONARE_WITH_MIXING)
+  // Per-track channel-strip bounce when the project binds tracks to scene strips.
+  const MixerRouting routing = resolve_mixer_routing(*compiled.timeline);
+  if (!routing.bound_tracks.empty()) {
+    return bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
+                                num_channels, frames, pdc, out_interleaved, out_len);
   }
+#endif
+
+  // Single-render path: no channel strips bound (output identical to the legacy
+  // bounce). Plugin-delay compensation renders `pdc` extra frames and drops the
+  // leading delay-line fill so musical time [0, frames) aligns to output 0.
+  const int64_t render_frames = frames + pdc;
+  std::vector<std::vector<float>> channels;
+  render_timeline(*compiled.timeline, /*keep=*/{}, instruments, sample_rate, block_size,
+                  num_channels, render_frames, &channels);
 
   std::unique_ptr<float[]> interleaved(new float[total]);
   for (int64_t frame = 0; frame < frames; ++frame) {

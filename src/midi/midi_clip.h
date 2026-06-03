@@ -86,6 +86,10 @@ enum class MidiLoopMode : uint8_t {
 struct MidiClipSchedule {
   /// Stable clip id (mirrors the EditClip id).
   uint32_t id = 0;
+  /// Source-track id (mirrors the EditClip's track_id). Control-plane only; the
+  /// sequencer never reads it. The offline bounce groups clips into per-track
+  /// stems for channel-strip mixing. 0 = unset.
+  uint32_t track_id = 0;
   /// Clip start on the render timeline (samples), baked from PPQ.
   int64_t start_sample = 0;
   /// Clip start in musical time (PPQ); carried for diagnostics / re-baking.

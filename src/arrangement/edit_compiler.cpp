@@ -332,6 +332,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                                /*clip_has_separate_fade_out_curve=*/true);
     sched.loop_length_samples = loop_length_samples;
     sched.warp_ref_id = clip.warp_ref_id;
+    sched.track_id = clip.track_id;
     sched.storage = std::move(storage);
     timeline.audio_clips.push_back(std::move(sched));
   }
@@ -388,6 +389,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
     midi::MidiClipSchedule sched;
     sched.id = clip.id;
+    sched.track_id = clip.track_id;
     // Route the clip's events to its track's MIDI destination. Without this the
     // sequencer fires every clip on destination 0, collapsing multi-track MIDI
     // onto a single instrument. 0 stays the default/null destination.
