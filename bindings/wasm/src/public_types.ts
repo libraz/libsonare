@@ -442,7 +442,18 @@ export interface RoomGeometryOptions {
   lengthM?: number;
   widthM?: number;
   heightM?: number;
+  /** Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar). */
   absorption?: number;
+  /**
+   * Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
+   * provided it overrides `absorption` unless `materialPreset` is set.
+   */
+  bandAbsorption?: Float32Array | number[];
+  /**
+   * Named wall-material preset (0 none; 1 concrete, 2 wood, 3 curtain,
+   * 4 carpet, 5 glass). A non-zero preset wins over `bandAbsorption`/`absorption`.
+   */
+  materialPreset?: number;
   sourceX?: number;
   sourceY?: number;
   sourceZ?: number;
@@ -498,6 +509,15 @@ export interface RoomEstimateResult {
 export interface RoomMorphOptions extends RoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
+  /**
+   * Use the Eyring statistical late-tail model for the target room (default
+   * true); false = Sabine. Matches {@link RirSynthOptions.preferEyring}.
+   */
+  preferEyring?: boolean;
+  /** Early/late crossover in ms (0 = auto, ~sqrt(V) ms). */
+  mixingTimeMs?: number;
+  /** Equal-power crossfade width around the mixing time in ms (0 = default). */
+  crossfadeMs?: number;
 }
 
 /**
@@ -728,6 +748,35 @@ export interface MasteringChainConfig {
     ceilingDb?: number;
     truePeakOversample?: number;
   };
+}
+
+/**
+ * Configuration for the block-by-block {@link StreamingMasteringChain}.
+ *
+ * Extends {@link MasteringChainConfig} with optional precomputed loudness
+ * parameters. The streaming chain cannot measure whole-signal integrated LUFS,
+ * so an enabled `loudness` stage normally throws at construction. To let a
+ * preset's streaming preview match its offline render, the caller may
+ * precompute the loudness normalization gain offline (e.g.
+ * `targetLufs - measuredIntegratedLufs`) and supply it here.
+ */
+export interface StreamingMasteringChainConfig extends MasteringChainConfig {
+  /**
+   * Precomputed static loudness gain in dB. When omitted (the default), an
+   * enabled `loudness` stage still throws. When provided and `loudness.enabled`
+   * is set, the chain applies this fixed gain per block before the loudness
+   * stage's true-peak limiter instead of throwing.
+   */
+  loudnessStaticGainDb?: number;
+
+  /**
+   * Offline-measured true-peak (dBFS) of the source the static gain was
+   * computed for. When provided, the static gain is clamped to
+   * `loudness.ceilingDb - loudnessStaticGainPeakDb` so the streaming preview
+   * does not drive the loudness limiter harder than the offline chain. When
+   * omitted (the default) the static gain is applied verbatim.
+   */
+  loudnessStaticGainPeakDb?: number;
 }
 
 export interface MasteringChainResult extends MasteringResult {

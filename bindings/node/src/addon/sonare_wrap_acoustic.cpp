@@ -2,6 +2,7 @@
 #include <cmath>
 #include <vector>
 
+#include "acoustic/material.h"
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
 #include "analysis/room_estimator.h"
@@ -48,12 +49,84 @@ bool ValidateAcousticInput(const Napi::Env& env, const float* data, size_t lengt
   return true;
 }
 
-// Builds a uniform-absorption shoebox + placement from a JS options object.
+// Maps a materialPreset selector (mirroring SONARE_MATERIAL_PRESET_*: 1 concrete,
+// 2 wood, 3 curtain, 4 carpet, 5 glass) onto a MaterialPreset. Returns false for
+// 0/none or any unknown value, in which case the per-band/scalar path applies.
+bool MaterialPresetFromInt(int selector, sonare::acoustic::MaterialPreset* out) {
+  using sonare::acoustic::MaterialPreset;
+  switch (selector) {
+    case 1:
+      *out = MaterialPreset::Concrete;
+      return true;
+    case 2:
+      *out = MaterialPreset::Wood;
+      return true;
+    case 3:
+      *out = MaterialPreset::Curtain;
+      return true;
+    case 4:
+      *out = MaterialPreset::Carpet;
+      return true;
+    case 5:
+      *out = MaterialPreset::Glass;
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Reads an optional Float32Array/number[] option into a vector (empty if absent).
+std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* key) {
+  Napi::Value value = opts.Get(key);
+  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
+    auto typed = value.As<Napi::Float32Array>();
+    return std::vector<float>(typed.Data(), typed.Data() + typed.ElementLength());
+  }
+  if (value.IsArray()) {
+    auto arr = value.As<Napi::Array>();
+    std::vector<float> out;
+    out.reserve(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      Napi::Value v = arr.Get(i);
+      out.push_back(v.IsNumber() ? v.As<Napi::Number>().FloatValue() : 0.0f);
+    }
+    return out;
+  }
+  return {};
+}
+
+// Builds a uniform shoebox + placement from a JS options object, honouring the
+// same wall-material precedence as the C ABI: materialPreset (non-zero) >
+// per-band bandAbsorption > scalar absorption.
 sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float def_absorption) {
-  return sonare::acoustic::uniform_shoebox(
-      {node_float_option(opts, "lengthM", 7.0f), node_float_option(opts, "widthM", 5.0f),
-       node_float_option(opts, "heightM", 3.0f)},
-      node_float_option(opts, "absorption", def_absorption));
+  using namespace sonare::acoustic;
+  const sonare::RoomDimensions dims{node_float_option(opts, "lengthM", 7.0f),
+                                    node_float_option(opts, "widthM", 5.0f),
+                                    node_float_option(opts, "heightM", 3.0f)};
+
+  MaterialPreset preset{};
+  if (MaterialPresetFromInt(node_int_option(opts, "materialPreset", 0), &preset)) {
+    ShoeboxRoom room;
+    room.dims = dims;
+    const Material wall = make_material(preset);
+    for (Material& w : room.walls) w = wall;
+    return room;
+  }
+
+  const std::vector<float> bands = NodeFloatArrayOption(opts, "bandAbsorption");
+  if (!bands.empty()) {
+    ShoeboxRoom room;
+    room.dims = dims;
+    Material wall;
+    wall.absorption.reserve(bands.size());
+    for (float a : bands) wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
+    // Keep the Material invariant absorption.size() == scattering.size().
+    wall.scattering.assign(bands.size(), 0.0f);
+    for (Material& w : room.walls) w = wall;
+    return room;
+  }
+
+  return uniform_shoebox(dims, node_float_option(opts, "absorption", def_absorption));
 }
 
 sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) {
@@ -190,6 +263,11 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   cfg.ism_order = std::max(0, node_int_option(opts, "ismOrder", cfg.ism_order));
   cfg.seed = static_cast<unsigned>(std::max(0, node_int_option(opts, "seed", 1)));
   cfg.max_seconds = node_float_option(opts, "maxSeconds", cfg.max_seconds);
+  cfg.late_model = node_bool_option(opts, "preferEyring", true)
+                       ? sonare::acoustic::ReverbModel::Eyring
+                       : sonare::acoustic::ReverbModel::Sabine;
+  cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
+  cfg.crossfade_ms = node_float_option(opts, "crossfadeMs", cfg.crossfade_ms);
 
   const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
   std::vector<float> out = AudioToVector(result);

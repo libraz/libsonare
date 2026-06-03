@@ -48,6 +48,16 @@ bool preset_from_int(int selector, sonare::acoustic::MaterialPreset* out) {
   }
 }
 
+// Map a SONARE_REVERB_MODEL_* selector onto sonare::acoustic::ReverbModel.
+// SONARE_REVERB_MODEL_DEFAULT (0, the zero-initialized value) and any unknown
+// selector resolve to the C++ library default (Eyring), so a {}-zeroed config
+// matches the C++ struct defaults and the high-level bindings' preferEyring
+// default; only an explicit SABINE selects Sabine.
+sonare::acoustic::ReverbModel reverb_model_from_int(int selector) {
+  using sonare::acoustic::ReverbModel;
+  return selector == SONARE_REVERB_MODEL_SABINE ? ReverbModel::Sabine : ReverbModel::Eyring;
+}
+
 // Build a uniform shoebox whose single wall material is chosen by precedence:
 //   material_preset (non-zero) > per-band absorption array > scalar absorption.
 // All six walls share the resulting material (this ABI exposes only uniform
@@ -120,8 +130,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                  {config->listener_x, config->listener_y, config->listener_z}};
   RirSynthConfig rc;
   rc.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
-  rc.late_model =
-      config->late_model == SONARE_REVERB_MODEL_SABINE ? ReverbModel::Sabine : ReverbModel::Eyring;
+  rc.late_model = reverb_model_from_int(config->late_model);
   rc.seed = config->seed;
   rc.max_seconds = config->max_seconds;
   rc.mixing_time_ms = config->mixing_time_ms;
@@ -229,9 +238,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
         cfg.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
         cfg.seed = config->seed;
         cfg.max_seconds = config->max_seconds;
-        cfg.late_model = config->late_model == SONARE_REVERB_MODEL_SABINE
-                             ? sonare::acoustic::ReverbModel::Sabine
-                             : sonare::acoustic::ReverbModel::Eyring;
+        cfg.late_model = reverb_model_from_int(config->late_model);
         cfg.mixing_time_ms = config->mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
         // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
         // not a useful setting), matching the RIR-synth ABI convention.

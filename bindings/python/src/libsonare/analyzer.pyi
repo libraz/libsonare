@@ -243,10 +243,15 @@ def synthesize_rir(
     source: tuple[float, float, float] = ...,
     listener: tuple[float, float, float] = ...,
     absorption: float = 0.2,
+    absorption_bands: Sequence[float] | None = None,
+    material_preset: int = 0,
     sample_rate: int = 48000,
     ism_order: int = 3,
+    prefer_eyring: bool = True,
     seed: int = 1,
     max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
+    crossfade_ms: float = 0.0,
 ) -> RirResult: ...
 def estimate_room(
     samples: FloatSamples,
@@ -268,11 +273,16 @@ def room_morph(
     source: tuple[float, float, float] = ...,
     listener: tuple[float, float, float] = ...,
     absorption: float = 0.2,
+    absorption_bands: Sequence[float] | None = None,
+    material_preset: int = 0,
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
     ism_order: int = 3,
+    prefer_eyring: bool = True,
     seed: int = 1,
     max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
+    crossfade_ms: float = 0.0,
 ) -> list[float]: ...
 def analyze_rhythm(
     samples: FloatSamples,

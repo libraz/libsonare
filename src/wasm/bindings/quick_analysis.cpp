@@ -435,11 +435,66 @@ val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
+// Maps a materialPreset selector (mirroring SONARE_MATERIAL_PRESET_*: 1 concrete,
+// 2 wood, 3 curtain, 4 carpet, 5 glass) onto a MaterialPreset. Returns false for
+// 0/none or any unknown value, leaving the per-band/scalar path to apply.
+bool materialPresetFromInt(int selector, sonare::acoustic::MaterialPreset* out) {
+  using sonare::acoustic::MaterialPreset;
+  switch (selector) {
+    case 1:
+      *out = MaterialPreset::Concrete;
+      return true;
+    case 2:
+      *out = MaterialPreset::Wood;
+      return true;
+    case 3:
+      *out = MaterialPreset::Curtain;
+      return true;
+    case 4:
+      *out = MaterialPreset::Carpet;
+      return true;
+    case 5:
+      *out = MaterialPreset::Glass;
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Builds a uniform shoebox from a JS options object, honouring the same wall-
+// material precedence as the C ABI: materialPreset (non-zero) > per-band
+// bandAbsorption (Float32Array/number[]) > scalar absorption.
 sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
-  return sonare::acoustic::uniform_shoebox(
-      {floatProperty(opts, "lengthM", 7.0f), floatProperty(opts, "widthM", 5.0f),
-       floatProperty(opts, "heightM", 3.0f)},
-      floatProperty(opts, "absorption", def_absorption));
+  using namespace sonare::acoustic;
+  const RoomDimensions dims{floatProperty(opts, "lengthM", 7.0f),
+                            floatProperty(opts, "widthM", 5.0f),
+                            floatProperty(opts, "heightM", 3.0f)};
+
+  MaterialPreset preset{};
+  if (materialPresetFromInt(intProperty(opts, "materialPreset", 0), &preset)) {
+    ShoeboxRoom room;
+    room.dims = dims;
+    const Material wall = make_material(preset);
+    for (Material& w : room.walls) w = wall;
+    return room;
+  }
+
+  if (hasProperty(opts, "bandAbsorption")) {
+    const std::vector<float> bands = float32ArrayToVector(opts["bandAbsorption"]);
+    if (!bands.empty()) {
+      ShoeboxRoom room;
+      room.dims = dims;
+      Material wall;
+      wall.absorption.reserve(bands.size());
+      for (float a : bands) wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
+      // Keep the Material invariant absorption.size() == scattering.size().
+      wall.scattering.assign(bands.size(), 0.0f);
+      for (Material& w : room.walls) w = wall;
+      return room;
+    }
+  }
+
+  return uniform_shoebox(dims, floatProperty(opts, "absorption", def_absorption));
 }
 
 sonare::acoustic::SourceListener placementFromVal(val opts) {
@@ -564,6 +619,11 @@ val js_room_morph(val samples, int sample_rate, val opts) {
   config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
   config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
+  config.late_model = boolProperty(opts, "preferEyring", true)
+                          ? sonare::acoustic::ReverbModel::Eyring
+                          : sonare::acoustic::ReverbModel::Sabine;
+  config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
+  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
 
   const Audio result = sonare::effects::acoustic::room_morph(audio, config);
   std::vector<float> out;

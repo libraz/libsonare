@@ -17,10 +17,16 @@
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
 #define SONARE_ACOUSTIC_ABI_VERSION 2u
 
-/// Statistical late-reverberation RT60 model for RIR synthesis
-/// (SonareRirSynthConfig::late_model). Mirrors sonare::acoustic::ReverbModel.
-#define SONARE_REVERB_MODEL_SABINE 0
-#define SONARE_REVERB_MODEL_EYRING 1
+/// Statistical late-reverberation RT60 model for RIR synthesis / room morph
+/// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model).
+/// SONARE_REVERB_MODEL_DEFAULT is 0 so a zero-initialized config selects the
+/// library default (Eyring), matching the C++ struct defaults
+/// (RirSynthConfig::late_model / RoomMorphConfig::late_model) and every
+/// high-level binding's preferEyring=true default. SABINE/EYRING select a model
+/// explicitly. Mirrors sonare::acoustic::ReverbModel for the explicit values.
+#define SONARE_REVERB_MODEL_DEFAULT 0
+#define SONARE_REVERB_MODEL_SABINE 1
+#define SONARE_REVERB_MODEL_EYRING 2
 
 /// Building-material preset selector for the uniform-room wall material
 /// (SonareRirSynthConfig::material_preset / SonareRoomMorphConfig::material_preset).
@@ -72,7 +78,7 @@ typedef struct {
   float mixing_time_ms; /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;   /* equal-power crossfade width around the mixing time (ms) */
   int ism_order;        /* image-source reflection order (>= 0) */
-  int late_model;       /* SONARE_REVERB_MODEL_* (Sabine/Eyring) for the late tail */
+  int late_model;       /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
   unsigned int seed;    /* deterministic late-tail seed */
   /* Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
    * absorption_bands != NULL and absorption_band_count > 0 it overrides the
@@ -138,7 +144,7 @@ typedef struct {
   float mixing_time_ms;          /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;            /* equal-power crossfade width around mixing time (ms) */
   int ism_order;
-  int late_model; /* SONARE_REVERB_MODEL_* (Sabine/Eyring) for the target tail */
+  int late_model; /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
   unsigned int seed;
   /* Optional per-octave-band target-wall absorption; see SonareRirSynthConfig. */
   const float* absorption_bands;

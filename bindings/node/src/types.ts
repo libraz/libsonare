@@ -495,7 +495,18 @@ export interface RoomGeometryOptions {
   lengthM?: number;
   widthM?: number;
   heightM?: number;
+  /** Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar). */
   absorption?: number;
+  /**
+   * Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
+   * provided it overrides `absorption` unless `materialPreset` is set.
+   */
+  bandAbsorption?: Float32Array | number[];
+  /**
+   * Named wall-material preset (0 none; 1 concrete, 2 wood, 3 curtain,
+   * 4 carpet, 5 glass). A non-zero preset wins over `bandAbsorption`/`absorption`.
+   */
+  materialPreset?: number;
   sourceX?: number;
   sourceY?: number;
   sourceZ?: number;
@@ -551,6 +562,15 @@ export interface RoomEstimateResult {
 export interface RoomMorphOptions extends RoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
+  /**
+   * Use the Eyring statistical late-tail model for the target room (default
+   * true); false = Sabine. Matches {@link RirSynthOptions.preferEyring}.
+   */
+  preferEyring?: boolean;
+  /** Early/late crossover in ms (0 = auto, ~sqrt(V) ms). */
+  mixingTimeMs?: number;
+  /** Equal-power crossfade width around the mixing time in ms (0 = default). */
+  crossfadeMs?: number;
 }
 
 export interface LufsResult {
