@@ -27,6 +27,8 @@ option(BUILD_FX "Build creative realtime FX processors" ON)
 option(BUILD_ACOUSTIC_SIM "Build geometric room-acoustics simulation (5th reverb engine)" ON)
 option(BUILD_PITCH_EDITOR "Build monophonic pitch editor primitives" ON)
 option(BUILD_VOICE_CHANGER "Build realtime voice changer primitives" ON)
+option(BUILD_ARRANGEMENT "Build headless arrangement / DAW project subsystem" ON)
+option(BUILD_ASSIST "Build composition-assist injection seam (control/offline only)" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
 option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
        "Build optional external fixture tests that require local datasets" OFF)

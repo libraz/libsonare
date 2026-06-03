@@ -278,6 +278,43 @@ if(BUILD_VOICE_CHANGER)
   )
 endif()
 
+if(BUILD_ARRANGEMENT)
+  target_sources(sonare_tests PRIVATE
+    arrangement/edit_model_test.cpp
+    arrangement/edit_command_history_test.cpp
+    arrangement/edit_compiler_golden_test.cpp
+    midi/midi_ump_test.cpp
+    midi/midi_clip_sequencer_test.cpp
+    midi/midi_no_alloc_test.cpp
+    midi/smf_roundtrip_test.cpp
+    midi/midi_fx_test.cpp
+    midi/program_map_test.cpp
+    midi/midi_routing_test.cpp
+    mir/mir_tempo_grid_test.cpp
+    mir/mir_warp_test.cpp
+    mir/mir_key_chord_onset_test.cpp
+    serialize/project_serializer_roundtrip_test.cpp
+    serialize/project_deserialize_fuzz_test.cpp
+    host/host_seam_test.cpp
+    bindings/binding_project_parity_test.cpp
+  )
+  # The headless-project C ABI translation unit (compiled into the test binary so
+  # the parity test drives the real C surface, like the engine/voice-changer TUs).
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp)
+  target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ARRANGEMENT=1)
+
+  # Composition-assist seam test. Exercises the seam end to end via a mock
+  # module + a static layering guard (rt/ + engine/ must not include
+  # midi/assist/). Gated by BUILD_ASSIST so a no-assist build compiles cleanly
+  # with no assist symbols on the surface.
+  if(BUILD_ASSIST)
+    target_sources(sonare_tests PRIVATE assist/assist_seam_test.cpp)
+    target_link_libraries(sonare_tests PRIVATE sonare_assist)
+    target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ASSIST=1)
+  endif()
+endif()
+
 # The CLI tests shell out to the built `sonare` binary, which only exists when
 # the CLI is built. Register them only then so they do not fail with exit 127
 # under -DBUILD_CLI=OFF (e.g. CI's native build matrix).

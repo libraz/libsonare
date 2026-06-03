@@ -576,6 +576,135 @@ if(BUILD_VOICE_CHANGER)
   set_target_properties(sonare_voice_changer PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
+if(BUILD_ARRANGEMENT)
+  # Headless arrangement / DAW project model (control-thread-only, value data).
+  # Depends one-way on transport/ + automation/ (via sonare_automation, which
+  # transitively links sonare_rt -> sonare_core) and includes the pure-data
+  # mixing::api::Scene struct header. The Scene STRUCT is header-only data, so
+  # sonare_mixing is NOT linked here; mixer JSON helpers stay optional, and the include
+  # path resolves through sonare_core's src/ include dir even when BUILD_MIXING
+  # is OFF. No core/engine/rt target depends on sonare_arrangement (one-way).
+  # MIDI core (UMP / clip / sequencer). RT-layer subsystem: depends ONLY on
+  # rt/ + transport/ (both compiled into sonare_rt). engine/ may include this
+  # (RealtimeEngine gains a flag-gated MidiSequencer member); arrangement/
+  # compiles to midi::MidiClipSchedule. One-way: midi does NOT depend on
+  # engine/ or arrangement/, so the link graph stays acyclic
+  # (rt/transport <- midi <- engine <- arrangement; arrangement -> midi too).
+  add_library(sonare_midi STATIC
+    midi/ump.cpp
+    midi/midi_clip.cpp
+    midi/sequencer.cpp
+    midi/smf.cpp
+    midi/midi_fx.cpp
+    midi/program_map.cpp
+    midi/sound_destination.cpp
+    midi/routing.cpp
+    midi/cc_map.cpp
+    midi/clock_sync.cpp
+    midi/capture.cpp
+  )
+  target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
+  target_compile_options(sonare_midi PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_midi PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_compile_definitions(sonare_midi PUBLIC SONARE_WITH_ARRANGEMENT=1)
+
+  # RealtimeEngine gains a flag-gated MidiSequencer member + set_midi_clips when
+  # the arrangement subsystem is built. Wire the dependency + the
+  # SONARE_WITH_ARRANGEMENT define onto the already-created sonare_engine target
+  # (PUBLIC so every consumer that links engine sees the matching layout).
+  target_link_libraries(sonare_engine PUBLIC sonare_midi)
+  target_compile_definitions(sonare_engine PUBLIC SONARE_WITH_ARRANGEMENT=1)
+
+  add_library(sonare_arrangement STATIC
+    arrangement/edit_model.cpp
+    arrangement/edit_command.cpp
+    arrangement/edit_history.cpp
+    arrangement/edit_compiler.cpp
+  )
+  target_include_directories(sonare_arrangement PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_include_directories(sonare_arrangement SYSTEM PUBLIC
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
+  )
+  # compiler links engine (engine::ClipSchedule / RealtimeEngine target
+  # types) and core (the fixed sonare::resample for source sample-rate
+  # conversion). engine PUBLIC-propagates SONARE_WITH_GRAPH / SONARE_WITH_MIXING,
+  # so the compiler's flag guards match the build. This is a ONE-WAY dependency:
+  # no core/engine/rt target links sonare_arrangement.
+  target_link_libraries(sonare_arrangement PUBLIC sonare_automation sonare_engine sonare_midi sonare_core)
+  target_compile_options(sonare_arrangement PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_arrangement PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_compile_definitions(sonare_arrangement PUBLIC SONARE_WITH_ARRANGEMENT=1)
+
+  # MIR tempo / grid: OFFLINE, control-plane-only bridge from existing
+  # beat/downbeat/BPM/meter analysis to transport::TempoSegment candidates plus
+  # pure PPQ grid-snap helpers. Depends one-way on analysis/feature/effects (in
+  # sonare_core), transport (in sonare_rt) and the arrangement value model
+  # (sonare_arrangement). NOTHING in rt/engine/midi/arrangement depends on mir;
+  # the RT-critical CI guard forbids rt/ and engine/ from including mir/.
+  add_library(sonare_mir STATIC
+    mir/tempo_estimator_bridge.cpp
+    mir/grid_snap.cpp
+    mir/warp.cpp
+    mir/key_context.cpp
+  )
+  target_include_directories(sonare_mir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(sonare_mir PUBLIC sonare_core sonare_rt sonare_arrangement)
+  target_compile_options(sonare_mir PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_mir PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_compile_definitions(sonare_mir PUBLIC SONARE_WITH_ARRANGEMENT=1)
+
+  # project serializer: OFFLINE / control-plane-only deterministic JSON
+  # round-trip of the arrangement Project + MidiContentStore. Depends one-way on
+  # arrangement/ + midi/ + mir/ (and core for util::json). NOTHING in
+  # rt/engine/midi/arrangement/mir depends on serialize; the RT-critical CI guard
+  # forbids rt/ and engine/ from including serialize/. The mixer Scene is embedded
+  # via scene_to_json/scene_from_json (sonare_mixing) when BUILD_MIXING is ON; in
+  # a mixing-OFF build the Scene struct fields are serialized directly so the
+  # round-trip still works without the mixer JSON helpers.
+  add_library(sonare_serialize STATIC
+    serialize/project_serializer.cpp
+  )
+  target_include_directories(sonare_serialize PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(sonare_serialize PUBLIC
+    sonare_arrangement sonare_midi sonare_mir sonare_core)
+  if(BUILD_MIXING)
+    # scene_to_json / scene_from_json live in sonare_mixing; link it and switch on
+    # SONARE_WITH_MIXING so the serializer embeds the tested mixer JSON.
+    target_link_libraries(sonare_serialize PUBLIC sonare_mixing)
+    target_compile_definitions(sonare_serialize PUBLIC SONARE_WITH_MIXING=1)
+  endif()
+  target_compile_options(sonare_serialize PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_serialize PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_compile_definitions(sonare_serialize PUBLIC SONARE_WITH_ARRANGEMENT=1)
+
+  # composition-assist injection seam: OFFLINE / CONTROL-THREAD ONLY. It is a
+  # same-build C++ link seam (NOT a stable ABI): a future composition-theory /
+  # generation engine implements the abstract module interfaces and is linked in
+  # later WITHOUT changing core/runtime. Depends one-way on midi/ + arrangement/
+  # + mir/. NOTHING in rt/engine/midi/arrangement/mir depends on assist; the
+  # RT-critical guard forbids rt/ and engine/ from including midi/assist/. Gated
+  # by BUILD_ASSIST AND BUILD_ARRANGEMENT; defines SONARE_WITH_ASSIST=1 so a
+  # no-assist build omits these symbols entirely and the runtime is
+  # unaffected.
+  if(BUILD_ASSIST)
+    add_library(sonare_assist STATIC
+      midi/assist/assist_registry.cpp
+      midi/assist/composition_assist.cpp
+    )
+    target_include_directories(sonare_assist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(sonare_assist PUBLIC sonare_arrangement sonare_midi sonare_mir)
+    target_compile_options(sonare_assist PRIVATE ${SONARE_WARNING_FLAGS})
+    set_target_properties(sonare_assist PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_definitions(sonare_assist PUBLIC SONARE_WITH_ARRANGEMENT=1 SONARE_WITH_ASSIST=1)
+  endif()
+endif()
+
 # Shared library for language bindings (Python ctypes, etc.)
 if(BUILD_SHARED)
   set(SONARE_SHARED_SOURCES $<TARGET_OBJECTS:sonare_core_objects>)
@@ -599,6 +728,10 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_engine.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_voice_changer.cpp)
+  # The project (arrangement) C ABI translation unit is always compiled so its
+  # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
+  # unless the arrangement subsystem is linked (see the BUILD_ARRANGEMENT block).
+  list(APPEND SONARE_SHARED_SOURCES sonare_c_project.cpp)
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
@@ -644,6 +777,15 @@ if(BUILD_SHARED)
     # The offline acoustic C ABI synthesizes RIRs / estimates rooms / morphs.
     target_link_libraries(sonare_shared PUBLIC sonare_acoustic)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_ACOUSTIC_SIM=1)
+  endif()
+  if(BUILD_ARRANGEMENT)
+    # The headless-project C ABI (sonare_c_project.cpp) wraps the arrangement
+    # control plane: EditHistory, the compiler + offline bounce, the
+    # serializer, and the MIR tempo/grid bridges. Link them and switch on
+    # SONARE_WITH_ARRANGEMENT so the real implementation is compiled.
+    target_link_libraries(sonare_shared PUBLIC
+      sonare_arrangement sonare_serialize sonare_mir sonare_midi)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_ARRANGEMENT=1)
   endif()
   target_compile_options(sonare_shared PRIVATE ${SONARE_WARNING_FLAGS})
   if(NOT BUILD_WASM)
@@ -744,6 +886,18 @@ if(BUILD_WASM)
     # RIR synthesis + room estimation (acoustic) and the offline morph (fx).
     target_link_libraries(sonare PRIVATE sonare_acoustic sonare_fx)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
+  endif()
+  if(BUILD_ARRANGEMENT)
+    # Headless DAW project. The WASM Project binding wraps the C-ABI
+    # keystone sonare_c_project.cpp, so compile that translation unit into the
+    # target and link the arrangement control-plane libraries (serializer / MIR /
+    # MIDI / project model). sonare_c_memory.cpp (sonare_free_string / _floats) is
+    # already compiled into sonare_core via sonare_core_objects, so it is NOT
+    # added here. sonare_free_bytes is provided by sonare_c_project.cpp itself.
+    target_sources(sonare PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sonare_c_project.cpp)
+    target_link_libraries(sonare PRIVATE
+      sonare_arrangement sonare_serialize sonare_midi sonare_mir)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
   endif()
   target_compile_options(sonare PRIVATE -msimd128)
   target_link_options(sonare PRIVATE
