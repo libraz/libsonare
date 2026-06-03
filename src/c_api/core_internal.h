@@ -39,7 +39,6 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
-float* copy_float_vector_or_nan(const std::vector<float>& values, size_t count);
 void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out);
 PitchClass from_c_pitch_class(SonarePitchClass pitch);
 Mode from_c_mode(SonareMode mode);

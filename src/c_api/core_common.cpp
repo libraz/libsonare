@@ -1,16 +1,5 @@
 #include "c_api/core_internal.h"
 
-float* copy_float_vector_or_nan(const std::vector<float>& values, size_t count) {
-  if (count == 0) {
-    return nullptr;
-  }
-  float* out = new float[count];
-  for (size_t i = 0; i < count; ++i) {
-    out[i] = i < values.size() ? values[i] : std::numeric_limits<float>::quiet_NaN();
-  }
-  return out;
-}
-
 void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out) {
   out->rt60 = params.rt60;
   out->edt = params.edt;
@@ -18,16 +7,16 @@ void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult
   out->c80 = params.c80;
   out->d50 = params.d50;
   out->band_count = params.rt60_bands.size();
-  out->rt60_bands = copy_float_vector_or_nan(params.rt60_bands, out->band_count);
-  out->edt_bands = copy_float_vector_or_nan(params.edt_bands, out->band_count);
+  out->rt60_bands = copy_float_vector_padded(params.rt60_bands, out->band_count);
+  out->edt_bands = copy_float_vector_padded(params.edt_bands, out->band_count);
   // Clarity bands are not computed in blind mode; expose null (rather than a
   // NaN-filled array) so callers can distinguish "not computed" from "invalid".
   out->c50_bands = params.c50_bands.empty()
                        ? nullptr
-                       : copy_float_vector_or_nan(params.c50_bands, out->band_count);
+                       : copy_float_vector_padded(params.c50_bands, out->band_count);
   out->c80_bands = params.c80_bands.empty()
                        ? nullptr
-                       : copy_float_vector_or_nan(params.c80_bands, out->band_count);
+                       : copy_float_vector_padded(params.c80_bands, out->band_count);
   out->confidence = params.confidence;
   out->is_blind = params.is_blind ? 1 : 0;
 }

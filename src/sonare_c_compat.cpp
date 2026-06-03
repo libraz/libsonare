@@ -25,27 +25,8 @@ using namespace sonare_c_detail;
 
 namespace {
 
-SonareError copy_float_vector(const std::vector<float>& values, float** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = values.size();
-  if (values.empty()) return SONARE_OK;
-  std::unique_ptr<float[]> tmp(new float[values.size()]);
-  std::memcpy(tmp.get(), values.data(), values.size() * sizeof(float));
-  *out = release_array(tmp);
-  return SONARE_OK;
-}
-
-SonareError copy_int_vector(const std::vector<int>& values, int** out, size_t* out_length) {
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = values.size();
-  if (values.empty()) return SONARE_OK;
-  std::unique_ptr<int[]> tmp(new int[values.size()]);
-  std::memcpy(tmp.get(), values.data(), values.size() * sizeof(int));
-  *out = release_array(tmp);
-  return SONARE_OK;
-}
+// Vector -> caller-owned C array copies funnel through copy_vector<T> in
+// sonare_c_internal.h (single canonical owner).
 
 // Shared input-buffer guard for the compat / transform functions. EMPTY
 // (length == 0) is allowed (these are pure array transforms with a well-defined
@@ -88,7 +69,7 @@ SonareError sonare_power_to_db(const float* values, size_t length, float ref, fl
                                float top_db, float** out, size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(power_to_db(values, length, ref, amin, top_db), out, out_length);
+  return copy_vector(power_to_db(values, length, ref, amin, top_db), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -96,7 +77,7 @@ SonareError sonare_amplitude_to_db(const float* values, size_t length, float ref
                                    float top_db, float** out, size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(amplitude_to_db(values, length, ref, amin, top_db), out, out_length);
+  return copy_vector(amplitude_to_db(values, length, ref, amin, top_db), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -104,7 +85,7 @@ SonareError sonare_db_to_power(const float* values, size_t length, float ref, fl
                                size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(db_to_power(values, length, ref), out, out_length);
+  return copy_vector(db_to_power(values, length, ref), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -112,7 +93,7 @@ SonareError sonare_db_to_amplitude(const float* values, size_t length, float ref
                                    size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(db_to_amplitude(values, length, ref), out, out_length);
+  return copy_vector(db_to_amplitude(values, length, ref), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -121,7 +102,7 @@ SonareError sonare_preemphasis(const float* samples, size_t length, float coef, 
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   const std::optional<float> state = use_zi ? std::optional<float>(zi) : std::nullopt;
-  return copy_float_vector(preemphasis(samples, length, coef, state), out, out_length);
+  return copy_vector(preemphasis(samples, length, coef, state), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -130,7 +111,7 @@ SonareError sonare_deemphasis(const float* samples, size_t length, float coef, f
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   const std::optional<float> state = use_zi ? std::optional<float>(zi) : std::nullopt;
-  return copy_float_vector(deemphasis(samples, length, coef, state), out, out_length);
+  return copy_vector(deemphasis(samples, length, coef, state), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -143,7 +124,7 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
   TrimResult result = trim(samples, length, top_db, frame_length, hop_length);
   *start_sample = result.start_sample;
   *end_sample = result.end_sample;
-  return copy_float_vector(result.audio, out, out_length);
+  return copy_vector(result.audio, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -159,7 +140,7 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
     flat.push_back(range.first);
     flat.push_back(range.second);
   }
-  return copy_int_vector(flat, out_intervals, out_interval_count);
+  return copy_vector(flat, out_intervals, out_interval_count);
   SONARE_C_CATCH
 }
 
@@ -170,7 +151,7 @@ SonareError sonare_frame_signal(const float* samples, size_t length, int frame_l
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   *out_n_frames = frame_count(length, frame_length, hop_length);
-  return copy_float_vector(frame(samples, length, frame_length, hop_length), out, out_length);
+  return copy_vector(frame(samples, length, frame_length, hop_length), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -178,7 +159,7 @@ SonareError sonare_pad_center(const float* values, size_t length, size_t target_
                               float pad_value, float** out, size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(pad_center(values, length, target_size, pad_value), out, out_length);
+  return copy_vector(pad_center(values, length, target_size, pad_value), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -186,7 +167,7 @@ SonareError sonare_fix_length(const float* values, size_t length, size_t target_
                               float pad_value, float** out, size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(fix_length(values, length, target_size, pad_value), out, out_length);
+  return copy_vector(fix_length(values, length, target_size, pad_value), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -195,7 +176,7 @@ SonareError sonare_fix_frames(const int* frames, size_t length, int x_min, int x
   if (length > 0 && frames == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::vector<int> input(frames, frames + length);
-  return copy_int_vector(fix_frames(input, x_min, x_max, pad != 0), out, out_length);
+  return copy_vector(fix_frames(input, x_min, x_max, pad != 0), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -204,9 +185,8 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
                              size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_int_vector(
-      peak_pick(values, length, pre_max, post_max, pre_avg, post_avg, delta, wait), out,
-      out_length);
+  return copy_vector(peak_pick(values, length, pre_max, post_max, pre_avg, post_avg, delta, wait),
+                     out, out_length);
   SONARE_C_CATCH
 }
 
@@ -214,8 +194,7 @@ SonareError sonare_vector_normalize(const float* values, size_t length, int norm
                                     float threshold, float** out, size_t* out_length) {
   if (validate_buffer(values, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return copy_float_vector(normalize(values, length, c_norm_type(norm_type), threshold), out,
-                           out_length);
+  return copy_vector(normalize(values, length, c_norm_type(norm_type), threshold), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -242,7 +221,7 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
   config.bias = bias;
   config.power = power;
   config.eps = eps;
-  return copy_float_vector(pcen(values, n_bins, n_frames, config), out, out_length);
+  return copy_vector(pcen(values, n_bins, n_frames, config), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -260,7 +239,7 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  return copy_float_vector(tonnetz(chromagram, n_chroma, n_frames), out, out_length);
+  return copy_vector(tonnetz(chromagram, n_chroma, n_frames), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -283,7 +262,7 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
       mode == SONARE_TEMPOGRAM_COSINE ? TempogramMode::kCosine : TempogramMode::kAutocorrelation;
   std::vector<float> input(onset_envelope, onset_envelope + length);
   *out_n_frames = static_cast<int>(input.size());
-  return copy_float_vector(tempogram(input, sample_rate, config), out, out_length);
+  return copy_vector(tempogram(input, sample_rate, config), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -308,8 +287,8 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
   config.norm = false;
   std::vector<float> input(onset_envelope, onset_envelope + length);
   *out_n_frames = static_cast<int>(input.size());
-  return copy_float_vector(cyclic_tempogram(input, sample_rate, config, bpm_min, n_bins), out,
-                           out_length);
+  return copy_vector(cyclic_tempogram(input, sample_rate, config, bpm_min, n_bins), out,
+                     out_length);
   SONARE_C_CATCH
 }
 
@@ -325,7 +304,7 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
   config.tempo_max = tempo_max;
   config.win_length = win_length;
   std::vector<float> input(onset_envelope, onset_envelope + length);
-  return copy_float_vector(plp(input, config), out, out_length);
+  return copy_vector(plp(input, config), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -342,7 +321,7 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
   config.norm = norm != 0;
   std::vector<float> input(onset_envelope, onset_envelope + length);
   *out_n_frames = static_cast<int>(input.size());
-  return copy_float_vector(fourier_tempogram(input, sr, config), out, out_length);
+  return copy_vector(fourier_tempogram(input, sr, config), out, out_length);
   SONARE_C_CATCH
 }
 
@@ -360,7 +339,7 @@ SonareError sonare_tempogram_ratio(const float* tempogram_data, size_t length, i
   } else {
     result = tempogram_ratio(input, win_length, sr, hop_length);
   }
-  return copy_float_vector(result, out, out_length);
+  return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -380,7 +359,7 @@ SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, f
                                   size_t* out_length) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
-    return copy_float_vector(metering::momentary_lufs(audio), out, out_length);
+    return copy_vector(metering::momentary_lufs(audio), out, out_length);
   });
 }
 
@@ -388,7 +367,7 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, 
                                    size_t* out_length) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
-    return copy_float_vector(metering::short_term_lufs(audio), out, out_length);
+    return copy_vector(metering::short_term_lufs(audio), out, out_length);
   });
 }
 

@@ -11,35 +11,8 @@ struct SonareStreamAnalyzer {
 
 namespace {
 
-// Copies a float vector into a freshly allocated array (nulls on empty).
-float* copy_float_vector(const std::vector<float>& v) {
-  if (v.empty()) return nullptr;
-  std::unique_ptr<float[]> buf(new float[v.size()]);
-  std::memcpy(buf.get(), v.data(), v.size() * sizeof(float));
-  return release_array(buf);
-}
-
-// Copies an int vector into a freshly allocated array (nulls on empty).
-int* copy_int_vector(const std::vector<int>& v) {
-  if (v.empty()) return nullptr;
-  std::unique_ptr<int[]> buf(new int[v.size()]);
-  std::memcpy(buf.get(), v.data(), v.size() * sizeof(int));
-  return release_array(buf);
-}
-
-uint8_t* copy_u8_vector(const std::vector<uint8_t>& v) {
-  if (v.empty()) return nullptr;
-  std::unique_ptr<uint8_t[]> buf(new uint8_t[v.size()]);
-  std::memcpy(buf.get(), v.data(), v.size() * sizeof(uint8_t));
-  return release_array(buf);
-}
-
-int16_t* copy_i16_vector(const std::vector<int16_t>& v) {
-  if (v.empty()) return nullptr;
-  std::unique_ptr<int16_t[]> buf(new int16_t[v.size()]);
-  std::memcpy(buf.get(), v.data(), v.size() * sizeof(int16_t));
-  return release_array(buf);
-}
+// Vector -> caller-owned C array copies funnel through copy_vector<T> in
+// sonare_c_internal.h (single canonical owner).
 
 bool finite_positive(float value) { return std::isfinite(value) && value > 0.0f; }
 
@@ -232,16 +205,16 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
 
   out->n_frames = static_cast<int>(buffer.n_frames);
   out->n_mels = analyzer->analyzer->config().n_mels;
-  out->timestamps = copy_float_vector(buffer.timestamps);
-  out->mel = copy_float_vector(buffer.mel);
-  out->chroma = copy_float_vector(buffer.chroma);
-  out->onset_strength = copy_float_vector(buffer.onset_strength);
-  out->rms_energy = copy_float_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_float_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_float_vector(buffer.spectral_flatness);
-  out->chord_root = copy_int_vector(buffer.chord_root);
-  out->chord_quality = copy_int_vector(buffer.chord_quality);
-  out->chord_confidence = copy_float_vector(buffer.chord_confidence);
+  out->timestamps = copy_vector(buffer.timestamps);
+  out->mel = copy_vector(buffer.mel);
+  out->chroma = copy_vector(buffer.chroma);
+  out->onset_strength = copy_vector(buffer.onset_strength);
+  out->rms_energy = copy_vector(buffer.rms_energy);
+  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
+  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
+  out->chord_root = copy_vector(buffer.chord_root);
+  out->chord_quality = copy_vector(buffer.chord_quality);
+  out->chord_confidence = copy_vector(buffer.chord_confidence);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -258,13 +231,13 @@ SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer
 
   out->n_frames = static_cast<int>(buffer.n_frames);
   out->n_mels = buffer.n_mels;
-  out->timestamps = copy_float_vector(buffer.timestamps);
-  out->mel = copy_u8_vector(buffer.mel);
-  out->chroma = copy_u8_vector(buffer.chroma);
-  out->onset_strength = copy_u8_vector(buffer.onset_strength);
-  out->rms_energy = copy_u8_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_u8_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_u8_vector(buffer.spectral_flatness);
+  out->timestamps = copy_vector(buffer.timestamps);
+  out->mel = copy_vector(buffer.mel);
+  out->chroma = copy_vector(buffer.chroma);
+  out->onset_strength = copy_vector(buffer.onset_strength);
+  out->rms_energy = copy_vector(buffer.rms_energy);
+  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
+  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -281,13 +254,13 @@ SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyze
 
   out->n_frames = static_cast<int>(buffer.n_frames);
   out->n_mels = buffer.n_mels;
-  out->timestamps = copy_float_vector(buffer.timestamps);
-  out->mel = copy_i16_vector(buffer.mel);
-  out->chroma = copy_i16_vector(buffer.chroma);
-  out->onset_strength = copy_i16_vector(buffer.onset_strength);
-  out->rms_energy = copy_i16_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_i16_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_i16_vector(buffer.spectral_flatness);
+  out->timestamps = copy_vector(buffer.timestamps);
+  out->mel = copy_vector(buffer.mel);
+  out->chroma = copy_vector(buffer.chroma);
+  out->onset_strength = copy_vector(buffer.onset_strength);
+  out->rms_energy = copy_vector(buffer.rms_energy);
+  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
+  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
   return SONARE_OK;
   SONARE_C_CATCH
 }

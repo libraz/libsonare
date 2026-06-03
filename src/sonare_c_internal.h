@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -77,6 +78,51 @@ SonareChordQuality to_c_chord_quality(ChordQuality quality);
 template <typename T>
 T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();
+}
+
+/// @brief Copies a vector into a freshly heap-allocated array owned by the
+///        caller (freed via the matching sonare_free_* entry point).
+/// @details Canonical owner of the "copy a trivially-copyable vector into a C
+///          output array" pattern shared across the C API translation units.
+///          EMPTY-RESULT POLICY: an empty vector yields @c nullptr, matching the
+///          analysis emitters' (null, 0) convention. @c T must be trivially
+///          copyable (float / int / int16_t / uint8_t and friends).
+template <typename T>
+T* copy_vector(const std::vector<T>& values) {
+  if (values.empty()) return nullptr;
+  std::unique_ptr<T[]> buf(new T[values.size()]);
+  std::memcpy(buf.get(), values.data(), values.size() * sizeof(T));
+  return buf.release();
+}
+
+/// @brief SonareError-returning vector copy: marshals @p values out through the
+///        @p out / @p out_length pair.
+/// @details Same allocation/empty policy as the single-argument @ref copy_vector
+///          overload (empty vector -> @c *out == nullptr, @c *out_length == 0).
+///          Rejects null @p out / @p out_length with
+///          @c SONARE_ERROR_INVALID_PARAMETER.
+template <typename T>
+SonareError copy_vector(const std::vector<T>& values, T** out, size_t* out_length) {
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_length = values.size();
+  *out = copy_vector(values);
+  return SONARE_OK;
+}
+
+/// @brief Copies @p values into a fresh array of exactly @p count elements,
+///        padding any shortfall with quiet NaN.
+/// @details Distinct from @ref copy_vector: a result shorter than @p count is
+///          made visibly invalid (NaN-filled) rather than silently truncated, so
+///          per-band emitters (acoustic RT60/EDT/clarity bands) can hand back a
+///          fixed-width array without dropping the band-count contract. Returns
+///          @c nullptr when @p count == 0.
+inline float* copy_float_vector_padded(const std::vector<float>& values, size_t count) {
+  if (count == 0) return nullptr;
+  std::unique_ptr<float[]> out(new float[count]);
+  for (size_t i = 0; i < count; ++i) {
+    out[i] = i < values.size() ? values[i] : std::numeric_limits<float>::quiet_NaN();
+  }
+  return out.release();
 }
 
 /// @brief Variadic no-op used by SONARE_C_STUB_NOT_SUPPORTED to swallow unused
