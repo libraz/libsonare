@@ -170,6 +170,10 @@ bool BoundarySplitter::add_marker(int offset) noexcept {
   return boundaries_.add_offset(offset, BoundarySource::kMarker, context_);
 }
 
+bool BoundarySplitter::add_midi(int offset) noexcept {
+  return boundaries_.add_offset(offset, BoundarySource::kMidi, context_);
+}
+
 const BoundaryList& BoundarySplitter::finish() noexcept {
   boundaries_.finalize(context_);
   return boundaries_;

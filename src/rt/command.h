@@ -11,7 +11,7 @@ namespace sonare::rt {
 /// Increment when Command, telemetry, or SharedArrayBuffer record layouts
 /// change. Bindings compare this value at startup before connecting to the
 /// realtime engine.
-inline constexpr uint32_t kEngineAbiVersion = 2;
+inline constexpr uint32_t kEngineAbiVersion = 3;
 
 // The CommandType space is split into two disjoint groups:
 //
@@ -19,7 +19,15 @@ inline constexpr uint32_t kEngineAbiVersion = 2;
 //      apply_command() on the audio thread. These carry only POD scalars and
 //      perform in-place, allocation-free updates:
 //        kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
-//        kTransportSeekSample, kTransportSeekPpq, kSeekMarker.
+//        kTransportSeekSample, kTransportSeekPpq, kSeekMarker,
+//        kMidiCcImmediate, kMidiAllNotesOff (a.k.a. MIDI panic).
+//
+//      Live scalar MIDI commands stay strictly POD: they synthesize a UMP from
+//      packed scalar fields (no pointer, no variable-length payload) and route
+//      it through the MidiSequencer's host-injection path. MIDI CLIP set
+//      replacement, route tables, SMF import, device binding and host-node swap
+//      are NOT queueable -- they own data swapped via direct setters and remain
+//      group (2).
 //
 //  (2) DIRECT-SETTER OPERATIONS -- known command names that must NOT flow
 //      through the realtime queue because they own data swapped via the
@@ -56,6 +64,20 @@ enum class CommandType : uint16_t {
   kSetMarker,
   // -- Group (1) continued --
   kSeekMarker,
+  // Immediate (live) MIDI control change routed to the host instrument via the
+  // MidiSequencer's injection path. Strictly POD/scalar -- no pointer, no
+  // variable-length payload. Field encoding:
+  //   target_id   = MIDI destination id (the clip/instrument destination).
+  //   sample_time = render frame to fire at (<0 / past => block head, like the
+  //                 other queueable commands).
+  //   arg.i       = packed bytes: bits[0..6]=value7, bits[8..14]=controller,
+  //                 bits[16..19]=channel(0..15), bits[24..27]=group(0..15).
+  kMidiCcImmediate,
+  // MIDI panic / all-notes-off: release every sounding note tracked by the
+  // sequencer (hang-note safety) at the command's render frame. POD/scalar:
+  //   target_id   = ignored (panic is global across the sequencer's table).
+  //   sample_time = render frame to fire at.
+  kMidiAllNotesOff,
 };
 
 union CommandArg {

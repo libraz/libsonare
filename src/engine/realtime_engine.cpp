@@ -28,6 +28,21 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   transport_.prepare(sample_rate, &tempo_map_);
   clip_player_.prepare(sample_rate, max_block_size_);
   clip_player_.set_tempo_map(&tempo_map_);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  midi_sequencer_.prepare(sample_rate);
+  // Pre-size the host-instrument render scratch (channel-planar) so the audio
+  // path never allocates when an instrument is registered. Re-prepare an
+  // already-registered instrument so it matches the new block size.
+  midi_instrument_storage_.assign(
+      static_cast<size_t>(max_block_size_) * midi_instrument_channels_.size(), 0.0f);
+  for (size_t ch = 0; ch < midi_instrument_channels_.size(); ++ch) {
+    midi_instrument_channels_[ch] =
+        midi_instrument_storage_.data() + ch * static_cast<size_t>(max_block_size_);
+  }
+  if (midi_instrument_ != nullptr) {
+    midi_instrument_->prepare(sample_rate_, max_block_size_);
+  }
+#endif
   metronome_.prepare(sample_rate, &tempo_map_);
 #if defined(SONARE_WITH_MIXING)
   // The engine exposes a single master metering tap; its telemetry always
@@ -102,6 +117,9 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // control-thread publish can never swap data mid-block.
   clip_player_.acquire_clips();
   automation_.acquire_lanes();
+#if defined(SONARE_WITH_ARRANGEMENT)
+  midi_sequencer_.acquire_midi_clips();
+#endif
   drain_commands(state.render_frame, frames);
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
   const uint32_t non_rt_rejection_count_before = automation_.non_realtime_safe_rejection_count();
@@ -221,6 +239,18 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     boundary_splitter_.add_clip(clip_boundaries.offsets[i]);
   }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // MIDI event edges split sub-blocks at the exact sample a UMP event fires, so
+  // the sequencer dispatches each event at its sample-accurate boundary rather
+  // than at block granularity. Uses a distinct BoundarySource::kMidi (added via
+  // add_midi) so dense-MIDI overflow stays distinguishable in telemetry.
+  midi::MidiSequencer::BoundaryOffsets midi_boundaries;
+  midi_sequencer_.collect_boundaries(state.sample_position, frames, &midi_boundaries);
+  for (size_t i = 0; i < midi_boundaries.size; ++i) {
+    boundary_splitter_.add_midi(midi_boundaries.offsets[i]);
+  }
+#endif
+
   // Punch in/out transitions must split sub-blocks at the exact sample so the
   // capture sink starts/stops on a sub-block boundary rather than at block
   // granularity. Register each punch edge that falls inside this block.
@@ -250,6 +280,15 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     if (offset < frames) {
       apply_due_commands(boundaries[i].render_frame);
     }
+#if defined(SONARE_WITH_ARRANGEMENT)
+    // Hang-note safety: when the playhead wraps at a loop boundary, release
+    // every note still sounding from the pre-wrap region so it does not hang
+    // into the looped-back region. The note-offs fire at the wrap's render
+    // frame. RT-safe (no alloc).
+    if ((boundaries[i].sources & boundary_source_mask(BoundarySource::kLoop)) != 0) {
+      midi_sequencer_.all_notes_off(boundaries[i].render_frame);
+    }
+#endif
     const int next_offset = (i + 1 < boundaries.size()) ? boundaries[i + 1].offset : frames;
     const int sub_block_len = next_offset - offset;
     // Evaluate automation at this sub-block's start using the advanced
@@ -383,8 +422,17 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
 
 void RealtimeEngine::set_tempo(double bpm) { tempo_map_.set_segments({{0.0, bpm, 0.0}}); }
 
+void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> segments) {
+  tempo_map_.set_segments(std::move(segments));
+}
+
 void RealtimeEngine::set_time_signature(int numerator, int denominator) {
   tempo_map_.set_time_signatures({{0.0, {numerator, denominator}}});
+}
+
+void RealtimeEngine::set_time_signature_segments(
+    std::vector<transport::TimeSignatureSegment> segments) {
+  tempo_map_.set_time_signatures(std::move(segments));
 }
 
 void RealtimeEngine::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
@@ -431,6 +479,25 @@ int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) cons
 void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {
   clip_player_.set_clips(std::move(clips));
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
+  midi_sequencer_.set_midi_clips(std::move(clips));
+}
+
+void RealtimeEngine::set_midi_instrument(midi::MidiInstrument* instrument) noexcept {
+  midi_instrument_ = instrument;
+  // The instrument IS-A MidiEventSink: route dispatched events to it (or detach
+  // by restoring a null sink). The sequencer holds a borrowed pointer only.
+  midi_sequencer_.set_sink(instrument);
+  // If the engine is already prepared, prepare the freshly-registered instrument
+  // to the engine's sample rate / block size. prepare() may allocate, so this is
+  // a control-thread operation (set_midi_instrument is control-thread only).
+  if (instrument != nullptr && max_block_size_ > 0) {
+    instrument->prepare(sample_rate_, max_block_size_);
+  }
+}
+#endif
 
 void RealtimeEngine::set_capture_segment(CaptureSegment segment) noexcept {
   capture_sink_.prepare(segment);
@@ -588,6 +655,30 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
                       transport_.sample_position(), command.target_id);
       }
       break;
+    case rt::CommandType::kMidiCcImmediate: {
+      // Group (1) queueable scalar MIDI: synthesize a MIDI 1.0 CC UMP from the
+      // packed scalar fields and route it through the sequencer's host-injection
+      // path so it reaches the instrument exactly like a clip-scheduled event.
+      // RT-safe: no allocation. command.sample_time has already been clamped to
+      // a concrete render frame by drain_commands (>= 0 here).
+#if defined(SONARE_WITH_ARRANGEMENT)
+      const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+      const uint8_t value7 = static_cast<uint8_t>(packed & 0x7Fu);
+      const uint8_t controller = static_cast<uint8_t>((packed >> 8) & 0x7Fu);
+      const uint8_t channel = static_cast<uint8_t>((packed >> 16) & 0x0Fu);
+      const uint8_t group = static_cast<uint8_t>((packed >> 24) & 0x0Fu);
+      const midi::Ump ump = midi::make_midi1_control_change(group, channel, controller, value7);
+      midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
+#endif
+      break;
+    }
+    case rt::CommandType::kMidiAllNotesOff:
+      // MIDI panic: release every sounding note tracked by the sequencer at this
+      // command's render frame. RT-safe, no allocation.
+#if defined(SONARE_WITH_ARRANGEMENT)
+      midi_sequencer_.all_notes_off(command.sample_time);
+#endif
+      break;
     case rt::CommandType::kSetTempoMap:
     case rt::CommandType::kSetLoop:
     case rt::CommandType::kSwapGraph:
@@ -730,6 +821,42 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     }
     clip_player_.process_at(sub_channels.data(), channels, num_frames,
                             transport_.sample_position());
+#if defined(SONARE_WITH_ARRANGEMENT)
+    // Dispatch the MIDI events whose render frame falls in this sub-block. The
+    // sequencer scans [block_start, block_start + num_frames); using the
+    // sub-block's timeline sample position keeps dispatch sample-accurate and
+    // aligned with the kMidi boundaries inserted above. No allocation.
+    //
+    // When an instrument is registered it IS the sequencer's sink, so this call
+    // feeds the block's events to the instrument at their sample-accurate render
+    // frames (event.render_frame relative to this sub-block's first frame). The
+    // instrument buffers them; rendering happens immediately below so the events
+    // and the audio they drive stay in the same sub-block.
+    midi_sequencer_.process_block(transport_.sample_position(), num_frames);
+    // Host-instrument audio injection: sum the instrument's render into the
+    // SAME source layer as the clip player, AFTER clip playback + MIDI dispatch
+    // and BEFORE the metronome / mixing-strip / monitor / graph stages. This is
+    // the PINNED clip/source-merge injection point: instrument output therefore
+    // flows through channel strips + monitoring + the graph exactly like clip
+    // audio, and PDC/latency matches clips. Opt-in: nullptr leaves the chain and
+    // the output bit-identical to the no-instrument path. RT-safe: the scratch
+    // is sized in prepare(); the audio thread only zero-fills and sums it.
+    if (midi_instrument_ != nullptr) {
+      for (int ch = 0; ch < channels; ++ch) {
+        std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
+                  midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+      }
+      midi_instrument_->process(midi_instrument_channels_.data(), channels, num_frames);
+      for (int ch = 0; ch < channels; ++ch) {
+        float* out = sub_channels[static_cast<size_t>(ch)];
+        const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
+        if (!out) continue;
+        for (int i = 0; i < num_frames; ++i) {
+          out[i] += inst[i];
+        }
+      }
+    }
+#endif
     metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());
 #if defined(SONARE_WITH_MIXING)
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs

@@ -23,6 +23,11 @@
 #include "transport/tempo_map.h"
 #include "transport/transport.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "midi/instrument.h"
+#include "midi/midi_clip.h"
+#include "midi/sequencer.h"
+#endif
 #if defined(SONARE_WITH_GRAPH)
 #include "engine/graph_runtime.h"
 #endif
@@ -61,7 +66,8 @@ namespace sonare::engine {
 ///   control thread between blocks, or route changes through @c push_command.
 /// - **Control-thread-only (NOT RT-safe; may allocate or take time):**
 ///   @c prepare, @c render_offline (offline use), @c set_tempo,
-///   @c set_time_signature, @c set_markers, @c set_clips,
+///   @c set_tempo_segments, @c set_time_signature,
+///   @c set_time_signature_segments, @c set_markers, @c set_clips,
 ///   @c bind_mixing_strip, @c add_monitor_strip, @c remove_monitor_strip,
 ///   @c swap_graph, @c bind_graph_parameter. These must be called from the
 ///   thread that owns engine lifecycle; do not call from the audio callback.
@@ -87,7 +93,13 @@ class RealtimeEngine {
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
 #endif
   void set_tempo(double bpm);
+  void set_tempo_segments(std::vector<transport::TempoSegment> segments);
   void set_time_signature(int numerator, int denominator);
+  void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
+  double bpm_at_sample(int64_t sample) const noexcept { return tempo_map_.bpm_at_sample(sample); }
+  transport::TimeSignature time_signature_at_ppq(double ppq) const noexcept {
+    return tempo_map_.time_signature_at_ppq(ppq);
+  }
   void set_loop(double start_ppq, double end_ppq, bool enabled) noexcept;
   void set_markers(std::vector<transport::Marker> markers);
   size_t marker_count() const noexcept { return markers_.marker_count(); }
@@ -100,6 +112,40 @@ class RealtimeEngine {
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
   void set_clips(std::vector<ClipSchedule> clips);
   size_t clip_count() const noexcept { return clip_player_.clip_count(); }
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Control-thread direct-setter: publishes a compiled MIDI clip set through the
+  // sequencer's RtPublisher (NOT an rt::Command, no ABI bump). The audio thread
+  // adopts it at block start and fires sample-accurate UMP events. Available
+  // only when the arrangement subsystem (and thus the MidiSequencer member) is
+  // compiled in.
+  void set_midi_clips(std::vector<midi::MidiClipSchedule> clips);
+  size_t midi_clip_count() const noexcept { return midi_sequencer_.clip_count(); }
+  midi::MidiSequencer& midi_sequencer() noexcept { return midi_sequencer_; }
+  const midi::MidiSequencer& midi_sequencer() const noexcept { return midi_sequencer_; }
+
+  // Control-thread: register (or clear, with nullptr) the host instrument node
+  // whose audio is summed at the CLIP/source-merge stage of process_subblock —
+  // the same source layer as the clip player, BEFORE the mixing strip stage —
+  // so instrument output flows through channel strips + monitor/graph normally
+  // and its PDC/latency matches clips. Default nullptr: when absent the engine
+  // behaves EXACTLY as before (opt-in; no audio-path side effects).
+  //
+  // The instrument IS-A midi::MidiEventSink, so registering it also makes it the
+  // MidiSequencer's sink: dispatched MIDI events reach the instrument at
+  // sample-accurate render frames during the block, and the instrument renders
+  // them into its prepared scratch buffer. Clearing it restores a null sink.
+  //
+  // RT contract: the engine never allocates for the instrument on the audio
+  // thread; the per-block scratch buffer is sized in prepare(). The instrument's
+  // own prepare()/process()/on_event() must honor the rt::ProcessorBase contract.
+  void set_midi_instrument(midi::MidiInstrument* instrument) noexcept;
+  midi::MidiInstrument* midi_instrument() const noexcept { return midi_instrument_; }
+  // Latency reported by the registered instrument (0 when none). Fed into the
+  // arrangement compiler's CompiledTimeline PDC / latency summary.
+  int midi_instrument_latency_samples() const noexcept {
+    return midi_instrument_ ? midi_instrument_->latency_samples() : 0;
+  }
+#endif
   void set_capture_segment(CaptureSegment segment) noexcept;
   void set_capture_armed(bool armed) noexcept;
   void set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled) noexcept;
@@ -180,6 +226,17 @@ class RealtimeEngine {
   transport::Transport transport_{};
   transport::MarkerMap markers_{};
   ClipPlayer clip_player_{};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  midi::MidiSequencer midi_sequencer_{};
+  // Optional host instrument node (default nullptr / opt-in). Summed at the
+  // clip/source stage. Owned by the caller; the engine only borrows the pointer.
+  midi::MidiInstrument* midi_instrument_ = nullptr;
+  // Per-block instrument render scratch, allocated in prepare() (channel-planar:
+  // kMaxAudioChannels rows of max_block_size_). The audio thread only points
+  // into it, never allocates.
+  std::vector<float> midi_instrument_storage_{};
+  std::array<float*, 64> midi_instrument_channels_{};
+#endif
   CaptureSink capture_sink_{};
   Metronome metronome_{};
 #if defined(SONARE_WITH_MIXING)

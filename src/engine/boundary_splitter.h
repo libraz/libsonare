@@ -17,6 +17,7 @@ enum class BoundarySource : uint32_t {
   kAutomation = 1u << 4u,
   kClip = 1u << 5u,
   kMarker = 1u << 6u,
+  kMidi = 1u << 7u,
 };
 
 constexpr uint32_t boundary_source_mask(BoundarySource source) noexcept {
@@ -81,6 +82,7 @@ class BoundarySplitter {
   bool add_automation(int offset) noexcept;
   bool add_clip(int offset) noexcept;
   bool add_marker(int offset) noexcept;
+  bool add_midi(int offset) noexcept;
   const BoundaryList& finish() noexcept;
 
  private:
