@@ -7,6 +7,7 @@
 
 #include "mastering/common/sliding_max.h"
 #include "mastering/common/true_peak_filter.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -53,8 +54,8 @@ int main(int argc, char** argv) {
     for (int i = 0; i < kBlockSamples; ++i) {
       const float phase = static_cast<float>(i + ch * 11) / static_cast<float>(kBlockSamples);
       input[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
-          0.8f * std::sin(2.0f * 3.14159265358979323846f * phase) +
-          0.1f * std::sin(2.0f * 3.14159265358979323846f * 7.0f * phase);
+          0.8f * std::sin(sonare::constants::kTwoPi * phase) +
+          0.1f * std::sin(sonare::constants::kTwoPi * 7.0f * phase);
     }
   }
 

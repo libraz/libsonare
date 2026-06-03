@@ -11,6 +11,7 @@
 
 namespace sonare {
 
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
@@ -209,9 +210,11 @@ std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, 
   // n_chroma/12 like the fmin rotation so it stays correct for n_chroma != 12.
   int pitch_class_offset = 0;
   if (fmin > 0.0f) {
-    const double midi_0 = std::fmod(static_cast<double>(hz_to_midi(fmin)) + tuning, 12.0);
-    pitch_class_offset =
-        static_cast<int>(std::lround(midi_0 * (static_cast<double>(n_chroma) / 12.0))) % n_chroma;
+    const double midi_0 =
+        std::fmod(static_cast<double>(hz_to_midi(fmin)) + tuning, kSemitonesPerOctave);
+    pitch_class_offset = static_cast<int>(std::lround(
+                             midi_0 * (static_cast<double>(n_chroma) / kSemitonesPerOctave))) %
+                         n_chroma;
     if (pitch_class_offset < 0) pitch_class_offset += n_chroma;
   }
 

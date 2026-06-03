@@ -10,6 +10,7 @@
 #include "mastering/common/partitioned_convolver.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -49,9 +50,8 @@ std::vector<float> make_signal(int samples, float gain = 0.8f) {
   std::vector<float> out(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(kSampleRate);
-    out[static_cast<size_t>(i)] =
-        gain * (0.7f * std::sin(2.0f * 3.14159265358979323846f * 440.0f * t) +
-                0.3f * std::sin(2.0f * 3.14159265358979323846f * 2800.0f * t));
+    out[static_cast<size_t>(i)] = gain * (0.7f * std::sin(sonare::constants::kTwoPi * 440.0f * t) +
+                                          0.3f * std::sin(sonare::constants::kTwoPi * 2800.0f * t));
   }
   return out;
 }
@@ -60,8 +60,8 @@ std::vector<float> make_ir(int samples) {
   std::vector<float> ir(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) {
     const float n = static_cast<float>(i);
-    const float window = 0.5f - 0.5f * std::cos(2.0f * 3.14159265358979323846f * n /
-                                                static_cast<float>(samples - 1));
+    const float window =
+        0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * n / static_cast<float>(samples - 1));
     const float decay = std::exp(-n / 96.0f);
     ir[static_cast<size_t>(i)] = window * decay * std::sin(0.17f * n);
   }
