@@ -100,7 +100,8 @@ typedef struct {
   double start_ppq;
   double length_ppq;
   double source_offset_ppq;
-  float gain;
+  float gain; /* linear playback gain; must be finite and >= 0. 0 = silent clip
+                 (passed through verbatim — no coercion to unity). */
 
   /* Audio source content (audio clips only; NULL => metadata-only source). */
   const float* audio_interleaved;
@@ -539,7 +540,7 @@ typedef enum {
 ///        is clamped to an audible range), so callers may fill only what they
 ///        need. This is a deliberately plain electronic sound source so MIDI
 ///        arrangements bounce to audio instead of silence; a richer instrument
-///        bank is planned (see backup/builtin-instrument-buildplan.md).
+///        bank is planned separately.
 /// Every numeric field uses "0 (or non-positive) => default", so a zero-init
 /// config is the default sine patch and callers override only what they need.
 typedef struct {
@@ -627,8 +628,9 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
 SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id);
 
 /// @brief Sets a clip's linear playback gain via an undoable edit command.
-///        @p gain must be finite and >= 0 (0 = muted; this is the explicit-gain
-///        path that the @ref sonare_project_add_clip default-coercion lacks).
+///        @p gain must be finite and >= 0 (0 = muted). Like the @p gain field of
+///        @ref sonare_project_add_clip, the value is applied verbatim (no
+///        coercion of 0 to unity).
 SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_id, float gain);
 
 /// @brief Sets a clip's fade-in and fade-out regions via an undoable edit

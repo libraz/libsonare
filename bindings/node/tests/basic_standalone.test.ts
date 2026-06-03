@@ -269,6 +269,62 @@ describe('standalone functions', () => {
     }
   });
 
+  it('detectChords options-object form matches the positional form', () => {
+    const tone = new Float32Array(SR);
+    for (let i = 0; i < tone.length; i++) {
+      tone[i] =
+        0.25 *
+        (Math.sin((2 * Math.PI * 261.63 * i) / SR) +
+          Math.sin((2 * Math.PI * 329.63 * i) / SR) +
+          Math.sin((2 * Math.PI * 392.0 * i) / SR));
+    }
+
+    const positional = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
+    const optionForm = detectChords(tone, SR, {
+      minDuration: 0.3,
+      smoothingWindow: 2.0,
+      threshold: 0.5,
+      useTriadsOnly: false,
+      nFft: 2048,
+      hopLength: 512,
+      useBeatSync: false,
+    });
+    expect(Array.isArray(optionForm.chords)).toBe(true);
+    expect(optionForm.chords.length).toBe(positional.chords.length);
+    if (positional.chords.length > 0) {
+      expect(optionForm.chords[0].root).toBe(positional.chords[0].root);
+      expect(optionForm.chords[0].quality).toBe(positional.chords[0].quality);
+    }
+
+    // chordFunctionalAnalysis options form: key from the dedicated args, the
+    // detection knobs from the options object.
+    const romansPositional = chordFunctionalAnalysis(
+      tone,
+      0,
+      0,
+      SR,
+      0.3,
+      2.0,
+      0.5,
+      false,
+      2048,
+      512,
+      false,
+    );
+    const romansOptions = chordFunctionalAnalysis(tone, 0, 0, SR, {
+      minDuration: 0.3,
+      smoothingWindow: 2.0,
+      threshold: 0.5,
+      useTriadsOnly: false,
+      nFft: 2048,
+      hopLength: 512,
+      useBeatSync: false,
+    });
+    expect(Array.isArray(romansOptions)).toBe(true);
+    expect(romansOptions.length).toBe(romansPositional.length);
+    expect(romansOptions).toEqual(romansPositional);
+  });
+
   it('chordFunctionalAnalysis rejects non-Float32Array input', () => {
     expect(() =>
       chordFunctionalAnalysis(new Float64Array(SR) as unknown as Float32Array, 0, 0, SR),

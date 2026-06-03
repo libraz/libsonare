@@ -846,8 +846,12 @@ class Project:
             if out:
                 lib.sonare_free_bytes(out)
 
-    def set_program(self, clip_id: int, program: int, bank: int = 0) -> None:
-        """Set a MIDI clip's channel-0 program / bank at source PPQ 0."""
+    def set_program(self, clip_id: int, program: int, bank: int = -1) -> None:
+        """Set a MIDI clip's channel-0 program / bank at source PPQ 0.
+
+        ``bank`` defaults to ``-1`` (no Bank Select emitted), matching
+        :meth:`set_program_on_channel`; pass ``>= 0`` to emit a Bank Select.
+        """
         _check(
             _get_lib().sonare_project_set_program(
                 self._require_handle(), int(clip_id), int(program), int(bank)
@@ -1166,7 +1170,10 @@ class Project:
         try:
             interleaved = _from_c_float_array(out, int(out_len.value))
         finally:
-            if out and out_len.value > 0:
+            # The C ABI returns a non-null buffer even when out_len == 0 (a
+            # sentinel `new float[1]`); free it unconditionally to avoid leaking
+            # on empty bounces. _from_c_float_array already copied the samples.
+            if out:
                 lib.sonare_free_floats(out)
         channels = num_channels if num_channels > 0 else 2
         if channels > 0 and interleaved.size % channels == 0:
@@ -1243,7 +1250,9 @@ class Project:
         try:
             interleaved = _from_c_float_array(out, int(out_len.value))
         finally:
-            if out and out_len.value > 0:
+            # Free unconditionally: the C ABI returns a non-null sentinel buffer
+            # even when out_len == 0, so a `> 0` guard would leak it.
+            if out:
                 lib.sonare_free_floats(out)
         channels = num_channels if num_channels > 0 else 2
         if channels > 0 and interleaved.size % channels == 0:

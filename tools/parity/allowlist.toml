@@ -112,14 +112,6 @@ python = [
 #   mastering_stereo_analyze / mastering_process / mastering_pair_process /
 #   mastering_process_stereo (listed in [surface_only] below). Same op, facade
 #   spelling.
-# --- NEW C-ABI functions PENDING binding wiring (known-pending, not drift) ---
-# These C entry points were just added to the C ABI and are scheduled to be
-# wired into every facade in a later binding wave. They are intentionally
-# allowlisted as known-pending across ALL facades so the gate stays green until
-# the wiring lands; remove each entry as its bindings are added.
-#   decompose_with_init            (src/sonare_c_effects.h)  warm-start decompose
-#   metering_phase_scope_decimated (src/sonare_c_metering.h) decimated phase scope
-#   metering_vectorscope_decimated (src/sonare_c_metering.h) decimated vectorscope
 node = [
   "detect_chords_ex",
   "detect_key_with_options",
@@ -140,10 +132,15 @@ node = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
-  "decompose_with_init",              # pending binding wave
-  "metering_phase_scope_decimated",   # pending binding wave
-  "metering_vectorscope_decimated",   # pending binding wave
-  "metering_spectrum_frame",          # pending binding wave
+  # Node folds these into a base free function via an extra parameter rather than
+  # exposing a separately-named function (Python/WASM expose them by name):
+  #   decompose_with_init            -> decompose(...) wraps sonare_decompose_with_init
+  #   metering_vectorscope_decimated -> meteringVectorscope(left, right, sr, maxPoints)
+  #   metering_phase_scope_decimated -> meteringPhaseScope(left, right, sr, maxPoints)
+  # (metering_spectrum_frame IS exposed by name as meteringSpectrumFrame.)
+  "decompose_with_init",
+  "metering_phase_scope_decimated",
+  "metering_vectorscope_decimated",
   # C-ABI-internal length-checked inverse variants: bindings build their own
   # arrays with known lengths and call the base function, so the explicit-length
   # guards are not part of the binding surface.
@@ -170,10 +167,6 @@ wasm = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
-  "decompose_with_init",              # pending binding wave
-  "metering_phase_scope_decimated",   # pending binding wave
-  "metering_vectorscope_decimated",   # pending binding wave
-  "metering_spectrum_frame",          # pending binding wave
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
@@ -203,10 +196,6 @@ python = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
-  "decompose_with_init",              # pending binding wave
-  "metering_phase_scope_decimated",   # pending binding wave
-  "metering_vectorscope_decimated",   # pending binding wave
-  "metering_spectrum_frame",          # pending binding wave
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",

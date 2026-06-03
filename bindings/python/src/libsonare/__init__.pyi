@@ -7,6 +7,9 @@ from .analyzer import (
     Mixer as Mixer,
 )
 from .analyzer import (
+    MixerStereoResult as MixerStereoResult,
+)
+from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,
 )
 from .analyzer import (

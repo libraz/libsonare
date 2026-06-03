@@ -128,6 +128,23 @@ val js_decompose(val s, int n_features, int n_frames, int n_components, int n_it
   return out;
 }
 
+// NMF decomposition with a selectable initialiser. Mirrors the C ABI
+// sonare_decompose_with_init / librosa.decompose.decompose (init). Identical to
+// js_decompose but exposes the initialisation strategy: "random" (default,
+// deterministic seed) or "nndsvd" (SVD-based warm start). Returns { w, h }.
+val js_decompose_with_init(val s, int n_features, int n_frames, int n_components, int n_iter,
+                           float beta, std::string init) {
+  std::vector<float> data = float32ArrayToVector(s);
+  if (init.empty()) init = "random";
+  DecomposeResult result =
+      decompose(data.data(), n_features, n_frames, n_components, n_iter, "mu", beta, init);
+
+  val out = val::object();
+  out.set("w", vectorToFloat32Array(result.W));
+  out.set("h", vectorToFloat32Array(result.H));
+  return out;
+}
+
 // Nearest-neighbour spectrogram filter. Mirrors the C ABI sonare_nn_filter /
 // librosa.decompose.nn_filter. Returns the smoothed spectrogram
 // [n_features x n_frames] as { data, rows, cols }.
@@ -255,6 +272,7 @@ void registerEffectsAudioBindings() {
   function("noteStretch", &js_note_stretch);
   function("voiceChange", &js_voice_change);
   function("decompose", &js_decompose);
+  function("decomposeWithInit", &js_decompose_with_init);
   function("nnFilter", &js_nn_filter);
   function("remix", &js_remix);
   function("hpssWithResidual", &js_hpss_with_residual);

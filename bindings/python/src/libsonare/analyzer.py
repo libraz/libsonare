@@ -178,6 +178,7 @@ from ._mastering import (
 )
 from ._mixing import (
     Mixer,
+    MixerStereoResult,
     mix_stereo,
     mixing_scene_preset_json,
     mixing_scene_preset_names,
@@ -260,6 +261,7 @@ __all__ = [
     "mastering_stereo_analyze",
     "mastering_streaming_preview",
     "Mixer",
+    "MixerStereoResult",
     "mix_stereo",
     "mixing_scene_preset_json",
     "mixing_scene_preset_names",

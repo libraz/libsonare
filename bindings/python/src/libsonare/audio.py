@@ -224,7 +224,7 @@ class Audio:
     def from_buffer(
         cls,
         data: Sequence[float] | list[float],
-        sample_rate: int = 22050,
+        sample_rate: int = 48000,
     ) -> Audio:
         """Create audio from a float sample buffer.
 
@@ -234,7 +234,7 @@ class Audio:
                 anything castable to ``float``). Stereo input must be downmixed
                 first (e.g. ``samples.mean(axis=1, dtype=np.float32)``).
                 Values are nominally in ``[-1.0, 1.0]``.
-            sample_rate: Sample rate in Hz (default 22050).
+            sample_rate: Sample rate in Hz (default 48000).
         """
         lib = _get_lib()
         # Use the shared numpy fast path (zero-copy for contiguous float32

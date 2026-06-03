@@ -422,6 +422,15 @@ export class StreamAnalyzer {
     return this.native.readFramesSoa(maxFrames);
   }
 
+  /**
+   * Alias for {@link readFramesSoa}, provided for cross-binding naming
+   * consistency (WASM exposes both `readFrames` and `readFramesSoa`; Python
+   * uses `read_frames`).
+   */
+  readFrames(maxFrames: number): StreamFramesSoa {
+    return this.readFramesSoa(maxFrames);
+  }
+
   /** Drain up to `maxFrames` frames as uint8-quantized arrays. */
   readFramesU8(maxFrames: number): StreamFramesU8 {
     return this.native.readFramesU8(maxFrames);

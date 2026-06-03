@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import typing
 from collections.abc import Sequence
 
 from ._ffi import SonareMixGoniometerPoint
@@ -29,6 +30,17 @@ from .types import GoniometerPoint
 # A strip is addressed either by its index in [0, strip_count()) or by its
 # string id (as declared in the scene JSON).
 StripRef = int | str
+
+
+class MixerStereoResult(typing.NamedTuple):
+    """Stereo master output of :meth:`Mixer.process_stereo`.
+
+    Mirrors the Node/WASM ``{left, right, sampleRate}`` result shape.
+    """
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
 
 
 def mixing_scene_preset_names() -> list[str]:
@@ -282,10 +294,18 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_input_trim_db(handle, ctypes.c_float(db)))
 
-    def set_pan(self, strip: StripRef, pan: float, pan_mode: int = 0) -> None:
-        """Set a strip's pan position (``pan_mode``: 0=balance, 1=stereo, 2=dual)."""
+    def set_pan(self, strip: StripRef, pan: float, pan_mode: int | str | None = None) -> None:
+        """Set a strip's pan position.
+
+        ``pan_mode`` accepts a :class:`PanLaw`-independent pan mode as an int
+        (``0`` balance, ``1`` stereo-pan, ``2`` dual-pan), a name
+        (``"balance"``/``"stereoPan"``/``"stereo-pan"``/``"dualPan"``/
+        ``"dual-pan"``), or ``None`` to keep the strip's current pan mode. The
+        ``None``/keep sentinel is passed to the C ABI as ``-1``.
+        """
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_pan(handle, ctypes.c_float(pan), ctypes.c_int(pan_mode)))
+        mode = -1 if pan_mode is None else _pan_mode_value(pan_mode)
+        _check(_get_lib().sonare_strip_set_pan(handle, ctypes.c_float(pan), ctypes.c_int(mode)))
 
     def set_width(self, strip: StripRef, width: float) -> None:
         """Set a strip's stereo width."""
@@ -496,11 +516,14 @@ class Mixer:
         self,
         left_channels: Sequence[Sequence[float]],
         right_channels: Sequence[Sequence[float]],
-    ) -> tuple[list[float], list[float]]:
+    ) -> MixerStereoResult:
         """Mix one block of per-strip stereo audio into the stereo master.
 
         ``left_channels[i]`` / ``right_channels[i]`` are strip ``i``'s channels.
-        Returns the ``(left, right)`` master output.
+        Returns a :class:`MixerStereoResult` (``left``, ``right``,
+        ``sample_rate``) matching the Node/WASM ``{left, right, sampleRate}``
+        shape. With no input strips the master is silent (an empty block), to
+        match the C ABI which accepts ``input_count=0``.
         """
         self._require()
         if len(left_channels) != len(right_channels):
@@ -521,8 +544,10 @@ class Mixer:
             left_arrays.append(left_array)
             right_arrays.append(right_array)
 
+        # No input strips -> silent (empty) master, matching the C ABI which
+        # accepts input_count=0 and returns OK.
         if length is None:
-            raise ValueError("at least one strip is required")
+            length = 0
 
         left_ptrs = (ctypes.POINTER(ctypes.c_float) * len(left_arrays))(
             *[ctypes.cast(arr, ctypes.POINTER(ctypes.c_float)) for arr in left_arrays]
@@ -543,9 +568,10 @@ class Mixer:
                 ctypes.c_size_t(length),
             )
         )
-        return (
-            [float(out_left[i]) for i in range(length)],
-            [float(out_right[i]) for i in range(length)],
+        return MixerStereoResult(
+            left=[float(out_left[i]) for i in range(length)],
+            right=[float(out_right[i]) for i in range(length)],
+            sample_rate=int(self._sample_rate),
         )
 
     def to_scene_json(self) -> str:

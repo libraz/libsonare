@@ -135,10 +135,9 @@ export class Audio {
 
   /**
    * Wrap raw mono float samples as an {@link Audio}. `sampleRate` defaults to
-   * `22050` (the librosa default) when omitted. Note: this diverges from the
-   * WASM binding, where `sampleRate` is required and has no default.
+   * `48000` (the project default) when omitted.
    */
-  static fromBuffer(samples: Float32Array, sampleRate = 22050): Audio {
+  static fromBuffer(samples: Float32Array, sampleRate = 48000): Audio {
     return new Audio(addon.Audio.fromBuffer(samples, sampleRate));
   }
 
@@ -1158,8 +1157,12 @@ export class Project {
     return this.native.exportClipFile();
   }
 
-  /** Set a MIDI clip's channel-0 program / bank at source PPQ 0. */
-  setProgram(clipId: number, program: number, bank = 0): void {
+  /**
+   * Set a MIDI clip's channel-0 program / bank at source PPQ 0. `bank` defaults
+   * to `-1` (no Bank Select emitted), matching `setProgramOnChannel` and the
+   * Python/WASM surfaces; pass `>= 0` to emit a Bank Select.
+   */
+  setProgram(clipId: number, program: number, bank = -1): void {
     this.native.setProgram(clipId, program, bank);
   }
 
@@ -1261,12 +1264,14 @@ export class Project {
    * to audible audio. Each entry of `instruments` binds a
    * {@link BuiltinInstrumentConfig} patch to a `destinationId` (default `0`).
    * An empty array renders silence, identical to {@link bounce}.
+   *
+   * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithBuiltinInstruments(
-    options: ProjectBounceOptions = {},
     instruments: BuiltinInstrumentConfig[] = [],
+    options: ProjectBounceOptions = {},
   ): Float32Array {
-    return this.native.bounceWithBuiltinInstruments(options, instruments);
+    return this.native.bounceWithBuiltinInstruments(instruments, options);
   }
 
   /**
@@ -1274,14 +1279,16 @@ export class Project {
    * common single-instrument case. Pass a {@link BuiltinInstrumentConfig}
    * (e.g. `{ waveform: 'saw', destinationId: 0 }`) or a bare
    * {@link SynthWaveform} name to bind one built-in synth patch.
+   *
+   * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithBuiltinInstrument(
-    options: ProjectBounceOptions = {},
     instrument: BuiltinInstrumentConfig | SynthWaveform = {},
+    options: ProjectBounceOptions = {},
   ): Float32Array {
     const config: BuiltinInstrumentConfig =
       typeof instrument === 'string' ? { waveform: instrument } : instrument;
-    return this.native.bounceWithBuiltinInstruments(options, [config]);
+    return this.native.bounceWithBuiltinInstruments([config], options);
   }
 
   /** Release the underlying native project. Safe to call only once. */
@@ -1590,9 +1597,17 @@ export class Mixer {
     this.native.setFaderDb(strip, db);
   }
 
-  /** Set a strip's pan position (-1..1) with an optional pan mode. */
-  setPan(strip: StripRef, pan: number, panMode: PanMode = 0): void {
-    this.native.setPan(strip, pan, panModeValue(panMode));
+  /**
+   * Set a strip's pan position (-1..1) with an optional pan mode. Omitting
+   * `panMode` keeps the strip's current mode (a plain pan nudge does not reset
+   * a scene strip's pan mode).
+   */
+  setPan(strip: StripRef, pan: number, panMode?: PanMode): void {
+    if (panMode === undefined) {
+      this.native.setPan(strip, pan);
+    } else {
+      this.native.setPan(strip, pan, panModeValue(panMode));
+    }
   }
 
   /** Set a strip's stereo width (0 = mono, 1 = original, >1 = widened). */
@@ -1661,9 +1676,16 @@ export class Mixer {
     this.native.setSendDb(strip, sendIndex, sendDb);
   }
 
-  /** Read a strip's current (post-fader) meter snapshot. */
-  stripMeter(strip: StripRef): MixMeterSnapshot {
-    return this.native.stripMeter(strip);
+  /**
+   * Read a strip's current meter snapshot. With no `tap` (or `'postFader'`)
+   * this returns the post-fader meter; pass `'preFader'` (or the enum int) to
+   * read the pre-fader tap instead.
+   */
+  stripMeter(strip: StripRef, tap?: MeterTap | number): MixMeterSnapshot {
+    if (tap === undefined) {
+      return this.native.stripMeter(strip);
+    }
+    return this.native.meterTap(strip, meterTapValue(tap));
   }
 
   /** Read a strip's meter snapshot at the given tap point (`'preFader'` | `'postFader'`). */

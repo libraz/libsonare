@@ -939,13 +939,15 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  // Argument order is instrument-first to match the WASM and Python bindings:
+  //   bounceWithBuiltinInstruments(instruments, options?)
   SonareProjectBounceOptions options{};
-  if (info.Length() > 0 && info[0].IsObject()) {
-    FillBounceOptions(info[0].As<Napi::Object>(), &options);
+  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
+    FillBounceOptions(info[1].As<Napi::Object>(), &options);
   }
   std::vector<SonareBuiltinInstrumentBinding> bindings;
-  if (info.Length() > 1 && info[1].IsArray()) {
-    Napi::Array arr = info[1].As<Napi::Array>();
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array arr = info[0].As<Napi::Array>();
     bindings.reserve(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
       Napi::Value element = arr.Get(i);

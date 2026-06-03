@@ -6,6 +6,7 @@ from importlib.metadata import version as _pkg_version
 from ._project import AssistSidecar, BuiltinSynthConfig, Project, project_abi_version
 from .analyzer import (
     Mixer,
+    MixerStereoResult,
     RealtimeVoiceChanger,
     RealtimeVoiceChangerConfig,
     StreamingEqualizer,
@@ -456,6 +457,7 @@ __all__ = [
     "mfcc_to_audio",
     "mfcc_to_mel",
     "Mixer",
+    "MixerStereoResult",
     "mix_stereo",
     "mixing_scene_preset_json",
     "mixing_scene_preset_names",

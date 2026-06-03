@@ -134,6 +134,25 @@ export function decompose(
 }
 
 /**
+ * Non-negative matrix factorisation with a selectable initialiser
+ * (librosa.decompose.decompose, `init`). Identical to {@link decompose} but
+ * exposes the initialisation strategy: `'random'` (default, deterministic seed)
+ * or `'nndsvd'` (SVD-based warm start, which tends to converge in fewer
+ * iterations). Returns the W and H factors.
+ */
+export function decomposeWithInit(
+  s: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  nComponents: number,
+  nIter = 50,
+  beta = 2.0,
+  init: 'random' | 'nndsvd' = 'random',
+): WasmDecomposeResult {
+  return requireModule().decomposeWithInit(s, nFeatures, nFrames, nComponents, nIter, beta, init);
+}
+
+/**
  * Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram
  * (librosa.decompose.nn_filter).
  */

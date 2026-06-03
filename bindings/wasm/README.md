@@ -161,7 +161,9 @@ If your bundler doesn't automatically resolve the `.wasm` file, specify its path
 import wasmUrl from '@libraz/libsonare/wasm?url'; // Vite
 import { init } from '@libraz/libsonare';
 
-await init({ wasmPath: wasmUrl });
+// `locateFile(path, prefix)` is called by the Emscripten loader to resolve the
+// `.wasm` file; return your bundler-provided URL for it.
+await init({ locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path) });
 ```
 
 ### Real-time Streaming

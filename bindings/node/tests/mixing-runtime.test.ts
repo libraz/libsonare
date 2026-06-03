@@ -93,6 +93,46 @@ describe('Mixer runtime methods', () => {
     expect(Number.isFinite(postFader.peakDbL)).toBe(true);
   });
 
+  it('stripMeter accepts an optional tap argument', () => {
+    const { left, right } = constantStrips([0.5, 0.25, 0.1]);
+    mixer.processStereo(left, right);
+
+    // No tap -> post-fader (same as the dedicated meterTap('postFader')).
+    const post = mixer.stripMeter('host');
+    const postTap = mixer.stripMeter('host', 'postFader');
+    const preTap = mixer.stripMeter('host', 'preFader');
+
+    for (const m of [post, postTap, preTap]) {
+      expect(Number.isFinite(m.peakDbL)).toBe(true);
+      expect(m.peakDbL).toBeGreaterThan(-120);
+    }
+    // The no-tap default matches the explicit post-fader tap.
+    expect(post.peakDbL).toBeCloseTo(postTap.peakDbL, 5);
+    // Pre-fader on host (before its fader trim) should be >= post-fader.
+    expect(preTap.peakDbL).toBeGreaterThanOrEqual(postTap.peakDbL - 1e-3);
+  });
+
+  it('setPan without panMode keeps the strip current pan mode', () => {
+    // Put the strip into stereoPan mode explicitly first.
+    mixer.setPan('host', 0.0, 'stereoPan');
+    const beforeScene = JSON.parse(mixer.toSceneJson());
+    const beforeHost = beforeScene.strips.find((s: { id: string }) => s.id === 'host');
+    expect(beforeHost.panMode).toBe(1); // 1 = stereoPan
+
+    // A plain pan nudge (no panMode) must NOT reset the mode back to Balance.
+    mixer.setPan('host', 0.3);
+    const afterScene = JSON.parse(mixer.toSceneJson());
+    const afterHost = afterScene.strips.find((s: { id: string }) => s.id === 'host');
+    expect(afterHost.panMode).toBe(1); // still stereoPan
+    expect(afterHost.pan).toBeCloseTo(0.3, 5);
+
+    // Passing an explicit mode still switches it.
+    mixer.setPan('host', 0.3, 'balance');
+    const finalScene = JSON.parse(mixer.toSceneJson());
+    const finalHost = finalScene.strips.find((s: { id: string }) => s.id === 'host');
+    expect(finalHost.panMode).toBe(0); // 0 = balance
+  });
+
   it('returns an array of goniometer points', () => {
     const { left, right } = constantStrips([0.5, 0.25, 0.1]);
     mixer.processStereo(left, right);

@@ -244,6 +244,7 @@ export interface StreamAnalyzerConfig {
 /** Structure-of-arrays frame buffer (`StreamAnalyzer.readFramesSoa`). */
 export interface StreamFramesSoa {
   nFrames: number;
+  nMels: number;
   timestamps: Float32Array;
   mel: Float32Array;
   chroma: Float32Array;
@@ -657,6 +658,29 @@ export interface ChordAnalysisResult {
 }
 
 export type ChordChromaMethod = 'stft' | 'nnls';
+
+/**
+ * Options-object form of the chord-detection parameters, mirroring the WASM
+ * `ChordDetectionOptions`. Accepted by the standalone {@link detectChords} /
+ * {@link chordFunctionalAnalysis} functions as an alternative to the positional
+ * argument form.
+ */
+export interface ChordDetectionOptions {
+  minDuration?: number;
+  smoothingWindow?: number;
+  threshold?: number;
+  useTriadsOnly?: boolean;
+  nFft?: number;
+  hopLength?: number;
+  useBeatSync?: boolean;
+  useHmm?: boolean;
+  hmmBeamWidth?: number;
+  useKeyContext?: boolean;
+  keyRoot?: number;
+  keyMode?: number;
+  detectInversions?: boolean;
+  chromaMethod?: ChordChromaMethod;
+}
 
 export interface HpssResult {
   harmonic: Float32Array;

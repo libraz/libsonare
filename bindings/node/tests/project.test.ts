@@ -264,39 +264,38 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
-  it('bounces MIDI through the built-in synth to non-silent audio', () => {
+  it('bounces MIDI through the built-in synth to non-silent audio (instrument-first)', () => {
     const project = buildMidiOnlyProject();
     const audio = project.bounceWithBuiltinInstrument(
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
       { waveform: 'saw', destinationId: 0, gain: 0.5 },
+      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
     );
     expect(audio.length).toBe(4096 * 2);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
   });
 
-  it('accepts a bare waveform name and an explicit bindings array', () => {
+  it('accepts a bare waveform name and an explicit bindings array (instrument-first)', () => {
     const project = buildMidiOnlyProject();
-    const byName = project.bounceWithBuiltinInstrument(
-      { totalFrames: 2048, numChannels: 1, sampleRate: 48000 },
-      'sine',
-    );
+    const byName = project.bounceWithBuiltinInstrument('sine', {
+      totalFrames: 2048,
+      numChannels: 1,
+      sampleRate: 48000,
+    });
     expect(peak(byName)).toBeGreaterThan(0);
 
     const byArray = project.bounceWithBuiltinInstruments(
-      { totalFrames: 2048, numChannels: 1, sampleRate: 48000 },
       [{ destinationId: 0, waveform: 'square' }],
+      { totalFrames: 2048, numChannels: 1, sampleRate: 48000 },
     );
     expect(peak(byArray)).toBeGreaterThan(0);
     project.destroy();
   });
 
-  it('auto-derives the render length when totalFrames is omitted', () => {
+  it('auto-derives the render length when options/totalFrames is omitted (instrument-first)', () => {
     const project = buildMidiOnlyProject();
-    const audio = project.bounceWithBuiltinInstrument(
-      { numChannels: 2, sampleRate: 48000 },
-      { waveform: 'triangle' },
-    );
+    // Pass only the instrument; options defaults to {} and length auto-derives.
+    const audio = project.bounceWithBuiltinInstrument({ waveform: 'triangle' });
     expect(audio.length).toBeGreaterThan(0);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
@@ -305,12 +304,9 @@ describe('Project native binding', () => {
   it('rejects an unknown built-in synth waveform name', () => {
     const project = buildMidiOnlyProject();
     expect(() =>
-      project.bounceWithBuiltinInstrument(
-        { totalFrames: 1024 },
-        {
-          waveform: 'noise' as unknown as 'sine',
-        },
-      ),
+      project.bounceWithBuiltinInstrument({
+        waveform: 'noise' as unknown as 'sine',
+      }),
     ).toThrow(/waveform/);
     project.destroy();
   });

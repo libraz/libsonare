@@ -58,6 +58,7 @@ export { pitchPyin, pitchYin } from './feature_pitch';
 export { resample } from './feature_resample';
 export {
   decompose,
+  decomposeWithInit,
   ebur128LoudnessRange,
   estimateTuning,
   hpssWithResidual,

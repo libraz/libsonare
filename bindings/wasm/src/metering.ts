@@ -185,7 +185,10 @@ export function meteringStereoCorrelation(
   return requireModule().meteringStereoCorrelation(left, right, sampleRate);
 }
 
-/** Side / mid energy ratio: 0 = pure mono, ~1 = wide stereo. */
+/**
+ * Side / mid energy ratio, clamped to `[0, 2]`: 0 = pure mono, ~1 = wide
+ * stereo, 2 = fully decorrelated / out-of-phase.
+ */
 export function meteringStereoWidth(
   left: Float32Array,
   right: Float32Array,
@@ -211,6 +214,25 @@ export function meteringVectorscope(
   return requireModule().meteringVectorscope(left, right, sampleRate);
 }
 
+/**
+ * Display-sized mid/side vectorscope. Like {@link meteringVectorscope} but the
+ * point series is deterministically decimated to at most `maxPoints` points
+ * (`0`, or a value `>= length`, yields one point per input sample). Mirrors the
+ * Node/Python decimated vectorscope.
+ */
+export function meteringVectorscopeDecimated(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  maxPoints = 0,
+  options: ValidateOptions = {},
+): VectorscopeReport {
+  const validate = options.validate !== false;
+  assertSamples('meteringVectorscopeDecimated', left, validate, 'left');
+  assertSamples('meteringVectorscopeDecimated', right, validate, 'right');
+  return requireModule().meteringVectorscopeDecimated(left, right, sampleRate, maxPoints);
+}
+
 /** Phase-scope point series plus summary stats. */
 export function meteringPhaseScope(
   left: Float32Array,
@@ -224,7 +246,32 @@ export function meteringPhaseScope(
   return requireModule().meteringPhaseScope(left, right, sampleRate);
 }
 
-/** Single-frame spectrum view (uses the first `nFft` samples of `samples`). */
+/**
+ * Display-sized phase scope. Like {@link meteringPhaseScope} but the point
+ * series is deterministically decimated to at most `maxPoints` points (`0`, or
+ * a value `>= length`, yields one point per input sample). The summary stats are
+ * always computed over the full-resolution signal. Mirrors the Node/Python
+ * decimated phase scope.
+ */
+export function meteringPhaseScopeDecimated(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate = 22050,
+  maxPoints = 0,
+  options: ValidateOptions = {},
+): PhaseScopeReport {
+  const validate = options.validate !== false;
+  assertSamples('meteringPhaseScopeDecimated', left, validate, 'left');
+  assertSamples('meteringPhaseScopeDecimated', right, validate, 'right');
+  return requireModule().meteringPhaseScopeDecimated(left, right, sampleRate, maxPoints);
+}
+
+/**
+ * Welch-averaged magnitude / power / dB spectrum over the WHOLE signal (split
+ * into Hann-windowed, 50%-overlapping `nFft`-length frames whose power spectra
+ * are averaged). For a true single-frame snapshot, use
+ * {@link meteringSpectrumFrame}.
+ */
 export function meteringSpectrum(
   samples: Float32Array,
   sampleRate = 22050,
@@ -233,4 +280,21 @@ export function meteringSpectrum(
   const validate = options?.validate !== false;
   assertSamples('meteringSpectrum', samples, validate);
   return requireModule().meteringSpectrum(samples, sampleRate, options ?? {});
+}
+
+/**
+ * True single-frame magnitude / power / dB spectrum (one Hann-windowed
+ * `nFft`-length FFT), for spectrum-analyzer "moment" snapshots that must not be
+ * time-averaged like {@link meteringSpectrum}. The analysis frame spans
+ * `[frameOffset, frameOffset + nFft)`; samples past the end are zero-padded.
+ */
+export function meteringSpectrumFrame(
+  samples: Float32Array,
+  sampleRate = 22050,
+  frameOffset = 0,
+  options?: SpectrumOptions & ValidateOptions,
+): SpectrumReport {
+  const validate = options?.validate !== false;
+  assertSamples('meteringSpectrumFrame', samples, validate);
+  return requireModule().meteringSpectrumFrame(samples, sampleRate, frameOffset, options ?? {});
 }

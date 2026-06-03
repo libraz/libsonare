@@ -19,6 +19,10 @@ typedef enum {
   SONARE_PAN_MODE_DUAL_PAN = 2
 } SonarePanMode;
 
+// Sentinel for sonare_strip_set_pan's pan_mode argument: keep the strip's
+// current pan mode and only move the pan position (see sonare_strip_set_pan).
+#define SONARE_PAN_MODE_KEEP (-1)
+
 typedef enum {
   SONARE_PAN_LAW_CONST_3DB = 0,
   SONARE_PAN_LAW_CONST_4P5DB = 1,
@@ -62,6 +66,9 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
 SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
 SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
+// Sets the strip's pan position. pan_mode < 0 (SONARE_PAN_MODE_KEEP) keeps the
+// strip's current pan mode (only the pan position changes); otherwise it selects
+// the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan.
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
 SonareError sonare_strip_set_width(SonareStrip* strip, float width);

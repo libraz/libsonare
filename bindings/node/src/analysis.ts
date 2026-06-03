@@ -6,6 +6,7 @@ import type {
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordChromaMethod,
+  ChordDetectionOptions,
   DynamicsResult,
   Key,
   KeyCandidate,
@@ -221,10 +222,82 @@ export function analyzeTimbre(
   return addon.analyzeTimbre(samples, sampleRate, nFft, hopLength, nMels, nMfcc, windowSec);
 }
 
+/**
+ * Resolved chord-detection parameters with all defaults applied. Used to feed
+ * the positional native call from either the positional or options-object
+ * public forms.
+ */
+interface ResolvedChordParams {
+  minDuration: number;
+  smoothingWindow: number;
+  threshold: number;
+  useTriadsOnly: boolean;
+  nFft: number;
+  hopLength: number;
+  useBeatSync: boolean;
+  useHmm: boolean;
+  hmmBeamWidth: number;
+  useKeyContext: boolean;
+  keyRoot: number;
+  keyMode: number;
+  detectInversions: boolean;
+  chromaMethod: ChordChromaMethod;
+}
+
+function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParams {
+  return {
+    minDuration: options.minDuration ?? 0.3,
+    smoothingWindow: options.smoothingWindow ?? 2.0,
+    threshold: options.threshold ?? 0.5,
+    useTriadsOnly: options.useTriadsOnly ?? false,
+    nFft: options.nFft ?? 2048,
+    hopLength: options.hopLength ?? 512,
+    useBeatSync: options.useBeatSync ?? true,
+    useHmm: options.useHmm ?? false,
+    hmmBeamWidth: options.hmmBeamWidth ?? 24,
+    useKeyContext: options.useKeyContext ?? false,
+    keyRoot: options.keyRoot ?? 0,
+    keyMode: options.keyMode ?? 0,
+    detectInversions: options.detectInversions ?? false,
+    chromaMethod: options.chromaMethod ?? 'stft',
+  };
+}
+
+/**
+ * Detect chords from mono samples.
+ *
+ * Accepts either an options object (`detectChords(samples, sampleRate, options)`,
+ * matching the WASM binding) or the legacy positional argument list. The form
+ * is selected by the type of the third argument: an object selects the
+ * options form, otherwise the positional form is used.
+ */
+export function detectChords(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: ChordDetectionOptions,
+): ChordAnalysisResult;
+export function detectChords(
+  samples: Float32Array,
+  sampleRate?: number,
+  minDuration?: number,
+  smoothingWindow?: number,
+  threshold?: number,
+  useTriadsOnly?: boolean,
+  nFft?: number,
+  hopLength?: number,
+  useBeatSync?: boolean,
+  useHmm?: boolean,
+  hmmBeamWidth?: number,
+  useKeyContext?: boolean,
+  keyRoot?: number,
+  keyMode?: number,
+  detectInversions?: boolean,
+  chromaMethod?: ChordChromaMethod,
+): ChordAnalysisResult;
 export function detectChords(
   samples: Float32Array,
   sampleRate = 22050,
-  minDuration = 0.3,
+  minDurationOrOptions: number | ChordDetectionOptions = 0.3,
   smoothingWindow = 2.0,
   threshold = 0.5,
   useTriadsOnly = false,
@@ -239,32 +312,84 @@ export function detectChords(
   detectInversions = false,
   chromaMethod: ChordChromaMethod = 'stft',
 ): ChordAnalysisResult {
+  const p: ResolvedChordParams =
+    typeof minDurationOrOptions === 'object'
+      ? resolveChordOptions(minDurationOrOptions)
+      : {
+          minDuration: minDurationOrOptions,
+          smoothingWindow,
+          threshold,
+          useTriadsOnly,
+          nFft,
+          hopLength,
+          useBeatSync,
+          useHmm,
+          hmmBeamWidth,
+          useKeyContext,
+          keyRoot,
+          keyMode,
+          detectInversions,
+          chromaMethod,
+        };
   return addon.detectChords(
     samples,
     sampleRate,
-    minDuration,
-    smoothingWindow,
-    threshold,
-    useTriadsOnly,
-    nFft,
-    hopLength,
-    useBeatSync,
-    useHmm,
-    hmmBeamWidth,
-    useKeyContext,
-    keyRoot,
-    keyMode,
-    detectInversions,
-    chordChromaMethodValue(chromaMethod),
+    p.minDuration,
+    p.smoothingWindow,
+    p.threshold,
+    p.useTriadsOnly,
+    p.nFft,
+    p.hopLength,
+    p.useBeatSync,
+    p.useHmm,
+    p.hmmBeamWidth,
+    p.useKeyContext,
+    p.keyRoot,
+    p.keyMode,
+    p.detectInversions,
+    chordChromaMethodValue(p.chromaMethod),
   );
 }
 
+/**
+ * Functional (Roman-numeral) chord analysis from mono samples.
+ *
+ * Accepts either an options object
+ * (`chordFunctionalAnalysis(samples, keyRoot, keyMode, sampleRate, options)`,
+ * matching the WASM binding) or the legacy positional argument list. The form
+ * is selected by the type of the fifth argument.
+ */
+export function chordFunctionalAnalysis(
+  samples: Float32Array,
+  keyRoot: number,
+  keyMode?: number,
+  sampleRate?: number,
+  options?: ChordDetectionOptions,
+): string[];
+export function chordFunctionalAnalysis(
+  samples: Float32Array,
+  keyRoot: number,
+  keyMode?: number,
+  sampleRate?: number,
+  minDuration?: number,
+  smoothingWindow?: number,
+  threshold?: number,
+  useTriadsOnly?: boolean,
+  nFft?: number,
+  hopLength?: number,
+  useBeatSync?: boolean,
+  useHmm?: boolean,
+  hmmBeamWidth?: number,
+  useKeyContext?: boolean,
+  detectInversions?: boolean,
+  chromaMethod?: ChordChromaMethod,
+): string[];
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   keyRoot: number,
   keyMode = 0,
   sampleRate = 22050,
-  minDuration = 0.3,
+  minDurationOrOptions: number | ChordDetectionOptions = 0.3,
   smoothingWindow = 2.0,
   threshold = 0.5,
   useTriadsOnly = false,
@@ -277,23 +402,42 @@ export function chordFunctionalAnalysis(
   detectInversions = false,
   chromaMethod: ChordChromaMethod = 'stft',
 ): string[] {
+  const p: ResolvedChordParams =
+    typeof minDurationOrOptions === 'object'
+      ? resolveChordOptions(minDurationOrOptions)
+      : {
+          minDuration: minDurationOrOptions,
+          smoothingWindow,
+          threshold,
+          useTriadsOnly,
+          nFft,
+          hopLength,
+          useBeatSync,
+          useHmm,
+          hmmBeamWidth,
+          useKeyContext,
+          keyRoot,
+          keyMode,
+          detectInversions,
+          chromaMethod,
+        };
   return addon.chordFunctionalAnalysis(
     samples,
     keyRoot,
     keyMode,
     sampleRate,
-    minDuration,
-    smoothingWindow,
-    threshold,
-    useTriadsOnly,
-    nFft,
-    hopLength,
-    useBeatSync,
-    useHmm,
-    hmmBeamWidth,
-    useKeyContext,
-    detectInversions,
-    chordChromaMethodValue(chromaMethod),
+    p.minDuration,
+    p.smoothingWindow,
+    p.threshold,
+    p.useTriadsOnly,
+    p.nFft,
+    p.hopLength,
+    p.useBeatSync,
+    p.useHmm,
+    p.hmmBeamWidth,
+    p.useKeyContext,
+    p.detectInversions,
+    chordChromaMethodValue(p.chromaMethod),
   );
 }
 

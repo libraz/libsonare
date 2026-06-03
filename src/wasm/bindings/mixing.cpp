@@ -140,7 +140,9 @@ class MixerWasm {
     checkStripError(sonare_strip_set_fader_db(stripAt(strip_index), db), "failed to set fader");
   }
 
-  // Sets the strip's pan position. pan_mode is processor-specific.
+  // Sets the strip's pan position. pan_mode is the SONARE_PAN_MODE_* ordinal;
+  // pass SONARE_PAN_MODE_KEEP (-1) to keep the strip's current pan mode (e.g. a
+  // scene-defined mode) on a plain pan nudge.
   void setPan(unsigned int strip_index, float pan, int pan_mode) {
     checkStripError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode), "failed to set pan");
   }
@@ -657,6 +659,60 @@ val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
   return out;
 }
 
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
+// Resolves a JS pan-mode value (number / string) to the SONARE_PAN_MODE_*
+// ordinal accepted by sonare_strip_set_pan. Mirrors Node's PanModeValue so the
+// real-graph mixStereo path behaves identically. Omitted / null defaults to
+// Balance (mixStereo builds fresh strips, so there is no prior mode to keep).
+int panModeOrdinalFromVal(val value) {
+  if (value.isUndefined() || value.isNull()) {
+    return SONARE_PAN_MODE_BALANCE;
+  }
+  if (value.typeOf().as<std::string>() == "number") {
+    return value.as<int>();
+  }
+  if (value.typeOf().as<std::string>() != "string") {
+    return SONARE_PAN_MODE_BALANCE;
+  }
+  std::string mode = value.as<std::string>();
+  for (char& ch : mode) {
+    if (ch == '_') ch = '-';
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  if (mode == "stereo-pan" || mode == "stereopan" || mode == "pan") {
+    return SONARE_PAN_MODE_STEREO_PAN;
+  }
+  if (mode == "dual-pan" || mode == "dualpan") {
+    return SONARE_PAN_MODE_DUAL_PAN;
+  }
+  return SONARE_PAN_MODE_BALANCE;
+}
+
+// Converts a C-ABI mix-meter snapshot to the JS meter object (same shape as
+// meterSnapshotToVal / Node's MixMeterToObject).
+val mixMeterSnapshotToValFree(const SonareMixMeterSnapshot& snapshot) {
+  val out = val::object();
+  out.set("peakDbL", snapshot.peak_db_l);
+  out.set("peakDbR", snapshot.peak_db_r);
+  out.set("rmsDbL", snapshot.rms_db_l);
+  out.set("rmsDbR", snapshot.rms_db_r);
+  out.set("correlation", snapshot.correlation);
+  out.set("monoCompatWidth", snapshot.mono_compat_width);
+  out.set("monoCompatPeak", snapshot.mono_compat_peak);
+  out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
+  out.set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
+  out.set("momentaryLufs", snapshot.momentary_lufs);
+  out.set("shortTermLufs", snapshot.short_term_lufs);
+  out.set("integratedLufs", snapshot.integrated_lufs);
+  out.set("gainReductionDb", snapshot.gain_reduction_db);
+  out.set("truePeakDbL", snapshot.true_peak_db_l);
+  out.set("truePeakDbR", snapshot.true_peak_db_r);
+  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.set("seq", static_cast<double>(snapshot.seq));
+  return out;
+}
+#endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
+
 }  // namespace
 
 val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val options) {
@@ -692,6 +748,79 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
   std::vector<float> out_right(length, 0.0f);
   val meters = val::array();
 
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
+  // Build a real mixer and route every input through the compiled routing graph
+  // + master bus via sonare_mixer_process_stereo, matching the Node/Python
+  // mixStereo path exactly (instead of summing bare ChannelStrip outputs).
+  SonareMixer* mixer =
+      sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
+  if (mixer == nullptr) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        std::string("failed to create mixer: ") + sonare_last_error_message());
+  }
+  std::vector<SonareStrip*> strips;
+  std::vector<const float*> left_ptrs(static_cast<size_t>(count));
+  std::vector<const float*> right_ptrs(static_cast<size_t>(count));
+  try {
+    strips.reserve(static_cast<size_t>(count));
+    for (int index = 0; index < count; ++index) {
+      SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
+      if (strip == nullptr) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to add mixer strip");
+      }
+      strips.push_back(strip);
+
+      val inputTrim = optionAt(options, "inputTrimDb", index);
+      if (!inputTrim.isUndefined() && !inputTrim.isNull() &&
+          inputTrim.typeOf().as<std::string>() == "number") {
+        sonare_strip_set_input_trim_db(strip, inputTrim.as<float>());
+      }
+      val fader = optionAt(options, "faderDb", index);
+      if (!fader.isUndefined() && !fader.isNull() && fader.typeOf().as<std::string>() == "number") {
+        sonare_strip_set_fader_db(strip, fader.as<float>());
+      }
+      val pan = optionAt(options, "pan", index);
+      if (!pan.isUndefined() && !pan.isNull() && pan.typeOf().as<std::string>() == "number") {
+        sonare_strip_set_pan(strip, pan.as<float>(),
+                             panModeOrdinalFromVal(optionAt(options, "panMode", index)));
+      }
+      val width = optionAt(options, "width", index);
+      if (!width.isUndefined() && !width.isNull() && width.typeOf().as<std::string>() == "number") {
+        sonare_strip_set_width(strip, width.as<float>());
+      }
+      val muted = optionAt(options, "muted", index);
+      if (!muted.isUndefined() && !muted.isNull() &&
+          muted.typeOf().as<std::string>() == "boolean") {
+        sonare_strip_set_muted(strip, muted.as<bool>() ? 1 : 0);
+      }
+
+      left_ptrs[static_cast<size_t>(index)] = left_inputs[static_cast<size_t>(index)].data();
+      right_ptrs[static_cast<size_t>(index)] = right_inputs[static_cast<size_t>(index)].data();
+    }
+
+    SonareError err = sonare_mixer_process_stereo(mixer, left_ptrs.data(), right_ptrs.data(),
+                                                  static_cast<size_t>(count), out_left.data(),
+                                                  out_right.data(), length);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("mixer process failed: ") + sonare_error_message(err));
+    }
+    for (size_t index = 0; index < strips.size(); ++index) {
+      SonareMixMeterSnapshot snapshot{};
+      sonare_strip_meter(strips[index], &snapshot);
+      meters.call<void>("push", mixMeterSnapshotToValFree(snapshot));
+    }
+  } catch (...) {
+    sonare_mixer_destroy(mixer);
+    throw;
+  }
+  sonare_mixer_destroy(mixer);
+#else
+  // Fallback for builds without the mixing routing graph: bare per-strip
+  // ChannelStrip processing + manual sum. Functionally equivalent for the simple
+  // (no-routing) case the graph collapses to.
   for (int index = 0; index < count; ++index) {
     mixing::ChannelStrip strip;
     strip.prepare(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
@@ -728,6 +857,7 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     }
     meters.call<void>("push", meterSnapshotToVal(strip.meter_snapshot()));
   }
+#endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
 
   val out = val::object();
   out.set("left", vectorToFloat32Array(out_left));

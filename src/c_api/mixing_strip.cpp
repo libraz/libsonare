@@ -72,14 +72,23 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  // to_pan_mode throws SONARE_ERROR_INVALID_PARAMETER for unknown modes, so by
-  // the time we mirror it into the scene strip the value is already validated.
-  strip->strip.set_pan_mode(to_pan_mode(pan_mode));
+  // pan_mode < 0 (SONARE_PAN_MODE_KEEP) means "keep the strip's current pan
+  // mode" — only the pan position moves. This avoids resetting a StereoPan /
+  // DualPan strip back to Balance when a caller merely nudges the pan position.
+  // Otherwise to_pan_mode throws SONARE_ERROR_INVALID_PARAMETER for unknown
+  // modes, so by the time we mirror it into the scene strip it is validated.
+  if (pan_mode < 0) {
+    // Mirror the strip's live mode into the scene cache so save/reload stays
+    // faithful (it is unchanged by this call but may have been set elsewhere).
+    strip->scene_strip.pan_mode = from_pan_mode(strip->strip.pan_mode());
+  } else {
+    strip->strip.set_pan_mode(to_pan_mode(pan_mode));
+    strip->scene_strip.pan_mode = pan_mode;
+  }
   strip->strip.set_pan(pan);
   // Clamp the cached scene pan to the processor's valid range so save/reload is
   // faithful, matching set_dual_pan (which already clamps) and the live panner.
   strip->scene_strip.pan = std::clamp(pan, -1.0f, 1.0f);
-  strip->scene_strip.pan_mode = pan_mode;
   return SONARE_OK;
   SONARE_C_CATCH
 }

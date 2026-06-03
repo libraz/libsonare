@@ -32,8 +32,8 @@ namespace {
 // zero-initialized config sanitizes into the full default patch and partial
 // overrides keep sensible values for the fields the caller left unset. This is a
 // deliberate minimal-synth convenience: an exact 0 (e.g. sustain == 0) is not
-// requestable — the richer instrument bank (see backup/builtin-instrument-plan.md)
-// will use an explicit "is-set" model instead.
+// requestable — the richer instrument bank (planned separately) will use an
+// explicit "is-set" model instead.
 float positive_or_default(float v, float fallback, float hi) noexcept {
   if (!std::isfinite(v) || v <= 0.0f) return fallback;
   return clampf(v, 0.0f, hi);

@@ -203,11 +203,63 @@ val js_metering_vectorscope(val left, val right, int sample_rate) {
   return out;
 }
 
+// Display-sized mid/side vectorscope. Mirrors js_metering_vectorscope but
+// decimates the point series to at most max_points points (0 = one point per
+// input sample). Backs the C ABI sonare_metering_vectorscope_decimated.
+val js_metering_vectorscope_decimated(val left, val right, int sample_rate, size_t max_points) {
+  std::vector<float> l;
+  std::vector<float> r;
+  ensureStereoPair(left, right, sample_rate, "meteringVectorscopeDecimated", &l, &r);
+  std::vector<metering::VectorscopePoint> points =
+      metering::vectorscope(l.data(), r.data(), l.size(), max_points);
+  std::vector<float> mid(points.size());
+  std::vector<float> side(points.size());
+  for (size_t i = 0; i < points.size(); ++i) {
+    mid[i] = points[i].mid;
+    side[i] = points[i].side;
+  }
+  val out = val::object();
+  out.set("mid", vectorToFloat32Array(mid));
+  out.set("side", vectorToFloat32Array(side));
+  return out;
+}
+
 val js_metering_phase_scope(val left, val right, int sample_rate) {
   std::vector<float> l;
   std::vector<float> r;
   ensureStereoPair(left, right, sample_rate, "meteringPhaseScope", &l, &r);
   metering::PhaseScopeResult result = metering::phase_scope(l.data(), r.data(), l.size());
+  std::vector<float> mid(result.points.size());
+  std::vector<float> side(result.points.size());
+  std::vector<float> radius(result.points.size());
+  std::vector<float> angle(result.points.size());
+  for (size_t i = 0; i < result.points.size(); ++i) {
+    mid[i] = result.points[i].mid;
+    side[i] = result.points[i].side;
+    radius[i] = result.points[i].radius;
+    angle[i] = result.points[i].angle_rad;
+  }
+  val out = val::object();
+  out.set("mid", vectorToFloat32Array(mid));
+  out.set("side", vectorToFloat32Array(side));
+  out.set("radius", vectorToFloat32Array(radius));
+  out.set("angleRad", vectorToFloat32Array(angle));
+  out.set("correlation", result.correlation);
+  out.set("averageAbsAngleRad", result.average_abs_angle_rad);
+  out.set("maxRadius", result.max_radius);
+  return out;
+}
+
+// Display-sized phase scope. Mirrors js_metering_phase_scope but decimates the
+// point series to at most max_points points (0 = one point per input sample);
+// the summary stats are always computed over the full-resolution signal. Backs
+// the C ABI sonare_metering_phase_scope_decimated.
+val js_metering_phase_scope_decimated(val left, val right, int sample_rate, size_t max_points) {
+  std::vector<float> l;
+  std::vector<float> r;
+  ensureStereoPair(left, right, sample_rate, "meteringPhaseScopeDecimated", &l, &r);
+  metering::PhaseScopeResult result =
+      metering::phase_scope(l.data(), r.data(), l.size(), max_points);
   std::vector<float> mid(result.points.size());
   std::vector<float> side(result.points.size());
   std::vector<float> radius(result.points.size());
@@ -269,6 +321,50 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
   return out;
 }
 
+// True single-frame magnitude / power / dB spectrum: one Hann-windowed nFft FFT
+// of the window [frameOffset, frameOffset + nFft), zero-padded past the end. NOT
+// time-averaged like js_metering_spectrum. Backs the C ABI
+// sonare_metering_spectrum_frame.
+val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset, val options) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  metering::SpectrumConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    if (options.hasOwnProperty("nFft")) {
+      const int n = options["nFft"].as<int>();
+      if (n > 0) cfg.n_fft = n;
+    }
+    if (options.hasOwnProperty("applyOctaveSmoothing")) {
+      cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
+    }
+    if (options.hasOwnProperty("octaveFraction")) {
+      const int f = options["octaveFraction"].as<int>();
+      if (f > 0) cfg.octave_fraction = f;
+    }
+    if (options.hasOwnProperty("dbRef")) {
+      const float ref = options["dbRef"].as<float>();
+      if (ref > 0.0f) cfg.db_ref = ref;
+    }
+    if (options.hasOwnProperty("dbAmin")) {
+      const float amin = options["dbAmin"].as<float>();
+      if (amin > 0.0f) cfg.db_amin = amin;
+    }
+  }
+  if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "meteringSpectrumFrame: nFft must be a power of two");
+  }
+  metering::SpectrumResult result = metering::spectrum_frame(audio, frame_offset, cfg);
+  val out = val::object();
+  out.set("frequencies", vectorToFloat32Array(result.frequencies));
+  out.set("magnitude", vectorToFloat32Array(result.magnitude));
+  out.set("power", vectorToFloat32Array(result.power));
+  out.set("db", vectorToFloat32Array(result.db));
+  out.set("nFft", result.n_fft);
+  out.set("sampleRate", result.sample_rate);
+  return out;
+}
+
 void registerMeteringBindings() {
   // Analysis - LUFS metering
   function("lufs", &js_lufs);
@@ -290,8 +386,11 @@ void registerMeteringBindings() {
   function("meteringStereoCorrelation", &js_metering_stereo_correlation);
   function("meteringStereoWidth", &js_metering_stereo_width);
   function("meteringVectorscope", &js_metering_vectorscope);
+  function("meteringVectorscopeDecimated", &js_metering_vectorscope_decimated);
   function("meteringPhaseScope", &js_metering_phase_scope);
+  function("meteringPhaseScopeDecimated", &js_metering_phase_scope_decimated);
   function("meteringSpectrum", &js_metering_spectrum);
+  function("meteringSpectrumFrame", &js_metering_spectrum_frame);
 }
 
 #endif  // __EMSCRIPTEN__

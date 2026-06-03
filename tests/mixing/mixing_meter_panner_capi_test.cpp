@@ -312,6 +312,30 @@ TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mix
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Mixing C API set_pan keep-mode sentinel preserves current pan mode", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "panned");
+  REQUIRE(strip != nullptr);
+
+  // Establish a non-default (StereoPan) mode.
+  REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_STEREO_PAN) == SONARE_OK);
+
+  // Nudging the pan with SONARE_PAN_MODE_KEEP (< 0) must NOT reset the mode back
+  // to Balance — only the pan position moves.
+  REQUIRE(sonare_strip_set_pan(strip, -0.5f, SONARE_PAN_MODE_KEEP) == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  // Mode stays StereoPan (panMode:1), not reset to Balance (panMode:0).
+  REQUIRE(scene_json.find("\"panMode\":1") != std::string::npos);
+  sonare_free_string(json);
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API reports invalid scene JSON through last error", "[mixing][capi]") {
   SonareMixer* mixer = sonare_mixer_from_scene_json("{\"strips\":[", 48000, 8);
   REQUIRE(mixer == nullptr);

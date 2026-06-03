@@ -883,6 +883,12 @@ export interface SonareModule {
     right: Float32Array,
     sampleRate: number,
   ) => { mid: Float32Array; side: Float32Array };
+  meteringVectorscopeDecimated: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    maxPoints: number,
+  ) => { mid: Float32Array; side: Float32Array };
   meteringPhaseScope: (
     left: Float32Array,
     right: Float32Array,
@@ -896,9 +902,42 @@ export interface SonareModule {
     averageAbsAngleRad: number;
     maxRadius: number;
   };
+  meteringPhaseScopeDecimated: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    maxPoints: number,
+  ) => {
+    mid: Float32Array;
+    side: Float32Array;
+    radius: Float32Array;
+    angleRad: Float32Array;
+    correlation: number;
+    averageAbsAngleRad: number;
+    maxRadius: number;
+  };
   meteringSpectrum: (
     samples: Float32Array,
     sampleRate: number,
+    options: {
+      nFft?: number;
+      applyOctaveSmoothing?: boolean;
+      octaveFraction?: number;
+      dbRef?: number;
+      dbAmin?: number;
+    },
+  ) => {
+    frequencies: Float32Array;
+    magnitude: Float32Array;
+    power: Float32Array;
+    db: Float32Array;
+    nFft: number;
+    sampleRate: number;
+  };
+  meteringSpectrumFrame: (
+    samples: Float32Array,
+    sampleRate: number,
+    frameOffset: number,
     options: {
       nFft?: number;
       applyOctaveSmoothing?: boolean;
@@ -949,6 +988,15 @@ export interface SonareModule {
     nComponents: number,
     nIter: number,
     beta: number,
+  ) => WasmDecomposeResult;
+  decomposeWithInit: (
+    s: Float32Array,
+    nFeatures: number,
+    nFrames: number,
+    nComponents: number,
+    nIter: number,
+    beta: number,
+    init: string,
   ) => WasmDecomposeResult;
   nnFilter: (
     s: Float32Array,

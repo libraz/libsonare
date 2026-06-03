@@ -240,6 +240,7 @@ export {
   pitchTuning,
   estimateTuning,
   decompose,
+  decomposeWithInit,
   nnFilter,
   remix,
   phaseVocoder,
@@ -319,12 +320,15 @@ export {
   meteringDynamicRange,
   meteringPeakDb,
   meteringPhaseScope,
+  meteringPhaseScopeDecimated,
   meteringRmsDb,
   meteringSpectrum,
+  meteringSpectrumFrame,
   meteringStereoCorrelation,
   meteringStereoWidth,
   meteringTruePeakDb,
   meteringVectorscope,
+  meteringVectorscopeDecimated,
 } from './metering';
 export type {
   ClippingRegion,

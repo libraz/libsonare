@@ -349,8 +349,10 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
+  // Omitting panMode passes SONARE_PAN_MODE_KEEP (-1) so a plain pan nudge does
+  // not reset a scene strip's current pan mode.
   const int pan_mode =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 0;
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : -1;
   SonareError err = sonare_strip_set_pan(strip, info[1].As<Napi::Number>().FloatValue(), pan_mode);
   if (err != SONARE_OK) {
     Napi::Error::New(env, std::string("failed to set strip pan: ") + ErrorMessageForCode(err))

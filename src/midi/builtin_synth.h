@@ -4,7 +4,7 @@
 /// @brief Minimal polyphonic oscillator synth — a deliberately plain electronic
 ///        sound source so MIDI arrangements bounce to audible output instead of
 ///        silence. A richer literature-backed instrument bank (FM, Karplus-Strong,
-///        modal) is planned separately; see backup/builtin-instrument-plan.md.
+///        modal) is planned separately.
 ///
 /// RT contract (inherited from MidiInstrument):
 ///   - prepare() runs on the control thread and is the ONLY place that allocates

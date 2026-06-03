@@ -389,11 +389,22 @@ struct ProjectWasm {
     return opts;
   }
 
+  // Maps a waveform name to its SonareSynthWaveform ordinal, or -1 if unknown.
+  // Mirrors the Node/Python accepted set: "sine", "saw"/"sawtooth", "square",
+  // "triangle".
+  static int waveformFromName(const std::string& name) {
+    if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
+    if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
+    if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
+    if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
+    return -1;
+  }
+
   // Reads a single { destinationId?, waveform?, gain?, attack?, decay?,
   // sustain?, release?, polyphony? } object into a built-in synth binding. Every
   // numeric synth field is "0 => default" per the C ABI, so unset fields stay 0.
-  // `waveform` accepts the ordinal or a string ("sine"/"saw"/"square"/
-  // "triangle").
+  // `waveform` accepts the ordinal or a string ("sine"/"saw"/"sawtooth"/
+  // "square"/"triangle"); an unknown name throws, matching Node/Python.
   static SonareBuiltinInstrumentBinding builtinBindingFromVal(val desc) {
     SonareBuiltinInstrumentBinding binding{};
     if (desc.isUndefined() || desc.isNull()) {
@@ -406,10 +417,14 @@ struct ProjectWasm {
       val wf = desc["waveform"];
       if (wf.typeOf().as<std::string>() == "string") {
         const std::string s = wf.as<std::string>();
-        binding.config.waveform = s == "saw"        ? SONARE_SYNTH_WAVEFORM_SAW
-                                  : s == "square"   ? SONARE_SYNTH_WAVEFORM_SQUARE
-                                  : s == "triangle" ? SONARE_SYNTH_WAVEFORM_TRIANGLE
-                                                    : SONARE_SYNTH_WAVEFORM_SINE;
+        const int mapped = waveformFromName(s);
+        if (mapped < 0) {
+          throw sonare::SonareException(
+              sonare::ErrorCode::InvalidParameter,
+              "Unknown synth waveform name: '" + s +
+                  "' (expected sine, saw, sawtooth, square, or triangle)");
+        }
+        binding.config.waveform = mapped;
       } else {
         binding.config.waveform = wf.as<int>();
       }
@@ -436,21 +451,18 @@ struct ProjectWasm {
   }
 
   // Normalizes the bounceWithBuiltinInstrument `instrument(s)` argument into a
-  // vector of bindings. Accepts an array of binding objects, a single binding
-  // object (treated as one element), or null/undefined (one default-destination
-  // sine patch so a freshly built MIDI project still makes sound).
+  // vector of bindings. Accepts an array of binding objects (an explicitly empty
+  // array yields ZERO bindings -> silent bounce, matching Node/Python and the
+  // documented contract), a single binding object (treated as one element), or
+  // null/undefined (also zero bindings -> silent). The TS wrapper's default
+  // argument of `{}` supplies the single default-sine patch for the no-arg call.
   static std::vector<SonareBuiltinInstrumentBinding> builtinBindingsFromVal(val bindings) {
     std::vector<SonareBuiltinInstrumentBinding> out;
     if (bindings.isUndefined() || bindings.isNull()) {
-      out.push_back(SonareBuiltinInstrumentBinding{});
       return out;
     }
     if (val::global("Array").call<bool>("isArray", bindings)) {
       const size_t count = bindings["length"].as<size_t>();
-      if (count == 0) {
-        out.push_back(SonareBuiltinInstrumentBinding{});
-        return out;
-      }
       out.reserve(count);
       for (size_t i = 0; i < count; ++i) {
         out.push_back(builtinBindingFromVal(bindings[i]));
@@ -485,8 +497,9 @@ struct ProjectWasm {
   // Compiles + renders the project, routing MIDI tracks through the built-in
   // oscillator synth so a MIDI-only arrangement bounces to audible audio.
   // @p bindings is an array of { destinationId?, ...synthConfig } objects (a
-  // single object is accepted too); a missing / empty array routes every MIDI
-  // track through one default-destination (0) sine patch. Every synth-config
+  // single object is accepted too); an explicitly empty array (or null /
+  // undefined) produces zero bindings, so MIDI tracks render silently. Every
+  // synth-config
   // field is optional and "0 => sensible default" per the C ABI. When
   // options.totalFrames is omitted the render length is auto-derived from the
   // arrangement plus the synth release tail.

@@ -211,6 +211,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
+  out.Set("nMels", Napi::Number::New(env, analyzer_->config().n_mels));
   out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
   out.Set("mel", Float32FromVec(env, buffer.mel));
   out.Set("chroma", Float32FromVec(env, buffer.chroma));

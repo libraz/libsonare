@@ -262,9 +262,20 @@ export class Mixer {
     this.mixer.setFaderDb(stripIndex, db);
   }
 
-  /** Set the strip's pan position. */
-  setPan(stripIndex: number, pan: number, panMode: PanMode | number = 0): void {
-    this.mixer.setPan(stripIndex, pan, panModeCode(panMode));
+  /**
+   * Set the strip's pan position.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param pan - Pan position in `[-1, 1]`
+   * @param panMode - Optional pan mode. When omitted the strip's current pan
+   *   mode is kept (passes `SONARE_PAN_MODE_KEEP`), so a plain pan nudge does
+   *   not reset a scene-defined `'stereoPan'` / `'dualPan'` mode back to
+   *   balance. Pass `'balance'` (or `0`) explicitly to force balance mode.
+   */
+  setPan(stripIndex: number, pan: number, panMode?: PanMode | number): void {
+    // SONARE_PAN_MODE_KEEP (-1) = keep the strip's current pan mode.
+    const mode = panMode === undefined ? -1 : panModeCode(panMode);
+    this.mixer.setPan(stripIndex, pan, mode);
   }
 
   /** Set the strip's stereo width. */
@@ -357,16 +368,22 @@ export class Mixer {
   }
 
   /**
-   * Read a strip's current (post-fader) meter snapshot.
+   * Read a strip's meter snapshot.
    *
-   * This is the tap-less variant, matching the Node/Python `stripMeter`
-   * contract (it reads the strip's own meter rather than selecting a tap
-   * point). Use {@link meterTap} to choose `'preFader'` / `'postFader'`.
+   * With no `tap` argument this reads the strip's own (post-fader) meter,
+   * matching the Node/Python tap-less `stripMeter` contract. Pass an optional
+   * `tap` (`'preFader'` / `'postFader'`) to read the tap-selectable snapshot
+   * instead — the same backing call as {@link meterTap}.
    *
    * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param tap - Optional tap point (`'preFader'` / `'postFader'`); when omitted
+   *   the tap-less post-fader strip meter is read.
    */
-  stripMeter(stripIndex: number): MixMeterSnapshot {
-    return this.mixer.stripMeter(stripIndex);
+  stripMeter(stripIndex: number, tap?: MeterTap | number): MixMeterSnapshot {
+    if (tap === undefined) {
+      return this.mixer.stripMeter(stripIndex);
+    }
+    return this.mixer.meterTap(stripIndex, meterTapCode(tap));
   }
 
   /**

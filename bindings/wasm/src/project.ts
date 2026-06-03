@@ -26,7 +26,16 @@ export interface ProjectBounceOptions {
 }
 
 /** Oscillator waveform for the built-in synth. */
-export type BuiltinSynthWaveform = 'sine' | 'saw' | 'square' | 'triangle' | 0 | 1 | 2 | 3;
+export type BuiltinSynthWaveform =
+  | 'sine'
+  | 'saw'
+  | 'sawtooth'
+  | 'square'
+  | 'triangle'
+  | 0
+  | 1
+  | 2
+  | 3;
 
 /**
  * Built-in synth patch + MIDI routing for
@@ -607,8 +616,12 @@ export class Project {
     return this.native.exportClipFile();
   }
 
-  /** Set a MIDI clip's channel-0 program / bank at source PPQ 0. */
-  setProgram(clipId: number, program: number, bank = 0): void {
+  /**
+   * Set a MIDI clip's channel-0 program / bank at source PPQ 0. `bank` defaults
+   * to `-1` (no Bank Select emitted), matching `setProgramOnChannel` and the
+   * Node/Python surfaces; pass `>= 0` to emit a Bank Select.
+   */
+  setProgram(clipId: number, program: number, bank = -1): void {
     this.native.setProgram(clipId, program, bank);
   }
 
@@ -666,7 +679,8 @@ export class Project {
    * built-in oscillator synth so a MIDI-only arrangement bounces to audible
    * audio. Pass a {@link BuiltinSynthBinding} (or an array of them) to choose
    * the patch and MIDI destination; omit it (or pass `{}`) for one
-   * default-destination sine patch.
+   * default-destination sine patch. An explicitly empty array `[]` (or
+   * `undefined` / `null`) produces zero bindings, so MIDI tracks render silently.
    *
    * Like {@link bounce}, omitting `totalFrames` auto-derives the render length
    * from the arrangement plus the synth's release tail.

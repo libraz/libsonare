@@ -159,7 +159,9 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   clip.start_ppq = desc->start_ppq;
   clip.length_ppq = desc->length_ppq;
   clip.source_offset_ppq = desc->source_offset_ppq;
-  clip.gain = desc->gain > 0.0f ? desc->gain : 1.0f;
+  // Pass the gain through literally (validated finite and >= 0 above): a gain of
+  // 0 is a legitimately silent clip, not a request for unity. No coercion here.
+  clip.gain = desc->gain;
   auto command = std::make_unique<arr::AddClip>(clip);
   arr::AddClip* raw = command.get();
   if (!project->history.apply(std::move(command)) || raw->allocated_id() == 0) {
