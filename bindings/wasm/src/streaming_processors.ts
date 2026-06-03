@@ -3,8 +3,8 @@ import type {
   EqBand,
   EqMatchOptions,
   EqSpectrumSnapshot,
-  MasteringChainConfig,
   StreamingEqualizerConfig,
+  StreamingMasteringChainConfig,
   StreamingRetuneConfig,
 } from './public_types';
 
@@ -17,7 +17,9 @@ import type {
  *
  * Maintains processor state across {@link processMono}/{@link processStereo}
  * calls. Only ProcessorBase-backed stages are supported. Configurations that
- * enable `repair.denoise` or `loudness` throw at construction.
+ * enable `repair.denoise` throw at construction. An enabled `loudness` stage
+ * also throws unless {@link StreamingMasteringChainConfig.loudnessStaticGainDb}
+ * supplies a precomputed normalization gain.
  *
  * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
@@ -36,7 +38,7 @@ import type {
 export class StreamingMasteringChain {
   private chain: import('./sonare.js').WasmStreamingMasteringChain;
 
-  constructor(config: MasteringChainConfig) {
+  constructor(config: StreamingMasteringChainConfig) {
     const module = getSonareModule();
     this.chain = module.createStreamingMasteringChain(config as Record<string, unknown>);
   }

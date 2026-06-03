@@ -382,10 +382,11 @@ int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --processor is required" << color::reset << "\n";
     return 1;
   }
-  const Audio reference = load_reference_audio(args, audio.sample_rate(), audio.size());
+  const Audio reference = load_reference_audio_any_length(args, audio.sample_rate());
   const auto params = parse_mastering_params(args.get_string("params"));
   const auto result = mastering::api::apply_named_pair_processor(
-      processor, audio.data(), reference.data(), audio.size(), audio.sample_rate(), params);
+      processor, audio.data(), reference.data(), audio.size(), reference.size(),
+      audio.sample_rate(), params);
   if (!args.output_file.empty()) {
     save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
              args.get_int("bits", 16));
@@ -423,10 +424,11 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --analysis is required" << color::reset << "\n";
     return 1;
   }
-  const Audio reference = load_reference_audio(args, audio.sample_rate(), audio.size());
+  const Audio reference = load_reference_audio_any_length(args, audio.sample_rate());
   const auto params = parse_mastering_params(args.get_string("params"));
   std::cout << mastering::api::analyze_named_pair(analysis, audio.data(), reference.data(),
-                                                  audio.size(), audio.sample_rate(), params)
+                                                  audio.size(), reference.size(),
+                                                  audio.sample_rate(), params)
             << "\n";
   return 0;
 }

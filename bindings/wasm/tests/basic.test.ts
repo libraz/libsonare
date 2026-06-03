@@ -912,6 +912,41 @@ describe('Sonare WASM Module', () => {
       }
     });
 
+    it('should construct a loudness-enabled StreamingMasteringChain with a static gain', () => {
+      // A loudness-enabled config normally throws at construction (whole-signal
+      // LUFS is unavailable while streaming). Supplying a precomputed
+      // loudnessStaticGainDb must let it construct, prepare, and process.
+      const chain = new StreamingMasteringChain({
+        eq: { tiltDb: 1.0 },
+        loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
+        loudnessStaticGainDb: 3.0,
+        loudnessStaticGainPeakDb: -6.0,
+      });
+      try {
+        chain.prepare(44100, 512, 1);
+        const block = new Float32Array(512);
+        for (let i = 0; i < block.length; i += 1) {
+          block[i] = 0.1;
+        }
+        const out = chain.processMono(block);
+        expect(out).toBeInstanceOf(Float32Array);
+        expect(out.length).toBe(block.length);
+        // The loudness stage is wired in once a static gain is provided.
+        expect(chain.stageNames()).toContain('loudness.optimize');
+      } finally {
+        chain.delete();
+      }
+    });
+
+    it('should still throw for a loudness-enabled chain without a static gain', () => {
+      expect(
+        () =>
+          new StreamingMasteringChain({
+            loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
+          }),
+      ).toThrow();
+    });
+
     it('should stream stereo blocks through StreamingEqualizer', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {

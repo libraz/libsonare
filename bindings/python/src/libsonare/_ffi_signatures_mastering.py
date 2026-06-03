@@ -63,6 +63,19 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(SonareMasteringResult),
         ]
+        if hasattr(lib, "sonare_mastering_apply_pair_processor_ex"):
+            lib.sonare_mastering_apply_pair_processor_ex.restype = ctypes.c_int32
+            lib.sonare_mastering_apply_pair_processor_ex.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareMasteringResult),
+            ]
         lib.sonare_mastering_analyze_pair.restype = ctypes.c_int32
         lib.sonare_mastering_analyze_pair.argtypes = [
             ctypes.c_char_p,
@@ -74,6 +87,19 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_void_p),
         ]
+        if hasattr(lib, "sonare_mastering_analyze_pair_ex"):
+            lib.sonare_mastering_analyze_pair_ex.restype = ctypes.c_int32
+            lib.sonare_mastering_analyze_pair_ex.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
         lib.sonare_mastering_analyze_stereo.restype = ctypes.c_int32
         lib.sonare_mastering_analyze_stereo.argtypes = [
             ctypes.c_char_p,
@@ -155,6 +181,14 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(SonareMasteringParam),
                 ctypes.c_size_t,
             ]
+            if hasattr(lib, "sonare_streaming_mastering_chain_create_ex"):
+                lib.sonare_streaming_mastering_chain_create_ex.restype = ctypes.c_void_p
+                lib.sonare_streaming_mastering_chain_create_ex.argtypes = [
+                    ctypes.POINTER(SonareMasteringParam),
+                    ctypes.c_size_t,
+                    ctypes.c_float,
+                    ctypes.c_float,
+                ]
             lib.sonare_streaming_mastering_chain_prepare.restype = ctypes.c_int32
             lib.sonare_streaming_mastering_chain_prepare.argtypes = [
                 ctypes.c_void_p,

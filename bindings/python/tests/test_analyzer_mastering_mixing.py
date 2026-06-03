@@ -78,6 +78,26 @@ def test_named_mastering_processors() -> None:
     assert len(stereo.right) == len(samples)
 
 
+def test_mastering_pair_accepts_differing_reference_length() -> None:
+    """Pair process/analyze accept a reference that differs in length from source."""
+    import libsonare
+
+    sr = 44100
+    source = [0.18 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 4)]
+    reference = [0.12 * math.sin(2 * math.pi * 880 * i / sr) for i in range(sr // 8)]  # shorter
+    assert len(reference) != len(source)
+
+    paired = libsonare.mastering_pair_process(
+        "match.abCrossfade", source, reference, sample_rate=sr, params={"mix": 0.5}
+    )
+    assert len(paired.samples) > 0
+
+    pair_json = libsonare.mastering_pair_analyze(
+        "match.referenceLoudness", source, reference, sample_rate=sr
+    )
+    assert '"referenceLufs"' in pair_json
+
+
 def test_mastering_pair_and_stereo_analysis() -> None:
     """Pair and stereo mastering APIs return shared processor output/JSON."""
     import libsonare

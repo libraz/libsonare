@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 
@@ -75,6 +77,27 @@ def test_streaming_mastering_chain_rejects_denoise() -> None:
 
     with pytest.raises(RuntimeError):
         StreamingMasteringChain({"repair.denoise.enabled": 1})
+
+
+def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
+    """A loudness-enabled config no longer raises when a static gain is supplied."""
+    from libsonare import StreamingMasteringChain
+
+    # Without a static gain a loudness target raises (cannot measure online)...
+    with pytest.raises(RuntimeError):
+        StreamingMasteringChain({"loudness.targetLufs": -14.0})
+
+    # ...but supplying a precomputed static gain makes it processable.
+    chain = StreamingMasteringChain(
+        {"loudness.targetLufs": -14.0},
+        loudness_static_gain_db=3.0,
+        loudness_static_gain_peak_db=-1.0,
+    )
+    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+    out = chain.process_mono([0.1] * 512)
+    assert len(out) == 512
+    assert all(math.isfinite(x) for x in out)
+    chain.reset()
 
 
 def test_stft_result_types() -> None:

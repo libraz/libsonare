@@ -123,6 +123,18 @@ float lufs_for(const std::vector<float>& samples, int sample_rate) {
   return common::measure_lufs(samples.data(), samples.size(), sample_rate);
 }
 
+// Validate and convert an integer param to a scoped enum, throwing
+// InvalidParameter when out of range. This mirrors the dedicated C-ABI repair
+// path (sonare_c_mastering_repair.cpp), which rejects unknown enum values rather
+// than silently no-op'ing on the underlying DSP's switch fall-through.
+template <typename Enum>
+Enum checked_enum(int value, int count, const char* what) {
+  if (value < 0 || value >= count) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string("invalid ") + what);
+  }
+  return static_cast<Enum>(value);
+}
+
 // Per-channel decorrelation offset XORed into the dither RNG seed. Without this,
 // both stereo channels seed std::mt19937 identically and produce bit-identical
 // (fully correlated) dither + noise-shaper feedback, which collapses the dither
@@ -304,7 +316,7 @@ void configure_processor(const std::string& name, const ParamMap& params,
   } else if (name == "repair.decrackle") {
     repair::DecrackleConfig config;
     config.threshold = f(params, "threshold", config.threshold);
-    config.mode = static_cast<repair::DecrackleMode>(i(params, "mode", 0));
+    config.mode = checked_enum<repair::DecrackleMode>(i(params, "mode", 0), 2, "decrackle mode");
     config.levels = i(params, "levels", config.levels);
     auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
     auto out = repair::decrackle(audio, config);
@@ -324,9 +336,9 @@ void configure_processor(const std::string& name, const ParamMap& params,
     samples.assign(out.data(), out.data() + out.size());
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
     repair::DenoiseClassicalConfig config;
-    config.mode = static_cast<repair::DenoiseMode>(i(params, "mode", 0));
-    config.noise_estimator =
-        static_cast<repair::DenoiseNoiseEstimator>(i(params, "noiseEstimator", 0));
+    config.mode = checked_enum<repair::DenoiseMode>(i(params, "mode", 0), 3, "denoise mode");
+    config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
+        i(params, "noiseEstimator", 0), 3, "denoise noise estimator");
     config.n_fft = i(params, "nFft", config.n_fft);
     config.hop_length = i(params, "hopLength", config.hop_length);
     config.dd_alpha = f(params, "ddAlpha", config.dd_alpha);
@@ -362,7 +374,8 @@ void configure_processor(const std::string& name, const ParamMap& params,
     config.threshold = f(params, "threshold", config.threshold);
     config.padding_samples =
         static_cast<size_t>(i(params, "paddingSamples", config.padding_samples));
-    config.mode = static_cast<repair::TrimSilenceMode>(i(params, "mode", 0));
+    config.mode =
+        checked_enum<repair::TrimSilenceMode>(i(params, "mode", 0), 2, "trim silence mode");
     config.gate_lufs = f(params, "gateLufs", config.gate_lufs);
     config.window_ms = f(params, "windowMs", config.window_ms);
     auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
@@ -623,11 +636,12 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
 }
 
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
-                                      const float* reference, std::size_t length, int sample_rate,
+                                      const float* reference, std::size_t source_length,
+                                      std::size_t reference_length, int sample_rate,
                                       const std::vector<Param>& params) {
   auto map = make_map(params);
-  auto source_audio = Audio::from_buffer(source, length, sample_rate);
-  auto reference_audio = Audio::from_buffer(reference, length, sample_rate);
+  auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
+  auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
   Audio out;
   if (name == "match.applyMatchEq") {
     ::sonare::mastering::match::MatchEqConfig match_config;
@@ -663,17 +677,23 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
   MonoResult result;
   result.samples.assign(out.data(), out.data() + out.size());
   result.sample_rate = out.sample_rate();
-  result.input_lufs = lufs_for(std::vector<float>(source, source + length), sample_rate);
+  result.input_lufs = lufs_for(std::vector<float>(source, source + source_length), sample_rate);
   result.output_lufs = lufs_for(result.samples, result.sample_rate);
   return result;
 }
 
+MonoResult apply_named_pair_processor(const std::string& name, const float* source,
+                                      const float* reference, std::size_t length, int sample_rate,
+                                      const std::vector<Param>& params) {
+  return apply_named_pair_processor(name, source, reference, length, length, sample_rate, params);
+}
+
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
-                               std::size_t length, int sample_rate,
-                               const std::vector<Param>& params) {
+                               std::size_t source_length, std::size_t reference_length,
+                               int sample_rate, const std::vector<Param>& params) {
   auto map = make_map(params);
-  auto source_audio = Audio::from_buffer(source, length, sample_rate);
-  auto reference_audio = Audio::from_buffer(reference, length, sample_rate);
+  auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
+  auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
   std::ostringstream json;
   json << "{";
   if (name == "match.referenceLoudness") {
@@ -730,6 +750,12 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   }
   json << "}";
   return json.str();
+}
+
+std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
+                               std::size_t length, int sample_rate,
+                               const std::vector<Param>& params) {
+  return analyze_named_pair(name, source, reference, length, length, sample_rate, params);
 }
 
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,

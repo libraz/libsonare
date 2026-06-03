@@ -33,6 +33,13 @@ void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
     std::string key = key_value.As<Napi::String>().Utf8Value();
     std::string full_key = prefix.empty() ? key : prefix + "." + key;
 
+    // Top-level streaming-only options are read separately by the constructor
+    // and are not chain config keys; skip them so parse_chain_config_params
+    // does not reject them as unknown.
+    if (prefix.empty() && (key == "loudnessStaticGainDb" || key == "loudnessStaticGainPeakDb")) {
+      continue;
+    }
+
     Napi::Value value = object.Get(key_value);
     if (value.IsObject() && !value.IsArray() && !value.IsBuffer() && !value.IsTypedArray() &&
         !value.IsFunction()) {
@@ -192,13 +199,24 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
   Napi::Env env = info.Env();
 
   std::vector<sonare::mastering::api::Param> params;
+  sonare::mastering::api::StreamingMasteringChainOptions options;
   if (info.Length() >= 1 && info[0].IsObject()) {
     params = ParseChainConfigFromJs(info[0]);
+    Napi::Object config_object = info[0].As<Napi::Object>();
+    if (HasKey(config_object, "loudnessStaticGainDb")) {
+      options.loudness_static_gain_db = static_cast<float>(
+          NumberKey(config_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
+    }
+    if (HasKey(config_object, "loudnessStaticGainPeakDb")) {
+      options.loudness_static_gain_peak_db = static_cast<float>(NumberKey(
+          config_object, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db));
+    }
   }
 
   try {
     auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
-    chain_ = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+    chain_ = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
+                                                                               options);
   } catch (const std::exception& e) {
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
     return;

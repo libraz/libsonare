@@ -180,10 +180,31 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
                                                   int sample_rate,
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, SonareMasteringResult* out);
+
+/// @brief Apply a two-input "match.*" processor with independent source and
+/// reference lengths. Reference masters are commonly a different length than the
+/// source; the underlying match primitives consume each buffer at its own
+/// length. @ref sonare_mastering_apply_pair_processor delegates here with
+/// reference_length == length.
+SonareError sonare_mastering_apply_pair_processor_ex(
+    const char* processor_name, const float* source, size_t source_length, const float* reference,
+    size_t reference_length, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, SonareMasteringResult* out);
+
 SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
                                           const float* reference, size_t length, int sample_rate,
                                           const SonareMasteringParam* params, size_t param_count,
                                           char** json_out);
+
+/// @brief Analyze a two-input "match.*" analysis with independent source and
+/// reference lengths. See @ref sonare_mastering_apply_pair_processor_ex.
+/// @ref sonare_mastering_analyze_pair delegates here with
+/// reference_length == length.
+SonareError sonare_mastering_analyze_pair_ex(const char* analysis_name, const float* source,
+                                             size_t source_length, const float* reference,
+                                             size_t reference_length, int sample_rate,
+                                             const SonareMasteringParam* params, size_t param_count,
+                                             char** json_out);
 SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,
@@ -263,9 +284,28 @@ void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult*
 typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
 
 /// @brief Create a streaming chain from flat params. Returns NULL on error
-/// (e.g. unknown key, non-streaming stage enabled).
+/// (e.g. unknown key, non-streaming stage enabled). When the params enable the
+/// loudness stage this throws (the streaming chain cannot measure whole-signal
+/// integrated LUFS); use @ref sonare_streaming_mastering_chain_create_ex to run
+/// a loudness-enabled chain with a caller-precomputed static gain.
 SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
     const SonareMasteringParam* params, size_t param_count);
+
+/// @brief Create a streaming chain with a precomputed loudness static gain.
+/// @details Identical to @ref sonare_streaming_mastering_chain_create except
+/// that when the params enable the loudness stage, @p loudness_static_gain_db
+/// (e.g. `target_lufs - measured_integrated_lufs`, measured offline) is applied
+/// per block before the loudness stage's true-peak limiter instead of throwing.
+/// Pass NaN to reproduce the throw-on-loudness behaviour of the non-_ex create.
+/// @param loudness_static_gain_peak_db Offline-measured true-peak (dBFS) of the
+///        source the static gain was computed for. When finite, the static gain
+///        is clamped to `ceiling_db - peak_db` so the streaming preview does not
+///        overdrive the loudness limiter harder than the offline chain (which
+///        applies the same ceiling clamp). Pass NaN to apply the static gain
+///        verbatim (no clamp). Returns NULL on error.
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
+    const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
+    float loudness_static_gain_peak_db);
 
 /// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
 SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,

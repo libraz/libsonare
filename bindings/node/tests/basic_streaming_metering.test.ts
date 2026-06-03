@@ -192,6 +192,19 @@ describe('StreamingMasteringChain', () => {
     expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).toThrow();
     expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
   });
+
+  it('accepts a loudness stage when a static gain is supplied', () => {
+    const chain = new StreamingMasteringChain({
+      'loudness.targetLufs': -14,
+      loudnessStaticGainDb: 3.0,
+      loudnessStaticGainPeakDb: -1.0,
+    });
+    chain.prepare(48000, 512, 1);
+    const out = chain.processMono(new Float32Array(512).fill(0.1));
+    expect(out.length).toBe(512);
+    expect(Number.isFinite(out[0])).toBe(true);
+    chain.reset();
+  });
 });
 
 describe('StreamingEqualizer', () => {

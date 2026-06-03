@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import json
+import math
 from collections.abc import Callable, Sequence
 from typing import Any, cast
 
@@ -577,14 +578,53 @@ class StreamingMasteringChain:
             ...
     """
 
-    def __init__(self, config: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        loudness_static_gain_db: float | None = None,
+        loudness_static_gain_peak_db: float | None = None,
+    ) -> None:
+        """Create a streaming mastering chain.
+
+        Args:
+            config: Flat chain params (see :func:`mastering_chain`).
+            loudness_static_gain_db: Precomputed loudness normalization gain in
+                dB (e.g. ``target_lufs - measured_integrated_lufs``, measured
+                offline). The streaming chain cannot measure whole-signal
+                integrated LUFS, so a ``loudness``-enabled config raises unless a
+                static gain is supplied here; when supplied it is applied per
+                block before the loudness stage's true-peak limiter.
+            loudness_static_gain_peak_db: Offline-measured true-peak (dBFS) of the
+                source the static gain was computed for. When given, the static
+                gain is clamped to ``ceilingDb - peak`` so the streaming preview
+                does not overdrive the loudness limiter harder than the offline
+                render. Ignored unless ``loudness_static_gain_db`` is given.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
             raise RuntimeError("libsonare was built without streaming mastering chain support")
         param_array, param_count = _chain_params(config)
-        handle = lib.sonare_streaming_mastering_chain_create(
-            param_array, ctypes.c_size_t(param_count)
-        )
+        if loudness_static_gain_db is not None:
+            if not hasattr(lib, "sonare_streaming_mastering_chain_create_ex"):
+                raise RuntimeError(
+                    "libsonare was built without streaming loudness static-gain support"
+                )
+            peak = (
+                math.nan
+                if loudness_static_gain_peak_db is None
+                else float(loudness_static_gain_peak_db)
+            )
+            handle = lib.sonare_streaming_mastering_chain_create_ex(
+                param_array,
+                ctypes.c_size_t(param_count),
+                ctypes.c_float(float(loudness_static_gain_db)),
+                ctypes.c_float(peak),
+            )
+        else:
+            handle = lib.sonare_streaming_mastering_chain_create(
+                param_array, ctypes.c_size_t(param_count)
+            )
         if not handle:
             detail = ""
             if hasattr(lib, "sonare_last_error_message"):
@@ -917,15 +957,17 @@ def mastering_pair_process(
         raise RuntimeError("libsonare was built without mastering support")
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
-    if source_length != reference_length:
-        raise ValueError("source and reference lengths must match")
     param_array, param_count = _mastering_params(params)
     out = SonareMasteringResult()
-    rc = lib.sonare_mastering_apply_pair_processor(
+    # Reference masters are commonly a different length than the source; the _ex
+    # variant takes independent source/reference lengths (the pair primitives
+    # consume each buffer at its own length).
+    rc = lib.sonare_mastering_apply_pair_processor_ex(
         processor_name.encode("utf-8"),
         source_array,
-        reference_array,
         ctypes.c_size_t(source_length),
+        reference_array,
+        ctypes.c_size_t(reference_length),
         ctypes.c_int(sample_rate),
         param_array,
         ctypes.c_size_t(param_count),
@@ -958,15 +1000,15 @@ def mastering_pair_analyze(
         raise RuntimeError("libsonare was built without mastering support")
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
-    if source_length != reference_length:
-        raise ValueError("source and reference lengths must match")
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_void_p()
-    rc = lib.sonare_mastering_analyze_pair(
+    # Independent source/reference lengths (see mastering_pair_process).
+    rc = lib.sonare_mastering_analyze_pair_ex(
         analysis_name.encode("utf-8"),
         source_array,
-        reference_array,
         ctypes.c_size_t(source_length),
+        reference_array,
+        ctypes.c_size_t(reference_length),
         ctypes.c_int(sample_rate),
         param_array,
         ctypes.c_size_t(param_count),

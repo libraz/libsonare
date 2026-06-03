@@ -47,6 +47,18 @@ Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_rate) {
+  const std::string path = args.get_string("reference");
+  if (path.empty()) {
+    throw std::invalid_argument("--reference is required");
+  }
+  auto [samples, sample_rate] = load_audio(path);
+  if (sample_rate != expected_sample_rate) {
+    throw std::invalid_argument("reference sample rate must match input sample rate");
+  }
+  return Audio::from_vector(std::move(samples), sample_rate);
+}
+
 std::vector<std::string> split_string(const std::string& text, char delimiter) {
   std::vector<std::string> values;
   std::stringstream stream(text);

@@ -39,9 +39,22 @@ std::vector<std::string> pair_processor_names();
 std::vector<std::string> pair_analysis_names();
 std::vector<std::string> stereo_analysis_names();
 
+// Apply a two-input "match.*" processor. The source and reference buffers may
+// have different lengths; the underlying match primitives consume each buffer at
+// its own length. The single-length overload delegates with
+// reference_length == length for backward compatibility.
+MonoResult apply_named_pair_processor(const std::string& name, const float* source,
+                                      const float* reference, std::size_t source_length,
+                                      std::size_t reference_length, int sample_rate,
+                                      const std::vector<Param>& params = {});
+
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
                                       const float* reference, std::size_t length, int sample_rate,
                                       const std::vector<Param>& params = {});
+
+std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
+                               std::size_t source_length, std::size_t reference_length,
+                               int sample_rate, const std::vector<Param>& params = {});
 
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t length, int sample_rate,

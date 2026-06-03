@@ -11,10 +11,32 @@
 // configuration enables non-streaming stages (repair.denoise, loudness).
 // ---------------------------------------------------------------------------
 
+namespace {
+
+/// @brief Build StreamingMasteringChainOptions from an optional config val.
+///
+/// Reads the optional numeric fields `loudnessStaticGainDb` and
+/// `loudnessStaticGainPeakDb`. Absent fields keep their NaN ("not provided")
+/// defaults so an enabled loudness stage behaves as before.
+mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val config) {
+  mastering::api::StreamingMasteringChainOptions options;
+  if (hasProperty(config, "loudnessStaticGainDb")) {
+    options.loudness_static_gain_db =
+        floatProperty(config, "loudnessStaticGainDb", options.loudness_static_gain_db);
+  }
+  if (hasProperty(config, "loudnessStaticGainPeakDb")) {
+    options.loudness_static_gain_peak_db =
+        floatProperty(config, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db);
+  }
+  return options;
+}
+
+}  // namespace
+
 class StreamingMasteringChainWrapper {
  public:
   explicit StreamingMasteringChainWrapper(val config)
-      : chain_(masteringChainConfigFromVal(config)) {}
+      : chain_(masteringChainConfigFromVal(config), streamingOptionsFromVal(config)) {}
 
   void prepare(double sample_rate, int max_block_size, int num_channels) {
     chain_.prepare(sample_rate, max_block_size, num_channels);

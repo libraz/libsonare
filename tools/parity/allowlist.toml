@@ -136,6 +136,11 @@ node = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
+  # Independent source/reference-length pair variants: Node has no pair facade at
+  # all (same as the base mastering_apply_pair_processor / mastering_analyze_pair
+  # above), so the _ex forms are likewise unexposed here.
+  "mastering_apply_pair_processor_ex",
+  "mastering_analyze_pair_ex",
   # Node folds these into a base free function via an extra parameter rather than
   # exposing a separately-named function (Python/WASM expose them by name):
   #   decompose_with_init            -> decompose(...) wraps sonare_decompose_with_init
@@ -178,6 +183,10 @@ wasm = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
+  # Independent source/reference-length pair variants: WASM has no pair facade
+  # (same as the base mastering_apply_pair_processor / mastering_analyze_pair).
+  "mastering_apply_pair_processor_ex",
+  "mastering_analyze_pair_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
@@ -212,6 +221,10 @@ python = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
+  # The _ex pair variants ARE what the mastering_pair_process / mastering_pair_analyze
+  # facade functions call (independent source/reference lengths); folded, not named.
+  "mastering_apply_pair_processor_ex",
+  "mastering_analyze_pair_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",

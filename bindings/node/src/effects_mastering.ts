@@ -320,13 +320,43 @@ export function masteringChainStereo(
 }
 
 /**
+ * Configuration accepted by the {@link StreamingMasteringChain} constructor.
+ *
+ * In addition to the nested/flat mastering chain config keys, the following
+ * top-level streaming-only options control the loudness stage in a realtime
+ * preview. They are not part of the offline chain config and are read directly
+ * by the streaming chain.
+ */
+export interface StreamingMasteringChainConfig extends Record<string, unknown> {
+  /**
+   * Precomputed static loudness gain in dB. When `loudness.enabled` is set, the
+   * streaming chain cannot measure whole-signal integrated LUFS, so it applies
+   * this fixed gain per block before the loudness stage's true-peak limiter
+   * (e.g. `target_lufs - measured_integrated_lufs`). When omitted, an enabled
+   * loudness stage throws.
+   */
+  loudnessStaticGainDb?: number;
+
+  /**
+   * Offline-measured true-peak (dBFS) of the source the static gain was computed
+   * for. When provided, the static gain is clamped to
+   * `loudness.ceiling_db - loudnessStaticGainPeakDb` so the streaming preview
+   * does not drive the loudness limiter harder than the offline chain. When
+   * omitted, the static gain is applied verbatim.
+   */
+  loudnessStaticGainPeakDb?: number;
+}
+
+/**
  * Block-by-block streaming variant of {@link masteringChain}.
  *
  * Maintains processor state across {@link processMono}/{@link processStereo}
  * calls. Only ProcessorBase-backed stages (`eq.tilt`, `dynamics.compressor`,
  * `saturation.tape`, `saturation.exciter`, `spectral.airBand`, `stereo.imager`,
  * `stereo.monoMaker`, `maximizer.truePeakLimiter`) are supported. Constructing
- * with `repair.denoise` or `loudness` enabled throws an Error.
+ * with `repair.denoise` enabled throws an Error. A `loudness`-enabled config
+ * also throws unless {@link StreamingMasteringChainConfig.loudnessStaticGainDb}
+ * is supplied.
  *
  * @example
  * ```typescript
@@ -339,7 +369,7 @@ export function masteringChainStereo(
 export class StreamingMasteringChain {
   private native: InstanceType<typeof addon.StreamingMasteringChain>;
 
-  constructor(config: Record<string, unknown> = {}) {
+  constructor(config: StreamingMasteringChainConfig = {}) {
     this.native = new addon.StreamingMasteringChain(config);
   }
 

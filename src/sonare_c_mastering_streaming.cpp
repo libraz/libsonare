@@ -1,4 +1,6 @@
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -83,15 +85,25 @@ struct SonareStreamingMasteringChain {
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
 };
 
-SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
-    const SonareMasteringParam* params, size_t param_count) {
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
+    const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
+    float loudness_static_gain_peak_db) {
   if (!params && param_count > 0) return nullptr;
   try {
     auto cpp_params = to_params(params, param_count);
     auto config =
         sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
-    auto chain =
-        std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+    std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
+    if (std::isnan(loudness_static_gain_db)) {
+      // Reproduce the throw-on-loudness behaviour of the non-_ex create.
+      chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+    } else {
+      sonare::mastering::api::StreamingMasteringChainOptions options;
+      options.loudness_static_gain_db = loudness_static_gain_db;
+      options.loudness_static_gain_peak_db = loudness_static_gain_peak_db;
+      chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
+                                                                                options);
+    }
     auto* handle = new SonareStreamingMasteringChain;
     handle->chain = std::move(chain);
     return handle;
@@ -102,6 +114,13 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
     sonare_c_detail::set_last_error("Unknown C++ exception (non-std::exception type)");
     return nullptr;
   }
+}
+
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
+    const SonareMasteringParam* params, size_t param_count) {
+  return sonare_streaming_mastering_chain_create_ex(params, param_count,
+                                                    std::numeric_limits<float>::quiet_NaN(),
+                                                    std::numeric_limits<float>::quiet_NaN());
 }
 
 SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,

@@ -90,6 +90,7 @@ export type {
   StftPowerResult,
   StftResult,
   StreamingEqualizerConfig,
+  StreamingMasteringChainConfig,
   StreamingPlatform,
   StreamingRetuneConfig,
   TempogramMode,

@@ -338,7 +338,7 @@ Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config
     case DenoiseMode::SpectralSubtraction:
       return denoise_berouti(audio, spec, noise_psd, config);
   }
-  return audio;
+  throw SonareException(ErrorCode::InvalidParameter, "unknown denoise mode");
 }
 
 }  // namespace sonare::mastering::repair

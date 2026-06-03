@@ -425,4 +425,53 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     }
   }
 }
+
+TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
+          "[c_api][mastering]") {
+  // The one-shot named-processor path must validate repair enum params the same
+  // way the dedicated repair C-ABI does, instead of silently passing audio
+  // through on an out-of-range mode.
+  std::vector<float> samples(2048, 0.1f);
+  SonareMasteringResult out{};
+
+  SonareMasteringParam bad_mode[] = {{"mode", 99.0}};
+  REQUIRE(sonare_mastering_apply_processor("repair.denoiseClassical", samples.data(),
+                                           samples.size(), 44100, bad_mode, 1,
+                                           &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mastering_apply_processor("repair.decrackle", samples.data(), samples.size(),
+                                           44100, bad_mode, 1,
+                                           &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mastering_apply_processor("repair.trimSilence", samples.data(), samples.size(),
+                                           44100, bad_mode, 1,
+                                           &out) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // A valid mode still succeeds.
+  SonareMasteringParam good_mode[] = {{"mode", 0.0}};
+  REQUIRE(sonare_mastering_apply_processor("repair.denoiseClassical", samples.data(),
+                                           samples.size(), 44100, good_mode, 1, &out) == SONARE_OK);
+  sonare_free_mastering_result(&out);
+}
+
+TEST_CASE("sonare_mastering pair _ex accepts differing reference length", "[c_api][mastering]") {
+  // Reference masters are commonly a different length than the source; the _ex
+  // pair variants take an independent reference_length.
+  std::vector<float> source(4096, 0.2f);
+  std::vector<float> reference(1024, 0.3f);  // intentionally shorter
+
+  SonareMasteringParam pair_params[] = {{"mix", 0.5}};
+  SonareMasteringResult paired{};
+  REQUIRE(sonare_mastering_apply_pair_processor_ex(
+              "match.abCrossfade", source.data(), source.size(), reference.data(), reference.size(),
+              44100, pair_params, 1, &paired) == SONARE_OK);
+  REQUIRE(paired.samples != nullptr);
+  sonare_free_mastering_result(&paired);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mastering_analyze_pair_ex("match.referenceLoudness", source.data(), source.size(),
+                                           reference.data(), reference.size(), 44100, nullptr, 0,
+                                           &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  REQUIRE(std::strstr(json, "referenceLufs") != nullptr);
+  sonare_free_string(json);
+}
 #endif

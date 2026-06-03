@@ -256,6 +256,14 @@ struct StreamingMasteringChainOptions {
   /// Precomputed static loudness gain in dB. NaN (the default) means "not
   /// provided"; in that case an enabled loudness stage still throws.
   float loudness_static_gain_db = std::numeric_limits<float>::quiet_NaN();
+
+  /// Offline-measured true-peak (dBFS) of the source the static gain was
+  /// computed for. When finite, the static gain is clamped to
+  /// `loudness.ceiling_db - loudness_static_gain_peak_db` so the streaming
+  /// preview does not drive the loudness limiter harder than the offline chain
+  /// (which applies the same ceiling clamp via `loudness_gain_db_with_ceiling`).
+  /// NaN (the default) applies the static gain verbatim.
+  float loudness_static_gain_peak_db = std::numeric_limits<float>::quiet_NaN();
 };
 
 class StreamingMasteringChain {
