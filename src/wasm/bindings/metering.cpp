@@ -128,12 +128,16 @@ val js_metering_dynamic_range(val samples, int sample_rate, float window_sec, fl
   metering::DynamicRangeConfig cfg;
   if (window_sec > 0.0f) cfg.window_sec = window_sec;
   if (hop_sec > 0.0f) cfg.hop_sec = hop_sec;
-  if (low_percentile > 0.0f) cfg.low_percentile = low_percentile;
-  if (high_percentile > 0.0f) cfg.high_percentile = high_percentile;
-  if (cfg.low_percentile >= cfg.high_percentile) {
+  // A NEGATIVE percentile selects the library default (matching the C ABI);
+  // 0.0..1.0 is taken verbatim, so 0 is a real request for the 0th percentile.
+  if (low_percentile >= 0.0f) cfg.low_percentile = low_percentile;
+  if (high_percentile >= 0.0f) cfg.high_percentile = high_percentile;
+  // The core accepts low == high (a valid 0-LU range); reject only an inverted
+  // pair.
+  if (cfg.low_percentile > cfg.high_percentile) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidParameter,
-        "meteringDynamicRange: lowPercentile must be smaller than highPercentile");
+        "meteringDynamicRange: lowPercentile must not exceed highPercentile");
   }
   metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
   val out = val::object();

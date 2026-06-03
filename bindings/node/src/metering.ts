@@ -95,15 +95,15 @@ export function meteringDetectClipping(
 
 /**
  * Sliding-window dynamic range (high_percentile_db - low_percentile_db).
- * Pass 0 for any parameter to use the library default
- * (window=3 s, hop=1 s, low=0.10, high=0.95).
+ * Pass 0 for window/hop to use the library default (window=3 s, hop=1 s). The
+ * percentiles use a NEGATIVE sentinel for "use the library default" (low=0.10,
+ * high=0.95) because 0 is a literal 0th percentile; omitted percentiles default
+ * to -1.
  */
 export function meteringDynamicRange(
   samples: Float32Array,
   sampleRate = 22050,
   windowSec = 0,
-  // The native side treats a NEGATIVE percentile as "use the library default"
-  // (0 is a literal 0th percentile), so omitted percentiles default to -1.
   hopSec = 0,
   lowPercentile = -1,
   highPercentile = -1,
