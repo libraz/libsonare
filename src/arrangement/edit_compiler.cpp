@@ -338,6 +338,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   }
 
   // ---- MIDI clips ----------------------------------------------------------
+  uint32_t first_midi_clip_id = 0;
   // Bake each MIDI clip's PPQ-timed events (from the MidiContentStore) into a
   // midi::MidiClipSchedule with absolute render-frame UMP events. The store's
   // MidiClipEvent maps data0/data1 onto the first two UMP words and carries a
@@ -407,6 +408,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           0, tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - sched.start_sample);
     }
     append_midi_render_events(midi_clip, clip, tempo_map, &sched.events);
+    first_midi_clip_id = timeline.midi_clips.empty() ? sched.id : first_midi_clip_id;
     timeline.midi_clips.push_back(std::move(sched));
 
     // PDC / latency: a host instrument renders this MIDI source, so its
@@ -416,6 +418,17 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     if (config.instrument_latency_samples > 0) {
       timeline.latency.per_source_samples[clip.source_id] = config.instrument_latency_samples;
     }
+  }
+
+  // Best-effort hint: a compiled MIDI clip renders to silence unless the caller
+  // binds an instrument at bounce time (the compiler runs before instruments are
+  // registered, so it cannot know whether one will be — hence a warning, not an
+  // error). Emitted once so a user who bounces with the plain sonare_project_bounce
+  // path is nudged toward bounce_with_builtin_instruments / a bound destination.
+  if (!timeline.midi_clips.empty()) {
+    add_diag(&result, Diagnostic::Code::kMidiClipNoInstrument, Diagnostic::Severity::kWarning,
+             first_midi_clip_id,
+             "project contains MIDI clips; bounce is silent unless an instrument is bound");
   }
 
   // Total reported latency is the maximum per-source contribution (sources render

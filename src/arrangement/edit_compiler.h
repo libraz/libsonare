@@ -247,6 +247,8 @@ struct Diagnostic {
     kEmptyAudioSource = 7,    // source registered but has no samples
     kInvalidSampleRate = 8,   // project / source sample rate invalid
     kSourceKindMismatch = 9,  // clip source kind does not match its track kind
+    kMidiClipNoInstrument =
+        10,  // project has MIDI clips; bounce is silent unless an instrument is bound
   };
   // Severity ordinals are a FROZEN WIRE VALUE: they are exposed numerically as
   // SonareProjectDiagnostic.severity through the C ABI (see

@@ -225,8 +225,12 @@ def test_compile_surfaces_renderable_timeline() -> None:
         assert isinstance(messages, str)
         result = project.compile()
         assert result.has_timeline is True
-        assert result.diagnostic_count == 0
-        assert result.diagnostics == ()
+        # The project carries a MIDI clip, so the compiler emits a single
+        # best-effort warning (code 10 = kMidiClipNoInstrument) that the bounce is
+        # silent unless an instrument is bound. It is non-fatal (timeline valid).
+        assert result.diagnostic_count == 1
+        assert result.diagnostics[0].code == 10
+        assert result.diagnostics[0].severity == 1  # warning
     finally:
         project.close()
 

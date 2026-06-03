@@ -417,3 +417,70 @@ TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
 
   sonare_project_destroy(project);
 }
+
+TEST_CASE("project C surface keeps an SMF note-off written on the end-of-track tick", "[project]") {
+  // Single MIDI track at 480 PPQN: note-on @ tick 0, note-off @ tick 480, then
+  // EndOfTrack at the SAME tick (delta 0). The closing note-off therefore lands
+  // exactly on the end-of-track tick, which is also the imported clip length.
+  // The compiler keeps clip events on the half-open window [0, length_ppq), so
+  // without nudging the clip length just past the final event the note-off would
+  // be discarded and the note left hanging when bounced through an instrument.
+  const std::vector<uint8_t> smf = {'M',  'T',  'h',  'd',  0x00, 0x00, 0x00, 0x06, 0x00,
+                                    0x00, 0x00, 0x01, 0x01, 0xE0, 'M',  'T',  'r',  'k',
+                                    0x00, 0x00, 0x00, 0x0D, 0x00, 0x90, 0x3C, 0x40, 0x83,
+                                    0x60, 0x80, 0x3C, 0x00, 0x00, 0xFF, 0x2F, 0x00};
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+  REQUIRE(first_clip != 0);
+
+  // The clip length is nudged just past the boundary note-off (note-off ppq is
+  // 1.0 quarter; length becomes the next representable double above it) so the
+  // event survives compilation. A plain length == note-off ppq would drop it.
+  const std::string json = serialize(project);
+  REQUIRE(json.find("\"length_ppq\":1.0000000000000002") != std::string::npos);
+
+  SonareProjectCompileResult result{};
+  REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
+  REQUIRE(result.has_timeline != 0);
+  sonare_project_free_compile_result(&result);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project C surface warns that a MIDI-only project bounces to silence", "[project]") {
+  // A project with MIDI clips but no bound instrument compiles to a valid
+  // timeline yet renders silence via the plain sonare_project_bounce path. The
+  // compiler emits a best-effort warning (code 10 = kMidiClipNoInstrument) so a
+  // caller is nudged toward bounce_with_builtin_instruments / a bound destination.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+
+  SonareProjectCompileResult result{};
+  REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
+  REQUIRE(result.has_timeline != 0);  // warning is non-fatal
+
+  bool warned = false;
+  for (size_t i = 0; i < result.diagnostic_count; ++i) {
+    if (result.diagnostics[i].code == 10u) {
+      warned = true;
+      REQUIRE(result.diagnostics[i].severity == 1u);  // kWarning
+    }
+  }
+  REQUIRE(warned);
+  sonare_project_free_compile_result(&result);
+
+  sonare_project_destroy(project);
+}

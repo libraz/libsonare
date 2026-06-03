@@ -454,11 +454,24 @@ SonareError install_imported_midi(
     add_track->reseed_id(track_id);
     commands.push_back(std::move(add_track));
 
-    double max_ppq = clip_index < clip_lengths_ppq.size() ? clip_lengths_ppq[clip_index] : 0.0;
+    double length_ppq = clip_index < clip_lengths_ppq.size() ? clip_lengths_ppq[clip_index] : 0.0;
+    double max_event_ppq = 0.0;
+    bool has_events = false;
     for (const auto& event : src.events()) {
-      if (event.ppq > max_ppq) max_ppq = event.ppq;
+      has_events = true;
+      if (event.ppq > max_event_ppq) max_event_ppq = event.ppq;
     }
-    const double length_ppq = max_ppq > 0.0 ? max_ppq : 1.0;
+    // The edit compiler keeps clip events on the half-open window [0, length_ppq)
+    // and drops anything at or past the end tick. A standard SMF places the final
+    // note-off exactly on the EndOfTrack tick, which equals the imported clip
+    // length, so without this nudge that closing note-off would be discarded and
+    // the note left hanging when the clip is bounced through an instrument. Extend
+    // the clip just past the last event so a boundary event survives; nextafter
+    // keeps the timing numerically indistinguishable from the original tick.
+    if (has_events && max_event_ppq >= length_ppq) {
+      length_ppq = std::nextafter(max_event_ppq, max_event_ppq + 1.0);
+    }
+    if (length_ppq <= 0.0) length_ppq = 1.0;
 
     arr::EditClip clip;
     clip.track_id = track_id;
