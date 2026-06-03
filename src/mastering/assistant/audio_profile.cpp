@@ -18,6 +18,7 @@
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/json.h"
 
 namespace sonare::mastering::assistant {
@@ -55,7 +56,7 @@ float stddev_finite(const std::vector<float>& values) {
 
 float power_to_db(double power) {
   if (power <= 1.0e-20) return kMinDb;
-  return static_cast<float>(10.0 * std::log10(power));
+  return power_to_db_scalar(power);
 }
 
 float band_rms_db(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft, int sr,

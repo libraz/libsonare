@@ -5,6 +5,7 @@
 
 #include "metering/lufs.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -50,8 +51,8 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
 
   // Convert to dB
   constexpr float eps = kEpsilon;
-  dynamics_.peak_db = 20.0f * std::log10(std::max(peak, eps));
-  dynamics_.rms_db = 20.0f * std::log10(std::max(rms, eps));
+  dynamics_.peak_db = linear_to_db(std::max(peak, eps));
+  dynamics_.rms_db = linear_to_db(std::max(rms, eps));
   dynamics_.crest_factor = dynamics_.peak_db - dynamics_.rms_db;
 
   // Compute loudness curve using prefix sum for O(n) complexity.
@@ -84,7 +85,7 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     // Compute RMS for this window using prefix sum: O(1) per window
     double win_sum_sq = prefix_sum[pos + window_samples] - prefix_sum[pos];
     float win_rms = static_cast<float>(std::sqrt(win_sum_sq / static_cast<double>(window_samples)));
-    float win_rms_db = 20.0f * std::log10(std::max(win_rms, eps));
+    float win_rms_db = linear_to_db(std::max(win_rms, eps));
 
     const double center_sample = static_cast<double>(pos) + 0.5 * window_samples;
     float time = static_cast<float>(center_sample / static_cast<double>(sr));

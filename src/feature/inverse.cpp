@@ -8,6 +8,7 @@
 #include "filters/dct.h"
 #include "filters/mel.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/nnls.h"
 
@@ -85,7 +86,7 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   }
   // Convert dB -> power. librosa uses ref=1.0 and power=2 -> P = 10^(dB/10).
   std::vector<float> mel_power = mel_db;
-  for (float& v : mel_power) v = std::pow(10.0f, v / 10.0f);
+  for (float& v : mel_power) v = db_to_power_scalar(v);
   return mel_power;
 }
 

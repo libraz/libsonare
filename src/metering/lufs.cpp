@@ -6,6 +6,7 @@
 #include <numeric>
 
 #include "rt/biquad_design.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -27,8 +28,8 @@ constexpr double kEnergyFloor = 1e-15;
 constexpr double kBs1770SurroundWeight = 1.4125375446227544;
 
 float energy_to_lufs(double energy) {
-  if (energy < kEnergyFloor) return -std::numeric_limits<float>::infinity();
-  return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
+  return power_to_offset_db(energy, rt::kLoudnessOffset, kEnergyFloor,
+                            -std::numeric_limits<float>::infinity());
 }
 
 std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
@@ -364,7 +365,7 @@ float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
   // Average in the linear (energy) domain, then convert back to LUFS.
   double mean_energy = 0.0;
   for (float value : abs_gated) {
-    mean_energy += std::pow(10.0, (static_cast<double>(value) - rt::kLoudnessOffset) / 10.0);
+    mean_energy += db_to_power_scalar(static_cast<double>(value) - rt::kLoudnessOffset);
   }
   mean_energy /= static_cast<double>(abs_gated.size());
   const float relative_gate = energy_to_lufs(mean_energy) + kLufsRangeRelativeGate;

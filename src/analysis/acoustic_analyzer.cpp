@@ -12,6 +12,7 @@
 #include "core/window.h"
 #include "filters/iir.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -144,7 +145,7 @@ FrameEnergy compute_frame_energy(const float* samples, size_t size, int sample_r
       std::max(*std::max_element(result.energy.begin(), result.energy.end()), kEnergyEpsilon);
   result.db.reserve(result.energy.size());
   for (float value : result.energy) {
-    result.db.push_back(10.0f * std::log10(std::max(value, kEnergyEpsilon) / reference));
+    result.db.push_back(power_to_db_scalar(std::max(value, kEnergyEpsilon) / reference));
   }
   return result;
 }
@@ -537,7 +538,7 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
   const double initial_energy =
       std::max(static_cast<double>(frames.energy[first]) - best_noise, 0.0);
   const double noise_separation =
-      initial_energy > 1e-20 ? 10.0 * std::log10(initial_energy / std::max(best_noise, 1e-20))
+      initial_energy > 1e-20 ? power_to_db_scalar(initial_energy / std::max(best_noise, 1e-20))
                              : 0.0;
   const float noise_score = static_cast<float>(std::clamp(noise_separation / 30.0, 0.0, 1.0));
   estimate.confidence = std::clamp(0.15f + 0.70f * r2 + 0.15f * noise_score, 0.0f, 1.0f);
@@ -720,7 +721,7 @@ std::vector<float> schroeder_edc_db(const std::vector<double>& energy) {
 
   const float reference = std::max(edc.front(), kEnergyEpsilon);
   for (float& value : edc) {
-    value = 10.0f * std::log10(std::max(value, kEnergyEpsilon) / reference);
+    value = power_to_db_scalar(std::max(value, kEnergyEpsilon) / reference);
   }
   return edc;
 }
@@ -777,8 +778,8 @@ float clarity_db(const std::vector<double>& energy, int sample_rate, float bound
   const size_t boundary = static_cast<size_t>(std::round(boundary_sec * sample_rate));
   const double early = sum_range(energy, 0, boundary);
   const double late = sum_range(energy, boundary, energy.size());
-  return static_cast<float>(10.0 * std::log10(std::max(early, static_cast<double>(kEnergyEpsilon)) /
-                                              std::max(late, static_cast<double>(kEnergyEpsilon))));
+  return power_to_db_scalar(std::max(early, static_cast<double>(kEnergyEpsilon)) /
+                            std::max(late, static_cast<double>(kEnergyEpsilon)));
 }
 
 float definition_d50(const std::vector<double>& energy, int sample_rate) {
@@ -1161,7 +1162,7 @@ bool looks_like_impulse_response(const Audio& audio) {
   if (early_rms <= 1e-12) {
     return false;
   }
-  return 20.0 * std::log10(std::max(early_rms, 1e-12) / std::max(tail_rms, 1e-12)) >= 18.0;
+  return linear_to_db(std::max(early_rms, 1e-12) / std::max(tail_rms, 1e-12)) >= 18.0;
 }
 
 }  // namespace

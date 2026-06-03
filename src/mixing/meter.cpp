@@ -34,8 +34,7 @@ double MeterProcessor::filter_sample(int channel, double x) noexcept {
 
 float MeterProcessor::energy_to_lufs(double energy) const noexcept {
   // Finite floor instead of -inf so the meter always shows a bounded value.
-  if (energy < static_cast<double>(kEpsilon)) return kFloorDb;
-  return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
+  return power_to_offset_db(energy, rt::kLoudnessOffset, static_cast<double>(kEpsilon), kFloorDb);
 }
 
 void MeterProcessor::prepare(double sample_rate, int max_block_size) {

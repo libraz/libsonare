@@ -10,6 +10,7 @@
 #include "core/window.h"
 #include "metering/frequency_bins.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/fractional_octave.h"
 
@@ -91,7 +92,7 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
 
   for (int i = 0; i < n_bins; ++i) {
     const float amplitude = std::max(config.db_amin, result.magnitude[i]);
-    result.db[i] = 20.0f * std::log10(amplitude / config.db_ref);
+    result.db[i] = linear_to_db(amplitude / config.db_ref);
   }
   return result;
 }

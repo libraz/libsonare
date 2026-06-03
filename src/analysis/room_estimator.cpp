@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "acoustic/late_reverb.h"
+#include "util/db.h"
 
 namespace sonare {
 namespace {
@@ -49,7 +50,7 @@ float estimate_drr_db(const Audio& x) {
     }
   }
   constexpr double kEps = 1e-12;
-  return static_cast<float>(10.0 * std::log10(std::max(direct, kEps) / std::max(reverb, kEps)));
+  return power_to_db_scalar(std::max(direct, kEps) / std::max(reverb, kEps));
 }
 
 }  // namespace

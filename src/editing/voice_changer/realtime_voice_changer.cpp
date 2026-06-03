@@ -34,7 +34,7 @@ constexpr float kLimiterAttackMs = 0.1f;  ///< Sub-millisecond limiter attack (~
 float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
 
 float amp_to_db(float amp) noexcept {
-  return 20.0f * std::log10(std::max(std::abs(amp), sonare::constants::kAmpEpsilon));
+  return sonare::linear_to_db(std::max(std::abs(amp), sonare::constants::kAmpEpsilon));
 }
 
 /// Bidirectional one-pole follower used by the gate/comp/limiter gain stages.

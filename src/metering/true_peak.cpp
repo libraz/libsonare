@@ -7,6 +7,7 @@
 
 #include "rt/polyphase_fir.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 
@@ -75,7 +76,7 @@ float true_peak(const Audio& audio, int oversample_factor) {
 float true_peak_db(const Audio& audio, int oversample_factor) {
   const float peak = true_peak(audio, oversample_factor);
   if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
-  return 20.0f * std::log10(peak);
+  return linear_to_db(peak);
 }
 
 }  // namespace sonare::metering

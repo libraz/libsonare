@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -36,12 +37,12 @@ std::vector<float> power_to_db(const float* S, std::size_t n, float ref, float a
 
   const float resolved_ref = resolve_ref(S, n, ref);
   const float ref_floor = std::max(amin, std::abs(resolved_ref));
-  const float ref_db = 10.0f * std::log10(ref_floor);
+  const float ref_db = power_to_db_scalar(ref_floor);
 
   float max_db = -std::numeric_limits<float>::infinity();
   for (std::size_t i = 0; i < n; ++i) {
     const float val = std::max(amin, S[i]);
-    const float db = 10.0f * std::log10(val) - ref_db;
+    const float db = power_to_db_scalar(val) - ref_db;
     out[i] = db;
     if (db > max_db) max_db = db;
   }
@@ -91,7 +92,7 @@ std::vector<float> db_to_power(const float* S_db, std::size_t n, float ref) {
   }
   std::vector<float> out(n);
   for (std::size_t i = 0; i < n; ++i) {
-    out[i] = ref * std::pow(10.0f, 0.1f * S_db[i]);
+    out[i] = ref * db_to_power_scalar(S_db[i]);
   }
   return out;
 }
@@ -107,7 +108,7 @@ std::vector<float> db_to_amplitude(const float* S_db, std::size_t n, float ref) 
   }
   std::vector<float> out(n);
   for (std::size_t i = 0; i < n; ++i) {
-    out[i] = ref * std::pow(10.0f, 0.05f * S_db[i]);
+    out[i] = ref * db_to_linear(S_db[i]);
   }
   return out;
 }
