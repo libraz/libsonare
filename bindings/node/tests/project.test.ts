@@ -342,3 +342,22 @@ describe('Project validateMidiNotes', () => {
     project.destroy();
   });
 });
+
+// Golden vectors for the hand-written UMP MIDI-1.0 channel-voice packing
+// (Project.midiNoteOn/Off/Cc/... build data0 in TS rather than via the native
+// packer). These exact words are what sonare::midi::make_midi1_* — and thus the
+// C-ABI sonare_midi_* packers Python delegates to — produce, so pinning them
+// here (with the identical vectors mirrored in the WASM suite) makes any silent
+// drift between the two hand-written JS copies a CI failure.
+describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
+  it('packs channel-voice messages into the spec word', () => {
+    expect(Project.midiNoteOn(0, 0, 0, 60, 100).data0 >>> 0).toBe(0x20903c64);
+    expect(Project.midiNoteOff(2, 0, 0, 60, 0).data0 >>> 0).toBe(0x20803c00);
+    expect(Project.midiCc(0, 0, 0, 7, 127).data0 >>> 0).toBe(0x20b0077f);
+    expect(Project.midiPolyPressure(0, 0, 0, 60, 64).data0 >>> 0).toBe(0x20a03c40);
+    expect(Project.midiProgram(0, 0, 0, 5).data0 >>> 0).toBe(0x20c00500);
+    expect(Project.midiChannelPressure(0, 0, 0, 90).data0 >>> 0).toBe(0x20d05a00);
+    // Group and channel nibbles land in their own fields.
+    expect(Project.midiNoteOn(0, 0xa, 0x3, 60, 100).data0 >>> 0).toBe(0x2a933c64);
+  });
+});

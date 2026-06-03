@@ -83,6 +83,10 @@ export function midi1Event(
   const ch = assertNibble(fnName, channel, 'channel');
   const d1 = assertU7(fnName, data1, 'data1');
   const d2 = assertU7(fnName, data2, 'data2');
+  // UMP MIDI-1.0 channel-voice word (message type 0x2). Canonical layout is
+  // sonare::midi::make_midi1_* (C-ABI sonare_midi_*, which Python delegates to);
+  // this hand-written copy is locked against those words by the golden vectors
+  // in project.test.ts (mirrored in the WASM suite) so it cannot silently drift.
   const word = ((0x2 << 28) | (g << 24) | (status << 20) | (ch << 16) | (d1 << 8) | d2) >>> 0;
   return { ppq, data0: word, data1: 0 };
 }
