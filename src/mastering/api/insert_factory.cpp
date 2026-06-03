@@ -65,6 +65,7 @@
 
 #ifdef SONARE_HAVE_FX
 #include <algorithm>
+#include <cmath>
 
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
@@ -380,13 +381,18 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     DattorroReverbConfig config;
     // decaySec is a tail-length intent in seconds; DattorroReverbConfig.decay is
     // a normalized tank feedback clamped internally to [0, 0.98]. The plate tank
-    // has no closed-form RT60, so unlike FDN/velvet/convolution (where decaySec
-    // maps to ~T60 in seconds) this is an approximate perceptual mapping: seconds
-    // to feedback as decay/10 (~10 s -> near-max tail), clamped to [0, 0.98].
-    // Treat decaySec on the plate as "longer is more reverberant", not an exact
-    // RT60 in seconds.
+    // has no closed-form RT60, but we map decaySec to an APPROXIMATE T60 so it
+    // tracks roughly the same seconds as FDN/velvet/convolution instead of being
+    // an unrelated 0..0.98 knob. Model: the figure-8 tank circulates once every
+    // ~21589 samples (sum of both halves' allpass+delay lengths at the 29761 Hz
+    // reference rate) and multiplies energy by decay^4 per full round trip (decay
+    // is applied twice per half). Requiring the amplitude to reach 1e-3 (-60 dB)
+    // after T60 seconds gives decay = exp(-ln(1000) * Tloop / (4 * T60)).
     if (params.find("decaySec") != params.end()) {
-      config.decay = std::min(0.98f, std::max(0.0f, f(params, "decaySec", 5.0f) / 10.0f));
+      constexpr float kTankLoopSeconds = 21589.0f / 29761.0f;  // both halves at ref rate
+      const float decay_sec = std::max(0.05f, f(params, "decaySec", 5.0f));
+      const float feedback = std::exp(-6.907755f * kTankLoopSeconds / (4.0f * decay_sec));
+      config.decay = std::min(0.98f, std::max(0.0f, feedback));
     } else {
       config.decay = f(params, "decay", config.decay);
     }

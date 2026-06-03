@@ -132,6 +132,54 @@ TEST_CASE("effects.reverb.room synthesizes per host sample rate and is determini
   for (size_t i = 0; i < a.size(); ++i) REQUIRE(a[i] == b[i]);
 }
 
+TEST_CASE("decaySec maps to a comparable RT60 across the time-tunable reverbs",
+          "[mastering][insert_factory][effects][reverb]") {
+  // decaySec is a tail-length-in-seconds intent. FDN maps it directly to ~T60;
+  // the plate/Dattorro tank now maps it to an approximate T60 too, so the same
+  // {decaySec:2} no longer yields a ~2 s FDN tail but a ~0.2-feedback (very
+  // short) plate tail. Measure each engine's RT60 from a fully-wet impulse via
+  // the Schroeder backward energy integral and assert they are on the same order.
+  const double sr = 48000.0;
+  const int block = 512;
+  const int seconds = 8;
+  const size_t total = static_cast<size_t>(sr) * static_cast<size_t>(seconds);
+
+  auto rt60_seconds = [&](const std::string& name) -> double {
+    auto p = make_insert(name, R"({"decaySec":2.0,"dryWet":1.0})");
+    REQUIRE(p != nullptr);
+    p->prepare(sr, block);
+    std::vector<float> buf(total, 0.0f);
+    buf[0] = 1.0f;
+    for (size_t off = 0; off < total; off += static_cast<size_t>(block)) {
+      const int n = static_cast<int>(std::min<size_t>(static_cast<size_t>(block), total - off));
+      float* blk = buf.data() + off;
+      p->process(&blk, 1, n);
+    }
+    std::vector<double> edc(total + 1, 0.0);
+    for (size_t i = total; i-- > 0;) edc[i] = edc[i + 1] + static_cast<double>(buf[i]) * buf[i];
+    const double e0 = edc[0];
+    REQUIRE(e0 > 0.0);
+    for (size_t i = 0; i < total; ++i) {
+      if (10.0 * std::log10(edc[i] / e0) <= -60.0) return static_cast<double>(i) / sr;
+    }
+    return static_cast<double>(seconds);
+  };
+
+  const double fdn = rt60_seconds("effects.reverb.fdn");
+  const double dattorro = rt60_seconds("effects.reverb.dattorro");
+
+  // Both land in the neighbourhood of the requested 2 s tail (the plate tank has
+  // no exact closed-form RT60, so allow a wide but bounded band).
+  REQUIRE(fdn > 1.0);
+  REQUIRE(fdn < 4.0);
+  REQUIRE(dattorro > 1.0);
+  REQUIRE(dattorro < 4.0);
+  // And crucially they are the same order of magnitude rather than the old ~10x
+  // gap (decaySec=2 used to give the plate a 0.2 feedback / very short tail).
+  REQUIRE(dattorro > 0.4 * fdn);
+  REQUIRE(dattorro < 2.5 * fdn);
+}
+
 TEST_CASE("effects.reverb.room passes through cleanly when geometry is invalid",
           "[mastering][insert_factory][effects][acoustic]") {
   // Source outside the room => validate_shoebox errors => empty RIR. The insert
