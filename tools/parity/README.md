@@ -128,7 +128,10 @@ check_parity.py     entry point: load extractors + allowlist + core_map, build r
 extractors/         one parser per surface:
   c_api.py            sonare_c.h + the sonare_c_<domain>.h headers it includes
   python_pyi.py       analyzer.pyi stubs
-  node_ts.py / wasm_ts.py / ts_common.py   the TS facades (every export class body)
+  node_ts.py / wasm_ts.py / ts_common.py   the TS facades (the index re-export
+                      closure: `export ... from './m'` is followed transitively,
+                      cycle-safe, so free functions and class methods spread
+                      across sibling modules all count)
   cli.py              the curated CLI command surface
   cpp_struct.py       C++ core struct field inits + free-fn default args (+ constants)
   wasm_internal.py    the WASM binding's own 3 files (embind regs / SonareModule / index.ts)

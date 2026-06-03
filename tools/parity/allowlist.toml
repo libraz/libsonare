@@ -44,6 +44,18 @@ node = [
   "*with_progress",
   "master_audio_async",         # libuv async variant, JS-only
   "master_audio_stereo_async",  # libuv async variant, JS-only
+  # Node-only INTERNAL input/MIDI validation helpers exported from
+  # bindings/node/src/validation.ts. Only the `ValidateOptions` TYPE is
+  # re-exported through index.ts; these value functions are consumed by sibling
+  # facade modules (project/scale/lufs), not part of the public C-mapped API and
+  # have no C counterpart by design. (assert_samples / assert_finite_scalar /
+  # assert_non_empty_samples / assert_finite_samples are covered by the shared
+  # `any` list above; the rest are Node-specific MIDI helpers.)
+  "assert_u7",
+  "assert_nibble",
+  "assert_u32",
+  "assert_project_midi_events",
+  "midi1_event",
 ]
 
 wasm = [
@@ -100,6 +112,14 @@ python = [
 #   mastering_stereo_analyze / mastering_process / mastering_pair_process /
 #   mastering_process_stereo (listed in [surface_only] below). Same op, facade
 #   spelling.
+# --- NEW C-ABI functions PENDING binding wiring (known-pending, not drift) ---
+# These C entry points were just added to the C ABI and are scheduled to be
+# wired into every facade in a later binding wave. They are intentionally
+# allowlisted as known-pending across ALL facades so the gate stays green until
+# the wiring lands; remove each entry as its bindings are added.
+#   decompose_with_init            (src/sonare_c_effects.h)  warm-start decompose
+#   metering_phase_scope_decimated (src/sonare_c_metering.h) decimated phase scope
+#   metering_vectorscope_decimated (src/sonare_c_metering.h) decimated vectorscope
 node = [
   "detect_chords_ex",
   "detect_key_with_options",
@@ -120,6 +140,10 @@ node = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
+  "decompose_with_init",              # pending binding wave
+  "metering_phase_scope_decimated",   # pending binding wave
+  "metering_vectorscope_decimated",   # pending binding wave
+  "metering_spectrum_frame",          # pending binding wave
 ]
 wasm = [
   "detect_chords_ex",
@@ -139,6 +163,10 @@ wasm = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
+  "decompose_with_init",              # pending binding wave
+  "metering_phase_scope_decimated",   # pending binding wave
+  "metering_vectorscope_decimated",   # pending binding wave
+  "metering_spectrum_frame",          # pending binding wave
 ]
 python = [
   "detect_chords_ex",
@@ -160,6 +188,10 @@ python = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
+  "decompose_with_init",              # pending binding wave
+  "metering_phase_scope_decimated",   # pending binding wave
+  "metering_vectorscope_decimated",   # pending binding wave
+  "metering_spectrum_frame",          # pending binding wave
 ]
 
 # ---------------------------------------------------------------------------

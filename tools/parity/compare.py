@@ -161,10 +161,20 @@ class Report:
 
 
 def _index(ex: Extraction) -> dict[str, FunctionSig]:
-    # First definition wins for a key on a surface.
+    # First definition wins for a key on a surface, with one exception: a FREE
+    # function (raw_name has no '.') is preferred over a CLASS METHOD for the
+    # same key. A facade often exposes both a free ``resample(samples, srcSr,
+    # targetSr)`` and an ``Audio.resample(targetSr)`` convenience method that
+    # drops the instance-supplied leading args; the free function is the
+    # canonical-shaped signature for the positional/order comparison, so it must
+    # win regardless of which file was parsed first.
     out: dict[str, FunctionSig] = {}
     for f in ex.functions:
-        out.setdefault(f.key, f)
+        existing = out.get(f.key)
+        if existing is None:
+            out[f.key] = f
+        elif "." in existing.raw_name and "." not in f.raw_name:
+            out[f.key] = f  # upgrade a method entry to the free-function form
     return out
 
 

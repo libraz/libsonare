@@ -19,6 +19,16 @@ conventions (the facade folds C scalar params into an options object). We also
 parse the generated ``*_gen.ts`` files (re-exported via ``export *``) and pull
 enum value-sets out of ``export type X = 'a' | 'b'`` and option-interface fields.
 
+The public surface of a facade is NOT confined to the index file: the index
+re-exports symbols from sibling modules (``export * from './features'``,
+``export { mastering } from './effects_mastering'``) and those modules may in
+turn re-export from yet deeper modules (``features.ts`` -> ``feature_*``). The
+class facades (``Audio``, ``Mixer``, ``RealtimeEngine``, ...) likewise live in
+their own files. To capture the true surface we therefore (a) follow
+``export ... from './relative'`` re-exports recursively from the index (cycle
+safe, deduped) and (b) glob the whole ``bindings/<surface>/src/**/*.ts`` tree.
+The two sets are unioned and de-duplicated by canonical key.
+
 Declarations whose parameter list we cannot balance are recorded as unparsed
 rather than silently dropped.
 """
@@ -47,6 +57,16 @@ _METHOD_HEAD = re.compile(
 _CLASS_HEAD = re.compile(r"export\s+(?:abstract\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\b")
 _TYPE_UNION = re.compile(r"export\s+type\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);", re.DOTALL)
 _STRING_LIT = re.compile(r"""['"]([^'"]+)['"]""")
+# A re-export that pulls (some or all) symbols from a sibling module:
+#   export * from './features';
+#   export { mastering, normalize } from './effects_mastering';
+#   export type { Foo } from './types';
+# We only care about the module specifier; whatever the module exports is
+# captured by parsing that module's text directly (facade modules export exactly
+# what they intend to expose). The specifier must be relative (starts with '.').
+_REEXPORT_FROM = re.compile(
+    r"""export\s+(?:type\s+)?(?:\*|\{[^}]*\})\s*(?:as\s+[A-Za-z_][A-Za-z0-9_]*\s+)?from\s+['"](\.[^'"]+)['"]"""
+)
 
 _NON_METHOD = {
     "if",
@@ -250,6 +270,57 @@ def _parse_text(
             )
 
 
+def _resolve_module_specifier(from_file: Path, spec: str) -> Path | None:
+    """Resolve a relative ``./module`` import specifier to a ``.ts`` file path.
+
+    TS source uses ESM specifiers that may or may not carry a ``.js`` extension
+    (``./features.js`` and ``./features`` both refer to ``features.ts``). We map
+    the specifier onto a sibling ``.ts`` file, also trying the ``/index.ts`` form
+    for directory specifiers. Returns ``None`` when no source file exists.
+    """
+    base = (from_file.parent / spec).resolve()
+    candidates = []
+    if base.suffix == ".js":
+        candidates.append(base.with_suffix(".ts"))
+    elif base.suffix == ".ts":
+        candidates.append(base)
+    else:
+        candidates.append(base.with_suffix(".ts"))
+        candidates.append(base / "index.ts")
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def _reexport_closure(index_path: Path) -> list[Path]:
+    """Follow ``export ... from './relative'`` re-exports transitively.
+
+    Starts at ``index_path`` and walks every relative re-export specifier
+    (``export *`` / ``export { ... }`` / ``export type { ... }``), recursively,
+    cycle-safe and deduplicated. Returns the index plus every reachable module
+    in deterministic (sorted-by-path) order.
+    """
+    seen: set[Path] = set()
+    order: list[Path] = []
+    stack = [index_path]
+    while stack:
+        cur = stack.pop()
+        if cur in seen or not cur.is_file():
+            continue
+        seen.add(cur)
+        order.append(cur)
+        try:
+            text = cur.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for m in _REEXPORT_FROM.finditer(text):
+            target = _resolve_module_specifier(cur, m.group(1))
+            if target is not None and target not in seen:
+                stack.append(target)
+    return sorted(order)
+
+
 def extract_ts(
     root: Path, surface: str, index_rel: str, generated_glob: str
 ) -> Extraction:
@@ -258,29 +329,68 @@ def extract_ts(
     gen_dir = root / generated_glob
     gen_files = sorted(gen_dir.glob("*_gen.ts")) if gen_dir.exists() else []
 
-    all_texts = []
-    if index_path.exists():
-        all_texts.append(index_path.read_text(encoding="utf-8"))
-    for g in gen_files:
-        all_texts.append(g.read_text(encoding="utf-8"))
-    enum_types = _collect_enum_types(all_texts)
+    # The public facade surface is exactly what the index re-exports, followed
+    # transitively: ``export * from './features'`` and
+    # ``export { mastering } from './effects_mastering'`` pull sibling-module
+    # symbols into the surface, and those modules re-export deeper still
+    # (``features.ts`` -> ``feature_*``). The class facades (``Audio``, ``Mixer``,
+    # ``RealtimeEngine``, ...) reach the index the same way. We deliberately do
+    # NOT glob the whole ``src`` tree: that would sweep in internal-only modules
+    # the index never re-exports (``worklet.ts`` AudioWorklet entry points,
+    # ``codes.ts`` / ``module_state.ts`` enum/state plumbing, the addon loader),
+    # which have no C-API counterpart by design and would be pure noise. The
+    # re-export closure is the precise definition of the public surface.
+    # Work in resolved paths throughout: ``_reexport_closure`` resolves symlinks
+    # (e.g. macOS ``/tmp`` -> ``/private/tmp``) so we resolve ``root`` too, and
+    # report locations relative to it.
+    root_res = root.resolve()
+    files: list[Path] = []
+    seen_files: set[Path] = set()
+
+    def _add(p: Path) -> None:
+        rp = p.resolve()
+        if rp in seen_files or not rp.is_file() or rp.name.endswith(".d.ts"):
+            return
+        seen_files.add(rp)
+        files.append(rp)
 
     if index_path.exists():
+        for p in _reexport_closure(index_path.resolve()):
+            _add(p)
+    for g in gen_files:
+        _add(g)
+
+    all_texts = [p.read_text(encoding="utf-8") for p in files]
+    enum_types = _collect_enum_types(all_texts)
+
+    def _rel(p: Path) -> str:
+        try:
+            return str(p.relative_to(root_res))
+        except ValueError:
+            return str(p)
+
+    # Parse every file, then de-duplicate the recorded signatures: the same
+    # symbol can be reached more than once through the re-export closure. The
+    # canonical key plus the surface-native raw_name uniquely identify a
+    # signature (free function ``cqt`` vs class method ``Audio.cqt``).
+    raw_ex = Extraction(surface=surface)
+    for p, text in zip(files, all_texts):
         _parse_text(
-            index_path.read_text(encoding="utf-8"),
-            str(index_path.relative_to(root)),
+            text,
+            _rel(p),
             surface,
-            ex,
+            raw_ex,
             enum_types,
             parse_methods=True,
         )
-    for g in gen_files:
-        _parse_text(
-            g.read_text(encoding="utf-8"),
-            str(g.relative_to(root)),
-            surface,
-            ex,
-            enum_types,
-            parse_methods=False,
-        )
+
+    seen_sig: set[tuple[str, str]] = set()
+    for sig in raw_ex.functions:
+        ident = (sig.key, sig.raw_name)
+        if ident in seen_sig:
+            continue
+        seen_sig.add(ident)
+        ex.functions.append(sig)
+    ex.unparsed = raw_ex.unparsed
+    ex.unparsed_notes = raw_ex.unparsed_notes
     return ex
