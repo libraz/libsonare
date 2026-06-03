@@ -291,6 +291,75 @@ def pitch_correct_to_midi(
             lib.sonare_free_floats(out)
 
 
+def pitch_correct_to_midi_timevarying(
+    samples: Sequence[float] | list[float],
+    f0_hz: Sequence[float] | list[float],
+    target_midi: float,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    voiced: Sequence[int] | list[int] | None = None,
+    voiced_prob: Sequence[float] | list[float] | None = None,
+) -> list[float]:
+    """Contour-following ("time-varying") pitch correction toward a MIDI target.
+
+    Unlike :func:`pitch_correct_to_midi` (a single constant transpose), this
+    follows the caller-supplied per-frame ``f0_hz`` contour and retunes every
+    voiced frame toward ``target_midi``, so vibrato/drift in the source is
+    tracked rather than flattened.
+
+    Args:
+        samples: Audio samples.
+        f0_hz: Per-frame measured F0 in Hz (one entry per analysis frame).
+        target_midi: Desired pitch as a MIDI note number.
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
+        voiced: Optional per-frame voiced flags (non-zero = voiced); ``None``
+            treats every frame as voiced.
+        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``;
+            ``None`` derives it from ``voiced`` (1.0 / 0.0).
+
+    Returns:
+        List of pitch-corrected samples.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_pitch_correct_to_midi_timevarying"):
+        raise RuntimeError("libsonare was built without pitch-editor support")
+    c_array, length = _to_c_float_array(samples)
+    f0_array, n_frames = _to_c_float_array(f0_hz)
+    prob_array = None
+    if voiced_prob is not None:
+        prob_array, prob_len = _to_c_float_array(voiced_prob)
+        if prob_len != n_frames:
+            raise ValueError("voiced_prob must have the same length as f0_hz")
+    voiced_array = None
+    if voiced is not None:
+        voiced_seq = [int(v) for v in voiced]
+        if len(voiced_seq) != n_frames:
+            raise ValueError("voiced must have the same length as f0_hz")
+        voiced_array = (ctypes.c_int32 * n_frames)(*voiced_seq)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_pitch_correct_to_midi_timevarying(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        f0_array,
+        prob_array,
+        voiced_array,
+        ctypes.c_size_t(n_frames),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(target_midi),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
 def note_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

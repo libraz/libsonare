@@ -402,6 +402,15 @@ def pitch_correct_to_midi(
     current_midi: float = 69.0,
     target_midi: float = 69.0,
 ) -> list[float]: ...
+def pitch_correct_to_midi_timevarying(
+    samples: FloatSamples,
+    f0_hz: FloatSamples,
+    target_midi: float,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    voiced: Sequence[int] | list[int] | None = None,
+    voiced_prob: FloatSamples | None = None,
+) -> list[float]: ...
 def note_stretch(
     samples: FloatSamples,
     sample_rate: int = 22050,

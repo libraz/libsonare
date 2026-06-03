@@ -25,12 +25,32 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
                                float semitones, float** out, size_t* out_length);
 /// Applies a single CONSTANT transposition: the whole buffer is treated as one
 /// note at @p current_midi and shifted by (target_midi - current_midi). This is
-/// not pitch tracking — it does not follow a time-varying melody. For real
-/// time-varying correction use the C++ correct_to_midi_timevarying with a
-/// caller-supplied F0 track (not yet exposed through the C ABI).
+/// not pitch tracking — it does not follow a time-varying melody. For
+/// contour-following correction use @ref sonare_pitch_correct_to_midi_timevarying
+/// with a caller-supplied per-frame F0 track.
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length);
+/// @brief Per-frame ("time-varying") correction toward a fixed MIDI target.
+/// @details Unlike @ref sonare_pitch_correct_to_midi (one constant transpose),
+///          this follows a caller-supplied F0 contour: each of the @p n_frames
+///          frames carries an @p f0_hz value (the measured pitch at that frame)
+///          and the corrector retunes every voiced frame toward @p target_midi,
+///          so vibrato/drift in the source is tracked rather than flattened.
+/// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
+/// @param voiced_prob Per-frame voicing probability [0,1] (@p n_frames entries),
+///                    or NULL to derive it from @p voiced (1.0 / 0.0).
+/// @param voiced      Per-frame voiced flags (non-zero = voiced; @p n_frames
+///                    entries), or NULL to treat every frame as voiced.
+/// @param hop_length  F0 hop in samples (> 0; frame i covers sample i*hop_length).
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_t length,
+                                                     int sample_rate, const float* f0_hz,
+                                                     const float* voiced_prob,
+                                                     const int32_t* voiced, size_t n_frames,
+                                                     int hop_length, float target_midi, float** out,
+                                                     size_t* out_length);
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length);

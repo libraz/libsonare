@@ -88,6 +88,39 @@ val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, f
   return vectorToFloat32Array(out_vec);
 }
 
+// Per-frame ("time-varying") correction toward target_midi following a
+// caller-supplied F0 contour. f0_hz is required; voiced / voiced_prob are
+// optional (undefined/null -> every frame voiced). Companion arrays are passed
+// as Float32Array (voiced uses 0.0/1.0) so a single conversion path suffices.
+val js_pitch_correct_to_midi_timevarying(val samples, int sample_rate, val f0_hz, float target_midi,
+                                         int hop_length, val voiced, val voiced_prob) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  const size_t n_frames = f0.size();
+  const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
+  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
+  std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
+
+  editing::pitch_editor::F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = hop_length;
+  track.f0_hz = f0;
+  track.voiced.resize(n_frames);
+  track.voiced_prob.resize(n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    const bool is_voiced = has_voiced ? (voiced_vec[i] != 0.0f) : true;
+    track.voiced[i] = is_voiced;
+    track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
+  }
+
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  editing::pitch_editor::PitchCorrector corrector;
+  Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
 val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_sample,
                     float stretch_ratio) {
   std::vector<float> data = float32ArrayToVector(samples);
@@ -269,6 +302,7 @@ void registerEffectsAudioBindings() {
   function("timeStretch", &js_time_stretch);
   function("pitchShift", &js_pitch_shift);
   function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
+  function("pitchCorrectToMidiTimevarying", &js_pitch_correct_to_midi_timevarying);
   function("noteStretch", &js_note_stretch);
   function("voiceChange", &js_voice_change);
   function("decompose", &js_decompose);

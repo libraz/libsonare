@@ -28,6 +28,35 @@ def test_pitch_correct_to_midi_function() -> None:
     assert all(math.isfinite(x) for x in result)
 
 
+def test_pitch_correct_to_midi_timevarying_function() -> None:
+    sr = 22050
+    samples = _tone(sr, freq=220.0)
+    hop = 512
+    n_frames = len(samples) // hop + 1
+    # A constant 220 Hz contour corrected toward MIDI 60; every frame voiced.
+    f0 = [220.0] * n_frames
+
+    result = libsonare.pitch_correct_to_midi_timevarying(
+        samples, f0, target_midi=60.0, sample_rate=sr, hop_length=hop
+    )
+    assert len(result) == len(samples)
+    assert all(math.isfinite(x) for x in result)
+
+    # Explicit voiced flags / probabilities are accepted.
+    voiced = [1] * n_frames
+    voiced_prob = [1.0] * n_frames
+    result2 = libsonare.pitch_correct_to_midi_timevarying(
+        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced, voiced_prob=voiced_prob
+    )
+    assert len(result2) == len(samples)
+
+    # Mismatched companion-array lengths are rejected before the native call.
+    with pytest.raises(ValueError):
+        libsonare.pitch_correct_to_midi_timevarying(
+            samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=[1, 0]
+        )
+
+
 def test_note_stretch_function() -> None:
     sr = 22050
     samples = _tone(sr)

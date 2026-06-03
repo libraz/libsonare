@@ -76,6 +76,23 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    # sonare_pitch_correct_to_midi_timevarying
+    if hasattr(lib, "sonare_pitch_correct_to_midi_timevarying"):
+        lib.sonare_pitch_correct_to_midi_timevarying.restype = ctypes.c_int32
+        lib.sonare_pitch_correct_to_midi_timevarying.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_note_stretch
     lib.sonare_note_stretch.restype = ctypes.c_int32
     lib.sonare_note_stretch.argtypes = [

@@ -133,6 +133,35 @@ export function pitchCorrectToMidi(
   return addon.pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
 }
 
+/**
+ * Contour-following ("time-varying") pitch correction toward a MIDI target.
+ *
+ * Unlike {@link pitchCorrectToMidi} (a single constant transpose), this follows
+ * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
+ * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
+ * flattened. `voiced` (non-zero = voiced) and `voicedProb` ([0,1]) are optional;
+ * omitting them treats every frame as voiced.
+ */
+export function pitchCorrectToMidiTimevarying(
+  samples: Float32Array,
+  f0Hz: Float32Array,
+  targetMidi: number,
+  sampleRate = 22050,
+  hopLength = 512,
+  voiced?: Int32Array,
+  voicedProb?: Float32Array,
+): Float32Array {
+  return addon.pitchCorrectToMidiTimevarying(
+    samples,
+    sampleRate,
+    f0Hz,
+    targetMidi,
+    hopLength,
+    voiced,
+    voicedProb,
+  );
+}
+
 export function noteStretch(
   samples: Float32Array,
   sampleRate = 22050,

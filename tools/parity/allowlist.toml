@@ -272,6 +272,12 @@ python = [
 # params that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks
 # them. Folded extended-facade params, not order drift. (WASM passes them via an
 # options object, so it is not flagged here.)
+# pitch_correct_to_midi_timevarying (all): C is (f0_hz, voiced_prob, voiced,
+# n_frames, hop_length, target_midi). Every facade uses the ergonomic order
+# (f0_hz, target_midi, hop_length, voiced?, voiced_prob?) and DERIVES n_frames
+# from the f0_hz array length — passing both the contour array and a redundant
+# frame count would let them disagree. Remapped to C order internally (ctypes /
+# addon / embind wrappers). Documented ergonomic convenience, not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -282,6 +288,7 @@ node = [
   "lufs_interleaved",
   "chord_functional_analysis",
   "analyze_melody",
+  "pitch_correct_to_midi_timevarying",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -292,6 +299,7 @@ wasm = [
   "strip_meter",
   "lufs_interleaved",
   "chord_functional_analysis",
+  "pitch_correct_to_midi_timevarying",
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -310,6 +318,7 @@ python = [
   "lufs_interleaved",
   "chord_functional_analysis",
   "analyze_melody",
+  "pitch_correct_to_midi_timevarying",
 ]
 
 # ---------------------------------------------------------------------------

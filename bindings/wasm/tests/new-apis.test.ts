@@ -25,6 +25,7 @@ import {
   noteStretch,
   onsetEnvelope,
   pitchCorrectToMidi,
+  pitchCorrectToMidiTimevarying,
   plp,
   RealtimeEngine,
   StreamingEqualizer,
@@ -189,6 +190,22 @@ describe('v1.2 feature additions (WASM)', () => {
       // catch obvious blow-ups / silence.
       expect(peak).toBeGreaterThan(0.05);
       expect(peak).toBeLessThanOrEqual(1.0);
+    });
+
+    it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const out = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop);
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBe(signal.length);
+      expect(allFinite(out)).toBe(true);
+
+      // Optional voiced / voicedProb arrays are accepted.
+      const voiced = new Int32Array(nFrames).fill(1);
+      const voicedProb = new Float32Array(nFrames).fill(1);
+      const out2 = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
+      expect(out2.length).toBe(signal.length);
     });
 
     it('noteStretch lengthens the buffer by the stretch ratio', () => {

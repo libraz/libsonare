@@ -199,6 +199,55 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, f0Hz, targetMidi, hopLength, voiced?, voicedProb?)
+  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsNumber()) {
+    Napi::TypeError::New(
+        env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, targetMidi, hopLength)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+  auto f0 = info[2].As<Napi::Float32Array>();
+  float target_midi = info[3].As<Napi::Number>().FloatValue();
+  int hop_length = info[4].As<Napi::Number>().Int32Value();
+  const size_t n_frames = f0.ElementLength();
+
+  sonare::editing::pitch_editor::F0Track track;
+  track.sample_rate = sr;
+  track.hop_length = hop_length;
+  track.f0_hz.assign(f0.Data(), f0.Data() + n_frames);
+  track.voiced.resize(n_frames);
+  track.voiced_prob.resize(n_frames);
+
+  const bool has_voiced = info.Length() > 5 && IsInt32Array(info[5]);
+  const bool has_prob = info.Length() > 6 && IsFloat32Array(info[6]);
+  Napi::Int32Array voiced_arr;
+  Napi::Float32Array prob_arr;
+  if (has_voiced) voiced_arr = info[5].As<Napi::Int32Array>();
+  if (has_prob) prob_arr = info[6].As<Napi::Float32Array>();
+  for (size_t i = 0; i < n_frames; ++i) {
+    const bool is_voiced = has_voiced ? (voiced_arr[i] != 0) : true;
+    track.voiced[i] = is_voiced;
+    track.voiced_prob[i] = has_prob ? prob_arr[i] : (is_voiced ? 1.0f : 0.0f);
+  }
+
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
+  sonare::editing::pitch_editor::PitchCorrector corrector;
+  sonare::Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 

@@ -16,6 +16,7 @@ namespace sonare_node {
 const char* ErrorMessageForCode(SonareError err);
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
+bool IsInt32Array(const Napi::Value& value);
 
 /// @brief Validate that a flat row-major matrix's declared dims match its
 ///        backing typed-array length.

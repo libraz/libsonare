@@ -137,6 +137,49 @@ export function pitchCorrectToMidi(
 }
 
 /**
+ * Contour-following ("time-varying") pitch correction toward a MIDI target.
+ *
+ * Unlike {@link pitchCorrectToMidi} (a single constant transpose), this follows
+ * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
+ * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
+ * flattened. `voiced` (non-zero = voiced) and `voicedProb` ([0,1]) are optional;
+ * omitting them treats every frame as voiced.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
+ * @param targetMidi - Desired MIDI note number
+ * @param sampleRate - Sample rate in Hz
+ * @param hopLength - F0 hop in samples (frame i covers sample i*hopLength)
+ * @param voiced - Optional per-frame voiced flags (non-zero = voiced)
+ * @param voicedProb - Optional per-frame voicing probability in [0, 1]
+ * @returns Pitch-corrected audio
+ */
+export function pitchCorrectToMidiTimevarying(
+  samples: Float32Array,
+  f0Hz: Float32Array,
+  targetMidi: number,
+  sampleRate = 22050,
+  hopLength = 512,
+  voiced?: Int32Array,
+  voicedProb?: Float32Array,
+  options: ValidateOptions = {},
+): Float32Array {
+  assertSamples('pitchCorrectToMidiTimevarying', samples, options.validate !== false);
+  // The embind layer reads the companion arrays as Float32Array (voiced uses
+  // 0.0/1.0); convert here so a single native conversion path suffices.
+  const voicedF32 = voiced ? Float32Array.from(voiced) : undefined;
+  return requireModule().pitchCorrectToMidiTimevarying(
+    samples,
+    sampleRate,
+    f0Hz,
+    targetMidi,
+    hopLength,
+    voicedF32,
+    voicedProb,
+  );
+}
+
+/**
  * Time-stretch a note region between two sample offsets without changing pitch.
  *
  * @param samples - Audio samples (mono, float32)

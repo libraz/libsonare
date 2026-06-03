@@ -72,6 +72,47 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   REQUIRE(out != nullptr);
   REQUIRE(out_length == samples.size());
   sonare_free_floats(out);
+
+  // Time-varying correction: a caller-supplied per-frame F0 contour (here a
+  // constant 440 Hz track) corrected toward MIDI 70.
+  const int hop = 512;
+  const size_t n_frames = samples.size() / static_cast<size_t>(hop) + 1;
+  std::vector<float> f0(n_frames, 440.0f);
+  std::vector<float> voiced_prob(n_frames, 1.0f);
+  std::vector<int32_t> voiced(n_frames, 1);
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                                   voiced_prob.data(), voiced.data(), n_frames, hop,
+                                                   70.0f, &out, &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(out[i]));
+  }
+  sonare_free_floats(out);
+
+  // NULL voiced / voiced_prob default to "all voiced"; only f0_hz is required.
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                                   nullptr, nullptr, n_frames, hop, 70.0f, &out,
+                                                   &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  sonare_free_floats(out);
+
+  // Invalid args are rejected (null f0, zero frames, bad hop, out-of-range target).
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, nullptr,
+                                                   nullptr, nullptr, n_frames, hop, 70.0f, &out,
+                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                                   nullptr, nullptr, n_frames, 0, 70.0f, &out,
+                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                                   nullptr, nullptr, n_frames, hop, 200.0f, &out,
+                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo buffers",

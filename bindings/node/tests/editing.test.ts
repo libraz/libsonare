@@ -3,6 +3,7 @@ import {
   Audio,
   noteStretch,
   pitchCorrectToMidi,
+  pitchCorrectToMidiTimevarying,
   RealtimeVoiceChanger,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
@@ -31,6 +32,22 @@ describe('editing effects', () => {
     const result = pitchCorrectToMidi(tone, SR, 69, 71);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    const result = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop);
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(result.length).toBe(tone.length);
+    expect(result.every((x) => Number.isFinite(x))).toBe(true);
+
+    // Optional voiced / voicedProb arrays are accepted.
+    const voiced = new Int32Array(nFrames).fill(1);
+    const voicedProb = new Float32Array(nFrames).fill(1);
+    const result2 = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, voicedProb);
+    expect(result2.length).toBe(tone.length);
   });
 
   it('noteStretch returns a non-empty Float32Array', () => {

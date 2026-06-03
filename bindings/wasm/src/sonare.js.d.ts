@@ -1042,6 +1042,15 @@ export interface SonareModule {
     currentMidi: number,
     targetMidi: number,
   ) => Float32Array;
+  pitchCorrectToMidiTimevarying: (
+    samples: Float32Array,
+    sampleRate: number,
+    f0Hz: Float32Array,
+    targetMidi: number,
+    hopLength: number,
+    voiced?: Float32Array,
+    voicedProb?: Float32Array,
+  ) => Float32Array;
   noteStretch: (
     samples: Float32Array,
     sampleRate: number,

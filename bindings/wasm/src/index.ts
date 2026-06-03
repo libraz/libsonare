@@ -163,6 +163,7 @@ export {
   timeStretch,
   pitchShift,
   pitchCorrectToMidi,
+  pitchCorrectToMidiTimevarying,
   noteStretch,
   voiceChange,
   voiceChangeRealtime,

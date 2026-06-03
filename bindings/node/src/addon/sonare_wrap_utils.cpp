@@ -22,6 +22,10 @@ bool IsUint8Array(const Napi::Value& value) {
   return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
 }
 
+bool IsInt32Array(const Napi::Value& value) {
+  return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array;
+}
+
 bool ValidateMatrixDims(Napi::Env env, const char* fn_name, int rows, int cols, size_t length) {
   if (rows < 0 || cols < 0) {
     Napi::RangeError::New(env, std::string(fn_name) + ": dimensions must be non-negative")

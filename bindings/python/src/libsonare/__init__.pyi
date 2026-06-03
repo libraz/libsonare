@@ -311,6 +311,9 @@ from .analyzer import (
     pitch_correct_to_midi as pitch_correct_to_midi,
 )
 from .analyzer import (
+    pitch_correct_to_midi_timevarying as pitch_correct_to_midi_timevarying,
+)
+from .analyzer import (
     pitch_pyin as pitch_pyin,
 )
 from .analyzer import (
