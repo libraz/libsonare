@@ -24,6 +24,7 @@ import {
   mixingScenePresetJson,
   Project,
 } from '../dist/index.js';
+import type { BuiltinSynthConfig } from '../dist/index.js';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -75,6 +76,24 @@ describe('Wave 2b WASM consistency', () => {
           { waveform: 'sawtooth', gain: 0.5 },
           { totalFrames: SR, numChannels: 1 },
         );
+        expect(audio).toBeInstanceOf(Float32Array);
+        expect(maxAbs(audio)).toBeGreaterThan(0.01);
+      } finally {
+        project.delete();
+      }
+    });
+
+    it('accepts a patch typed with the shared BuiltinSynthConfig alias', () => {
+      const project = buildMidiOnlyProject();
+      try {
+        // The Python binding names this concept BuiltinSynthConfig; the WASM
+        // alias lets portable code share that name (tsc validates the alias
+        // accepts the same shape as BuiltinSynthBinding).
+        const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
+        const audio = project.bounceWithBuiltinInstrument(patch, {
+          totalFrames: SR,
+          numChannels: 1,
+        });
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {

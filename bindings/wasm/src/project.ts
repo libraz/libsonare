@@ -63,6 +63,13 @@ export interface BuiltinSynthBinding {
   polyphony?: number;
 }
 
+/**
+ * Cross-binding alias of {@link BuiltinSynthBinding}. The same built-in-synth
+ * patch concept is named `BuiltinSynthConfig` in the Python binding; this alias
+ * lets portable code use that shared name on the WASM surface too.
+ */
+export type BuiltinSynthConfig = BuiltinSynthBinding;
+
 /** Clip fade-curve for {@link Project.setClipFade}. */
 export type ProjectFadeCurve =
   | 'linear'

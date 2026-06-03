@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXPECTED_PROJECT_ABI_VERSION, Project, projectAbiVersion } from '../src/index.js';
+import type { BuiltinSynthConfig } from '../src/index.js';
 
 /** Build a small deterministic project: a track + an audio clip + a MIDI clip + tempo. */
 function buildProject(): Project {
@@ -296,6 +297,18 @@ describe('Project native binding', () => {
     const project = buildMidiOnlyProject();
     // Pass only the instrument; options defaults to {} and length auto-derives.
     const audio = project.bounceWithBuiltinInstrument({ waveform: 'triangle' });
+    expect(audio.length).toBeGreaterThan(0);
+    expect(peak(audio)).toBeGreaterThan(0);
+    project.destroy();
+  });
+
+  it('accepts a patch typed with the shared BuiltinSynthConfig alias', () => {
+    const project = buildMidiOnlyProject();
+    // The Python binding names this concept BuiltinSynthConfig; the Node alias
+    // lets portable code share that name (tsc validates the alias accepts the
+    // same shape as BuiltinInstrumentConfig).
+    const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
+    const audio = project.bounceWithBuiltinInstrument(patch);
     expect(audio.length).toBeGreaterThan(0);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();

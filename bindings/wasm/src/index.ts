@@ -343,6 +343,7 @@ export type {
 export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale';
 export type {
   BuiltinSynthBinding,
+  BuiltinSynthConfig,
   BuiltinSynthWaveform,
   ProjectAssistSidecar,
   ProjectAutomationCurve,

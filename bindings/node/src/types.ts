@@ -1420,6 +1420,13 @@ export interface BuiltinInstrumentConfig {
   polyphony?: number;
 }
 
+/**
+ * Cross-binding alias of {@link BuiltinInstrumentConfig}. The same built-in-synth
+ * patch concept is named `BuiltinSynthConfig` in the Python binding; this alias
+ * lets portable code use that shared name on the Node surface too.
+ */
+export type BuiltinSynthConfig = BuiltinInstrumentConfig;
+
 /** Clip fade-curve ordinals (mirror SonareProjectFadeCurve). */
 export type ProjectFadeCurve = 0 | 1 | 2 | 3;
 export const PROJECT_FADE_CURVE_LINEAR = 0;
