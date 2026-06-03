@@ -245,6 +245,43 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
   sonare_mixer_destroy(restored);
 }
 
+TEST_CASE("Mixing C API removes a strip send", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
+  REQUIRE(strip != nullptr);
+
+  size_t to_verb = 999;
+  size_t to_delay = 999;
+  REQUIRE(sonare_strip_add_send(strip, "vocal-to-verb", "verb", -12.0f,
+                                SONARE_SEND_TIMING_POST_FADER, &to_verb) == SONARE_OK);
+  REQUIRE(sonare_strip_add_send(strip, "vocal-to-delay", "delay", -9.0f,
+                                SONARE_SEND_TIMING_POST_FADER, &to_delay) == SONARE_OK);
+  REQUIRE(to_verb == 0);
+  REQUIRE(to_delay == 1);
+
+  // Out-of-range removal is rejected.
+  REQUIRE(sonare_strip_remove_send(strip, 5) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // Remove the first send; the second must shift down to index 0 and the dropped
+  // send must disappear from both the live strip and the scene mirror.
+  REQUIRE(sonare_strip_remove_send(strip, 0) == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  sonare_free_string(json);
+  REQUIRE(scene_json.find("\"vocal-to-verb\"") == std::string::npos);
+  REQUIRE(scene_json.find("\"vocal-to-delay\"") != std::string::npos);
+
+  // The surviving send is now addressable at index 0 (the shifted position);
+  // index 1 is out of range after the removal.
+  REQUIRE(sonare_strip_set_send_db(strip, 0, -6.0f) == SONARE_OK);
+  REQUIRE(sonare_strip_set_send_db(strip, 1, -6.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 8);
   REQUIRE(mixer != nullptr);

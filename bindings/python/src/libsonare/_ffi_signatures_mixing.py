@@ -62,6 +62,9 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_float,
         ]
+        if hasattr(lib, "sonare_strip_remove_send"):
+            lib.sonare_strip_remove_send.restype = ctypes.c_int32
+            lib.sonare_strip_remove_send.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
         lib.sonare_strip_meter.restype = ctypes.c_int32
         lib.sonare_strip_meter.argtypes = [
             ctypes.c_void_p,

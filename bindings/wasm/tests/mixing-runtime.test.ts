@@ -130,6 +130,39 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.delete();
       }
     });
+
+    it('removeSend drops a previously-added send and shifts higher indices down', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      try {
+        const vocal = mixer.stripById('vocal');
+        // Add two sends to the same bus; remove the first so the second shifts
+        // down into index 0.
+        const first = mixer.addSend(vocal, 'rt-send-a', 'vocal-verb', -20, 'postFader');
+        const second = mixer.addSend(vocal, 'rt-send-b', 'vocal-verb', -24, 'postFader');
+        expect(second).toBeGreaterThan(first);
+
+        // setSendDb on the highest index is valid before removal.
+        expect(() => mixer.setSendDb(vocal, second, -18)).not.toThrow();
+
+        // Remove the first send: the second shifts down by one, so the old
+        // highest index is now out of range and addressing it throws.
+        expect(() => mixer.removeSend(vocal, first)).not.toThrow();
+        expect(() => mixer.setSendDb(vocal, second, -18)).toThrow();
+        // The shifted-down send is still addressable at the lower index.
+        expect(() => mixer.setSendDb(vocal, first, -18)).not.toThrow();
+
+        mixer.compile();
+        const vocalL = new Float32Array(BLOCK);
+        vocalL[0] = 1;
+        const out = mixer.processStereo(
+          [vocalL, new Float32Array(BLOCK)],
+          [vocalL, new Float32Array(BLOCK)],
+        );
+        expect(blockEnergy(out)).toBeGreaterThan(0);
+      } finally {
+        mixer.delete();
+      }
+    });
   });
 
   describe('solo and solo-safe', () => {

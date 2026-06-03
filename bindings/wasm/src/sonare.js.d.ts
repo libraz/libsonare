@@ -1768,6 +1768,7 @@ export interface WasmMixer {
     timing: number,
   ) => number;
   setSendDb: (stripIndex: number, sendIndex: number, sendDb: number) => void;
+  removeSend: (stripIndex: number, sendIndex: number) => void;
   meterTap: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
   stripMeter: (stripIndex: number) => WasmMixMeterSnapshot;
   scheduleFaderAutomation: (

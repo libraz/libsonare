@@ -239,6 +239,11 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
                                                   out_left.data(), out_right.data(), length);
     if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
 
+    // Per-strip meter snapshots. NOTE: the integrating fields
+    // (momentaryLufs / shortTermLufs / integratedLufs / truePeakDb*) require
+    // sustained streaming to converge; on a short one-shot mix they have not
+    // accumulated enough signal and read the -120 dB floor sentinel. Use the
+    // streaming Mixer for meaningful loudness/true-peak readings.
     Napi::Array meters = Napi::Array::New(env, strips.size());
     for (size_t index = 0; index < strips.size(); ++index) {
       SonareMixMeterSnapshot snapshot{};

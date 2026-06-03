@@ -728,6 +728,20 @@ size_t ChannelStrip::add_send(const SendConfig& cfg) {
   return sends_.size() - 1;
 }
 
+void ChannelStrip::remove_send(size_t index) {
+  if (index >= sends_.size()) {
+    return;
+  }
+  // sends_ and send_automation_ are kept index-parallel by add_send, so erase
+  // the same slot from both. Erasing shifts higher sends down by one index,
+  // which the caller (the C-ABI remove_send) mirrors into the scene strip and
+  // forces a graph recompile to re-derive the send node port layout.
+  sends_.erase(sends_.begin() + static_cast<std::ptrdiff_t>(index));
+  if (index < send_automation_.size()) {
+    send_automation_.erase(send_automation_.begin() + static_cast<std::ptrdiff_t>(index));
+  }
+}
+
 void ChannelStrip::set_send_db(size_t index, float db) {
   if (index >= sends_.size()) {
     return;

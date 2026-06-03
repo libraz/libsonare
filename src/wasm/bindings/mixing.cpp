@@ -222,6 +222,14 @@ class MixerWasm {
                     "failed to set send level");
   }
 
+  // Removes the send at send_index (in add order) from the strip. Higher send
+  // indices shift down by one after removal; recompile before processing.
+  void removeSend(unsigned int strip_index, size_t send_index) {
+    checkStripError(
+        sonare_strip_remove_send(stripAt(strip_index), static_cast<unsigned int>(send_index)),
+        "failed to remove send");
+  }
+
   // Reads a meter snapshot at the given tap point. tap: 0 = pre-fader,
   // 1 = post-fader (see SonareMeterTap). Returns the full snapshot.
   val meterTap(unsigned int strip_index, int tap) {
@@ -807,6 +815,11 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
           sonare::ErrorCode::InvalidState,
           std::string("mixer process failed: ") + sonare_error_message(err));
     }
+    // The per-strip meter snapshots reflect only this single one-shot block.
+    // The integrating-meter fields (momentaryLufs/shortTermLufs/integratedLufs
+    // and the true-peak fields) require sustained streaming to populate; on a
+    // short one-shot mix they read the -120 dB floor sentinel. Use the
+    // streaming Mixer path if you need meaningful loudness/true-peak readings.
     for (size_t index = 0; index < strips.size(); ++index) {
       SonareMixMeterSnapshot snapshot{};
       sonare_strip_meter(strips[index], &snapshot);
@@ -898,6 +911,7 @@ void registerMixingBindings() {
       .function("setDualPan", &MixerWasm::setDualPan)
       .function("addSend", &MixerWasm::addSend)
       .function("setSendDb", &MixerWasm::setSendDb)
+      .function("removeSend", &MixerWasm::removeSend)
       .function("meterTap", &MixerWasm::meterTap)
       .function("stripMeter", &MixerWasm::stripMeter)
       .function("scheduleFaderAutomation", &MixerWasm::scheduleFaderAutomation)

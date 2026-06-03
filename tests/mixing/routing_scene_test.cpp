@@ -122,6 +122,37 @@ TEST_CASE("Removing a bus drops connections that referenced it", "[mixing][routi
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Removing a bus drops strip sends that targeted it", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 64;
+
+  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_bus(mixer, "reverb", "aux") == SONARE_OK);
+  SonareStrip* lead = sonare_mixer_add_strip(mixer, "lead");
+  REQUIRE(lead != nullptr);
+  size_t send_index = 999;
+  REQUIRE(sonare_strip_add_send(lead, "lead-to-verb", "reverb", -6.0f,
+                                SONARE_SEND_TIMING_POST_FADER, &send_index) == SONARE_OK);
+
+  // Removing the reverb bus must also drop the strip send that fed it, instead of
+  // leaving it dangling to be re-materialized as an implicit aux bus to master.
+  REQUIRE(sonare_mixer_remove_bus(mixer, "reverb") == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  sonare_free_string(json);
+  REQUIRE(scene_json.find("\"lead-to-verb\"") == std::string::npos);
+  REQUIRE(scene_json.find("\"reverb\"") == std::string::npos);
+
+  // The strip's send was removed, so index 0 is now out of range.
+  REQUIRE(sonare_strip_set_send_db(lead, 0, -3.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixing][routing]") {
   static constexpr int kSr = 48000;
   static constexpr int kBlock = 512;

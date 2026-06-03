@@ -358,6 +358,20 @@ export class Mixer {
   }
 
   /**
+   * Remove an existing send from a strip by index.
+   *
+   * Sends are addressed in add order. After removal, sends with a higher index
+   * than `sendIndex` shift down by one. Recompile (or process) before reading
+   * results so the routing graph rebuilds.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param sendIndex - Send index in add order
+   */
+  removeSend(stripIndex: number, sendIndex: number): void {
+    this.mixer.removeSend(stripIndex, sendIndex);
+  }
+
+  /**
    * Read a strip's meter snapshot at the given tap point.
    *
    * @param stripIndex - Strip index in `[0, stripCount())`

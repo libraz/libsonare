@@ -60,6 +60,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::SetDualPan>("setDualPan"),
           InstanceMethod<&MixerWrap::AddSend>("addSend"),
           InstanceMethod<&MixerWrap::SetSendDb>("setSendDb"),
+          InstanceMethod<&MixerWrap::RemoveSend>("removeSend"),
           InstanceMethod<&MixerWrap::StripMeter>("stripMeter"),
           InstanceMethod<&MixerWrap::MeterTap>("meterTap"),
           InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest"),
@@ -579,6 +580,26 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
   if (err != SONARE_OK) {
     Napi::Error::New(env,
                      std::string("failed to set strip send level: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::RemoveSend(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (strip, sendIndex: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const unsigned int send_index =
+      static_cast<unsigned int>(info[1].As<Napi::Number>().Int64Value());
+  SonareError err = sonare_strip_remove_send(strip, send_index);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to remove strip send: ") + ErrorMessageForCode(err))
         .ThrowAsJavaScriptException();
   }
   return env.Undefined();

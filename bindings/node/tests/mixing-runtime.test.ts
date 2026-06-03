@@ -68,6 +68,21 @@ describe('Mixer runtime methods', () => {
     expect(host.sends[0].sendDb).toBeCloseTo(-12, 5);
   });
 
+  it('removeSend drops a previously added send', () => {
+    const sendIndex = mixer.addSend('host', 'host-extra', 'master', -6, 'postFader');
+    expect(sendIndex).toBe(0);
+
+    const before = JSON.parse(mixer.toSceneJson());
+    const hostBefore = before.strips.find((strip: { id: string }) => strip.id === 'host');
+    expect(hostBefore.sends).toHaveLength(1);
+
+    expect(() => mixer.removeSend('host', sendIndex)).not.toThrow();
+
+    const after = JSON.parse(mixer.toSceneJson());
+    const hostAfter = after.strips.find((strip: { id: string }) => strip.id === 'host');
+    expect(hostAfter.sends ?? []).toHaveLength(0);
+  });
+
   it('returns numeric meter snapshots from stripMeter and meterTap', () => {
     const { left, right } = constantStrips([0.5, 0.25, 0.1]);
     mixer.processStereo(left, right);

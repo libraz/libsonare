@@ -60,6 +60,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   // Sends.
   Napi::Value AddSend(const Napi::CallbackInfo& info);
   Napi::Value SetSendDb(const Napi::CallbackInfo& info);
+  Napi::Value RemoveSend(const Napi::CallbackInfo& info);
 
   // Metering.
   Napi::Value StripMeter(const Napi::CallbackInfo& info);

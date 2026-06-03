@@ -1693,6 +1693,16 @@ export class Mixer {
   }
 
   /**
+   * Remove a strip's send addressed by add-order index.
+   *
+   * Sends with a higher index shift down by one after removal, so cached send
+   * indices must be re-resolved following this call.
+   */
+  removeSend(strip: StripRef, sendIndex: number): void {
+    this.native.removeSend(strip, sendIndex);
+  }
+
+  /**
    * Read a strip's current meter snapshot. With no `tap` (or `'postFader'`)
    * this returns the post-fader meter; pass `'preFader'` (or the enum int) to
    * read the pre-fader tap instead.
@@ -1777,6 +1787,16 @@ export class Mixer {
   }
 }
 
+/**
+ * One-shot stereo mix of multiple input strips down to a single stereo bus.
+ *
+ * The returned `meters` array carries a per-strip {@link MixMeterSnapshot}.
+ * Note that the integrating fields (`momentaryLufs`, `shortTermLufs`,
+ * `integratedLufs`, `truePeakDbL`/`truePeakDbR`) require sustained streaming to
+ * converge; on a short one-shot mix they have not accumulated enough signal and
+ * read the -120 dB floor sentinel. Use the streaming {@link Mixer} for
+ * meaningful loudness/true-peak readings.
+ */
 export function mixStereo(
   leftChannels: Float32Array[],
   rightChannels: Float32Array[],

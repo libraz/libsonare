@@ -251,13 +251,44 @@ SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float sen
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Reject an out-of-range send index rather than silently returning OK after a
-  // no-op (the underlying ChannelStrip ignores unknown indices).
-  if (index >= strip->scene_strip.sends.size()) {
+  // no-op (the underlying ChannelStrip ignores unknown indices). Validate
+  // against the live ChannelStrip's send count, the single source of truth
+  // shared with sonare_strip_schedule_send_automation; add_send/remove_send keep
+  // the live strip and the scene_strip mirror index-parallel.
+  if (index >= strip->strip.num_sends()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   strip->strip.set_send_db(index, send_db);
   strip->scene_strip.sends[index].send_db = send_db;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index) {
+  if (!strip) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Validate against the live ChannelStrip's send count, the single source of
+  // truth (see sonare_strip_set_send_db / sonare_strip_schedule_send_automation).
+  if (static_cast<size_t>(index) >= strip->strip.num_sends()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const size_t send_index = static_cast<size_t>(index);
+  // Drop the send from BOTH the live strip and the scene_strip mirror so the two
+  // counters stay consistent (LOW-63). Erasing shifts higher sends down by one
+  // index on both sides, keeping them index-parallel.
+  strip->strip.remove_send(send_index);
+  if (send_index < strip->scene_strip.sends.size()) {
+    strip->scene_strip.sends.erase(strip->scene_strip.sends.begin() +
+                                   static_cast<std::ptrdiff_t>(send_index));
+  }
+  // Removing a send changes the strip node's port layout; recompile the routing
+  // graph before the next process (matches sonare_strip_add_send).
+  if (strip->owner != nullptr) {
+    strip->owner->compiled_dirty = true;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 }

@@ -96,6 +96,12 @@ SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   const char* destination_bus_id, float send_db, int timing,
                                   size_t* index_out);
 SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float send_db);
+// Removes the send at @c index (in add order) from the strip. Higher sends shift
+// down by one index. The send is dropped from both the live strip and the scene
+// mirror, and the routing graph is marked dirty (recompile before processing).
+// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or @c index is out
+// of range.
+SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index);
 SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
 // Reads a meter snapshot at the given tap point. @c tap: 0 = pre-fader,
 // 1 = post-fader (see SonareMeterTap). Returns @c SONARE_ERROR_INVALID_PARAMETER
@@ -148,16 +154,16 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
 // start of processing: the mixer advances an internal sample position from 0 on
 // the first sonare_mixer_process_stereo call (reset to 0 on recompile).
 //
-// AUTOMATION CURVE ORDINALS (sample-accurate, mixing path):
+// AUTOMATION CURVE ORDINALS (canonical, shared across paths):
 //   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
 //
-// WARNING: this is a DIFFERENT ordinal scheme from the PPQ-domain
-// SonareAutomationPoint.curve_to_next used by sonare_engine_set_automation_lane
-// (where 0 = Hold, 1 = Linear, 2 = Exponential, 3 = SCurve). The two paths
-// target different C++ subsystems (mixing::AutomationCurveType vs
-// automation::CurveType) and are pinned by static_assert at each call site;
-// they cannot be unified without an ABI break. Always consult the ordinal
-// table for the API you are actually calling.
+// This is the SAME canonical ordinal scheme used by the PPQ-domain
+// SonareAutomationPoint.curve_to_next (sonare_engine_set_automation_lane). Both
+// paths resolve to the single sonare::AutomationCurve enum (mixing::
+// AutomationCurveType and automation::CurveType are aliases of it), so no
+// per-path "translation" of curve ordinals is needed when moving between the
+// engine-automation and mixer-automation APIs. Each call site pins the ordinals
+// with static_assert.
 //
 // Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if
 // strip is NULL, curve is unknown, or insert_index is out of range.
@@ -167,10 +173,10 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
 // Schedules sample-accurate fader/pan/width automation on a strip. @c sample_pos
 // uses the same absolute-sample timeline as sonare_strip_schedule_insert_automation.
 //
-// @c curve uses the sample-accurate mixing ordinal scheme:
+// @c curve uses the canonical automation-curve ordinal scheme:
 //   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
-// (This is NOT the same as the PPQ-domain scheme used by
-// SonareAutomationPoint.curve_to_next; see the warning above
+// (This is the same scheme used by the PPQ-domain
+// SonareAutomationPoint.curve_to_next; see the ordinal note above
 // sonare_strip_schedule_insert_automation.)
 //
 // Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if

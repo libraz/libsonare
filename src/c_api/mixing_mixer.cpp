@@ -56,11 +56,21 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
                                                    connection.destination == bus_id;
                                           }),
                            mixer->connections.end());
-  // Strip sends that still target the removed bus are intentionally left in
-  // place: compile_graph re-materializes any unknown send destination as an
-  // implicit aux bus (default-routed to master), so the send stays audible
-  // rather than dangling. ChannelStrip has no remove_send, so dropping the
-  // send would require rebuilding the strip and is out of scope here.
+  // Drop any strip send that targeted the removed bus from both the live strip
+  // and the scene mirror. Otherwise build_and_compile would re-materialize the
+  // orphaned destination as an implicit aux bus default-routed to master, so the
+  // (now reverb-less) dry send would silently re-appear at the master and alter
+  // the mix. Iterate sends back-to-front so erasing one does not skip the next.
+  for (const auto& strip : mixer->strips) {
+    auto& sends = strip->scene_strip.sends;
+    for (size_t i = sends.size(); i-- > 0;) {
+      if (sends[i].destination_bus_id == bus_id) {
+        // remove_send keeps the live strip and scene mirror index-parallel.
+        strip->strip.remove_send(i);
+        sends.erase(sends.begin() + static_cast<std::ptrdiff_t>(i));
+      }
+    }
+  }
   mixer->compiled_dirty = true;
   return SONARE_OK;
   SONARE_C_CATCH

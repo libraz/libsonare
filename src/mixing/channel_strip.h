@@ -162,6 +162,11 @@ class ChannelStrip : public rt::ProcessorBase {
   // Aux sends. add_send is a control-thread mutator (may allocate); it must not run
   // concurrently with process()/mix_send(), matching FxBus::add_insert's contract.
   size_t add_send(const SendConfig& cfg);
+  // Removes the send at @p index (and its paired automation lane), shifting the
+  // indices of any higher sends down by one. Control-thread mutator; must not
+  // run concurrently with process()/mix_send(), matching add_send's contract.
+  // Out-of-range indices are ignored (no-op).
+  void remove_send(size_t index);
   size_t num_sends() const noexcept { return sends_.size(); }
   void set_send_db(size_t index, float db);
   SendTiming send_timing(size_t index) const;

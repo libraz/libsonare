@@ -353,6 +353,19 @@ class Mixer:
             _get_lib().sonare_strip_set_send_db(handle, ctypes.c_size_t(index), ctypes.c_float(db))
         )
 
+    def remove_send(self, strip: StripRef, index: int) -> None:
+        """Remove a strip's send by add-order index.
+
+        Higher sends shift down by one index. The send is dropped from both the
+        live strip and the scene mirror; call :meth:`compile` (or process) before
+        the next render to rebuild the routing graph.
+        """
+        handle = self._strip_handle(strip)
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_strip_remove_send"):
+            raise RuntimeError("libsonare was built without strip remove_send support")
+        _check(lib.sonare_strip_remove_send(handle, ctypes.c_uint32(index)))
+
     def strip_meter(
         self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
     ) -> MixMeterSnapshot:
@@ -623,6 +636,14 @@ def mix_stereo(
         width: Optional per-strip stereo width values.
         muted: Optional per-strip mute flags.
         input_trim_db: Optional per-strip input trim values in dB.
+
+    Note:
+        The per-strip meters in the result expose integrating loudness fields
+        (``momentary_lufs``, ``short_term_lufs``, ``integrated_lufs``) and
+        ``true_peak_db``. These require sustained streaming to be meaningful:
+        on a short one-shot mix they have not accumulated enough history and
+        read the ``-120`` dB floor sentinel. For accurate loudness/true-peak
+        metering, drive a strip over a streaming session instead.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixer_create"):

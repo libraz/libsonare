@@ -146,13 +146,18 @@ void build_and_compile(SonareMixer* mixer) {
 
   // Any send destination that isn't already a bus becomes an implicit aux bus
   // (it default-routes to master below, so manual sends are still audible).
+  // Also record which bus ids receive inbound audio from a strip send so the
+  // dangling-bus diagnostic below can tell whether an unpatched explicit bus is
+  // actually fed (and thus silently dropping audio) versus genuinely unused.
   std::unordered_map<std::string, bool> is_bus;
   std::unordered_map<std::string, bool> is_implicit_bus;
+  std::unordered_map<std::string, bool> bus_has_inbound;
   for (const auto& bus : buses) {
     is_bus[bus.id] = true;
   }
   for (const auto& strip : mixer->strips) {
     for (const auto& send : strip->scene_strip.sends) {
+      bus_has_inbound[send.destination_bus_id] = true;
       if (!is_bus.count(send.destination_bus_id)) {
         buses.push_back({send.destination_bus_id, "aux"});
         is_bus[send.destination_bus_id] = true;
@@ -250,6 +255,7 @@ void build_and_compile(SonareMixer* mixer) {
     checked_connect({conn.source, 0, conn.destination, 0, sonare::graph::Connection::Mix::Add});
     checked_connect({conn.source, 1, conn.destination, 1, sonare::graph::Connection::Mix::Add});
     has_main_out[conn.source] = true;
+    bus_has_inbound[conn.destination] = true;  // a main edge feeds this node
   }
 
   // Default-route strips with no outgoing main connection to the master bus.
@@ -268,6 +274,36 @@ void build_and_compile(SonareMixer* mixer) {
       checked_connect({bus.id, 0, master_id, 0, sonare::graph::Connection::Mix::Add});
       checked_connect({bus.id, 1, master_id, 1, sonare::graph::Connection::Mix::Add});
     }
+  }
+
+  // MED-18 diagnostic: an EXPLICIT scene bus (submix/aux) that is fed by strips
+  // (a send or a main connection targets it) but has no onward main connection
+  // of its own contributes nothing to the master — its audio is silently
+  // dropped. This is the most common mixer-routing mistake (forgetting the
+  // submix -> master patch). We deliberately keep the authored topology rather
+  // than auto-routing such buses to master (auto-routing would discard the
+  // intentional "unpatched bus" design and make explicit buses indistinguishable
+  // from implicit ones), but record a clear diagnostic via set_last_error so the
+  // caller can retrieve it with sonare_last_error_message after a successful
+  // compile instead of being left with silence and no signal. Implicit buses are
+  // excluded (they were already default-routed above); the master is excluded.
+  std::string dangling_buses;
+  for (const auto& bus : buses) {
+    const bool is_dangling = !is_implicit_bus[bus.id] && !has_main_out[bus.id] &&
+                             bus_has_inbound[bus.id] && bus.id != master_id;
+    if (is_dangling) {
+      if (!dangling_buses.empty()) {
+        dangling_buses += ", ";
+      }
+      dangling_buses += bus.id;
+    }
+  }
+  if (!dangling_buses.empty()) {
+    sonare_c_detail::set_last_error(
+        ("mixer: explicit bus(es) [" + dangling_buses +
+         "] receive strip routing but have no onward connection to the master bus; their audio is "
+         "dropped. Add a connection from each bus to the master (or another routed bus).")
+            .c_str());
   }
 
   // Send taps: strip send output ports -> destination bus input ports.

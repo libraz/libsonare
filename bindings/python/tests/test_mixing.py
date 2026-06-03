@@ -153,6 +153,19 @@ def test_sends_add_and_set_level(mixer) -> None:
     mixer.set_send_db("vocal", index, -6.0)
 
 
+def test_remove_send_drops_a_send_and_shifts_indices(mixer) -> None:
+    """remove_send drops a send; later sends shift down and the index goes stale."""
+    i0 = mixer.add_send("vocal", "rm-send-0", "vocal-verb", send_db=-12.0, timing=0)
+    i1 = mixer.add_send("vocal", "rm-send-1", "vocal-verb", send_db=-9.0, timing=0)
+    assert i1 == i0 + 1
+
+    mixer.remove_send("vocal", i0)
+    # The surviving send shifted down to i0; the old top index is now out of range.
+    mixer.set_send_db("vocal", i0, -6.0)
+    with pytest.raises(RuntimeError):
+        mixer.set_send_db("vocal", i1, -6.0)
+
+
 def test_add_send_accepts_send_timing_enum_name_and_int(mixer) -> None:
     """add_send accepts a SendTiming enum, a name, and a raw int; invalid raises."""
     from libsonare import SendTiming
