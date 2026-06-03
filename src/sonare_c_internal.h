@@ -130,7 +130,7 @@ inline const char* join_names(const std::vector<std::string>& values, std::strin
 ///          inline. The supplied callable receives the wrapped Audio and must
 ///          return an Audio whose samples are copied into a fresh
 ///          heap-allocated array owned by the caller (freed via the existing
-///          sonare_free_array entry point).
+///          sonare_free_floats entry point).
 /// @param samples       Caller-owned input buffer (validated for null / NaN /
 ///                      Inf / sample_rate by validate_audio_params).
 /// @param length        Number of samples in @p samples.

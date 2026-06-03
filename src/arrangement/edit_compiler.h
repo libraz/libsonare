@@ -60,7 +60,7 @@ namespace sonare::arrangement {
 ///        drift silently. Kept in the arrangement layer (not the public C
 ///        header) so internal C++ callers can reference it without including
 ///        sonare_c_project.h.
-inline constexpr uint32_t kProjectAbiVersion = 3u;
+inline constexpr uint32_t kProjectAbiVersion = 1u;
 
 // ===========================================================================
 // Audio content store (decoded samples supplied by the caller before compile)

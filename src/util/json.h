@@ -402,12 +402,17 @@ inline void dump_value(const Value& value, std::ostringstream& out) {
     out << (value.as_bool() ? "true" : "false");
   } else if (value.is_number()) {
     // RFC 8259 forbids NaN/Infinity as JSON numbers; std::ostringstream would
-    // emit "nan"/"inf" which no spec-compliant parser accepts (including the
-    // one in this header). Fail loudly rather than silently producing invalid
-    // output that breaks on the next parse round-trip.
+    // emit "nan"/"inf" which no spec-compliant parser accepts (including the one
+    // in this header). Emit `null` instead -- a valid JSON token that round-trips
+    // cleanly through parse(). This lets callers serialize legitimately
+    // non-finite values (e.g. a -inf LUFS / true-peak reading for a fully silent
+    // input, the EBU R128 "below measurement floor" sentinel) into a JSON sidecar
+    // without dump() throwing. The information that the field was non-finite is
+    // preserved as JSON null rather than a misleading finite number.
     const double number = value.as_number();
     if (!std::isfinite(number)) {
-      throw JsonError("cannot serialize non-finite JSON number", 0);
+      out << "null";
+      return;
     }
     // max_digits10 (17 for IEEE-754 double) is the minimum precision that
     // guarantees a lossless roundtrip via decimal text. setprecision(15) was

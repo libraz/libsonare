@@ -60,6 +60,7 @@ add_executable(sonare_tests
   effects/pitch_shift_test.cpp
   effects/phase_vocoder_test.cpp
   effects/normalize_test.cpp
+  effects/fx_reachability_test.cpp
   analysis/key_profiles_test.cpp
   analysis/chord_templates_test.cpp
   analysis/acoustic_analyzer_test.cpp
@@ -324,6 +325,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/edit_model_test.cpp
     arrangement/edit_command_history_test.cpp
     arrangement/edit_compiler_golden_test.cpp
+    arrangement/c_abi_edit_ops_test.cpp
     midi/midi_ump_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
@@ -337,6 +339,7 @@ if(BUILD_ARRANGEMENT)
     mir/mir_key_chord_onset_test.cpp
     serialize/project_serializer_roundtrip_test.cpp
     serialize/project_deserialize_fuzz_test.cpp
+    serialize/project_default_sr_and_uri_test.cpp
     host/host_seam_test.cpp
     engine/realtime_engine_midi_test.cpp
     bindings/binding_project_c_surface_test.cpp

@@ -135,26 +135,28 @@ TEST_CASE("util json parse_strict rejects duplicate object keys", "[json]") {
   REQUIRE_NOTHROW(sonare::util::json::parse_strict("{\"a\":1,\"b\":2}"));
 }
 
-TEST_CASE("util json rejects serializing non-finite numbers", "[json]") {
+TEST_CASE("util json serializes non-finite numbers as null", "[json]") {
   // RFC 8259 has no representation for NaN/Inf; dumping them would emit
   // implementation-defined strings ("nan"/"inf") that no JSON parser accepts,
-  // including our own. The serializer must throw rather than produce output
-  // that breaks on the next parse round-trip (e.g. preset JSON pipelines).
-  REQUIRE_THROWS_AS(
-      sonare::util::json::dump(sonare::util::json::Value(std::numeric_limits<double>::quiet_NaN())),
-      sonare::util::json::JsonError);
-  REQUIRE_THROWS_AS(
-      sonare::util::json::dump(sonare::util::json::Value(std::numeric_limits<double>::infinity())),
-      sonare::util::json::JsonError);
-  REQUIRE_THROWS_AS(
-      sonare::util::json::dump(sonare::util::json::Value(-std::numeric_limits<double>::infinity())),
-      sonare::util::json::JsonError);
-  // Embedded non-finite inside a container must also reject (whole-document
-  // validation, not just top-level numbers).
+  // including our own. Instead of throwing (which made it impossible to store a
+  // legitimately non-finite value such as a -inf LUFS/true-peak reading for a
+  // silent input), the serializer emits the valid JSON token `null`, which
+  // round-trips cleanly through parse().
+  REQUIRE(sonare::util::json::dump(
+              sonare::util::json::Value(std::numeric_limits<double>::quiet_NaN())) == "null");
+  REQUIRE(sonare::util::json::dump(
+              sonare::util::json::Value(std::numeric_limits<double>::infinity())) == "null");
+  REQUIRE(sonare::util::json::dump(
+              sonare::util::json::Value(-std::numeric_limits<double>::infinity())) == "null");
+
+  // Embedded non-finite inside a container is also rendered as null (whole
+  // document stays valid JSON) and parses back to a null member.
   sonare::util::json::Object obj;
-  obj["x"] = sonare::util::json::Value(std::numeric_limits<double>::quiet_NaN());
-  REQUIRE_THROWS_AS(sonare::util::json::dump(sonare::util::json::Value(std::move(obj))),
-                    sonare::util::json::JsonError);
+  obj["x"] = sonare::util::json::Value(-std::numeric_limits<double>::infinity());
+  const std::string dumped = sonare::util::json::dump(sonare::util::json::Value(std::move(obj)));
+  REQUIRE(dumped == "{\"x\":null}");
+  const auto reparsed = sonare::util::json::parse(dumped);
+  REQUIRE(reparsed["x"].is_null());
 }
 
 TEST_CASE("util json tolerates a UTF-8 BOM at the document head", "[json]") {

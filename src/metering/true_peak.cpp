@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <limits>
 
 #include "rt/polyphase_fir.h"
 #include "util/constants.h"
@@ -14,6 +13,7 @@
 namespace sonare::metering {
 
 using sonare::constants::kEpsilon;
+using sonare::constants::kFloorDb;
 
 namespace {
 
@@ -75,7 +75,10 @@ float true_peak(const Audio& audio, int oversample_factor) {
 
 float true_peak_db(const Audio& audio, int oversample_factor) {
   const float peak = true_peak(audio, oversample_factor);
-  if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
+  // Silence floor: report the shared finite dB floor (kFloorDb, -120 dB) rather
+  // than -inf, matching the spectrum and dynamic-range meters. A finite floor is
+  // JSON-safe and gives every level-in-dB meter the same "silence" sentinel.
+  if (peak < kEpsilon) return kFloorDb;
   return linear_to_db(peak);
 }
 

@@ -183,6 +183,13 @@ std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_lengt
 }
 
 int samples_to_frames(int samples, int hop_length, int n_fft) {
+  // Guard against a non-positive hop_length: dividing by it below would be
+  // integer division-by-zero (UB) for hop_length == 0 and would produce a
+  // meaningless (sign-flipped) frame index for a negative hop. A frame index is
+  // undefined without a positive hop, so return 0 frames -- mirroring the
+  // saturating, non-throwing convention of the sibling frames_to_samples
+  // helpers (the throwing variants are frames_to_time / time_to_frames).
+  if (hop_length <= 0) return 0;
   const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
   // Use floor for deterministic behavior with negative numerators.
   const int adjusted = samples - offset;

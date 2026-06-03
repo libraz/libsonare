@@ -144,6 +144,7 @@ node = [
   "metering_phase_scope_decimated",   # pending binding wave
   "metering_vectorscope_decimated",   # pending binding wave
   "metering_spectrum_frame",          # pending binding wave
+  "mastering_insert_names",           # pending binding wave
   # C-ABI-internal length-checked inverse variants: bindings build their own
   # arrays with known lengths and call the base function, so the explicit-length
   # guards are not part of the binding surface.
@@ -174,6 +175,7 @@ wasm = [
   "metering_phase_scope_decimated",   # pending binding wave
   "metering_vectorscope_decimated",   # pending binding wave
   "metering_spectrum_frame",          # pending binding wave
+  "mastering_insert_names",           # pending binding wave
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
@@ -207,6 +209,7 @@ python = [
   "metering_phase_scope_decimated",   # pending binding wave
   "metering_vectorscope_decimated",   # pending binding wave
   "metering_spectrum_frame",          # pending binding wave
+  "mastering_insert_names",           # pending binding wave
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",

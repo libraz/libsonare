@@ -275,6 +275,18 @@ Value source_to_json(const arrangement::ClipSource& src) {
     // Host-local reference only; the core never opens the URI. Recording /
     // generated audio with no file defaults to this ref (URI/asset id) and/or a
     // storage handle id — the core does not embed or interpret blobs.
+    //
+    // LIMITATION (audio-sample serialization): decoded interleaved PCM is NEVER
+    // embedded in the project JSON — that is deliberate, since the document is
+    // byte-stable / deterministic by design and PCM blobs would bloat it and
+    // break golden stability. The ONLY render-time link to the underlying audio
+    // is this @c uri / @c storage_handle_id / @c content_hash triple. A host
+    // that saves a project, drops the in-memory content store, then loads + bounces
+    // gets SILENT audio clips unless it re-supplies samples for these references
+    // (re-decode the URI, or re-bind via the content store). We therefore make
+    // sure ALL of those references survive the round-trip so the host can detect
+    // an unresolved source and re-decode it, rather than silently bouncing
+    // silence. We do NOT base64-embed PCM here.
     o["uri"] = audio->uri;
     o["channel_count"] = static_cast<double>(audio->channel_count);
     o["sample_rate_hint"] = audio->sample_rate_hint;
@@ -890,7 +902,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
 
     arrangement::Project project;
-    project.set_sample_rate(num_or(root, "sample_rate", 22050.0));
+    // Default matches arrangement::Project's constructor default (48 kHz, the
+    // conventional DAW render rate) so a document that omits "sample_rate"
+    // round-trips to the same rate an in-memory project would have.
+    project.set_sample_rate(num_or(root, "sample_rate", 48000.0));
     project.set_overlap_policy(
         static_cast<arrangement::OverlapPolicy>(uint_or(root, "overlap_policy", 0)));
 

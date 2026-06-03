@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "mastering/api/named_processor.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::api {
@@ -29,6 +30,15 @@ namespace sonare::mastering::api {
 ///         is malformed. Unknown names return nullptr rather than throwing.
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
                                                        const std::string& json_params);
+
+/// @brief Same as make_insert() but takes an already-parsed Param list instead
+///        of a JSON string. Used by the offline named-processor path so it can
+///        reach the streaming inserts (e.g. the creative effects.* reverbs and
+///        modulation effects) without re-serializing to JSON.
+/// @return A heap-allocated processor, or nullptr if @p name is not a known
+///         block-processor insert.
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
+    const std::string& name, const std::vector<Param>& param_list);
 
 /// @brief Construct a streaming insert that needs an impulse response.
 /// @param name Processor name. For "effects.reverb.convolution" the returned

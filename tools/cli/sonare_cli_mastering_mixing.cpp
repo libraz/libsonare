@@ -159,6 +159,65 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+// True when `name` has no mono implementation and must run through the stereo
+// entry point (stereo wideners / mid-side EQ / multiband — see
+// named_processor_registry.cpp). The mono apply_named_processor() rejects these
+// with an opaque INVALID_PARAMETER, so the CLI must route them to the stereo
+// path (or give a clear diagnostic).
+bool is_stereo_only_processor(const std::string& name) {
+  const auto names = mastering::api::stereo_processor_names();
+  return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+// Stereo path for cmd_mastering_processor: the CLI carries a single mono buffer,
+// so we feed it to BOTH channels, run the true-stereo processor, and downmix the
+// processed L/R back to mono for the (mono-centric) CLI WAV writer. This makes
+// stereo-only processors (stereo.imager, eq.midSide, multiband.*) reachable as a
+// standalone CLI effect. Engaged by --stereo or auto-engaged for a stereo-only
+// processor.
+int run_mastering_processor_stereo(const CliArgs& args, const Audio& audio,
+                                   const std::string& processor,
+                                   const std::vector<mastering::api::Param>& params) {
+  const std::vector<float> channel(audio.begin(), audio.end());
+  const auto result = mastering::api::apply_named_processor_stereo(
+      processor, channel.data(), channel.data(), audio.size(), audio.sample_rate(), params);
+  if (!args.output_file.empty()) {
+    std::vector<float> mono(result.left.size(), 0.0f);
+    for (size_t i = 0; i < mono.size(); ++i) {
+      const float r = i < result.right.size() ? result.right[i] : 0.0f;
+      mono[i] = 0.5f * (result.left[i] + r);
+    }
+    save_wav(args.output_file, mono, result.sample_rate, args.get_int("bits", 16));
+  }
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("processor", processor)
+        .kv("stereo", true)
+        .kv("input_lufs", result.input_lufs)
+        .kv("output_lufs", result.output_lufs)
+        .kv("applied_gain_db", result.applied_gain_db)
+        .kv("latency_samples", result.latency_samples)
+        .kv("output", args.output_file)
+        .end_object()
+        .print();
+  } else {
+    std::cout << "\n"
+              << color::cyan << color::bold << "Mastering Processor (stereo)" << color::reset
+              << "\n"
+              << "  Processor:       " << processor << "\n"
+              << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+              << "\n"
+              << "  Output LUFS:     " << result.output_lufs << "\n"
+              << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
+              << "  Latency:         " << result.latency_samples << " samples\n";
+    if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
+    std::cout << "\n";
+  }
+  return 0;
+}
+
 int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
   const std::string processor = args.get_string("processor");
   if (processor.empty()) {
@@ -166,6 +225,12 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   const auto params = parse_mastering_params(args.get_string("params"));
+  // Route stereo-only processors (and an explicit --stereo request) through the
+  // true-stereo entry point; otherwise they would fail with an opaque mono
+  // INVALID_PARAMETER. The mono path stays the default for everything else.
+  if (args.has("stereo") || is_stereo_only_processor(processor)) {
+    return run_mastering_processor_stereo(args, audio, processor, params);
+  }
   const auto result = mastering::api::apply_named_processor(processor, audio.data(), audio.size(),
                                                             audio.sample_rate(), params);
   if (!args.output_file.empty()) {

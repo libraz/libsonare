@@ -689,3 +689,138 @@ TEST_CASE("true peak supports 16x oversampling without degrading", "[meter]") {
   REQUIRE(tp16 > metering::true_peak(audio, 1));
   REQUIRE(tp16 >= metering::true_peak(audio, 8) - 0.05f);
 }
+
+// ============================================================================
+// Foundations: cross-meter silence floor sentinel + scope decimation parity.
+// ============================================================================
+
+TEST_CASE("level meters share the finite kFloorDb silence sentinel", "[meter][floor]") {
+  // The level-in-dB meters (true_peak / spectrum / dynamic_range) all report the
+  // same finite floor for silence: sonare::constants::kFloorDb (-120 dB). A
+  // finite floor is JSON-safe and gives every level meter the same "silence"
+  // sentinel, instead of the earlier mix of -inf / -120 / -200.
+  const float floor = sonare::constants::kFloorDb;
+
+  SECTION("true_peak_db of silence is kFloorDb (was -inf)") {
+    const std::vector<float> silent(4096, 0.0f);
+    const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
+    const float tp_db = metering::true_peak_db(audio);
+    REQUIRE(std::isfinite(tp_db));
+    REQUIRE_THAT(tp_db, WithinAbs(floor, 1e-4f));
+  }
+
+  SECTION("dynamic_range window floor is kFloorDb") {
+    const std::vector<float> silent(48000, 0.0f);
+    const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
+    metering::DynamicRangeConfig config;
+    config.window_sec = 0.5f;
+    config.hop_sec = 0.5f;
+    const auto result = metering::dynamic_range(audio, config);
+    REQUIRE(!result.window_rms_db.empty());
+    for (float v : result.window_rms_db) {
+      REQUIRE(std::isfinite(v));
+      REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
+    }
+    // The default config floor_db is also kFloorDb.
+    REQUIRE_THAT(metering::DynamicRangeConfig{}.floor_db, WithinAbs(floor, 0.0f));
+  }
+
+  SECTION("spectrum empty-result db is kFloorDb") {
+    // The empty-audio spectrum result fills its dB array with the shared floor.
+    const Audio audio;  // empty
+    metering::SpectrumConfig config;
+    config.n_fft = 1024;
+    const auto result = metering::spectrum(audio, config);
+    REQUIRE(!result.db.empty());
+    for (float v : result.db) {
+      REQUIRE(std::isfinite(v));
+      REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
+    }
+  }
+}
+
+TEST_CASE("LUFS deliberately keeps -inf as its silence sentinel", "[meter][floor][lufs]") {
+  // Unlike the level meters above, LUFS keeps -inf for silence: it is the
+  // canonical ITU-R BS.1770-4 / EBU R128 "below measurement floor" value and is
+  // also used internally as a gating sentinel. This documents the intentional
+  // difference; JSON serialization of that -inf is made safe in util/json.h.
+  const std::vector<float> silent(48000, 0.0f);
+  const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
+  const auto result = metering::lufs(audio);
+  REQUIRE(!std::isfinite(result.integrated_lufs));
+  REQUIRE(result.integrated_lufs < 0.0f);
+}
+
+TEST_CASE("vectorscope and phase scope decimate identically", "[meter][decimation]") {
+  // Both scopes share src/metering/decimation.h for mid/side and the bucketed
+  // largest-radius decimation, so for the same input and point budget they must
+  // select the same per-bucket sample. mid/side are identical and both pick the
+  // max-radius element of each contiguous bucket (mid^2+side^2 vs radius give the
+  // same argmax), so the kept points line up one-to-one.
+  std::vector<float> left(1000);
+  std::vector<float> right(1000);
+  for (size_t i = 0; i < left.size(); ++i) {
+    const float t = static_cast<float>(i) / 1000.0f;
+    left[i] = std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 7.0f * t);
+    right[i] =
+        0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 11.0f * t + 0.3f);
+  }
+
+  const size_t max_points = 64;
+  const auto vs = metering::vectorscope(left.data(), right.data(), left.size(), max_points);
+  const auto ps = metering::phase_scope(left.data(), right.data(), left.size(), max_points);
+
+  REQUIRE(vs.size() == ps.points.size());
+  REQUIRE(vs.size() <= max_points);
+  REQUIRE(!vs.empty());
+  for (size_t i = 0; i < vs.size(); ++i) {
+    // Same bucket winner => same mid/side from the shared helper.
+    REQUIRE_THAT(vs[i].mid, WithinAbs(ps.points[i].mid, 1e-6f));
+    REQUIRE_THAT(vs[i].side, WithinAbs(ps.points[i].side, 1e-6f));
+  }
+}
+
+TEST_CASE("scope decimation matches a reference inline implementation", "[meter][decimation]") {
+  // Pin the shared decimation to a hand-written reference so a future refactor of
+  // decimation.h cannot silently change which sample each bucket keeps. The
+  // reference reproduces the exact pre-commonization vectorscope logic.
+  std::vector<float> left(257);
+  std::vector<float> right(257);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = std::sin(0.37f * static_cast<float>(i));
+    right[i] = std::cos(0.21f * static_cast<float>(i));
+  }
+  const size_t max_points = 16;
+  const auto vs = metering::vectorscope(left.data(), right.data(), left.size(), max_points);
+
+  const float inv_sqrt2 = sonare::constants::kInvSqrt2;
+  std::vector<metering::VectorscopePoint> expected;
+  for (size_t b = 0; b < max_points; ++b) {
+    const size_t begin = (b * left.size()) / max_points;
+    const size_t end = ((b + 1) * left.size()) / max_points;
+    if (begin >= end) continue;
+    auto make = [&](size_t i) {
+      metering::VectorscopePoint p;
+      p.mid = (left[i] + right[i]) * inv_sqrt2;
+      p.side = (left[i] - right[i]) * inv_sqrt2;
+      return p;
+    };
+    metering::VectorscopePoint best = make(begin);
+    float best_metric = best.mid * best.mid + best.side * best.side;
+    for (size_t i = begin + 1; i < end; ++i) {
+      const auto p = make(i);
+      const float metric = p.mid * p.mid + p.side * p.side;
+      if (metric > best_metric) {
+        best_metric = metric;
+        best = p;
+      }
+    }
+    expected.push_back(best);
+  }
+
+  REQUIRE(vs.size() == expected.size());
+  for (size_t i = 0; i < vs.size(); ++i) {
+    REQUIRE_THAT(vs[i].mid, WithinAbs(expected[i].mid, 0.0f));
+    REQUIRE_THAT(vs[i].side, WithinAbs(expected[i].side, 0.0f));
+  }
+}

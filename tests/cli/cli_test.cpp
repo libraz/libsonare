@@ -959,5 +959,56 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE(code != 0);
     std::remove(bad.c_str());
   }
+
+  SECTION("bounce WAV header sample rate equals the render rate (default 48000)") {
+    // Regression: the bounce used to tag the WAV with 44100 while the engine
+    // rendered at the project rate (~2x pitch error). The reported sample_rate
+    // must equal the rate the render actually used. With no --sample-rate the
+    // CLI pins a definite 48000 render rate and tags the header to match.
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_bounce.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [bc, bo] =
+        exec_command(CLI + " project bounce --in " + proj + " -o " + wav + " --frames 256 --json");
+    REQUIRE(bc == 0);
+    REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": 48000"));
+
+    std::remove(proj.c_str());
+    std::remove(wav.c_str());
+  }
+
+  SECTION("bounce honors an explicit --sample-rate in the WAV header") {
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_bounce.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --sample-rate 44100 --json");
+    REQUIRE(bc == 0);
+    REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": 44100"));
+
+    std::remove(proj.c_str());
+    std::remove(wav.c_str());
+  }
+
+  SECTION("--synth routes MIDI through the built-in instrument bounce") {
+    // Without --synth a MIDI bounce is silent; --synth makes it audible by
+    // routing through sonare_project_bounce_with_builtin_instruments.
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_synth.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --synth saw --json");
+    REQUIRE(bc == 0);
+    REQUIRE_THAT(bo, ContainsSubstring("\"builtin_synth\": true"));
+
+    std::remove(proj.c_str());
+    std::remove(wav.c_str());
+  }
 }
 #endif  // SONARE_WITH_ARRANGEMENT

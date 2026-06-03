@@ -1,12 +1,10 @@
 #include "metering/stereo.h"
 
-#include "util/constants.h"
+#include "metering/decimation.h"
 #include "util/exception.h"
 #include "util/stereo_metrics.h"
 
 namespace sonare::metering {
-
-using sonare::constants::kInvSqrt2;
 
 float correlation(const float* left, const float* right, size_t length) {
   return util::stereo_correlation(left, right, length);
@@ -26,9 +24,10 @@ std::vector<VectorscopePoint> vectorscope(const float* left, const float* right,
   SONARE_CHECK(left != nullptr && right != nullptr, ErrorCode::InvalidParameter);
 
   auto point_at = [&](size_t i) {
+    const detail::MidSide ms = detail::mid_side(left, right, i);
     VectorscopePoint p;
-    p.mid = (left[i] + right[i]) * kInvSqrt2;
-    p.side = (left[i] - right[i]) * kInvSqrt2;
+    p.mid = ms.mid;
+    p.side = ms.side;
     return p;
   };
 
@@ -39,26 +38,15 @@ std::vector<VectorscopePoint> vectorscope(const float* left, const float* right,
   }
 
   // Deterministic decimation: split the input into max_points contiguous buckets
-  // and keep, for each bucket, the sample with the largest radius (|mid|+|side|
-  // proxy) so transient stereo peaks survive the down-sample.
+  // and keep, for each bucket, the sample with the largest radius (mid^2 + side^2
+  // metric) so transient stereo peaks survive the down-sample. Shared bucket math
+  // lives in detail::decimate_max so it cannot diverge from the phase scope.
   std::vector<VectorscopePoint> points;
   points.reserve(max_points);
-  for (size_t b = 0; b < max_points; ++b) {
-    const size_t begin = (b * length) / max_points;
-    const size_t end = ((b + 1) * length) / max_points;
-    if (begin >= end) continue;
-    VectorscopePoint best = point_at(begin);
-    float best_metric = best.mid * best.mid + best.side * best.side;
-    for (size_t i = begin + 1; i < end; ++i) {
-      const VectorscopePoint p = point_at(i);
-      const float metric = p.mid * p.mid + p.side * p.side;
-      if (metric > best_metric) {
-        best_metric = metric;
-        best = p;
-      }
-    }
-    points.push_back(best);
-  }
+  detail::decimate_max(
+      length, max_points, point_at,
+      [](const VectorscopePoint& p) { return p.mid * p.mid + p.side * p.side; },
+      [&](const VectorscopePoint& best) { points.push_back(best); });
   return points;
 }
 

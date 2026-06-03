@@ -35,8 +35,14 @@
 #include "sonare_c_types.h"
 
 /// @brief Compile-time mirror of the runtime project ABI version returned by
-///        @ref sonare_project_abi_version. Bump on ANY flat POD layout change.
-#define SONARE_PROJECT_ABI_VERSION 3u
+///        @ref sonare_project_abi_version.
+///
+/// This is the PUBLISHED project ABI contract. Bump it once per RELEASE that
+/// changes the flat POD layout a distributed binary exposes — NOT on every
+/// in-development edit. The project ABI has not shipped in any release yet
+/// (absent from v1.2.3), so it stays at 1 while the surface is still being
+/// built out; additive, unreleased changes do not require a bump.
+#define SONARE_PROJECT_ABI_VERSION 1u
 
 #ifdef __cplusplus
 extern "C" {
@@ -339,6 +345,72 @@ static_assert(offsetof(SonareMidiEventPod, data0) == 8, "MidiEventPod.data0 offs
 static_assert(offsetof(SonareMidiEventPod, data1) == 12, "MidiEventPod.data1 offset");
 #endif
 
+/// @brief Clip fade-curve ordinals; mirror sonare::arrangement::FadeCurve.
+///        Pinned by a static_assert in the .cpp so reordering is caught.
+typedef enum {
+  SONARE_FADE_CURVE_LINEAR = 0,
+  SONARE_FADE_CURVE_EQUAL_POWER = 1,
+  SONARE_FADE_CURVE_EXPONENTIAL = 2,
+  SONARE_FADE_CURVE_LOGARITHMIC = 3,
+} SonareProjectFadeCurve;
+
+/// @brief Clip loop-mode ordinals; mirror sonare::arrangement::LoopMode.
+///        Pinned by a static_assert in the .cpp.
+typedef enum {
+  SONARE_LOOP_MODE_OFF = 0,
+  SONARE_LOOP_MODE_LOOP = 1,
+} SonareProjectLoopMode;
+
+/// @brief Automation breakpoint interpolation ordinals; mirror
+///        sonare::AutomationCurve. Pinned by a static_assert in the .cpp.
+typedef enum {
+  SONARE_CURVE_LINEAR = 0,
+  SONARE_CURVE_EXPONENTIAL = 1,
+  SONARE_CURVE_HOLD = 2,
+  SONARE_CURVE_SCURVE = 3,
+} SonareProjectAutomationCurve;
+
+/// @brief One clip fade region for @ref sonare_project_set_clip_fade.
+///        @p length_ppq must be finite and >= 0 (0 = no fade). @p curve is a
+///        @ref SonareProjectFadeCurve ordinal.
+typedef struct {
+  double length_ppq;
+  uint32_t curve; /* SonareProjectFadeCurve */
+} SonareProjectClipFade;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectClipFade, length_ppq) == 0, "ClipFade.length_ppq offset");
+static_assert(offsetof(SonareProjectClipFade, curve) == sizeof(double), "ClipFade.curve offset");
+static_assert(sizeof(SonareProjectClipFade) == sizeof(double) + 2u * sizeof(uint32_t),
+              "SonareProjectClipFade layout drift");
+#endif
+
+/// @brief Description for @ref sonare_project_add_automation_lane and
+///        @ref sonare_project_edit_automation_lane.
+///
+/// @p target_param_id identifies the parameter the lane drives (host-defined,
+/// e.g. a mixer-strip volume parameter id). @p points is an array of
+/// @p point_count breakpoints (the shared @ref SonareAutomationPoint POD whose
+/// @c curve_to_next uses the @ref SonareProjectAutomationCurve ordinals). It may
+/// be NULL only when @p point_count is 0. The breakpoints are copied; the core
+/// does not require them pre-sorted but stores them verbatim.
+typedef struct {
+  uint32_t target_param_id;
+  const SonareAutomationPoint* points;
+  size_t point_count;
+} SonareAutomationLaneDesc;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareAutomationLaneDesc, target_param_id) == 0,
+              "AutomationLaneDesc.target_param_id offset");
+static_assert(offsetof(SonareAutomationLaneDesc, points) == sizeof(void*),
+              "AutomationLaneDesc.points offset");
+static_assert(offsetof(SonareAutomationLaneDesc, point_count) == 2u * sizeof(void*),
+              "AutomationLaneDesc.point_count offset");
+static_assert(sizeof(SonareAutomationLaneDesc) == 2u * sizeof(void*) + sizeof(size_t),
+              "SonareAutomationLaneDesc layout drift");
+#endif
+
 // ============================================================================
 // ABI version
 // ============================================================================
@@ -467,7 +539,7 @@ typedef enum {
 ///        is clamped to an audible range), so callers may fill only what they
 ///        need. This is a deliberately plain electronic sound source so MIDI
 ///        arrangements bounce to audio instead of silence; a richer instrument
-///        bank is planned (see backup/builtin-instrument-plan.md).
+///        bank is planned (see backup/builtin-instrument-buildplan.md).
 /// Every numeric field uses "0 (or non-positive) => default", so a zero-init
 /// config is the default sine patch and callers override only what they need.
 typedef struct {
@@ -548,6 +620,83 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
 ///        undoable edit command. @p track_id must reference an existing track.
 SonareError sonare_project_set_track_midi_destination(SonareProject* project, uint32_t track_id,
                                                       uint32_t destination_id);
+
+/// @brief Removes a clip via an undoable edit command. @p clip_id must
+///        reference an existing clip. Undo restores the clip (and its MIDI
+///        content) at its original position.
+SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id);
+
+/// @brief Sets a clip's linear playback gain via an undoable edit command.
+///        @p gain must be finite and >= 0 (0 = muted; this is the explicit-gain
+///        path that the @ref sonare_project_add_clip default-coercion lacks).
+SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_id, float gain);
+
+/// @brief Sets a clip's fade-in and fade-out regions via an undoable edit
+///        command. Each fade length (PPQ) must be finite and >= 0 (0 = no fade);
+///        each curve is a @ref SonareProjectFadeCurve ordinal.
+SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_id,
+                                         const SonareProjectClipFade* fade_in,
+                                         const SonareProjectClipFade* fade_out);
+
+/// @brief Sets a clip's loop mode + loop length (PPQ) via an undoable edit
+///        command. @p loop_mode is a @ref SonareProjectLoopMode ordinal. When
+///        @p loop_mode is SONARE_LOOP_MODE_LOOP, @p loop_length_ppq must be
+///        finite and > 0; otherwise it must be finite and >= 0.
+SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_id, int loop_mode,
+                                         double loop_length_ppq);
+
+/// @brief Rebinds a clip to a different (already-registered) source via an
+///        undoable edit command. @p source_id must reference an existing source;
+///        @p clip_id an existing clip.
+SonareError sonare_project_set_clip_source(SonareProject* project, uint32_t clip_id,
+                                           uint32_t source_id);
+
+/// @brief Duplicates a clip at @p new_start_ppq (same track), allocating a fresh
+///        id and copying any MIDI content, via an undoable edit command.
+///        @p out_new_clip_id receives the new clip id (may be NULL).
+SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_id,
+                                          double new_start_ppq, uint32_t* out_new_clip_id);
+
+/// @brief Removes a track via an undoable edit command. @p track_id must
+///        reference an existing track. (The command layer removes the track's
+///        clips first; undo restores the track and its clips.)
+SonareError sonare_project_remove_track(SonareProject* project, uint32_t track_id);
+
+/// @brief Renames a track via an undoable edit command. @p name is an optional
+///        NUL-terminated C string (NULL = empty name). @p track_id must
+///        reference an existing track.
+SonareError sonare_project_rename_track(SonareProject* project, uint32_t track_id,
+                                        const char* name);
+
+/// @brief Sets a track's mixer-strip binding + output target via an undoable
+///        edit command. @p channel_strip_ref and @p output_target are
+///        NUL-terminated C strings; pass NULL or "" to clear the respective
+///        field. @p track_id must reference an existing track.
+SonareError sonare_project_set_track_route(SonareProject* project, uint32_t track_id,
+                                           const char* channel_strip_ref,
+                                           const char* output_target);
+
+/// @brief Appends an automation lane to a track via an undoable edit command.
+///        @p track_id must reference an existing track; @p desc describes the
+///        target parameter id and breakpoints (see @ref SonareAutomationLaneDesc).
+///        @p out_lane_index receives the appended lane's index within the track
+///        (may be NULL).
+SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t track_id,
+                                               const SonareAutomationLaneDesc* desc,
+                                               size_t* out_lane_index);
+
+/// @brief Replaces an existing automation lane in place via an undoable edit
+///        command. @p track_id must reference an existing track and
+///        @p lane_index an existing lane on it.
+SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
+                                                size_t lane_index,
+                                                const SonareAutomationLaneDesc* desc);
+
+/// @brief Removes an automation lane from a track via an undoable edit command.
+///        @p track_id must reference an existing track and @p lane_index an
+///        existing lane on it.
+SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32_t track_id,
+                                                  size_t lane_index);
 
 /// @brief Undoes the most recent edit. Returns SONARE_ERROR_INVALID_STATE when
 ///        the undo stack is empty.

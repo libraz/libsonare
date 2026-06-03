@@ -49,7 +49,9 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/crossover.h"
 #include "mastering/multiband/multiband_compressor.h"
+#include "mastering/multiband/multiband_dynamic_eq.h"
 #include "mastering/multiband/multiband_expander.h"
+#include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
 #include "mastering/saturation/bitcrusher.h"
@@ -371,6 +373,59 @@ inline void populate_saturation_bands(multiband::MultibandSaturationConfig& conf
     band.drive_db = f(params, (prefix + "driveDb").c_str(), band.drive_db);
     band.mix = f(params, (prefix + "mix").c_str(), band.mix);
     band.output_gain_db = f(params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
+  }
+}
+
+// Resize the imager bands to match the crossover, then overlay per-band fields
+// (band{i}.width / .decorrelationAmount / .enabled / .preserveEnergy) so a
+// non-default crossover works and per-band settings are not silently dropped.
+inline void populate_imager_bands(multiband::MultibandImagerConfig& config,
+                                  const ParamMap& params) {
+  resize_bands_to_crossover(config.bands, config.crossover);
+  for (size_t index = 0; index < config.bands.size(); ++index) {
+    const std::string prefix = "band" + std::to_string(index) + ".";
+    auto& band = config.bands[index];
+    band.width = f(params, (prefix + "width").c_str(), band.width);
+    band.decorrelation_amount =
+        f(params, (prefix + "decorrelationAmount").c_str(), band.decorrelation_amount);
+    band.enabled = b(params, (prefix + "enabled").c_str(), band.enabled);
+    band.preserve_energy = b(params, (prefix + "preserveEnergy").c_str(), band.preserve_energy);
+  }
+}
+
+// Resize the dynamic-EQ crossover bands to match the crossover, then read each
+// crossover band's list of dynamic sub-bands from band{i}.dyn{j}.<field> keys.
+// A sub-band is created only when its frequency key is present (mirroring
+// configure_dynamic_eq_bands for the single-band DynamicEq insert).
+inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& config,
+                                      const ParamMap& params) {
+  config.bands.resize(config.crossover.cutoffs_hz.size() + 1);
+  for (size_t index = 0; index < config.bands.size(); ++index) {
+    auto& dyn_bands = config.bands[index];
+    dyn_bands.clear();
+    for (size_t sub = 0; sub < eq::DynamicEq::kMaxBands; ++sub) {
+      const std::string prefix =
+          "band" + std::to_string(index) + ".dyn" + std::to_string(sub) + ".";
+      if (params.find(prefix + "frequencyHz") == params.end()) {
+        continue;
+      }
+      eq::DynamicEqBand band;
+      band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
+      band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
+      band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db);
+      band.q = f(params, (prefix + "q").c_str(), band.q);
+      band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+      band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
+      band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
+      band.enabled = b(params, (prefix + "enabled").c_str(), true);
+      band.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.sidechain_q);
+      band.sidechain_freq_hz =
+          f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
+      band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
+      band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
+      band.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
+      dyn_bands.push_back(band);
+    }
   }
 }
 

@@ -3,6 +3,7 @@
 /// @file convolution_reverb.h
 /// @brief Non-RT IR-loadable FFT partitioned convolution reverb.
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -11,8 +12,32 @@
 
 namespace sonare::effects::reverb {
 
+/// @brief Parameters for the algorithmic default impulse response.
+///
+/// When no explicit IR is loaded via load_ir(), prepare() synthesizes a short
+/// exponentially-decaying noise IR from these fields so the convolution reverb
+/// produces an actual room-like tail from scalar params, matching its sibling
+/// algorithmic reverbs (effects.reverb.fdn / .velvet). Supplying an explicit IR
+/// via load_ir() overrides this synthesis entirely.
+struct ConvolutionReverbConfig {
+  /// Approximate RT60 tail length in seconds (matched to FDN/velvet, where
+  /// decaySec maps to the ~T60 reverberation time). Clamped to a sane range.
+  float decay_sec = 1.5f;
+  /// Pre-delay before the synthesized tail begins, in milliseconds.
+  float pre_delay_ms = 0.0f;
+  /// Dry/wet mix. 1.0 = fully wet (convolution only); 0.0 = dry passthrough.
+  float dry_wet = 0.35f;
+  /// Deterministic seed for the decaying-noise IR (so output is reproducible).
+  std::uint32_t seed = 0x5151ABCDu;
+};
+
 class ConvolutionReverb : public rt::ProcessorBase {
  public:
+  ConvolutionReverb() = default;
+  explicit ConvolutionReverb(ConvolutionReverbConfig config) : config_(config) {
+    dry_wet_ = config.dry_wet;
+  }
+
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
@@ -31,10 +56,19 @@ class ConvolutionReverb : public rt::ProcessorBase {
 
  private:
   void rebuild_convolvers();
+  // Synthesize a decaying-noise IR from config_ at the prepared sample rate.
+  // Used only when no explicit IR was supplied via load_ir().
+  void synthesize_default_ir(double sample_rate);
 
+  ConvolutionReverbConfig config_{};
+  // True once load_ir() supplies caller IR samples; suppresses default synthesis.
+  bool explicit_ir_ = false;
   std::vector<float> ir_;
   int partition_size_ = 0;
   // Dry/wet mix. 1.0 = fully wet (convolution only); 0.0 = dry passthrough.
+  // A default-constructed (no-config) ConvolutionReverb is fully wet so a direct
+  // user who load_ir()s their own IR gets the pure convolution; the insert/scene
+  // path supplies its own mix via ConvolutionReverbConfig::dry_wet (0.35).
   float dry_wet_ = 1.0f;
 
   // One convolver per channel; the library targets mono/stereo only.

@@ -315,6 +315,25 @@ bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
   if (new_track_id_ != 0 && !project.has_track(new_track_id_)) {
     return false;
   }
+  // Reject moving a clip onto a track whose kind is incompatible with the
+  // clip's source kind (audio track <- audio source, MIDI track <- MIDI
+  // source; an aux track accepts neither). Allowing a cross-kind move would
+  // produce a project that the compiler later rejects, so fail cleanly here
+  // WITHOUT mutating state. Same-track moves (new_track_id_ == 0) are
+  // unaffected. Mirrors edit_compiler.cpp::clip_matches_track_kind.
+  if (new_track_id_ != 0) {
+    const Track* dest = project.find_track(new_track_id_);
+    const ClipSource* src = project.find_source(c->source_id);
+    if (dest == nullptr || src == nullptr) {
+      return false;
+    }
+    const SourceKind src_kind = source_kind(*src);
+    const bool compatible = (dest->kind == Track::Kind::kAudio && src_kind == SourceKind::kAudio) ||
+                            (dest->kind == Track::Kind::kMidi && src_kind == SourceKind::kMidi);
+    if (!compatible) {
+      return false;
+    }
+  }
   const TrackId target_track = new_track_id_ != 0 ? new_track_id_ : c->track_id;
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(target_track, new_start_ppq_, c->length_ppq, id_)) {

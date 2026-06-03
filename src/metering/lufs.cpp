@@ -27,6 +27,14 @@ constexpr double kEnergyFloor = 1e-15;
 // Spec-mandated bit-exact value; do not round.
 constexpr double kBs1770SurroundWeight = 1.4125375446227544;
 
+// Silence sentinel rationale: unlike the level-in-dB meters (true_peak /
+// spectrum / dynamic_range), which report the finite kFloorDb (-120 dB) for
+// silence, LUFS deliberately keeps -inf. -inf ("below the measurement floor") is
+// the canonical ITU-R BS.1770-4 / EBU R128 convention for an unmeasurable block,
+// and the value doubles as an internal gating sentinel throughout this file
+// (absolute/relative gate comparisons, last_or_silence). Forcing it to -120
+// would silently alter a standardized loudness algorithm, so it is left as-is.
+// JSON serialization safety for this -inf is handled in util/json.h instead.
 float energy_to_lufs(double energy) {
   return power_to_offset_db(energy, rt::kLoudnessOffset, kEnergyFloor,
                             -std::numeric_limits<float>::infinity());

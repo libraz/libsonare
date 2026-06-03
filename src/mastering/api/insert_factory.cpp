@@ -353,6 +353,7 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
   if (name == "multiband.imager") {
     multiband::MultibandImagerConfig config;
     config.crossover = crossover_config(params);
+    detail::populate_imager_bands(config, params);
     return make<multiband::MultibandImager>(config);
   }
   if (name == "multiband.saturation") {
@@ -364,6 +365,7 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
   if (name == "multiband.dynamicEq") {
     multiband::MultibandDynamicEqConfig config;
     config.crossover = crossover_config(params);
+    detail::populate_dynamic_eq_bands(config, params);
     return make<multiband::MultibandDynamicEq>(config);
   }
   return nullptr;
@@ -377,8 +379,12 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   if (name == "effects.reverb.plate" || name == "effects.reverb.dattorro") {
     DattorroReverbConfig config;
     // decaySec is a tail-length intent in seconds; DattorroReverbConfig.decay is
-    // a normalized tank feedback clamped internally to [0, 0.98]. Map seconds to
-    // feedback as decay/10 (~10 s -> max tail) and clamp into the documented range.
+    // a normalized tank feedback clamped internally to [0, 0.98]. The plate tank
+    // has no closed-form RT60, so unlike FDN/velvet/convolution (where decaySec
+    // maps to ~T60 in seconds) this is an approximate perceptual mapping: seconds
+    // to feedback as decay/10 (~10 s -> near-max tail), clamped to [0, 0.98].
+    // Treat decaySec on the plate as "longer is more reverberant", not an exact
+    // RT60 in seconds.
     if (params.find("decaySec") != params.end()) {
       config.decay = std::min(0.98f, std::max(0.0f, f(params, "decaySec", 5.0f) / 10.0f));
     } else {
@@ -402,7 +408,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   if (name == "effects.reverb.fdn") {
     FdnReverbConfig config;
     if (params.find("decaySec") != params.end()) {
-      config.decay = std::max(0.0f, f(params, "decaySec", 5.5f) / 10.0f);
+      // decaySec is the approximate RT60 tail length in seconds. The FDN's
+      // T60_lf = max(0.01, clamp(decay, 0, 1.5) * 10), so decaySec maps to
+      // T60 directly via decay = decaySec / 10. The core clamps decay to 1.5
+      // (T60 = 15 s); clamp here too so an out-of-range request like
+      // {decaySec:40} resolves to the documented 15 s ceiling rather than being
+      // silently truncated only after construction.
+      config.decay = std::clamp(f(params, "decaySec", 5.5f) / 10.0f, 0.0f, 1.5f);
     } else {
       config.decay = f(params, "decay", config.decay);
     }
@@ -415,7 +427,12 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.decay = f(params, "decay", config.decay);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     if (params.find("decaySec") != params.end()) {
-      config.reverb_time_s = std::max(0.0f, f(params, "decaySec", config.reverb_time_s));
+      // Velvet's effective T60 = reverb_time_s * (0.5 + decay). To make decaySec
+      // mean approximately the same RT60 as FDN (decaySec == ~T60), set
+      // reverb_time_s = decaySec / (0.5 + decay) so the product lands on decaySec.
+      const float decay_factor = 0.5f + std::clamp(config.decay, 0.0f, 1.0f);
+      config.reverb_time_s = std::max(0.0f, f(params, "decaySec", config.reverb_time_s)) /
+                             std::max(0.01f, decay_factor);
     } else {
       config.reverb_time_s = f(params, "reverbTimeS", config.reverb_time_s);
     }
@@ -424,17 +441,18 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     return make<VelvetReverb>(config);
   }
   if (name == "effects.reverb.convolution") {
-    // Constructs as a near-passthrough until an IR is supplied. The IR cannot be
-    // expressed through the scalar JSON params, so callers that need a working
-    // convolution insert must use make_insert_with_ir(); via plain make_insert()
-    // the convolver stays a passthrough. dryWet is the one configurable scalar:
-    // apply it via set_parameter(0) so it is honored at construction (matching
-    // the sibling reverbs) rather than silently dropped.
-    auto reverb = make<ConvolutionReverb>();
-    if (params.find("dryWet") != params.end()) {
-      reverb->set_parameter(0, f(params, "dryWet", 1.0f));
+    // When no explicit IR is injected (make_insert_with_ir), the convolver
+    // synthesizes a decaying-noise IR from these scalar params at prepare() time
+    // so the insert produces an actual reverb tail just like its algorithmic
+    // siblings. decaySec is the approximate RT60 tail length in seconds (matched
+    // to effects.reverb.fdn, where decaySec maps directly to ~T60).
+    ConvolutionReverbConfig config;
+    if (params.find("decaySec") != params.end()) {
+      config.decay_sec = std::max(0.0f, f(params, "decaySec", config.decay_sec));
     }
-    return reverb;
+    config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<ConvolutionReverb>(config);
   }
 #ifdef SONARE_HAVE_ACOUSTIC
   if (name == "effects.reverb.room") {
@@ -518,11 +536,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
 
 }  // namespace
 
-std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
-                                                       const std::string& json_params) {
-  const std::vector<Param> param_list = parse_insert_params_json(json_params);
-  const ParamMap params = detail::make_map(param_list);
+namespace {
 
+std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params) {
   if (auto p = build_dynamics(name, params)) return p;
   if (auto p = build_eq(name, params)) return p;
   if (auto p = build_saturation(name, params)) return p;
@@ -534,6 +550,21 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
   if (auto p = build_effects(name, params)) return p;
 #endif
   return nullptr;
+}
+
+}  // namespace
+
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
+                                                       const std::string& json_params) {
+  const std::vector<Param> param_list = parse_insert_params_json(json_params);
+  const ParamMap params = detail::make_map(param_list);
+  return build_insert(name, params);
+}
+
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
+    const std::string& name, const std::vector<Param>& param_list) {
+  const ParamMap params = detail::make_map(param_list);
+  return build_insert(name, params);
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string& name,

@@ -200,8 +200,22 @@ int cmd_project_compile(const CliArgs& args) {
   return has_timeline ? 0 : 1;
 }
 
+// Maps a `--synth` waveform name to the built-in synth waveform ordinal. An
+// empty / unrecognized name (including the bare flag value "true") falls back to
+// sine, matching the C ABI's out-of-range -> sine sanitization.
+int parse_synth_waveform(const std::string& name) {
+  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
+  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
+  if (name == "triangle" || name == "tri") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
+  return SONARE_SYNTH_WAVEFORM_SINE;
+}
+
 // `project bounce --in in.json -o out.wav` — compile + render the project
-// offline to an interleaved WAV file.
+// offline to an interleaved WAV file. With `--synth [waveform]` MIDI tracks are
+// rendered through the built-in oscillator synth so a MIDI-only arrangement is
+// audible; without it MIDI tracks render silently (the default). The waveform is
+// an optional space-separated value (`--synth` alone => sine, or
+// `--synth saw|square|triangle`).
 int cmd_project_bounce(const CliArgs& args) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: project bounce requires output file (-o out.wav)"
@@ -215,18 +229,40 @@ int cmd_project_bounce(const CliArgs& args) {
   options.total_frames = static_cast<int64_t>(args.get_int("frames", 0));
   options.block_size = args.get_int("block-size", 0);
   options.num_channels = args.get_int("channels", 0);
-  options.sample_rate = args.get_int("sample-rate", 0);
   options.instrument_latency_samples = args.get_int("instrument-latency", 0);
+  // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
+  // actually used, or the file plays back at the wrong pitch. The C ABI renders
+  // at options.sample_rate when > 0, otherwise at the project's own rate. The
+  // CLI cannot query the project rate through the C surface, so we pin a definite
+  // render rate here: the user's --sample-rate if given, else 48000 (which also
+  // matches the project default), and reuse that SAME value for the WAV header.
+  const int render_sample_rate = args.get_int("sample-rate", 48000);
+  options.sample_rate = render_sample_rate;
+
+  // `--synth` (optionally `--synth saw|square|triangle|sine`) routes MIDI tracks
+  // through the built-in synth; absent, MIDI renders silently. The bare flag
+  // (no value, or followed by another option) yields the value "true" from the
+  // arg parser, which parse_synth_waveform() sanitizes to sine.
+  const bool use_builtin_synth = args.has("synth");
+  SonareBuiltinSynthConfig synth_config{};  // zero-init => sanitized sine patch.
+  synth_config.waveform = parse_synth_waveform(args.get_string("synth"));
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 0;  // default MIDI destination.
+  binding.config = synth_config;
 
   float* interleaved = nullptr;
   size_t total = 0;
-  SonareError err = sonare_project_bounce(handle.ptr, &options, &interleaved, &total);
+  SonareError err = use_builtin_synth
+                        ? sonare_project_bounce_with_builtin_instruments(
+                              handle.ptr, &options, &binding, 1, &interleaved, &total)
+                        : sonare_project_bounce(handle.ptr, &options, &interleaved, &total);
   if (err != SONARE_OK) {
     project_report_error("bounce project", err);
     return 1;
   }
   const int channels = options.num_channels > 0 ? options.num_channels : 2;
-  const int sample_rate = options.sample_rate > 0 ? options.sample_rate : 44100;
+  // The WAV header sample rate equals the render rate the engine used (see above).
+  const int sample_rate = render_sample_rate;
   const size_t frames = channels > 0 ? total / static_cast<size_t>(channels) : total;
   // The CLI WAV writer is mono; downmix the interleaved render to mono (matching
   // the rest of the CLI, which is mono-centric). The full multichannel buffer is
@@ -249,11 +285,13 @@ int cmd_project_bounce(const CliArgs& args) {
         .kv("frames", frames)
         .kv("channels", channels)
         .kv("sample_rate", sample_rate)
+        .kv("builtin_synth", use_builtin_synth)
         .end_object()
         .print();
   } else if (!args.quiet) {
     std::cerr << color::green << "Bounced " << frames << " frames (" << channels << " ch @ "
-              << sample_rate << " Hz) to " << args.output_file << color::reset << "\n";
+              << sample_rate << " Hz" << (use_builtin_synth ? ", built-in synth" : "") << ") to "
+              << args.output_file << color::reset << "\n";
   }
   return 0;
 }
@@ -460,6 +498,7 @@ void print_project_usage(std::ostream& out) {
       << "  validate             Round-trip / validate a project (--in in.json [-o out.json])\n"
       << "  compile              Compile a project + report diagnostics (--in in.json)\n"
       << "  bounce               Render a project offline to WAV (--in in.json -o out.wav)\n"
+      << "                       Use --synth [saw|square|triangle|sine] to make MIDI audible\n"
       << "  export-smf           Export tempo map + MIDI clips to SMF (--in in.json -o out.mid)\n"
       << "  import-smf           Import an SMF into a new project (--smf in.mid -o out.json)\n"
       << "  export-midi2         Export tempo map + MIDI clips to MIDI2 Clip File (--in in.json -o "
@@ -471,9 +510,11 @@ void print_project_usage(std::ostream& out) {
       << "  --smf <file>         Input Standard MIDI File (import-smf)\n"
       << "  --midi2 <file>       Input MIDI 2.0 Clip File (import-midi2)\n"
       << "  -o, --output <file>  Output file\n"
-      << "  --sample-rate <hz>   Sample rate (new / bounce)\n"
+      << "  --sample-rate <hz>   Sample rate (new / bounce; bounce default 48000)\n"
       << "  --frames <n>         Bounce length in frames\n"
       << "  --channels <n>       Bounce channel count (default 2)\n"
+      << "  --synth [waveform]   Bounce MIDI through the built-in synth "
+         "(sine|saw|square|triangle)\n"
       << "  --json               Emit JSON results\n";
 }
 

@@ -455,7 +455,9 @@ class Project {
   std::pair<WarpMapRef, bool> remove_warp_map(WarpRefId id);
 
  private:
-  double sample_rate_ = 22050.0;
+  // Default project sample rate. 48 kHz is the conventional DAW production rate
+  // (the librosa analysis default of 22.05 kHz is lo-fi for arrangement render).
+  double sample_rate_ = 48000.0;
   uint32_t project_version_ = kProjectVersion;
   OverlapPolicy overlap_policy_ = OverlapPolicy::kDisallow;
 

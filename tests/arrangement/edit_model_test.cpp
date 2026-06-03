@@ -31,7 +31,7 @@ std::pair<TrackId, SourceId> make_audio_track(Project& p, const std::string& nam
 
 TEST_CASE("Project constructs with deterministic defaults", "[arrangement]") {
   Project p;
-  CHECK(p.sample_rate() == 22050.0);
+  CHECK(p.sample_rate() == 48000.0);
   CHECK(p.project_version() == kProjectVersion);
   CHECK(p.overlap_policy() == OverlapPolicy::kDisallow);
   CHECK(p.tracks().empty());

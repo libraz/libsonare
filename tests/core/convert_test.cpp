@@ -129,6 +129,37 @@ TEST_CASE("note_to_hz with non-ASCII input", "[convert]") {
   }
 }
 
+TEST_CASE("samples_to_frames guards against non-positive hop_length", "[convert]") {
+  // Dividing by hop_length without a guard is integer division-by-zero (UB) for
+  // hop_length == 0 and yields a meaningless sign-flipped index for a negative
+  // hop. A frame index is undefined without a positive hop, so the helper returns
+  // 0 frames (defined, non-throwing) rather than invoking UB.
+  SECTION("zero hop_length returns 0 instead of dividing by zero") {
+    REQUIRE(samples_to_frames(5120, 0, 0) == 0);
+    REQUIRE(samples_to_frames(5120, 0, 2048) == 0);
+    REQUIRE(samples_to_frames(0, 0, 0) == 0);
+  }
+
+  SECTION("negative hop_length returns 0") {
+    REQUIRE(samples_to_frames(5120, -512, 0) == 0);
+    REQUIRE(samples_to_frames(5120, -512, 2048) == 0);
+  }
+
+  SECTION("vector overload is also guarded element-wise") {
+    const std::vector<int> samples = {0, 1024, 5120};
+    const std::vector<int> framed = samples_to_frames(samples, 0, 2048);
+    REQUIRE(framed.size() == samples.size());
+    for (int f : framed) REQUIRE(f == 0);
+  }
+
+  SECTION("valid hop_length is unaffected") {
+    // 5120 samples, hop 512, no n_fft offset -> 10 frames (librosa-compatible).
+    REQUIRE(samples_to_frames(5120, 512, 0) == 10);
+    // With n_fft = 2048 the centering offset (1024) is subtracted first.
+    REQUIRE(samples_to_frames(5120 + 1024, 512, 2048) == 10);
+  }
+}
+
 TEST_CASE("frames_to_time / time_to_frames", "[convert]") {
   int sr = 22050;
   int hop = 512;

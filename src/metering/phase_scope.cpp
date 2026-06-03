@@ -3,13 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "metering/decimation.h"
 #include "metering/stereo.h"
-#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::metering {
-
-using sonare::constants::kInvSqrt2;
 
 namespace {
 
@@ -23,9 +21,10 @@ void validate_stereo_buffers(const float* left, const float* right, size_t lengt
 namespace {
 
 PhaseScopePoint make_point(const float* left, const float* right, size_t i) {
+  const detail::MidSide ms = detail::mid_side(left, right, i);
   PhaseScopePoint point;
-  point.mid = (left[i] + right[i]) * kInvSqrt2;
-  point.side = (left[i] - right[i]) * kInvSqrt2;
+  point.mid = ms.mid;
+  point.side = ms.side;
   point.radius = std::sqrt(point.mid * point.mid + point.side * point.side);
   point.angle_rad = std::atan2(point.side, point.mid);
   return point;
@@ -61,19 +60,14 @@ PhaseScopeResult phase_scope(const float* left, const float* right, size_t lengt
   }
 
   // Deterministic decimation into max_points contiguous buckets, keeping the
-  // largest-radius sample of each bucket so transient peaks are preserved.
+  // largest-radius sample of each bucket so transient peaks are preserved. Shared
+  // bucket math lives in detail::decimate_max so it cannot diverge from the
+  // vectorscope.
   result.points.reserve(max_points);
-  for (size_t b = 0; b < max_points; ++b) {
-    const size_t begin = (b * length) / max_points;
-    const size_t end = ((b + 1) * length) / max_points;
-    if (begin >= end) continue;
-    PhaseScopePoint best = make_point(left, right, begin);
-    for (size_t i = begin + 1; i < end; ++i) {
-      const PhaseScopePoint p = make_point(left, right, i);
-      if (p.radius > best.radius) best = p;
-    }
-    result.points.push_back(best);
-  }
+  detail::decimate_max(
+      length, max_points, [&](size_t i) { return make_point(left, right, i); },
+      [](const PhaseScopePoint& p) { return p.radius; },
+      [&](const PhaseScopePoint& best) { result.points.push_back(best); });
   return result;
 }
 

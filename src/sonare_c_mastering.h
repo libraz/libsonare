@@ -165,6 +165,16 @@ const char* sonare_mastering_processor_names(void);
 const char* sonare_mastering_pair_processor_names(void);
 const char* sonare_mastering_pair_analysis_names(void);
 const char* sonare_mastering_stereo_analysis_names(void);
+
+/// @brief Returns the channel-strip insert / FX processor names that
+///        sonare_mixing scene inserts can build, separated by '\n'. Includes the
+///        creative effects.* reverbs / modulation / delay when the build has FX
+///        support. Use these to discover valid insert names instead of
+///        hardcoding magic strings.
+/// @details Pointer is owned by libsonare and remains valid for the program
+///          lifetime; the caller must NOT free it (mirrors
+///          @ref sonare_mastering_processor_names).
+const char* sonare_mastering_insert_names(void);
 SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
                                                   const float* reference, size_t length,
                                                   int sample_rate,

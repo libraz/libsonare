@@ -6,6 +6,7 @@
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/common/loudness_measure.h"
@@ -412,6 +413,41 @@ void configure_processor(const std::string& name, const ParamMap& params,
   }
 }
 
+// Creative streaming effects (the 5 reverbs, modulation, stereo delay,
+// ducking) are heap-allocated rt::ProcessorBase inserts built by the insert
+// factory rather than configured offline helpers. They are reachable from the
+// one-shot named-processor path by building the insert and running it through
+// the shared latency-compensating runner. Returns true when @p name was an
+// effects insert (handled), false otherwise so the caller can fall through to
+// the offline configure_processor() dispatch.
+bool is_effects_name(const std::string& name) { return name.rfind("effects.", 0) == 0; }
+
+bool try_run_effects_insert_mono(const std::string& name, const std::vector<Param>& params,
+                                 std::vector<float>& samples, int sample_rate,
+                                 int& latency_samples) {
+  if (!is_effects_name(name)) return false;
+  auto processor = make_insert_from_params(name, params);
+  if (!processor) {
+    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
+  }
+  internal::run_processor_mono(*processor, samples, sample_rate);
+  latency_samples = processor->latency_samples();
+  return true;
+}
+
+bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Param>& params,
+                                   std::vector<float>& left, std::vector<float>& right,
+                                   int sample_rate, int& latency_samples) {
+  if (!is_effects_name(name)) return false;
+  auto processor = make_insert_from_params(name, params);
+  if (!processor) {
+    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
+  }
+  internal::run_processor_stereo(*processor, left, right, sample_rate);
+  latency_samples = processor->latency_samples();
+  return true;
+}
+
 }  // namespace
 
 MonoResult apply_named_processor(const std::string& name, const float* samples, std::size_t length,
@@ -420,9 +456,12 @@ MonoResult apply_named_processor(const std::string& name, const float* samples, 
   result.samples.assign(samples, samples + length);
   result.sample_rate = sample_rate;
   result.input_lufs = lufs_for(result.samples, sample_rate);
-  auto map = make_map(params);
-  configure_processor(name, map, result.samples, sample_rate, result.latency_samples,
-                      result.applied_gain_db);
+  if (!try_run_effects_insert_mono(name, params, result.samples, sample_rate,
+                                   result.latency_samples)) {
+    auto map = make_map(params);
+    configure_processor(name, map, result.samples, sample_rate, result.latency_samples,
+                        result.applied_gain_db);
+  }
   result.output_lufs = lufs_for(result.samples, sample_rate);
   return result;
 }
@@ -437,7 +476,11 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   result.input_lufs = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);
   auto map = make_map(params);
 
-  if (name == "stereo.autoPan") {
+  if (try_run_effects_insert_stereo(name, params, result.left, result.right, sample_rate,
+                                    result.latency_samples)) {
+    // Handled by the streaming-effects insert path below; fall through to the
+    // shared LUFS measurement at the end of the function.
+  } else if (name == "stereo.autoPan") {
     stereo::AutoPan p(detail::auto_pan_config(map));
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "stereo.haasEnhancer") {
@@ -484,6 +527,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "multiband.imager") {
     multiband::MultibandImagerConfig config;
     config.crossover = crossover_config(map);
+    detail::populate_imager_bands(config, map);
     multiband::MultibandImager p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "multiband.saturation") {
@@ -495,6 +539,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "multiband.dynamicEq") {
     multiband::MultibandDynamicEqConfig config;
     config.crossover = crossover_config(map);
+    detail::populate_dynamic_eq_bands(config, map);
     multiband::MultibandDynamicEq p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "maximizer.loudnessOptimize") {

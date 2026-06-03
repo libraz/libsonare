@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c.h"
@@ -141,6 +142,11 @@ const char* sonare_mastering_pair_analysis_names(void) {
 const char* sonare_mastering_stereo_analysis_names(void) {
   static std::string names;
   return join_names(sonare::mastering::api::stereo_analysis_names(), names);
+}
+
+const char* sonare_mastering_insert_names(void) {
+  static std::string names;
+  return join_names(sonare::mastering::api::insert_factory_names(), names);
 }
 
 SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
