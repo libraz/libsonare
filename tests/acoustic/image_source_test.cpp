@@ -9,6 +9,7 @@
 
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -127,7 +128,7 @@ TEST_CASE("early IR places a reflection within +/-1 sample with correct gain/pol
   // The peak *sample* of a fractional-delay sinc is < gain (energy spreads
   // across taps); the frac-independent amplitude is the kernel sum (sinc is a
   // partition of unity), which reconstructs gain = 1/(4π·distance).
-  const float gain = 1.0f / (4.0f * 3.14159265f * direct.distance);
+  const float gain = 1.0f / (4.0f * sonare::constants::kPi * direct.distance);
   float sum = 0.0f;
   for (int i = 0; i < n; ++i) sum += d[i];
   REQUIRE_THAT(sum, WithinRel(gain, 0.02f));
@@ -144,7 +145,7 @@ TEST_CASE("early IR amplitude (kernel sum) is independent of the fractional dela
     const Audio ir = synthesize_early_ir({im}, sr);
     float sum = 0.0f;
     for (size_t i = 0; i < ir.size(); ++i) sum += ir.data()[i];
-    const float gain = 1.0f / (4.0f * 3.14159265f * dist);
+    const float gain = 1.0f / (4.0f * sonare::constants::kPi * dist);
     REQUIRE_THAT(sum, WithinRel(gain, 0.02f));
   }
 }

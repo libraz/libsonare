@@ -15,45 +15,17 @@
 #include "mastering/saturation/transformer.h"
 #include "mastering/saturation/tube.h"
 #include "mastering/saturation/waveshaper.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare::mastering::saturation;
 
-using sonare::constants::kPi;
-
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude = 0.25f) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
-
-float peak_abs(const std::vector<float>& samples) {
-  float peak = 0.0f;
-  for (float sample : samples) peak = std::max(peak, std::abs(sample));
-  return peak;
-}
-
-float rms_tail(const std::vector<float>& samples, size_t skip = 0) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
-}
+using sonare::test::generate_sine_samples;
+using sonare::test::peak_abs;
+using sonare::test::process;
+using sonare::test::rms_tail;
 
 struct LegacyJaState {
   float M = 0.0f;
@@ -279,7 +251,7 @@ TEST_CASE("Tube exposes voltage-domain bias control", "[mastering][saturation]")
 
 TEST_CASE("Tape saturation changes driven signal and keeps state resettable",
           "[mastering][saturation]") {
-  auto signal = sine(1000.0f, 48000, 48000, 0.8f);
+  auto signal = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);
   auto first = signal;
   auto second = signal;
   Tape tape({9.0f, 0.8f, 0.2f, -3.0f});
@@ -363,7 +335,7 @@ TEST_CASE("Jiles-Atherton presets expose tape, steel, and mu-metal cores",
 }
 
 TEST_CASE("Tape speed controls head bump and gap loss", "[mastering][saturation]") {
-  auto slow = sine(160.0f, 48000, 48000, 0.2f);
+  auto slow = generate_sine_samples(160.0f, 48000, 48000, 0.2f);
   auto fast = slow;
   Tape slow_tape({6.0f, 0.4f, 0.3f, 0.0f, 7.5f, 9.0f, 0.05f, 0.3f});
   Tape fast_tape({6.0f, 0.4f, 0.3f, 0.0f, 30.0f, 9.0f, 0.05f, 0.3f});
@@ -429,7 +401,7 @@ TEST_CASE("BitCrusher can apply deterministic dither before quantization",
 }
 
 TEST_CASE("Exciter adds high-frequency enhancement", "[mastering][saturation]") {
-  auto signal = sine(8000.0f, 48000, 48000, 0.2f);
+  auto signal = generate_sine_samples(8000.0f, 48000, 48000, 0.2f);
   const float before = rms_tail(signal, 4096);
   Exciter exciter({3000.0f, 12.0f, 0.5f});
   exciter.prepare(48000.0, 1024);
@@ -438,8 +410,8 @@ TEST_CASE("Exciter adds high-frequency enhancement", "[mastering][saturation]") 
 }
 
 TEST_CASE("Exciter focuses harmonic generation around resonant band", "[mastering][saturation]") {
-  auto center = sine(4000.0f, 48000, 48000, 0.2f);
-  auto low = sine(300.0f, 48000, 48000, 0.2f);
+  auto center = generate_sine_samples(4000.0f, 48000, 48000, 0.2f);
+  auto low = generate_sine_samples(300.0f, 48000, 48000, 0.2f);
   const float center_before = rms_tail(center, 4096);
   const float low_before = rms_tail(low, 4096);
   Exciter exciter({4000.0f, 12.0f, 0.7f, 2.0f, 0.2f});
@@ -475,8 +447,8 @@ TEST_CASE("MultibandExciter can enhance high band while leaving low band close",
   MultibandExciter exciter(config);
   exciter.prepare(48000.0, 1024);
 
-  auto low = sine(100.0f, 48000, 48000, 0.2f);
-  auto high = sine(8000.0f, 48000, 48000, 0.2f);
+  auto low = generate_sine_samples(100.0f, 48000, 48000, 0.2f);
+  auto high = generate_sine_samples(8000.0f, 48000, 48000, 0.2f);
   const float low_before = rms_tail(low, 4096);
   const float high_before = rms_tail(high, 4096);
   process(exciter, low);

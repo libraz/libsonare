@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rt/biquad_design.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -16,16 +17,8 @@ using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 2.0f * kPi;
-
-std::vector<float> generate_sine(int samples, float freq, int sr) {
-  std::vector<float> result(samples);
-  for (int i = 0; i < samples; ++i) {
-    result[i] = std::sin(kTwoPi * freq * i / sr);
-  }
-  return result;
-}
+using sonare::constants::kTwoPi;
+using sonare::test::generate_sine;
 
 void require_coeffs_close(const BiquadCoeffs& actual, const rt::BiquadCoeffs& expected,
                           float tolerance = 1.0e-6f) {

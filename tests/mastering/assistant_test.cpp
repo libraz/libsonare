@@ -7,18 +7,19 @@
 #include "mastering/api/presets.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mastering/assistant/suggester.h"
+#include "util/constants.h"
 
 namespace assistant = sonare::mastering::assistant;
 
 namespace {
 
-constexpr float kPi = 3.14159265358979323846f;
+using sonare::constants::kTwoPi;
 
 std::vector<float> tone(int sr, float seconds, float frequency, float amplitude = 0.4f) {
   std::vector<float> samples(static_cast<size_t>(seconds * static_cast<float>(sr)));
   for (size_t i = 0; i < samples.size(); ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = amplitude * std::sin(2.0f * kPi * frequency * t);
+    samples[i] = amplitude * std::sin(kTwoPi * frequency * t);
   }
   return samples;
 }
@@ -26,7 +27,7 @@ std::vector<float> tone(int sr, float seconds, float frequency, float amplitude 
 void add_tone(std::vector<float>& samples, int sr, float frequency, float amplitude) {
   for (size_t i = 0; i < samples.size(); ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] += amplitude * std::sin(2.0f * kPi * frequency * t);
+    samples[i] += amplitude * std::sin(kTwoPi * frequency * t);
   }
 }
 
@@ -60,9 +61,8 @@ std::vector<float> dynamic_classical_like(int sr, float seconds) {
   std::vector<float> samples(static_cast<size_t>(seconds * static_cast<float>(sr)));
   for (size_t i = 0; i < samples.size(); ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sr);
-    const float env = 0.08f + 0.45f * (0.5f + 0.5f * std::sin(2.0f * kPi * 0.25f * t));
-    samples[i] =
-        env * (std::sin(2.0f * kPi * 330.0f * t) + 0.5f * std::sin(2.0f * kPi * 660.0f * t));
+    const float env = 0.08f + 0.45f * (0.5f + 0.5f * std::sin(kTwoPi * 0.25f * t));
+    samples[i] = env * (std::sin(kTwoPi * 330.0f * t) + 0.5f * std::sin(kTwoPi * 660.0f * t));
   }
   return samples;
 }
@@ -71,10 +71,10 @@ std::vector<float> speech_like(int sr, float seconds) {
   std::vector<float> samples(static_cast<size_t>(seconds * static_cast<float>(sr)));
   for (size_t i = 0; i < samples.size(); ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sr);
-    const float syllable = 0.55f + 0.45f * std::max(0.0f, std::sin(2.0f * kPi * 4.0f * t));
-    samples[i] = syllable * (0.20f * std::sin(2.0f * kPi * 170.0f * t) +
-                             0.16f * std::sin(2.0f * kPi * 900.0f * t) +
-                             0.08f * std::sin(2.0f * kPi * 1800.0f * t));
+    const float syllable = 0.55f + 0.45f * std::max(0.0f, std::sin(kTwoPi * 4.0f * t));
+    samples[i] =
+        syllable * (0.20f * std::sin(kTwoPi * 170.0f * t) + 0.16f * std::sin(kTwoPi * 900.0f * t) +
+                    0.08f * std::sin(kTwoPi * 1800.0f * t));
   }
   return samples;
 }

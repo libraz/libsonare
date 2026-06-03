@@ -128,9 +128,65 @@ TEST_CASE("Realtime command records keep POD ABI properties", "[rt][command]") {
   command.sample_time = 128;
   command.arg.i = 48000;
 
-  REQUIRE(sonare::rt::kEngineAbiVersion == 2);
+  REQUIRE(sonare::rt::kEngineAbiVersion == 3);
   REQUIRE(command.type == CommandType::kTransportSeekSample);
   REQUIRE(command.target_id == 7);
   REQUIRE(command.sample_time == 128);
   REQUIRE(command.arg.i == 48000);
+
+  // The Command record is a fixed 24-byte POD: a 16-bit CommandType + 32-bit
+  // target_id (padded), a 64-bit sample_time, and the 64-bit CommandArg union.
+  // The new MIDI commands reuse those existing fields, so the layout/ABI is
+  // unchanged. Pin the size so adding command types never silently grows it.
+  static_assert(sizeof(Command) == 24, "Command must stay 24-byte POD");
+}
+
+TEST_CASE("Queueable scalar MIDI commands survive the SPSC queue", "[rt][command][midi]") {
+  using sonare::rt::Command;
+  using sonare::rt::CommandType;
+
+  sonare::rt::SpscQueue<Command> queue;
+  queue.reserve(4);
+
+  // Immediate CC: pack group/channel/controller/value7 into arg.i (matching the
+  // encoding documented in command.h and decoded by apply_command).
+  constexpr uint8_t kGroup = 0x0;
+  constexpr uint8_t kChannel = 0x3;
+  constexpr uint8_t kController = 74;  // filter cutoff
+  constexpr uint8_t kValue7 = 100;
+  const int64_t packed = static_cast<int64_t>(
+      static_cast<uint64_t>(kValue7) | (static_cast<uint64_t>(kController) << 8) |
+      (static_cast<uint64_t>(kChannel) << 16) | (static_cast<uint64_t>(kGroup) << 24));
+
+  Command cc{};
+  cc.type = CommandType::kMidiCcImmediate;
+  cc.target_id = 42;  // MIDI destination id
+  cc.sample_time = 256;
+  cc.arg.i = packed;
+
+  Command panic{};
+  panic.type = CommandType::kMidiAllNotesOff;
+  panic.target_id = 0;
+  panic.sample_time = 512;
+
+  REQUIRE(queue.push(cc));
+  REQUIRE(queue.push(panic));
+
+  Command out{};
+  REQUIRE(queue.pop(out));
+  REQUIRE(out.type == CommandType::kMidiCcImmediate);
+  REQUIRE(out.target_id == 42);
+  REQUIRE(out.sample_time == 256);
+  REQUIRE(out.arg.i == packed);
+  const uint64_t round = static_cast<uint64_t>(out.arg.i);
+  REQUIRE(static_cast<uint8_t>(round & 0x7Fu) == kValue7);
+  REQUIRE(static_cast<uint8_t>((round >> 8) & 0x7Fu) == kController);
+  REQUIRE(static_cast<uint8_t>((round >> 16) & 0x0Fu) == kChannel);
+  REQUIRE(static_cast<uint8_t>((round >> 24) & 0x0Fu) == kGroup);
+
+  REQUIRE(queue.pop(out));
+  REQUIRE(out.type == CommandType::kMidiAllNotesOff);
+  REQUIRE(out.sample_time == 512);
+
+  REQUIRE(queue.empty());
 }

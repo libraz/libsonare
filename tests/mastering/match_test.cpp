@@ -10,14 +10,16 @@
 #include "mastering/match/reference_loudness.h"
 #include "mastering/match/reference_spectrum.h"
 #include "mastering/match/tonal_balance.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
 using namespace sonare::mastering::match;
+using sonare::constants::kPi;
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
+using sonare::test::rms;
 
 Audio sine_audio(float frequency_hz, float amplitude, int sample_rate = 48000,
                  float duration_sec = 1.0f) {
@@ -25,19 +27,10 @@ Audio sine_audio(float frequency_hz, float amplitude, int sample_rate = 48000,
   std::vector<float> out(static_cast<size_t>(samples));
   for (int i = 0; i < samples; ++i) {
     out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
+        amplitude *
+        static_cast<float>(std::sin(sonare::constants::kTwoPiD * frequency_hz * i / sample_rate));
   }
   return Audio::from_vector(std::move(out), sample_rate);
-}
-
-float rms(const Audio& audio, size_t skip = 0) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, audio.size()); i < audio.size(); ++i) {
-    sum += static_cast<double>(audio[i]) * audio[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
 }  // namespace

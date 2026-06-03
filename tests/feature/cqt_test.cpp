@@ -11,23 +11,14 @@
 #include <iterator>
 #include <vector>
 
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinRel;
 
 namespace {
-
-/// @brief Generates a pure sine wave.
-Audio generate_sine(float freq, float duration, int sr = 22050) {
-  int n_samples = static_cast<int>(sr * duration);
-  std::vector<float> samples(n_samples);
-  for (int i = 0; i < n_samples; ++i) {
-    float t = static_cast<float>(i) / sr;
-    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
-  }
-  return Audio::from_vector(std::move(samples), sr);
-}
+using sonare::test::generate_sine;
 
 /// @brief Generates a chord (multiple frequencies).
 Audio generate_chord(const std::vector<float>& freqs, float duration, int sr = 22050) {

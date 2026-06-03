@@ -5,13 +5,14 @@
 #include <vector>
 
 #include "mastering/api/presets.h"
+#include "util/constants.h"
 
 namespace api = sonare::mastering::api;
 
 namespace {
 
 constexpr int kSampleRate = 24000;
-constexpr float kPi = 3.14159265358979323846f;
+using sonare::constants::kPi;
 
 // ITU-R BS.1770-4 inter-sample true-peak measurement tolerance (dB). The
 // band-limited limiter targets the ceiling exactly; this slack accounts for

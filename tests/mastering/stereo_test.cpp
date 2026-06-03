@@ -14,38 +14,17 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare::mastering::stereo;
+using sonare::constants::kPi;
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude = 0.25f) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
-
-float rms_tail(const std::vector<float>& samples, size_t skip) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
-
-void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                    std::vector<float>& right) {
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(left.size()));
-}
+using sonare::test::generate_sine_samples;
+using sonare::test::process_stereo;
+using sonare::test::rms_tail;
 
 std::vector<float> side_signal(const std::vector<float>& left, const std::vector<float>& right) {
   std::vector<float> side(left.size());
@@ -91,8 +70,8 @@ TEST_CASE("MidSide encode preserves total energy (AES convention)", "[mastering]
   // exercises both the sum (mid) and difference (side) paths.
   constexpr int kSampleRate = 48000;
   constexpr int kSamples = 4096;
-  auto left = sine(440.0f, kSampleRate, kSamples, 0.42f);
-  auto right = sine(660.0f, kSampleRate, kSamples, 0.17f);
+  auto left = generate_sine_samples(440.0f, kSampleRate, kSamples, 0.42f);
+  auto right = generate_sine_samples(660.0f, kSampleRate, kSamples, 0.17f);
   // Inject a phase offset on right to create non-trivial side content.
   for (int i = 0; i < kSamples; ++i) {
     right[static_cast<size_t>(i)] +=
@@ -120,8 +99,8 @@ TEST_CASE("MidSide buffer roundtrip is bit-near-exact", "[mastering][stereo]") {
   // Stress the round-trip with a longer, mixed signal.
   constexpr int kSampleRate = 48000;
   constexpr int kSamples = 2048;
-  auto left = sine(523.25f, kSampleRate, kSamples, 0.31f);
-  auto right = sine(783.99f, kSampleRate, kSamples, 0.27f);
+  auto left = generate_sine_samples(523.25f, kSampleRate, kSamples, 0.31f);
+  auto right = generate_sine_samples(783.99f, kSampleRate, kSamples, 0.27f);
   const auto original_left = left;
   const auto original_right = right;
 
@@ -143,8 +122,8 @@ TEST_CASE("MidSide preserves loudness when side gain is applied", "[mastering][s
   // and matches the analytic expression exactly for a mid+side decomposition.
   constexpr int kSampleRate = 48000;
   constexpr int kSamples = 4096;
-  auto left = sine(330.0f, kSampleRate, kSamples, 0.22f);
-  auto right = sine(495.0f, kSampleRate, kSamples, 0.14f);
+  auto left = generate_sine_samples(330.0f, kSampleRate, kSamples, 0.22f);
+  auto right = generate_sine_samples(495.0f, kSampleRate, kSamples, 0.14f);
 
   std::vector<float> mid(left.size());
   std::vector<float> side(left.size());
@@ -183,8 +162,8 @@ TEST_CASE("MidSide preserves loudness when side gain is applied", "[mastering][s
 }
 
 TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") {
-  auto mid = sine(1000.0f, 48000, 48000, 0.25f);
-  auto side = sine(1500.0f, 48000, 48000, 0.05f);
+  auto mid = generate_sine_samples(1000.0f, 48000, 48000, 0.25f);
+  auto side = generate_sine_samples(1500.0f, 48000, 48000, 0.05f);
   auto left = mid;
   auto right = mid;
   for (size_t i = 0; i < left.size(); ++i) {
@@ -211,8 +190,8 @@ TEST_CASE("Imager preserves energy when narrowing", "[mastering][stereo]") {
   // preserve_energy used to gate on width > 1 only, so narrowing (width < 1)
   // shrank the side and dropped total energy uncompensated. It must now hold
   // total energy roughly constant for any width != 1.
-  auto mid = sine(1000.0f, 48000, 48000, 0.25f);
-  auto side = sine(1500.0f, 48000, 48000, 0.15f);
+  auto mid = generate_sine_samples(1000.0f, 48000, 48000, 0.25f);
+  auto side = generate_sine_samples(1500.0f, 48000, 48000, 0.15f);
   auto left = mid;
   auto right = mid;
   for (size_t i = 0; i < left.size(); ++i) {
@@ -233,8 +212,8 @@ TEST_CASE("Imager preserves energy when narrowing", "[mastering][stereo]") {
 }
 
 TEST_CASE("Imager decorrelates widened side signal", "[mastering][stereo]") {
-  auto left = sine(1000.0f, 48000, 48000, 0.25f);
-  auto right = sine(1000.0f, 48000, 48000, -0.25f);
+  auto left = generate_sine_samples(1000.0f, 48000, 48000, 0.25f);
+  auto right = generate_sine_samples(1000.0f, 48000, 48000, -0.25f);
 
   Imager dry({1.5f, 0.0f, 0.0f, false});
   Imager decorated({1.5f, 0.0f, 1.0f, false});
@@ -257,8 +236,8 @@ TEST_CASE("Imager validates width", "[mastering][stereo]") {
 }
 
 TEST_CASE("MonoMaker collapses stereo to identical channels", "[mastering][stereo]") {
-  auto left = sine(100.0f, 48000, 48000, 0.3f);
-  auto right = sine(100.0f, 48000, 48000, 0.1f);
+  auto left = generate_sine_samples(100.0f, 48000, 48000, 0.3f);
+  auto right = generate_sine_samples(100.0f, 48000, 48000, 0.1f);
 
   MonoMaker mono_maker({1.0f});
   mono_maker.prepare(48000.0, 1024);
@@ -378,7 +357,7 @@ TEST_CASE("PhaseAlign validates configuration", "[mastering][stereo]") {
 }
 
 TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]") {
-  auto left = sine(1000.0f, 48000, 48000, 0.5f);
+  auto left = generate_sine_samples(1000.0f, 48000, 48000, 0.5f);
   auto right = left;
   for (auto& sample : right) {
     sample = -sample;
@@ -393,7 +372,7 @@ TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]
 }
 
 TEST_CASE("MonoCompatCheck reports log-band phase correlation", "[mastering][stereo]") {
-  auto left = sine(1000.0f, 48000, 48000, 0.5f);
+  auto left = generate_sine_samples(1000.0f, 48000, 48000, 0.5f);
   auto right = left;
   for (auto& sample : right) {
     sample = -sample;

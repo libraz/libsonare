@@ -9,29 +9,17 @@
 #include <numeric>
 #include <vector>
 
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 2.0f * kPi;
-
-std::vector<float> generate_sine(int samples, float freq, int sr) {
-  std::vector<float> result(samples);
-  for (int i = 0; i < samples; ++i) {
-    result[i] = std::sin(kTwoPi * freq * i / sr);
-  }
-  return result;
-}
-
-float compute_rms(const float* data, size_t size) {
-  float sum_sq = 0.0f;
-  for (size_t i = 0; i < size; ++i) {
-    sum_sq += data[i] * data[i];
-  }
-  return std::sqrt(sum_sq / size);
-}
+using sonare::constants::kTwoPi;
+using sonare::test::generate_sine;
+using sonare::test::rms;
 }  // namespace
 
 TEST_CASE("resample same rate returns copy", "[resample]") {
@@ -61,8 +49,8 @@ TEST_CASE("resample 44100 to 22050 (2x downsample)", "[resample]") {
                WithinRel(static_cast<float>(expected_size), 0.02f));
 
   // RMS should be similar (within 10% for a sine wave)
-  float src_rms = compute_rms(samples.data(), samples.size());
-  float dst_rms = compute_rms(result.data(), result.size());
+  float src_rms = rms(samples.data(), samples.size());
+  float dst_rms = rms(result.data(), result.size());
   REQUIRE_THAT(dst_rms, WithinRel(src_rms, 0.1f));
 }
 
@@ -81,8 +69,8 @@ TEST_CASE("resample 22050 to 44100 (2x upsample)", "[resample]") {
                WithinRel(static_cast<float>(expected_size), 0.02f));
 
   // RMS should be similar
-  float src_rms = compute_rms(samples.data(), samples.size());
-  float dst_rms = compute_rms(result.data(), result.size());
+  float src_rms = rms(samples.data(), samples.size());
+  float dst_rms = rms(result.data(), result.size());
   REQUIRE_THAT(dst_rms, WithinRel(src_rms, 0.1f));
 }
 

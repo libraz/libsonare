@@ -22,6 +22,7 @@
 #include "mastering/eq/spectrum_registry.h"
 #include "mastering/eq/tilt.h"
 #include "rt/biquad_design.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -31,6 +32,11 @@ namespace {
 
 using sonare::constants::kButterworthQ;
 using sonare::constants::kPiD;
+using sonare::test::max_abs_difference;
+using sonare::test::peak_abs;
+using sonare::test::process;
+using sonare::test::process_stereo;
+using sonare::test::rms_tail;
 
 std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude = 0.25f) {
   std::vector<float> out(static_cast<size_t>(samples));
@@ -39,31 +45,6 @@ std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float 
         amplitude * static_cast<float>(std::sin(2.0 * kPiD * frequency_hz * i / sample_rate));
   }
   return out;
-}
-
-float rms_tail(const std::vector<float>& samples, size_t skip) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
-
-float peak_abs(const std::vector<float>& samples) {
-  float peak = 0.0f;
-  for (float sample : samples) peak = std::max(peak, std::abs(sample));
-  return peak;
-}
-
-float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
-  const size_t count = std::min(lhs.size(), rhs.size());
-  float peak = 0.0f;
-  for (size_t i = 0; i < count; ++i) {
-    peak = std::max(peak, std::abs(lhs[i] - rhs[i]));
-  }
-  return peak;
 }
 
 float kernel_magnitude_at(const std::vector<float>& kernel, double frequency_hz,
@@ -75,17 +56,6 @@ float kernel_magnitude_at(const std::vector<float>& kernel, double frequency_hz,
                 std::exp(std::complex<double>(0.0, -omega * static_cast<double>(n)));
   }
   return static_cast<float>(std::abs(response));
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
-}
-
-void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                    std::vector<float>& right) {
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
 }
 
 }  // namespace

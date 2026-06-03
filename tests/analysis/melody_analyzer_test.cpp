@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -15,19 +16,7 @@ using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
-
-/// @brief Creates a pure sine wave at given frequency.
-Audio create_sine(float freq, int sr = 22050, float duration = 1.0f) {
-  int n_samples = static_cast<int>(sr * duration);
-  std::vector<float> samples(n_samples);
-
-  for (int i = 0; i < n_samples; ++i) {
-    float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = 0.8f * std::sin(2.0f * sonare::constants::kPiD * freq * t);
-  }
-
-  return Audio::from_vector(std::move(samples), sr);
-}
+using sonare::test::generate_sine_audio;
 
 /// @brief Creates a melody with multiple pitches.
 Audio create_melody(const std::vector<float>& freqs, float note_duration, int sr = 22050) {
@@ -58,7 +47,7 @@ Audio create_melody(const std::vector<float>& freqs, float note_duration, int sr
 }  // namespace
 
 TEST_CASE("MelodyAnalyzer basic", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyConfig config;
   MelodyAnalyzer analyzer(audio, config);
@@ -67,7 +56,7 @@ TEST_CASE("MelodyAnalyzer basic", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer A440 detection", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyConfig config;
   config.threshold = 0.15f;
@@ -82,7 +71,7 @@ TEST_CASE("MelodyAnalyzer A440 detection", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer pitch times", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyAnalyzer analyzer(audio);
 
@@ -98,7 +87,7 @@ TEST_CASE("MelodyAnalyzer pitch times", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer pitch frequencies", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyAnalyzer analyzer(audio);
 
@@ -108,7 +97,7 @@ TEST_CASE("MelodyAnalyzer pitch frequencies", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer pitch confidences", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyAnalyzer analyzer(audio);
 
@@ -123,7 +112,7 @@ TEST_CASE("MelodyAnalyzer pitch confidences", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer contour features", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyAnalyzer analyzer(audio);
 
@@ -135,7 +124,7 @@ TEST_CASE("MelodyAnalyzer contour features", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer stability for pure tone", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 2.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 2.0f, 0.8f);
 
   MelodyConfig config;
   config.threshold = 0.15f;
@@ -166,7 +155,7 @@ TEST_CASE("MelodyAnalyzer melody with multiple pitches", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer frequency range config", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyConfig config;
   config.fmin = 400.0f;
@@ -185,7 +174,7 @@ TEST_CASE("MelodyAnalyzer frequency range config", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer frame/hop config", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 1.0f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyConfig config1;
   config1.frame_length = 2048;
@@ -202,7 +191,7 @@ TEST_CASE("MelodyAnalyzer frame/hop config", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer short audio", "[melody_analyzer]") {
-  Audio audio = create_sine(440.0f, 22050, 0.2f);
+  Audio audio = generate_sine_audio(440.0f, 22050, 0.2f, 0.8f);
 
   MelodyConfig config;
   MelodyAnalyzer analyzer(audio, config);
@@ -216,7 +205,7 @@ TEST_CASE("MelodyAnalyzer different frequencies", "[melody_analyzer]") {
   std::vector<float> test_freqs = {200.0f, 300.0f, 500.0f, 800.0f};
 
   for (float freq : test_freqs) {
-    Audio audio = create_sine(freq, 22050, 1.0f);
+    Audio audio = generate_sine_audio(freq, 22050, 1.0f, 0.8f);
 
     MelodyConfig config;
     config.threshold = 0.2f;
@@ -230,7 +219,7 @@ TEST_CASE("MelodyAnalyzer different frequencies", "[melody_analyzer]") {
 }
 
 TEST_CASE("MelodyAnalyzer has_melody", "[melody_analyzer]") {
-  Audio sine = create_sine(440.0f, 22050, 1.0f);
+  Audio sine = generate_sine_audio(440.0f, 22050, 1.0f, 0.8f);
 
   MelodyAnalyzer analyzer(sine);
 

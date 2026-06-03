@@ -16,6 +16,8 @@
 #include "rt/processor_chain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/sliding_max.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 #include "util/lpc.h"
 
 using Catch::Matchers::WithinAbs;
@@ -31,6 +33,7 @@ using sonare::mastering::common::NoiseTracker;
 using namespace sonare::rt;  // NOLINT(google-build-using-namespace)
 
 namespace {
+using sonare::test::rms;
 
 class NoLatencyProcessor : public ProcessorBase {
  public:
@@ -47,16 +50,6 @@ class FixedLatencyProcessor : public NoLatencyProcessor {
  private:
   int latency_ = 0;
 };
-
-float rms(const std::vector<float>& samples, size_t skip = 0) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
 
 }  // namespace
 
@@ -266,7 +259,7 @@ TEST_CASE("Oversampler downsample uses FIR decimation", "[mastering]") {
   Oversampler oversampler(8);
   std::vector<float> low_rate(256, 0.0f);
   for (size_t i = 0; i < low_rate.size(); ++i) {
-    low_rate[i] = 0.4f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * 250.0 *
+    low_rate[i] = 0.4f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 250.0 *
                                                      static_cast<double>(i) / 48000.0));
   }
   const auto upsampled = oversampler.upsample(low_rate);

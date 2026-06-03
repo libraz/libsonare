@@ -12,21 +12,18 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
 using namespace sonare::mastering::repair;
 
 namespace {
+using sonare::test::rms;
 
 Audio make_audio(const std::vector<float>& samples) {
   return Audio::from_buffer(samples.data(), samples.size(), 48000);
-}
-
-float rms(const Audio& audio) {
-  double sum = 0.0;
-  for (size_t i = 0; i < audio.size(); ++i) sum += static_cast<double>(audio[i]) * audio[i];
-  return audio.empty() ? 0.0f : static_cast<float>(std::sqrt(sum / audio.size()));
 }
 
 }  // namespace
@@ -87,7 +84,7 @@ TEST_CASE("Decrackle median-filters small impulses", "[mastering][repair]") {
 TEST_CASE("Decrackle wavelet shrinkage reduces crackle energy", "[mastering][repair]") {
   std::vector<float> samples(256, 0.0f);
   for (size_t i = 0; i < samples.size(); ++i) {
-    samples[i] = 0.1f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * i / 64.0));
+    samples[i] = 0.1f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * i / 64.0));
   }
   samples[32] += 0.35f;
   samples[96] -= 0.32f;
@@ -223,10 +220,10 @@ ClippedFixture make_clipped_sine(size_t n, float freq_hz, float amp, float sampl
   fx.clipped.resize(n);
   std::mt19937 rng(seed);
   std::uniform_real_distribution<float> noise(-0.005f, 0.005f);
-  constexpr double kPi = 3.14159265358979323846;
   for (size_t i = 0; i < n; ++i) {
     const float t = static_cast<float>(i) / sample_rate;
-    const float x = amp * static_cast<float>(std::sin(2.0 * kPi * freq_hz * t)) + noise(rng);
+    const float x =
+        amp * static_cast<float>(std::sin(sonare::constants::kTwoPiD * freq_hz * t)) + noise(rng);
     fx.original[i] = x;
     fx.clipped[i] = std::clamp(x, -clip_thresh, clip_thresh);
   }
@@ -254,7 +251,7 @@ TEST_CASE("Declip preserves all unclipped samples exactly", "[mastering][repair]
 TEST_CASE("Dehum notch filter reduces fundamental tone", "[mastering][repair]") {
   std::vector<float> samples(4800);
   for (size_t i = 0; i < samples.size(); ++i) {
-    samples[i] = 0.5f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * 50.0 *
+    samples[i] = 0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 50.0 *
                                                     static_cast<double>(i) / 48000.0));
   }
   const auto input = make_audio(samples);
@@ -267,7 +264,7 @@ TEST_CASE("Dehum adaptive notch follows drifting fundamental", "[mastering][repa
   std::vector<float> samples(8192);
   for (size_t i = 0; i < samples.size(); ++i) {
     const float hz = 49.0f + 2.0f * static_cast<float>(i) / static_cast<float>(samples.size());
-    samples[i] = 0.35f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * hz *
+    samples[i] = 0.35f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * hz *
                                                      static_cast<double>(i) / 48000.0));
   }
   const auto input = make_audio(samples);
@@ -279,14 +276,14 @@ TEST_CASE("Dehum adaptive notch follows drifting fundamental", "[mastering][repa
 namespace {
 Audio noisy_tone(int sample_rate, int samples, float tone_freq, float tone_amp, float noise_amp,
                  uint32_t seed) {
-  constexpr double kPi = 3.14159265358979323846;
   std::vector<float> data(static_cast<size_t>(samples));
   std::mt19937 rng(seed);
   std::uniform_real_distribution<float> noise(-noise_amp, noise_amp);
   for (int i = 0; i < samples; ++i) {
     const double t = static_cast<double>(i) / sample_rate;
     data[static_cast<size_t>(i)] =
-        static_cast<float>(tone_amp * std::sin(2.0 * kPi * tone_freq * t)) + noise(rng);
+        static_cast<float>(tone_amp * std::sin(sonare::constants::kTwoPiD * tone_freq * t)) +
+        noise(rng);
   }
   return Audio::from_vector(std::move(data), sample_rate);
 }
@@ -366,9 +363,8 @@ TEST_CASE("DereverbClassical spectral subtraction reduces late decay", "[masteri
   std::vector<float> samples(48000, 0.0f);
   samples[0] = 1.0f;
   for (size_t i = 1; i < samples.size(); ++i) {
-    samples[i] =
-        0.4f * std::exp(-static_cast<float>(i) / 8000.0f) *
-        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+    samples[i] = 0.4f * std::exp(-static_cast<float>(i) / 8000.0f) *
+                 std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const Audio input = Audio::from_vector(samples, 48000);
   const auto output =
@@ -388,7 +384,7 @@ TEST_CASE("DereverbClassical WPE mode further suppresses predictable late reverb
           "[mastering][repair]") {
   std::vector<float> samples(48000, 0.0f);
   for (size_t i = 0; i < samples.size(); ++i) {
-    const float direct = 0.4f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * 700.0 *
+    const float direct = 0.4f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 700.0 *
                                                             static_cast<double>(i) / 48000.0));
     const float late = i >= 2400 ? 0.25f * samples[i - 2400] : 0.0f;
     samples[i] = direct + late;

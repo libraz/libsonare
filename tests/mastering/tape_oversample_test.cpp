@@ -6,6 +6,7 @@
 
 #include "core/fft.h"
 #include "mastering/saturation/tape.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -17,15 +18,7 @@ namespace {
 constexpr int kSampleRate = 22050;
 constexpr int kLength = 32768;
 
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude *
-        static_cast<float>(std::sin(sonare::constants::kTwoPiD * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
+using sonare::test::generate_sine_samples;
 
 void run_tape(int oversample_factor, std::vector<float>& mono) {
   TapeConfig config{};
@@ -73,7 +66,7 @@ double alias_energy(const std::vector<float>& signal, float fundamental_hz) {
 
 TEST_CASE("Tape oversampling reduces aliasing at high drive", "[mastering][saturation]") {
   const float freq = 3500.0f;
-  auto base = sine(freq, kSampleRate, kLength, 0.9f);
+  auto base = generate_sine_samples(freq, kSampleRate, kLength, 0.9f);
 
   auto out1x = base;
   auto out4x = base;
@@ -89,7 +82,7 @@ TEST_CASE("Tape oversampling reduces aliasing at high drive", "[mastering][satur
 
 TEST_CASE("Tape oversample_factor=1 is deterministic and matches default path",
           "[mastering][saturation]") {
-  auto input = sine(440.0f, kSampleRate, 4096, 0.5f);
+  auto input = generate_sine_samples(440.0f, kSampleRate, 4096, 0.5f);
 
   auto a = input;
   auto b = input;

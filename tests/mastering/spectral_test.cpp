@@ -7,62 +7,18 @@
 #include "mastering/spectral/low_end_focus.h"
 #include "mastering/spectral/presence_enhancer.h"
 #include "mastering/spectral/spectral_shaper.h"
+#include "support/audio_fixtures.h"
 
 using namespace sonare::mastering::spectral;
 
 namespace {
-
-float peak_abs(const std::vector<float>& samples) {
-  float peak = 0.0f;
-  for (float sample : samples) peak = std::max(peak, std::abs(sample));
-  return peak;
-}
-
-float rms(const std::vector<float>& samples) {
-  double sum = 0.0;
-  for (float sample : samples) sum += static_cast<double>(sample) * sample;
-  return static_cast<float>(std::sqrt(sum / static_cast<double>(samples.size())));
-}
-
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude *
-        static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
-
-float rms_tail(const std::vector<float>& samples, size_t skip) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
-
-float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
-  const size_t count = std::min(lhs.size(), rhs.size());
-  float peak = 0.0f;
-  for (size_t i = 0; i < count; ++i) {
-    peak = std::max(peak, std::abs(lhs[i] - rhs[i]));
-  }
-  return peak;
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
-}
-
-void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                    std::vector<float>& right) {
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
-}
+using sonare::test::generate_sine_samples;
+using sonare::test::max_abs_difference;
+using sonare::test::peak_abs;
+using sonare::test::process;
+using sonare::test::process_stereo;
+using sonare::test::rms;
+using sonare::test::rms_tail;
 
 }  // namespace
 
@@ -70,7 +26,7 @@ TEST_CASE("SpectralShaper reduces material above threshold", "[mastering][spectr
   SpectralShaper shaper({0.05f, 1.0f, 500.0f, 8000.0f, 0.0f, 0.0f, 24.0f});
   shaper.prepare(48000.0, 512);
 
-  auto signal = sine(4000.0f, 48000, 512, 0.5f);
+  auto signal = generate_sine_samples(4000.0f, 48000, 512, 0.5f);
   const float before = rms_tail(signal, 128);
   process(shaper, signal);
 
@@ -83,8 +39,8 @@ TEST_CASE("SpectralShaper targets high-band energy more than low-band energy",
   SpectralShaper shaper({0.05f, 1.0f, 2000.0f, 6000.0f, 0.0f, 0.0f, 24.0f});
   shaper.prepare(48000.0, 2048);
 
-  auto low = sine(500.0f, 48000, 2048, 0.5f);
-  auto target = sine(4000.0f, 48000, 2048, 0.5f);
+  auto low = generate_sine_samples(500.0f, 48000, 2048, 0.5f);
+  auto target = generate_sine_samples(4000.0f, 48000, 2048, 0.5f);
 
   const float low_before = rms_tail(low, 512);
   const float target_before = rms_tail(target, 512);
@@ -102,7 +58,7 @@ TEST_CASE("SpectralShaper attack slows initial gain reduction", "[mastering][spe
   fast.prepare(48000.0, 256);
   slow.prepare(48000.0, 256);
 
-  auto fast_signal = sine(4000.0f, 48000, 256, 0.5f);
+  auto fast_signal = generate_sine_samples(4000.0f, 48000, 256, 0.5f);
   auto slow_signal = fast_signal;
   const float before = rms(fast_signal);
   process(fast, fast_signal);
@@ -118,7 +74,7 @@ TEST_CASE("SpectralShaper release controls gain recovery", "[mastering][spectral
   fast.prepare(48000.0, 512);
   slow.prepare(48000.0, 512);
 
-  auto loud_fast = sine(4000.0f, 48000, 512, 0.5f);
+  auto loud_fast = generate_sine_samples(4000.0f, 48000, 512, 0.5f);
   auto loud_slow = loud_fast;
   process(fast, loud_fast);
   process(slow, loud_slow);
@@ -155,7 +111,7 @@ TEST_CASE("LowEndFocus adds octave-down subharmonic energy", "[mastering][spectr
   dry.prepare(48000.0, 4096);
   sub.prepare(48000.0, 4096);
 
-  auto dry_signal = sine(80.0f, 48000, 48000, 0.2f);
+  auto dry_signal = generate_sine_samples(80.0f, 48000, 48000, 0.2f);
   auto sub_signal = dry_signal;
   process(dry, dry_signal);
   process(sub, sub_signal);
@@ -199,8 +155,8 @@ TEST_CASE("AirBand emphasizes high band more than low band", "[mastering][spectr
   AirBand air({0.6f, 10000.0f, -60.0f, 6.0f});
   air.prepare(sample_rate, 1024);
 
-  auto low = sine(500.0f, sample_rate, sample_rate, 0.2f);
-  auto high = sine(14000.0f, sample_rate, sample_rate, 0.2f);
+  auto low = generate_sine_samples(500.0f, sample_rate, sample_rate, 0.2f);
+  auto high = generate_sine_samples(14000.0f, sample_rate, sample_rate, 0.2f);
   const float low_before = rms_tail(low, 4096);
   const float high_before = rms_tail(high, 4096);
 
@@ -241,12 +197,12 @@ TEST_CASE("AirBand preserves existing channel state when channel count grows",
   mono_path.prepare(48000.0, 1024);
   stereo_path.prepare(48000.0, 1024);
 
-  auto warmup = sine(14000.0f, 48000, 4096, 0.3f);
+  auto warmup = generate_sine_samples(14000.0f, 48000, 4096, 0.3f);
   auto warmup_copy = warmup;
   process(mono_path, warmup);
   process(stereo_path, warmup_copy);
 
-  auto expected_left = sine(14000.0f, 48000, 512, 0.3f);
+  auto expected_left = generate_sine_samples(14000.0f, 48000, 512, 0.3f);
   auto actual_left = expected_left;
   auto actual_right = expected_left;
   process(mono_path, expected_left);
@@ -282,8 +238,8 @@ TEST_CASE("PresenceEnhancer focuses harmonic drive near presence band", "[master
   PresenceEnhancer enhancer({0.4f, 4.0f, 3000.0f, 1.2f});
   enhancer.prepare(sample_rate, 1024);
 
-  auto presence = sine(3000.0f, sample_rate, sample_rate, 0.2f);
-  auto low = sine(200.0f, sample_rate, sample_rate, 0.2f);
+  auto presence = generate_sine_samples(3000.0f, sample_rate, sample_rate, 0.2f);
+  auto low = generate_sine_samples(200.0f, sample_rate, sample_rate, 0.2f);
   const float presence_before = rms_tail(presence, 4096);
   const float low_before = rms_tail(low, 4096);
 
@@ -301,12 +257,12 @@ TEST_CASE("PresenceEnhancer preserves existing channel state when channel count 
   mono_path.prepare(48000.0, 1024);
   stereo_path.prepare(48000.0, 1024);
 
-  auto warmup = sine(3000.0f, 48000, 4096, 0.3f);
+  auto warmup = generate_sine_samples(3000.0f, 48000, 4096, 0.3f);
   auto warmup_copy = warmup;
   process(mono_path, warmup);
   process(stereo_path, warmup_copy);
 
-  auto expected_left = sine(3000.0f, 48000, 512, 0.3f);
+  auto expected_left = generate_sine_samples(3000.0f, 48000, 512, 0.3f);
   auto actual_left = expected_left;
   auto actual_right = expected_left;
   process(mono_path, expected_left);

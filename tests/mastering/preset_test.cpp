@@ -7,6 +7,7 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -14,6 +15,8 @@ using Catch::Matchers::WithinAbs;
 
 namespace sonare::mastering::api {
 namespace {
+using sonare::test::peak_abs;
+using sonare::test::rms;
 
 std::vector<float> create_preset_fixture(int sample_rate, float seconds) {
   const int count = static_cast<int>(static_cast<float>(sample_rate) * seconds);
@@ -36,22 +39,6 @@ float mean_abs(const std::vector<float>& samples) {
     sum += std::abs(value);
   }
   return static_cast<float>(sum / static_cast<double>(samples.size()));
-}
-
-float rms(const std::vector<float>& samples) {
-  double sum = 0.0;
-  for (float value : samples) {
-    sum += static_cast<double>(value) * static_cast<double>(value);
-  }
-  return static_cast<float>(std::sqrt(sum / static_cast<double>(samples.size())));
-}
-
-float peak_abs(const std::vector<float>& samples) {
-  float peak = 0.0f;
-  for (float value : samples) {
-    peak = std::max(peak, std::abs(value));
-  }
-  return peak;
 }
 
 }  // namespace

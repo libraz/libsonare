@@ -43,19 +43,14 @@
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
 #endif
+#include "support/alloc_guard.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
 namespace {
 
-std::atomic<bool> g_count_allocations{false};
-std::atomic<size_t> g_allocation_count{0};
-
-void note_allocation() noexcept {
-  if (g_count_allocations.load(std::memory_order_relaxed)) {
-    g_allocation_count.fetch_add(1, std::memory_order_relaxed);
-  }
-}
+using sonare::test::AllocationGuard;
+using sonare::test::note_allocation;
 
 void* allocate_bytes(std::size_t size) {
   note_allocation();
@@ -95,16 +90,6 @@ void aligned_free(void* ptr) noexcept {
   std::free(ptr);
 #endif
 }
-
-class AllocationGuard {
- public:
-  AllocationGuard() {
-    g_allocation_count.store(0, std::memory_order_relaxed);
-    g_count_allocations.store(true, std::memory_order_relaxed);
-  }
-  ~AllocationGuard() { g_count_allocations.store(false, std::memory_order_relaxed); }
-  size_t count() const noexcept { return g_allocation_count.load(std::memory_order_relaxed); }
-};
 
 class ScaleProcessor final : public sonare::rt::ProcessorBase {
  public:

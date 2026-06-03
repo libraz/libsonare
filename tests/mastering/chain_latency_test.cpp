@@ -6,6 +6,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "util/constants.h"
 
 namespace api = sonare::mastering::api;
 namespace maximizer = sonare::mastering::maximizer;
@@ -13,7 +14,7 @@ namespace maximizer = sonare::mastering::maximizer;
 namespace {
 
 constexpr int kSampleRate = 48000;
-constexpr float kPi = 3.14159265358979323846f;
+using sonare::constants::kPi;
 
 // Index of the maximum-magnitude sample.
 size_t argmax_abs(const std::vector<float>& signal) {

@@ -9,6 +9,7 @@
 #include <complex>
 #include <vector>
 
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -17,19 +18,7 @@ using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
-
-/// @brief Creates a simple test signal (sine wave).
-Audio create_sine_audio(float freq, int sr = 22050, float duration = 0.5f) {
-  int n_samples = static_cast<int>(sr * duration);
-  std::vector<float> samples(n_samples);
-
-  for (int i = 0; i < n_samples; ++i) {
-    float t = static_cast<float>(i) / static_cast<float>(sr);
-    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
-  }
-
-  return Audio::from_vector(std::move(samples), sr);
-}
+using sonare::test::generate_sine_audio;
 
 /// @brief Creates white noise signal.
 Audio create_noise_audio(int sr = 22050, float duration = 0.5f) {
@@ -49,7 +38,7 @@ Audio create_noise_audio(int sr = 22050, float duration = 0.5f) {
 }  // namespace
 
 TEST_CASE("spectral_centroid basic", "[spectral]") {
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
   int sr = audio.sample_rate();
 
   StftConfig config;
@@ -73,8 +62,8 @@ TEST_CASE("spectral_centroid basic", "[spectral]") {
 }
 
 TEST_CASE("spectral_centroid low vs high frequency", "[spectral]") {
-  Audio low_audio = create_sine_audio(200.0f);
-  Audio high_audio = create_sine_audio(4000.0f);
+  Audio low_audio = generate_sine_audio(200.0f);
+  Audio high_audio = generate_sine_audio(4000.0f);
   int sr = 22050;
 
   StftConfig config;
@@ -108,7 +97,7 @@ TEST_CASE("spectral_centroid normalizes tiny nonzero magnitudes like librosa", "
 }
 
 TEST_CASE("spectral_bandwidth basic", "[spectral]") {
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
   int sr = audio.sample_rate();
 
   StftConfig config;
@@ -147,7 +136,7 @@ TEST_CASE("spectral_bandwidth normalizes tiny nonzero magnitudes like librosa", 
 }
 
 TEST_CASE("spectral_rolloff basic", "[spectral]") {
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
   int sr = audio.sample_rate();
 
   StftConfig config;
@@ -219,7 +208,7 @@ TEST_CASE("spectral_rolloff validates librosa-compatible inputs", "[spectral]") 
 }
 
 TEST_CASE("spectral_flatness sine vs noise", "[spectral]") {
-  Audio sine_audio = create_sine_audio(1000.0f);
+  Audio sine_audio = generate_sine_audio(1000.0f);
   Audio noise_audio = create_noise_audio();
 
   StftConfig config;
@@ -296,7 +285,7 @@ TEST_CASE("zero_crossing_rate handles empty input", "[spectral][zcr][edge]") {
 }
 
 TEST_CASE("spectral_contrast basic", "[spectral]") {
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
   int sr = audio.sample_rate();
 
   StftConfig config;
@@ -394,7 +383,7 @@ TEST_CASE("poly_features column scaling preserves linear-order values",
           "[spectral][poly_features]") {
   // For order = 1, column-scaled and unscaled solves must agree to high
   // precision: this guards against an off-by-one in the unscaling step.
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
   StftConfig config;
   config.n_fft = 2048;
   config.hop_length = 512;
@@ -408,7 +397,7 @@ TEST_CASE("poly_features column scaling preserves linear-order values",
 }
 
 TEST_CASE("zero_crossing_rate basic", "[spectral]") {
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
 
   int frame_length = 2048;
   int hop_length = 512;
@@ -439,8 +428,8 @@ TEST_CASE("zero_crossing_rate uses librosa edge padding", "[spectral]") {
 
 TEST_CASE("zero_crossing_rate frequency relationship", "[spectral]") {
   // Higher frequency should have more zero crossings
-  Audio low_audio = create_sine_audio(100.0f);
-  Audio high_audio = create_sine_audio(4000.0f);
+  Audio low_audio = generate_sine_audio(100.0f);
+  Audio high_audio = generate_sine_audio(4000.0f);
 
   int frame_length = 2048;
   int hop_length = 512;
@@ -459,7 +448,7 @@ TEST_CASE("zero_crossing_rate frequency relationship", "[spectral]") {
 }
 
 TEST_CASE("rms_energy basic", "[spectral]") {
-  Audio audio = create_sine_audio(1000.0f);
+  Audio audio = generate_sine_audio(1000.0f);
 
   int frame_length = 2048;
   int hop_length = 512;

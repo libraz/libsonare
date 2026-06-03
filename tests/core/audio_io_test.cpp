@@ -3,15 +3,16 @@
 
 #include "core/audio_io.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <vector>
 
+#include "support/audio_fixtures.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -89,16 +90,7 @@ std::vector<uint8_t> create_wav_buffer_pcm16(const float* samples, size_t sample
   return buffer;
 }
 
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 2.0f * kPi;
-
-std::vector<float> generate_sine(int samples, float freq, int sr) {
-  std::vector<float> result(samples);
-  for (int i = 0; i < samples; ++i) {
-    result[i] = std::sin(kTwoPi * freq * i / sr);
-  }
-  return result;
-}
+using sonare::test::generate_sine;
 
 }  // namespace
 

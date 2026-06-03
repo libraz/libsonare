@@ -20,60 +20,19 @@
 #include "mastering/dynamics/upward_compressor.h"
 #include "mastering/dynamics/upward_expander.h"
 #include "mastering/dynamics/vocal_rider.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare::mastering::dynamics;
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
-
-float rms_tail(const std::vector<float>& samples, size_t skip) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
-
-float peak_abs(const std::vector<float>& samples, size_t skip = 0) {
-  float peak = 0.0f;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    peak = std::max(peak, std::abs(samples[i]));
-  }
-  return peak;
-}
-
-float max_abs_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
-  const size_t count = std::min(lhs.size(), rhs.size());
-  float peak = 0.0f;
-  for (size_t i = 0; i < count; ++i) {
-    peak = std::max(peak, std::abs(lhs[i] - rhs[i]));
-  }
-  return peak;
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
-}
-
-void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                    std::vector<float>& right) {
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
-}
+using sonare::test::generate_sine_samples;
+using sonare::test::max_abs_difference;
+using sonare::test::peak_abs;
+using sonare::test::process;
+using sonare::test::process_stereo;
+using sonare::test::rms_tail;
 
 }  // namespace
 
@@ -81,8 +40,8 @@ TEST_CASE("Compressor reduces level above threshold", "[mastering][dynamics]") {
   Compressor compressor({-18.0f, 4.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Rms});
   compressor.prepare(48000.0, 1024);
 
-  auto quiet = sine(1000.0f, 48000, 48000, 0.05f);
-  auto loud = sine(1000.0f, 48000, 48000, 0.8f);
+  auto quiet = generate_sine_samples(1000.0f, 48000, 48000, 0.05f);
+  auto loud = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);
   const float quiet_before = rms_tail(quiet, 4096);
   const float loud_before = rms_tail(loud, 4096);
 
@@ -96,7 +55,7 @@ TEST_CASE("Compressor reduces level above threshold", "[mastering][dynamics]") {
 }
 
 TEST_CASE("Compressor auto makeup increases compressed output", "[mastering][dynamics]") {
-  auto input = sine(1000.0f, 48000, 48000, 0.8f);
+  auto input = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);
   auto no_makeup = input;
   auto with_makeup = input;
 
@@ -120,7 +79,7 @@ TEST_CASE("Compressor LogRms detector compresses loud sustained tones", "[master
   Compressor compressor({-18.0f, 4.0f, 10.0f, 50.0f, 0.0f, 0.0f, false, DetectorMode::LogRms});
   compressor.prepare(48000.0, 1024);
 
-  auto loud = sine(1000.0f, 48000, 48000, 0.8f);
+  auto loud = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);
   const float before = rms_tail(loud, 4096);
   process(compressor, loud);
 
@@ -132,8 +91,8 @@ TEST_CASE("Compressor links detection across stereo channels", "[mastering][dyna
   Compressor compressor({-18.0f, 4.0f, 10.0f, 50.0f, 0.0f, 0.0f, false, DetectorMode::Peak});
   compressor.prepare(48000.0, 1024);
 
-  auto left = sine(1000.0f, 48000, 48000, 0.8f);
-  auto right = sine(1000.0f, 48000, 48000, 0.02f);
+  auto left = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);
+  auto right = generate_sine_samples(1000.0f, 48000, 48000, 0.02f);
   float* channels[] = {left.data(), right.data()};
   compressor.process(channels, 2, static_cast<int>(left.size()));
 
@@ -158,14 +117,14 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
   std::atomic<int> nonfinite_blocks{0};
 
   std::thread audio_thread([&] {
-    std::vector<float> block = sine(1000.0f, 48000, 256, 0.5f);
+    std::vector<float> block = generate_sine_samples(1000.0f, 48000, 256, 0.5f);
     float* channels[] = {block.data()};
     while (!stop.load(std::memory_order_acquire)) {
       // Refill the block each iteration so detector state has steady input;
       // the test verifies snapshot consistency, not detector behaviour.
       for (size_t i = 0; i < block.size(); ++i) {
-        block[i] = 0.5f * static_cast<float>(
-                              std::sin(2.0 * kPi * 1000.0 * static_cast<double>(i) / 48000.0));
+        block[i] = 0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 1000.0 *
+                                                      static_cast<double>(i) / 48000.0));
       }
       compressor.process(channels, 1, static_cast<int>(block.size()));
       bool all_finite = true;
@@ -216,7 +175,7 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
   final.attack_ms = 7.0f;
   final.release_ms = 80.0f;
   compressor.set_config(final);
-  std::vector<float> tail = sine(1000.0f, 48000, 256, 0.5f);
+  std::vector<float> tail = generate_sine_samples(1000.0f, 48000, 256, 0.5f);
   float* tail_channels[] = {tail.data()};
   compressor.process(tail_channels, 1, static_cast<int>(tail.size()));
   REQUIRE(compressor.config().threshold_db == -12.0f);
@@ -225,7 +184,7 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
 
 TEST_CASE("Compressor sidechain HPF ignores low-frequency detector energy",
           "[mastering][dynamics]") {
-  auto input = sine(40.0f, 48000, 48000, 0.8f);
+  auto input = generate_sine_samples(40.0f, 48000, 48000, 0.8f);
   auto full_band = input;
   auto hpf_keyed = input;
 
@@ -519,8 +478,8 @@ TEST_CASE("DeEsser attenuates sibilant band more than low band", "[mastering][dy
   DeEsser deesser({5000.0f, -28.0f, 6.0f, 0.0f, 20.0f, 18.0f});
   deesser.prepare(48000.0, 1024);
 
-  auto high = sine(5000.0f, 48000, 48000, 0.5f);
-  auto low = sine(1000.0f, 48000, 48000, 0.5f);
+  auto high = generate_sine_samples(5000.0f, 48000, 48000, 0.5f);
+  auto low = generate_sine_samples(1000.0f, 48000, 48000, 0.5f);
   const float high_before = rms_tail(high, 4096);
   const float low_before = rms_tail(low, 4096);
 
@@ -550,12 +509,12 @@ TEST_CASE("DeEsser preserves existing channel filter state when channel count gr
   mono_path.prepare(48000.0, 1024);
   stereo_path.prepare(48000.0, 1024);
 
-  auto warmup = sine(8000.0f, 48000, 4096, 0.5f);
+  auto warmup = generate_sine_samples(8000.0f, 48000, 4096, 0.5f);
   auto warmup_copy = warmup;
   process(mono_path, warmup);
   process(stereo_path, warmup_copy);
 
-  auto expected_left = sine(8000.0f, 48000, 512, 0.5f);
+  auto expected_left = generate_sine_samples(8000.0f, 48000, 512, 0.5f);
   auto actual_left = expected_left;
   auto actual_right = expected_left;
   process(mono_path, expected_left);
@@ -571,17 +530,17 @@ TEST_CASE("DeEsser keeps inactive stereo channel state across mono blocks",
   reference.prepare(48000.0, 1024);
   under_test.prepare(48000.0, 1024);
 
-  auto warm_l = sine(8000.0f, 48000, 4096, 0.5f);
-  auto warm_r = sine(8000.0f, 48000, 4096, 0.5f);
+  auto warm_l = generate_sine_samples(8000.0f, 48000, 4096, 0.5f);
+  auto warm_r = generate_sine_samples(8000.0f, 48000, 4096, 0.5f);
   auto test_warm_l = warm_l;
   auto test_warm_r = warm_r;
   process_stereo(reference, warm_l, warm_r);
   process_stereo(under_test, test_warm_l, test_warm_r);
 
-  auto mono = sine(8000.0f, 48000, 512, 0.5f);
+  auto mono = generate_sine_samples(8000.0f, 48000, 512, 0.5f);
   process(under_test, mono);
 
-  auto ref_l = sine(8000.0f, 48000, 512, 0.5f);
+  auto ref_l = generate_sine_samples(8000.0f, 48000, 512, 0.5f);
   auto ref_r = ref_l;
   auto test_l = ref_l;
   auto test_r = ref_r;
@@ -652,7 +611,7 @@ TEST_CASE("TransientShaper reports zero latency without lookahead", "[mastering]
 }
 
 TEST_CASE("ParallelComp blends dry and compressed signals", "[mastering][dynamics]") {
-  auto dry = sine(1000.0f, 48000, 48000, 0.8f);
+  auto dry = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);
   auto half = dry;
   auto wet = dry;
 
@@ -845,8 +804,8 @@ TEST_CASE("SidechainRouter supports HPF mono key and key listen", "[mastering][d
   listen.prepare(48000.0, 1024);
 
   std::vector<float> target(1024, 0.0f);
-  std::vector<float> low = sine(40.0f, 48000, 1024, 1.0f);
-  std::vector<float> high = sine(1000.0f, 48000, 1024, 1.0f);
+  std::vector<float> low = generate_sine_samples(40.0f, 48000, 1024, 1.0f);
+  std::vector<float> high = generate_sine_samples(1000.0f, 48000, 1024, 1.0f);
   const float* sidechain[] = {low.data(), high.data()};
   listen.set_sidechain(sidechain, 2, static_cast<int>(target.size()));
   process(listen, target);
@@ -872,8 +831,8 @@ TEST_CASE("Compressor sidechain HPF attenuates lows in the detector", "[masterin
   low_comp.prepare(48000.0, 4096);
   high_comp.prepare(48000.0, 4096);
 
-  auto low = sine(100.0f, 48000, 24000, 0.5f);
-  auto high = sine(5000.0f, 48000, 24000, 0.5f);
+  auto low = generate_sine_samples(100.0f, 48000, 24000, 0.5f);
+  auto high = generate_sine_samples(5000.0f, 48000, 24000, 0.5f);
   process(low_comp, low);
   process(high_comp, high);
 
@@ -1003,13 +962,13 @@ TEST_CASE("Compressor detector mode switch does not spike gain reduction",
   Compressor compressor(cfg);
   compressor.prepare(48000.0, 4096);
 
-  auto block = sine(1000.0f, 48000, 4096, 0.5f);
+  auto block = generate_sine_samples(1000.0f, 48000, 4096, 0.5f);
   process(compressor, block);
   const float gr_before = compressor.last_gain_reduction_db();
 
   cfg.detector = DetectorMode::LogRms;
   compressor.set_config(cfg);
-  auto block2 = sine(1000.0f, 48000, 4096, 0.5f);
+  auto block2 = generate_sine_samples(1000.0f, 48000, 4096, 0.5f);
   process(compressor, block2);
   const float gr_after = compressor.last_gain_reduction_db();
 
@@ -1029,7 +988,7 @@ TEST_CASE("DeEsser preserves low-frequency energy while reducing the sibilant ba
   DeEsser deesser({5000.0f, -28.0f, 6.0f, 1.0f, 60.0f, 18.0f});
   deesser.prepare(48000.0, 4096);
 
-  auto low = sine(120.0f, 48000, 4096, 0.5f);
+  auto low = generate_sine_samples(120.0f, 48000, 4096, 0.5f);
   const float low_before = rms_tail(low, 1024);
   process(deesser, low);
   const float low_after = rms_tail(low, 1024);
@@ -1095,9 +1054,9 @@ void run_rt_safe_race(PublishFn publish_one, ProcessFn process_one_block_returns
 
 void fill_sine_block(std::vector<float>& block, float freq_hz, int sample_rate) {
   for (size_t k = 0; k < block.size(); ++k) {
-    block[k] = 0.5f * static_cast<float>(std::sin(2.0 * kPi * static_cast<double>(freq_hz) *
-                                                  static_cast<double>(k) /
-                                                  static_cast<double>(sample_rate)));
+    block[k] = 0.5f * static_cast<float>(
+                          std::sin(sonare::constants::kTwoPiD * static_cast<double>(freq_hz) *
+                                   static_cast<double>(k) / static_cast<double>(sample_rate)));
   }
 }
 

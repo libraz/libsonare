@@ -14,40 +14,21 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
+#include "support/audio_fixtures.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
 using namespace sonare::mastering::maximizer;
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
+using sonare::test::generate_sine_samples;
+using sonare::test::peak_abs;
+using sonare::test::process;
 
 Audio sine_audio(float amplitude, int sample_rate = 48000, float duration_sec = 1.0f) {
   const int samples = static_cast<int>(duration_sec * static_cast<float>(sample_rate));
-  return Audio::from_vector(sine(1000.0f, sample_rate, samples, amplitude), sample_rate);
-}
-
-float peak_abs(const std::vector<float>& samples) {
-  float peak = 0.0f;
-  for (float sample : samples) {
-    peak = std::max(peak, std::abs(sample));
-  }
-  return peak;
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
+  return Audio::from_vector(generate_sine_samples(1000.0f, sample_rate, samples, amplitude),
+                            sample_rate);
 }
 
 }  // namespace
@@ -56,7 +37,7 @@ TEST_CASE("Maximizer applies input gain and respects ceiling", "[mastering][maxi
   Maximizer maximizer({12.0f, -6.0f, 0.0f, 0.0f});
   maximizer.prepare(48000.0, 512);
 
-  auto signal = sine(1000.0f, 48000, 2048, 0.5f);
+  auto signal = generate_sine_samples(1000.0f, 48000, 2048, 0.5f);
   process(maximizer, signal);
 
   REQUIRE(peak_abs(signal) <= 0.502f);
@@ -118,7 +99,7 @@ TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
   full.prepare(48000.0, 128);
   split.prepare(48000.0, 32);
 
-  auto split_signal = sine(6000.0f, 48000, 256, 0.95f);
+  auto split_signal = generate_sine_samples(6000.0f, 48000, 256, 0.95f);
   for (size_t offset = 0; offset < split_signal.size(); offset += 16) {
     float* channel[] = {split_signal.data() + offset};
     split.process(channel, 1, static_cast<int>(std::min<size_t>(16, split_signal.size() - offset)));
@@ -133,7 +114,7 @@ TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximiz
   SoftKneeMax maximizer({6.0f, -3.0f, 6.0f, 0.0f});
   maximizer.prepare(48000.0, 512);
 
-  auto signal = sine(1000.0f, 48000, 2048, 0.9f);
+  auto signal = generate_sine_samples(1000.0f, 48000, 2048, 0.9f);
   process(maximizer, signal);
 
   REQUIRE(peak_abs(signal) <= 0.708f);
@@ -190,7 +171,7 @@ TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximi
   limiter.prepare(48000.0, 2048);
 
   // Sustained sine -> low crest factor -> release should approach max_release_ms.
-  auto signal = sine(1000.0f, 48000, 2048, 1.0f);
+  auto signal = generate_sine_samples(1000.0f, 48000, 2048, 1.0f);
   process(limiter, signal);
   REQUIRE(peak_abs(signal) <= 0.502f);
   REQUIRE(limiter.current_crest_factor() < 2.0f);

@@ -2251,7 +2251,8 @@ TEST_CASE("RealtimeVoiceChanger ISP limiter keeps true peak under the configured
   // limiting still produces inter-sample overshoots after the DAC oversamples.
   std::vector<float> input(total);
   for (int i = 0; i < total; ++i) {
-    input[static_cast<size_t>(i)] = 0.97f * std::sin(2.0 * M_PI * 997.0 * i / sample_rate);
+    input[static_cast<size_t>(i)] =
+        0.97f * std::sin(sonare::constants::kTwoPiD * 997.0 * i / sample_rate);
   }
 
   auto run = [&](bool enable_isp) {
@@ -2294,7 +2295,8 @@ TEST_CASE("RealtimeVoiceChanger ISP limiter leaves quiet signals untouched",
 
   std::vector<float> input(total);
   for (int i = 0; i < total; ++i) {
-    input[static_cast<size_t>(i)] = 0.05f * std::sin(2.0 * M_PI * 440.0 * i / sample_rate);
+    input[static_cast<size_t>(i)] =
+        0.05f * std::sin(sonare::constants::kTwoPiD * 440.0 * i / sample_rate);
   }
 
   RealtimeVoiceChangerConfig config =

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "streaming/stream_analyzer_utils.h"
+#include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -17,8 +18,7 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 2.0f * kPi;
+using sonare::constants::kTwoPi;
 
 std::vector<float> generate_sine(int samples, float freq, int sr) {
   std::vector<float> result(samples);

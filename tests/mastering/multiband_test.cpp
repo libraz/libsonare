@@ -10,20 +10,24 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using namespace sonare::mastering::multiband;
 
 using sonare::constants::kPi;
+using sonare::constants::kTwoPiD;
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
+using sonare::test::process;
+using sonare::test::process_stereo;
+using sonare::test::rms_tail;
 
 std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude = 0.25f) {
   std::vector<float> out(static_cast<size_t>(samples));
   for (int i = 0; i < samples; ++i) {
     out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
+        amplitude * static_cast<float>(std::sin(kTwoPiD * frequency_hz * i / sample_rate));
   }
   return out;
 }
@@ -37,16 +41,6 @@ std::vector<float> four_tone_signal(int sample_rate, int samples) {
     signal[i] += low_mid[i] + high_mid[i] + high[i];
   }
   return signal;
-}
-
-float rms_tail(const std::vector<float>& samples, size_t skip) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
 float projected_tone_amplitude(const std::vector<float>& samples, float frequency_hz,
@@ -65,17 +59,6 @@ float projected_tone_amplitude(const std::vector<float>& samples, float frequenc
   }
   return static_cast<float>(2.0 * std::sqrt(sin_sum * sin_sum + cos_sum * cos_sum) /
                             static_cast<double>(count));
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
-}
-
-void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                    std::vector<float>& right) {
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(left.size()));
 }
 
 std::vector<float> side_signal(const std::vector<float>& left, const std::vector<float>& right) {

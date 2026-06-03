@@ -10,13 +10,14 @@
 #include <vector>
 
 #include "mastering/api/presets.h"
+#include "util/constants.h"
 
 namespace api = sonare::mastering::api;
 
 namespace {
 
 constexpr int kSampleRate = 24000;
-constexpr float kPi = 3.14159265358979323846f;
+using sonare::constants::kPi;
 
 std::vector<float> make_signal(const std::string& name) {
   constexpr float seconds = 0.75f;

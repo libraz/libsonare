@@ -15,29 +15,22 @@
 #include "mastering/stereo/mid_side.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
+#include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 
-using sonare::constants::kPi;
-
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-std::vector<float> sine(float frequency_hz, int sample_rate, int samples, float amplitude = 0.25f) {
-  std::vector<float> out(static_cast<size_t>(samples));
-  for (int i = 0; i < samples; ++i) {
-    out[static_cast<size_t>(i)] =
-        amplitude * static_cast<float>(std::sin(2.0 * kPi * frequency_hz * i / sample_rate));
-  }
-  return out;
-}
+using sonare::test::generate_sine_samples;
+using sonare::test::process;
+using sonare::test::process_stereo;
+using sonare::test::rms;
 
 std::vector<float> deterministic_signal(int samples) {
   std::vector<float> out(static_cast<size_t>(samples));
   for (int i = 0; i < samples; ++i) {
-    const float slow = 0.17f * std::sin(2.0f * static_cast<float>(kPi) * i / 97.0f);
-    const float fast = 0.05f * std::sin(2.0f * static_cast<float>(kPi) * i / 13.0f);
+    const float slow = 0.17f * std::sin(static_cast<float>(sonare::constants::kTwoPiD) * i / 97.0f);
+    const float fast = 0.05f * std::sin(static_cast<float>(sonare::constants::kTwoPiD) * i / 13.0f);
     out[static_cast<size_t>(i)] = slow + fast;
   }
   return out;
@@ -50,25 +43,6 @@ void require_close(const std::vector<float>& actual, const std::vector<float>& e
     INFO("sample index: " << i);
     REQUIRE_THAT(actual[i], WithinAbs(expected[i], tolerance));
   }
-}
-
-float rms(const std::vector<float>& samples) {
-  double sum = 0.0;
-  for (float sample : samples) {
-    sum += static_cast<double>(sample) * sample;
-  }
-  return samples.empty() ? 0.0f : static_cast<float>(std::sqrt(sum / samples.size()));
-}
-
-void process(sonare::rt::ProcessorBase& processor, std::vector<float>& mono) {
-  float* channels[] = {mono.data()};
-  processor.process(channels, 1, static_cast<int>(mono.size()));
-}
-
-void process_stereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                    std::vector<float>& right) {
-  float* channels[] = {left.data(), right.data()};
-  processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
 }
 
 }  // namespace
@@ -115,7 +89,7 @@ TEST_CASE("Property: compressor ratio 1 preserves stereo audio", "[mastering][pr
   compressor.prepare(48000.0, 512);
 
   auto left = deterministic_signal(2048);
-  auto right = sine(880.0f, 48000, 2048, 0.11f);
+  auto right = generate_sine_samples(880.0f, 48000, 2048, 0.11f);
   const auto original_left = left;
   const auto original_right = right;
   process_stereo(compressor, left, right);
@@ -164,7 +138,7 @@ TEST_CASE("Property: open gate preserves audio", "[mastering][property]") {
   Gate gate(config);
   gate.prepare(48000.0, 512);
 
-  auto audio = sine(440.0f, 48000, 2048, 0.25f);
+  auto audio = generate_sine_samples(440.0f, 48000, 2048, 0.25f);
   const auto original = audio;
   process(gate, audio);
 
@@ -187,7 +161,7 @@ TEST_CASE("Property: mid-side buffer roundtrip preserves stereo", "[mastering][p
   using sonare::mastering::stereo::encode_buffer;
 
   auto left = deterministic_signal(2048);
-  auto right = sine(660.0f, 48000, 2048, 0.13f);
+  auto right = generate_sine_samples(660.0f, 48000, 2048, 0.13f);
   const auto original_left = left;
   const auto original_right = right;
   std::vector<float> mid(left.size());
@@ -205,7 +179,7 @@ TEST_CASE("Property: empty mid-side EQ preserves stereo", "[mastering][property]
   eq.prepare(48000.0, 512);
 
   auto left = deterministic_signal(2048);
-  auto right = sine(880.0f, 48000, 2048, 0.09f);
+  auto right = generate_sine_samples(880.0f, 48000, 2048, 0.09f);
   const auto original_left = left;
   const auto original_right = right;
   process_stereo(eq, left, right);
@@ -224,7 +198,7 @@ TEST_CASE("Property: zero-gain mid-side EQ preserves stereo", "[mastering][prope
   eq.set_side_band(0, {EqBandType::Peak, 3000.0f, 0.0f, 0.70710678f, true});
 
   auto left = deterministic_signal(4096);
-  auto right = sine(660.0f, 48000, 4096, 0.12f);
+  auto right = generate_sine_samples(660.0f, 48000, 4096, 0.12f);
   const auto original_left = left;
   const auto original_right = right;
   process_stereo(eq, left, right);
@@ -242,7 +216,7 @@ TEST_CASE("Property: EqualizerProcessor stereo placement preserves side energy s
   side_band.placement = StereoPlacement::Side;
   eq.set_band(0, side_band);
 
-  auto left = sine(2000.0f, 48000, 4096, 0.2f);
+  auto left = generate_sine_samples(2000.0f, 48000, 4096, 0.2f);
   auto right = left;
   const auto original_left = left;
   const auto original_right = right;
@@ -260,7 +234,7 @@ TEST_CASE("Property: EqualizerProcessor auto-gain trends boosted RMS toward unit
   eq.set_auto_gain_enabled(true);
   eq.set_band(0, {EqBandType::Peak, 1000.0f, 9.0f, 1.0f, true});
 
-  auto audio = sine(1000.0f, 48000, 48000, 0.2f);
+  auto audio = generate_sine_samples(1000.0f, 48000, 48000, 0.2f);
   const float before = rms(audio);
   process(eq, audio);
   const float after = rms(audio);
@@ -311,7 +285,7 @@ TEST_CASE("Property: chain compressor ratio 1 preserves mono signal", "[masterin
 }
 
 TEST_CASE("Property: LUFS measurement is deterministic", "[mastering][property]") {
-  const auto samples = sine(997.0f, 48000, 48000, 0.25f);
+  const auto samples = generate_sine_samples(997.0f, 48000, 48000, 0.25f);
   const auto audio = sonare::Audio::from_buffer(samples.data(), samples.size(), 48000);
 
   const auto first = sonare::metering::lufs(audio);
@@ -334,7 +308,7 @@ TEST_CASE("Property: true peak measurement is deterministic", "[mastering][prope
 }
 
 TEST_CASE("Property: built-in preset processing is deterministic", "[mastering][property]") {
-  const auto audio = sine(440.0f, 48000, 48000, 0.2f);
+  const auto audio = generate_sine_samples(440.0f, 48000, 48000, 0.2f);
 
   const auto first = sonare::mastering::api::master_audio_mono(
       sonare::mastering::api::Preset::Streaming, audio.data(), audio.size(), 48000);

@@ -28,6 +28,7 @@
 #include <string>
 
 #include "rt/biquad_design.h"
+#include "util/constants.h"
 #include "util/json_reader.h"
 
 using Catch::Matchers::WithinAbs;
@@ -47,7 +48,7 @@ namespace {
 /// H(z) = (b0 + b1*z^{-1} + b2*z^{-2}) / (1 + a1*z^{-1} + a2*z^{-2})
 /// evaluated at z = e^{j*omega}, omega = 2*pi*f/fs.
 double biquad_response_db(const BiquadCoeffsD& c, double freq_hz, double sample_rate) {
-  const double omega = 2.0 * M_PI * freq_hz / sample_rate;
+  const double omega = sonare::constants::kTwoPiD * freq_hz / sample_rate;
   const std::complex<double> z_inv{std::cos(omega), -std::sin(omega)};
   const std::complex<double> z_inv2 = z_inv * z_inv;
 

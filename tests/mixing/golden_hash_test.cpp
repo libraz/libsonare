@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "mixing/channel_strip.h"
+#include "util/constants.h"
 
 namespace mixing = sonare::mixing;
 
@@ -20,7 +21,7 @@ namespace {
 
 constexpr int kSampleRate = 24000;
 constexpr int kSamples = 4096;
-constexpr float kPi = 3.14159265358979323846f;
+using sonare::constants::kPi;
 
 struct Scenario {
   std::string name;

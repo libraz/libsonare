@@ -20,6 +20,7 @@
 #include "metering/lufs.h"
 #include "mixing/meter.h"
 #include "sonare_c.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -28,18 +29,9 @@ using Catch::Matchers::WithinAbs;
 using sonare::constants::kTwoPi;
 
 namespace {
+using sonare::test::rms_tail;
 
 float energy(float left, float right) { return left * left + right * right; }
-
-float rms_tail(const std::vector<float>& samples, size_t skip) {
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
-    sum += static_cast<double>(samples[i]) * samples[i];
-    ++count;
-  }
-  return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
-}
 
 double lagrange3_magnitude_db(double fractional_delay, double normalized_to_nyquist) {
   const double mu = fractional_delay;
