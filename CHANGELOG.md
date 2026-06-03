@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### New features
+
+- Added a headless DAW / arrangement runtime, exposed through a new project C ABI
+  and across the Python, Node, WASM, and CLI bindings:
+  - Author projects with audio and MIDI tracks and clips. Clip edits (add /
+    split / trim / move), tempo, and routing changes all route through an
+    undoable `EditHistory`, so `undo` / `redo` cover every mutation. Musical
+    positions are PPQ (quarter notes).
+  - Sequence MIDI 1.0 and MIDI 2.0 channel-voice events, set per-clip program /
+    bank and a MIDI-FX chain, and route a track's MIDI to a host-instrument
+    destination id.
+  - Import / export Standard MIDI Files, plus a MIDI 2.0 Clip File (`SMF2CLIP`)
+    format that preserves 16-bit velocity, 32-bit CC, per-note controllers, and
+    bank-valid Program Change without loss.
+  - `auto_tempo` detects and installs a project tempo from audio; `snap_to_grid`
+    quantizes a PPQ coordinate to the project grid.
+  - `compile` produces a renderable timeline with structured diagnostics, and
+    `bounce` renders the project offline to interleaved float audio. Both are
+    deterministic; project JSON serialization is byte-stable within one build.
+  - New `sonare project` CLI subcommands: `abi`, `new`, `validate`, `compile`,
+    `bounce`, `export-smf`, `import-smf`, `export-midi2`, `import-midi2`.
+- Wired a flag-gated MIDI sequencer into the realtime engine and added
+  audio / MIDI / plugin host integration seams for embedding hosts.
+
 ## v1.2.3 (2026-06-02)
 
 ### New features

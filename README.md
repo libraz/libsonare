@@ -46,6 +46,13 @@ no GPL/AGPL, no model weights.
   a recording (`estimateRoom` → volume / dimensions / per-band absorption /
   DRR + honest confidence), and morph a recording's reverberation toward a
   target room (`roomMorph`). Apache-2.0, dependency-free, deterministic.
+- **Headless DAW / arrangement runtime** — author projects with audio & MIDI
+  tracks and clips (split / trim / move with full undo/redo), sequence MIDI,
+  import/export Standard MIDI Files and MIDI 2.0 Clip Files (`SMF2CLIP`),
+  auto-tempo and snap-to-grid, deterministic byte-stable JSON save/load, compile
+  to a renderable timeline with structured diagnostics, and bounce offline to
+  interleaved audio. No UI, device setup, or plugin-host implementation — just
+  the headless core, exposed across the C ABI, Python, Node, WASM, and CLI.
 - **Everywhere, one license** — Apache-2.0 across the entire stack
   (C++, C, Python, Node, WASM, and CLI).
 
@@ -301,6 +308,33 @@ const stretchedNote = noteStretch(samples, sampleRate, 12000, 24000, 1.25);
 const changed = voiceChange(samples, sampleRate, 5, 1.1);
 ```
 
+**Headless DAW project**
+
+```typescript
+import { Project } from '@libraz/libsonare';
+
+// WASM constructs with `new Project()`; the Node native binding uses
+// `Project.create()`. The method surface is otherwise identical.
+const project = new Project();
+project.setSampleRate(48000);
+
+// Musical positions are PPQ (quarter notes).
+const { clipId } = project.addMidiClip(0, 4);          // { trackId, clipId }
+project.setMidiEvents(clipId, [
+  Project.midiNoteOn(0, 0, 0, 60, 100),                // ppq, group, channel, note, velocity
+  Project.midiNoteOff(1, 0, 0, 60),
+]);
+
+const json = project.toJson();                         // deterministic, byte-stable within a build
+const smf = project.exportSmf();                       // Uint8Array — Standard MIDI File
+const midi2 = project.exportClipFile();                // Uint8Array — MIDI 2.0 Clip File (lossless)
+
+const { hasTimeline, diagnostics } = project.compile();
+const audio = project.bounce({ numChannels: 2 });      // interleaved Float32Array
+
+project.delete();                                      // Node native: project.destroy()
+```
+
 ### Python
 
 `pip install libsonare` ships a **WAV/MP3-only wheel** (matching librosa / pydub /
@@ -406,6 +440,19 @@ mix = libsonare.mix_stereo(
     pan=[0.0, -0.2],
     width=[1.0, 0.9],
 )
+
+# Headless DAW project (audio + MIDI arrangement; PPQ = quarter notes)
+with libsonare.Project() as project:
+    project.set_sample_rate(48000)
+    track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+    project.set_midi_events(clip_id, [
+        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),
+        libsonare.Project.midi_note_off(1.0, 0, 0, 60),
+    ])
+    json_str = project.to_json()           # deterministic, byte-stable within a build
+    smf = project.export_smf()             # bytes — Standard MIDI File
+    result = project.compile()             # has_timeline / messages / diagnostics
+    audio = project.bounce(num_channels=2) # (frames, channels) float32 ndarray
 ```
 
 ### Python CLI
@@ -449,6 +496,16 @@ sonare mix input.wav -o mix.wav --fader-db -3 --pan 0.1 --pan-mode stereo-pan --
 sonare pitch-correct vocal.wav --current-midi 69 --target-midi 70 -o corrected.wav
 sonare note-stretch vocal.wav --onset 12000 --offset 24000 --ratio 1.25 -o stretched.wav
 sonare voice-change vocal.wav --pitch-semitones 5 --formant-factor 1.1 -o changed.wav
+
+# Headless DAW project (arrangement / MIDI)
+sonare project new -o song.json                          # create an empty project
+sonare project validate --in song.json                   # round-trip / validate project JSON
+sonare project compile --in song.json                    # compile + report diagnostics
+sonare project bounce --in song.json -o mix.wav          # render offline to WAV
+sonare project export-smf --in song.json -o song.mid     # tempo map + MIDI clips → SMF
+sonare project import-smf --smf song.mid -o song.json     # SMF → new project JSON
+sonare project export-midi2 --in song.json -o song.midi2 # → MIDI 2.0 Clip File (lossless)
+sonare project import-midi2 --midi2 song.midi2 -o song.json
 ```
 
 ### C++
@@ -521,6 +578,20 @@ Mastering is built by default (`BUILD_MASTERING=ON`). Disable with
 Mixing is built by default (`BUILD_MIXING=ON`) and depends on the mastering
 processor interfaces for insert hosting. Disable with `cmake -DBUILD_MIXING=OFF`
 for analysis/mastering-only builds.
+
+### Headless DAW / arrangement
+
+| Arrangement model                | MIDI & file I/O                  | Compile & render               |
+|----------------------------------|----------------------------------|--------------------------------|
+| Audio / MIDI / aux tracks & clips| MIDI 1.0 + MIDI 2.0 sequencing   | Compile to renderable timeline |
+| Split / trim / move, undo / redo | SMF import / export              | Structured compile diagnostics |
+| Auto-tempo, snap-to-grid, warp   | MIDI 2.0 Clip File (lossless)    | Deterministic offline bounce   |
+| Program / bank, per-clip MIDI-FX | Per-track MIDI destination route | C / Node / Python / WASM / CLI |
+
+The arrangement runtime is the headless core only: there is no UI, device
+setup, or plugin-host implementation (see [Non-goals](#non-goals)). Project state
+serializes to deterministic, byte-stable JSON, and `bounce` is bit-identical for
+the same project and options within one build.
 
 ## Performance
 

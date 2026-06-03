@@ -338,6 +338,35 @@ const { left: outL, right: outR } = chain.processStereo(left, right);
 chain.reset();
 ```
 
+### Headless DAW project
+
+`Project` is a headless arrangement model: audio & MIDI tracks and clips, MIDI
+sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON save/load, and an
+offline `bounce`. Every mutation routes through an undoable history, and musical
+positions are PPQ (quarter notes). Call `destroy()` to release the native handle.
+
+```typescript
+import { Project } from '@libraz/libsonare-native';
+
+const project = Project.create();
+project.setSampleRate(48000);
+
+const { clipId } = project.addMidiClip(0, 4);          // { trackId, clipId }
+project.setMidiEvents(clipId, [
+  Project.midiNoteOn(0, 0, 0, 60, 100),                // ppq, group, channel, note, velocity
+  Project.midiNoteOff(1, 0, 0, 60),
+]);
+
+const json = project.toJson();                         // deterministic, byte-stable within a build
+const smf = project.exportSmf();                       // Uint8Array — Standard MIDI File
+const midi2 = project.exportClipFile();                // Uint8Array — MIDI 2.0 Clip File (lossless)
+
+const { hasTimeline, diagnostics } = project.compile();
+const audio = project.bounce({ numChannels: 2 });      // interleaved Float32Array
+
+project.destroy();
+```
+
 ### Audio class
 
 `Audio` caches the decoded samples and is the only way to load files, so it is

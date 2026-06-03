@@ -295,6 +295,40 @@ console.log(realtime.outLeft[0], realtime.outRight[0]);
 mixer.delete();
 ```
 
+### Headless DAW project
+
+`Project` is a headless arrangement model: audio & MIDI tracks and clips, MIDI
+sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON save/load, and an
+offline `bounce`. Every mutation routes through an undoable history, and musical
+positions are PPQ (quarter notes). Call `delete()` (or wrap in `try/finally`) to
+release the WASM object — the embind handle is not garbage-collected.
+
+```typescript
+import { init, Project } from '@libraz/libsonare';
+
+await init();
+
+const project = new Project();
+try {
+  project.setSampleRate(48000);
+
+  const { clipId } = project.addMidiClip(0, 4);          // { trackId, clipId }
+  project.setMidiEvents(clipId, [
+    Project.midiNoteOn(0, 0, 0, 60, 100),                // ppq, group, channel, note, velocity
+    Project.midiNoteOff(1, 0, 0, 60),
+  ]);
+
+  const json = project.toJson();                         // deterministic, byte-stable within a build
+  const smf = project.exportSmf();                       // Uint8Array — Standard MIDI File
+  const midi2 = project.exportClipFile();                // Uint8Array — MIDI 2.0 Clip File (lossless)
+
+  const { hasTimeline, diagnostics } = project.compile();
+  const audio = project.bounce({ numChannels: 2 });      // interleaved Float32Array
+} finally {
+  project.delete();
+}
+```
+
 ### AudioWorklet bridge
 
 The package exposes an optional worklet entry that uses the same `sonare.wasm`
@@ -450,6 +484,7 @@ chain.delete(); // release WASM memory
 - **Pitch**: YIN, pYIN algorithms with optional `fillNa`
 - **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
 - **Streaming**: Real-time analysis with progressive estimates
+- **Headless DAW**: `Project` arrangement model — audio/MIDI tracks & clips, undo/redo, MIDI sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`
 - **Conversions**: Hz/mel/MIDI/note, frames/time, resample
 
 ## Also available

@@ -259,6 +259,32 @@ finally:
     mixer.close()
 ```
 
+### Headless DAW project
+
+`Project` is a headless arrangement model: audio & MIDI tracks and clips, MIDI
+sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON save/load, and an
+offline `bounce`. Every mutation routes through an undoable history, musical
+positions are PPQ (quarter notes), and the object is a context manager.
+
+```python
+import libsonare
+
+with libsonare.Project() as project:
+    project.set_sample_rate(48000)
+    track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+    project.set_midi_events(clip_id, [
+        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
+        libsonare.Project.midi_note_off(1.0, 0, 0, 60),
+    ])
+
+    json_str = project.to_json()            # deterministic, byte-stable within a build
+    smf = project.export_smf()              # bytes — Standard MIDI File
+    midi2 = project.export_clip_file()      # bytes — MIDI 2.0 Clip File (lossless)
+
+    result = project.compile()              # has_timeline / messages / diagnostics
+    audio = project.bounce(num_channels=2)  # (frames, channels) float32 ndarray
+```
+
 ### Streaming mastering chain
 
 `StreamingMasteringChain` runs the same pipeline block-by-block for real-time
@@ -403,6 +429,7 @@ sonare mastering-stereo-analyze left.wav --reference right.wav --analysis stereo
 - **Features**: STFT, mel spectrogram, MFCC, chroma, CQT/VQT, spectral contrast, poly features, zero crossings, pitch tracking (YIN / pYIN with optional `fill_na`)
 - **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
 - **Conversions**: Hz / mel / MIDI / note, frames / time
+- **Headless DAW**: `Project` arrangement model — audio/MIDI tracks & clips, undo/redo, MIDI sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`
 - **I/O**: Load WAV / MP3 (and M4A/AAC/FLAC/OGG when built with FFmpeg), resample
 
 ## librosa-compatible defaults
