@@ -16,7 +16,8 @@ constexpr char kFileHeader[8] = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
 // UMP message type nibbles (word[0] bits 28..31).
 constexpr uint32_t kMtUtility = 0x0u;
 constexpr uint32_t kMtMidi1 = 0x2u;
-constexpr uint32_t kMtData64 = 0x3u;  // SysEx7.
+constexpr uint32_t kMtData64 = 0x3u;   // SysEx7.
+constexpr uint32_t kMtData128 = 0x5u;  // SysEx8 / Mixed Data Set.
 constexpr uint32_t kMtMidi2 = 0x4u;
 constexpr uint32_t kMtFlexData = 0xDu;
 constexpr uint32_t kMtStream = 0xFu;
@@ -133,6 +134,30 @@ void append_sysex7_bytes(uint32_t word0, uint32_t word1, std::vector<uint8_t>* o
   for (uint8_t i = 0; i < num_bytes && i < 6; ++i) out->push_back(bytes[i]);
 }
 
+// Extracts the SysEx8 data bytes carried by a 4-word MT=0x5 packet. SysEx8 holds
+// full 8-bit data (no 7-bit restriction). word0 byte1 low nibble counts the
+// valid bytes INCLUDING the Stream ID (word0 byte2); the actual payload follows
+// the Stream ID, starting at word0 byte3 and continuing through words 1..3.
+void append_sysex8_bytes(const std::array<uint32_t, 4>& words, std::vector<uint8_t>* out) {
+  const uint8_t num_bytes = static_cast<uint8_t>((words[0] >> 16) & 0x0Fu);
+  if (num_bytes <= 1u) return;  // Only a Stream ID (or nothing) — no payload.
+  const uint8_t data_bytes = static_cast<uint8_t>(num_bytes - 1u);
+  std::array<uint8_t, 13> bytes = {static_cast<uint8_t>(words[0] & 0xFFu),
+                                   static_cast<uint8_t>((words[1] >> 24) & 0xFFu),
+                                   static_cast<uint8_t>((words[1] >> 16) & 0xFFu),
+                                   static_cast<uint8_t>((words[1] >> 8) & 0xFFu),
+                                   static_cast<uint8_t>(words[1] & 0xFFu),
+                                   static_cast<uint8_t>((words[2] >> 24) & 0xFFu),
+                                   static_cast<uint8_t>((words[2] >> 16) & 0xFFu),
+                                   static_cast<uint8_t>((words[2] >> 8) & 0xFFu),
+                                   static_cast<uint8_t>(words[2] & 0xFFu),
+                                   static_cast<uint8_t>((words[3] >> 24) & 0xFFu),
+                                   static_cast<uint8_t>((words[3] >> 16) & 0xFFu),
+                                   static_cast<uint8_t>((words[3] >> 8) & 0xFFu),
+                                   static_cast<uint8_t>(words[3] & 0xFFu)};
+  for (uint8_t i = 0; i < data_bytes && i < bytes.size(); ++i) out->push_back(bytes[i]);
+}
+
 // ---------------------------------------------------------------------------
 // Export writer helpers.
 // ---------------------------------------------------------------------------
@@ -170,17 +195,29 @@ uint32_t flex_word0(uint8_t bank, uint8_t status) noexcept {
          (static_cast<uint32_t>(bank) << 8) | static_cast<uint32_t>(status);
 }
 
-void put_dcs(std::vector<uint8_t>* out, uint32_t* last_tick, uint32_t tick) {
-  const uint32_t delta = tick >= *last_tick ? tick - *last_tick : 0u;
-  put_word(out, delta_clockstamp_word(delta));
+// A single Delta Clockstamp carries a 20-bit delta. To express a delta larger
+// than 0xFFFFF, the MIDI Clip File spec chains multiple DCS messages, which the
+// importer accumulates additively (running_tick += word & 0xFFFFF). Emit one
+// max-valued (0xFFFFF) DCS per full 20-bit span, then the remainder, so deltas
+// of any size survive the round trip.
+void put_dcs(std::vector<uint8_t>* out, uint64_t* last_tick, uint64_t tick) {
+  uint64_t delta = tick >= *last_tick ? tick - *last_tick : 0u;
+  while (delta > 0xFFFFFu) {
+    put_word(out, delta_clockstamp_word(0xFFFFFu));
+    delta -= 0xFFFFFu;
+  }
+  put_word(out, delta_clockstamp_word(static_cast<uint32_t>(delta)));
   *last_tick = tick;
 }
 
-uint32_t ppq_to_tick(double ppq, uint16_t dctpq) noexcept {
+uint64_t ppq_to_tick(double ppq, uint16_t dctpq) noexcept {
   const double t = ppq * static_cast<double>(dctpq);
   if (!std::isfinite(t) || t <= 0.0) return 0u;
-  const double clamped = std::min(t, static_cast<double>(0xFFFFFu));
-  return static_cast<uint32_t>(std::llround(clamped));
+  // The absolute tick is not bounded by the 20-bit DCS field; deltas between
+  // events are chained across multiple DCS words by put_dcs. Clamp only to the
+  // representable 64-bit range to avoid UB on pathological input.
+  const double clamped = std::min(t, static_cast<double>(0xFFFFFFFFFFFFFull));
+  return static_cast<uint64_t>(std::llround(clamped));
 }
 
 }  // namespace
@@ -351,7 +388,33 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
       continue;
     }
 
-    // SysEx8, System, and reserved message types are not represented.
+    if (mt == kMtData128) {
+      // SysEx8 shares the SysEx7 status-nibble convention (complete/start/
+      // continue/end) in word0 bits 20..23.
+      const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
+      if (packet_status == kSysex7Complete || packet_status == kSysex7Start) {
+        pending_sysex.clear();
+        pending_sysex_ppq = ppq;
+      }
+      append_sysex8_bytes(words, &pending_sysex);
+      const bool complete = packet_status == kSysex7Complete || packet_status == kSysex7End;
+      if (!complete) continue;
+      const SysExHandle handle = result.sysex_store.add(pending_sysex);
+      pending_sysex.clear();
+      if (handle == 0) {
+        ++result.skipped_events;
+        continue;
+      }
+      MidiClipEvent ev;
+      ev.ppq = pending_sysex_ppq;
+      ev.ump = make_sysex_handle(/*group=*/0, handle);
+      clip.add_event(ev);
+      has_events = true;
+      last_event_ppq = std::max(last_event_ppq, pending_sysex_ppq);
+      continue;
+    }
+
+    // System and reserved message types are not represented.
     ++result.skipped_events;
   }
 
@@ -386,13 +449,13 @@ namespace {
 
 // A single sequence-data item positioned at an integer tick.
 struct SeqItem {
-  uint32_t tick = 0;
+  uint64_t tick = 0;
   int order = 0;  // Tie-break: tempo(0) / time-sig(1) before notes(2) at same tick.
   std::array<uint32_t, 4> words{};
   int word_count = 0;
 };
 
-void emit_sysex7(std::vector<SeqItem>* items, uint32_t tick, const std::vector<uint8_t>& payload) {
+void emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<uint8_t>& payload) {
   // Strip a leading 0xF0 / trailing 0xF7 if present; UMP SysEx7 carries the
   // payload without the MIDI 1.0 framing bytes.
   size_t begin = 0;
@@ -520,7 +583,7 @@ Smf2ExportResult export_clip_file(
     items.push_back(item);
   }
   for (const MidiClipEvent& ev : clip.events()) {
-    const uint32_t tick = ppq_to_tick(ev.ppq, dctpq);
+    const uint64_t tick = ppq_to_tick(ev.ppq, dctpq);
     if (ev.ump.sysex_handle != 0) {
       const std::vector<uint8_t>* payload = options.sysex_store != nullptr
                                                 ? options.sysex_store->lookup(ev.ump.sysex_handle)
@@ -547,8 +610,8 @@ Smf2ExportResult export_clip_file(
     return a.order < b.order;
   });
 
-  uint32_t last_tick = 0;
-  uint32_t max_tick = 0;
+  uint64_t last_tick = 0;
+  uint64_t max_tick = 0;
   for (const SeqItem& item : items) {
     put_dcs(&out, &last_tick, item.tick);
     for (int w = 0; w < item.word_count; ++w) put_word(&out, item.words[static_cast<size_t>(w)]);

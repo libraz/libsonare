@@ -346,6 +346,15 @@ static_assert(offsetof(SonareMidiEventPod, data0) == 8, "MidiEventPod.data0 offs
 static_assert(offsetof(SonareMidiEventPod, data1) == 12, "MidiEventPod.data1 offset");
 #endif
 
+/// @brief Result of @ref sonare_project_validate_midi_notes. @p ok is 1 when
+///        every note-on in the clip has a matching note-off and vice versa, else
+///        0; the unmatched counts are diagnostic.
+typedef struct {
+  int ok;
+  uint32_t unmatched_note_ons;
+  uint32_t unmatched_note_offs;
+} SonareNotePairValidation;
+
 /// @brief Clip fade-curve ordinals; mirror sonare::arrangement::FadeCurve.
 ///        Pinned by a static_assert in the .cpp so reordering is caught.
 typedef enum {
@@ -812,6 +821,16 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 /// SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
                                        const char* config_json);
+
+/// @brief Pre-flight check for hanging / unmatched notes in a MIDI clip.
+///
+/// Builds a transient view of the clip's stored events and reports whether every
+/// note-on is matched by a note-off (FIFO per channel+note). Useful before
+/// bouncing to catch a stuck note that would otherwise sustain. Does not mutate
+/// the project. Returns SONARE_ERROR_INVALID_PARAMETER if @p project / @p out is
+/// null or @p clip_id is not a MIDI clip.
+SonareError sonare_project_validate_midi_notes(const SonareProject* project, uint32_t clip_id,
+                                               SonareNotePairValidation* out);
 
 // ============================================================================
 // Assist sidecars (opaque module state)

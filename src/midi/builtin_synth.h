@@ -85,6 +85,11 @@ class BuiltinSynth final : public MidiInstrument {
 
   void note_on(uint8_t channel, uint8_t note, float velocity) noexcept;
   void note_off(uint8_t channel, uint8_t note) noexcept;
+  // Channel-mode "All Notes Off" (CC#123): release every sounding voice on the
+  // channel (graceful, honours the release tail). `all_sound_off` (CC#120)
+  // silences them immediately, bypassing the release stage.
+  void all_notes_off(uint8_t channel) noexcept;
+  void all_sound_off(uint8_t channel) noexcept;
   float render_voice_sample(Voice& v) noexcept;
 
   BuiltinSynthConfig config_{};

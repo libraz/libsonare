@@ -432,6 +432,38 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
         project.close()
 
 
+def test_validate_midi_notes_flags_hanging_note_on() -> None:
+    """A well-paired clip validates ``ok``; a lone note-on is flagged hanging."""
+    project = Project()
+    try:
+        _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+
+        # Well-paired note-on / note-off: nothing hanging.
+        project.set_midi_events(
+            clip_id,
+            [
+                Project.midi_note_on(0.0, 0, 0, 60, 100),
+                Project.midi_note_off(2.0, 0, 0, 60, 0),
+            ],
+        )
+        paired = project.validate_midi_notes(clip_id)
+        assert paired.ok is True
+        assert paired.unmatched_note_ons == 0
+        assert paired.unmatched_note_offs == 0
+
+        # A single hanging note-on (no matching note-off).
+        project.set_midi_events(
+            clip_id,
+            [Project.midi_note_on(0.0, 0, 0, 60, 100)],
+        )
+        hanging = project.validate_midi_notes(clip_id)
+        assert hanging.ok is False
+        assert hanging.unmatched_note_ons == 1
+        assert hanging.unmatched_note_offs == 0
+    finally:
+        project.close()
+
+
 def test_set_midi_events_validates_event_shape_and_words() -> None:
     project = Project()
     try:

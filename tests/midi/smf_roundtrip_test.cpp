@@ -171,7 +171,67 @@ std::vector<uint8_t> wrap_format0_track(const std::vector<uint8_t>& body) {
   return smf;
 }
 
+// Builds a format-1 SMF whose track 0 is a meta-only conductor track carrying a
+// track-name meta (= the song / sequence title) and whose track 1 carries a
+// single note. Mirrors what DAWs export.
+std::vector<uint8_t> make_format1_with_conductor_name(const char* song_name) {
+  std::vector<uint8_t> conductor;
+  // delta 0, track name = song title.
+  conductor.push_back(0x00);
+  conductor.push_back(0xFF);
+  conductor.push_back(0x03);
+  const auto name_len = static_cast<uint8_t>(std::string(song_name).size());
+  conductor.push_back(name_len);
+  for (const char* p = song_name; *p != '\0'; ++p) conductor.push_back(static_cast<uint8_t>(*p));
+  // delta 0, end-of-track.
+  conductor.push_back(0x00);
+  conductor.push_back(0xFF);
+  conductor.push_back(0x2F);
+  conductor.push_back(0x00);
+
+  std::vector<uint8_t> note;
+  // delta 0, note-on ch0 note 60 vel 100, then delta 480 note-off.
+  note.push_back(0x00);
+  note.push_back(0x90);
+  note.push_back(0x3C);
+  note.push_back(0x64);
+  note.push_back(0x83);
+  note.push_back(0x60);
+  note.push_back(0x80);
+  note.push_back(0x3C);
+  note.push_back(0x00);
+  note.push_back(0x00);
+  note.push_back(0xFF);
+  note.push_back(0x2F);
+  note.push_back(0x00);
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 1);    // Format 1.
+  push_u16(&smf, 2);    // Two tracks.
+  push_u16(&smf, 480);  // 480 PPQN.
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(conductor.size()));
+  smf.insert(smf.end(), conductor.begin(), conductor.end());
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(note.size()));
+  smf.insert(smf.end(), note.begin(), note.end());
+  return smf;
+}
+
 }  // namespace
+
+TEST_CASE("SMF format-1 import preserves the conductor track sequence name", "[midi]") {
+  const std::vector<uint8_t> smf = make_format1_with_conductor_name("My Song");
+  const SmfImportResult r = import_smf(smf);
+  REQUIRE(r.ok());
+  REQUIRE(r.format == 1);
+  // The meta-only conductor track produces no clip, but its name is kept as the
+  // sequence/song title rather than discarded.
+  REQUIRE(r.sequence_name == "My Song");
+  REQUIRE(r.clips.size() == 1);  // Only the note track yields a clip.
+}
 
 TEST_CASE("SMF import parses tempo, time-signature, names, markers and notes", "[midi]") {
   const std::vector<uint8_t> smf = make_known_smf();

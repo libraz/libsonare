@@ -77,6 +77,12 @@ struct SmfImportResult {
   /// SMF format word (0 or 1) as parsed from the header.
   uint16_t format = 0;
 
+  /// Sequence / song name, taken from the track-name meta of a conductor track
+  /// (a meta-only track that carries no MIDI events — conventionally track 0 in
+  /// a format-1 file). Empty when no such name is present. Track names that
+  /// belong to tracks with MIDI events stay in `clip_names`, not here.
+  std::string sequence_name;
+
   /// One MidiClip per imported track that carried MIDI events. Tracks that held
   /// only meta events (e.g. a conductor track) produce no clip.
   std::vector<MidiClip> clips;

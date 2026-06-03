@@ -186,6 +186,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetProgram>("setProgram"),
           InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel"),
           InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
+          InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes"),
           InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
           InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),
           InstanceMethod<&ProjectWrap::AnnotateKeys>("annotateKeys"),
@@ -705,6 +706,19 @@ Napi::Value ProjectWrap::SetMidiFx(const Napi::CallbackInfo& info) {
                            : std::string();
   ThrowIfError(env, sonare_project_set_midi_fx(project_, clip_id, config.c_str()));
   return env.Undefined();
+}
+
+Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  SonareNotePairValidation out{};
+  ThrowIfError(env, sonare_project_validate_midi_notes(project_, clip_id, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("ok", Napi::Boolean::New(env, out.ok != 0));
+  result.Set("unmatchedNoteOns", Napi::Number::New(env, out.unmatched_note_ons));
+  result.Set("unmatchedNoteOffs", Napi::Number::New(env, out.unmatched_note_offs));
+  return result;
 }
 
 Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {

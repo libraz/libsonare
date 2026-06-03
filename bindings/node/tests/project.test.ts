@@ -311,3 +311,34 @@ describe('Project native binding', () => {
     project.destroy();
   });
 });
+
+describe('Project validateMidiNotes', () => {
+  it('reports fully paired note-on/note-off as ok', () => {
+    const project = Project.create();
+    project.setSampleRate(48000);
+    const { clipId } = project.addMidiClip(0, 4);
+    project.setMidiEvents(clipId, [
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(2, 0, 0, 60, 0),
+    ]);
+
+    const result = project.validateMidiNotes(clipId);
+    expect(result.ok).toBe(true);
+    expect(result.unmatchedNoteOns).toBe(0);
+    expect(result.unmatchedNoteOffs).toBe(0);
+    project.destroy();
+  });
+
+  it('flags a hanging note-on as not ok', () => {
+    const project = Project.create();
+    project.setSampleRate(48000);
+    const { clipId } = project.addMidiClip(0, 4);
+    project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+
+    const result = project.validateMidiNotes(clipId);
+    expect(result.ok).toBe(false);
+    expect(result.unmatchedNoteOns).toBe(1);
+    expect(result.unmatchedNoteOffs).toBe(0);
+    project.destroy();
+  });
+});

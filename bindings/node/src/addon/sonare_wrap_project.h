@@ -56,6 +56,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetProgram(const Napi::CallbackInfo& info);
   Napi::Value SetProgramOnChannel(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
+  Napi::Value ValidateMidiNotes(const Napi::CallbackInfo& info);
 
   // -- MIR --
   Napi::Value AutoTempo(const Napi::CallbackInfo& info);

@@ -357,6 +357,7 @@ export type {
   ProjectLoopMode,
   ProjectMidiClipResult,
   ProjectMidiEvent,
+  ProjectNotePairValidation,
   ProjectTrackDesc,
   ProjectTrackKind,
 } from './project';

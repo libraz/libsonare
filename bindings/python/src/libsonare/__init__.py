@@ -3,7 +3,13 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
-from ._project import AssistSidecar, BuiltinSynthConfig, Project, project_abi_version
+from ._project import (
+    AssistSidecar,
+    BuiltinSynthConfig,
+    NotePairValidation,
+    Project,
+    project_abi_version,
+)
 from .analyzer import (
     Mixer,
     MixerStereoResult,
@@ -337,6 +343,7 @@ __all__ = [
     "MixResult",
     "MfccResult",
     "Mode",
+    "NotePairValidation",
     "PanLaw",
     "ParameterInfo",
     "PhaseScopeReport",

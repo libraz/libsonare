@@ -283,6 +283,13 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
         ]
 
+        lib.sonare_project_validate_midi_notes.restype = ctypes.c_int32
+        lib.sonare_project_validate_midi_notes.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareNotePairValidation),
+        ]
+
         for _name, _args in {
             "sonare_midi_note_on": [
                 ctypes.c_double,

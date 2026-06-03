@@ -396,16 +396,17 @@ void fill_project_tempo_map(const arr::Project& project, sonare::transport::Temp
 // `markers` may be empty (SMF2 carries none). On failure the history is rolled
 // back to its prior depth. `out_first_clip_id` (optional) receives the first
 // added clip id.
-SonareError install_imported_midi(SonareProject* project,
-                                  const std::vector<sonare::transport::TempoSegment>& tempos,
-                                  const std::vector<sonare::transport::TimeSignatureSegment>& sigs,
-                                  const std::vector<std::pair<double, std::string>>& markers,
-                                  const std::vector<sonare::midi::MidiClip>& clips,
-                                  const std::vector<std::string>& clip_names,
-                                  const std::vector<double>& clip_lengths_ppq,
-                                  const sonare::midi::SysExStore& sysex_store,
-                                  uint32_t* out_first_clip_id) {
+SonareError install_imported_midi(
+    SonareProject* project, const std::vector<sonare::transport::TempoSegment>& tempos,
+    const std::vector<sonare::transport::TimeSignatureSegment>& sigs,
+    const std::vector<std::pair<double, std::string>>& markers,
+    const std::vector<sonare::midi::MidiClip>& clips, const std::vector<std::string>& clip_names,
+    const std::vector<double>& clip_lengths_ppq, const sonare::midi::SysExStore& sysex_store,
+    uint32_t* out_first_clip_id, const std::string& sequence_name = "") {
   const size_t rollback_depth = project->history.undo_depth();
+  // The conductor-track song title (if any) becomes the name of the first track
+  // that has no name of its own, so it is not lost when flattening to clips.
+  bool sequence_name_used = sequence_name.empty();
 
   std::vector<arr::EditCommandPtr> commands;
   commands.reserve(2 + markers.size() + clips.size() * 4);
@@ -441,9 +442,14 @@ SonareError install_imported_midi(SonareProject* project,
 
     arr::Track track;
     track.kind = arr::Track::Kind::kMidi;
-    track.name = clip_index < clip_names.size() && !clip_names[clip_index].empty()
-                     ? clip_names[clip_index]
-                     : "midi";
+    if (clip_index < clip_names.size() && !clip_names[clip_index].empty()) {
+      track.name = clip_names[clip_index];
+    } else if (!sequence_name_used) {
+      track.name = sequence_name;
+      sequence_name_used = true;
+    } else {
+      track.name = "midi";
+    }
     auto add_track = std::make_unique<arr::AddTrack>(std::move(track));
     add_track->reseed_id(track_id);
     commands.push_back(std::move(add_track));

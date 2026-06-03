@@ -327,6 +327,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/edit_compiler_golden_test.cpp
     arrangement/c_abi_edit_ops_test.cpp
     midi/midi_ump_test.cpp
+    midi/builtin_synth_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp

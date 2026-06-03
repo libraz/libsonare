@@ -1182,6 +1182,22 @@ export class Project {
     this.native.setMidiFx(clipId, configJson);
   }
 
+  /**
+   * Validate that every note-on in a MIDI clip has a matching note-off.
+   *
+   * @param clipId Target MIDI clip id.
+   * @returns `ok` is `true` when fully paired; `unmatchedNoteOns` /
+   *          `unmatchedNoteOffs` count the dangling events of each kind.
+   * @throws If `clipId` is not a MIDI clip.
+   */
+  validateMidiNotes(clipId: number): {
+    ok: boolean;
+    unmatchedNoteOns: number;
+    unmatchedNoteOffs: number;
+  } {
+    return this.native.validateMidiNotes(clipId);
+  }
+
   // -- MIR --
 
   /** Detect tempo from a mono buffer and install it (undoable); returns the primary BPM. */

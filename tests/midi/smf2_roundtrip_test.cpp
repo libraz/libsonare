@@ -156,6 +156,59 @@ TEST_CASE("SMF2 round-trips a SysEx payload", "[midi][smf2]") {
   REQUIRE(*recovered == payload);
 }
 
+TEST_CASE("SMF2 chains Delta Clockstamps for events beyond the 20-bit tick span", "[midi][smf2]") {
+  // At dctpq=480, 5000 quarter notes -> tick 2,400,000, which exceeds two full
+  // 20-bit DCS spans (2 * 0xFFFFF = 2,097,150). A single DCS word would clamp /
+  // collapse the event; chained DCS words must preserve the position.
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.add_event(ev(5000.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+
+  Smf2ExportOptions options;
+  options.ticks_per_quarter = 480;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.ok());
+
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  REQUIRE(events.size() == 2);
+  REQUIRE(events[0].ppq == Catch::Approx(0.0));
+  REQUIRE(events[1].ppq == Catch::Approx(5000.0));
+  REQUIRE(imported.clip_lengths_ppq.front() == Catch::Approx(5000.0));
+}
+
+TEST_CASE("SMF2 imports a SysEx8 data message payload", "[midi][smf2]") {
+  // Hand-built SMF2CLIP: header + DCTPQ + a complete SysEx8 packet (MT=0x5).
+  // The exporter only writes SysEx7, so SysEx8 import is exercised directly.
+  std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
+  auto push_word = [&bytes](uint32_t w) {
+    bytes.push_back(static_cast<uint8_t>((w >> 24) & 0xFFu));
+    bytes.push_back(static_cast<uint8_t>((w >> 16) & 0xFFu));
+    bytes.push_back(static_cast<uint8_t>((w >> 8) & 0xFFu));
+    bytes.push_back(static_cast<uint8_t>(w & 0xFFu));
+  };
+  // DCTPQ = 480 (MT=0x0 utility, status 0x3).
+  push_word((0x0u << 28) | (0x3u << 20) | 480u);
+  // SysEx8 complete (status 0x0), numBytes=4 (streamID + 3 data), streamID=0x00,
+  // payload bytes {0x11, 0x22, 0x33}. word0 byte3 = data[0]=0x11.
+  push_word((0x5u << 28) | (0x4u << 16) | (0x00u << 8) | 0x11u);
+  push_word((0x22u << 24) | (0x33u << 16));
+  push_word(0);
+  push_word(0);
+
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  REQUIRE(events.size() == 1);
+  REQUIRE(events[0].ump.sysex_handle != 0);
+  const std::vector<uint8_t>* recovered = imported.sysex_store.lookup(events[0].ump.sysex_handle);
+  REQUIRE(recovered != nullptr);
+  REQUIRE(*recovered == std::vector<uint8_t>{0x11, 0x22, 0x33});
+}
+
 TEST_CASE("SMF2 import rejects malformed input without reading out of bounds", "[midi][smf2]") {
   SECTION("empty buffer") {
     const Smf2ImportResult r = import_clip_file(nullptr, 0);

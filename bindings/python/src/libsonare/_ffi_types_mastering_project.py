@@ -206,6 +206,16 @@ class SonareMidiEventPod(ctypes.Structure):
     ]
 
 
+class SonareNotePairValidation(ctypes.Structure):
+    """Maps to SonareNotePairValidation in sonare_c_project.h."""
+
+    _fields_ = [
+        ("ok", ctypes.c_int32),
+        ("unmatched_note_ons", ctypes.c_uint32),
+        ("unmatched_note_offs", ctypes.c_uint32),
+    ]
+
+
 # Built-in synth waveform ordinals (mirror SonareSynthWaveform).
 SONARE_SYNTH_WAVEFORM_SINE = 0
 SONARE_SYNTH_WAVEFORM_SAW = 1

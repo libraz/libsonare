@@ -180,6 +180,16 @@ export interface ProjectMidiEvent {
   data1?: number;
 }
 
+/** Result of {@link Project.validateMidiNotes}. */
+export interface ProjectNotePairValidation {
+  /** True when every note-on has a matching note-off (and vice versa). */
+  ok: boolean;
+  /** Count of note-ons that never received a matching note-off. */
+  unmatchedNoteOns: number;
+  /** Count of note-offs with no preceding matching note-on. */
+  unmatchedNoteOffs: number;
+}
+
 /** One compile diagnostic (mirrors SonareProjectDiagnostic). */
 export interface ProjectDiagnostic {
   code: number;
@@ -233,6 +243,7 @@ interface WasmProject {
     bank: number,
   ) => void;
   setMidiFx: (clipId: number, configJson: string) => void;
+  validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
   autoTempo: (audio: Float32Array, sampleRate: number) => number;
   snapToGrid: (ppq: number, strength: number) => number;
   compile: () => ProjectCompileResult;
@@ -639,6 +650,16 @@ export class Project {
   /** Configure and apply a clip's MIDI-FX chain from JSON. */
   setMidiFx(clipId: number, configJson: string): void {
     this.native.setMidiFx(clipId, configJson);
+  }
+
+  /**
+   * Pre-flight check for hanging / unmatched notes in a MIDI clip: reports
+   * whether every note-on has a matching note-off (FIFO per channel+note).
+   * Useful before bouncing to catch a stuck note. Throws if `clipId` is unknown
+   * or not a MIDI clip.
+   */
+  validateMidiNotes(clipId: number): ProjectNotePairValidation {
+    return this.native.validateMidiNotes(clipId);
   }
 
   /** Detect tempo from a mono buffer and install it; returns the primary BPM. */

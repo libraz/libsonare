@@ -379,3 +379,41 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   sonare_free_bytes(bytes);
   sonare_project_destroy(project);
 }
+
+TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  SonareNotePairValidation report{};
+  // Null / invalid arguments are rejected.
+  REQUIRE(sonare_project_validate_midi_notes(nullptr, clip, &report) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_validate_midi_notes(project, 999999, &report) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // A well-paired clip validates clean.
+  SonareMidiEventPod paired[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &paired[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &paired[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, paired, 2) == SONARE_OK);
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
+  REQUIRE(report.ok == 1);
+  REQUIRE(report.unmatched_note_ons == 0);
+  REQUIRE(report.unmatched_note_offs == 0);
+
+  // A hanging note-on (no matching note-off) is reported.
+  SonareMidiEventPod hanging[1]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 64, 100, &hanging[0]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, hanging, 1) == SONARE_OK);
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
+  REQUIRE(report.ok == 0);
+  REQUIRE(report.unmatched_note_ons == 1);
+
+  sonare_project_destroy(project);
+}

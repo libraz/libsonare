@@ -475,6 +475,10 @@ SmfImportResult import_smf(const uint8_t* data, size_t size) {
       result.clips.push_back(std::move(track.clip));
       result.clip_names.push_back(std::move(track.name));
       result.clip_lengths_ppq.push_back(track.length_ppq);
+    } else if (!track.name.empty() && result.sequence_name.empty()) {
+      // Meta-only conductor track (track 0 in a format-1 file): its track-name
+      // meta is the sequence / song title. Keep the first one we see.
+      result.sequence_name = std::move(track.name);
     }
   }
 

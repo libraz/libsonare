@@ -149,7 +149,7 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   // position (or the imported end-of-track length).
   return install_imported_midi(project, result.tempo_segments, result.time_signatures, markers,
                                result.clips, result.clip_names, result.clip_lengths_ppq,
-                               result.sysex_store, out_first_clip_id);
+                               result.sysex_store, out_first_clip_id, result.sequence_name);
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, bytes, len, out_first_clip_id);
@@ -316,6 +316,40 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, group, channel, program, bank);
+#endif
+}
+
+SonareError sonare_project_validate_midi_notes(const SonareProject* project, uint32_t clip_id,
+                                               SonareNotePairValidation* out) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  out->ok = 1;
+  out->unmatched_note_ons = 0;
+  out->unmatched_note_offs = 0;
+  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  sonare::midi::MidiClip clip;
+  const auto it = project->history.midi_content().events.find(clip_id);
+  if (it != project->history.midi_content().events.end()) {
+    for (const arr::MidiClipEvent& event : it->second) {
+      sonare::midi::MidiClipEvent ev;
+      ev.ppq = event.ppq;
+      ev.ump.words[0] = event.data0;
+      ev.ump.words[1] = event.data1;
+      ev.ump.word_count = ump_word_count_from_word0(event.data0);
+      ev.ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
+      clip.add_event(ev);
+    }
+  }
+  clip.sort_stable();
+  const sonare::midi::NotePairValidation v = clip.validate_note_pairs();
+  out->ok = v.ok ? 1 : 0;
+  out->unmatched_note_ons = v.unmatched_note_ons;
+  out->unmatched_note_offs = v.unmatched_note_offs;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, out);
 #endif
 }
 

@@ -366,6 +366,42 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('validates MIDI note pairing and detects hanging notes', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      // A well-paired note-on / note-off.
+      project.setMidiEvents(clipId, [
+        Project.midiNoteOn(0, 0, 0, 60, 100),
+        Project.midiNoteOff(2, 0, 0, 60, 0),
+      ]);
+      const paired = project.validateMidiNotes(clipId);
+      expect(paired.ok).toBe(true);
+      expect(paired.unmatchedNoteOns).toBe(0);
+      expect(paired.unmatchedNoteOffs).toBe(0);
+
+      // A single hanging note-on (no matching note-off).
+      project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+      const hanging = project.validateMidiNotes(clipId);
+      expect(hanging.ok).toBe(false);
+      expect(hanging.unmatchedNoteOns).toBe(1);
+      expect(hanging.unmatchedNoteOffs).toBe(0);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('throws when validateMidiNotes targets a non-MIDI clip', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      expect(() => project.validateMidiNotes(clipId)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
   it('throws cleanly on malformed fromJson input', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();
   });

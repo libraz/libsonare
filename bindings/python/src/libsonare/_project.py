@@ -32,6 +32,7 @@ from ._runtime import (
     SonareBuiltinInstrumentBinding,
     SonareBuiltinSynthConfig,
     SonareMidiEventPod,
+    SonareNotePairValidation,
     SonareProjectAssistSidecar,
     SonareProjectBounceOptions,
     SonareProjectChordSymbol,
@@ -182,6 +183,20 @@ class ProjectDiagnostic:
     code: int
     severity: int
     target_id: int
+
+
+@dataclass(frozen=True)
+class NotePairValidation:
+    """Result of :meth:`Project.validate_midi_notes`.
+
+    ``ok`` is True when every note-on in the clip has a matching note-off;
+    otherwise ``unmatched_note_ons`` / ``unmatched_note_offs`` count the
+    hanging (unpaired) events.
+    """
+
+    ok: bool
+    unmatched_note_ons: int
+    unmatched_note_offs: int
 
 
 @dataclass(frozen=True)
@@ -881,6 +896,22 @@ class Project:
                 int(clip_id),
                 config_json.encode("utf-8"),
             )
+        )
+
+    def validate_midi_notes(self, clip_id: int) -> NotePairValidation:
+        """Check a MIDI clip for hanging / unmatched notes before bouncing."""
+        result = SonareNotePairValidation()
+        _check(
+            _get_lib().sonare_project_validate_midi_notes(
+                self._require_handle(),
+                int(clip_id),
+                ctypes.byref(result),
+            )
+        )
+        return NotePairValidation(
+            ok=bool(result.ok),
+            unmatched_note_ons=int(result.unmatched_note_ons),
+            unmatched_note_offs=int(result.unmatched_note_offs),
         )
 
     @staticmethod

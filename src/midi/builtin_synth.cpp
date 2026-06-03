@@ -121,6 +121,18 @@ void BuiltinSynth::note_off(uint8_t channel, uint8_t note) noexcept {
   }
 }
 
+void BuiltinSynth::all_notes_off(uint8_t channel) noexcept {
+  for (auto& v : voices_) {
+    if (v.active && v.channel == channel && v.stage != Stage::kRelease) v.stage = Stage::kRelease;
+  }
+}
+
+void BuiltinSynth::all_sound_off(uint8_t channel) noexcept {
+  for (auto& v : voices_) {
+    if (v.active && v.channel == channel) v = Voice{};
+  }
+}
+
 void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) noexcept {
   const Ump& u = event.ump;
   if (u.message_type() != UmpMessageType::kMidi1ChannelVoice &&
@@ -138,6 +150,27 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
     note_on(u.channel(), u.note_number(), vel);
   } else if (u.is_note_off()) {
     note_off(u.channel(), u.note_number());
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
+    // Channel-mode messages. The controller index rides word[0] bits 8..14 for
+    // both protocols (same slot as a note number).
+    const uint8_t controller = u.note_number();
+    const uint8_t channel = u.channel();
+    switch (controller) {
+      case 120:  // All Sound Off — immediate silence.
+        all_sound_off(channel);
+        break;
+      case 123:  // All Notes Off — graceful release.
+      case 124:  // Omni Off / On and Mono/Poly mode changes also imply notes-off.
+      case 125:
+      case 126:
+      case 127:
+        all_notes_off(channel);
+        break;
+      default:
+        // Other controllers (sustain, RPN/NRPN, etc.) have no effect on this
+        // deliberately minimal synth.
+        break;
+    }
   }
 }
 

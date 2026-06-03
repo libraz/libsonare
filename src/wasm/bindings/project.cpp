@@ -329,6 +329,23 @@ struct ProjectWasm {
     }
   }
 
+  // Pre-flight check for hanging / unmatched notes in a MIDI clip. Returns
+  // { ok, unmatchedNoteOns, unmatchedNoteOffs }; throws if the clip id is
+  // unknown or not a MIDI clip.
+  val validateMidiNotes(uint32_t clip_id) {
+    SonareNotePairValidation result{};
+    const SonareError err = sonare_project_validate_midi_notes(project_.get(), clip_id, &result);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to validate MIDI notes");
+    }
+    val out = val::object();
+    out.set("ok", result.ok != 0);
+    out.set("unmatchedNoteOns", static_cast<double>(result.unmatched_note_ons));
+    out.set("unmatchedNoteOffs", static_cast<double>(result.unmatched_note_offs));
+    return out;
+  }
+
   float autoTempo(val audio, int sample_rate) {
     std::vector<float> samples = float32ArrayToVector(audio);
     float bpm = 0.0f;
@@ -863,6 +880,7 @@ void registerProjectBindings() {
       .function("setProgram", &ProjectWasm::setProgram)
       .function("setProgramOnChannel", &ProjectWasm::setProgramOnChannel)
       .function("setMidiFx", &ProjectWasm::setMidiFx)
+      .function("validateMidiNotes", &ProjectWasm::validateMidiNotes)
       .function("autoTempo", &ProjectWasm::autoTempo)
       .function("snapToGrid", &ProjectWasm::snapToGrid)
       .function("compile", &ProjectWasm::compile)
