@@ -331,6 +331,9 @@ const midi2 = project.exportClipFile();                // Uint8Array — MIDI 2.
 
 const { hasTimeline, diagnostics } = project.compile();
 const audio = project.bounce({ numChannels: 2 });      // interleaved Float32Array
+// Audio clips render as-is; MIDI clips need an instrument. The built-in synth
+// renders MIDI to audible output (length auto-derived when totalFrames omitted):
+const midiMix = project.bounceWithBuiltinInstrument({ waveform: 'saw' });
 
 project.delete();                                      // Node native: project.destroy()
 ```
@@ -453,6 +456,11 @@ with libsonare.Project() as project:
     smf = project.export_smf()             # bytes — Standard MIDI File
     result = project.compile()             # has_timeline / messages / diagnostics
     audio = project.bounce(num_channels=2) # (frames, channels) float32 ndarray
+    # MIDI clips need an instrument; the built-in synth renders them to audio
+    # (render length auto-derived when total_frames is omitted):
+    midi_mix = project.bounce_with_builtin_instrument(
+        libsonare.BuiltinSynthConfig(waveform="saw")
+    )
 ```
 
 ### Python CLI
