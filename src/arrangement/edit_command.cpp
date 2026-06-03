@@ -4,6 +4,7 @@
 #include "arrangement/edit_command.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace sonare::arrangement {
@@ -21,6 +22,16 @@ bool clip_can_be_inserted(const Project& project, const EditClip& clip, ClipId i
     return false;
   }
   return true;
+}
+
+bool source_matches_track_kind(const Project& project, TrackId track_id, SourceId source_id) {
+  const Track* track = project.find_track(track_id);
+  const ClipSource* source = project.find_source(source_id);
+  if (track == nullptr || source == nullptr) return false;
+  const SourceKind kind = source_kind(*source);
+  if (track->kind == Track::Kind::kAudio) return kind == SourceKind::kAudio;
+  if (track->kind == Track::Kind::kMidi) return kind == SourceKind::kMidi;
+  return false;
 }
 
 }  // namespace
@@ -120,6 +131,24 @@ EditCommandPtr SetTrackKind::invert(const Project& before,
     return nullptr;
   }
   return std::make_unique<SetTrackKind>(id_, t->kind);
+}
+
+bool SetTrackMidiDestination::apply(Project& project, MidiContentStore& /*store*/) {
+  Track* t = project.find_track_mutable(id_);
+  if (t == nullptr) {
+    return false;
+  }
+  t->midi_destination_id = destination_id_;
+  return true;
+}
+
+EditCommandPtr SetTrackMidiDestination::invert(const Project& before,
+                                               const MidiContentStore& /*store_before*/) const {
+  const Track* t = before.find_track(id_);
+  if (t == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetTrackMidiDestination>(id_, t->midi_destination_id);
 }
 
 // ===========================================================================
@@ -401,6 +430,71 @@ EditCommandPtr SetClipLoop::invert(const Project& before,
   return std::make_unique<SetClipLoop>(id_, c->loop_mode, c->loop_length_ppq);
 }
 
+bool SetClipWarpRef::apply(Project& project, MidiContentStore& /*store*/) {
+  EditClip* c = project.find_clip_mutable(id_);
+  if (c == nullptr) {
+    return false;
+  }
+  c->warp_ref_id = warp_ref_id_;
+  return true;
+}
+
+EditCommandPtr SetClipWarpRef::invert(const Project& before,
+                                      const MidiContentStore& /*store_before*/) const {
+  const EditClip* c = before.find_clip(id_);
+  if (c == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetClipWarpRef>(id_, c->warp_ref_id);
+}
+
+bool SetWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
+  return project.set_warp_map(map_);
+}
+
+EditCommandPtr SetWarpMap::invert(const Project& before,
+                                  const MidiContentStore& /*store_before*/) const {
+  const WarpMapRef* prior = before.find_warp_map(map_.id);
+  if (prior != nullptr) {
+    return std::make_unique<SetWarpMap>(*prior);
+  }
+  return std::make_unique<RemoveWarpMap>(map_.id);
+}
+
+bool RemoveWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
+  return project.remove_warp_map(id_).second;
+}
+
+EditCommandPtr RemoveWarpMap::invert(const Project& before,
+                                     const MidiContentStore& /*store_before*/) const {
+  const WarpMapRef* prior = before.find_warp_map(id_);
+  if (prior == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetWarpMap>(*prior);
+}
+
+bool SetClipSource::apply(Project& project, MidiContentStore& /*store*/) {
+  EditClip* c = project.find_clip_mutable(id_);
+  if (c == nullptr) {
+    return false;
+  }
+  if (!source_matches_track_kind(project, c->track_id, source_id_)) {
+    return false;
+  }
+  c->source_id = source_id_;
+  return true;
+}
+
+EditCommandPtr SetClipSource::invert(const Project& before,
+                                     const MidiContentStore& /*store_before*/) const {
+  const EditClip* c = before.find_clip(id_);
+  if (c == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetClipSource>(id_, c->source_id);
+}
+
 // ===========================================================================
 // Source commands
 // ===========================================================================
@@ -471,6 +565,39 @@ EditCommandPtr ReplaceSource::invert(const Project& before,
 // ===========================================================================
 // Timeline commands
 // ===========================================================================
+
+bool SetSampleRate::apply(Project& project, MidiContentStore& /*store*/) {
+  if (!std::isfinite(sample_rate_) || !(sample_rate_ > 0.0)) {
+    return false;
+  }
+  project.set_sample_rate(sample_rate_);
+  return true;
+}
+
+EditCommandPtr SetSampleRate::invert(const Project& before,
+                                     const MidiContentStore& /*store_before*/) const {
+  return std::make_unique<SetSampleRate>(before.sample_rate());
+}
+
+bool SetOverlapPolicy::apply(Project& project, MidiContentStore& /*store*/) {
+  project.set_overlap_policy(policy_);
+  return true;
+}
+
+EditCommandPtr SetOverlapPolicy::invert(const Project& before,
+                                        const MidiContentStore& /*store_before*/) const {
+  return std::make_unique<SetOverlapPolicy>(before.overlap_policy());
+}
+
+bool SetScene::apply(Project& project, MidiContentStore& /*store*/) {
+  project.scene() = scene_;
+  return true;
+}
+
+EditCommandPtr SetScene::invert(const Project& before,
+                                const MidiContentStore& /*store_before*/) const {
+  return std::make_unique<SetScene>(before.scene());
+}
 
 bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
   if (id_ == 0 && allocated_id_ == 0) {

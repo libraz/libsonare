@@ -30,7 +30,9 @@
 
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
+#include "midi/midi_fx.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::midi {
 
@@ -59,6 +61,8 @@ class MidiSequencer {
   /// 256 voices comfortably covers multi-channel orchestral MIDI within one
   /// block while staying small enough to live inline in the engine.
   static constexpr size_t kMaxActiveNotes = 256;
+  static constexpr size_t kMaxMidiFxInserts = 32;
+  static constexpr size_t kMaxPendingFxEvents = 512;
 
   void prepare(double sample_rate);
   void reset() noexcept;
@@ -67,6 +71,14 @@ class MidiSequencer {
 
   /// CONTROL thread: publish a new compiled MIDI clip set. May allocate.
   void set_midi_clips(std::vector<MidiClipSchedule> clips);
+
+  /// CONTROL thread: install / replace a live MIDI FX insert for one
+  /// destination. The audio thread applies it immediately before dispatching to
+  /// the sink, so scheduled clips stay unmodified and the insert can be changed
+  /// independently of clip content. Returns false when the fixed destination
+  /// insert table is full. Not RT-safe.
+  bool set_midi_fx(uint32_t destination_id, const MidiFxChain& chain) noexcept;
+  void clear_midi_fx(uint32_t destination_id) noexcept;
 
   /// AUDIO thread: adopt the latest published clip set. Call once at block
   /// start before process_block. RT-safe, no alloc.
@@ -81,6 +93,13 @@ class MidiSequencer {
   /// note-offs are dispatched at `render_frame`. After this active_note_count()
   /// is 0. RT-safe, no alloc.
   void all_notes_off(int64_t render_frame) noexcept;
+
+  /// AUDIO thread (or CONTROL thread between blocks): emit note-off for every
+  /// note currently sounding on `destination_id` and remove those entries,
+  /// leaving notes on other destinations untouched. Used when a single
+  /// instrument is swapped/cleared on its destination so its held notes are
+  /// released rather than left hanging. RT-safe, no alloc.
+  void all_notes_off_for_destination(uint32_t destination_id, int64_t render_frame) noexcept;
 
   /// AUDIO thread: dispatch a single host-injected (live) UMP event to a
   /// destination, sample-accurately at `render_frame`, maintaining the same
@@ -99,6 +118,9 @@ class MidiSequencer {
   }
   uint32_t dispatched_event_count() const noexcept {
     return dispatched_event_count_.load(std::memory_order_relaxed);
+  }
+  uint32_t midi_fx_pending_overflow_count() const noexcept {
+    return midi_fx_pending_overflow_count_.load(std::memory_order_relaxed);
   }
 
   /// Collect the render-frame offsets of MIDI events in this block as sub-block
@@ -119,16 +141,56 @@ class MidiSequencer {
     uint8_t channel = 0;
     uint8_t note = 0;
     uint32_t destination_id = 0;
+    uint32_t clip_id = 0;
+    bool from_clip = false;
+  };
+  struct DestinationFx {
+    uint32_t destination_id = 0;
+    bool active = false;
+    MidiFxChain chain;
+    MidiFxBuffer buffer;
+  };
+  struct PendingFxEvent {
+    uint32_t destination_id = 0;
+    MidiEvent event;
+    uint32_t clip_id = 0;
+    bool from_clip = false;
   };
 
   // Records a sounding note; returns false on capacity overflow (bumps counter).
-  bool track_note_on(uint8_t group, uint8_t channel, uint8_t note,
-                     uint32_t destination_id) noexcept;
-  // Removes a sounding note if present.
-  void track_note_off(uint8_t group, uint8_t channel, uint8_t note) noexcept;
+  bool track_note_on(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
+                     bool from_clip, uint32_t clip_id) noexcept;
+  // Removes a sounding note if present. Keyed by destination_id too, so a
+  // note-off on one destination never releases an identically-pitched note
+  // sounding on a different destination/instrument.
+  void track_note_off(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
+                      bool from_clip, uint32_t clip_id) noexcept;
   void dispatch(uint32_t destination_id, const MidiEvent& event) noexcept;
+  // Emit the standard reset sequence (damper off, reset-all-controllers,
+  // all-notes-off, pitch-bend center) for one channel at render_frame. Used on a
+  // playback discontinuity so a note released under a held sustain pedal does not
+  // keep ringing and stale pitch-bend / CC state does not carry across (M-4).
+  void emit_controller_reset(uint32_t destination_id, uint8_t group, uint8_t channel,
+                             int64_t render_frame) noexcept;
+  // Emit emit_controller_reset() once per distinct (destination, group, channel)
+  // sounding in the active-note table, optionally limited to one destination.
+  // Non-mutating; dedup is bounded by kMaxActiveNotes. RT-safe, no alloc.
+  void emit_active_controller_resets(bool single_destination, uint32_t destination_id,
+                                     int64_t render_frame) noexcept;
+  DestinationFx* find_midi_fx(uint32_t destination_id) noexcept;
+  const DestinationFx* find_midi_fx(uint32_t destination_id) const noexcept;
+  void process_event(uint32_t destination_id, const MidiEvent& event, int64_t block_end_frame,
+                     bool from_clip, uint32_t clip_id) noexcept;
+  void dispatch_transformed(uint32_t destination_id, const MidiEvent& event, bool from_clip,
+                            uint32_t clip_id) noexcept;
+  void enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
+                       uint32_t clip_id) noexcept;
+  void dispatch_pending(int64_t block_start_frame, int64_t block_end_frame) noexcept;
+  void clear_pending_for_destination(uint32_t destination_id) noexcept;
+  void clear_pending_for_clip(uint32_t clip_id) noexcept;
+  void release_notes_for_clip(uint32_t clip_id, int64_t render_frame) noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = constants::kDefaultDawSampleRate;
   MidiEventSink* sink_ = nullptr;
   mutable rt::RtPublisher<std::vector<MidiClipSchedule>> clips_;
   std::atomic<size_t> clip_count_{0};
@@ -138,6 +200,10 @@ class MidiSequencer {
   size_t active_count_ = 0;
   std::atomic<uint32_t> active_note_overflow_count_{0};
   std::atomic<uint32_t> dispatched_event_count_{0};
+  std::array<DestinationFx, kMaxMidiFxInserts> midi_fx_{};
+  std::array<PendingFxEvent, kMaxPendingFxEvents> pending_fx_{};
+  size_t pending_fx_count_ = 0;
+  std::atomic<uint32_t> midi_fx_pending_overflow_count_{0};
 };
 
 }  // namespace sonare::midi

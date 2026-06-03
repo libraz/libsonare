@@ -52,6 +52,16 @@
 
 namespace sonare::arrangement {
 
+/// @brief Compile-time project ABI version. Mirror of the C macro
+///        @c SONARE_PROJECT_ABI_VERSION returned by
+///        @c sonare_project_abi_version(). Bump on ANY flat POD layout change in
+///        the project C ABI. A @c static_assert in the C-ABI bridge
+///        (c_api/project_core.cpp) pins this to the macro so the two cannot
+///        drift silently. Kept in the arrangement layer (not the public C
+///        header) so internal C++ callers can reference it without including
+///        sonare_c_project.h.
+inline constexpr uint32_t kProjectAbiVersion = 3u;
+
 // ===========================================================================
 // Audio content store (decoded samples supplied by the caller before compile)
 // ===========================================================================
@@ -75,10 +85,21 @@ struct AudioSourceSamples {
 /// an ERROR diagnostic (dangling/unavailable), not a crash.
 struct AudioContentStore {
   std::map<SourceId, AudioSourceSamples> sources;
+  /// Optional pre-baked warped audio, keyed by warp_ref_id. The MIR/host layer
+  /// creates these offline from a WarpMap and registers them before compile().
+  /// The arrangement compiler can then select already-warped samples without
+  /// depending on mir/ (which would create a dependency cycle).
+  std::map<WarpRefId, AudioSourceSamples> warped_sources;
 
   const AudioSourceSamples* find(SourceId id) const noexcept {
     const auto it = sources.find(id);
     return it == sources.end() ? nullptr : &it->second;
+  }
+
+  const AudioSourceSamples* find_warped(WarpRefId id) const noexcept {
+    if (id == 0) return nullptr;
+    const auto it = warped_sources.find(id);
+    return it == warped_sources.end() ? nullptr : &it->second;
   }
 };
 
@@ -217,19 +238,31 @@ struct CompiledTimeline {
 struct Diagnostic {
   enum class Code : uint32_t {
     kOk = 0,
-    kDanglingSourceRef = 1,  // clip references a missing/unavailable source
-    kClipOverlap = 2,        // overlap-policy violation
-    kInvalidTempo = 3,       // negative/zero bpm or non-monotonic PPQ
-    kInvalidPpq = 4,         // negative start/length/offset
-    kUnsupportedGraph = 5,   // graph requested but SONARE_WITH_GRAPH off
-    kUnsupportedMixing = 6,  // mixer bind requested but SONARE_WITH_MIXING off
-    kEmptyAudioSource = 7,   // source registered but has no samples
-    kInvalidSampleRate = 8,  // project / source sample rate invalid
+    kDanglingSourceRef = 1,   // clip references a missing/unavailable source
+    kClipOverlap = 2,         // overlap-policy violation
+    kInvalidTempo = 3,        // negative/zero bpm or non-monotonic PPQ
+    kInvalidPpq = 4,          // negative start/length/offset
+    kUnsupportedGraph = 5,    // graph requested but SONARE_WITH_GRAPH off
+    kUnsupportedMixing = 6,   // mixer bind requested but SONARE_WITH_MIXING off
+    kEmptyAudioSource = 7,    // source registered but has no samples
+    kInvalidSampleRate = 8,   // project / source sample rate invalid
+    kSourceKindMismatch = 9,  // clip source kind does not match its track kind
   };
+  // Severity ordinals are a FROZEN WIRE VALUE: they are exposed numerically as
+  // SonareProjectDiagnostic.severity through the C ABI (see
+  // c_api/project_core.cpp). This ordering (kError=0, kWarning=1) differs from
+  // the canonical sonare::Diagnostic ordering (Info<Warning<Error) and from
+  // serialize::DiagnosticSeverity (which is inverted); the static_asserts below
+  // pin it so a reorder is caught at compile time before it can change a byte on
+  // the wire. Do NOT renumber.
   enum class Severity : uint32_t {
     kError = 0,
     kWarning = 1,
   };
+  static_assert(static_cast<uint32_t>(Severity::kError) == 0u,
+                "arrangement Diagnostic kError ordinal is a frozen C-ABI wire value");
+  static_assert(static_cast<uint32_t>(Severity::kWarning) == 1u,
+                "arrangement Diagnostic kWarning ordinal is a frozen C-ABI wire value");
 
   Code code = Code::kOk;
   Severity severity = Severity::kError;

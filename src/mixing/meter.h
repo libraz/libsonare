@@ -10,6 +10,7 @@
 
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "rt/seqlock_cell.h"
 #include "rt/true_peak_filter.h"
 #include "util/constants.h"
 
@@ -79,9 +80,11 @@ class MeterProcessor : public rt::ProcessorBase {
   std::vector<float> true_peak_zero_in_{};
   int max_block_size_ = 0;
 
-  // Seqlock: odd guard_ means a write is in progress; readers retry until it is even and stable.
-  alignas(64) std::atomic<uint32_t> guard_{0};
-  MeterSnapshot snapshot_{};
+  // Seqlock cell publishing the most recent snapshot. The reader (snapshot())
+  // spins until it observes an untorn value; seq_ is stamped into each snapshot
+  // before publishing so a consumer can detect a missed update. Aligned to a
+  // cache line to keep the writer's guard off the reader's other state.
+  alignas(64) rt::SeqlockCell<MeterSnapshot> snapshot_{};
   uint64_t seq_ = 0;
 
   // LUFS streaming state. The two ITU-R BS.1770 K-weighting sections are

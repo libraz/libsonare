@@ -94,6 +94,63 @@ TEST_CASE("MidiFx quantize snaps render frames to grid", "[midi]") {
   REQUIRE(out.events[0].render_frame == 120);  // 140 + (-40 * 0.5)
 }
 
+TEST_CASE("MidiFx quantize can swing odd grid lines", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  q.swing = 1.0f;
+  fx.set_quantize(q);
+
+  std::vector<MidiEvent> in = {
+      note_on(130, 60, 100),  // nearest swung line 1: 100 + 50 = 150
+      note_on(205, 61, 100),  // even line 2 remains 200
+      note_on(310, 62, 100),  // swung line 3: 300 + 50 = 350
+  };
+  MidiFxBuffer out;
+  fx.process(in.data(), in.size(), &out);
+
+  REQUIRE(out.size == 3);
+  REQUIRE(out.events[0].render_frame == 150);
+  REQUIRE(out.events[1].render_frame == 200);
+  REQUIRE(out.events[2].render_frame == 350);
+
+  q.strength = 0.5f;
+  fx.set_quantize(q);
+  std::vector<MidiEvent> half = {note_on(130, 60, 100)};
+  fx.process(half.data(), half.size(), &out);
+  REQUIRE(out.events[0].render_frame == 140);  // halfway from 130 to swung 150
+}
+
+TEST_CASE("MidiFx quantize applies repeating groove template offsets", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  q.groove_steps = 4;
+  q.groove_offsets = {0.0f, 0.10f, -0.10f, 0.25f};
+  fx.set_quantize(q);
+
+  std::vector<MidiEvent> in = {
+      note_on(112, 60, 100),  // line 1: 100 + 10
+      note_on(188, 61, 100),  // line 2: 200 - 10
+      note_on(330, 62, 100),  // line 3: 300 + 25
+      note_on(405, 63, 100),  // line 4 wraps to template index 0
+  };
+  MidiFxBuffer out;
+  fx.process(in.data(), in.size(), &out);
+
+  REQUIRE(out.size == 4);
+  REQUIRE(out.events[0].render_frame == 110);
+  REQUIRE(out.events[1].render_frame == 190);
+  REQUIRE(out.events[2].render_frame == 325);
+  REQUIRE(out.events[3].render_frame == 400);
+}
+
 TEST_CASE("MidiFx velocity curve maps velocity", "[midi]") {
   MidiFxChain fx;
   fx.prepare();
@@ -138,6 +195,109 @@ TEST_CASE("MidiFx chord expands a single note into multiple notes", "[midi]") {
   REQUIRE(out.events[0].ump.is_note_on());
   REQUIRE(out.events[3].ump.note_number() == 60);
   REQUIRE(out.events[3].ump.is_note_off());
+}
+
+TEST_CASE("MidiFx handles MIDI 2.0 note events without down-converting", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig t;
+  t.enabled = true;
+  t.semitones = 12;
+  fx.set_transpose(t);
+  VelocityCurveConfig v;
+  v.enabled = true;
+  v.scale = 0.5f;
+  v.gamma = 1.0f;
+  fx.set_velocity_curve(v);
+  ChordConfig c;
+  c.enabled = true;
+  c.count = 2;
+  c.intervals = {0, 7};
+  fx.set_chord(c);
+
+  const MidiEvent in[] = {{10, sonare::midi::make_midi2_note_on(1, 3, 60, 0x8000u)},
+                          {20, sonare::midi::make_midi2_note_off(1, 3, 60, 0)}};
+  MidiFxBuffer out;
+  fx.process(in, 2, &out);
+
+  REQUIRE(out.size == 4);
+  REQUIRE(out.events[0].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(out.events[0].ump.channel() == 3);
+  REQUIRE(out.events[0].ump.note_number() == 72);
+  REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) ==
+          sonare::midi::scale_velocity_7_to_16(32));
+  REQUIRE(out.events[1].ump.note_number() == 79);
+  REQUIRE(out.events[2].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(out.events[2].ump.is_note_off());
+  REQUIRE(out.events[2].ump.note_number() == 72);
+  REQUIRE(out.events[3].ump.note_number() == 79);
+}
+
+TEST_CASE("MidiFx maps MIDI 2.0 per-note controller notes without changing controller value",
+          "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig t;
+  t.enabled = true;
+  t.semitones = 12;
+  fx.set_transpose(t);
+  ChordConfig c;
+  c.enabled = true;
+  c.count = 2;
+  c.intervals = {0, 7};
+  fx.set_chord(c);
+
+  const MidiEvent in[] = {
+      {10, sonare::midi::make_midi2_per_note_controller(1, 3, 60, 1, 0x12345678u)},
+      {20, sonare::midi::make_midi2_assignable_per_note_controller(1, 3, 61, 9, 0x87654321u)},
+  };
+  MidiFxBuffer out;
+  fx.process(in, 2, &out);
+
+  REQUIRE(out.size == 4);
+  REQUIRE(out.events[0].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kRegisteredPerNoteController));
+  REQUIRE(out.events[0].ump.channel() == 3);
+  REQUIRE(out.events[0].ump.note_number() == 72);
+  REQUIRE(static_cast<uint8_t>(out.events[0].ump.words[0] & 0xFFu) == 1);
+  REQUIRE(out.events[0].ump.words[1] == 0x12345678u);
+  REQUIRE(out.events[1].ump.note_number() == 79);
+  REQUIRE(out.events[1].ump.words[1] == 0x12345678u);
+
+  REQUIRE(out.events[2].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kAssignablePerNoteController));
+  REQUIRE(out.events[2].ump.note_number() == 73);
+  REQUIRE(static_cast<uint8_t>(out.events[2].ump.words[0] & 0xFFu) == 9);
+  REQUIRE(out.events[2].ump.words[1] == 0x87654321u);
+  REQUIRE(out.events[3].ump.note_number() == 80);
+  REQUIRE(out.events[3].ump.words[1] == 0x87654321u);
+}
+
+TEST_CASE("MidiFx preserves MIDI 2.0 channel controller forms while time shaping", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig t;
+  t.enabled = true;
+  t.semitones = 12;
+  fx.set_transpose(t);
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  fx.set_quantize(q);
+
+  const MidiEvent in[] = {
+      {149, sonare::midi::make_midi2_registered_controller(1, 3, 2, 10, 0x10203040u)},
+      {151, sonare::midi::make_midi2_assignable_controller(1, 3, 5, 12, 0xA0B0C0D0u)},
+  };
+  MidiFxBuffer out;
+  fx.process(in, 2, &out);
+
+  REQUIRE(out.size == 2);
+  REQUIRE(out.events[0].render_frame == 100);
+  REQUIRE(out.events[0].ump == in[0].ump);
+  REQUIRE(out.events[1].render_frame == 200);
+  REQUIRE(out.events[1].ump == in[1].ump);
 }
 
 TEST_CASE("MidiFx arpeggiator expands a held note into gated steps", "[midi]") {

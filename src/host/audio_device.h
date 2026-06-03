@@ -25,6 +25,7 @@
 /// render() runs on the AUDIO (device) thread and MUST be allocation-free,
 /// lock-free and I/O-free, exactly like rt::ProcessorBase::process.
 
+#include <cstddef>
 #include <cstdint>
 
 namespace sonare::host {
@@ -38,6 +39,13 @@ struct AudioStreamConfig {
   int max_block_size = 512;
   int num_input_channels = 0;
   int num_output_channels = 2;
+  // Hardware I/O latency the backend reports for this negotiated format, in
+  // samples at `sample_rate`. A host adds `output_latency_samples` (plus the
+  // engine's graph/instrument PDC) to align rendered audio with what the
+  // listener hears, and uses `input_latency_samples` to timestamp captured
+  // input. 0 means "unknown / not reported" (the safe default; no compensation).
+  int input_latency_samples = 0;
+  int output_latency_samples = 0;
 };
 
 /// Per-callback timing handed to the render callback. `stream_time_seconds` is
@@ -45,9 +53,18 @@ struct AudioStreamConfig {
 /// `sample_time` is the absolute frame index of the first frame since the
 /// stream started. Both are advisory (for sync / capture timestamping); a
 /// backend that cannot provide them leaves them at 0.
+///
+/// `input_xruns` reports xruns/underruns (dropped output / overflowed input
+/// buffers) the backend detected SINCE the previous render() callback — i.e. a
+/// discontinuity occurred before this buffer's first frame. It is a per-callback
+/// delta, not a running total (the device exposes the cumulative figure via
+/// AudioDevice::xrun_count()). 0 means "no dropout reported"; a backend that
+/// cannot detect xruns leaves it at 0. The callee may use it to flush/realign
+/// state across a glitch.
 struct AudioCallbackTime {
   double stream_time_seconds = 0.0;
   int64_t sample_time = 0;
+  uint32_t input_xruns = 0;
 };
 
 /// One render request: deinterleaved input/output channel buffers plus the
@@ -63,6 +80,30 @@ struct AudioBufferView {
   int num_output_channels = 0;
   int num_frames = 0;
   AudioCallbackTime time{};
+};
+
+/// Direction of an audio bus on the device seam. The render callback receives
+/// inputs and outputs in separate pointer arrays (AudioBufferView), but the
+/// device can also DESCRIBE its buses up front so a host can negotiate / display
+/// them; the direction tags which side of AudioBufferView a bus feeds.
+enum class AudioBusDirection : uint8_t {
+  kInput = 0,
+  kOutput = 1,
+};
+
+/// One audio bus the device exposes, with its direction. Plain value data; no
+/// device handle (invariant 6). `channel_count` is the bus width; `first_channel`
+/// is its offset into the corresponding AudioBufferView array (inputs for
+/// kInput, outputs for kOutput); `name` is for display. This lets a host map a
+/// logical stereo/mono bus onto the flat channel arrays the render callback
+/// receives, and in particular declares INPUT-direction buses explicitly rather
+/// than inferring them from a raw channel count.
+struct AudioBusDescriptor {
+  AudioBusDirection direction = AudioBusDirection::kOutput;
+  int first_channel = 0;
+  int channel_count = 0;
+  // True for the device's primary record (kInput) / playback (kOutput) bus.
+  bool is_main = true;
 };
 
 /// The seam a host audio backend drives. A concrete backend owns the device and
@@ -112,6 +153,35 @@ class AudioDevice {
 
   /// True while the device is actively streaming.
   virtual bool is_running() const noexcept = 0;
+
+  /// Hardware latency the device reports, in samples at the negotiated sample
+  /// rate. Many backends only know the true figure AFTER open() (the driver
+  /// rounds the requested buffering), so these are queried on the live device
+  /// rather than taken solely from AudioStreamConfig. Default 0 = unknown.
+  /// A host derives total output latency as `output_latency_samples()` plus the
+  /// engine's reported graph/instrument PDC (graph_latency_samples_q8 >> 8).
+  virtual int input_latency_samples() const noexcept { return 0; }
+  virtual int output_latency_samples() const noexcept { return 0; }
+
+  /// CONTROL thread: number of audio buses (both directions) the open device
+  /// exposes. Default 0 (the host treats the device as a flat
+  /// num_input/num_output_channels layout). A backend that knows its bus
+  /// grouping overrides this with bus_descriptor() to declare input- and
+  /// output-direction buses explicitly.
+  virtual size_t bus_count() const noexcept { return 0; }
+
+  /// CONTROL thread: write bus metadata for `index` into `out`. Returns false
+  /// for out-of-range `index` or null `out`. Default: no enumerable buses.
+  virtual bool bus_descriptor(size_t index, AudioBusDescriptor* out) const noexcept {
+    (void)index;
+    (void)out;
+    return false;
+  }
+
+  /// Cumulative count of xruns/underruns the device has detected since it opened
+  /// (the running total whose per-callback delta is AudioCallbackTime::input_xruns).
+  /// Advisory telemetry. Default 0 = unknown / no xruns detected.
+  virtual uint32_t xrun_count() const noexcept { return 0; }
 };
 
 }  // namespace sonare::host

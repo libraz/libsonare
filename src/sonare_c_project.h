@@ -36,7 +36,7 @@
 
 /// @brief Compile-time mirror of the runtime project ABI version returned by
 ///        @ref sonare_project_abi_version. Bump on ANY flat POD layout change.
-#define SONARE_PROJECT_ABI_VERSION 1u
+#define SONARE_PROJECT_ABI_VERSION 3u
 
 #ifdef __cplusplus
 extern "C" {
@@ -178,6 +178,124 @@ static_assert(sizeof(SonareProjectCompileResult) == 3u * sizeof(void*) + sizeof(
               "SonareProjectCompileResult layout drift");
 #endif
 
+/// @brief Heap-owned AssistSidecar snapshot returned by
+///        @ref sonare_project_get_assist_sidecar.
+///
+/// @p module_id is a heap C string (free via
+/// @ref sonare_project_free_assist_sidecar). @p payload is a heap byte array
+/// of @p payload_len bytes (also freed by the same helper). The core treats the
+/// payload as opaque module-owned bytes.
+typedef struct {
+  char* module_id;
+  uint32_t schema_version;
+  uint32_t target_track_id;
+  double region_start_ppq;
+  double region_end_ppq;
+  uint8_t* payload;
+  size_t payload_len;
+} SonareProjectAssistSidecar;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectAssistSidecar, module_id) == 0,
+              "AssistSidecar.module_id offset");
+static_assert(offsetof(SonareProjectAssistSidecar, schema_version) == sizeof(void*),
+              "AssistSidecar.schema_version offset");
+static_assert(offsetof(SonareProjectAssistSidecar, target_track_id) ==
+                  sizeof(void*) + sizeof(uint32_t),
+              "AssistSidecar.target_track_id offset");
+static_assert(offsetof(SonareProjectAssistSidecar, region_start_ppq) ==
+                  ((sizeof(void*) + 2u * sizeof(uint32_t) + 7u) & ~static_cast<size_t>(7u)),
+              "AssistSidecar.region_start_ppq offset");
+static_assert(offsetof(SonareProjectAssistSidecar, region_end_ppq) ==
+                  offsetof(SonareProjectAssistSidecar, region_start_ppq) + sizeof(double),
+              "AssistSidecar.region_end_ppq offset");
+static_assert(offsetof(SonareProjectAssistSidecar, payload) ==
+                  offsetof(SonareProjectAssistSidecar, region_end_ppq) + sizeof(double),
+              "AssistSidecar.payload offset");
+static_assert(offsetof(SonareProjectAssistSidecar, payload_len) ==
+                  offsetof(SonareProjectAssistSidecar, payload) + sizeof(void*),
+              "AssistSidecar.payload_len offset");
+static_assert(sizeof(SonareProjectAssistSidecar) ==
+                  ((offsetof(SonareProjectAssistSidecar, payload_len) + sizeof(size_t) + 7u) &
+                   ~static_cast<size_t>(7u)),
+              "SonareProjectAssistSidecar layout drift");
+#endif
+
+/// @brief Key segment descriptor for @ref sonare_project_annotate_keys.
+///
+/// @p tonic_pc is 0..11 (C=0) or 255 for unknown. @p mode uses the
+/// arrangement KeyMode ordinal (0 unknown, 1 major, 2 minor, 3 dorian,
+/// 4 phrygian, 5 lydian, 6 mixolydian, 7 locrian).
+typedef struct {
+  double start_ppq;
+  double end_ppq;
+  uint32_t tonic_pc;
+  uint32_t mode;
+} SonareProjectKeySegment;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectKeySegment, start_ppq) == 0, "KeySegment.start_ppq offset");
+static_assert(offsetof(SonareProjectKeySegment, end_ppq) == sizeof(double),
+              "KeySegment.end_ppq offset");
+static_assert(offsetof(SonareProjectKeySegment, tonic_pc) == 2u * sizeof(double),
+              "KeySegment.tonic_pc offset");
+static_assert(offsetof(SonareProjectKeySegment, mode) == 2u * sizeof(double) + sizeof(uint32_t),
+              "KeySegment.mode offset");
+static_assert(sizeof(SonareProjectKeySegment) == 2u * sizeof(double) + 2u * sizeof(uint32_t),
+              "SonareProjectKeySegment layout drift");
+#endif
+
+/// @brief Chord-symbol descriptor for @ref sonare_project_annotate_chords.
+///
+/// @p root_pc and @p slash_bass_pc are 0..11 (C=0) or 255 for unknown / none.
+/// @p quality uses the arrangement ChordQuality ordinal (0 unknown, 1 major,
+/// 2 minor, 3 diminished, 4 augmented, 5 dominant, 6 half-diminished,
+/// 7 suspended). @p extensions is copied and may be NULL only when
+/// @p extension_count is 0. @p roman_numeral is optional and copied.
+typedef struct {
+  double start_ppq;
+  double end_ppq;
+  uint32_t root_pc;
+  uint32_t quality;
+  const uint8_t* extensions;
+  size_t extension_count;
+  uint32_t slash_bass_pc;
+  const char* roman_numeral;
+  int modulation_boundary;
+} SonareProjectChordSymbol;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectChordSymbol, start_ppq) == 0, "ChordSymbol.start_ppq offset");
+static_assert(offsetof(SonareProjectChordSymbol, end_ppq) == sizeof(double),
+              "ChordSymbol.end_ppq offset");
+static_assert(offsetof(SonareProjectChordSymbol, root_pc) == 2u * sizeof(double),
+              "ChordSymbol.root_pc offset");
+static_assert(offsetof(SonareProjectChordSymbol, quality) == 2u * sizeof(double) + sizeof(uint32_t),
+              "ChordSymbol.quality offset");
+static_assert(offsetof(SonareProjectChordSymbol, extensions) ==
+                  ((2u * sizeof(double) + 2u * sizeof(uint32_t) + sizeof(void*) - 1u) &
+                   ~(sizeof(void*) - 1u)),
+              "ChordSymbol.extensions offset");
+static_assert(offsetof(SonareProjectChordSymbol, extension_count) ==
+                  offsetof(SonareProjectChordSymbol, extensions) + sizeof(void*),
+              "ChordSymbol.extension_count offset");
+static_assert(offsetof(SonareProjectChordSymbol, slash_bass_pc) ==
+                  offsetof(SonareProjectChordSymbol, extension_count) + sizeof(size_t),
+              "ChordSymbol.slash_bass_pc offset");
+static_assert(offsetof(SonareProjectChordSymbol, roman_numeral) ==
+                  ((offsetof(SonareProjectChordSymbol, slash_bass_pc) + sizeof(uint32_t) +
+                    sizeof(void*) - 1u) &
+                   ~(sizeof(void*) - 1u)),
+              "ChordSymbol.roman_numeral offset");
+static_assert(offsetof(SonareProjectChordSymbol, modulation_boundary) ==
+                  offsetof(SonareProjectChordSymbol, roman_numeral) + sizeof(void*),
+              "ChordSymbol.modulation_boundary offset");
+static_assert(sizeof(SonareProjectChordSymbol) ==
+                  ((offsetof(SonareProjectChordSymbol, modulation_boundary) + sizeof(int) + 7u) &
+                   ~static_cast<size_t>(7u)),
+              "SonareProjectChordSymbol layout drift");
+#endif
+
 /// @brief Options for @ref sonare_project_bounce. Zero-initialize then override.
 typedef struct {
   int64_t total_frames;           /* render length in frames at @p sample_rate */
@@ -280,6 +398,58 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
                                   float** out_interleaved, size_t* out_len);
 
 // ============================================================================
+// External-instrument host shim (callback-driven)
+// ============================================================================
+
+/// @brief Callback table a host supplies to drive an EXTERNAL instrument as the
+///        engine's MIDI-driven instrument during a bounce. The bounce engine
+///        treats it as a sonare::midi::MidiInstrument: @p prepare runs once on
+///        the control thread, then per render block the engine delivers each
+///        dispatched UMP event to @p on_event at its sample-accurate render
+///        frame and calls @p render to sum the instrument's audio. Invariant 6:
+///        only opaque words / buffers cross this seam — NO plugin-SDK type.
+///
+/// All callbacks receive @p user_data verbatim. @p render is REQUIRED; the
+/// others may be NULL. The table (and any state @p user_data points to) must
+/// outlive the bounce call. The callbacks run on the bounce's render thread and
+/// must not free the project.
+typedef struct {
+  void* user_data;
+  /// CONTROL thread (once, before rendering): negotiated sample rate + max block.
+  void (*prepare)(void* user_data, double sample_rate, int max_block_size);
+  /// RENDER thread: one dispatched channel-voice UMP event for @p destination_id
+  /// at @p render_frame. @p ump_words points to @p word_count (1 or 2) 32-bit
+  /// UMP words; the pointer is valid only for the duration of the call.
+  void (*on_event)(void* user_data, uint32_t destination_id, const uint32_t* ump_words,
+                   int word_count, int64_t render_frame);
+  /// RENDER thread: ADD @p num_frames of the instrument's audio into the planar
+  /// @p channels (channels[ch][i]); the engine zero-fills the scratch first.
+  void (*render)(void* user_data, float* const* channels, int num_channels, int num_frames);
+  /// Reported instrument latency in samples (PDC). 0 = no latency.
+  int latency_samples;
+} SonareInstrumentCallbacks;
+
+/// @brief Binds a callback instrument to a MIDI destination id (the value set by
+///        @ref sonare_project_set_track_midi_destination and stamped onto the
+///        track's compiled clips). The default destination is 0.
+typedef struct {
+  uint32_t destination_id;
+  SonareInstrumentCallbacks callbacks;
+} SonareInstrumentBinding;
+
+/// @brief Like @ref sonare_project_bounce, but registers each callback
+///        instrument on the engine before rendering, so MIDI tracks routed to
+///        those destinations render the host instrument's audio instead of
+///        silence. @p instruments points to @p instrument_count bindings (may be
+///        NULL / 0 for a silent MIDI bounce identical to sonare_project_bounce).
+///        Deterministic for a fixed project + options + instrument behavior.
+SonareError sonare_project_bounce_with_instruments(SonareProject* project,
+                                                   const SonareProjectBounceOptions* options,
+                                                   const SonareInstrumentBinding* instruments,
+                                                   size_t instrument_count, float** out_interleaved,
+                                                   size_t* out_len);
+
+// ============================================================================
 // Edit (all mutation routes through EditHistory commands)
 // ============================================================================
 
@@ -310,6 +480,22 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
 ///        (0 = keep current track).
 SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, double new_start_ppq,
                                      uint32_t new_track_id);
+
+/// @brief Sets a clip's warp reference id via an undoable edit command.
+///
+/// The project model stores the reference id only; the host/authoring layer owns
+/// the actual warp-map payload until first-class project warp-map storage exists.
+/// Use @p warp_ref_id = 0 to clear the reference.
+SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t clip_id,
+                                             uint32_t warp_ref_id);
+
+/// @brief Routes a track's MIDI to host-instrument destination @p destination_id
+///        (0 = the default destination). The arrangement compiler stamps every
+///        MIDI clip on the track with this id so the engine dispatches its events
+///        to the instrument registered for that destination. Routes through an
+///        undoable edit command. @p track_id must reference an existing track.
+SonareError sonare_project_set_track_midi_destination(SonareProject* project, uint32_t track_id,
+                                                      uint32_t destination_id);
 
 /// @brief Undoes the most recent edit. Returns SONARE_ERROR_INVALID_STATE when
 ///        the undo stack is empty.
@@ -374,6 +560,24 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
 SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** out_bytes,
                                       size_t* out_len);
 
+/// @brief Imports an in-memory MIDI 2.0 Clip File ("SMF2CLIP", MIDI Association
+///        MIDI Clip File). Unlike SMF, the UMP-based container carries MIDI 2.0
+///        channel-voice messages (16-bit velocity, 32-bit CC, per-note /
+///        registered controllers, bank-valid Program Change) without loss.
+///        Adds one MIDI track + clip. @p out_first_clip_id (optional) receives
+///        the added clip id. Malformed input returns an error without crashing.
+SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_t* bytes,
+                                            size_t len, uint32_t* out_first_clip_id);
+
+/// @brief Exports the project's tempo map + MIDI clips to a MIDI 2.0 Clip File
+///        byte buffer (single-clip container). MIDI 2.0-only events are written
+///        WITHOUT loss — the reason to prefer this over @ref
+///        sonare_project_export_smf when MIDI 2.0 fidelity matters.
+/// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
+/// @param out_len   Receives the byte length.
+SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_t** out_bytes,
+                                            size_t* out_len);
+
 /// @brief Sets a MIDI clip's program / bank by inserting deterministic
 ///        MIDI-1.0 bank-select CC + program-change events at source PPQ 0.
 ///        Uses group 0 / channel 0. For explicit routing use
@@ -407,6 +611,36 @@ SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
                                        const char* config_json);
 
 // ============================================================================
+// Assist sidecars (opaque module state)
+// ============================================================================
+
+/// @brief Adds or updates an opaque assist sidecar by module id + target scope.
+///
+/// The payload is copied. Existing sidecars with the same module id,
+/// target_track_id, region_start_ppq, and region_end_ppq are replaced via an
+/// undoable command; otherwise a new sidecar is appended. @p module_id must be a
+/// non-empty NUL-terminated string. @p payload may be NULL only when
+/// @p payload_len is 0.
+SonareError sonare_project_set_assist_sidecar(SonareProject* project, const char* module_id,
+                                              uint32_t schema_version, uint32_t target_track_id,
+                                              double region_start_ppq, double region_end_ppq,
+                                              const uint8_t* payload, size_t payload_len);
+
+/// @brief Number of assist sidecars currently stored on the project.
+size_t sonare_project_assist_sidecar_count(const SonareProject* project);
+
+/// @brief Reads one assist sidecar by stable project order.
+///
+/// On success @p out owns heap memory and must be released with
+/// @ref sonare_project_free_assist_sidecar. On failure @p out is zeroed.
+SonareError sonare_project_get_assist_sidecar(const SonareProject* project, size_t index,
+                                              SonareProjectAssistSidecar* out);
+
+/// @brief Frees heap fields returned by @ref sonare_project_get_assist_sidecar
+///        and zeros the struct. NULL is safe.
+void sonare_project_free_assist_sidecar(SonareProjectAssistSidecar* sidecar);
+
+// ============================================================================
 // MIR (offline analysis -> edit commands; deterministic)
 // ============================================================================
 
@@ -421,6 +655,18 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
 ///        that position. @p strength in [0,1] (0 = no snap, 1 = exact line).
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
                                         double* out_ppq);
+
+/// @brief Replaces the project's key annotation stream via an undoable command.
+///
+/// Existing chord / section / onset annotations are preserved. @p keys may be
+/// NULL only when @p count is 0.
+SonareError sonare_project_annotate_keys(SonareProject* project,
+                                         const SonareProjectKeySegment* keys, size_t count);
+
+/// @brief Replaces the project's chord-symbol annotation stream via an
+///        undoable command. @p chords may be NULL only when @p count is 0.
+SonareError sonare_project_annotate_chords(SonareProject* project,
+                                           const SonareProjectChordSymbol* chords, size_t count);
 
 // ============================================================================
 // Memory management (heap byte buffers)

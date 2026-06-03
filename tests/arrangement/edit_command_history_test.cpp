@@ -98,6 +98,78 @@ bool sidecar_equal(const AssistSidecar& a, const AssistSidecar& b) {
          a.region_start_ppq == b.region_start_ppq && a.region_end_ppq == b.region_end_ppq;
 }
 
+bool warp_map_equal(const WarpMapRef& a, const WarpMapRef& b) {
+  return a.id == b.id && a.name == b.name && a.anchors == b.anchors;
+}
+
+bool insert_equal(const sonare::mixing::api::Insert& a, const sonare::mixing::api::Insert& b) {
+  return a.slot == b.slot && a.processor_name == b.processor_name &&
+         a.params_json == b.params_json && a.sidechain_key == b.sidechain_key;
+}
+
+bool send_equal(const sonare::mixing::api::Send& a, const sonare::mixing::api::Send& b) {
+  return a.id == b.id && a.destination_bus_id == b.destination_bus_id && a.send_db == b.send_db &&
+         a.timing == b.timing;
+}
+
+bool strip_equal(const sonare::mixing::api::Strip& a, const sonare::mixing::api::Strip& b) {
+  if (a.id != b.id || a.input_trim_db != b.input_trim_db || a.fader_db != b.fader_db ||
+      a.pan != b.pan || a.width != b.width || a.muted != b.muted || a.soloed != b.soloed ||
+      a.solo_safe != b.solo_safe || a.pan_mode != b.pan_mode ||
+      a.dual_pan_left != b.dual_pan_left || a.dual_pan_right != b.dual_pan_right ||
+      a.polarity_invert_left != b.polarity_invert_left ||
+      a.polarity_invert_right != b.polarity_invert_right || a.pan_law != b.pan_law ||
+      a.channel_delay_samples != b.channel_delay_samples) {
+    return false;
+  }
+  if (a.inserts.size() != b.inserts.size() || a.sends.size() != b.sends.size()) return false;
+  for (size_t i = 0; i < a.inserts.size(); ++i) {
+    if (!insert_equal(a.inserts[i], b.inserts[i])) return false;
+  }
+  for (size_t i = 0; i < a.sends.size(); ++i) {
+    if (!send_equal(a.sends[i], b.sends[i])) return false;
+  }
+  return true;
+}
+
+bool bus_equal(const sonare::mixing::api::Bus& a, const sonare::mixing::api::Bus& b) {
+  if (a.id != b.id || a.role != b.role || a.inserts.size() != b.inserts.size()) return false;
+  for (size_t i = 0; i < a.inserts.size(); ++i) {
+    if (!insert_equal(a.inserts[i], b.inserts[i])) return false;
+  }
+  return true;
+}
+
+bool vca_equal(const sonare::mixing::api::VcaGroup& a, const sonare::mixing::api::VcaGroup& b) {
+  return a.id == b.id && a.gain_db == b.gain_db && a.members == b.members;
+}
+
+bool connection_equal(const sonare::mixing::api::Connection& a,
+                      const sonare::mixing::api::Connection& b) {
+  return a.source == b.source && a.destination == b.destination;
+}
+
+bool scene_equal(const sonare::mixing::api::Scene& a, const sonare::mixing::api::Scene& b) {
+  if (a.version != b.version || a.strips.size() != b.strips.size() ||
+      a.buses.size() != b.buses.size() || a.vca_groups.size() != b.vca_groups.size() ||
+      a.connections.size() != b.connections.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < a.strips.size(); ++i) {
+    if (!strip_equal(a.strips[i], b.strips[i])) return false;
+  }
+  for (size_t i = 0; i < a.buses.size(); ++i) {
+    if (!bus_equal(a.buses[i], b.buses[i])) return false;
+  }
+  for (size_t i = 0; i < a.vca_groups.size(); ++i) {
+    if (!vca_equal(a.vca_groups[i], b.vca_groups[i])) return false;
+  }
+  for (size_t i = 0; i < a.connections.size(); ++i) {
+    if (!connection_equal(a.connections[i], b.connections[i])) return false;
+  }
+  return true;
+}
+
 bool tempo_seg_equal(const sonare::transport::TempoSegment& a,
                      const sonare::transport::TempoSegment& b) {
   return a.start_ppq == b.start_ppq && a.bpm == b.bpm && a.start_sample == b.start_sample &&
@@ -113,6 +185,8 @@ bool time_sig_seg_equal(const sonare::transport::TimeSignatureSegment& a,
 // Full deep equality across all command-affected fields of a Project.
 bool project_equal(const Project& a, const Project& b) {
   if (a.sample_rate() != b.sample_rate()) return false;
+  if (a.overlap_policy() != b.overlap_policy()) return false;
+  if (!scene_equal(a.scene(), b.scene())) return false;
 
   if (a.tracks().size() != b.tracks().size()) return false;
   for (size_t i = 0; i < a.tracks().size(); ++i) {
@@ -152,6 +226,10 @@ bool project_equal(const Project& a, const Project& b) {
   if (a.assist_sidecars().size() != b.assist_sidecars().size()) return false;
   for (size_t i = 0; i < a.assist_sidecars().size(); ++i) {
     if (!sidecar_equal(a.assist_sidecars()[i], b.assist_sidecars()[i])) return false;
+  }
+  if (a.warp_maps().size() != b.warp_maps().size()) return false;
+  for (size_t i = 0; i < a.warp_maps().size(); ++i) {
+    if (!warp_map_equal(a.warp_maps()[i], b.warp_maps()[i])) return false;
   }
   return true;
 }
@@ -302,6 +380,72 @@ TEST_CASE("Clip command round-trips", "[arrangement]") {
     check_round_trip(f.project, store,
                      std::make_unique<SetClipLoop>(f.audio_clip, LoopMode::kLoop, 480.0));
   }
+  SECTION("SetClipWarpRef") {
+    check_round_trip(f.project, store, std::make_unique<SetClipWarpRef>(f.audio_clip, 77));
+  }
+  SECTION("SetWarpMap adds a project warp map") {
+    WarpMapRef map;
+    map.id = 77;
+    map.name = "manual warp";
+    map.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+    check_round_trip(f.project, store, std::make_unique<SetWarpMap>(map));
+  }
+  SECTION("SetWarpMap replaces an existing project warp map") {
+    WarpMapRef map;
+    map.id = 77;
+    map.name = "manual warp";
+    map.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+    REQUIRE(f.project.set_warp_map(map));
+    map.name = "edited warp";
+    map.anchors.push_back({96000.0, 88200.0});
+    check_round_trip(f.project, store, std::make_unique<SetWarpMap>(map));
+  }
+  SECTION("RemoveWarpMap") {
+    WarpMapRef map;
+    map.id = 77;
+    map.name = "manual warp";
+    map.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+    REQUIRE(f.project.set_warp_map(map));
+    check_round_trip(f.project, store, std::make_unique<RemoveWarpMap>(77));
+  }
+  SECTION("SetClipSource") {
+    AudioSourceRef replacement;
+    replacement.uri = "file://replacement.wav";
+    replacement.channel_count = 2;
+    const SourceId replacement_id = f.project.add_audio_source(replacement);
+    check_round_trip(f.project, store,
+                     std::make_unique<SetClipSource>(f.audio_clip, replacement_id));
+  }
+}
+
+TEST_CASE("SetClipSource retargets one clip without replacing the shared source", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+
+  EditClip second = *f.project.find_clip(f.audio_clip);
+  second.id = 0;
+  second.start_ppq = 2400.0;
+  const ClipId second_clip = f.project.add_clip(second);
+  REQUIRE(second_clip != 0);
+
+  AudioSourceRef replacement;
+  replacement.uri = "file://replacement.wav";
+  replacement.channel_count = 2;
+  const SourceId replacement_id = f.project.add_audio_source(replacement);
+
+  REQUIRE(SetClipSource(f.audio_clip, replacement_id).apply(f.project, store));
+  REQUIRE(f.project.find_clip(f.audio_clip)->source_id == replacement_id);
+  REQUIRE(f.project.find_clip(second_clip)->source_id == f.audio_source);
+  REQUIRE(std::get<AudioSourceRef>(*f.project.find_source(f.audio_source)).uri == "file://a.wav");
+}
+
+TEST_CASE("SetClipSource rejects missing or wrong-kind sources", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+
+  REQUIRE_FALSE(SetClipSource(f.audio_clip, 999999u).apply(f.project, store));
+  REQUIRE_FALSE(SetClipSource(f.audio_clip, f.midi_source).apply(f.project, store));
+  REQUIRE(f.project.find_clip(f.audio_clip)->source_id == f.audio_source);
 }
 
 TEST_CASE("SplitClip partitions MIDI content instead of duplicating it", "[arrangement]") {
@@ -400,6 +544,45 @@ TEST_CASE("Timeline command round-trips", "[arrangement]") {
   Fixture f;
   MidiContentStore store;
 
+  SECTION("SetSampleRate") {
+    check_round_trip(f.project, store, std::make_unique<SetSampleRate>(48000.0));
+  }
+  SECTION("SetOverlapPolicy") {
+    check_round_trip(f.project, store, std::make_unique<SetOverlapPolicy>(OverlapPolicy::kAllow));
+  }
+  SECTION("SetScene") {
+    sonare::mixing::api::Scene scene;
+    scene.version = 1;
+    sonare::mixing::api::Strip strip;
+    strip.id = "lead";
+    strip.input_trim_db = -1.0f;
+    strip.fader_db = -4.5f;
+    strip.pan = 0.25f;
+    strip.width = 1.2f;
+    strip.muted = true;
+    strip.solo_safe = true;
+    strip.channel_delay_samples = 17;
+    strip.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PreFader, "eq.parametric", "{\"gain\":2}"});
+    sonare::mixing::api::Send send;
+    send.id = "verb-send";
+    send.destination_bus_id = "verb";
+    send.send_db = -9.0f;
+    send.timing = sonare::mixing::api::SendTiming::PreFader;
+    strip.sends.push_back(send);
+    scene.strips.push_back(strip);
+    sonare::mixing::api::Bus bus("verb", "aux");
+    bus.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PostFader, "effects.reverb.plate", "{}"});
+    scene.buses.push_back(bus);
+    sonare::mixing::api::VcaGroup vca;
+    vca.id = "vox";
+    vca.gain_db = -2.0f;
+    vca.members = {"lead"};
+    scene.vca_groups.push_back(vca);
+    scene.connections.push_back({"lead", "verb"});
+    check_round_trip(f.project, store, std::make_unique<SetScene>(scene));
+  }
   SECTION("SetMarker new") {
     check_round_trip(f.project, store, std::make_unique<SetMarker>(0, 480.0, "intro"));
   }
@@ -441,6 +624,18 @@ TEST_CASE("Timeline command round-trips", "[arrangement]") {
     chords.push_back(c);
     check_round_trip(f.project, store, std::make_unique<SetHarmonySegment>(chords));
   }
+}
+
+TEST_CASE("SetSampleRate rejects invalid values atomically", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  const Project before = f.project;
+
+  CHECK_FALSE(SetSampleRate(0.0).apply(f.project, store));
+  CHECK(project_equal(f.project, before));
+
+  CHECK_FALSE(SetSampleRate(-1.0).apply(f.project, store));
+  CHECK(project_equal(f.project, before));
 }
 
 TEST_CASE("Automation command round-trips", "[arrangement]") {

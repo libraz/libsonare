@@ -111,6 +111,39 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('routes a track to a MIDI destination and undoes it', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'midi', name: 'lead' });
+      const before = project.toJson();
+      project.setTrackMidiDestination(trackId, 7);
+      const after = project.toJson();
+      expect(after).not.toBe(before);
+      expect(after).toContain('"midi_destination_id":7');
+      project.undo();
+      expect(project.toJson()).toBe(before);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('sets a clip warp reference and undoes it', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      const before = project.toJson();
+      project.setClipWarpRef(clipId, 123);
+      const after = project.toJson();
+      expect(after).not.toBe(before);
+      expect(after).toContain('"warp_ref_id":123');
+      project.undo();
+      expect(project.toJson()).toBe(before);
+    } finally {
+      project.delete();
+    }
+  });
+
   it('compiles an empty project into a renderable timeline', () => {
     const project = new Project();
     try {
@@ -119,6 +152,8 @@ describe('Sonare WASM Project', () => {
       expect(result.hasTimeline).toBe(true);
       expect(typeof result.diagnosticCount).toBe('number');
       expect(typeof result.messages).toBe('string');
+      expect(Array.isArray(result.diagnostics)).toBe(true);
+      expect(result.diagnostics.length).toBe(result.diagnosticCount);
     } finally {
       project.delete();
     }
@@ -187,6 +222,37 @@ describe('Sonare WASM Project', () => {
       }
     } finally {
       sysexProject.delete();
+    }
+  });
+
+  it('round-trips a MIDI 2.0 Clip File through the binding', () => {
+    const project = buildProject();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      // A MIDI 2.0 note-on (message type 0x4) with a full 16-bit velocity.
+      project.setMidiEvents(clipId, [
+        { ppq: 0, data0: 0x40903c00, data1: 0xbeef0000 },
+        { ppq: 1, data0: 0x40803c00, data1: 0 },
+      ]);
+      const clipFile = project.exportClipFile();
+      expect(clipFile.length).toBeGreaterThan(8);
+      // MIDI 2.0 Clip File header magic "SMF2CLIP".
+      expect(Array.from(clipFile.subarray(0, 8))).toEqual([
+        0x53, 0x4d, 0x46, 0x32, 0x43, 0x4c, 0x49, 0x50,
+      ]);
+
+      const reimported = new Project();
+      try {
+        const firstClip = reimported.importClipFile(clipFile);
+        expect(firstClip).toBeGreaterThan(0);
+        expect(Array.from(reimported.exportClipFile().subarray(0, 8))).toEqual([
+          0x53, 0x4d, 0x46, 0x32, 0x43, 0x4c, 0x49, 0x50,
+        ]);
+      } finally {
+        reimported.delete();
+      }
+    } finally {
+      project.delete();
     }
   });
 

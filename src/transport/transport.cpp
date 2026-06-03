@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::transport {
 namespace {
 
@@ -23,43 +25,20 @@ bool BoundaryList::add(Boundary boundary) noexcept {
 }
 
 void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   tempo_map_ = tempo_map ? tempo_map : &fallback_tempo_map();
   render_frame_ = 0;
   sample_position_ = 0;
   playing_ = false;
   loop_overflow_count_.store(0, std::memory_order_relaxed);
-  write_loop_state({});
-}
-
-Transport::LoopState Transport::read_loop_state() const noexcept {
-  // Single try-read, no spin: if the writer is mid-update or the guard moved
-  // across the copy, fall back to the last consistent value rather than block
-  // the audio thread until the control thread finishes its write.
-  const uint32_t g1 = loop_guard_.load(std::memory_order_acquire);
-  if ((g1 & 1u) == 0u) {  // not mid-update
-    LoopState copy = loop_state_;
-    std::atomic_thread_fence(std::memory_order_acquire);
-    const uint32_t g2 = loop_guard_.load(std::memory_order_acquire);
-    if (g1 == g2) {
-      cached_loop_state_ = copy;
-      return copy;
-    }
-  }
-  return cached_loop_state_;
-}
-
-void Transport::write_loop_state(const LoopState& state) noexcept {
-  loop_guard_.fetch_add(1, std::memory_order_release);  // now odd: write in progress
-  loop_state_ = state;
-  loop_guard_.fetch_add(1, std::memory_order_release);  // now even: write complete
+  loop_state_.store({});
 }
 
 TransportState Transport::snapshot() const noexcept {
   const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
   const double ppq = map.sample_to_ppq(sample_position_);
   const TimeSignature sig = map.time_signature_at_ppq(ppq);
-  const LoopState loop = read_loop_state();
+  const LoopState loop = loop_state_.try_load();
   return {playing_,
           loop.enabled,
           render_frame_,
@@ -82,7 +61,7 @@ void Transport::advance(int num_frames) noexcept {
   sample_position_ += frames;
 
   const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
-  const LoopState loop = read_loop_state();
+  const LoopState loop = loop_state_.try_load();
   if (!loop.enabled || loop.end_ppq <= loop.start_ppq) return;
 
   const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
@@ -110,10 +89,10 @@ void Transport::set_loop(double start_ppq, double end_ppq, bool enabled) noexcep
   // raw NaN published).
   const bool valid = std::isfinite(start_ppq) && std::isfinite(end_ppq) && end_ppq > start_ppq;
   if (!valid) {
-    write_loop_state({0.0, 0.0, false});
+    loop_state_.store({0.0, 0.0, false});
     return;
   }
-  write_loop_state({start_ppq, end_ppq, enabled});
+  loop_state_.store({start_ppq, end_ppq, enabled});
 }
 
 bool Transport::seek_marker(uint32_t marker_id, const MarkerMap& markers) noexcept {
@@ -138,7 +117,7 @@ bool Transport::set_loop_from_markers(uint32_t start_marker_id, uint32_t end_mar
 bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const noexcept {
   if (!out) return false;
   out->clear();
-  const LoopState loop = read_loop_state();
+  const LoopState loop = loop_state_.try_load();
   if (!playing_ || !loop.enabled || num_frames <= 0 || loop.end_ppq <= loop.start_ppq) {
     return false;
   }

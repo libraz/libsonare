@@ -128,6 +128,53 @@ EditClip* Project::find_clip_mutable(ClipId id) noexcept {
   return nullptr;
 }
 
+const WarpMapRef* Project::find_warp_map(WarpRefId id) const noexcept {
+  if (id == 0) {
+    return nullptr;
+  }
+  for (const WarpMapRef& map : warp_maps_) {
+    if (map.id == id) {
+      return &map;
+    }
+  }
+  return nullptr;
+}
+
+WarpMapRef* Project::find_warp_map_mutable(WarpRefId id) noexcept {
+  if (id == 0) {
+    return nullptr;
+  }
+  for (WarpMapRef& map : warp_maps_) {
+    if (map.id == id) {
+      return &map;
+    }
+  }
+  return nullptr;
+}
+
+bool Project::set_warp_map(WarpMapRef map) {
+  if (map.id == 0) {
+    return false;
+  }
+  if (WarpMapRef* existing = find_warp_map_mutable(map.id)) {
+    *existing = std::move(map);
+    return true;
+  }
+  warp_maps_.emplace_back(std::move(map));
+  return true;
+}
+
+std::pair<WarpMapRef, bool> Project::remove_warp_map(WarpRefId id) {
+  for (auto it = warp_maps_.begin(); it != warp_maps_.end(); ++it) {
+    if (it->id == id) {
+      WarpMapRef removed = std::move(*it);
+      warp_maps_.erase(it);
+      return {std::move(removed), true};
+    }
+  }
+  return {WarpMapRef{}, false};
+}
+
 uint32_t Project::add_marker(double ppq, std::string name) {
   const uint32_t id = next_marker_id_++;
   ProjectMarker marker;

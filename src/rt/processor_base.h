@@ -3,7 +3,11 @@
 /// @file processor_base.h
 /// @brief Base interface for stateful mastering processors.
 
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "util/exception.h"
 
@@ -11,6 +15,23 @@ namespace sonare::rt {
 
 class ProcessorBase {
  public:
+  ProcessorBase() = default;
+  ProcessorBase(const ProcessorBase& other)
+      : bypassed_(other.bypassed_.load(std::memory_order_acquire)) {}
+  ProcessorBase& operator=(const ProcessorBase& other) {
+    if (this != &other) {
+      bypassed_.store(other.bypassed_.load(std::memory_order_acquire), std::memory_order_release);
+    }
+    return *this;
+  }
+  ProcessorBase(ProcessorBase&& other) noexcept
+      : bypassed_(other.bypassed_.load(std::memory_order_acquire)) {}
+  ProcessorBase& operator=(ProcessorBase&& other) noexcept {
+    if (this != &other) {
+      bypassed_.store(other.bypassed_.load(std::memory_order_acquire), std::memory_order_release);
+    }
+    return *this;
+  }
   virtual ~ProcessorBase() = default;
 
   /// @brief Throws @c SonareException (InvalidState) if @p prepared is false.
@@ -39,7 +60,22 @@ class ProcessorBase {
     (void)output_port;
     return latency_samples_q8();
   }
+  // Optional decay length after input becomes silent, in samples. Hosts use
+  // this to keep offline bounces from truncating reverb/delay/plugin tails.
+  virtual int tail_samples() const noexcept { return 0; }
   virtual float last_gain_reduction_db() const { return 0.0f; }
+
+  // Generic host bypass state. Containers such as graph nodes and insert
+  // chains consume this flag by leaving the dry buffer untouched and skipping
+  // process(); processors may still override for plugin-specific bypass.
+  virtual bool set_bypassed(bool bypassed, bool reset_on_bypass = false) {
+    const bool was = bypassed_.exchange(bypassed, std::memory_order_acq_rel);
+    if (bypassed && reset_on_bypass && !was) {
+      reset();
+    }
+    return true;
+  }
+  virtual bool bypassed() const noexcept { return bypassed_.load(std::memory_order_acquire); }
 
   // Optional external detector/key input for processors that support
   // sidechain operation. Buffers are borrowed until the processor consumes or
@@ -75,6 +111,30 @@ class ProcessorBase {
     (void)param_id;
     return true;
   }
+
+  // Opaque instance-state persistence for host session save/restore. save_state
+  // appends the processor's full restorable state (preset + automatable
+  // parameter values, voice config, etc.) to @p out as an OPAQUE byte span and
+  // returns true; load_state rehydrates from a span previously produced by the
+  // same processor build and returns true on success. Invariant 6: the blob is
+  // an opaque byte sequence — NO plugin-SDK type (VST3 / AU / CLAP) crosses this
+  // seam; the out-of-tree bridge owns the encoding. Default: stateless processor
+  // (save_state returns false / appends nothing, load_state ignores the span).
+  //
+  // Threading: both run on the CONTROL thread (save before a process block,
+  // load before the instance is wired into the audio graph). They MAY allocate.
+  virtual bool save_state(std::vector<uint8_t>& out) const {
+    (void)out;
+    return false;
+  }
+  virtual bool load_state(const uint8_t* data, size_t len) {
+    (void)data;
+    (void)len;
+    return false;
+  }
+
+ private:
+  std::atomic<bool> bypassed_{false};
 };
 
 }  // namespace sonare::rt

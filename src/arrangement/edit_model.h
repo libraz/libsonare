@@ -40,6 +40,35 @@ using ClipId = uint32_t;
 using WarpRefId = uint32_t;
 
 // ===========================================================================
+// Warp maps
+// ===========================================================================
+
+/// A warp anchor mapping output/warped sample position to source sample
+/// position. The arrangement layer stores this as plain value data; MIR/host
+/// code owns any offline baking that turns it into rendered audio.
+struct WarpAnchorRef {
+  double warp_sample = 0.0;
+  double source_sample = 0.0;
+
+  bool operator==(const WarpAnchorRef& o) const noexcept {
+    return warp_sample == o.warp_sample && source_sample == o.source_sample;
+  }
+  bool operator!=(const WarpAnchorRef& o) const noexcept { return !(*this == o); }
+};
+
+/// First-class project warp map referenced by EditClip::warp_ref_id.
+struct WarpMapRef {
+  WarpRefId id = 0;
+  std::string name;
+  std::vector<WarpAnchorRef> anchors;
+
+  bool operator==(const WarpMapRef& o) const noexcept {
+    return id == o.id && name == o.name && anchors == o.anchors;
+  }
+  bool operator!=(const WarpMapRef& o) const noexcept { return !(*this == o); }
+};
+
+// ===========================================================================
 // EditClip
 // ===========================================================================
 
@@ -124,6 +153,13 @@ struct Track {
   /// Minimal routing info: an output target id/string (e.g. a bus id resolved by
   /// the arrangement compiler against the Scene). Empty means "default/main output".
   std::string output_target;
+
+  /// MIDI destination id the compiler stamps onto every MidiClipSchedule built
+  /// from clips on this track (resolved against a host DestinationTable: a host
+  /// instrument node id or an external MIDI port). 0 = default/null destination.
+  /// This is what makes multi-track MIDI route to per-track instruments rather
+  /// than collapsing every clip onto destination 0. Audio tracks ignore it.
+  uint32_t midi_destination_id = 0;
 };
 
 // ===========================================================================
@@ -331,6 +367,13 @@ class Project {
   void add_assist_sidecar(AssistSidecar sidecar) { assist_sidecars_.push_back(std::move(sidecar)); }
   const std::vector<AssistSidecar>& assist_sidecars() const noexcept { return assist_sidecars_; }
 
+  // ---- Warp maps ------------------------------------------------------------
+
+  const std::vector<WarpMapRef>& warp_maps() const noexcept { return warp_maps_; }
+  const WarpMapRef* find_warp_map(WarpRefId id) const noexcept;
+  WarpMapRef* find_warp_map_mutable(WarpRefId id) noexcept;
+  bool has_warp_map(WarpRefId id) const noexcept { return find_warp_map(id) != nullptr; }
+
   // ---- Low-level mutation helpers (used by EditCommand; not for general use) -
   //
   // The arrangement subsystem routes ALL public mutation through EditCommand
@@ -401,9 +444,15 @@ class Project {
   /// Mutable markers / sidecars / tempo for command use.
   std::vector<ProjectMarker>& markers_mutable() noexcept { return markers_; }
   std::vector<AssistSidecar>& assist_sidecars_mutable() noexcept { return assist_sidecars_; }
+  std::vector<WarpMapRef>& warp_maps_mutable() noexcept { return warp_maps_; }
   std::vector<transport::TempoSegment>& tempo_segments_mutable() noexcept {
     return tempo_segments_;
   }
+
+  /// Replaces or inserts a warp map by id. Returns false for id 0.
+  bool set_warp_map(WarpMapRef map);
+  /// Removes a warp map by id and returns the removed map plus success flag.
+  std::pair<WarpMapRef, bool> remove_warp_map(WarpRefId id);
 
  private:
   double sample_rate_ = 22050.0;
@@ -420,6 +469,7 @@ class Project {
   ProjectAnnotation annotation_;
   mixing::api::Scene scene_;
   std::vector<AssistSidecar> assist_sidecars_;
+  std::vector<WarpMapRef> warp_maps_;
 
   // Independent, monotonic, never-reused id counters (deterministic; no rand).
   SourceId next_source_id_ = 1;

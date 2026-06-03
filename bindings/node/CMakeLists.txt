@@ -49,14 +49,27 @@ add_subdirectory(${SONARE_ROOT} ${CMAKE_BINARY_DIR}/libsonare)
 set(ADDON_SOURCES
   src/addon/addon.cpp
   src/addon/sonare_wrap_engine.cpp
+  src/addon/engine/clips_capture.cpp
+  src/addon/engine/graph_offline.cpp
   src/addon/sonare_wrap_project.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_acoustic.cpp
   src/addon/sonare_wrap_analysis.cpp
+  src/addon/analysis/metering.cpp
+  src/addon/analysis/progress.cpp
   src/addon/sonare_wrap_effects.cpp
+  src/addon/effects/dynamics_repair.cpp
+  src/addon/effects/extra.cpp
+  src/addon/effects/mastering.cpp
+  src/addon/effects/mixing.cpp
   src/addon/sonare_wrap_features.cpp
+  src/addon/features/advanced.cpp
+  src/addon/features/rhythm.cpp
+  src/addon/features/signal.cpp
   src/addon/sonare_wrap_mixer.cpp
   src/addon/sonare_wrap_streaming.cpp
+  src/addon/streaming/realtime_voice_changer.cpp
+  src/addon/streaming/stream_analyzer.cpp
   src/addon/sonare_wrap_utils.cpp
 )
 
@@ -69,10 +82,18 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/sonare_c_mastering_repair.cpp
   ${SONARE_ROOT}/src/sonare_c_mastering_streaming.cpp
   ${SONARE_ROOT}/src/sonare_c_mixing.cpp
+  ${SONARE_ROOT}/src/c_api/mixing_graph.cpp
+  ${SONARE_ROOT}/src/c_api/mixing_mixer.cpp
+  ${SONARE_ROOT}/src/c_api/mixing_strip.cpp
   ${SONARE_ROOT}/src/sonare_c_daw.cpp
   ${SONARE_ROOT}/src/sonare_c_engine.cpp
   ${SONARE_ROOT}/src/sonare_c_voice_changer.cpp
   ${SONARE_ROOT}/src/sonare_c_project.cpp
+  ${SONARE_ROOT}/src/c_api/project_bounce.cpp
+  ${SONARE_ROOT}/src/c_api/project_core.cpp
+  ${SONARE_ROOT}/src/c_api/project_edit.cpp
+  ${SONARE_ROOT}/src/c_api/project_midi.cpp
+  ${SONARE_ROOT}/src/c_api/project_mir.cpp
 )
 
 add_library(${PROJECT_NAME} SHARED

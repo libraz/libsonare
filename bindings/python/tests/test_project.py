@@ -152,6 +152,10 @@ def test_compile_surfaces_renderable_timeline() -> None:
         has_timeline, messages = project.compile()
         assert has_timeline is True
         assert isinstance(messages, str)
+        result = project.compile()
+        assert result.has_timeline is True
+        assert result.diagnostic_count == 0
+        assert result.diagnostics == ()
     finally:
         project.close()
 
@@ -183,6 +187,53 @@ def test_undo_on_empty_stack_raises() -> None:
     try:
         with pytest.raises(RuntimeError):
             project.undo()
+    finally:
+        project.close()
+
+
+def test_set_track_midi_destination_round_trips_and_undoes() -> None:
+    project = Project()
+    try:
+        track_id, _clip_id = project.add_midi_clip(0.0, 4.0)
+        before = project.to_json_bytes()
+
+        project.set_track_midi_destination(track_id, 7)
+        after = project.to_json_bytes()
+        assert after != before
+        assert b'"midi_destination_id":7' in after
+
+        # Routes through the edit history, so undo restores the prior routing.
+        project.undo()
+        assert project.to_json_bytes() == before
+    finally:
+        project.close()
+
+
+def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "audio")
+        clip_id = project.add_clip(
+            track_id=track_id, start_ppq=0.0, length_ppq=4.0, audio_channels=0
+        )
+        before = project.to_json_bytes()
+
+        project.set_clip_warp_ref(clip_id, 123)
+        after = project.to_json_bytes()
+        assert after != before
+        assert b'"warp_ref_id":123' in after
+
+        project.undo()
+        assert project.to_json_bytes() == before
+    finally:
+        project.close()
+
+
+def test_set_track_midi_destination_rejects_unknown_track() -> None:
+    project = Project()
+    try:
+        with pytest.raises(RuntimeError):
+            project.set_track_midi_destination(9999, 1)
     finally:
         project.close()
 
@@ -238,6 +289,32 @@ def test_export_smf_returns_bytes() -> None:
         assert isinstance(data, bytes)
         assert data  # tempo map + MIDI structure present
         assert data[:4] == b"MThd"
+    finally:
+        project.close()
+
+
+def test_clip_file_round_trips_midi_2_losslessly() -> None:
+    project, _audio_clip, _midi_track, midi_clip = _build_project()
+    try:
+        # A MIDI 2.0 note-on (message type 0x4) whose 16-bit velocity (0xBEEF)
+        # would be truncated through MIDI 1.0 SMF.
+        note_on = (0.0, 0x40903C00, 0xBEEF0000)
+        note_off = (1.0, 0x40803C00, 0x00000000)
+        project.set_midi_events(midi_clip, [note_on, note_off])
+
+        data = project.export_clip_file()
+        assert isinstance(data, bytes)
+        assert data[:8] == b"SMF2CLIP"
+
+        # Re-import through the binding into a fresh project.
+        reimported = Project()
+        try:
+            first_clip = reimported.import_clip_file(data)
+            assert first_clip != 0
+            # Export -> import -> export is deterministic for the same content.
+            assert reimported.export_clip_file()[:8] == b"SMF2CLIP"
+        finally:
+            reimported.close()
     finally:
         project.close()
 

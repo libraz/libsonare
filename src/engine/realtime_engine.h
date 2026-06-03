@@ -24,6 +24,10 @@
 #include "transport/transport.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include "engine/channel_delay.h"
+#include "engine/instrument_rack.h"
+#include "host/midi_io.h"
+#include "midi/clock_sync.h"
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
 #include "midi/sequencer.h"
@@ -79,6 +83,14 @@ class RealtimeEngine {
   static constexpr size_t kMaxCommandsPerBlock = 64;
   static constexpr size_t kMaxPendingCommands = 64;
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+  class MidiSyncSink {
+   public:
+    virtual ~MidiSyncSink() = default;
+    virtual void on_midi_sync_byte(int64_t render_frame, uint8_t byte) noexcept = 0;
+  };
+#endif
+
   void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
                size_t telemetry_capacity = 1024);
 
@@ -120,6 +132,16 @@ class RealtimeEngine {
   // compiled in.
   void set_midi_clips(std::vector<midi::MidiClipSchedule> clips);
   size_t midi_clip_count() const noexcept { return midi_sequencer_.clip_count(); }
+  bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
+  void clear_midi_fx(uint32_t destination_id) noexcept;
+  void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
+    midi_input_source_ = source;
+    midi_input_destination_id_ = destination_id;
+  }
+  void set_midi_output_sink(host::MidiOutputSink* sink) noexcept {
+    midi_dispatch_sink_.output = sink;
+  }
+  void set_midi_sync_sink(MidiSyncSink* sink) noexcept { midi_sync_sink_ = sink; }
   midi::MidiSequencer& midi_sequencer() noexcept { return midi_sequencer_; }
   const midi::MidiSequencer& midi_sequencer() const noexcept { return midi_sequencer_; }
 
@@ -139,11 +161,26 @@ class RealtimeEngine {
   // thread; the per-block scratch buffer is sized in prepare(). The instrument's
   // own prepare()/process()/on_event() must honor the rt::ProcessorBase contract.
   void set_midi_instrument(midi::MidiInstrument* instrument) noexcept;
-  midi::MidiInstrument* midi_instrument() const noexcept { return midi_instrument_; }
-  // Latency reported by the registered instrument (0 when none). Fed into the
-  // arrangement compiler's CompiledTimeline PDC / latency summary.
+  // Per-destination registration: bind (or clear, with nullptr) the host
+  // instrument that renders MIDI routed to `destination_id` (the compiler stamps
+  // each MidiClipSchedule with its track's Track.midi_destination_id). The
+  // single-argument overload above binds the default destination 0, preserving
+  // the prior single-instrument behavior. Returns false only when a new binding
+  // cannot be added because the rack is full (kMaxInstruments). Control-thread
+  // only; swapping/clearing first releases notes sounding on that destination so
+  // the outgoing instrument does not hang. May prepare() the instrument
+  // (allocates) when the engine is already prepared.
+  bool set_midi_instrument(uint32_t destination_id, midi::MidiInstrument* instrument) noexcept;
+  midi::MidiInstrument* midi_instrument() const noexcept { return instrument_rack_.get(0); }
+  midi::MidiInstrument* midi_instrument(uint32_t destination_id) const noexcept {
+    return instrument_rack_.get(destination_id);
+  }
+  size_t midi_instrument_count() const noexcept { return instrument_rack_.size(); }
+  // Highest instrument latency (samples) across all registered instruments (0
+  // when none). Fed into the arrangement compiler's CompiledTimeline PDC /
+  // latency summary.
   int midi_instrument_latency_samples() const noexcept {
-    return midi_instrument_ ? midi_instrument_->latency_samples() : 0;
+    return instrument_rack_.max_latency_samples();
   }
 #endif
   void set_capture_segment(CaptureSegment segment) noexcept;
@@ -221,16 +258,49 @@ class RealtimeEngine {
   void enqueue_error(TelemetryErrorCode code, int64_t render_frame, int64_t timeline_sample,
                      uint32_t value) noexcept;
   void compact_pending() noexcept;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // CONTROL thread: refresh the PDC delays from the current instrument rack and
+  // report the resulting graph latency. Called from prepare() and whenever an
+  // instrument binding changes.
+  void recompute_pdc() noexcept;
+  // AUDIO thread: flush the PDC delay lines on a transport discontinuity so no
+  // stale clip/instrument audio rings out across a stop/seek/loop.
+  void flush_pdc_delays() noexcept;
+  void emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept;
+  void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
+                             int num_frames) noexcept;
+  void dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept;
+#endif
 
   transport::TempoMap tempo_map_{};
   transport::Transport transport_{};
   transport::MarkerMap markers_{};
   ClipPlayer clip_player_{};
 #if defined(SONARE_WITH_ARRANGEMENT)
+  struct MidiDispatchSink final : midi::MidiEventSink {
+    InstrumentRack* rack = nullptr;
+    host::MidiOutputSink* output = nullptr;
+    void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
+      if (rack != nullptr) rack->on_event(destination_id, event);
+      if (output != nullptr) output->send(event);
+    }
+  };
+
   midi::MidiSequencer midi_sequencer_{};
-  // Optional host instrument node (default nullptr / opt-in). Summed at the
-  // clip/source stage. Owned by the caller; the engine only borrows the pointer.
-  midi::MidiInstrument* midi_instrument_ = nullptr;
+  midi::ClockGenerator midi_clock_{};
+  MidiSyncSink* midi_sync_sink_ = nullptr;
+  host::MidiInputSource* midi_input_source_ = nullptr;
+  uint32_t midi_input_destination_id_ = 0;
+  static constexpr size_t kMaxLiveMidiInputEvents = 256;
+  std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
+  size_t live_midi_input_count_ = 0;
+  // Per-destination host-instrument rack (default empty / opt-in). It is the
+  // sequencer's dispatch sink (so routed MIDI reaches the instrument bound to
+  // each clip's destination) and the engine sums every bound instrument's audio
+  // at the clip/source stage. Owned by the engine; each slot borrows a
+  // caller-owned instrument pointer.
+  InstrumentRack instrument_rack_{};
+  MidiDispatchSink midi_dispatch_sink_{};
   // Per-block instrument render scratch, allocated in prepare() (channel-planar:
   // kMaxAudioChannels rows of max_block_size_). The audio thread only points
   // into it, never allocates.
@@ -272,6 +342,27 @@ class RealtimeEngine {
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
   static constexpr size_t kMaxAudioChannels = 64;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Plugin-delay compensation (PDC). A hosted instrument reports an internal
+  // latency: its audio for a note dispatched at frame F emerges latency_samples
+  // later. To keep clip audio and every instrument mutually phase-aligned, the
+  // engine delays the clip bus by pdc_total_samples_ (the maximum instrument
+  // latency) and each instrument by (pdc_total_samples_ - its own latency), so
+  // all sources reach the source-merge point coincident at +pdc_total_samples_.
+  // Recomputed on the control thread whenever an instrument binding changes;
+  // a value of 0 (no latency-bearing instrument) leaves the render path
+  // bit-identical to the non-PDC path. The clip bus renders into clip_scratch_
+  // first so it can be delayed before summing. Tracked in Q8.8 samples so
+  // sub-sample instrument latency is compensated (fractional PDC).
+  int pdc_total_q8_ = 0;
+  ChannelDelay<kMaxAudioChannels> clip_pdc_delay_{};
+  std::array<ChannelDelay<kMaxAudioChannels>, InstrumentRack::kMaxInstruments>
+      instrument_pdc_delays_{};
+  std::array<uint32_t, InstrumentRack::kMaxInstruments> instrument_pdc_dest_{};
+  size_t pdc_instrument_count_ = 0;
+  std::vector<float> clip_scratch_storage_{};
+  std::array<float*, kMaxAudioChannels> clip_scratch_channels_{};
+#endif
 #if defined(SONARE_WITH_MIXING)
   std::vector<float> monitor_bus_storage_{};
   std::array<float*, kMaxAudioChannels> monitor_bus_channels_{};

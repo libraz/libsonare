@@ -8,6 +8,18 @@
 
 namespace sonare::mixing {
 
+namespace {
+
+int total_tail_samples(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
+  int total = 0;
+  for (const auto& insert : inserts) {
+    total += std::max(0, insert->tail_samples());
+  }
+  return total;
+}
+
+}  // namespace
+
 BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inputs_(max_inputs) {
   // Pre-reserve so add_insert (control thread) never reallocates inserts_ /
   // insert_sidechains_ while process() (audio thread) iterates them; a
@@ -44,6 +56,9 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
     } else {
       // Leave directly configured processor sidechains intact.
     }
+    if (inserts_[index]->bypassed()) {
+      continue;
+    }
     inserts_[index]->process(channels, num_channels, num_samples);
   }
   meter_.process(channels, num_channels, num_samples);
@@ -65,6 +80,8 @@ int BusProcessor::latency_samples_q8() const noexcept {
   }
   return total;
 }
+
+int BusProcessor::tail_samples() const noexcept { return total_tail_samples(inserts_); }
 
 void BusProcessor::sum_inputs(const std::vector<float* const*>& inputs, float* const* output,
                               int num_channels, int num_samples) const {

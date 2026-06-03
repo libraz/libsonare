@@ -80,7 +80,10 @@ add_executable(sonare_tests
   analysis/melody_analyzer_test.cpp
   analysis/section_analyzer_test.cpp
   analysis/music_analyzer_test.cpp
-  streaming/stream_analyzer_test.cpp
+  streaming/stream_analyzer_core_test.cpp
+  streaming/stream_analyzer_quantized_test.cpp
+  streaming/stream_analyzer_integration_test.cpp
+  streaming/stream_analyzer_long_chord_test.cpp
   rt/adaa2_test.cpp
   rt/biquad_design_test.cpp
   rt/k_weighting_freq_response_test.cpp
@@ -88,6 +91,8 @@ add_executable(sonare_tests
   rt/partitioned_convolver_test.cpp
   rt/true_peak_filter_test.cpp
   rt/rt_publisher_test.cpp
+  rt/seqlock_cell_test.cpp
+  rt/overflow_counter_test.cpp
   automation/automation_test.cpp
   engine/boundary_splitter_test.cpp
   engine/capture_test.cpp
@@ -100,7 +105,13 @@ add_executable(sonare_tests
   transport/marker_test.cpp
   transport/transport_test.cpp
   api/quick_test.cpp
-  api/sonare_c_test.cpp
+  api/sonare_c_core_test.cpp
+  api/sonare_c_music_test.cpp
+  api/sonare_c_mastering_test.cpp
+  api/sonare_c_mastering_repair_test.cpp
+  api/sonare_c_features_metering_test.cpp
+  api/sonare_c_engine_voice_test.cpp
+  api/sonare_c_mixing_features_test.cpp
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
   api/sonare_c_metering_extra_test.cpp
@@ -162,9 +173,17 @@ if(BUILD_MASTERING)
     mastering/common_test.cpp
     mastering/property_test.cpp
     mastering/preset_test.cpp
-    mastering/dynamics_test.cpp
+    mastering/dynamics_compressor_limiter_test.cpp
+    mastering/dynamics_expander_gate_test.cpp
+    mastering/dynamics_processors_test.cpp
+    mastering/dynamics_rt_safe_test.cpp
     mastering/eq_golden_test.cpp
-    mastering/eq_test.cpp
+    mastering/eq_parametric_test.cpp
+    mastering/eq_processor_test.cpp
+    mastering/eq_spectrum_test.cpp
+    mastering/eq_phase_test.cpp
+    mastering/eq_specialized_test.cpp
+    mastering/eq_dynamic_detail_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp
     mastering/insert_factory_extra_test.cpp
@@ -205,11 +224,26 @@ if(BUILD_MIXING)
     engine/monitor_runtime_test.cpp
     mixing/golden_hash_test.cpp
     mixing/insert_automation_c_api_test.cpp
-    mixing/mixing_test.cpp
-    mixing/no_alloc_test.cpp
-    mixing/routing_test.cpp
+    mixing/mixing_meter_panner_capi_test.cpp
+    mixing/mixing_automation_scene_test.cpp
+    mixing/mixing_channel_strip_test.cpp
+    mixing/mixing_bus_control_test.cpp
+    mixing/mixing_meter_lufs_integration_test.cpp
+    mixing/no_alloc_allocators.cpp
+    mixing/no_alloc_engine_mixing_test.cpp
+    mixing/no_alloc_mastering_eq_test.cpp
+    mixing/no_alloc_mastering_dynamics_test.cpp
+    mixing/no_alloc_voice_reverb_test.cpp
+    mixing/routing_latency_test.cpp
+    mixing/routing_scene_test.cpp
+    mixing/routing_capi_test.cpp
   )
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_mixing.cpp)
+  target_sources(sonare_tests PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_mixing.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
+  )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
 endif()
 
@@ -266,7 +300,13 @@ if(BUILD_PITCH_EDITOR)
 endif()
 
 if(BUILD_VOICE_CHANGER)
-  target_sources(sonare_tests PRIVATE editing/voice_changer_test.cpp)
+  target_sources(sonare_tests PRIVATE
+    editing/voice_changer_retune_formant_test.cpp
+    editing/voice_changer_realtime_core_test.cpp
+    editing/voice_changer_preset_capi_test.cpp
+    editing/voice_changer_realtime_dsp_test.cpp
+    editing/voice_changer_limiter_json_test.cpp
+  )
   target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
   target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_daw.cpp)
   target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_engine.cpp)
@@ -287,6 +327,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp
+    midi/smf2_roundtrip_test.cpp
     midi/midi_fx_test.cpp
     midi/program_map_test.cpp
     midi/midi_routing_test.cpp
@@ -296,11 +337,22 @@ if(BUILD_ARRANGEMENT)
     serialize/project_serializer_roundtrip_test.cpp
     serialize/project_deserialize_fuzz_test.cpp
     host/host_seam_test.cpp
-    bindings/binding_project_parity_test.cpp
+    engine/realtime_engine_midi_test.cpp
+    bindings/binding_project_c_surface_test.cpp
+    bindings/binding_project_bounce_test.cpp
+    bindings/binding_project_editing_test.cpp
+    bindings/binding_project_midi_test.cpp
   )
-  # The headless-project C ABI translation unit (compiled into the test binary so
-  # the parity test drives the real C surface, like the engine/voice-changer TUs).
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp)
+  # The headless-project C ABI sources are compiled into the test binary so the
+  # parity test drives the real C surface, like the engine/voice-changer TUs.
+  target_sources(sonare_tests PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_edit.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+  )
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ARRANGEMENT=1)
 

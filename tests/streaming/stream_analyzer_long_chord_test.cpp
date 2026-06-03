@@ -1,0 +1,327 @@
+/// @file stream_analyzer_long_chord_test.cpp
+/// @brief StreamAnalyzer long-stream and chord progression tests.
+
+#include "stream_analyzer_test_helpers.h"
+
+TEST_CASE("StreamAnalyzer onset accumulator is bounded over a long stream", "[streaming][bpm]") {
+  // Before the fix, every valid onset frame was push_back'd into
+  // onset_accumulator_ and only ever cleared on reset(). For a multi-minute
+  // track the accumulator grew to ~10k entries and every BPM update re-scanned
+  // the whole history, so memory and CPU grew monotonically. The fix bounds it
+  // to a sliding window (kOnsetWindowSeconds of onset frames). This test feeds
+  // far more than that window and asserts the size stays capped, while BPM is
+  // still estimated correctly for the known tempo after the cap is hit.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_onset = true;
+  config.compute_mel = true;
+  config.bpm_update_interval_sec = 5.0f;
+
+  StreamAnalyzer analyzer(config);
+
+  const size_t cap = analyzer.onset_window_frames_for_test();
+  REQUIRE(cap > 0);
+
+  // Stream ~90 seconds of a 120 BPM click train, which produces far more onset
+  // frames than the ~60 s window. Feed in chunks so trimming happens
+  // incrementally across many process() calls, like a real stream.
+  const int sr = 22050;
+  const int duration_sec = 90;
+  const int total_samples = sr * duration_sec;
+  const float bpm = 120.0f;
+  std::vector<float> audio = generate_click_train(total_samples, bpm, sr);
+
+  const size_t chunk = 4096;
+  for (size_t off = 0; off < audio.size(); off += chunk) {
+    const size_t n = std::min(chunk, audio.size() - off);
+    analyzer.process(audio.data() + off, n);
+    analyzer.read_frames(10000);  // Drain output so it does not dominate memory.
+
+    // Invariant must hold at every step, not just at the end.
+    REQUIRE(analyzer.onset_accumulator_size_for_test() <= cap);
+  }
+
+  // Total onset frames produced (~ total_samples / hop) vastly exceeds the cap,
+  // so the accumulator must actually be at its bound, proving trimming engaged.
+  const size_t approx_total_onset_frames =
+      static_cast<size_t>((total_samples - config.n_fft) / config.hop_length);
+  REQUIRE(approx_total_onset_frames > cap);
+  REQUIRE(analyzer.onset_accumulator_size_for_test() == cap);
+
+  // Trimming must not break BPM: the known-tempo signal still resolves to a
+  // plausible tempo with non-zero confidence after the cap is hit.
+  auto stats = analyzer.stats();
+  REQUIRE(stats.estimate.bpm >= 60.0f);
+  REQUIRE(stats.estimate.bpm <= 200.0f);
+  REQUIRE(stats.estimate.bpm_confidence > 0.0f);
+  // Expect the estimate near 120 BPM (or its 60/240 octave); allow the half/
+  // double-tempo ambiguity autocorrelation is prone to.
+  const float b = stats.estimate.bpm;
+  const bool near_tempo = std::abs(b - 120.0f) < 8.0f || std::abs(b - 60.0f) < 8.0f ||
+                          std::abs(b - 80.0f) < 8.0f || std::abs(b - 180.0f) < 8.0f;
+  REQUIRE(near_tempo);
+}
+
+// ============================================================================
+// H8 regression: compute_onset without compute_mel must not silently break BPM
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer onset auto-enables mel so BPM is not silently zero", "[streaming][bpm]") {
+  // Before the fix, requesting compute_onset=true with compute_mel=false caused
+  // compute_onset() to early-return 0 before marking has_prev_frame_, so onset
+  // strength was always 0, onset_valid never became true, the accumulator
+  // stayed empty, and BPM was stuck at 0/confidence 0 forever — with no
+  // diagnostic. The constructor now force-enables mel when onset is requested.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_onset = true;
+  config.compute_mel = false;  // Intentionally off — must be coerced on.
+  config.bpm_update_interval_sec = 5.0f;
+
+  StreamAnalyzer analyzer(config);
+
+  SECTION("constructor coerces compute_mel on and it is observable") {
+    REQUIRE(analyzer.config().compute_mel);
+  }
+
+  SECTION("onset becomes valid and BPM is computed on a rhythmic signal") {
+    const int sr = 22050;
+    const int duration_sec = 15;
+    std::vector<float> audio = generate_click_train(sr * duration_sec, 120.0f, sr);
+    analyzer.process(audio.data(), audio.size());
+
+    // onset_valid is now true for non-first frames (the silent-failure mode is
+    // gone).
+    auto frames = analyzer.read_frames(10000);
+    REQUIRE(frames.size() > 1);
+    bool any_onset_valid = false;
+    bool any_onset_nonzero = false;
+    for (const auto& f : frames) {
+      if (f.onset_valid) any_onset_valid = true;
+      if (f.onset_strength > 0.0f) any_onset_nonzero = true;
+    }
+    REQUIRE(any_onset_valid);
+    REQUIRE(any_onset_nonzero);
+
+    // BPM is now actually estimated instead of being stuck at 0.
+    auto stats = analyzer.stats();
+    REQUIRE(stats.estimate.bpm_candidate_count > 0);
+    REQUIRE(stats.estimate.bpm > 0.0f);
+    REQUIRE(stats.estimate.bpm_confidence > 0.0f);
+  }
+}
+
+// ============================================================================
+// Perf/container regression: full_chroma_history_ must stay bounded with O(1)
+// front-trimming (deque), and the downstream chroma-derived result must be
+// unchanged by the container switch.
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer full chroma history stays bounded over a long stream",
+          "[streaming][chord]") {
+  // full_chroma_history_ feeds retroactive bar-chord detection and is capped at
+  // kMaxChromaHistoryFrames. It used to be a std::vector trimmed with
+  // erase(begin()) every frame (an O(N) memmove of ~kMaxChromaHistoryFrames*12
+  // floats per frame); it is now a std::deque trimmed with an O(1) pop_front.
+  // The retained chroma CONTENT is identical — only the container/perf changes.
+  // This test feeds far more than the cap and asserts the history never exceeds
+  // it (the front-trim engaged) while the chroma-derived key estimate is still
+  // the expected, stable value for the known signal.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+  config.key_update_interval_sec = 3.0f;
+
+  StreamAnalyzer analyzer(config);
+
+  const size_t cap = StreamAnalyzer::full_chroma_history_cap_for_test();
+  REQUIRE(cap > 0);
+
+  // A frame is emitted every hop_length samples, so producing more than `cap`
+  // chroma frames requires > cap * hop_length samples. Feed comfortably past
+  // that so the front-trim is exercised many times. Use a sustained A (440 Hz)
+  // so the downstream key estimate is deterministic (pitch class 9 = A).
+  const int sr = 22050;
+  const size_t target_frames = cap + 600;
+  const int total_samples =
+      static_cast<int>((target_frames + 4) * static_cast<size_t>(config.hop_length));
+  std::vector<float> audio = generate_sine(total_samples, 440.0f, sr);
+
+  // Stream in chunks so trimming happens incrementally across many process()
+  // calls, like a real stream, and assert the invariant at every step.
+  const size_t chunk = 8192;
+  for (size_t off = 0; off < audio.size(); off += chunk) {
+    const size_t n = std::min(chunk, audio.size() - off);
+    analyzer.process(audio.data() + off, n);
+    analyzer.read_frames(100000);  // Drain output so it does not dominate memory.
+    REQUIRE(analyzer.full_chroma_history_size_for_test() <= cap);
+  }
+
+  // Many more chroma frames than the cap were produced, so the history must be
+  // pinned exactly at its bound — proving the front-trim actually engaged
+  // (a never-trimmed container would be far larger).
+  REQUIRE(analyzer.full_chroma_history_size_for_test() == cap);
+
+  // Downstream result unchanged: the sustained-A signal still resolves to key A.
+  auto stats = analyzer.stats();
+  REQUIRE(stats.estimate.key == 9);
+  REQUIRE(stats.estimate.key_confidence > 0.0f);
+
+  // reset() must clear the bounded history (deque::clear), like the old vector.
+  analyzer.reset();
+  REQUIRE(analyzer.full_chroma_history_size_for_test() == 0);
+}
+
+TEST_CASE("StreamAnalyzer vote-index encode/decode round-trips for extended qualities",
+          "[streaming][chord]") {
+  // Regression for the pattern-correction decode bug: corrections were encoded
+  // as `root * kNumChordQualities + quality` but decoded with the hardcoded
+  // `chord_idx / 4` / `chord_idx % 4`, corrupting every chord whose quality
+  // index was >= 4 (Dominant7 and beyond). The decode now uses
+  // kNumChordQualities. This test pins the round-trip for the exact (root,
+  // quality) pairs the old /4,%4 path corrupted, and demonstrates that the old
+  // formula disagrees with the encoding while the new one recovers it exactly.
+  const int q = sonare::kNumChordQualities;  // 17
+
+  struct Pair {
+    int root;
+    int quality;
+  };
+  // Qualities >= 4 are the cases the old %4 corrupted.
+  const Pair pairs[] = {
+      {0, static_cast<int>(sonare::ChordQuality::Dominant7)},  // 4
+      {3, static_cast<int>(sonare::ChordQuality::Major7)},     // 5
+      {7, static_cast<int>(sonare::ChordQuality::Minor7)},     // 6
+      {9, static_cast<int>(sonare::ChordQuality::Sus4)},       // 8
+      {11, static_cast<int>(sonare::ChordQuality::Sus2Add4)},  // 16
+  };
+
+  for (const auto& p : pairs) {
+    const int encoded = p.root * q + p.quality;
+    REQUIRE(encoded < sonare::StreamAnalyzer::kBarVoteSlots);
+
+    // Correct decode (post-fix): recovers the original pair exactly.
+    REQUIRE(encoded / q == p.root);
+    REQUIRE(encoded % q == p.quality);
+
+    // Old buggy decode (/4, %4) must NOT recover the pair for these qualities —
+    // proving the encoding/decode mismatch the fix removes.
+    const bool old_matches = (encoded / 4 == p.root) && (encoded % 4 == p.quality);
+    REQUIRE_FALSE(old_matches);
+  }
+}
+
+// ============================================================================
+// Regression: ChordChange::confidence must reflect the *completed* chord, not
+// the chord that triggered the transition.
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chord",
+          "[streaming][chord]") {
+  // Before the fix, when a chord transition was detected the recorded
+  // ChordChange stored `new_confidence` — the per-frame confidence of the NEW
+  // chord that triggered the change — even though root/quality belonged to the
+  // chord that just *ended*. Consumers therefore saw a different chord's
+  // confidence than the chord whose root/quality was reported.
+  //
+  // The fix accumulates the held chord's running-max confidence over its stable
+  // span (prev_chord_confidence_) and uses THAT at the transition. This test
+  // streams two sustained chords with clearly different detection confidences
+  // (a clean triad followed by a noise-contaminated triad) and asserts the
+  // first (completed) progression entry's confidence tracks the first chord's
+  // own held confidence — not the noisier second chord's.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+
+  StreamAnalyzer analyzer(config);
+
+  const int sr = 22050;
+  const float chord_sec = 4.0f;  // Each chord well past kChordMinDuration (0.3s).
+  const int chord_samples = static_cast<int>(chord_sec * sr);
+  const float amp = 0.3f;
+
+  // First chord: clean C major triad — C(261.63) + E(329.63) + G(392.00).
+  const float c_major[] = {261.63f, 329.63f, 392.00f};
+  // Second chord: G major triad — G(392.00) + B(493.88) + D(587.33) — but with
+  // additive broadband noise so its detection confidence is clearly lower than
+  // the clean first chord. A simple deterministic LCG keeps the test
+  // reproducible without <random> bringing in platform variation.
+  const float g_major[] = {392.00f, 493.88f, 587.33f};
+
+  std::vector<float> audio(static_cast<size_t>(2 * chord_samples), 0.0f);
+
+  // Clean first chord.
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : c_major) {
+      s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    }
+    audio[static_cast<size_t>(i)] = s;
+  }
+
+  // Noisy second chord.
+  uint32_t lcg = 0x12345678u;
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : g_major) {
+      s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    }
+    // Deterministic uniform noise in [-1, 1], scaled to clearly degrade the
+    // chroma match without masking the chord entirely.
+    lcg = lcg * 1664525u + 1013904223u;
+    const float noise = (static_cast<float>(lcg) / 4294967295.0f) * 2.0f - 1.0f;
+    s += 0.25f * noise;
+    audio[static_cast<size_t>(chord_samples + i)] = s;
+  }
+
+  analyzer.process(audio.data(), audio.size());
+
+  // Collect the per-frame confidences observed while the FIRST chord was held,
+  // so we can compare the recorded progression confidence against the first
+  // chord's own confidence range rather than a hardcoded magnitude.
+  auto frames = analyzer.read_frames(100000);
+  REQUIRE(frames.size() > 1);
+
+  const float first_chord_boundary = chord_sec;  // seconds
+  float first_chord_max_conf = 0.0f;
+  float second_chord_max_conf = 0.0f;
+  for (const auto& f : frames) {
+    if (f.timestamp < first_chord_boundary) {
+      first_chord_max_conf = std::max(first_chord_max_conf, f.chord_confidence);
+    } else {
+      second_chord_max_conf = std::max(second_chord_max_conf, f.chord_confidence);
+    }
+  }
+
+  // Sanity: the two chords must hold clearly DIFFERENT confidences, otherwise
+  // the test cannot tell whether the completed entry recorded the first chord's
+  // value or the second's. (Which one is larger is incidental and signal
+  // dependent; only their separation matters for discrimination.)
+  REQUIRE(first_chord_max_conf > 0.0f);
+  REQUIRE(second_chord_max_conf > 0.0f);
+  REQUIRE(std::abs(first_chord_max_conf - second_chord_max_conf) > 0.05f);
+
+  auto stats = analyzer.stats();
+  const auto& prog = stats.estimate.chord_progression;
+  REQUIRE_FALSE(prog.empty());
+
+  // The first progression entry corresponds to the COMPLETED first chord. Its
+  // recorded confidence must reflect the first chord's own held confidence
+  // (running-max over its stable span), i.e. close to first_chord_max_conf.
+  const ChordChange& completed = prog.front();
+  REQUIRE_THAT(completed.confidence, WithinAbs(first_chord_max_conf, 1e-3f));
+
+  // The pre-fix bug stored the second (triggering) chord's confidence here.
+  // Since the two chords hold clearly separated confidences (asserted above),
+  // matching the first proves it did NOT record the second's value.
+  REQUIRE(std::abs(completed.confidence - second_chord_max_conf) > 0.05f);
+}

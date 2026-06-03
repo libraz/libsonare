@@ -221,6 +221,34 @@ TEST_CASE("invalid project: dangling source ref returns an error and no timeline
   REQUIRE(found);
 }
 
+TEST_CASE("invalid project: clip source kind must match track kind", "[arrangement]") {
+  arr::Project project;
+  project.set_sample_rate(kProjectSr);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+
+  arr::MidiSourceRef midi_src;
+  const arr::SourceId sid = project.add_midi_source(midi_src);
+  arr::Track audio_track;
+  audio_track.kind = arr::Track::Kind::kAudio;
+  const arr::TrackId tid = project.add_track(audio_track);
+
+  arr::EditClip clip;
+  clip.track_id = tid;
+  clip.source_id = sid;
+  clip.start_ppq = 0.0;
+  clip.length_ppq = 1.0;
+  project.add_clip(clip);
+
+  arr::CompileResult r = arr::compile(project, arr::MidiContentStore{}, arr::AudioContentStore{});
+  REQUIRE(r.has_errors());
+  REQUIRE_FALSE(r.timeline.has_value());
+  bool found = false;
+  for (const auto& d : r.diagnostics) {
+    if (d.code == arr::Diagnostic::Code::kSourceKindMismatch) found = true;
+  }
+  REQUIRE(found);
+}
+
 TEST_CASE("invalid project: negative tempo returns an error and no timeline", "[arrangement]") {
   Fixture f = make_fixture();
   f.project.set_tempo_segments({{0.0, -120.0, 0.0}});
@@ -319,7 +347,111 @@ TEST_CASE("MIDI compile trims events outside the EditClip length", "[arrangement
   REQUIRE(events[1].render_frame == 66000);
 }
 
-TEST_CASE("MIDI compile expands looped clips on the control thread", "[arrangement]") {
+TEST_CASE("MIDI compile resolves SysEx handles to stable payload views", "[arrangement]") {
+  arr::Project project;
+  project.set_sample_rate(kProjectSr);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+
+  arr::MidiSourceRef src;
+  const arr::SourceId sid = project.add_midi_source(src);
+  arr::Track track;
+  track.kind = arr::Track::Kind::kMidi;
+  track.midi_destination_id = 31;
+  const arr::TrackId tid = project.add_track(track);
+
+  arr::EditClip clip;
+  clip.track_id = tid;
+  clip.source_id = sid;
+  clip.start_ppq = 1.0;
+  clip.length_ppq = 1.0;
+  const arr::ClipId cid = project.add_clip(clip);
+  REQUIRE(cid != 0);
+
+  constexpr uint32_t kHandle = 42;
+  const std::vector<uint8_t> payload = {0xF0, 0x7D, 0x10, 0x11, 0xF7};
+  const auto sysex = sonare::midi::make_sysex_handle(/*group=*/0, kHandle);
+
+  arr::MidiContentStore midi;
+  midi.sysex_payloads.emplace(kHandle, payload);
+  midi.events[cid] = {{0.0, sysex.words[0], sysex.words[1], kHandle}};
+
+  arr::CompileResult r = arr::compile(project, midi, arr::AudioContentStore{});
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->midi_clips.size() == 1);
+
+  const auto& schedule = r.timeline->midi_clips.front();
+  REQUIRE(schedule.destination_id == 31);
+  REQUIRE(schedule.events.size() == 1);
+  const auto& event = schedule.events.front();
+  REQUIRE(event.ump.sysex_handle == kHandle);
+  REQUIRE(event.sysex_payload == midi.sysex_payloads.at(kHandle).data());
+  REQUIRE(event.sysex_payload_size == payload.size());
+  REQUIRE(std::vector<uint8_t>(event.sysex_payload,
+                               event.sysex_payload + event.sysex_payload_size) == payload);
+}
+
+TEST_CASE("compiler stamps each MIDI clip with its track's destination id", "[arrangement]") {
+  arr::Project project;
+  project.set_sample_rate(kProjectSr);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+
+  // Two MIDI tracks routed to distinct destinations, each with one clip.
+  auto add_midi_track_clip = [&](uint32_t destination) {
+    arr::MidiSourceRef src;
+    const arr::SourceId sid = project.add_midi_source(src);
+    arr::Track track;
+    track.kind = arr::Track::Kind::kMidi;
+    track.midi_destination_id = destination;
+    const arr::TrackId tid = project.add_track(track);
+    arr::EditClip clip;
+    clip.track_id = tid;
+    clip.source_id = sid;
+    clip.start_ppq = 0.0;
+    clip.length_ppq = 1.0;
+    return project.add_clip(clip);
+  };
+  const arr::ClipId c_a = add_midi_track_clip(11);
+  const arr::ClipId c_b = add_midi_track_clip(22);
+
+  arr::MidiContentStore midi;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  midi.events[c_a] = {{0.0, on.words[0], 0}};
+  midi.events[c_b] = {{0.0, on.words[0], 0}};
+
+  arr::CompileResult r = arr::compile(project, midi, arr::AudioContentStore{});
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->midi_clips.size() == 2);
+
+  // Each compiled schedule carries its track's destination (not a collapsed 0).
+  uint32_t dest_a = 0, dest_b = 0;
+  for (const auto& sched : r.timeline->midi_clips) {
+    if (sched.id == c_a) dest_a = sched.destination_id;
+    if (sched.id == c_b) dest_b = sched.destination_id;
+  }
+  REQUIRE(dest_a == 11);
+  REQUIRE(dest_b == 22);
+
+  // Re-routing through the undoable command updates the compiled destination,
+  // and undo restores the original.
+  const arr::TrackId track_b = project.find_clip(c_b)->track_id;
+  arr::EditHistory history(project);
+  REQUIRE(history.apply(std::make_unique<arr::SetTrackMidiDestination>(track_b, 99)));
+  arr::CompileResult r2 = arr::compile(history.project(), midi, arr::AudioContentStore{});
+  REQUIRE(r2.timeline.has_value());
+  for (const auto& sched : r2.timeline->midi_clips) {
+    if (sched.id == c_b) REQUIRE(sched.destination_id == 99);
+  }
+  REQUIRE(history.undo());
+  arr::CompileResult r3 = arr::compile(history.project(), midi, arr::AudioContentStore{});
+  REQUIRE(r3.timeline.has_value());
+  for (const auto& sched : r3.timeline->midi_clips) {
+    if (sched.id == c_b) REQUIRE(sched.destination_id == 22);
+  }
+}
+
+TEST_CASE("MIDI compile emits one loop body for RT-looped clips", "[arrangement]") {
   arr::Project project;
   project.set_sample_rate(kProjectSr);
   project.set_tempo_segments({{0.0, 120.0, 0.0}});
@@ -352,14 +484,83 @@ TEST_CASE("MIDI compile expands looped clips on the control thread", "[arrangeme
   REQUIRE_FALSE(r.has_errors());
   REQUIRE(r.timeline.has_value());
   REQUIRE(r.timeline->midi_clips.size() == 1);
-  const auto& events = r.timeline->midi_clips.front().events;
-  REQUIRE(events.size() == 6);
+  const auto& sched = r.timeline->midi_clips.front();
+  REQUIRE(sched.loop_mode == sonare::midi::MidiLoopMode::kLoop);
+  REQUIRE(sched.loop_length_samples == 24000);
+  const auto& events = sched.events;
+  REQUIRE(events.size() == 2);
   REQUIRE(events[0].render_frame == 0);
   REQUIRE(events[1].render_frame == 18000);
-  REQUIRE(events[2].render_frame == 24000);
-  REQUIRE(events[3].render_frame == 42000);
-  REQUIRE(events[4].render_frame == 48000);
-  REQUIRE(events[5].render_frame == 66000);
+}
+
+TEST_CASE("compiler preserves independent audio fade curves", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->fade_in = arr::ClipFade{0.5, arr::FadeCurve::kExponential};
+  clip->fade_out = arr::ClipFade{0.5, arr::FadeCurve::kLogarithmic};
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.fade_in_curve == sonare::engine::FadeCurve::Exponential);
+  REQUIRE(sched.fade_out_curve == sonare::engine::FadeCurve::Logarithmic);
+}
+
+TEST_CASE("compiler passes audio loop length to ClipSchedule", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->loop_mode = arr::LoopMode::kLoop;
+  clip->loop_length_ppq = 0.5;
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  REQUIRE(r.timeline->audio_clips.front().loop);
+  REQUIRE(r.timeline->audio_clips.front().loop_length_samples == 12000);
+}
+
+TEST_CASE("compiler carries audio clip warp reference into the RT schedule", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  REQUIRE(r.timeline->audio_clips.front().warp_ref_id == 77);
+}
+
+TEST_CASE("compiler uses pre-baked warped audio when a warp reference is registered",
+          "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+
+  arr::AudioSourceSamples warped;
+  warped.sample_rate = kProjectSr;
+  warped.channels.push_back({0.75f, 0.5f, 0.25f});
+  warped.channels.push_back({-0.25f, -0.5f, -0.75f});
+  f.audio.warped_sources.emplace(77, std::move(warped));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.warp_ref_id == 77);
+  REQUIRE(sched.buffer.num_channels == 2);
+  REQUIRE(sched.buffer.num_samples == 3);
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels[0][0] == 0.75f);
+  REQUIRE(sched.storage->channels[1][2] == -0.75f);
 }
 
 TEST_CASE("apply_to_engine installs full tempo and time-signature maps", "[arrangement]") {

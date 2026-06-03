@@ -19,6 +19,7 @@ class FxBus : public rt::ProcessorBase {
   void reset() override;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int tail_samples() const noexcept override;
 
   void add_insert(std::unique_ptr<rt::ProcessorBase> processor);
   size_t num_inserts() const noexcept { return bus_.num_inserts(); }

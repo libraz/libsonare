@@ -99,6 +99,111 @@ std::string_view gm_drum_name(uint8_t note) noexcept;
 /// -1 if no GM percussion entry has that name.
 int gm_drum_note_for_name(std::string_view name) noexcept;
 
+/// The nine GM2 percussion sets, identified by the bank LSB that selects them on
+/// the GM2 percussion bank (bank MSB 0x78). The Standard set is the GM Level 1
+/// drum map; the other sets re-voice a handful of notes (the rest stay Standard).
+enum class Gm2DrumSet : uint8_t {
+  kStandard = 0,
+  kRoom = 8,
+  kPower = 16,
+  kElectronic = 24,
+  kAnalog = 25,
+  kJazz = 32,
+  kBrush = 40,
+  kOrchestra = 48,
+  kSfx = 56,
+};
+
+/// Returns the GM2 percussion name for a note on the drum channel within the
+/// percussion set selected by `bank_lsb` (bank MSB 0x78). A bank LSB that names
+/// a known GM2 set returns that set's name where it re-voices the note, falling
+/// back to the Standard GM name otherwise. Unknown bank LSBs are treated as the
+/// Standard set. Notes outside the GM drum range (35..81) return an empty view.
+std::string_view gm2_drum_name(uint8_t bank_lsb, uint8_t note) noexcept;
+
+/// Returns the human-readable name of the GM2 percussion set selected by
+/// `bank_lsb` (e.g. "Standard", "Room", "Jazz", "SFX"), or empty for a bank LSB
+/// that does not name a GM2 set.
+std::string_view gm2_drum_set_name(uint8_t bank_lsb) noexcept;
+
+// ===========================================================================
+// Per-destination drum-map override
+// ===========================================================================
+
+/// A per-destination drum-note remap: rewrites incoming drum-channel note
+/// numbers to the note numbers a particular instrument / sound module expects
+/// (e.g. routing a GM "Acoustic Snare" at note 38 to a custom kit's note). It is
+/// trivially copyable POD: the CONTROL thread builds it (set_note may allocate
+/// nothing — the table is fixed-capacity) and the RT path applies it with
+/// map_note() / remap, both allocation-free, lock-free and I/O-free.
+///
+/// Only entries that are explicitly set remap; any note without an entry passes
+/// through unchanged, so an empty override is the identity map. The override is
+/// scoped to the drum channel by the caller; map_note() itself does not inspect
+/// the channel.
+struct DrumMapOverride {
+  /// Maximum number of distinct note remaps. set_note() past this fails.
+  static constexpr size_t kMaxEntries = 128;
+
+  struct Entry {
+    uint8_t from = 0;
+    uint8_t to = 0;
+  };
+  std::array<Entry, kMaxEntries> entries{};
+  uint8_t count = 0;
+
+  /// CONTROL thread: map `from` -> `to`. Replaces an existing entry for `from`.
+  /// Returns false only when the table is full and `from` is new. `from`/`to`
+  /// are masked to 7 bits. A self-map (`from == to`) is stored verbatim.
+  bool set_note(uint8_t from, uint8_t to) noexcept {
+    const uint8_t f = static_cast<uint8_t>(from & 0x7Fu);
+    const uint8_t t = static_cast<uint8_t>(to & 0x7Fu);
+    for (uint8_t i = 0; i < count; ++i) {
+      if (entries[i].from == f) {
+        entries[i].to = t;
+        return true;
+      }
+    }
+    if (count >= kMaxEntries) return false;
+    entries[count++] = Entry{f, t};
+    return true;
+  }
+
+  /// Removes the remap for `from`. Returns true if one existed.
+  bool clear_note(uint8_t from) noexcept {
+    const uint8_t f = static_cast<uint8_t>(from & 0x7Fu);
+    for (uint8_t i = 0; i < count; ++i) {
+      if (entries[i].from == f) {
+        entries[i] = entries[count - 1];
+        --count;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void clear() noexcept { count = 0; }
+  bool empty() const noexcept { return count == 0; }
+
+  /// RT-safe: returns the remapped note for `note`, or `note` itself if it has
+  /// no override entry. Allocation-free, lock-free.
+  uint8_t map_note(uint8_t note) const noexcept {
+    const uint8_t n = static_cast<uint8_t>(note & 0x7Fu);
+    for (uint8_t i = 0; i < count; ++i) {
+      if (entries[i].from == n) return entries[i].to;
+    }
+    return n;
+  }
+};
+
+/// RT-safe: returns a copy of `ump` with its note number remapped through
+/// `map` when `ump` is a note-on / note-off / poly-pressure channel-voice
+/// message; any other message (and a note with no override) is returned
+/// unchanged. The note field is identical for MIDI 1.0 and 2.0, so this works
+/// for both protocols. Allocation-free; the caller scopes it to the drum
+/// channel. (Defined in program_map.cpp.)
+Ump remap_drum_note(const Ump& ump, const DrumMapOverride& map) noexcept;
+
 // ===========================================================================
 // Control change (CC) names
 // ===========================================================================

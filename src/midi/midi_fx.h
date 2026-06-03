@@ -29,12 +29,12 @@
 /// It does NOT depend on arrangement/ or engine/.
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "rt/overflow_counter.h"
 
 namespace sonare::midi {
 
@@ -79,12 +79,22 @@ struct TransposeConfig {
 /// the control thread can bake a PPQ grid (via TempoMap) into a frame interval
 /// before handing the chain to the audio thread.
 struct QuantizeConfig {
+  static constexpr size_t kMaxGrooveSteps = 16;
   bool enabled = false;
   /// Grid spacing in render frames (must be > 0 to take effect).
   int64_t grid_frames = 0;
   /// Quantize strength in [0, 1]; 1 == full snap to nearest grid line, 0 == no
   /// movement. Intermediate values move the event a fraction of the way.
   float strength = 1.0f;
+  /// Swing amount in [0, 1]. 0 uses a straight grid. Values > 0 delay every odd
+  /// grid line by up to half a grid step, so full swing maps line 1 to 1.5x
+  /// grid_frames while even lines remain fixed.
+  float swing = 0.0f;
+  /// Optional repeating groove-template offsets, expressed as fractions of
+  /// `grid_frames` per grid line. For example, {0, 0.1, -0.05, 0.0} delays line
+  /// 1 by 10% of the grid and pulls line 2 5% early. 0 disables the template.
+  size_t groove_steps = 0;
+  std::array<float, kMaxGrooveSteps> groove_offsets{};
 };
 
 /// Velocity remap for note-on events. The 7-bit input velocity is scaled and
@@ -149,8 +159,8 @@ struct HumanizeConfig {
 /// humanize act on the final event set.)
 class MidiFxChain {
  public:
-  void prepare() noexcept { overflow_count_.store(0, std::memory_order_relaxed); }
-  void reset() noexcept { overflow_count_.store(0, std::memory_order_relaxed); }
+  void prepare() noexcept { overflow_count_.reset(); }
+  void reset() noexcept { overflow_count_.reset(); }
 
   void set_transpose(const TransposeConfig& c) noexcept { transpose_ = c; }
   void set_quantize(const QuantizeConfig& c) noexcept { quantize_ = c; }
@@ -172,9 +182,7 @@ class MidiFxChain {
   void process(const MidiEvent* in, size_t count, MidiFxBuffer* out) noexcept;
 
   /// Telemetry: number of output events dropped because the buffer was full.
-  uint32_t overflow_count() const noexcept {
-    return overflow_count_.load(std::memory_order_relaxed);
-  }
+  uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
 
  private:
   // Stage helpers. Each reads `out` in place? No: stages that fan out write into
@@ -188,7 +196,7 @@ class MidiFxChain {
   ArpeggiatorConfig arpeggiator_{};
   HumanizeConfig humanize_{};
 
-  std::atomic<uint32_t> overflow_count_{0};
+  rt::OverflowCounter overflow_count_{};
 };
 
 // ---------------------------------------------------------------------------

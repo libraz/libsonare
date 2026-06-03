@@ -37,6 +37,7 @@
 ///     MIDI 2.0; converting them to MIDI 1.0 DROPS them (no 1.0 equivalent).
 ///   - Note-on attribute / per-note pitch (MIDI 2.0) is DROPPED on down-convert.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
@@ -236,6 +237,19 @@ Ump midi1_to_midi2(const Ump& ump) noexcept;
 /// (caller should drop them). Returns the original unchanged if `ump` is not a
 /// MIDI 2.0 channel-voice message.
 Ump midi2_to_midi1(const Ump& ump) noexcept;
+
+/// A MIDI 2.0 -> MIDI 1.0 conversion result that can carry multi-message
+/// lowerings such as bank-select CC#0/CC#32 plus program-change.
+struct Midi1MessageList {
+  std::array<Ump, 3> messages{};
+  uint8_t count = 0;
+};
+
+/// Down-converts one UMP into zero or more MIDI 1.0 channel-voice UMPs. Most
+/// channel-voice messages produce one output; a MIDI 2.0 Program Change with
+/// the bank-valid flag set produces CC#0, CC#32, and Program Change at the same
+/// timestamp. MIDI 2.0-only controller forms produce count == 0.
+Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept;
 
 /// 7-bit -> 16-bit velocity up-scale (MIDI-Association min/center/max scaling).
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept;

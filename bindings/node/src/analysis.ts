@@ -1,0 +1,308 @@
+import { addon } from './native.js';
+import type {
+  AcousticResult,
+  AnalysisProgressCallback,
+  AnalysisResult,
+  BpmAnalysisResult,
+  ChordAnalysisResult,
+  ChordChromaMethod,
+  DynamicsResult,
+  Key,
+  KeyCandidate,
+  KeyDetectionOptions,
+  MelodyResult,
+  RhythmResult,
+  RirResult,
+  RirSynthOptions,
+  RoomEstimateOptions,
+  RoomEstimateResult,
+  RoomMorphOptions,
+  Section,
+  TimbreResult,
+} from './types.js';
+
+export function detectBpm(samples: Float32Array, sampleRate = 22050): number {
+  return addon.detectBpm(samples, sampleRate);
+}
+
+export function detectKey(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: KeyDetectionOptions = {},
+): Key {
+  return addon.detectKey(samples, sampleRate, options);
+}
+
+export function detectKeyCandidates(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: KeyDetectionOptions = {},
+): KeyCandidate[] {
+  return addon.detectKeyCandidates(samples, sampleRate, options);
+}
+
+export function detectBeats(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.detectBeats(samples, sampleRate);
+}
+
+export function detectDownbeats(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.detectDownbeats(samples, sampleRate);
+}
+
+export function detectOnsets(samples: Float32Array, sampleRate = 22050): Float32Array {
+  return addon.detectOnsets(samples, sampleRate);
+}
+
+export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResult {
+  return addon.analyze(samples, sampleRate);
+}
+
+/**
+ * Synthesize a room impulse response from shoebox geometry. `hasError` is true
+ * when the source/listener falls outside the room (the RIR is then empty).
+ */
+export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
+  return addon.synthesizeRir(options);
+}
+
+/**
+ * Estimate an equivalent room (volume/dimensions/absorption/DRR) from a
+ * recording or impulse response. The volume scale is anchored by
+ * `referenceAbsorption`; `confidence` reports how well the data support it.
+ */
+export function estimateRoom(
+  samples: Float32Array,
+  sampleRate = 48000,
+  options: RoomEstimateOptions = {},
+): RoomEstimateResult {
+  return addon.estimateRoom(samples, sampleRate, options);
+}
+
+/**
+ * Morph a recording's reverberation toward a target room (creative FX, not
+ * dereverberation). Returns the morphed samples (input length plus the target
+ * room's reverb tail).
+ */
+export function roomMorph(
+  samples: Float32Array,
+  sampleRate: number,
+  options: RoomMorphOptions = {},
+): Float32Array {
+  return addon.roomMorph(samples, sampleRate, options);
+}
+
+/**
+ * Asynchronous variant of {@link analyze}. Runs the DSP pipeline on a libuv
+ * worker thread so the JS event loop is never blocked. The returned promise
+ * resolves with the same shape as the synchronous version.
+ */
+export function analyzeAsync(samples: Float32Array, sampleRate = 22050): Promise<AnalysisResult> {
+  return addon.analyzeAsync(samples, sampleRate);
+}
+
+/**
+ * Run the full music analysis, reporting per-stage progress.
+ *
+ * The progress callback is invoked synchronously during analysis with a
+ * normalized progress value in `[0, 1]` and the current stage name. The result
+ * shape matches {@link analyze}.
+ */
+export function analyzeWithProgress(
+  samples: Float32Array,
+  sampleRate = 22050,
+  onProgress: AnalysisProgressCallback,
+): AnalysisResult {
+  return addon.analyzeWithProgress(samples, sampleRate, onProgress);
+}
+
+/** Detect song-structure sections (intro/verse/chorus/...). */
+export function analyzeSections(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  minSectionSec = 4.0,
+): Section[] {
+  return addon.analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec);
+}
+
+/** Extract the melody contour from monophonic audio via YIN. */
+export function analyzeMelody(
+  samples: Float32Array,
+  sampleRate = 22050,
+  fmin = 65.0,
+  fmax = 2093.0,
+  frameLength = 2048,
+  hopLength = 256,
+  threshold = 0.1,
+): MelodyResult {
+  return addon.analyzeMelody(samples, sampleRate, fmin, fmax, frameLength, hopLength, threshold);
+}
+
+export function analyzeBpm(
+  samples: Float32Array,
+  sampleRate = 22050,
+  bpmMin = 30.0,
+  bpmMax = 300.0,
+  startBpm = 120.0,
+  nFft = 2048,
+  hopLength = 512,
+  maxCandidates = 5,
+): BpmAnalysisResult {
+  return addon.analyzeBpm(
+    samples,
+    sampleRate,
+    bpmMin,
+    bpmMax,
+    startBpm,
+    nFft,
+    hopLength,
+    maxCandidates,
+  );
+}
+
+export function analyzeRhythm(
+  samples: Float32Array,
+  sampleRate = 22050,
+  bpmMin = 60.0,
+  bpmMax = 200.0,
+  startBpm = 120.0,
+  nFft = 2048,
+  hopLength = 512,
+): RhythmResult {
+  return addon.analyzeRhythm(samples, sampleRate, bpmMin, bpmMax, startBpm, nFft, hopLength);
+}
+
+export function analyzeDynamics(
+  samples: Float32Array,
+  sampleRate = 22050,
+  windowSec = 0.4,
+  hopLength = 512,
+  compressionThreshold = 6.0,
+): DynamicsResult {
+  return addon.analyzeDynamics(samples, sampleRate, windowSec, hopLength, compressionThreshold);
+}
+
+export function analyzeImpulseResponse(
+  samples: Float32Array,
+  sampleRate = 48000,
+  nOctaveBands = 6,
+): AcousticResult {
+  return addon.analyzeImpulseResponse(samples, sampleRate, nOctaveBands);
+}
+
+export function detectAcoustic(
+  samples: Float32Array,
+  sampleRate = 48000,
+  nOctaveBands = 6,
+  nThirdOctaveSubbands = 24,
+  minDecayDb = 30.0,
+  noiseFloorMarginDb = 10.0,
+): AcousticResult {
+  return addon.detectAcoustic(
+    samples,
+    sampleRate,
+    nOctaveBands,
+    nThirdOctaveSubbands,
+    minDecayDb,
+    noiseFloorMarginDb,
+  );
+}
+
+export function analyzeTimbre(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nMfcc = 13,
+  windowSec = 0.5,
+): TimbreResult {
+  return addon.analyzeTimbre(samples, sampleRate, nFft, hopLength, nMels, nMfcc, windowSec);
+}
+
+export function detectChords(
+  samples: Float32Array,
+  sampleRate = 22050,
+  minDuration = 0.3,
+  smoothingWindow = 2.0,
+  threshold = 0.5,
+  useTriadsOnly = false,
+  nFft = 2048,
+  hopLength = 512,
+  useBeatSync = true,
+  useHmm = false,
+  hmmBeamWidth = 24,
+  useKeyContext = false,
+  keyRoot = 0,
+  keyMode = 0,
+  detectInversions = false,
+  chromaMethod: ChordChromaMethod = 'stft',
+): ChordAnalysisResult {
+  return addon.detectChords(
+    samples,
+    sampleRate,
+    minDuration,
+    smoothingWindow,
+    threshold,
+    useTriadsOnly,
+    nFft,
+    hopLength,
+    useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
+    keyRoot,
+    keyMode,
+    detectInversions,
+    chordChromaMethodValue(chromaMethod),
+  );
+}
+
+export function chordFunctionalAnalysis(
+  samples: Float32Array,
+  keyRoot: number,
+  keyMode = 0,
+  sampleRate = 22050,
+  minDuration = 0.3,
+  smoothingWindow = 2.0,
+  threshold = 0.5,
+  useTriadsOnly = false,
+  nFft = 2048,
+  hopLength = 512,
+  useBeatSync = true,
+  useHmm = false,
+  hmmBeamWidth = 24,
+  useKeyContext = false,
+  detectInversions = false,
+  chromaMethod: ChordChromaMethod = 'stft',
+): string[] {
+  return addon.chordFunctionalAnalysis(
+    samples,
+    keyRoot,
+    keyMode,
+    sampleRate,
+    minDuration,
+    smoothingWindow,
+    threshold,
+    useTriadsOnly,
+    nFft,
+    hopLength,
+    useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
+    detectInversions,
+    chordChromaMethodValue(chromaMethod),
+  );
+}
+
+function chordChromaMethodValue(method: ChordChromaMethod): number {
+  if (method === 'stft') {
+    return 0;
+  }
+  if (method === 'nnls') {
+    return 1;
+  }
+  throw new Error(`Invalid chord chroma method: ${method}`);
+}

@@ -53,6 +53,14 @@ int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inse
   return total;
 }
 
+int total_tail_samples(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
+  int total = 0;
+  for (const auto& insert : inserts) {
+    total += std::max(0, insert->tail_samples());
+  }
+  return total;
+}
+
 float aggregate_gain_reduction_db(
     const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
   float reduction_db = 0.0f;
@@ -454,6 +462,9 @@ void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::Processo
       // Leave directly configured processor sidechains intact. Graph-managed
       // keys are marked through set_insert_sidechain().
     }
+    if (inserts[local]->bypassed()) {
+      continue;
+    }
     inserts[local]->process(channels, num_channels, num_samples);
   }
 }
@@ -494,6 +505,10 @@ void ChannelStrip::reset() {
 int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
 
 int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }
+
+int ChannelStrip::tail_samples() const noexcept {
+  return total_tail_samples(pre_inserts_) + total_tail_samples(post_inserts_);
+}
 
 int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {
   return alignment_delay_.latency_samples_q8() + total_latency_q8(pre_inserts_);

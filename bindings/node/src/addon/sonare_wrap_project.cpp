@@ -13,7 +13,7 @@ namespace {
 // bindings' EXPECTED_PROJECT_ABI_VERSION. A mismatch means the loaded native
 // binary lays out the flat project PODs differently than this addon expects (or
 // arrangement support was compiled out, in which case the runtime version is 0).
-constexpr uint32_t kExpectedProjectAbiVersion = 1;
+constexpr uint32_t kExpectedProjectAbiVersion = 3;
 
 void ThrowIfError(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {
@@ -51,32 +51,36 @@ int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback
 Napi::FunctionReference ProjectWrap::constructor;
 
 Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func =
-      DefineClass(env, "Project",
-                  {
-                      InstanceMethod<&ProjectWrap::ToJson>("toJson"),
-                      InstanceMethod<&ProjectWrap::SetSampleRate>("setSampleRate"),
-                      InstanceMethod<&ProjectWrap::AddTrack>("addTrack"),
-                      InstanceMethod<&ProjectWrap::AddClip>("addClip"),
-                      InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip"),
-                      InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),
-                      InstanceMethod<&ProjectWrap::TrimClip>("trimClip"),
-                      InstanceMethod<&ProjectWrap::MoveClip>("moveClip"),
-                      InstanceMethod<&ProjectWrap::Undo>("undo"),
-                      InstanceMethod<&ProjectWrap::Redo>("redo"),
-                      InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents"),
-                      InstanceMethod<&ProjectWrap::ImportSmf>("importSmf"),
-                      InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf"),
-                      InstanceMethod<&ProjectWrap::SetProgram>("setProgram"),
-                      InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel"),
-                      InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
-                      InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
-                      InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),
-                      InstanceMethod<&ProjectWrap::Compile>("compile"),
-                      InstanceMethod<&ProjectWrap::Bounce>("bounce"),
-                      InstanceMethod<&ProjectWrap::Destroy>("destroy"),
-                      StaticMethod<&ProjectWrap::FromJson>("fromJson"),
-                  });
+  Napi::Function func = DefineClass(
+      env, "Project",
+      {
+          InstanceMethod<&ProjectWrap::ToJson>("toJson"),
+          InstanceMethod<&ProjectWrap::SetSampleRate>("setSampleRate"),
+          InstanceMethod<&ProjectWrap::AddTrack>("addTrack"),
+          InstanceMethod<&ProjectWrap::AddClip>("addClip"),
+          InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip"),
+          InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),
+          InstanceMethod<&ProjectWrap::TrimClip>("trimClip"),
+          InstanceMethod<&ProjectWrap::MoveClip>("moveClip"),
+          InstanceMethod<&ProjectWrap::SetClipWarpRef>("setClipWarpRef"),
+          InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination"),
+          InstanceMethod<&ProjectWrap::Undo>("undo"),
+          InstanceMethod<&ProjectWrap::Redo>("redo"),
+          InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents"),
+          InstanceMethod<&ProjectWrap::ImportSmf>("importSmf"),
+          InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf"),
+          InstanceMethod<&ProjectWrap::ImportClipFile>("importClipFile"),
+          InstanceMethod<&ProjectWrap::ExportClipFile>("exportClipFile"),
+          InstanceMethod<&ProjectWrap::SetProgram>("setProgram"),
+          InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel"),
+          InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
+          InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
+          InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),
+          InstanceMethod<&ProjectWrap::Compile>("compile"),
+          InstanceMethod<&ProjectWrap::Bounce>("bounce"),
+          InstanceMethod<&ProjectWrap::Destroy>("destroy"),
+          StaticMethod<&ProjectWrap::FromJson>("fromJson"),
+      });
   constructor = Napi::Persistent(func);
   constructor.SuppressDestruct();
   exports.Set("Project", func);
@@ -279,6 +283,20 @@ Napi::Value ProjectWrap::MoveClip(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value ProjectWrap::SetClipWarpRef(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_clip_warp_ref(project_, Uint32Arg(info, 0, 0),
+                                                     Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTrackMidiDestination(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_track_midi_destination(project_, Uint32Arg(info, 0, 0),
+                                                              Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
 Napi::Value ProjectWrap::Undo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_project_undo(project_));
@@ -354,6 +372,41 @@ Napi::Value ProjectWrap::ExportSmf(const Napi::CallbackInfo& info) {
   uint8_t* bytes = nullptr;
   size_t len = 0;
   ThrowIfError(env, sonare_project_export_smf(project_, &bytes, &len));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::Copy(env, bytes != nullptr ? bytes : nullptr,
+                                                          bytes != nullptr ? len : 0);
+  if (bytes != nullptr) sonare_free_bytes(bytes);
+  return out;
+}
+
+Napi::Value ProjectWrap::ImportClipFile(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t* bytes = nullptr;
+  size_t len = 0;
+  if (info.Length() > 0 && info[0].IsBuffer()) {
+    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
+    bytes = buf.Data();
+    len = buf.Length();
+  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
+    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
+    bytes = arr.Data();
+    len = arr.ByteLength();
+  } else {
+    Napi::TypeError::New(env, "importClipFile expects a Buffer or Uint8Array")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  uint32_t out_id = 0;
+  ThrowIfError(env, sonare_project_import_clip_file(project_, bytes, len, &out_id));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, out_id);
+}
+
+Napi::Value ProjectWrap::ExportClipFile(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  ThrowIfError(env, sonare_project_export_clip_file(project_, &bytes, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::Copy(env, bytes != nullptr ? bytes : nullptr,
                                                           bytes != nullptr ? len : 0);

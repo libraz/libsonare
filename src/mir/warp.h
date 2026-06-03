@@ -5,10 +5,10 @@
 ///
 /// This is an OFFLINE, control-plane-only component (subsystem sonare::mir).
 /// It NEVER runs on the audio thread. It MAY allocate freely. It does NOT
-/// re-implement DSP: chroma comes from feature/chroma, the DTW core comes from
-/// util/sequence, source separation from effects/hpss, and time-scale
-/// modification from effects/phase_vocoder (harmonic, phase-locked) and a
-/// reused OLA path (percussive). See @ref mir_warp_tsm.
+/// re-implement broad DSP stacks: chroma comes from feature/chroma, the DTW core
+/// comes from util/sequence, source separation from effects/hpss, and
+/// time-scale modification uses effects/phase_vocoder for harmonic content plus
+/// a local WSOLA path for percussive transients. See @ref mir_warp_tsm.
 ///
 /// The module exposes three capabilities:
 ///   1. WarpMap: a piecewise-linear, strictly monotonic map between "warp time"
@@ -171,14 +171,12 @@ ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
 ///   * HARMONIC component -> phase-vocoder with identity phase-locking
 ///     (effects/phase_vocoder `phase_vocoder_phaselocked`, Laroche & Dolson
 ///     1999). Phase-locking keeps tonal partials coherent and avoids phasiness.
-///   * PERCUSSIVE component -> a windowed overlap-add (OLA) resynthesis at the
-///     stretched hop. libsonare has no standalone WSOLA implementation in
-///     effects/; instead of re-deriving WSOLA here (which would duplicate DSP
-///     this module is forbidden from owning), we reuse the existing STFT/iSTFT
-///     OLA machinery by stretching the percussive spectrogram's FRAME POSITIONS
-///     without phase propagation (magnitude/phase carried per source frame),
-///     which preserves transient sharpness far better than a phase vocoder.
-///     This substitution documents the chosen transient-preserving implementation.
+///   * PERCUSSIVE component -> deterministic waveform-similarity overlap-add
+///     (WSOLA). Each synthesis frame advances on the target grid, searches a
+///     bounded neighborhood around the nominal source position, and chooses the
+///     source frame whose overlap best matches the already-rendered waveform.
+///     This avoids nearest-frame replication stutter while keeping transient
+///     attacks sharper than a phase vocoder.
 ///
 /// Both paths share the same `n_fft`/`hop_length` analysis grid so the summed
 /// output stays aligned.
@@ -204,10 +202,11 @@ Audio warp_to_length(const Audio& audio, size_t target_length,
 
 /// @brief Time-scales `audio` so its source timeline follows `map`.
 /// @details The output length is taken from the warp-axis span of `map`
-///   (map.warp_to_source covers [0, output_length)). For the current scope the
-///   warp is realized as a single global rate equal to the average
-///   source/warp slope of the map; segment-wise variable-rate warping is a
-///   future extension and is documented as such. Deterministic.
+///   (map.warp_to_source covers [0, output_length)). Each adjacent anchor pair
+///   is rendered as its own source segment and time-scaled to the corresponding
+///   warp-axis segment length, then concatenated. This preserves local tempo
+///   changes encoded in the map instead of collapsing them to one global rate.
+///   Deterministic.
 /// @param audio Input signal whose timeline is the map's SOURCE axis.
 /// @param map A valid WarpMap.
 /// @param config Analysis / HPSS parameters.

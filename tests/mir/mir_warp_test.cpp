@@ -4,6 +4,7 @@
 ///        component-specific TSM length-target + determinism + transient
 ///        preservation.
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -22,6 +23,7 @@ using sonare::mir::chroma_dtw_align;
 using sonare::mir::ChromaDtwConfig;
 using sonare::mir::ChromaDtwResult;
 using sonare::mir::warp_to_length;
+using sonare::mir::warp_to_map;
 using sonare::mir::WarpAnchor;
 using sonare::mir::WarpMap;
 using sonare::mir::WarpTsmConfig;
@@ -72,6 +74,20 @@ double total_energy(const Audio& a) {
   double e = 0.0;
   for (size_t i = 0; i < a.size(); ++i) e += static_cast<double>(a[i]) * a[i];
   return e;
+}
+
+std::vector<size_t> peak_positions(const Audio& a, float threshold, size_t refractory) {
+  std::vector<size_t> peaks;
+  size_t next_allowed = 0;
+  for (size_t i = 1; i + 1 < a.size(); ++i) {
+    const float v = std::abs(a[i]);
+    if (i < next_allowed || v < threshold) continue;
+    if (v >= std::abs(a[i - 1]) && v >= std::abs(a[i + 1])) {
+      peaks.push_back(i);
+      next_allowed = i + refractory;
+    }
+  }
+  return peaks;
 }
 
 }  // namespace
@@ -198,6 +214,35 @@ TEST_CASE("TSM hits exact target length and is deterministic", "[mir]") {
   REQUIRE(stable_hash(b1) == stable_hash(b2));
 }
 
+TEST_CASE("warp_to_map follows local segment rates instead of one global rate", "[mir]") {
+  const int sr = 22050;
+  Audio tone = make_tone(sr, 330.0, 0.7);
+  const double n = static_cast<double>(tone.size());
+
+  WarpTsmConfig cfg;
+  cfg.n_fft = 512;
+  cfg.hop_length = 128;
+  cfg.hpss_kernel_harmonic = 7;
+  cfg.hpss_kernel_percussive = 7;
+
+  const WarpMap global = WarpMap::from_anchors({{0.0, 0.0}, {n, n}});
+  const WarpMap segmented = WarpMap::from_anchors({{0.0, 0.0}, {n * 0.5, n * 0.25}, {n, n}});
+
+  Audio global_out = warp_to_map(tone, global, cfg);
+  Audio segmented_a = warp_to_map(tone, segmented, cfg);
+  Audio segmented_b = warp_to_map(tone, segmented, cfg);
+
+  REQUIRE(global_out.size() == tone.size());
+  REQUIRE(segmented_a.size() == tone.size());
+  REQUIRE(segmented_b.size() == tone.size());
+
+  std::vector<float> ga(global_out.begin(), global_out.end());
+  std::vector<float> sa(segmented_a.begin(), segmented_a.end());
+  std::vector<float> sb(segmented_b.begin(), segmented_b.end());
+  REQUIRE(stable_hash(sa) == stable_hash(sb));
+  REQUIRE(stable_hash(sa) != stable_hash(ga));
+}
+
 TEST_CASE("TSM preserves percussive energy within tolerance", "[mir]") {
   const int sr = 22050;
   Audio clicks = make_clicks(sr, 1.0, 8.0);  // 8 clicks/sec.
@@ -216,4 +261,33 @@ TEST_CASE("TSM preserves percussive energy within tolerance", "[mir]") {
   // Within a factor of ~2 (loose but catches gross transient destruction).
   REQUIRE(out_density > in_density * 0.4);
   REQUIRE(out_density < in_density * 2.5);
+}
+
+TEST_CASE("TSM uses WSOLA to stretch percussive click spacing", "[mir]") {
+  const int sr = 22050;
+  const double click_hz = 8.0;
+  Audio clicks = make_clicks(sr, 1.0, click_hz);
+
+  WarpTsmConfig cfg;
+  cfg.n_fft = 512;
+  cfg.hop_length = 128;
+  cfg.hpss_kernel_harmonic = 7;
+  cfg.hpss_kernel_percussive = 7;
+
+  const size_t target = clicks.size() * 2;
+  Audio out = warp_to_length(clicks, target, cfg);
+  REQUIRE(out.size() == target);
+
+  const size_t input_period = static_cast<size_t>(std::llround(sr / click_hz));
+  const size_t expected_period = input_period * 2;
+  const std::vector<size_t> peaks = peak_positions(out, 0.18f, input_period);
+  REQUIRE(peaks.size() >= 5);
+
+  std::vector<size_t> gaps;
+  for (size_t i = 1; i < peaks.size(); ++i) gaps.push_back(peaks[i] - peaks[i - 1]);
+  std::sort(gaps.begin(), gaps.end());
+  const size_t median_gap = gaps[gaps.size() / 2];
+
+  REQUIRE(median_gap > input_period + input_period / 2);
+  REQUIRE(median_gap == Catch::Approx(static_cast<double>(expected_period)).margin(input_period));
 }

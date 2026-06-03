@@ -99,6 +99,12 @@ Fixture make_fixture() {
   aclip.warp_ref_id = 5;
   const ClipId aclip_id = p.add_clip(aclip);
 
+  WarpMapRef warp;
+  warp.id = 5;
+  warp.name = "audio warp";
+  warp.anchors = {{0.0, 0.0}, {48000.0, 44100.0}, {96000.0, 90000.0}};
+  REQUIRE(p.set_warp_map(warp));
+
   // MIDI clip.
   EditClip mclip;
   mclip.track_id = mtid;
@@ -214,6 +220,7 @@ bool eq(const Track& a, const Track& b) {
   if (a.id != b.id || a.name != b.name || a.kind != b.kind) return false;
   if (a.channel_strip_ref != b.channel_strip_ref || a.output_target != b.output_target)
     return false;
+  if (a.midi_destination_id != b.midi_destination_id) return false;
   if (a.automation_lanes.size() != b.automation_lanes.size()) return false;
   for (size_t i = 0; i < a.automation_lanes.size(); ++i) {
     if (!eq(a.automation_lanes[i], b.automation_lanes[i])) return false;
@@ -249,9 +256,81 @@ bool eq(const AssistSidecar& a, const AssistSidecar& b) {
          a.region_start_ppq == b.region_start_ppq && a.region_end_ppq == b.region_end_ppq;
 }
 
+bool eq(const WarpMapRef& a, const WarpMapRef& b) {
+  return a.id == b.id && a.name == b.name && a.anchors == b.anchors;
+}
+
+bool eq(const mixing::api::Insert& a, const mixing::api::Insert& b) {
+  return a.slot == b.slot && a.processor_name == b.processor_name &&
+         a.params_json == b.params_json && a.sidechain_key == b.sidechain_key;
+}
+
+bool eq(const mixing::api::Send& a, const mixing::api::Send& b) {
+  return a.id == b.id && a.destination_bus_id == b.destination_bus_id && a.send_db == b.send_db &&
+         a.timing == b.timing;
+}
+
+bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
+  if (a.id != b.id || a.input_trim_db != b.input_trim_db || a.fader_db != b.fader_db ||
+      a.pan != b.pan || a.width != b.width || a.muted != b.muted || a.soloed != b.soloed ||
+      a.solo_safe != b.solo_safe || a.pan_mode != b.pan_mode ||
+      a.dual_pan_left != b.dual_pan_left || a.dual_pan_right != b.dual_pan_right ||
+      a.polarity_invert_left != b.polarity_invert_left ||
+      a.polarity_invert_right != b.polarity_invert_right || a.pan_law != b.pan_law ||
+      a.channel_delay_samples != b.channel_delay_samples || a.inserts.size() != b.inserts.size() ||
+      a.sends.size() != b.sends.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < a.inserts.size(); ++i) {
+    if (!eq(a.inserts[i], b.inserts[i])) return false;
+  }
+  for (size_t i = 0; i < a.sends.size(); ++i) {
+    if (!eq(a.sends[i], b.sends[i])) return false;
+  }
+  return true;
+}
+
+bool eq(const mixing::api::Bus& a, const mixing::api::Bus& b) {
+  if (a.id != b.id || a.role != b.role || a.inserts.size() != b.inserts.size()) return false;
+  for (size_t i = 0; i < a.inserts.size(); ++i) {
+    if (!eq(a.inserts[i], b.inserts[i])) return false;
+  }
+  return true;
+}
+
+bool eq(const mixing::api::VcaGroup& a, const mixing::api::VcaGroup& b) {
+  return a.id == b.id && a.gain_db == b.gain_db && a.members == b.members;
+}
+
+bool eq(const mixing::api::Connection& a, const mixing::api::Connection& b) {
+  return a.source == b.source && a.destination == b.destination;
+}
+
+bool eq(const mixing::api::Scene& a, const mixing::api::Scene& b) {
+  if (a.version != b.version || a.strips.size() != b.strips.size() ||
+      a.buses.size() != b.buses.size() || a.vca_groups.size() != b.vca_groups.size() ||
+      a.connections.size() != b.connections.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < a.strips.size(); ++i) {
+    if (!eq(a.strips[i], b.strips[i])) return false;
+  }
+  for (size_t i = 0; i < a.buses.size(); ++i) {
+    if (!eq(a.buses[i], b.buses[i])) return false;
+  }
+  for (size_t i = 0; i < a.vca_groups.size(); ++i) {
+    if (!eq(a.vca_groups[i], b.vca_groups[i])) return false;
+  }
+  for (size_t i = 0; i < a.connections.size(); ++i) {
+    if (!eq(a.connections[i], b.connections[i])) return false;
+  }
+  return true;
+}
+
 void check_project_equal(const Project& a, const Project& b) {
   CHECK(a.sample_rate() == b.sample_rate());
   CHECK(a.overlap_policy() == b.overlap_policy());
+  CHECK(eq(a.scene(), b.scene()));
 
   REQUIRE(a.tempo_segments().size() == b.tempo_segments().size());
   for (size_t i = 0; i < a.tempo_segments().size(); ++i)
@@ -276,6 +355,9 @@ void check_project_equal(const Project& a, const Project& b) {
 
   REQUIRE(a.clips().size() == b.clips().size());
   for (size_t i = 0; i < a.clips().size(); ++i) CHECK(eq(a.clips()[i], b.clips()[i]));
+
+  REQUIRE(a.warp_maps().size() == b.warp_maps().size());
+  for (size_t i = 0; i < a.warp_maps().size(); ++i) CHECK(eq(a.warp_maps()[i], b.warp_maps()[i]));
 
   REQUIRE(a.markers().size() == b.markers().size());
   for (size_t i = 0; i < a.markers().size(); ++i) {
@@ -335,6 +417,80 @@ TEST_CASE("project round-trip preserves all fields", "[serialize]") {
 
   check_project_equal(f.project, *result.project);
   CHECK(result.midi == f.midi);  // MidiContentStore deep-equal.
+}
+
+TEST_CASE("project scene JSON uses stable camelCase keys", "[serialize]") {
+  Fixture f = make_fixture();
+  const auto root = util::json::parse(project_to_json(f.project, f.midi));
+  REQUIRE(root.is_object());
+  REQUIRE(root["scene"].is_object());
+  const auto& scene = root["scene"];
+
+  CHECK(scene.contains("vcaGroups"));
+  CHECK_FALSE(scene.contains("vca_groups"));
+  REQUIRE(scene["strips"].is_array());
+  REQUIRE_FALSE(scene["strips"].as_array().empty());
+  const auto& strip = scene["strips"].as_array()[0];
+  REQUIRE(strip.is_object());
+  CHECK(strip.contains("inputTrimDb"));
+  CHECK(strip.contains("faderDb"));
+  CHECK(strip.contains("soloSafe"));
+  CHECK_FALSE(strip.contains("input_trim_db"));
+  CHECK_FALSE(strip.contains("fader_db"));
+  CHECK_FALSE(strip.contains("solo_safe"));
+
+  REQUIRE(strip["sends"].is_array());
+  REQUIRE_FALSE(strip["sends"].as_array().empty());
+  const auto& send = strip["sends"].as_array()[0];
+  CHECK(send.contains("destinationBusId"));
+  CHECK(send.contains("sendDb"));
+  CHECK_FALSE(send.contains("destination_bus_id"));
+  CHECK_FALSE(send.contains("send_db"));
+}
+
+TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[serialize]") {
+  Project project;
+  MidiContentStore midi;
+  auto root = util::json::parse(project_to_json(project, midi));
+  root.as_object()["scene"] = util::json::parse(
+      "{\"version\":1,\"strips\":[{\"id\":\"legacy\",\"input_trim_db\":1.5,"
+      "\"fader_db\":-4,\"pan\":0.25,\"width\":1.1,\"muted\":false,\"soloed\":true,"
+      "\"solo_safe\":true,\"pan_mode\":2,\"dual_pan_left\":-0.4,"
+      "\"dual_pan_right\":0.6,\"polarity_invert_left\":true,"
+      "\"polarity_invert_right\":false,\"pan_law\":3,\"channel_delay_samples\":21,"
+      "\"inserts\":[],\"sends\":[{\"id\":\"send\",\"destination_bus_id\":\"bus\","
+      "\"send_db\":-8,\"timing\":\"pre\"}]}],\"buses\":[],"
+      "\"vca_groups\":[{\"id\":\"vca\",\"gain_db\":-2,\"members\":[\"legacy\"]}],"
+      "\"connections\":[{\"source\":\"legacy\",\"destination\":\"bus\"}]}");
+
+  auto decoded = project_from_json(util::json::dump(root));
+  REQUIRE(decoded.ok());
+  const auto& scene = decoded.project->scene();
+  REQUIRE(scene.strips.size() == 1);
+  CHECK(scene.strips[0].id == "legacy");
+  CHECK(scene.strips[0].input_trim_db == 1.5f);
+  CHECK(scene.strips[0].fader_db == -4.0f);
+  CHECK(scene.strips[0].solo_safe);
+  CHECK(scene.strips[0].pan_mode == 2);
+  CHECK(scene.strips[0].dual_pan_left == -0.4f);
+  CHECK(scene.strips[0].dual_pan_right == 0.6f);
+  CHECK(scene.strips[0].polarity_invert_left);
+  CHECK(scene.strips[0].pan_law == 3);
+  CHECK(scene.strips[0].channel_delay_samples == 21);
+  REQUIRE(scene.strips[0].sends.size() == 1);
+  CHECK(scene.strips[0].sends[0].destination_bus_id == "bus");
+  CHECK(scene.strips[0].sends[0].send_db == -8.0f);
+  CHECK(scene.strips[0].sends[0].timing == mixing::api::SendTiming::PreFader);
+  REQUIRE(scene.vca_groups.size() == 1);
+  CHECK(scene.vca_groups[0].id == "vca");
+  CHECK(scene.vca_groups[0].gain_db == -2.0f);
+  CHECK(scene.vca_groups[0].members == std::vector<std::string>{"legacy"});
+  REQUIRE(scene.connections.size() == 1);
+  CHECK(scene.connections[0].destination == "bus");
+
+  const auto normalized = util::json::parse(project_to_json(*decoded.project, decoded.midi));
+  CHECK(normalized["scene"].contains("vcaGroups"));
+  CHECK_FALSE(normalized["scene"].contains("vca_groups"));
 }
 
 TEST_CASE("project deserialize preserves next id counters without gaps", "[serialize]") {
@@ -426,4 +582,138 @@ TEST_CASE("AssistSidecar with unregistered module + binary payload round-trips l
 
   const std::string s2 = project_to_json(*result.project, result.midi);
   CHECK(s1 == s2);
+}
+
+TEST_CASE("AudioSourceRef content_hash round-trips when set", "[serialize]") {
+  Project p;
+  MidiContentStore midi;
+  AudioSourceRef audio;
+  audio.uri = "file://x.wav";
+  audio.content_hash = "sha256:deadbeef";
+  p.add_audio_source(audio);
+
+  const std::string s1 = project_to_json(p, midi);
+  // The key is present only because the hash is set.
+  CHECK(s1.find("content_hash") != std::string::npos);
+
+  auto result = project_from_json(s1);
+  REQUIRE(result.ok());
+  REQUIRE(result.project->sources().size() == 1);
+  const auto* restored = std::get_if<AudioSourceRef>(&result.project->sources()[0]);
+  REQUIRE(restored != nullptr);
+  CHECK(restored->content_hash == "sha256:deadbeef");
+
+  const std::string s2 = project_to_json(*result.project, result.midi);
+  CHECK(s1 == s2);
+}
+
+TEST_CASE("AudioSourceRef without content_hash omits the key (byte-stable)", "[serialize]") {
+  Project p;
+  MidiContentStore midi;
+  AudioSourceRef audio;
+  audio.uri = "file://x.wav";  // content_hash left empty (default)
+  p.add_audio_source(audio);
+
+  const std::string s = project_to_json(p, midi);
+  // Empty hash must NOT appear so existing projects stay byte-identical.
+  CHECK(s.find("content_hash") == std::string::npos);
+
+  // Absent hash loads back as empty.
+  auto result = project_from_json(s);
+  REQUIRE(result.ok());
+  REQUIRE(result.project->sources().size() == 1);
+  const auto* restored = std::get_if<AudioSourceRef>(&result.project->sources()[0]);
+  REQUIRE(restored != nullptr);
+  CHECK(restored->content_hash.empty());
+}
+
+TEST_CASE("tempo segments are normalized (sorted + deduped) on load", "[serialize]") {
+  // Hand-build an out-of-order document with a duplicate start_ppq (last wins).
+  util::json::Object root;
+  root["version"] = static_cast<double>(1);
+  util::json::Array tempo;
+  auto seg = [](double start, double bpm) {
+    util::json::Object o;
+    o["start_ppq"] = start;
+    o["bpm"] = bpm;
+    o["start_sample"] = 0.0;
+    o["end_bpm"] = 0.0;
+    return util::json::Value(std::move(o));
+  };
+  tempo.push_back(seg(1920.0, 140.0));
+  tempo.push_back(seg(0.0, 120.0));
+  tempo.push_back(seg(960.0, 130.0));
+  tempo.push_back(seg(960.0, 131.0));  // duplicate tick: this one wins
+  root["tempo_segments"] = std::move(tempo);
+
+  auto result = project_from_json(util::json::dump(util::json::Value(std::move(root))));
+  REQUIRE(result.ok());
+  const auto& segs = result.project->tempo_segments();
+  REQUIRE(segs.size() == 3);
+  CHECK(segs[0].start_ppq == 0.0);
+  CHECK(segs[1].start_ppq == 960.0);
+  CHECK(segs[1].bpm == 131.0);  // last writer at the duplicate tick
+  CHECK(segs[2].start_ppq == 1920.0);
+}
+
+TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]") {
+  auto result = project_from_json("{\"version\": 1, \"tempo_segments\": [{\"bpm\": -5.0}]}");
+  CHECK_FALSE(result.ok());
+  REQUIRE(result.has_error());
+  bool found = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "invalid_tempo_bpm") found = true;
+  }
+  CHECK(found);
+}
+
+TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently zeroed",
+          "[serialize]") {
+  // data0 below zero clamps to 0; data1 above uint32 max clamps to 0xFFFFFFFF.
+  const std::string in =
+      "{\"version\": 1, \"midi_content\": {\"3\": [{\"ppq\": 0.0, \"data0\": -1.0, "
+      "\"data1\": 5000000000.0}]}}";
+  auto result = project_from_json(in);
+  REQUIRE(result.ok());
+  REQUIRE(result.midi.events.count(3) == 1);
+  const auto& events = result.midi.events.at(3);
+  REQUIRE(events.size() == 1);
+  CHECK(events[0].data0 == 0u);
+  CHECK(events[0].data1 == 0xFFFFFFFFu);
+  int warnings = 0;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "midi_word_out_of_range") ++warnings;
+  }
+  CHECK(warnings == 2);
+}
+
+TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", "[serialize]") {
+  // A clip referencing a non-existent source and track.
+  const std::string dangling =
+      "{\"version\": 1, \"clips\": [{\"id\": 1, \"track_id\": 99, \"source_id\": 99, "
+      "\"length_ppq\": 1.0}]}";
+  auto r1 = project_from_json(dangling);
+  REQUIRE(r1.ok());  // Verbatim load: warnings, not errors.
+  bool dangling_src = false;
+  bool dangling_trk = false;
+  for (const auto& d : r1.diagnostics) {
+    if (d.code == "dangling_clip_source") dangling_src = true;
+    if (d.code == "dangling_clip_track") dangling_trk = true;
+  }
+  CHECK(dangling_src);
+  CHECK(dangling_trk);
+
+  // A MIDI source on an audio track => kind mismatch.
+  const std::string mismatch =
+      "{\"version\": 1, "
+      "\"sources\": [{\"kind\": 1, \"id\": 1}], "  // MIDI source
+      "\"tracks\": [{\"id\": 1, \"kind\": 0}], "   // audio track
+      "\"clips\": [{\"id\": 1, \"track_id\": 1, \"source_id\": 1, \"length_ppq\": 1.0}]}";
+  auto r2 = project_from_json(mismatch);
+  REQUIRE(r2.ok());
+  bool kind_mismatch = false;
+  for (const auto& d : r2.diagnostics) {
+    if (d.code == "clip_source_kind_mismatch") kind_mismatch = true;
+  }
+  CHECK(kind_mismatch);
 }

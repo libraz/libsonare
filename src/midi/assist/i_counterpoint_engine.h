@@ -12,8 +12,18 @@
 
 #include "arrangement/project_view.h"
 #include "midi/assist/assist_request.h"
+#include "midi/assist/i_dissonance_analyzer.h"
+#include "midi/assist/i_harmony_context.h"
+#include "midi/assist/i_note_placement_judge.h"
 
 namespace sonare::midi::assist {
+
+/// @brief Non-owning query slots available to counterpoint / voice derivation.
+struct AssistQueryContext {
+  const IHarmonyContext* harmony = nullptr;
+  const IDissonanceAnalyzer* dissonance = nullptr;
+  const INotePlacementJudge* judge = nullptr;
+};
 
 /// @brief Derives counterpoint / additional voices against existing material.
 class ICounterpointEngine {
@@ -24,11 +34,13 @@ class ICounterpointEngine {
   virtual const char* module_id() const noexcept = 0;
 
   /// @brief Derives voices for `request` against `view`, given the existing
-  ///        `cantus` voices to harmonize/counterpoint against.
+  ///        `cantus` voices to harmonize/counterpoint against and the optional
+  ///        harmony/dissonance/judge query slots registered by the host.
   /// @return an AssistResult (EditCommands + candidate payload). Deterministic
   ///         for a fixed seed; budget-cooperative; never mutates the project.
   virtual AssistResult derive(const arrangement::ProjectView& view, const AssistRequest& request,
-                              const std::vector<VoiceModel>& cantus) = 0;
+                              const std::vector<VoiceModel>& cantus,
+                              const AssistQueryContext& queries) = 0;
 };
 
 }  // namespace sonare::midi::assist

@@ -19,6 +19,30 @@
 ///    never inlined.
 ///  - Header-only: abstract interfaces, no .cpp, no lib.
 ///
+/// SysEx-handle transfer contract (across this seam)
+/// -------------------------------------------------
+/// A UMP that carries a SysEx / property payload sets midi::Ump::sysex_handle to
+/// a non-zero handle; the bytes live in a control-thread midi::SysExStore. The
+/// handle, NOT the bytes, crosses this seam in both directions:
+///  - INPUT: when push_event() enqueues a UMP with a non-zero sysex_handle, the
+///    HANDLE NAMESPACE is the host's own (the host owns the store its live port
+///    parsed the incoming SysEx into). The runtime, on drain(), treats the
+///    handle as opaque and forwards it unchanged; it does NOT dereference the
+///    payload on the audio thread (no SysExStore lookup, no variable-length
+///    copy). A consumer that needs the bytes resolves them on the control thread
+///    against the host's store.
+///  - OUTPUT: when the runtime send()s a UMP with a non-zero sysex_handle, the
+///    handle is valid in the RUNTIME's store; the host resolves the payload off
+///    the audio thread (in its port-flush thread) before writing it to the
+///    device. send() copies only the fixed UMP record — it never inlines or
+///    allocates the payload.
+/// In both directions the payload bytes are an opaque byte span owned by the
+/// originating side and are NEVER copied on the audio thread; only the
+/// fixed-size handle travels through the RT structures (invariant 6). Handles
+/// from one side are not meaningful in the other side's store, so a host that
+/// loops MIDI input back to output must re-resolve and re-register the payload
+/// on the control thread rather than forwarding the raw handle.
+///
 /// Threading / RT contract
 /// -----------------------
 ///  - INPUT (MidiInputSource): the host's port thread pushes incoming events
@@ -29,6 +53,31 @@
 ///  - OUTPUT (MidiOutputSink): the RT runtime SENDS events (send) to the sink,
 ///    which the host's port thread flushes to the live port. send() is RT-safe;
 ///    the actual device write happens off the audio thread.
+///
+/// MPE I/O seam and MPE / SMF fidelity
+/// -----------------------------------
+/// This seam is UMP-native, so MPE (MIDI Polyphonic Expression) and full MIDI
+/// 2.0 per-note expression pass through LOSSLESSLY as fixed midi::Ump records:
+///  - MIDI 2.0 per-note pitch / per-note controllers / per-note attributes ride
+///    in the UMP word fields directly; per-note channel/group routing is
+///    preserved on both push_event() and send().
+///  - MPE expressed in MIDI 1.0 form (per-voice channel spread across an MPE
+///    zone, with per-channel pitch-bend / CC#74 / channel-pressure) is carried
+///    as MIDI-1.0-typed UMPs; this seam does NOT collapse the zone or remap
+///    member channels — the host's port owns MPE zone configuration. The seam
+///    neither imposes nor enforces a zone layout; it forwards the channel as-is.
+/// FIDELITY LIMITS:
+///  - This seam carries individual events only; it has no MPE-zone model and
+///    performs no MPE<->single-channel conversion. Down-converting MIDI 2.0
+///    per-note expression to MIDI 1.0 MPE (or vice versa) is the host's job
+///    outside this seam (see midi::midi2_to_midi1 for the lossy mapping).
+///  - SMF (Standard MIDI File) fidelity is governed by midi/smf.{h,cpp}, NOT by
+///    this live-I/O seam: an SMF round-trip preserves channel-voice events,
+///    markers, time-signature metronome bytes and merges multi-packet SysEx, but
+///    MIDI 2.0-only per-note forms that have no MIDI 1.0 SMF encoding are counted
+///    in SmfExportResult::skipped_events rather than silently dropped. Use the
+///    MIDI 2.0 clip container (midi/smf2.{h,cpp}) for lossless MIDI 2.0 / MPE
+///    persistence. This seam is real-time transport only and does no file I/O.
 
 #include <array>
 #include <atomic>
@@ -61,6 +110,22 @@ class MidiInputSource {
   /// in-block render_frame. Drained events are removed from the buffer.
   virtual size_t drain(midi::MidiEvent* out, size_t capacity,
                        int64_t block_start_frame) noexcept = 0;
+
+  /// AUDIO/RT thread: block-size-aware drain. Default preserves compatibility
+  /// with older implementations by calling drain(), then clamping timestamps to
+  /// [block_start_frame, block_start_frame + num_frames). Implementations may
+  /// override for tighter behavior. Events are removed from the buffer.
+  virtual size_t drain_block(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame,
+                             int num_frames) noexcept {
+    if (num_frames <= 0) return 0;
+    const size_t n = drain(out, capacity, block_start_frame);
+    const int64_t block_end_frame = block_start_frame + num_frames;
+    for (size_t i = 0; i < n; ++i) {
+      if (out[i].render_frame < block_start_frame) out[i].render_frame = block_start_frame;
+      if (out[i].render_frame >= block_end_frame) out[i].render_frame = block_end_frame - 1;
+    }
+    return n;
+  }
 
   /// Number of events currently buffered (lock-free poll). Advisory.
   virtual size_t pending_count() const noexcept = 0;
@@ -118,12 +183,23 @@ class FixedMidiInputSource final : public MidiInputSource {
     const size_t write = write_index_.load(std::memory_order_acquire);
     size_t n = 0;
     while (read != write && n < capacity) {
-      out[n].render_frame = block_start_frame + buffer_[read].port_time_samples;
+      const int64_t offset =
+          buffer_[read].port_time_samples < 0 ? 0 : buffer_[read].port_time_samples;
+      out[n].render_frame = block_start_frame + offset;
       out[n].ump = buffer_[read].ump;
       read = increment(read);
       ++n;
     }
     read_index_.store(read, std::memory_order_release);
+    for (size_t i = 1; i < n; ++i) {
+      midi::MidiEvent value = out[i];
+      size_t j = i;
+      while (j > 0 && out[j - 1].render_frame > value.render_frame) {
+        out[j] = out[j - 1];
+        --j;
+      }
+      out[j] = value;
+    }
     return n;
   }
 

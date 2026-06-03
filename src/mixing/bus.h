@@ -27,6 +27,7 @@ class BusProcessor : public rt::ProcessorBase {
   void reset() override;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int tail_samples() const noexcept override;
 
   void sum_inputs(const std::vector<float* const*>& inputs, float* const* output, int num_channels,
                   int num_samples) const;

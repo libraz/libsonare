@@ -362,3 +362,22 @@ TEST_CASE("MIDI 2.0 per-note controller down-converts to a dropped (empty) UMP",
               sonare::midi::make_midi2_assignable_controller(0, 0, 1, 2, 0x1234u))
               .word_count == 0);
 }
+
+TEST_CASE("MIDI 2.0 banked program change lowers to MIDI 1.0 bank select and program", "[midi]") {
+  const Ump pc = sonare::midi::make_midi2_program_change(2, 5, /*program=*/42, /*bank_msb=*/0x79,
+                                                         /*bank_lsb=*/3, /*bank_valid=*/true);
+  const auto lowered = sonare::midi::midi2_to_midi1_messages(pc);
+
+  REQUIRE(lowered.count == 3);
+  REQUIRE(lowered.messages[0].status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange));
+  REQUIRE(lowered.messages[0].channel() == 5);
+  REQUIRE(((lowered.messages[0].words[0] >> 8) & 0x7Fu) == 0u);
+  REQUIRE((lowered.messages[0].words[0] & 0x7Fu) == 0x79u);
+
+  REQUIRE(lowered.messages[1].status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange));
+  REQUIRE(((lowered.messages[1].words[0] >> 8) & 0x7Fu) == 32u);
+  REQUIRE((lowered.messages[1].words[0] & 0x7Fu) == 3u);
+
+  REQUIRE(lowered.messages[2].status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange));
+  REQUIRE(((lowered.messages[2].words[0] >> 8) & 0x7Fu) == 42u);
+}

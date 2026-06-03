@@ -68,6 +68,7 @@ class ChannelStrip : public rt::ProcessorBase {
   void reset() override;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int tail_samples() const noexcept override;
   int pre_fader_latency_samples_q8() const noexcept;
   int post_fader_latency_samples_q8() const noexcept;
 

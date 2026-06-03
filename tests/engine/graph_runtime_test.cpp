@@ -25,6 +25,33 @@ class GainProcessor final : public sonare::rt::ProcessorBase {
   float gain_ = 1.0f;
 };
 
+class SidechainProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    process_channels = num_channels;
+    process_samples = num_samples;
+    if (sidechain_ == nullptr || num_channels <= 0) return;
+    for (int i = 0; i < num_samples; ++i) {
+      channels[0][i] += sidechain_[0][i] * 0.5f;
+    }
+  }
+  void reset() override {}
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override {
+    sidechain_channels = num_channels;
+    sidechain_samples = num_samples;
+    sidechain_ = channels;
+  }
+
+  int process_channels = 0;
+  int process_samples = 0;
+  int sidechain_channels = 0;
+  int sidechain_samples = 0;
+
+ private:
+  const float* const* sidechain_ = nullptr;
+};
+
 }  // namespace
 
 TEST_CASE("GraphRuntime processes a prepared graph sub-block without string routing",
@@ -55,6 +82,63 @@ TEST_CASE("GraphRuntime processes a prepared graph sub-block without string rout
   REQUIRE(left[6] == 7.0f);
   REQUIRE(right[2] == -6.0f);
   REQUIRE(right[5] == -12.0f);
+}
+
+TEST_CASE("GraphRuntime bypasses processor nodes as dry pass-through", "[engine][graph_runtime]") {
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.add_node("gain", std::make_unique<GainProcessor>(4.0f), 1));
+  REQUIRE(graph.add_node("out", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.connect({"in", 0, "gain", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"gain", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 8);
+  REQUIRE(graph.node("gain") != nullptr);
+  REQUIRE(graph.node("gain")->processor().set_bypassed(true));
+
+  sonare::engine::GraphRuntime runtime;
+  REQUIRE(runtime.bind(&graph, "in", "out", 1));
+
+  std::array<float, 4> buffer{1.0f, 2.0f, 3.0f, 4.0f};
+  float* io[] = {buffer.data()};
+  runtime.process(io, 1, 0, 4);
+  REQUIRE(buffer[0] == 1.0f);
+  REQUIRE(buffer[1] == 2.0f);
+  REQUIRE(buffer[3] == 4.0f);
+}
+
+TEST_CASE("Graph node maps configured sidechain ports to ProcessorBase sidechain",
+          "[engine][graph_runtime]") {
+  sonare::graph::Graph graph;
+  auto sidechain = std::make_unique<SidechainProcessor>();
+  SidechainProcessor* raw_sidechain = sidechain.get();
+  REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.add_node("key", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.add_node("fx", std::move(sidechain), 2));
+  REQUIRE(graph.add_node("out", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.set_node_sidechain_ports("fx", 1, 1));
+  REQUIRE(graph.connect({"in", 0, "fx", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"key", 0, "fx", 1, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"fx", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 8);
+
+  std::array<float, 4> main{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, 4> key{10.0f, 20.0f, 30.0f, 40.0f};
+  graph.clear_inputs(4);
+  graph.set_input("in", 0, main.data(), 4);
+  graph.set_input("key", 0, key.data(), 4);
+  graph.process_block(4);
+
+  const float* out = graph.output("out", 0);
+  REQUIRE(out != nullptr);
+  REQUIRE(out[0] == 6.0f);
+  REQUIRE(out[1] == 12.0f);
+  REQUIRE(out[3] == 24.0f);
+  REQUIRE(raw_sidechain->process_channels == 1);
+  REQUIRE(raw_sidechain->process_samples == 4);
+  REQUIRE(raw_sidechain->sidechain_channels == 1);
+  REQUIRE(raw_sidechain->sidechain_samples == 4);
 }
 
 TEST_CASE("GraphRuntime swap returns old graph for control-thread reclamation",

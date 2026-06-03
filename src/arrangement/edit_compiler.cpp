@@ -12,6 +12,30 @@ namespace sonare::arrangement {
 
 namespace {
 
+engine::FadeCurve to_engine_fade_curve(FadeCurve curve) noexcept {
+  switch (curve) {
+    case FadeCurve::kEqualPower:
+      return engine::FadeCurve::EqualPower;
+    case FadeCurve::kExponential:
+      return engine::FadeCurve::Exponential;
+    case FadeCurve::kLogarithmic:
+      return engine::FadeCurve::Logarithmic;
+    case FadeCurve::kLinear:
+    default:
+      return engine::FadeCurve::Linear;
+  }
+}
+
+bool clip_matches_track_kind(const Project& project, const EditClip& clip,
+                             const ClipSource& source) noexcept {
+  const Track* track = project.find_track(clip.track_id);
+  if (track == nullptr) return false;
+  const SourceKind kind = source_kind(source);
+  if (track->kind == Track::Kind::kAudio) return kind == SourceKind::kAudio;
+  if (track->kind == Track::Kind::kMidi) return kind == SourceKind::kMidi;
+  return false;
+}
+
 // Fills a deterministic transport::TempoMap from the project's plain segment
 // data. When the project has no tempo segments a single 120 BPM segment is used
 // so PPQ->sample conversion is always well defined (mirrors RealtimeEngine's
@@ -76,17 +100,16 @@ void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& 
   if (out == nullptr) return;
   const double clip_end_ppq = clip.end_ppq();
   if (clip.loop_mode == LoopMode::kLoop && clip.loop_length_ppq > 0.0) {
-    for (double loop_start = clip.start_ppq; loop_start < clip_end_ppq;
-         loop_start += clip.loop_length_ppq) {
-      for (const midi::MidiClipEvent& ev : midi_clip.events()) {
-        if (ev.ppq < 0.0 || ev.ppq >= clip.loop_length_ppq) continue;
-        const double event_ppq = loop_start + ev.ppq;
-        if (event_ppq >= clip_end_ppq) continue;
-        midi::MidiEvent rendered;
-        rendered.render_frame = tempo_map.ppq_to_sample(event_ppq);
-        rendered.ump = ev.ump;
-        out->push_back(rendered);
-      }
+    for (const midi::MidiClipEvent& ev : midi_clip.events()) {
+      if (ev.ppq < 0.0 || ev.ppq >= clip.loop_length_ppq) continue;
+      const double event_ppq = clip.start_ppq + ev.ppq;
+      if (event_ppq >= clip_end_ppq) continue;
+      midi::MidiEvent rendered;
+      rendered.render_frame = tempo_map.ppq_to_sample(event_ppq);
+      rendered.ump = ev.ump;
+      rendered.sysex_payload = ev.sysex_payload;
+      rendered.sysex_payload_size = ev.sysex_payload_size;
+      out->push_back(rendered);
     }
   } else {
     for (const midi::MidiClipEvent& ev : midi_clip.events()) {
@@ -94,6 +117,8 @@ void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& 
       midi::MidiEvent rendered;
       rendered.render_frame = tempo_map.ppq_to_sample(clip.start_ppq + ev.ppq);
       rendered.ump = ev.ump;
+      rendered.sysex_payload = ev.sysex_payload;
+      rendered.sysex_payload_size = ev.sysex_payload_size;
       out->push_back(rendered);
     }
   }
@@ -198,15 +223,20 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 #endif
 
   // ---- Audio clips ---------------------------------------------------------
-  // Cache baked storage per source so multiple clips referencing the same audio
-  // source share one immutable buffer (and resample only once).
-  std::map<SourceId, std::shared_ptr<const engine::ClipAudioStorage>> baked;
+  // Cache baked storage per source+warp-ref so multiple clips share immutable
+  // buffers, while a warped rendition does not alias the unwarped source.
+  std::map<std::pair<SourceId, WarpRefId>, std::shared_ptr<const engine::ClipAudioStorage>> baked;
 
   for (const auto& clip : project.clips()) {
     const ClipSource* src = project.find_source(clip.source_id);
     if (src == nullptr) {
       add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError, clip.id,
                "clip references a source id that is not registered");
+      continue;
+    }
+    if (!clip_matches_track_kind(project, clip, *src)) {
+      add_diag(&result, Diagnostic::Code::kSourceKindMismatch, Diagnostic::Severity::kError,
+               clip.id, "clip source kind does not match its track kind");
       continue;
     }
     if (source_kind(*src) != SourceKind::kAudio) {
@@ -220,7 +250,12 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       continue;
     }
 
-    const AudioSourceSamples* samples = audio.find(clip.source_id);
+    const AudioSourceSamples* samples =
+        clip.warp_ref_id != 0 ? audio.find_warped(clip.warp_ref_id) : nullptr;
+    const WarpRefId baked_warp_ref = samples != nullptr ? clip.warp_ref_id : 0;
+    if (samples == nullptr) {
+      samples = audio.find(clip.source_id);
+    }
     if (samples == nullptr) {
       add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError, clip.id,
                "audio source has no decoded samples registered in the AudioContentStore");
@@ -239,7 +274,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
     // Bake (resample to project SR) once per source; share across clips.
     std::shared_ptr<const engine::ClipAudioStorage> storage;
-    const auto cached = baked.find(clip.source_id);
+    const auto cache_key = std::make_pair(clip.source_id, baked_warp_ref);
+    const auto cached = baked.find(cache_key);
     if (cached != baked.end()) {
       storage = cached->second;
     } else {
@@ -253,7 +289,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         built->channel_ptrs.push_back(ch.data());
       }
       storage = std::move(built);
-      baked.emplace(clip.source_id, storage);
+      baked.emplace(cache_key, storage);
     }
 
     const int num_channels = static_cast<int>(storage->channels.size());
@@ -282,13 +318,20 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     buffer.num_samples = source_samples;
 
     const bool loop = clip.loop_mode == LoopMode::kLoop;
-    const engine::FadeCurve fade_curve = clip.fade_in.curve == FadeCurve::kEqualPower
-                                             ? engine::FadeCurve::EqualPower
-                                             : engine::FadeCurve::Linear;
+    const int64_t loop_length_samples =
+        loop && clip.loop_length_ppq > 0.0
+            ? std::max<int64_t>(
+                  0, tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - start_sample)
+            : 0;
+    const engine::FadeCurve fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
+    const engine::FadeCurve fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
 
     engine::ClipSchedule sched(clip.id, buffer, clip.start_ppq, start_sample, clip_offset_samples,
                                length_samples, loop, clip.gain, fade_in_samples, fade_out_samples,
-                               fade_curve);
+                               fade_in_curve, fade_out_curve,
+                               /*clip_has_separate_fade_out_curve=*/true);
+    sched.loop_length_samples = loop_length_samples;
+    sched.warp_ref_id = clip.warp_ref_id;
     sched.storage = std::move(storage);
     timeline.audio_clips.push_back(std::move(sched));
   }
@@ -304,6 +347,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     if (src == nullptr) {
       // Audio clips already reported dangling refs above; only report once for
       // MIDI-only references here (the audio loop `continue`s past non-audio).
+      continue;
+    }
+    if (!clip_matches_track_kind(project, clip, *src)) {
       continue;
     }
     if (source_kind(*src) != SourceKind::kMidi) {
@@ -328,6 +374,13 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         out.ump.word_count = ump_word_count_from_word0(ev.data0);
         out.ump.group = static_cast<uint8_t>((ev.data0 >> 24u) & 0x0Fu);
         out.ump.sysex_handle = ev.sysex_handle;
+        if (ev.sysex_handle != 0) {
+          const auto payload_it = midi.sysex_payloads.find(ev.sysex_handle);
+          if (payload_it != midi.sysex_payloads.end() && !payload_it->second.empty()) {
+            out.sysex_payload = payload_it->second.data();
+            out.sysex_payload_size = payload_it->second.size();
+          }
+        }
         midi_clip.add_event(out);
       }
     }
@@ -335,6 +388,12 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
     midi::MidiClipSchedule sched;
     sched.id = clip.id;
+    // Route the clip's events to its track's MIDI destination. Without this the
+    // sequencer fires every clip on destination 0, collapsing multi-track MIDI
+    // onto a single instrument. 0 stays the default/null destination.
+    if (const Track* clip_track = project.find_track(clip.track_id)) {
+      sched.destination_id = clip_track->midi_destination_id;
+    }
     sched.start_ppq = clip.start_ppq;
     sched.start_sample = tempo_map.ppq_to_sample(clip.start_ppq);
     sched.length_samples =

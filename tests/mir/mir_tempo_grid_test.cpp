@@ -45,6 +45,18 @@ BeatAnalysisInput make_constant_fixture(double bpm, int n_beats, double jitter_s
   return in;
 }
 
+void set_onset_strength(BeatAnalysisInput* in, double time_s, float value) {
+  const double frames_per_sec =
+      static_cast<double>(in->sample_rate) / static_cast<double>(in->hop_length);
+  const long frame = std::lround(time_s * frames_per_sec);
+  if (frame < 0) return;
+  if (static_cast<size_t>(frame) >= in->onset_strength.size()) {
+    in->onset_strength.resize(static_cast<size_t>(frame) + 1, 0.0f);
+  }
+  in->onset_strength[static_cast<size_t>(frame)] =
+      std::max(in->onset_strength[static_cast<size_t>(frame)], value);
+}
+
 // Beats that accelerate linearly from bpm0 to bpm1 over n_beats.
 BeatAnalysisInput make_ramp_fixture(double bpm0, double bpm1, int n_beats) {
   BeatAnalysisInput in;
@@ -77,6 +89,20 @@ std::vector<double> reconstruct_beat_times(const TempoEstimate& est, int n_beats
   std::vector<double> times;
   for (int i = 0; i < n_beats; ++i) {
     const int64_t s = map.ppq_to_sample(static_cast<double>(i));
+    times.push_back(static_cast<double>(s) / sample_rate);
+  }
+  return times;
+}
+
+std::vector<double> reconstruct_scaled_beat_times(const TempoEstimate& est, int n_beats,
+                                                  double sample_rate, double ppq_per_beat) {
+  sonare::transport::TempoMap map;
+  map.prepare(sample_rate);
+  map.set_segments(est.segments);
+  map.set_time_signatures(est.time_sigs);
+  std::vector<double> times;
+  for (int i = 0; i < n_beats; ++i) {
+    const int64_t s = map.ppq_to_sample(static_cast<double>(i) * ppq_per_beat);
     times.push_back(static_cast<double>(s) / sample_rate);
   }
   return times;
@@ -192,6 +218,113 @@ TEST_CASE("mir bridge exposes double-tempo candidate when analyzer reports half"
       REQUIRE(c.segments.front().bpm == Catch::Approx(120.0).epsilon(0.05));
     }
   }
+}
+
+TEST_CASE("mir octave tempo candidates rescale PPQ beat spacing", "[mir]") {
+  const int n = 16;
+  const BeatAnalysisInput in = make_constant_fixture(90.0, n);
+  TempoEstimatorConfig cfg;
+  cfg.include_octave_candidates = true;
+  const std::vector<TempoEstimate> cands = estimate_tempo(in, cfg);
+
+  const TempoEstimate* half = nullptr;
+  const TempoEstimate* dbl = nullptr;
+  for (const auto& c : cands) {
+    if (std::string(c.label) == "half") half = &c;
+    if (std::string(c.label) == "double") dbl = &c;
+  }
+  REQUIRE(half != nullptr);
+  REQUIRE(dbl != nullptr);
+  REQUIRE(dbl->segments.front().bpm == Catch::Approx(180.0).epsilon(0.05));
+  REQUIRE(half->segments.front().bpm == Catch::Approx(45.0).epsilon(0.05));
+
+  std::vector<double> ref;
+  for (int i = 0; i < n; ++i) ref.push_back(i * 60.0 / 90.0);
+  const std::vector<double> double_times =
+      reconstruct_scaled_beat_times(*dbl, n, in.sample_rate, 2.0);
+  const std::vector<double> half_times =
+      reconstruct_scaled_beat_times(*half, n, in.sample_rate, 0.5);
+
+  REQUIRE(beat_f_measure(double_times, ref, 0.070) > 0.9);
+  REQUIRE(beat_f_measure(half_times, ref, 0.070) > 0.9);
+}
+
+TEST_CASE("mir octave tempo confidence uses onset evidence", "[mir]") {
+  {
+    BeatAnalysisInput in = make_constant_fixture(60.0, 16);
+    for (const Beat& beat : in.beats) {
+      set_onset_strength(&in, beat.time, 1.0f);
+    }
+    for (size_t i = 1; i < in.beats.size(); ++i) {
+      set_onset_strength(&in, 0.5 * (in.beats[i - 1].time + in.beats[i].time), 0.8f);
+    }
+
+    TempoEstimatorConfig cfg;
+    cfg.include_octave_candidates = true;
+    const std::vector<TempoEstimate> cands = estimate_tempo(in, cfg);
+
+    const TempoEstimate* primary = nullptr;
+    const TempoEstimate* dbl = nullptr;
+    for (const auto& c : cands) {
+      if (std::string(c.label) == "primary") primary = &c;
+      if (std::string(c.label) == "double") dbl = &c;
+    }
+    REQUIRE(primary != nullptr);
+    REQUIRE(dbl != nullptr);
+    REQUIRE(dbl->confidence == Catch::Approx(primary->confidence * 0.8).margin(0.08));
+  }
+
+  {
+    BeatAnalysisInput in = make_constant_fixture(120.0, 16);
+    for (size_t i = 0; i < in.beats.size(); ++i) {
+      set_onset_strength(&in, in.beats[i].time, (i & 1u) == 0 ? 1.0f : 0.1f);
+    }
+
+    TempoEstimatorConfig cfg;
+    cfg.include_octave_candidates = true;
+    const std::vector<TempoEstimate> cands = estimate_tempo(in, cfg);
+
+    const TempoEstimate* primary = nullptr;
+    const TempoEstimate* half = nullptr;
+    for (const auto& c : cands) {
+      if (std::string(c.label) == "primary") primary = &c;
+      if (std::string(c.label) == "half") half = &c;
+    }
+    REQUIRE(primary != nullptr);
+    REQUIRE(half != nullptr);
+    REQUIRE(half->confidence == Catch::Approx(primary->confidence * 0.9).margin(0.08));
+  }
+}
+
+TEST_CASE("mir bridge anchors bar phase to detected downbeat", "[mir]") {
+  BeatAnalysisInput in = make_constant_fixture(120.0, 16);
+  in.downbeat_indices = {2, 6, 10, 14};
+  TempoEstimatorConfig cfg;
+  cfg.include_octave_candidates = true;
+  const std::vector<TempoEstimate> cands = estimate_tempo(in, cfg);
+
+  const TempoEstimate* primary = nullptr;
+  const TempoEstimate* dbl = nullptr;
+  const TempoEstimate* half = nullptr;
+  for (const auto& c : cands) {
+    if (std::string(c.label) == "primary") primary = &c;
+    if (std::string(c.label) == "double") dbl = &c;
+    if (std::string(c.label) == "half") half = &c;
+  }
+  REQUIRE(primary != nullptr);
+  REQUIRE(dbl != nullptr);
+  REQUIRE(half != nullptr);
+
+  REQUIRE(primary->time_sigs.front().start_ppq == Catch::Approx(2.0));
+  REQUIRE(dbl->time_sigs.front().start_ppq == Catch::Approx(4.0));
+  REQUIRE(half->time_sigs.front().start_ppq == Catch::Approx(1.0));
+
+  sonare::transport::TempoMap map;
+  map.prepare(in.sample_rate);
+  map.set_segments(primary->segments);
+  map.set_time_signatures(primary->time_sigs);
+  REQUIRE(map.bar_start_ppq(2.1) == Catch::Approx(2.0));
+  REQUIRE(map.ppq_to_bar_beat(2.1).beat == 1);
 }
 
 TEST_CASE("mir grid_snap snaps to beat / bar / subdivision", "[mir]") {

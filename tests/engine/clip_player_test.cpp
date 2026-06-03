@@ -70,6 +70,35 @@ TEST_CASE("ClipPlayer applies linear fade in and fade out", "[engine][clip_playe
   REQUIRE_THAT(out_l[5], WithinAbs(0.5f, 1.0e-6f));
 }
 
+TEST_CASE("ClipPlayer applies independent exponential and logarithmic fade curves",
+          "[engine][clip_player]") {
+  std::array<float, 6> source{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+  player.set_clips({{1,
+                     {channels, 1, 6},
+                     0.0,
+                     0,
+                     0,
+                     6,
+                     false,
+                     1.0f,
+                     2,
+                     2,
+                     sonare::engine::FadeCurve::Exponential,
+                     sonare::engine::FadeCurve::Logarithmic,
+                     true}});
+
+  std::array<float, 6> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 6, 0);
+
+  REQUIRE_THAT(out_l[1], WithinAbs(0.25f, 1.0e-6f));
+  REQUIRE_THAT(out_l[5], WithinAbs(0.70710678f, 1.0e-6f));
+}
+
 TEST_CASE("ClipPlayer collects clip start and stop boundaries", "[engine][clip_player]") {
   std::array<float, 8> source{};
   const float* channels[] = {source.data()};
@@ -114,6 +143,29 @@ TEST_CASE("ClipPlayer loop wraps mid-block from the correct source positions",
   REQUIRE(out_l[5] == 20.0f);
   REQUIRE(out_l[6] == 30.0f);
   REQUIRE(out_l[7] == 40.0f);
+}
+
+TEST_CASE("ClipPlayer honors explicit audio loop length", "[engine][clip_player]") {
+  std::array<float, 4> source{10.0f, 20.0f, 30.0f, 40.0f};
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 4}, 0.0, 0, 0, 8, true, 1.0f, 0, 0};
+  clip.loop_length_samples = 2;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+  player.set_clips({clip});
+
+  std::array<float, 8> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 8, 0);
+
+  REQUIRE(out_l[0] == 10.0f);
+  REQUIRE(out_l[1] == 20.0f);
+  REQUIRE(out_l[2] == 10.0f);
+  REQUIRE(out_l[3] == 20.0f);
+  REQUIRE(out_l[4] == 10.0f);
+  REQUIRE(out_l[5] == 20.0f);
 }
 
 TEST_CASE(

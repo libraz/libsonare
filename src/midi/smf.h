@@ -23,7 +23,8 @@
 ///   - Variable-length quantities and running status are handled on import.
 ///   - Meta events: set-tempo, time-signature, track name, marker and
 ///     end-of-track are recognized. Set-tempo / time-signature populate the
-///     transport segment vectors; track name / marker are captured as strings.
+///     transport segment vectors, including SMF time-signature metronome bytes;
+///     track name / marker are captured as strings.
 ///   - SysEx (F0 / F7) payloads are preserved in @ref SmfImportResult::sysex_store
 ///     and represented in clips as SysEx-handle UMP events. F7 escape status is
 ///     normalized to an F0 SysEx event on export because the normalized UMP
@@ -35,9 +36,9 @@
 ///     tempo + time-signature map, followed by one track per MidiClip whose
 ///     channel-voice UMP events are serialized back via the ump.h adapter.
 ///     SysEx handles are re-emitted as F0 SysEx events only when
-///     SmfExportOptions::sysex_store is supplied. MIDI 2.0-only messages and
-///     meta strings beyond track name are not re-emitted (export targets MIDI
-///     1.0 channel voice plus SysEx).
+///     SmfExportOptions::sysex_store is supplied. Markers supplied in
+///     SmfExportOptions::markers are written to track 0. MIDI 2.0-only messages
+///     are skipped lossily and counted in SmfExportResult::skipped_events.
 
 #include <cstdint>
 #include <string>
@@ -82,6 +83,9 @@ struct SmfImportResult {
   /// Track name (if any) parallel to `clips` by index. Empty string when the
   /// track had no name meta event.
   std::vector<std::string> clip_names;
+  /// Imported clip length in PPQ, parallel to `clips`. Derived from the track's
+  /// end-of-track tick when present; otherwise from the final parsed tick.
+  std::vector<double> clip_lengths_ppq;
 
   /// Tempo map extracted from set-tempo meta events (sorted by start_ppq, at
   /// least one segment — defaults to 120 BPM when none present).
@@ -120,6 +124,8 @@ struct SmfExportOptions {
   /// Optional payload store used to serialize UMP SysEx handles back to SMF.
   /// When omitted, SysEx-handle events are skipped without failing export.
   const SysExStore* sysex_store = nullptr;
+  /// Optional marker meta events written to track 0.
+  std::vector<SmfMarker> markers;
 };
 
 /// Result of exporting normalized data to an SMF byte buffer.
@@ -127,6 +133,9 @@ struct SmfExportResult {
   SmfStatus status = SmfStatus::kOk;
   std::string diagnostic;
   std::vector<uint8_t> bytes;
+  /// Count of events skipped lossily during export (unresolved SysEx handles,
+  /// MIDI 2.0-only controller forms, non-channel voice packets, etc.).
+  uint32_t skipped_events = 0;
 
   bool ok() const noexcept { return status == SmfStatus::kOk; }
 };

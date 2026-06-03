@@ -35,8 +35,20 @@ namespace sonare::midi {
 /// Sentinel meaning "match a CC on any channel".
 inline constexpr uint8_t kCcAnyChannel = 0xFFu;
 
-/// A single CC <-> parameter binding. Trivially copyable POD so the table can be
-/// scanned on the audio thread without allocation.
+/// Learned / bound MIDI controller identity.
+enum class CcBindingKind : uint8_t {
+  /// Plain 7-bit Control Change.
+  kControlChange7 = 0,
+  /// High-resolution 14-bit Control Change (MSB CC#0..31 plus LSB CC#32..63).
+  kControlChange14 = 1,
+  /// Registered Parameter Number selected by CC#101/100 and driven by Data Entry.
+  kRpn = 2,
+  /// Non-Registered Parameter Number selected by CC#99/98 and driven by Data Entry.
+  kNrpn = 3,
+};
+
+/// A single MIDI controller <-> parameter binding. Trivially copyable POD so the
+/// table can be scanned on the audio thread without allocation.
 struct CcBinding {
   /// MIDI controller number (0..127).
   uint8_t cc_number = 0;
@@ -48,6 +60,15 @@ struct CcBinding {
   /// is `min_value + (cc/127) * (max_value - min_value)`.
   float min_value = 0.0f;
   float max_value = 1.0f;
+  /// Controller shape. Existing callers that aggregate-initialize the first five
+  /// fields continue to create plain 7-bit CC bindings.
+  CcBindingKind kind = CcBindingKind::kControlChange7;
+  /// LSB CC for kControlChange14 (cc_number + 32). 0 for other kinds.
+  uint8_t cc_lsb_number = 0;
+  /// RPN/NRPN selector MSB. 0 for ordinary CC kinds.
+  uint8_t selector_msb = 0;
+  /// RPN/NRPN selector LSB. 0 for ordinary CC kinds.
+  uint8_t selector_lsb = 0;
 };
 
 /// Extracts the controller number from a control-change UMP (MIDI 1.0 or 2.0).
@@ -82,9 +103,19 @@ class CcMap {
   size_t binding_count() const noexcept { return count_; }
   const CcBinding& binding_at(size_t index) const noexcept { return bindings_[index]; }
 
-  /// Arm MIDI learn: the next CC seen by observe_for_learn() binds `param_id`
-  /// over [min_value, max_value]. Re-arming overrides any pending learn.
-  void begin_learn(uint32_t param_id, float min_value = 0.0f, float max_value = 1.0f) noexcept;
+  /// Arm MIDI learn: a CC seen by observe_for_learn() binds `param_id` over
+  /// [min_value, max_value]. Re-arming overrides any pending learn.
+  ///
+  /// `min_movement` is an activity threshold in 7-bit CC units (0..127). When it
+  /// is 0 (the default) the FIRST observed control-change binds immediately, as
+  /// before. When it is > 0, a controller is only learned once its value has
+  /// MOVED by at least `min_movement` from the first value observed for that
+  /// (cc_number, channel) while armed — so idle / noise traffic (a controller
+  /// sitting still, or jittering by less than the threshold) does not trigger a
+  /// spurious learn. The threshold is compared in 7-bit units for both MIDI 1.0
+  /// (native 7-bit) and MIDI 2.0 (down-scaled) control-change values.
+  void begin_learn(uint32_t param_id, float min_value = 0.0f, float max_value = 1.0f,
+                   uint8_t min_movement = 0) noexcept;
   /// Disarm a pending learn without binding.
   void cancel_learn() noexcept;
   bool is_learning() const noexcept { return learning_; }
@@ -116,14 +147,20 @@ class CcMap {
   bool cc_to_breakpoint(const Ump& ump, double ppq, std::vector<automation::Breakpoint>* out) const;
 
   /// Build a control-change UMP from an automation unit value for `param_id`.
-  /// The unit value is inverse-mapped to a normalized 0..1 then to a 7-bit CC
-  /// (MIDI 1.0 control-change). Returns false if no binding targets `param_id`.
-  /// MAY scan the table; no allocation. Control-thread (config-time) use.
+  /// The unit value is inverse-mapped to a normalized 0..1 then encoded at the
+  /// binding's resolution: a kControlChange7 binding emits a 7-bit MIDI 1.0
+  /// control-change; a kControlChange14 binding emits a MIDI 2.0 control-change
+  /// carrying the full-resolution (14-bit, bit-scaled to 32-bit) value in a
+  /// single UMP — a single 7-bit MIDI 1.0 CC cannot carry 14 bits losslessly.
+  /// Returns false if no binding targets `param_id`. MAY scan the table; no
+  /// allocation. Control-thread (config-time) use.
   bool param_to_cc(uint32_t param_id, float unit_value, uint8_t group, Ump* out_ump) const noexcept;
 
  private:
   // Returns the index of an exact (cc, channel) binding, or kMaxBindings.
   size_t find_exact(uint8_t cc_number, uint8_t channel) const noexcept;
+  size_t find_exact_binding(const CcBinding& binding) const noexcept;
+  bool commit_learned_binding(const CcBinding& binding, CcBinding* out_binding);
 
   std::array<CcBinding, kMaxBindings> bindings_{};
   size_t count_ = 0;
@@ -132,6 +169,28 @@ class CcMap {
   uint32_t learn_param_id_ = 0;
   float learn_min_ = 0.0f;
   float learn_max_ = 1.0f;
+
+  // Activity threshold (7-bit units): a controller must move at least this far
+  // from its first observed value before it is learned. 0 disables the gate.
+  uint8_t learn_min_movement_ = 0;
+  bool learn_baseline_valid_ = false;
+  uint8_t learn_baseline_cc_ = 0;
+  uint8_t learn_baseline_channel_ = 0;
+  uint8_t learn_baseline_value_ = 0;
+
+  bool pending_cc_msb_valid_ = false;
+  uint8_t pending_cc_msb_ = 0;
+  uint8_t pending_cc_msb_channel_ = 0;
+
+  bool rpn_msb_valid_ = false;
+  bool rpn_lsb_valid_ = false;
+  uint8_t rpn_msb_ = 0;
+  uint8_t rpn_lsb_ = 0;
+
+  bool nrpn_msb_valid_ = false;
+  bool nrpn_lsb_valid_ = false;
+  uint8_t nrpn_msb_ = 0;
+  uint8_t nrpn_lsb_ = 0;
 };
 
 }  // namespace sonare::midi

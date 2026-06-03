@@ -30,6 +30,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SplitClip(const Napi::CallbackInfo& info);
   Napi::Value TrimClip(const Napi::CallbackInfo& info);
   Napi::Value MoveClip(const Napi::CallbackInfo& info);
+  Napi::Value SetClipWarpRef(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackMidiDestination(const Napi::CallbackInfo& info);
   Napi::Value Undo(const Napi::CallbackInfo& info);
   Napi::Value Redo(const Napi::CallbackInfo& info);
 
@@ -37,6 +39,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetMidiEvents(const Napi::CallbackInfo& info);
   Napi::Value ImportSmf(const Napi::CallbackInfo& info);
   Napi::Value ExportSmf(const Napi::CallbackInfo& info);
+  Napi::Value ImportClipFile(const Napi::CallbackInfo& info);
+  Napi::Value ExportClipFile(const Napi::CallbackInfo& info);
   Napi::Value SetProgram(const Napi::CallbackInfo& info);
   Napi::Value SetProgramOnChannel(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);

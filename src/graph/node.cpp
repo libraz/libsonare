@@ -75,7 +75,33 @@ void Node::process_block(int num_samples) noexcept {
     std::copy(input, input + num_samples, output);
     process_channels_[static_cast<size_t>(port)] = output;
   }
-  processor_->process(process_channels_.data(), num_ports_, num_samples);
+  int process_ports = num_ports_;
+  if (sidechain_num_ports_ > 0) {
+    process_ports = sidechain_first_port_;
+    for (int port = 0; port < sidechain_num_ports_; ++port) {
+      sidechain_channels_[static_cast<size_t>(port)] = output_port(sidechain_first_port_ + port);
+    }
+    processor_->set_sidechain(sidechain_channels_.data(), sidechain_num_ports_, num_samples);
+  }
+  if (processor_->bypassed()) {
+    return;
+  }
+  processor_->process(process_channels_.data(), process_ports, num_samples);
+}
+
+bool Node::set_sidechain_ports(int first_port, int num_ports) noexcept {
+  if (num_ports == 0) {
+    sidechain_first_port_ = 0;
+    sidechain_num_ports_ = 0;
+    return true;
+  }
+  if (first_port <= 0 || num_ports < 0 || first_port >= num_ports_ ||
+      num_ports > num_ports_ - first_port) {
+    return false;
+  }
+  sidechain_first_port_ = first_port;
+  sidechain_num_ports_ = num_ports;
+  return true;
 }
 
 float* Node::input_port(int port) noexcept { return port_data(input_, port); }

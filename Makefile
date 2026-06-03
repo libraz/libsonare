@@ -6,6 +6,7 @@ BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
 RYE ?= rye
 CMAKE ?= cmake
+UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 PYTHON_PKG_DIR := bindings/python/src/libsonare
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -51,12 +52,12 @@ clean:
 rebuild: clean build
 
 format:
-	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | xargs -0 clang-format -i
+	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))' | xargs -0 clang-format -i
 	cd bindings/wasm && yarn format
 	cd bindings/node && yarn format
-	$(RYE) sync --pyproject bindings/python/pyproject.toml
-	$(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
-	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
 
 lint:
 	cd bindings/wasm && yarn lint

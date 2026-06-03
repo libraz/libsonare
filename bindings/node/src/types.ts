@@ -1097,7 +1097,7 @@ export interface EqSpectrumSnapshot {
  * that differs means the native binary lays out the flat project PODs
  * differently than this binding expects (0 = arrangement support compiled out).
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 1;
+export const EXPECTED_PROJECT_ABI_VERSION = 3;
 
 /** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;

@@ -49,7 +49,7 @@ std::vector<int> quality_intervals(arrangement::ChordQuality quality) {
 }
 
 /// Extension scale-degree (e.g. 9, 11, 13, or 2 for sus2) -> semitone offset.
-int extension_semitones(uint8_t degree) {
+int extension_semitones(uint8_t degree, arrangement::ChordQuality quality) {
   switch (degree) {
     case 2:
       return 2;  // 9th folded into the octave, or sus2.
@@ -58,7 +58,7 @@ int extension_semitones(uint8_t degree) {
     case 6:
       return 9;  // 13th folded, or add6.
     case 7:
-      return 10;  // minor 7th by default (quality already sets maj7 cases).
+      return quality == arrangement::ChordQuality::kMajor ? 11 : 10;
     case 9:
       return 2;
     case 11:
@@ -224,12 +224,17 @@ arrangement::HarmonicTimeline build_harmonic_timeline(const HarmonicAnalysisInpu
   }
 
   // --- Chord segments ------------------------------------------------------
-  auto key_tonic_at = [&](double ppq) -> int {
+  struct KeyIdentity {
+    int tonic = -1;
+    arrangement::KeyMode mode = arrangement::KeyMode::kUnknown;
+  };
+  auto key_identity_at = [&](double ppq) -> KeyIdentity {
     const arrangement::KeySegment* k = timeline.key_at(ppq);
-    return k ? static_cast<int>(k->tonic_pc) : -1;
+    return k ? KeyIdentity{static_cast<int>(k->tonic_pc), k->mode} : KeyIdentity{};
   };
 
-  int prev_tonic = -2;  // sentinel distinct from any pitch class or "unknown".
+  bool have_prev_key = false;
+  KeyIdentity prev_key;
   for (const auto& c : input.chords) {
     arrangement::ChordSymbol sym;
     sym.start_ppq = seconds_to_ppq(c.start, tempo_map);
@@ -241,12 +246,16 @@ arrangement::HarmonicTimeline build_harmonic_timeline(const HarmonicAnalysisInpu
     if (c.bass != c.root) {
       sym.slash_bass_pc = static_cast<uint8_t>(static_cast<int>(c.bass));
     }
-    // Mark a modulation boundary when the active key tonic changes here.
-    const int tonic = key_tonic_at(sym.start_ppq);
-    if (tonic >= 0 && tonic != prev_tonic && prev_tonic != -2) {
+    // Mark a modulation boundary when the active key identity changes here.
+    const KeyIdentity key = key_identity_at(sym.start_ppq);
+    if (key.tonic >= 0 && have_prev_key &&
+        (key.tonic != prev_key.tonic || key.mode != prev_key.mode)) {
       sym.modulation_boundary = true;
     }
-    if (tonic >= 0) prev_tonic = tonic;
+    if (key.tonic >= 0) {
+      prev_key = key;
+      have_prev_key = true;
+    }
     timeline.chords.push_back(std::move(sym));
   }
 
@@ -263,7 +272,7 @@ PitchCorrectionTarget derive_pitch_correction_target(const arrangement::Harmonic
     const int root = chord->root_pc;
     for (int iv : quality_intervals(chord->quality)) add_pc(target.chord_tones, root + iv);
     for (uint8_t deg : chord->extensions) {
-      const int semis = extension_semitones(deg);
+      const int semis = extension_semitones(deg, chord->quality);
       if (semis >= 0) add_pc(target.chord_tones, root + semis);
     }
     std::sort(target.chord_tones.begin(), target.chord_tones.end());

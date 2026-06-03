@@ -2,13 +2,40 @@
 
 #include <cmath>
 
+#include "midi/tick_conversion.h"
+
 namespace sonare::midi {
 namespace {
 
-// PPQ (quarter notes) -> clock ticks at 24 PPQN. One quarter note == 24 ticks.
-double ppq_to_ticks(double ppq) noexcept { return ppq * kClockPulsesPerQuarter; }
-double ticks_to_ppq(int64_t ticks) noexcept {
-  return static_cast<double>(ticks) / kClockPulsesPerQuarter;
+bool valid_mtc_time(const MtcTime& time) noexcept {
+  return time.hours < 24 && time.minutes < 60 && time.seconds < 60 &&
+         time.frames < static_cast<uint8_t>(mtc_fps(time.rate));
+}
+
+void advance_mtc_frames(MtcTime* time, int frames) noexcept {
+  if (time == nullptr || frames <= 0 || !valid_mtc_time(*time)) {
+    return;
+  }
+  const int fps = mtc_fps(time->rate);
+  int total = static_cast<int>(time->frames) + frames;
+  time->frames = static_cast<uint8_t>(total % fps);
+  total /= fps;
+  if (total == 0) {
+    return;
+  }
+  total += static_cast<int>(time->seconds);
+  time->seconds = static_cast<uint8_t>(total % 60);
+  total /= 60;
+  if (total == 0) {
+    return;
+  }
+  total += static_cast<int>(time->minutes);
+  time->minutes = static_cast<uint8_t>(total % 60);
+  total /= 60;
+  if (total == 0) {
+    return;
+  }
+  time->hours = static_cast<uint8_t>((static_cast<int>(time->hours) + total) % 24);
 }
 
 }  // namespace
@@ -55,7 +82,7 @@ double spp_beats_to_ppq(uint16_t midi_beats) noexcept {
 }
 
 size_t encode_mtc_quarter_frame(const MtcTime& time, int piece, uint8_t* out, size_t cap) noexcept {
-  if (out == nullptr || cap < 2 || piece < 0 || piece > 7) {
+  if (out == nullptr || cap < 2 || piece < 0 || piece > 7 || !valid_mtc_time(time)) {
     return 0;
   }
   uint8_t nibble = 0;
@@ -94,11 +121,63 @@ size_t encode_mtc_quarter_frame(const MtcTime& time, int piece, uint8_t* out, si
   return 2;
 }
 
+size_t encode_mtc_full_frame(const MtcTime& time, uint8_t device_id, uint8_t* out,
+                             size_t cap) noexcept {
+  if (out == nullptr || cap < 10 || !valid_mtc_time(time)) {
+    return 0;
+  }
+  out[0] = 0xF0u;
+  out[1] = 0x7Fu;
+  out[2] = static_cast<uint8_t>(device_id & 0x7Fu);
+  out[3] = 0x01u;
+  out[4] = 0x01u;
+  out[5] = static_cast<uint8_t>(((static_cast<uint8_t>(time.rate) & 0x03u) << 5u) |
+                                (time.hours & 0x1Fu));
+  out[6] = static_cast<uint8_t>(time.minutes & 0x3Fu);
+  out[7] = static_cast<uint8_t>(time.seconds & 0x3Fu);
+  out[8] = static_cast<uint8_t>(time.frames & 0x1Fu);
+  out[9] = 0xF7u;
+  return 10;
+}
+
+size_t encode_transport_command(uint8_t status, uint8_t* out, size_t cap) noexcept {
+  if (out == nullptr || cap < 1) {
+    return 0;
+  }
+  if (status != kStatusStart && status != kStatusContinue && status != kStatusStop) {
+    return 0;
+  }
+  out[0] = status;
+  return 1;
+}
+
+bool MtcQuarterFrameGenerator::reset(const MtcTime& start, int next_piece) noexcept {
+  if (!valid_mtc_time(start) || next_piece < 0 || next_piece > 7) {
+    return false;
+  }
+  time_ = start;
+  next_piece_ = next_piece;
+  return true;
+}
+
+size_t MtcQuarterFrameGenerator::next(uint8_t* out, size_t cap) noexcept {
+  const int piece = next_piece_;
+  const size_t written = encode_mtc_quarter_frame(time_, piece, out, cap);
+  if (written == 0) {
+    return 0;
+  }
+  next_piece_ = (next_piece_ + 1) & 0x07;
+  if (next_piece_ == 0) {
+    advance_mtc_frames(&time_, 2);
+  }
+  return written;
+}
+
 int64_t ClockGenerator::frame_of_tick(int64_t tick) const noexcept {
   if (tempo_map_ == nullptr) {
     return 0;
   }
-  const double ppq = ticks_to_ppq(tick);
+  const double ppq = clock_ticks_to_ppq(tick);
   return tempo_map_->ppq_to_sample(ppq);
 }
 
@@ -107,7 +186,7 @@ int64_t ClockGenerator::first_tick_at_or_after(int64_t frame) const noexcept {
     return 0;
   }
   const double ppq = tempo_map_->sample_to_ppq(frame);
-  const double ticks = ppq_to_ticks(ppq);
+  const double ticks = clock_ppq_to_ticks(ppq);
   int64_t tick = static_cast<int64_t>(std::ceil(ticks));
   if (tick < 0) {
     tick = 0;
@@ -137,7 +216,7 @@ size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_f
        frame_of_tick(tick) < block_end_frame; ++tick) {
     if (out->size >= ClockByteOutput::kCapacity) {
       out->overflowed = true;
-      overflow_count_.fetch_add(1, std::memory_order_relaxed);
+      overflow_count_.bump();
       // Keep scanning so overflow_count reflects every dropped tick.
       continue;
     }
@@ -171,6 +250,10 @@ void ClockParser::assemble_mtc() noexcept {
   t.minutes = static_cast<uint8_t>((mtc_pieces_[4] & 0x0Fu) | ((mtc_pieces_[5] & 0x03u) << 4u));
   t.hours = static_cast<uint8_t>((mtc_pieces_[6] & 0x0Fu) | ((mtc_pieces_[7] & 0x01u) << 4u));
   t.rate = static_cast<MtcFrameRate>((mtc_pieces_[7] >> 1u) & 0x03u);
+  if (!valid_mtc_time(t)) {
+    mtc_complete_ = false;
+    return;
+  }
   mtc_time_ = t;
   mtc_complete_ = true;
 }
@@ -221,6 +304,10 @@ bool ClockParser::parse_byte(uint8_t byte) noexcept {
     case Pending::kMtcData: {
       const int piece = (byte >> 4u) & 0x07u;
       const uint8_t nibble = static_cast<uint8_t>(byte & 0x0Fu);
+      if (piece == 0) {
+        mtc_seen_.fill(false);
+        mtc_complete_ = false;
+      }
       mtc_pieces_[static_cast<size_t>(piece)] = nibble;
       mtc_seen_[static_cast<size_t>(piece)] = true;
       pending_ = Pending::kNone;
@@ -238,7 +325,7 @@ bool ClockParser::parse_byte(uint8_t byte) noexcept {
 
 double ClockParser::position_ppq() const noexcept {
   const double anchor = has_spp_ ? spp_beats_to_ppq(spp_beats_) : 0.0;
-  return anchor + ticks_to_ppq(clock_ticks_);
+  return anchor + clock_ticks_to_ppq(clock_ticks_);
 }
 
 }  // namespace sonare::midi

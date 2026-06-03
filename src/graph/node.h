@@ -3,6 +3,7 @@
 /// @file node.h
 /// @brief Processor node with preallocated port buffers.
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -27,6 +28,7 @@ class Node {
   // handled by early return rather than throwing.
   void clear_inputs(int num_samples) noexcept;
   void process_block(int num_samples) noexcept;
+  bool set_sidechain_ports(int first_port, int num_ports) noexcept;
 
   float* input_port(int port) noexcept;
   const float* input_port(int port) const noexcept;
@@ -37,6 +39,8 @@ class Node {
   rt::ProcessorBase& processor() noexcept { return *processor_; }
   const rt::ProcessorBase& processor() const noexcept { return *processor_; }
   int num_ports() const noexcept { return num_ports_; }
+  int sidechain_first_port() const noexcept { return sidechain_first_port_; }
+  int sidechain_num_ports() const noexcept { return sidechain_num_ports_; }
   int max_block_size() const noexcept { return max_block_size_; }
 
  private:
@@ -56,6 +60,9 @@ class Node {
   std::vector<float> input_;
   std::vector<float> output_;
   std::vector<float*> process_channels_;
+  std::array<const float*, kMaxPorts> sidechain_channels_{};
+  int sidechain_first_port_ = 0;
+  int sidechain_num_ports_ = 0;
 };
 
 }  // namespace sonare::graph

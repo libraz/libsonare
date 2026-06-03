@@ -1,0 +1,82 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
+import {
+  createSonareEngineCommandRingBuffer,
+  createSonareEngineTelemetryRingBuffer,
+  createSonareMeterRingBuffer,
+  createSonareSpectrumRingBuffer,
+  init as initWorklet,
+  popSonareEngineCommandRingBuffer,
+  pushSonareEngineCommandRingBuffer,
+  readSonareEngineTelemetryRingBuffer,
+  readSonareMeterRingBuffer,
+  readSonareSpectrumRingBuffer,
+  registerSonareRealtimeEngineWorkletProcessor,
+  registerSonareRealtimeVoiceChangerWorkletProcessor,
+  registerSonareWorkletProcessor,
+  SONARE_ENGINE_COMMAND_RECORD_BYTES,
+  SONARE_ENGINE_RING_HEADER_INTS,
+  SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_METER_RING_HEADER_INTS,
+  SONARE_METER_RING_RECORD_FLOATS,
+  SonareEngine,
+  SonareEngineCommandType,
+  SonareEngineTelemetryError,
+  SonareEngineTelemetryType,
+  SonareRealtimeEngineNode,
+  SonareRealtimeEngineWorkletProcessor,
+  SonareRealtimeVoiceChangerWorkletProcessor,
+  SonareRtRealtimeEngineRuntime,
+  SonareWorkletProcessor,
+  sonareEngineCommandRingBufferByteLength,
+  sonareEngineTelemetryRingBufferByteLength,
+  sonareMeterRingBufferByteLength,
+  writeSonareEngineTelemetryRingBuffer,
+} from '../dist/worklet.js';
+
+export {
+  createSonareEngineCommandRingBuffer,
+  createSonareEngineTelemetryRingBuffer,
+  createSonareMeterRingBuffer,
+  createSonareSpectrumRingBuffer,
+  describe,
+  expect,
+  it,
+  Mixer,
+  mixingScenePresetJson,
+  popSonareEngineCommandRingBuffer,
+  pushSonareEngineCommandRingBuffer,
+  readSonareEngineTelemetryRingBuffer,
+  readSonareMeterRingBuffer,
+  readSonareSpectrumRingBuffer,
+  registerSonareRealtimeEngineWorkletProcessor,
+  registerSonareRealtimeVoiceChangerWorkletProcessor,
+  registerSonareWorkletProcessor,
+  SONARE_ENGINE_COMMAND_RECORD_BYTES,
+  SONARE_ENGINE_RING_HEADER_INTS,
+  SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_METER_RING_HEADER_INTS,
+  SONARE_METER_RING_RECORD_FLOATS,
+  SonareEngine,
+  SonareEngineCommandType,
+  SonareEngineTelemetryError,
+  SonareEngineTelemetryType,
+  SonareRealtimeEngineNode,
+  SonareRealtimeEngineWorkletProcessor,
+  SonareRealtimeVoiceChangerWorkletProcessor,
+  SonareRtRealtimeEngineRuntime,
+  SonareWorkletProcessor,
+  sonareEngineCommandRingBufferByteLength,
+  sonareEngineTelemetryRingBufferByteLength,
+  sonareMeterRingBufferByteLength,
+  writeSonareEngineTelemetryRingBuffer,
+};
+
+export function setupWorklet(): void {
+  beforeAll(async () => {
+    // index.js and worklet.js are separate self-contained bundles (code-splitting
+    // is disabled), so each owns its module singleton and must be initialized.
+    await init();
+    await initWorklet();
+  });
+}

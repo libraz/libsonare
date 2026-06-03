@@ -5,7 +5,7 @@
 #include <vector>
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
-#include "editing/voice_changer/realtime_voice_changer.h"
+#include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/voice_changer.h"
 #endif
 #include "core/audio.h"

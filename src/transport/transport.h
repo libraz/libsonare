@@ -7,9 +7,11 @@
 #include <atomic>
 #include <cstdint>
 
+#include "rt/seqlock_cell.h"
 #include "transport/marker.h"
 #include "transport/tempo_map.h"
 #include "transport/transport_state.h"
+#include "util/constants.h"
 
 namespace sonare::transport {
 
@@ -56,6 +58,10 @@ class Transport {
 
   int64_t render_frame() const noexcept { return render_frame_; }
   int64_t sample_position() const noexcept { return sample_position_; }
+  // Whether the transport is currently rolling. Read on the audio thread per
+  // sub-block to gate sequenced playback (a stopped transport produces no clip /
+  // MIDI output and re-dispatches nothing while the playhead is frozen).
+  bool playing() const noexcept { return playing_; }
 
   // Number of process blocks in which collect_loop_boundaries() dropped one or
   // more loop wraps because the BoundaryList filled to kCapacity. Mirrors
@@ -68,34 +74,24 @@ class Transport {
 
  private:
   // Consistent snapshot of the loop region. set_loop (control thread) publishes
-  // all three fields atomically via the seqlock guard below; the audio thread
-  // (advance / collect_loop_boundaries / snapshot) reads a torn-free copy.
+  // all three fields atomically via the seqlock cell below; the audio thread
+  // (advance / collect_loop_boundaries / snapshot) reads a torn-free copy via
+  // the cell's single non-spinning try_load() (RT-safe; on a detected conflict
+  // it returns the last cached value instead of spinning up to a scheduler
+  // tick, which would risk an xrun if the control thread were preempted
+  // mid-write). The control thread alone calls store().
   struct LoopState {
     double start_ppq = 0.0;
     double end_ppq = 0.0;
     bool enabled = false;
   };
 
-  // Seqlock: an odd guard means a write is in progress. The audio-thread reader
-  // does a single non-spinning attempt (read_loop_state); on a detected
-  // conflict (writer mid-update or torn read) it returns the last consistent
-  // value it cached instead of spinning up to a scheduler tick, which would
-  // risk an xrun if the control thread were preempted mid-write. The control
-  // thread alone calls write_loop_state. Mirrors mixing/meter.cpp's try-read.
-  LoopState read_loop_state() const noexcept;
-  void write_loop_state(const LoopState& state) noexcept;
-
   const TempoMap* tempo_map_ = nullptr;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = constants::kDefaultDawSampleRate;
   bool playing_ = false;
   int64_t render_frame_ = 0;
   int64_t sample_position_ = 0;
-  LoopState loop_state_{};
-  mutable std::atomic<uint32_t> loop_guard_{0};
-  // Last torn-free LoopState observed by read_loop_state(). Touched only on the
-  // audio-thread read path, so no synchronization is needed; serves as the
-  // fallback when a single try-read races a control-thread write.
-  mutable LoopState cached_loop_state_{};
+  rt::SeqlockCell<LoopState> loop_state_{};
   // Diagnostic overflow counter (see loop_overflow_count()). Incremented on the
   // audio thread from the const collect_loop_boundaries(), hence mutable atomic.
   mutable std::atomic<uint32_t> loop_overflow_count_{0};

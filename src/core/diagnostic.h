@@ -16,6 +16,20 @@
 namespace sonare {
 
 /// @brief A single non-fatal diagnostic message.
+///
+/// @note CANONICAL severity ordering. This is the project-wide reference scheme:
+///   ascending severity, `Info(0) < Warning(1) < Error(2)`. Two historical
+///   diagnostic types predate this canonical form and use DIFFERENT ordinals,
+///   so they are deliberately NOT migrated onto this struct:
+///     - `arrangement::Diagnostic::Severity` is `kError=0, kWarning=1` and its
+///       ordinal is EXPOSED NUMERICALLY through the C ABI
+///       (`SonareProjectDiagnostic.severity`) — a frozen wire value.
+///     - `serialize::DiagnosticSeverity` is `kWarning=0, kError=1` (INVERTED
+///       relative to arrangement); it is latent (never crosses a boundary as a
+///       number).
+///   Unifying them would silently change those ordinals, so instead each pins
+///   its mapping with a `static_assert` near its definition. New diagnostic
+///   producers should use THIS canonical type and ordering.
 struct Diagnostic {
   enum class Severity {
     Info,     ///< Informational; no action required.

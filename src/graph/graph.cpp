@@ -78,6 +78,15 @@ bool Graph::disconnect(const std::string& source_node, int source_port,
   return connections_.size() != old_size;
 }
 
+bool Graph::set_node_sidechain_ports(const std::string& node_id, int first_port,
+                                     int num_ports) noexcept {
+  Node* target = node(node_id);
+  if (target == nullptr) {
+    return false;
+  }
+  return target->set_sidechain_ports(first_port, num_ports);
+}
+
 bool Graph::compile() {
   topo_order_.clear();
   topo_order_ids_.clear();

@@ -110,12 +110,73 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('routes a track to a MIDI destination and undoes it', () => {
+    const project = Project.create();
+    const trackId = project.addTrack({ kind: 'midi', name: 'lead' });
+    const before = project.toJson();
+
+    project.setTrackMidiDestination(trackId, 7);
+    const after = project.toJson();
+    expect(after).not.toBe(before);
+    expect(after).toContain('"midi_destination_id":7');
+
+    project.undo();
+    expect(project.toJson()).toBe(before);
+
+    project.destroy();
+  });
+
+  it('sets a clip warp reference and undoes it', () => {
+    const project = Project.create();
+    const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+    const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const before = project.toJson();
+
+    project.setClipWarpRef(clipId, 123);
+    const after = project.toJson();
+    expect(after).not.toBe(before);
+    expect(after).toContain('"warp_ref_id":123');
+
+    project.undo();
+    expect(project.toJson()).toBe(before);
+
+    project.destroy();
+  });
+
+  it('rejects routing an unknown track', () => {
+    const project = Project.create();
+    expect(() => project.setTrackMidiDestination(9999, 1)).toThrow();
+    project.destroy();
+  });
+
   it('exports MIDI to an SMF Buffer', () => {
     const project = buildProject();
     const smf = project.exportSmf();
     expect(smf.length).toBeGreaterThan(0);
     // Standard MIDI File header chunk magic.
     expect(smf.subarray(0, 4).toString('ascii')).toBe('MThd');
+    project.destroy();
+  });
+
+  it('round-trips a MIDI 2.0 Clip File through the binding', () => {
+    const project = buildProject();
+    const { clipId } = project.addMidiClip(0, 4);
+    // A MIDI 2.0 note-on (message type 0x4) with a full 16-bit velocity.
+    project.setMidiEvents(clipId, [
+      { ppq: 0, data0: 0x40903c00, data1: 0xbeef0000 },
+      { ppq: 1, data0: 0x40803c00, data1: 0 },
+    ]);
+
+    const clipFile = project.exportClipFile();
+    expect(clipFile.length).toBeGreaterThan(8);
+    // MIDI 2.0 Clip File header magic.
+    expect(clipFile.subarray(0, 8).toString('ascii')).toBe('SMF2CLIP');
+
+    const reimported = Project.create();
+    const firstClip = reimported.importClipFile(clipFile);
+    expect(firstClip).toBeGreaterThan(0);
+    expect(reimported.exportClipFile().subarray(0, 8).toString('ascii')).toBe('SMF2CLIP');
+    reimported.destroy();
     project.destroy();
   });
 

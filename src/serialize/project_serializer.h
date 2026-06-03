@@ -60,10 +60,22 @@ namespace sonare::serialize {
 inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 1;
 
 /// @brief Severity of a deserialize diagnostic.
+///
+/// @note This ordinal scheme (`kWarning=0, kError=1`) is INVERTED relative to
+///   `arrangement::Diagnostic::Severity` (`kError=0, kWarning=1`) and to the
+///   project-wide canonical `sonare::Diagnostic::Severity`
+///   (`Info=0 < Warning=1 < Error=2`, see core/diagnostic.h). It is latent —
+///   this layer never exposes the numeric ordinal across a boundary — so the
+///   `static_assert`s below merely FREEZE the historical values and document
+///   the divergence so it can never drift silently into a wire mismatch.
 enum class DiagnosticSeverity : uint32_t {
   kWarning = 0,
   kError = 1,
 };
+static_assert(static_cast<uint32_t>(DiagnosticSeverity::kWarning) == 0u,
+              "serialize DiagnosticSeverity::kWarning ordinal is frozen (see core/diagnostic.h)");
+static_assert(static_cast<uint32_t>(DiagnosticSeverity::kError) == 1u,
+              "serialize DiagnosticSeverity::kError ordinal is frozen (see core/diagnostic.h)");
 
 /// @brief A single diagnostic produced while deserializing a project.
 struct Diagnostic {

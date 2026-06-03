@@ -8,12 +8,13 @@
 #include <vector>
 
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::transport {
 
 struct TempoSegment {
   double start_ppq = 0.0;
-  double bpm = 120.0;
+  double bpm = constants::kDefaultBpm;
   double start_sample = 0.0;
   /// Tempo (BPM) reached at the END of this segment (i.e. at the next segment's
   /// start_ppq). When <= 0 or equal to `bpm`, the segment is piecewise-constant
@@ -33,6 +34,8 @@ struct TimeSignature {
 struct TimeSignatureSegment {
   double start_ppq = 0.0;
   TimeSignature time_sig{};
+  uint8_t clocks_per_metronome_click = 24;
+  uint8_t thirty_seconds_per_quarter = 8;
 };
 
 struct BarBeat {
@@ -66,7 +69,7 @@ class TempoMap {
   static double bar_start_ppq_in(const std::vector<TimeSignatureSegment>& time_signatures,
                                  double ppq) noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = constants::kDefaultDawSampleRate;
   rt::RtSnapshot<std::vector<TempoSegment>> segments_;
   rt::RtSnapshot<std::vector<TimeSignatureSegment>> time_signatures_;
 };

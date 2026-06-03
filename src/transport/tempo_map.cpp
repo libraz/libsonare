@@ -5,6 +5,8 @@
 #include <limits>
 #include <memory>
 
+#include "util/constants.h"
+
 namespace sonare::transport {
 namespace {
 
@@ -90,7 +92,7 @@ std::vector<TempoSegment> normalize_segments(std::vector<TempoSegment> segments,
                                 }),
                  segments.end());
   if (segments.empty()) {
-    segments.push_back({0.0, 120.0, 0.0});
+    segments.push_back({0.0, constants::kDefaultBpm, 0.0});
   }
   std::sort(segments.begin(), segments.end(),
             [](const auto& a, const auto& b) { return a.start_ppq < b.start_ppq; });
@@ -128,7 +130,9 @@ std::vector<TimeSignatureSegment> normalize_time_signatures(
   std::sort(time_signatures.begin(), time_signatures.end(),
             [](const auto& a, const auto& b) { return a.start_ppq < b.start_ppq; });
   if (time_signatures.front().start_ppq > 0.0) {
-    time_signatures.insert(time_signatures.begin(), {0.0, time_signatures.front().time_sig});
+    TimeSignatureSegment first = time_signatures.front();
+    first.start_ppq = 0.0;
+    time_signatures.insert(time_signatures.begin(), first);
   }
   return time_signatures;
 }
@@ -143,7 +147,7 @@ void TempoMap::prepare(double sample_rate) {
   // Control-thread reads of the current snapshots are safe via load().
   const std::vector<TempoSegment>* segments = segments_.load();
   std::vector<TempoSegment> seg_values =
-      segments ? *segments : std::vector<TempoSegment>{{0.0, 120.0, 0.0}};
+      segments ? *segments : std::vector<TempoSegment>{{0.0, constants::kDefaultBpm, 0.0}};
   segments_.publish(std::make_shared<const std::vector<TempoSegment>>(
       normalize_segments(std::move(seg_values), sample_rate_)));
 
@@ -191,7 +195,7 @@ int64_t TempoMap::ppq_to_sample(double ppq) const noexcept {
 
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
   const std::vector<TempoSegment>* segments = segments_.load();
-  if (!segments || segments->empty()) return 120.0;
+  if (!segments || segments->empty()) return constants::kDefaultBpm;
   const TempoSegment& segment =
       (*segments)[segment_index_for_sample(*segments, static_cast<double>(sample))];
   const double end_bpm = effective_end_bpm(segment);

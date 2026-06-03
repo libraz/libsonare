@@ -41,6 +41,11 @@ struct AudioSourceRef {
   /// by id rather than URI (0 = none). The core stores the id only and does not
   /// own or interpret the underlying buffer.
   uint32_t storage_handle_id = 0;
+  /// Optional opaque content hash for integrity / identity (empty = unset). The
+  /// host computes this (e.g. a digest of the referenced audio); the core treats
+  /// it as a non-interpreted string and only round-trips it. Kept absent from
+  /// serialized output when empty so existing projects stay byte-identical.
+  std::string content_hash;
 };
 
 /// Reference to MIDI content. Reserved: only the stable id and minimal

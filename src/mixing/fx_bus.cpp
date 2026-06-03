@@ -20,6 +20,8 @@ int FxBus::latency_samples() const noexcept { return bus_.latency_samples(); }
 
 int FxBus::latency_samples_q8() const noexcept { return bus_.latency_samples_q8(); }
 
+int FxBus::tail_samples() const noexcept { return bus_.tail_samples(); }
+
 void FxBus::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
   bus_.add_insert(std::move(processor));
 }

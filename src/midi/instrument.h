@@ -27,6 +27,7 @@
 
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
+#include "transport/transport_state.h"
 
 namespace sonare::midi {
 
@@ -45,6 +46,17 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   // rt::ProcessorBase: prepare / process / reset / latency_samples are inherited
   // (prepare and process are pure-virtual and must be implemented).
   // MidiEventSink: on_event(destination_id, event) is inherited (pure-virtual).
+  // rt::ProcessorBase::save_state / load_state provide opaque session
+  // persistence (default: stateless).
+
+  /// AUDIO thread: per-block playhead / transport sync, pushed by the engine
+  /// BEFORE process() so a tempo-synced delay, arpeggiator or LFO inside a
+  /// hosted instrument follows the host transport instead of free-running. The
+  /// state is the same immutable per-block snapshot the engine feeds the
+  /// sequencer / automation (playing, ppq/sample position, bpm, time signature,
+  /// loop region). Must be allocation-free and lock-free. Default: ignored
+  /// (a free-running instrument needs no transport).
+  virtual void set_transport(const transport::TransportState& state) noexcept { (void)state; }
 };
 
 }  // namespace sonare::midi

@@ -1,6 +1,13 @@
 # CLI tool
 add_executable(sonare
   sonare_cli.cpp
+  cli/sonare_cli_analysis.cpp
+  cli/sonare_cli_common.cpp
+  cli/sonare_cli_dsp.cpp
+  cli/sonare_cli_features_metering.cpp
+  cli/sonare_cli_mastering_mixing.cpp
+  cli/sonare_cli_processing.cpp
+  cli/sonare_cli_project.cpp
   cli_support.cpp
 )
 
@@ -33,6 +40,11 @@ if(BUILD_ARRANGEMENT)
   # link the arrangement subsystem libs the C ABI resolves against.
   target_sources(sonare PRIVATE
     ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_edit.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
     ${PROJECT_SOURCE_DIR}/src/sonare_c_memory.cpp
   )
   target_link_libraries(sonare PRIVATE
@@ -44,6 +56,8 @@ target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 
 target_include_directories(sonare PRIVATE
   ${PROJECT_SOURCE_DIR}/src
+  ${PROJECT_SOURCE_DIR}/tools
+  ${PROJECT_SOURCE_DIR}/tools/cli
 )
 
 # Profiling build option

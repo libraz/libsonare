@@ -28,10 +28,10 @@
 /// and integer tick math. No clock / random.
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
+#include "rt/overflow_counter.h"
 #include "transport/tempo_map.h"
 
 namespace sonare::midi {
@@ -106,6 +106,40 @@ double spp_beats_to_ppq(uint16_t midi_beats) noexcept;
 /// args.
 size_t encode_mtc_quarter_frame(const MtcTime& time, int piece, uint8_t* out, size_t cap) noexcept;
 
+/// Encode an MTC full-frame SysEx message:
+/// [F0, 7F, device_id, 01, 01, hr, mn, se, fr, F7].
+/// `device_id` is 0x7F for all-call. Returns 10 bytes written, or 0 on bad args
+/// / invalid timecode.
+size_t encode_mtc_full_frame(const MtcTime& time, uint8_t device_id, uint8_t* out,
+                             size_t cap) noexcept;
+
+/// Encode one MIDI transport real-time command byte (Start / Continue / Stop).
+/// Returns 1 byte written, or 0 when `status` is not a transport command or
+/// `out` is null / too small.
+size_t encode_transport_command(uint8_t status, uint8_t* out, size_t cap) noexcept;
+
+/// Stateful MTC quarter-frame stream generator. Emits pieces 0..7 in order for
+/// the current timecode; after piece 7, advances the timecode by two SMPTE
+/// frames because one full quarter-frame cycle spans eight quarter-frame
+/// messages.
+class MtcQuarterFrameGenerator {
+ public:
+  /// Sets the current stream position. Returns false and leaves the previous
+  /// state unchanged when `start` is not a valid timecode.
+  bool reset(const MtcTime& start, int next_piece = 0) noexcept;
+
+  /// Encodes the next [F1, data] quarter-frame message and advances stream
+  /// state. Returns 2 bytes written, or 0 on invalid args.
+  size_t next(uint8_t* out, size_t cap) noexcept;
+
+  const MtcTime& time() const noexcept { return time_; }
+  int next_piece() const noexcept { return next_piece_; }
+
+ private:
+  MtcTime time_{};
+  int next_piece_ = 0;
+};
+
 /// MIDI clock generator: emits 0xF8 ticks across a render-frame block.
 class ClockGenerator {
  public:
@@ -122,17 +156,15 @@ class ClockGenerator {
   /// tick fires every 1/24 quarter note). RT-safe.
   int64_t first_tick_at_or_after(int64_t frame) const noexcept;
 
-  uint32_t overflow_count() const noexcept {
-    return overflow_count_.load(std::memory_order_relaxed);
-  }
-  void reset_telemetry() noexcept { overflow_count_.store(0, std::memory_order_relaxed); }
-
- private:
-  // Render frame at which absolute clock tick `tick` fires.
+  /// Render frame at which absolute clock tick `tick` fires. RT-safe.
   int64_t frame_of_tick(int64_t tick) const noexcept;
 
+  uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
+  void reset_telemetry() noexcept { overflow_count_.reset(); }
+
+ private:
   const transport::TempoMap* tempo_map_ = nullptr;
-  std::atomic<uint32_t> overflow_count_{0};
+  rt::OverflowCounter overflow_count_{};
 };
 
 /// Incremental parser for incoming sync bytes. Tracks the last received SPP

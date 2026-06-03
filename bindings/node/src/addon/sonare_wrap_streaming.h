@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "editing/voice_changer/realtime_voice_changer.h"
+#include "editing/voice_changer/realtime.h"
 #include "mastering/api/chain.h"
 #include "mastering/eq/equalizer.h"
 #include "streaming/stream_analyzer.h"

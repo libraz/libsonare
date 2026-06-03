@@ -21,6 +21,7 @@ class Graph {
   bool connect(Connection connection);
   bool disconnect(const std::string& source_node, int source_port, const std::string& dest_node,
                   int dest_port);
+  bool set_node_sidechain_ports(const std::string& node_id, int first_port, int num_ports) noexcept;
 
   bool compile();
   void prepare(double sample_rate, int max_block_size);

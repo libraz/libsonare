@@ -134,25 +134,38 @@ size_t ClipPlayer::clip_count() const noexcept {
   return clip_count_.load(std::memory_order_relaxed);
 }
 
-float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position, FadeCurve curve) noexcept {
-  // Linear-amplitude fraction in [0, 1] for the current position.
-  float fraction = 1.0f;
+float curve_gain(float fraction, FadeCurve curve) noexcept {
+  fraction = std::clamp(fraction, 0.0f, 1.0f);
+  switch (curve) {
+    case FadeCurve::EqualPower:
+      return std::sin(kHalfPi * fraction);
+    case FadeCurve::Exponential:
+      return fraction * fraction;
+    case FadeCurve::Logarithmic:
+      return std::sqrt(fraction);
+    case FadeCurve::Linear:
+    default:
+      return fraction;
+  }
+}
+
+float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position,
+                            FadeCurve /*curve*/) noexcept {
+  float gain = 1.0f;
   if (clip.fade_in_samples > 0 && position < clip.fade_in_samples) {
-    fraction *= static_cast<float>(position) / static_cast<float>(clip.fade_in_samples);
+    const float fraction = static_cast<float>(position) / static_cast<float>(clip.fade_in_samples);
+    gain *= curve_gain(fraction, clip.fade_in_curve);
   }
   if (clip.fade_out_samples > 0) {
     const int64_t fade_start = clip.length_samples - clip.fade_out_samples;
     if (position >= fade_start) {
-      fraction *= static_cast<float>(std::max<int64_t>(0, clip.length_samples - position)) /
-                  static_cast<float>(clip.fade_out_samples);
+      const float fraction =
+          static_cast<float>(std::max<int64_t>(0, clip.length_samples - position)) /
+          static_cast<float>(clip.fade_out_samples);
+      gain *= curve_gain(fraction, clip.fade_out_curve);
     }
   }
-  fraction = std::clamp(fraction, 0.0f, 1.0f);
-  if (curve == FadeCurve::EqualPower) {
-    // sin(pi/2 * x) holds constant energy across symmetric crossfades.
-    return std::sin(kHalfPi * fraction);
-  }
-  return fraction;
+  return std::clamp(gain, 0.0f, 1.0f);
 }
 
 int64_t ClipPlayer::local_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept {
@@ -162,7 +175,10 @@ int64_t ClipPlayer::local_position(const ClipSchedule& clip, int64_t timeline_sa
       std::min<int64_t>(clip.length_samples, clip.buffer.num_samples - clip.clip_offset_samples);
   if (source_len <= 0) return -1;
   if (clip.loop) {
-    return clip.clip_offset_samples + (position % source_len);
+    const int64_t loop_len = clip.loop_length_samples > 0
+                                 ? std::min<int64_t>(clip.loop_length_samples, source_len)
+                                 : source_len;
+    return clip.clip_offset_samples + (position % loop_len);
   }
   return clip.clip_offset_samples + position;
 }

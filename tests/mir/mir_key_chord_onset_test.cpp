@@ -144,6 +144,24 @@ TEST_CASE("build_harmonic_timeline marks modulation boundary on key change", "[m
   CHECK(tl.chords[1].modulation_boundary);
 }
 
+TEST_CASE("build_harmonic_timeline marks modulation boundary on mode change", "[mir]") {
+  TempoMap map;
+  prepare_120bpm_map(map);
+
+  HarmonicAnalysisInput in;
+  in.chords.push_back(make_chord(PitchClass::C, ChordQuality::Major, 0.0f, 1.0f));
+  in.chords.push_back(make_chord(PitchClass::C, ChordQuality::Minor, 1.0f, 2.0f));
+  in.keys = {Key{PitchClass::C, Mode::Major, 1.0f}, Key{PitchClass::C, Mode::Minor, 1.0f}};
+  in.key_start_times = {0.0f, 1.0f};
+
+  const HarmonicTimeline tl = sonare::mir::build_harmonic_timeline(in, map);
+
+  REQUIRE(tl.keys.size() == 2);
+  REQUIRE(tl.chords.size() == 2);
+  CHECK_FALSE(tl.chords[0].modulation_boundary);
+  CHECK(tl.chords[1].modulation_boundary);
+}
+
 TEST_CASE("build_harmonic_timeline is deterministic", "[mir]") {
   TempoMap map;
   prepare_120bpm_map(map);
@@ -195,6 +213,23 @@ TEST_CASE("derive_pitch_correction_target returns chord + scale tones", "[mir]")
 
   // C major scale: C D E F G A B = {0,2,4,5,7,9,11}.
   CHECK(target.scale_tones == std::vector<uint8_t>{0, 2, 4, 5, 7, 9, 11});
+}
+
+TEST_CASE("derive_pitch_correction_target maps major seventh to semitone 11", "[mir]") {
+  HarmonicTimeline tl;
+  sonare::arrangement::ChordSymbol chord;
+  chord.start_ppq = 0.0;
+  chord.end_ppq = 4.0;
+  chord.root_pc = static_cast<uint8_t>(PitchClass::C);
+  chord.quality = sonare::arrangement::ChordQuality::kMajor;
+  chord.extensions = {7};
+  tl.chords.push_back(chord);
+
+  const auto target = sonare::mir::derive_pitch_correction_target(tl, 1.0);
+
+  CHECK(has_pc(target.chord_tones, 11));
+  CHECK_FALSE(has_pc(target.chord_tones, 10));
+  CHECK(target.chord_tones == std::vector<uint8_t>{0, 4, 7, 11});
 }
 
 TEST_CASE("derive_pitch_correction_target falls back to chord tones with no key", "[mir]") {

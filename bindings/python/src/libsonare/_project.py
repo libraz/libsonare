@@ -20,7 +20,8 @@ from __future__ import annotations
 import ctypes
 import math
 import numbers
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from typing import SupportsFloat, cast
 
 import numpy as np
@@ -41,7 +42,7 @@ from ._runtime import (
 # bindings' expected project ABI constant. A mismatch means the loaded native
 # binary lays out the flat project PODs differently than this wrapper expects,
 # or the arrangement subsystem was compiled out (runtime version 0).
-EXPECTED_PROJECT_ABI_VERSION = 1
+EXPECTED_PROJECT_ABI_VERSION = 3
 
 # Track kind ordinals (mirror SonareProjectTrackKind).
 TRACK_AUDIO = 0
@@ -53,6 +54,36 @@ _TRACK_KIND_NAMES = {
     "midi": TRACK_MIDI,
     "aux": TRACK_AUX,
 }
+
+
+@dataclass(frozen=True)
+class ProjectDiagnostic:
+    """One compile diagnostic surfaced by :meth:`Project.compile`."""
+
+    code: int
+    severity: int
+    target_id: int
+
+
+@dataclass(frozen=True)
+class ProjectCompileResult:
+    """Structured compile result matching the C/Node/WASM project surface.
+
+    Iteration preserves the legacy ``has_timeline, messages = project.compile()``
+    pattern while exposing structured diagnostics.
+    """
+
+    has_timeline: bool
+    messages: str
+    diagnostics: tuple[ProjectDiagnostic, ...]
+
+    @property
+    def diagnostic_count(self) -> int:
+        return len(self.diagnostics)
+
+    def __iter__(self) -> Iterator[object]:
+        yield self.has_timeline
+        yield self.messages
 
 
 def project_abi_version() -> int:
@@ -341,6 +372,31 @@ class Project:
             )
         )
 
+    def set_clip_warp_ref(self, clip_id: int, warp_ref_id: int) -> None:
+        """Set a clip's warp reference id (``0`` clears it)."""
+        _check(
+            _get_lib().sonare_project_set_clip_warp_ref(
+                self._require_handle(),
+                int(clip_id),
+                int(warp_ref_id),
+            )
+        )
+
+    def set_track_midi_destination(self, track_id: int, destination_id: int) -> None:
+        """Route a track's MIDI to host-instrument ``destination_id`` (0 = default).
+
+        The compiler stamps every MIDI clip on the track with this id so the
+        engine dispatches the clip's events to the instrument registered for that
+        destination. Routes through an undoable edit command.
+        """
+        _check(
+            _get_lib().sonare_project_set_track_midi_destination(
+                self._require_handle(),
+                int(track_id),
+                int(destination_id),
+            )
+        )
+
     def undo(self) -> None:
         """Undo the most recent edit (raises when the undo stack is empty)."""
         _check(_get_lib().sonare_project_undo(self._require_handle()))
@@ -407,6 +463,52 @@ class Project:
         out_len = ctypes.c_size_t()
         _check(
             lib.sonare_project_export_smf(
+                self._require_handle(), ctypes.byref(out), ctypes.byref(out_len)
+            )
+        )
+        try:
+            if not out or out_len.value == 0:
+                return b""
+            return ctypes.string_at(out, out_len.value)
+        finally:
+            if out:
+                lib.sonare_free_bytes(out)
+
+    def import_clip_file(self, data: bytes) -> int:
+        """Import an in-memory MIDI 2.0 Clip File (``SMF2CLIP``); return the
+        first added clip id.
+
+        Unlike :meth:`import_smf`, the UMP-based container preserves MIDI 2.0
+        channel-voice messages (16-bit velocity, 32-bit CC, per-note /
+        registered controllers, bank-valid Program Change) without loss. Raises
+        ``ValueError`` on malformed input, never crashing.
+        """
+        lib = _get_lib()
+        raw = bytes(data)
+        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+        out_id = ctypes.c_uint32()
+        _check(
+            lib.sonare_project_import_clip_file(
+                self._require_handle(),
+                buf,
+                ctypes.c_size_t(len(raw)),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def export_clip_file(self) -> bytes:
+        """Export the project's tempo map + MIDI clips to a MIDI 2.0 Clip File
+        (``SMF2CLIP``) byte buffer.
+
+        MIDI 2.0-only events are written WITHOUT loss — prefer this over
+        :meth:`export_smf` when MIDI 2.0 fidelity matters.
+        """
+        lib = _get_lib()
+        out = ctypes.POINTER(ctypes.c_uint8)()
+        out_len = ctypes.c_size_t()
+        _check(
+            lib.sonare_project_export_clip_file(
                 self._require_handle(), ctypes.byref(out), ctypes.byref(out_len)
             )
         )
@@ -534,13 +636,13 @@ class Project:
 
     # -- compile / render ---------------------------------------------------
 
-    def compile(self) -> tuple[bool, str]:
+    def compile(self) -> ProjectCompileResult:
         """Compile the project into an RT-readable timeline.
 
-        Returns ``(has_timeline, messages)``: ``has_timeline`` is True when
-        compilation produced a renderable timeline (no error diagnostics), and
-        ``messages`` is the newline-joined human-readable diagnostic detail.
-        Never throws on bad project content; it surfaces error diagnostics.
+        Returns a :class:`ProjectCompileResult` with ``has_timeline``,
+        ``messages``, and structured ``diagnostics``. The result remains
+        iterable as ``(has_timeline, messages)`` for legacy callers. Never
+        throws on bad project content; it surfaces error diagnostics.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
@@ -548,7 +650,15 @@ class Project:
         try:
             has_timeline = bool(result.has_timeline)
             messages = result.messages.decode("utf-8") if result.messages else ""
-            return has_timeline, messages
+            diagnostics = tuple(
+                ProjectDiagnostic(
+                    code=int(result.diagnostics[i].code),
+                    severity=int(result.diagnostics[i].severity),
+                    target_id=int(result.diagnostics[i].target_id),
+                )
+                for i in range(int(result.diagnostic_count))
+            )
+            return ProjectCompileResult(has_timeline, messages, diagnostics)
         finally:
             lib.sonare_project_free_compile_result(ctypes.byref(result))
 

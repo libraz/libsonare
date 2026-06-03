@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "midi/midi_clip.h"
+#include "midi/program_map.h"
 #include "midi/smf.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
@@ -17,6 +18,8 @@ namespace {
 using sonare::midi::export_smf;
 using sonare::midi::import_smf;
 using sonare::midi::MidiClip;
+using sonare::midi::MidiClipEvent;
+using sonare::midi::ProgramState;
 using sonare::midi::SmfExportOptions;
 using sonare::midi::SmfImportResult;
 using sonare::midi::SmfStatus;
@@ -155,6 +158,19 @@ std::vector<uint8_t> make_sysex_smf(const std::vector<uint8_t>& payload, uint32_
   return smf;
 }
 
+std::vector<uint8_t> wrap_format0_track(const std::vector<uint8_t>& body) {
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
 }  // namespace
 
 TEST_CASE("SMF import parses tempo, time-signature, names, markers and notes", "[midi]") {
@@ -175,6 +191,10 @@ TEST_CASE("SMF import parses tempo, time-signature, names, markers and notes", "
   REQUIRE(r.time_signatures.size() == 1);
   REQUIRE(r.time_signatures[0].time_sig.numerator == 3);
   REQUIRE(r.time_signatures[0].time_sig.denominator == 4);
+  REQUIRE(r.time_signatures[0].clocks_per_metronome_click == 24);
+  REQUIRE(r.time_signatures[0].thirty_seconds_per_quarter == 8);
+  REQUIRE(r.clip_lengths_ppq.size() == 1);
+  REQUIRE(r.clip_lengths_ppq[0] == 1.0);
 
   // One clip with a track name and a marker.
   REQUIRE(r.clips.size() == 1);
@@ -227,9 +247,11 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   // Export back to bytes (480 PPQN preserves the 480-tick note length exactly).
   SmfExportOptions opts;
   opts.ticks_per_quarter = 480;
+  opts.markers = imported.markers;
   const auto exported = export_smf(imported.clips, imported.tempo_segments,
                                    imported.time_signatures, imported.clip_names, opts);
   REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
   REQUIRE_FALSE(exported.bytes.empty());
 
   // Re-import the exported bytes.
@@ -244,11 +266,18 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   REQUIRE(round.tempo_segments[0].bpm < 120.1);
   REQUIRE(round.time_signatures[0].time_sig.numerator == 3);
   REQUIRE(round.time_signatures[0].time_sig.denominator == 4);
+  REQUIRE(round.time_signatures[0].clocks_per_metronome_click == 24);
+  REQUIRE(round.time_signatures[0].thirty_seconds_per_quarter == 8);
+  REQUIRE(round.markers.size() == 1);
+  REQUIRE(round.markers[0].text == "verse");
+  REQUIRE(round.markers[0].ppq == 0.0);
 
   // Clip events match the original import exactly (UMP equality + ppq).
   REQUIRE(round.clips.size() == imported.clips.size());
   REQUIRE(round.clip_names.size() == imported.clip_names.size());
   REQUIRE(round.clip_names[0] == "lead");
+  REQUIRE(round.clip_lengths_ppq.size() == 1);
+  REQUIRE(round.clip_lengths_ppq[0] == 1.0);
 
   const auto& a = imported.clips[0].events();
   const auto& b = round.clips[0].events();
@@ -257,6 +286,65 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
     REQUIRE(a[i].ppq == b[i].ppq);
     REQUIRE(a[i].ump == b[i].ump);
   }
+}
+
+TEST_CASE("SMF time-signature metronome bytes round-trip", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x58);
+  body.push_back(0x04);
+  body.push_back(0x07);  // 7/8.
+  body.push_back(0x03);
+  body.push_back(0x24);  // 36 MIDI clocks per metronome click.
+  body.push_back(0x06);  // 6 notated 32nds per quarter.
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.time_signatures.size() == 1);
+  REQUIRE(imported.time_signatures[0].time_sig.numerator == 7);
+  REQUIRE(imported.time_signatures[0].time_sig.denominator == 8);
+  REQUIRE(imported.time_signatures[0].clocks_per_metronome_click == 36);
+  REQUIRE(imported.time_signatures[0].thirty_seconds_per_quarter == 6);
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({}, imported.tempo_segments, imported.time_signatures, {}, opts);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.time_signatures.size() == 1);
+  REQUIRE(round.time_signatures[0].time_sig.numerator == 7);
+  REQUIRE(round.time_signatures[0].time_sig.denominator == 8);
+  REQUIRE(round.time_signatures[0].clocks_per_metronome_click == 36);
+  REQUIRE(round.time_signatures[0].thirty_seconds_per_quarter == 6);
+}
+
+TEST_CASE("SMF import derives clip length from end-of-track tick", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0x90);
+  body.push_back(60);
+  body.push_back(100);
+  body.push_back(0x87);
+  body.push_back(0x40);  // delta 960 ticks = 2 PPQ at 480 PPQN.
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  REQUIRE(imported.clips[0].events()[0].ppq == 0.0);
+  REQUIRE(imported.clip_lengths_ppq.size() == 1);
+  REQUIRE(imported.clip_lengths_ppq[0] == 2.0);
 }
 
 TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]") {
@@ -283,6 +371,7 @@ TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]")
   const auto exported = export_smf(imported.clips, imported.tempo_segments,
                                    imported.time_signatures, imported.clip_names, opts);
   REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
 
   const SmfImportResult round = import_smf(exported.bytes);
   REQUIRE(round.ok());
@@ -296,6 +385,131 @@ TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]")
   const std::vector<uint8_t>* round_payload = round.sysex_store.lookup(round_ump.sysex_handle);
   REQUIRE(round_payload != nullptr);
   REQUIRE(*round_payload == payload);
+}
+
+TEST_CASE("SMF import joins multi-packet SysEx continuations", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xF0);
+  body.push_back(0x03);
+  body.push_back(0x7E);
+  body.push_back(0x7F);
+  body.push_back(0x09);
+  body.push_back(0x83);
+  body.push_back(0x60);  // delta 480 ticks; continuation must keep original ppq.
+  body.push_back(0xF7);
+  body.push_back(0x02);
+  body.push_back(0x01);
+  body.push_back(0xF7);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 0);
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  REQUIRE(imported.clips[0].events()[0].ppq == 0.0);
+
+  const Ump& ump = imported.clips[0].events()[0].ump;
+  const std::vector<uint8_t>* payload = imported.sysex_store.lookup(ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  REQUIRE(*payload == std::vector<uint8_t>{0x7E, 0x7F, 0x09, 0x01, 0xF7});
+}
+
+TEST_CASE("SMF import skips system real-time bytes without clearing running status", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0x90);
+  body.push_back(60);
+  body.push_back(100);
+  body.push_back(0x00);
+  body.push_back(0xF8);  // Timing clock: skipped, running status remains valid.
+  body.push_back(0x00);
+  body.push_back(62);
+  body.push_back(100);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult r = import_smf(wrap_format0_track(body));
+  REQUIRE(r.ok());
+  REQUIRE(r.skipped_events == 1);
+  REQUIRE(r.clips.size() == 1);
+  REQUIRE(r.clips[0].events().size() == 2);
+  REQUIRE(r.clips[0].events()[0].ump.note_number() == 60);
+  REQUIRE(r.clips[0].events()[1].ump.note_number() == 62);
+}
+
+TEST_CASE("SMF import clears running status after meta events", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0x90);
+  body.push_back(60);
+  body.push_back(100);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x06);
+  body.push_back(0x01);
+  body.push_back('A');
+  body.push_back(0x00);
+  body.push_back(62);  // Invalid: running status must not survive the marker.
+  body.push_back(100);
+
+  const SmfImportResult r = import_smf(wrap_format0_track(body));
+  REQUIRE_FALSE(r.ok());
+  REQUIRE(r.status == SmfStatus::kTruncated);
+}
+
+TEST_CASE("SMF export counts skipped unresolved SysEx and MIDI 2.0-only events", "[midi]") {
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.0, sonare::midi::make_sysex_handle(0, 999)});
+  clip.add_event(
+      MidiClipEvent{1.0, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 1, 0x12345678u)});
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 2);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.empty());
+}
+
+TEST_CASE("SMF export preserves MIDI 2.0 banked program changes as MIDI 1.0 bank select",
+          "[midi]") {
+  MidiClip clip;
+  clip.add_event(
+      MidiClipEvent{0.0, sonare::midi::make_midi2_program_change(/*group=*/0, /*channel=*/4,
+                                                                 /*program=*/42, /*bank_msb=*/0x79,
+                                                                 /*bank_lsb=*/3,
+                                                                 /*bank_valid=*/true)});
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({clip}, {}, {}, {"banked"}, opts);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  REQUIRE(round.clips[0].events().size() == 3);
+
+  ProgramState state;
+  for (const auto& ev : round.clips[0].events()) {
+    REQUIRE(ev.ppq == 0.0);
+    state.observe(ev.ump);
+  }
+  REQUIRE(state.program_seen);
+  REQUIRE(state.current.bank_msb == 0x79u);
+  REQUIRE(state.current.bank_lsb == 3u);
+  REQUIRE(state.current.program == 42u);
 }
 
 TEST_CASE("SMF import rejects malformed and truncated input without crashing", "[midi]") {

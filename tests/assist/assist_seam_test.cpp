@@ -17,11 +17,13 @@
 ///     and compiler/rt/engine do not reference AssistSidecar.
 
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -52,12 +54,17 @@ using sonare::arrangement::ReplaceMidiClipEvents;
 using sonare::arrangement::SetAssistSidecar;
 using sonare::arrangement::Track;
 using sonare::arrangement::TrackId;
+using sonare::midi::assist::AssistQueryContext;
 using sonare::midi::assist::AssistRegistry;
 using sonare::midi::assist::AssistRequest;
 using sonare::midi::assist::AssistResult;
 using sonare::midi::assist::AssistStatus;
 using sonare::midi::assist::CompositionAssist;
+using sonare::midi::assist::ICounterpointEngine;
+using sonare::midi::assist::IDissonanceAnalyzer;
+using sonare::midi::assist::IHarmonyContext;
 using sonare::midi::assist::INoteGenerator;
+using sonare::midi::assist::INotePlacementJudge;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -222,6 +229,136 @@ class InvalidPatchGenerator final : public INoteGenerator {
   }
 };
 
+class ScratchClipGenerator final : public INoteGenerator {
+ public:
+  static constexpr TrackId kTrackId = 9001;
+  static constexpr sonare::arrangement::SourceId kSourceId = 9002;
+  static constexpr sonare::arrangement::ClipId kClipId = 9003;
+
+  const char* module_id() const noexcept override { return "scratch-gen"; }
+  AssistResult generate(const ProjectView&, const AssistRequest&) override {
+    AssistResult result;
+
+    Track track;
+    track.name = "scratch";
+    track.kind = Track::Kind::kMidi;
+    auto add_track = std::make_unique<AddTrack>(track);
+    add_track->reseed_id(kTrackId);
+    result.commands.push_back(std::move(add_track));
+
+    MidiSourceRef ref;
+    ref.name = "scratch-src";
+    auto attach = std::make_unique<AttachMidiSource>(ref);
+    attach->reseed_id(kSourceId);
+    result.commands.push_back(std::move(attach));
+
+    EditClip clip;
+    clip.track_id = kTrackId;
+    clip.source_id = kSourceId;
+    clip.length_ppq = 480.0;
+    auto add_clip = std::make_unique<AddClip>(clip);
+    add_clip->reseed_id(kClipId);
+    result.commands.push_back(std::move(add_clip));
+
+    result.candidate_payload = "scratch-generator";
+    result.diagnostics.iterations_consumed = 1;
+    result.diagnostics.status = AssistStatus::kOk;
+    return result;
+  }
+};
+
+class QueryAwareCounterpoint final : public ICounterpointEngine {
+ public:
+  bool saw_queries = false;
+
+  const char* module_id() const noexcept override { return "query-cp"; }
+  AssistResult derive(const ProjectView&, const AssistRequest&,
+                      const std::vector<sonare::midi::assist::VoiceModel>&,
+                      const AssistQueryContext& queries) override {
+    saw_queries =
+        queries.harmony != nullptr && queries.dissonance != nullptr && queries.judge != nullptr;
+
+    MidiClipEventList events;
+    const auto on = sonare::midi::make_midi1_note_on(0, 0, 64, 96);
+    const auto off = sonare::midi::make_midi1_note_off(0, 0, 64, 0);
+    events.push_back(MidiClipEvent{0.0, on.words[0], on.words[1]});
+    events.push_back(MidiClipEvent{240.0, off.words[0], off.words[1]});
+
+    AssistResult result;
+    result.commands.push_back(
+        std::make_unique<ReplaceMidiClipEvents>(ScratchClipGenerator::kClipId, events));
+    result.candidate_payload = "counterpoint";
+    result.diagnostics.iterations_consumed = 1;
+    result.diagnostics.status = AssistStatus::kOk;
+    return result;
+  }
+};
+
+class DummyHarmonyContext final : public IHarmonyContext {
+ public:
+  sonare::arrangement::ChordSymbol chord_at(const ProjectView&, double) const override {
+    return {};
+  }
+  sonare::arrangement::KeySegment key_at(const ProjectView&, double) const override { return {}; }
+  std::vector<uint8_t> scale_pitch_classes(const ProjectView&, double) const override {
+    return {0, 2, 4, 5, 7, 9, 11};
+  }
+};
+
+class DummyDissonanceAnalyzer final : public IDissonanceAnalyzer {
+ public:
+  float score_note(const ProjectView&, const sonare::midi::assist::CandidateNote&) const override {
+    return 0.0f;
+  }
+  float score_vertical(const ProjectView&, double,
+                       const std::vector<sonare::midi::assist::CandidateNote>&) const override {
+    return 0.0f;
+  }
+};
+
+class DummyPlacementJudge final : public INotePlacementJudge {
+ public:
+  sonare::midi::assist::PlacementVerdict judge(
+      const ProjectView&, const sonare::midi::assist::VoiceModel&,
+      const sonare::midi::assist::CandidateNote& candidate) const override {
+    sonare::midi::assist::PlacementVerdict verdict;
+    verdict.accepted = true;
+    verdict.adjusted = candidate;
+    return verdict;
+  }
+};
+
+class SlowGenerator final : public INoteGenerator {
+ public:
+  const char* module_id() const noexcept override { return "slow"; }
+  AssistResult generate(const ProjectView&, const AssistRequest&) override {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    AssistResult result;
+    result.candidate_payload = "slow";
+    result.diagnostics.iterations_consumed = 1;
+    result.diagnostics.status = AssistStatus::kOk;
+    return result;
+  }
+};
+
+class ScopeBreakingGenerator final : public INoteGenerator {
+ public:
+  explicit ScopeBreakingGenerator(sonare::arrangement::ClipId clip_id) : clip_id_(clip_id) {}
+  const char* module_id() const noexcept override { return "scope-breaking"; }
+  AssistResult generate(const ProjectView&, const AssistRequest&) override {
+    MidiClipEventList events;
+    const auto on = sonare::midi::make_midi1_note_on(0, 0, 67, 96);
+    events.push_back(MidiClipEvent{0.0, on.words[0], on.words[1]});
+    AssistResult result;
+    result.commands.push_back(std::make_unique<ReplaceMidiClipEvents>(clip_id_, events));
+    result.diagnostics.status = AssistStatus::kOk;
+    return result;
+  }
+
+ private:
+  sonare::arrangement::ClipId clip_id_ = 0;
+};
+
 }  // namespace
 
 // ===========================================================================
@@ -354,6 +491,41 @@ TEST_CASE("assist mock candidate payload re-applies as a deterministic branch", 
   REQUIRE(serialize(f2.history) == applied);
 }
 
+TEST_CASE("assist passes query slots and validates multi-slot commands cumulatively", "[assist]") {
+  Fixture f = make_fixture();
+
+  ScratchClipGenerator gen;
+  QueryAwareCounterpoint counterpoint;
+  DummyHarmonyContext harmony;
+  DummyDissonanceAnalyzer dissonance;
+  DummyPlacementJudge judge;
+
+  AssistRegistry registry;
+  registry.register_generator(&gen);
+  registry.register_counterpoint(&counterpoint);
+  registry.register_harmony_context(&harmony);
+  registry.register_dissonance_analyzer(&dissonance);
+  registry.register_judge(&judge);
+
+  CompositionAssist assist(registry);
+  ProjectView view(f.history.project(), f.history.midi_content(), "scratch-gen");
+  AssistRequest req;
+  AssistResult result = assist.run(view, req);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+  REQUIRE(counterpoint.saw_queries);
+  REQUIRE(result.candidate_payloads.size() == 2);
+  REQUIRE(result.candidate_payloads[0] == "scratch-generator");
+  REQUIRE(result.candidate_payloads[1] == "counterpoint");
+  REQUIRE(result.candidate_payload.find("scratch-generator") != std::string::npos);
+  REQUIRE(result.candidate_payload.find("counterpoint") != std::string::npos);
+  REQUIRE(apply_result(&f.history, std::move(result)));
+
+  const auto events_it = f.history.midi_content().events.find(ScratchClipGenerator::kClipId);
+  REQUIRE(events_it != f.history.midi_content().events.end());
+  REQUIRE(events_it->second.size() == 2);
+}
+
 // ===========================================================================
 // Error contract: throwing / invalid module -> discarded, state unchanged,
 // registry preserved.
@@ -374,6 +546,7 @@ TEST_CASE("assist discards a throwing module and preserves state + registry", "[
   AssistResult r = assist.run(view, req);  // Must NOT throw.
   REQUIRE(r.commands.empty());
   REQUIRE(r.diagnostics.status == AssistStatus::kDiscarded);
+  REQUIRE(r.diagnostics.slots_discarded == 1);
 
   // Project unchanged; registry still holds the module.
   REQUIRE(serialize(f.history) == before);
@@ -394,6 +567,7 @@ TEST_CASE("assist discards an invalid patch and preserves state", "[assist]") {
   AssistResult r = assist.run(view, req);
   REQUIRE(r.commands.empty());
   REQUIRE(r.diagnostics.status == AssistStatus::kDiscarded);
+  REQUIRE(r.diagnostics.slots_discarded == 1);
   REQUIRE(serialize(f.history) == before);
   REQUIRE(registry.generator() == &gen);
 }
@@ -425,6 +599,73 @@ TEST_CASE("assist budget truncates and returns promptly", "[assist]") {
   AssistResult truncated = assist.run(view, tiny);
   // The mock self-truncates to <= 1 note per clip; fewer events than the full run.
   REQUIRE(truncated.diagnostics.iterations_consumed <= 1);
+}
+
+TEST_CASE("assist time budget stops dispatching later slots", "[assist]") {
+  Fixture f = make_fixture();
+
+  SlowGenerator gen;
+  QueryAwareCounterpoint counterpoint;
+  AssistRegistry registry;
+  registry.register_generator(&gen);
+  registry.register_counterpoint(&counterpoint);
+  CompositionAssist assist(registry);
+  ProjectView view(f.history.project(), f.history.midi_content(), "slow");
+
+  AssistRequest req;
+  req.budget.max_time_ms = 1;
+  AssistResult result = assist.run(view, req);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+  REQUIRE(result.diagnostics.reason == "time budget exhausted");
+  REQUIRE(result.candidate_payloads.size() == 1);
+  REQUIRE(result.candidate_payloads[0] == "slow");
+  REQUIRE_FALSE(counterpoint.saw_queries);
+}
+
+TEST_CASE("assist rejects commands that mutate out-of-scope tracks", "[assist]") {
+  Fixture f = make_fixture();
+  TrackId track_a = f.track_id;
+
+  auto add_track = std::make_unique<AddTrack>([] {
+    Track t;
+    t.name = "track-b";
+    t.kind = Track::Kind::kMidi;
+    return t;
+  }());
+  auto* add_track_ptr = add_track.get();
+  REQUIRE(f.history.apply(std::move(add_track)));
+  const TrackId track_b = add_track_ptr->allocated_id();
+
+  MidiSourceRef ref;
+  ref.name = "b-src";
+  auto attach = std::make_unique<AttachMidiSource>(ref);
+  auto* attach_ptr = attach.get();
+  REQUIRE(f.history.apply(std::move(attach)));
+  EditClip clip_b;
+  clip_b.track_id = track_b;
+  clip_b.source_id = attach_ptr->allocated_id();
+  clip_b.length_ppq = 480.0;
+  auto add_clip = std::make_unique<AddClip>(clip_b);
+  auto* add_clip_ptr = add_clip.get();
+  REQUIRE(f.history.apply(std::move(add_clip)));
+  const auto clip_b_id = add_clip_ptr->allocated_id();
+
+  const std::string before = serialize(f.history);
+  ScopeBreakingGenerator gen(clip_b_id);
+  AssistRegistry registry;
+  registry.register_generator(&gen);
+  CompositionAssist assist(registry);
+  ProjectView view(f.history.project(), f.history.midi_content(), "scope-breaking");
+
+  AssistRequest req;
+  req.scope.track_ids = {track_a};
+  AssistResult result = assist.run(view, req);
+
+  REQUIRE(result.commands.empty());
+  REQUIRE(result.diagnostics.status == AssistStatus::kDiscarded);
+  REQUIRE(result.diagnostics.slots_discarded == 1);
+  REQUIRE(serialize(f.history) == before);
 }
 
 // ===========================================================================

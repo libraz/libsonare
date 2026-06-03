@@ -80,7 +80,7 @@ void MeterProcessor::prepare(double sample_rate, int max_block_size) {
 }
 
 void MeterProcessor::reset() {
-  snapshot_ = MeterSnapshot{};
+  snapshot_.store(MeterSnapshot{});
   seq_ = 0;
   gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 
@@ -99,8 +99,6 @@ void MeterProcessor::reset() {
   short_term_sum_ = 0.0;
   gate_hop_counter_ = 0;
   reset_integrated();
-
-  guard_.store(0, std::memory_order_release);
 }
 
 void MeterProcessor::reset_integrated() noexcept {
@@ -311,22 +309,12 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 }
 
 void MeterProcessor::publish(const MeterSnapshot& next) noexcept {
-  guard_.fetch_add(1, std::memory_order_release);  // now odd: write in progress
-  snapshot_ = next;
-  snapshot_.seq = ++seq_;
-  guard_.fetch_add(1, std::memory_order_release);  // now even: write complete
+  MeterSnapshot stamped = next;
+  stamped.seq = ++seq_;
+  snapshot_.store(stamped);
 }
 
-MeterSnapshot MeterProcessor::snapshot() const noexcept {
-  for (;;) {
-    const uint32_t g1 = guard_.load(std::memory_order_acquire);
-    if (g1 & 1u) continue;  // writer mid-update
-    MeterSnapshot copy = snapshot_;
-    std::atomic_thread_fence(std::memory_order_acquire);
-    const uint32_t g2 = guard_.load(std::memory_order_acquire);
-    if (g1 == g2) return copy;
-  }
-}
+MeterSnapshot MeterProcessor::snapshot() const noexcept { return snapshot_.load(); }
 
 void MeterProcessor::set_gain_reduction_db(float db) noexcept {
   gain_reduction_db_.store(std::min(0.0f, db), std::memory_order_relaxed);

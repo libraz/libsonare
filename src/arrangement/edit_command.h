@@ -209,6 +209,22 @@ class SetTrackKind final : public EditCommand {
   Track::Kind kind_;
 };
 
+/// Sets a track's MIDI destination id (the route the compiler stamps onto the
+/// track's MidiClipSchedules). Deterministic, undoable.
+class SetTrackMidiDestination final : public EditCommand {
+ public:
+  SetTrackMidiDestination(TrackId id, uint32_t destination_id)
+      : id_(id), destination_id_(destination_id) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetTrackMidiDestination"; }
+
+ private:
+  TrackId id_;
+  uint32_t destination_id_;
+};
+
 // ===========================================================================
 // Clip commands
 // ===========================================================================
@@ -373,6 +389,56 @@ class SetClipLoop final : public EditCommand {
   double loop_length_ppq_;
 };
 
+class SetClipWarpRef final : public EditCommand {
+ public:
+  SetClipWarpRef(ClipId id, WarpRefId warp_ref_id) : id_(id), warp_ref_id_(warp_ref_id) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetClipWarpRef"; }
+
+ private:
+  ClipId id_;
+  WarpRefId warp_ref_id_;
+};
+
+class SetWarpMap final : public EditCommand {
+ public:
+  explicit SetWarpMap(WarpMapRef map) : map_(std::move(map)) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetWarpMap"; }
+
+ private:
+  WarpMapRef map_;
+};
+
+class RemoveWarpMap final : public EditCommand {
+ public:
+  explicit RemoveWarpMap(WarpRefId id) : id_(id) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "RemoveWarpMap"; }
+
+ private:
+  WarpRefId id_;
+};
+
+class SetClipSource final : public EditCommand {
+ public:
+  SetClipSource(ClipId id, SourceId source_id) : id_(id), source_id_(source_id) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetClipSource"; }
+
+ private:
+  ClipId id_;
+  SourceId source_id_;
+};
+
 // ===========================================================================
 // Source commands
 // ===========================================================================
@@ -441,6 +507,46 @@ class ReplaceSource final : public EditCommand {
 // ===========================================================================
 // Timeline commands
 // ===========================================================================
+
+/// Sets the project sample rate. Invalid rates are rejected so undo/redo does
+/// not admit non-compileable project state.
+class SetSampleRate final : public EditCommand {
+ public:
+  explicit SetSampleRate(double sample_rate) : sample_rate_(sample_rate) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetSampleRate"; }
+
+ private:
+  double sample_rate_;
+};
+
+/// Sets the project's clip-overlap policy.
+class SetOverlapPolicy final : public EditCommand {
+ public:
+  explicit SetOverlapPolicy(OverlapPolicy policy) : policy_(policy) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetOverlapPolicy"; }
+
+ private:
+  OverlapPolicy policy_;
+};
+
+/// Replaces the project's pure-data mixer scene.
+class SetScene final : public EditCommand {
+ public:
+  explicit SetScene(mixing::api::Scene scene) : scene_(std::move(scene)) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetScene"; }
+
+ private:
+  mixing::api::Scene scene_;
+};
 
 /// Adds or replaces a marker. When `id` is 0 a new marker is allocated; when
 /// `id` references an existing marker its ppq/name are replaced.

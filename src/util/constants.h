@@ -64,5 +64,15 @@ inline constexpr int kDefaultNFft = 2048;
 inline constexpr int kDefaultHopLength = 512;
 inline constexpr int kDefaultNMels = 128;
 
+// ============================================================
+// DAW / transport defaults
+// ============================================================
+/// Default audio sample rate (Hz) for the headless DAW transport / engine path,
+/// used as the fallback when a non-positive rate is supplied. Distinct from the
+/// librosa analysis default (@ref kDefaultSampleRate, 22050).
+inline constexpr double kDefaultDawSampleRate = 48000.0;
+/// Default musical tempo in beats per minute.
+inline constexpr double kDefaultBpm = 120.0;
+
 }  // namespace constants
 }  // namespace sonare

@@ -83,6 +83,8 @@ void MidiClip::to_render_events(const transport::TempoMap& tempo_map, double cli
     // consistent with the clip's own start_sample baking in the compiler.
     rendered.render_frame = abs_sample;
     rendered.ump = ev.ump;
+    rendered.sysex_payload = ev.sysex_payload;
+    rendered.sysex_payload_size = ev.sysex_payload_size;
     (void)clip_start_sample;
     out->push_back(rendered);
   }

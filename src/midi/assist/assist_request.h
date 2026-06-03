@@ -104,17 +104,21 @@ struct AssistDiagnostics {
   std::string reason;
   /// Iterations actually consumed by the module (for budget reporting).
   uint32_t iterations_consumed = 0;
+  /// Number of module slots discarded because they threw or returned commands
+  /// that failed dry-run validation.
+  uint32_t slots_discarded = 0;
 };
 
 /// @brief The result of a run: a uniform command sequence + opaque candidate
 ///        payload + diagnostics.
 ///
 /// `commands` is the ONLY mutation channel: the caller applies it via
-/// EditHistory. `candidate_payload` is an opaque blob (e.g. seed + chosen notes)
-/// the host can keep as a candidate / history branch and re-apply for a
-/// deterministic re-render; the core never interprets it.
+/// EditHistory. `candidate_payloads` preserves one opaque blob per contributing
+/// slot; `candidate_payload` is the legacy newline-joined view kept for older
+/// callers. The core never interprets either form.
 struct AssistResult {
   std::vector<arrangement::EditCommandPtr> commands;
+  std::vector<std::string> candidate_payloads;
   std::string candidate_payload;
   AssistDiagnostics diagnostics;
 

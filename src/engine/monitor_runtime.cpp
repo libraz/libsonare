@@ -2,10 +2,12 @@
 
 #include <algorithm>
 
+#include "util/constants.h"
+
 namespace sonare::engine {
 
 void MonitorRuntime::prepare(double sample_rate, int max_block_size, float smoothing_ms) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   max_block_size_ = std::max(max_block_size, 1);
   smoothing_ms_ = std::max(smoothing_ms, 0.0f);
   for (StripState& state : strips_) {

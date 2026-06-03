@@ -24,6 +24,10 @@ enum class FadeCurve {
   /// Equal-power (constant-energy) ramp using a sine/cosine law; holds a
   /// constant -3 dB sum across symmetric crossfades.
   EqualPower,
+  /// Slow start, fast finish (x^2).
+  Exponential,
+  /// Fast start, slow finish (sqrt(x)).
+  Logarithmic,
 };
 
 struct ClipAudioBuffer {
@@ -42,7 +46,9 @@ struct ClipSchedule {
   ClipSchedule(uint32_t clip_id, ClipAudioBuffer clip_buffer, double clip_start_ppq,
                int64_t clip_start_sample, int64_t clip_offset, int64_t clip_length, bool clip_loop,
                float clip_gain, int64_t clip_fade_in, int64_t clip_fade_out,
-               FadeCurve clip_fade_curve = FadeCurve::Linear)
+               FadeCurve clip_fade_curve = FadeCurve::Linear,
+               FadeCurve clip_fade_out_curve = FadeCurve::Linear,
+               bool clip_has_separate_fade_out_curve = false)
       : id(clip_id),
         buffer(clip_buffer),
         start_ppq(clip_start_ppq),
@@ -53,7 +59,9 @@ struct ClipSchedule {
         gain(clip_gain),
         fade_in_samples(clip_fade_in),
         fade_out_samples(clip_fade_out),
-        fade_curve(clip_fade_curve) {}
+        fade_curve(clip_fade_curve),
+        fade_in_curve(clip_fade_curve),
+        fade_out_curve(clip_has_separate_fade_out_curve ? clip_fade_out_curve : clip_fade_curve) {}
 
   uint32_t id = 0;
   ClipAudioBuffer buffer{};
@@ -62,10 +70,20 @@ struct ClipSchedule {
   int64_t clip_offset_samples = 0;
   int64_t length_samples = 0;
   bool loop = false;
+  int64_t loop_length_samples = 0;
+  /// Control-plane warp reference id carried from the arrangement clip. The
+  /// clip player does not dereference it on the audio thread; hosts/compiler
+  /// extensions can use it to associate pre-baked warped storage with this
+  /// schedule.
+  uint32_t warp_ref_id = 0;
   float gain = 1.0f;
   int64_t fade_in_samples = 0;
   int64_t fade_out_samples = 0;
+  /// Legacy combined curve view. New code should use fade_in_curve /
+  /// fade_out_curve; kept so existing aggregate users keep the old shape.
   FadeCurve fade_curve = FadeCurve::Linear;
+  FadeCurve fade_in_curve = FadeCurve::Linear;
+  FadeCurve fade_out_curve = FadeCurve::Linear;
   std::shared_ptr<const ClipAudioStorage> storage;
 };
 

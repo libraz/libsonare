@@ -135,7 +135,16 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
     lo[i] = std::min(lo[i], lo[i - 1]);
     hi[i] = std::max(hi[i], hi[i - 1]);
   }
-  lo[0] = 0;  // anchor the start corner.
+  // Anchor BOTH corners. The DTW must start at (0,0) and end at
+  // (ref_frames-1, tgt_frames-1); if the projected band misses either corner
+  // the cell is unreachable and the backtrack falls back to a clamped in-band
+  // cell, yielding a path that never touches the true end corner. Forcing the
+  // first row to include j=0 and the last row to include j=tgt_frames-1 keeps
+  // both corners in-band. The last row stays contiguous from lo[last] (reachable
+  // from the row above) up to tgt_frames-1 via successive left steps, so the
+  // corner is reachable without widening any interior row.
+  lo[0] = 0;
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
 
   auto cos_dist = [&](int i, int j) -> float {
     double dot = 0.0, na = 0.0, nb = 0.0;
@@ -280,28 +289,94 @@ std::vector<std::pair<int, int>> mrmsdtw_path(const std::vector<float>& ref, int
   return path;
 }
 
-// Stretch a spectrogram by integer frame replication / decimation WITHOUT phase
-// propagation: each output frame copies the nearest source frame verbatim. This
-// is the percussive OLA path (transient-preserving) described in @ref
-// mir_warp_tsm. `rate` < 1 lengthens, > 1 shortens (matching phase_vocoder).
-Spectrogram percussive_frame_stretch(const Spectrogram& spec, float rate) {
-  const int n_bins = spec.n_bins();
-  const int in_frames = spec.n_frames();
-  const int out_frames = std::max(1, static_cast<int>(std::round(in_frames / rate)));
-  std::vector<std::complex<float>> out(static_cast<size_t>(n_bins) * out_frames);
-  const std::complex<float>* in = spec.complex_data();
-  for (int of = 0; of < out_frames; ++of) {
-    // Nearest-source-frame mapping (deterministic, transient-preserving).
-    int src = (out_frames > 1) ? static_cast<int>(std::round(static_cast<double>(of) *
-                                                             (in_frames - 1) / (out_frames - 1)))
-                               : 0;
-    src = std::clamp(src, 0, in_frames - 1);
-    for (int b = 0; b < n_bins; ++b) {
-      out[static_cast<size_t>(b) * out_frames + of] = in[static_cast<size_t>(b) * in_frames + src];
+std::vector<float> hann_window(int n) {
+  std::vector<float> w(static_cast<size_t>(n), 1.0f);
+  if (n <= 1) return w;
+  for (int i = 0; i < n; ++i) {
+    w[static_cast<size_t>(i)] =
+        static_cast<float>(0.5 - 0.5 * std::cos(constants::kTwoPiD * i / (n - 1)));
+  }
+  return w;
+}
+
+float window_similarity(const Audio& input, int candidate, const std::vector<float>& rendered,
+                        int out_pos, int overlap) {
+  double dot = 0.0;
+  double na = 0.0;
+  double nb = 0.0;
+  for (int i = 0; i < overlap; ++i) {
+    const int in_index = candidate + i;
+    const float a =
+        (in_index >= 0 && static_cast<size_t>(in_index) < input.size()) ? input[in_index] : 0.0f;
+    const float b = rendered[static_cast<size_t>(out_pos + i)];
+    dot += static_cast<double>(a) * b;
+    na += static_cast<double>(a) * a;
+    nb += static_cast<double>(b) * b;
+  }
+  if (na <= 1e-20 || nb <= 1e-20) {
+    // Silence in either side gives no meaningful correlation. Prefer the
+    // nominal position by returning a neutral score.
+    return 0.0f;
+  }
+  return static_cast<float>(dot / (std::sqrt(na) * std::sqrt(nb)));
+}
+
+// Waveform Similarity OLA for the percussive component. `rate` < 1 lengthens,
+// > 1 shortens (matching phase_vocoder). The nominal input advance is
+// synthesis_hop * rate; each frame searches a deterministic local window around
+// that position and chooses the candidate whose leading overlap is most similar
+// to the already-rendered output.
+Audio percussive_wsola(const Audio& audio, float rate, size_t target_length,
+                       const WarpTsmConfig& config) {
+  const int win_length = std::max(16, config.n_fft);
+  const int synthesis_hop = std::max(1, config.hop_length);
+  const double analysis_hop = std::max(1.0, static_cast<double>(synthesis_hop) * rate);
+  const int search_radius = std::max(1, synthesis_hop / 2);
+  const std::vector<float> window = hann_window(win_length);
+
+  std::vector<float> rendered(target_length + static_cast<size_t>(win_length), 0.0f);
+  std::vector<float> norm(rendered.size(), 0.0f);
+  const int max_start = std::max(0, static_cast<int>(audio.size()) - win_length);
+
+  for (int frame = 0;; ++frame) {
+    const int out_pos = frame * synthesis_hop;
+    if (static_cast<size_t>(out_pos) >= target_length) break;
+
+    int nominal = static_cast<int>(std::llround(frame * analysis_hop));
+    nominal = std::clamp(nominal, 0, max_start);
+    int best = nominal;
+    if (frame > 0) {
+      const int overlap =
+          std::max(0, std::min(win_length, std::min(out_pos, win_length - synthesis_hop)));
+      float best_score = -2.0f;
+      const int lo = std::max(0, nominal - search_radius);
+      const int hi = std::min(max_start, nominal + search_radius);
+      for (int candidate = lo; candidate <= hi; ++candidate) {
+        const float score = window_similarity(audio, candidate, rendered, out_pos, overlap);
+        if (score > best_score) {
+          best_score = score;
+          best = candidate;
+        }
+      }
+    }
+
+    for (int i = 0; i < win_length; ++i) {
+      const size_t out_index = static_cast<size_t>(out_pos + i);
+      if (out_index >= rendered.size()) break;
+      const int in_index = best + i;
+      const float sample =
+          (in_index >= 0 && static_cast<size_t>(in_index) < audio.size()) ? audio[in_index] : 0.0f;
+      const float w = window[static_cast<size_t>(i)];
+      rendered[out_index] += sample * w;
+      norm[out_index] += w;
     }
   }
-  return Spectrogram::from_complex(out.data(), n_bins, out_frames, spec.n_fft(), spec.hop_length(),
-                                   spec.sample_rate(), spec.center(), spec.win_length());
+
+  std::vector<float> out(target_length, 0.0f);
+  for (size_t i = 0; i < target_length; ++i) {
+    out[i] = norm[i] > 1e-8f ? rendered[i] / norm[i] : 0.0f;
+  }
+  return Audio::from_vector(std::move(out), audio.sample_rate());
 }
 
 // Core TSM: HPSS-split, stretch each component by `rate`, sum to `target_length`.
@@ -325,12 +400,11 @@ Audio tsm_rate(const Audio& audio, float rate, size_t target_length, const WarpT
 
   // Harmonic: phase-locked phase vocoder (tonal coherence).
   Spectrogram h_stretched = phase_vocoder_phaselocked(hp.harmonic, rate, pv);
-  // Percussive: frame-replication OLA (transient preservation), per @ref mir_warp_tsm.
-  Spectrogram p_stretched = percussive_frame_stretch(hp.percussive, rate);
 
   const int len = static_cast<int>(target_length);
   Audio h_audio = h_stretched.to_audio(len);
-  Audio p_audio = p_stretched.to_audio(len);
+  Audio p_source = hp.percussive.to_audio(static_cast<int>(audio.size()));
+  Audio p_audio = percussive_wsola(p_source, rate, target_length, config);
 
   // Sum the two components into a fresh buffer of exactly target_length.
   std::vector<float> out(target_length, 0.0f);
@@ -447,19 +521,49 @@ Audio warp_to_length(const Audio& audio, size_t target_length, const WarpTsmConf
 Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(map.valid(), ErrorCode::InvalidState);
-  // Output spans the warp axis from the first to the last anchor; the realized
-  // (current-scope) warp is a single global rate equal to the average
-  // source/warp slope across the map. Variable-rate segment warping is a
-  // documented future extension.
-  const WarpAnchor& first = map.anchors().front();
-  const WarpAnchor& last = map.anchors().back();
+  const auto& anchors = map.anchors();
+  const WarpAnchor& first = anchors.front();
+  const WarpAnchor& last = anchors.back();
   const double warp_span = last.warp_sample - first.warp_sample;
   const double source_span = last.source_sample - first.source_sample;
   SONARE_CHECK(warp_span > 0.0 && source_span > 0.0, ErrorCode::InvalidState);
   const size_t target_length = static_cast<size_t>(std::llround(warp_span));
   SONARE_CHECK(target_length > 0, ErrorCode::InvalidState);
-  const float rate = static_cast<float>(source_span / warp_span);
-  return tsm_rate(audio, rate, target_length, config);
+
+  std::vector<float> out;
+  out.reserve(target_length);
+  for (size_t i = 1; i < anchors.size(); ++i) {
+    const WarpAnchor& a = anchors[i - 1];
+    const WarpAnchor& b = anchors[i];
+    const double segment_warp_span = b.warp_sample - a.warp_sample;
+    const double segment_source_span = b.source_sample - a.source_sample;
+    SONARE_CHECK(segment_warp_span > 0.0 && segment_source_span > 0.0, ErrorCode::InvalidState);
+
+    const size_t segment_target_length = static_cast<size_t>(std::llround(segment_warp_span));
+    SONARE_CHECK(segment_target_length > 0, ErrorCode::InvalidState);
+    int64_t source_start = static_cast<int64_t>(std::llround(a.source_sample));
+    int64_t source_end = static_cast<int64_t>(std::llround(b.source_sample));
+    source_start = std::clamp<int64_t>(source_start, 0, static_cast<int64_t>(audio.size()));
+    source_end = std::clamp<int64_t>(source_end, 0, static_cast<int64_t>(audio.size()));
+    SONARE_CHECK(source_end > source_start, ErrorCode::InvalidState);
+
+    std::vector<float> segment(static_cast<size_t>(source_end - source_start));
+    for (size_t n = 0; n < segment.size(); ++n) {
+      segment[n] = audio[static_cast<size_t>(source_start) + n];
+    }
+    Audio segment_audio = Audio::from_vector(std::move(segment), audio.sample_rate());
+    Audio warped =
+        tsm_rate(segment_audio, static_cast<float>(segment_source_span / segment_warp_span),
+                 segment_target_length, config);
+    out.insert(out.end(), warped.begin(), warped.end());
+  }
+
+  if (out.size() > target_length) {
+    out.resize(target_length);
+  } else if (out.size() < target_length) {
+    out.resize(target_length, 0.0f);
+  }
+  return Audio::from_vector(std::move(out), audio.sample_rate());
 }
 
 }  // namespace sonare::mir

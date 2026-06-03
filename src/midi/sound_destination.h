@@ -21,6 +21,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "midi/ump.h"
+
 namespace sonare::midi {
 
 /// What a destination ultimately points at.
@@ -58,7 +60,13 @@ struct ExternalPortDescriptor {
   std::string device_name;
   /// UMP group (0..15) events on this destination are emitted on.
   uint8_t group = 0;
-  /// True if this port speaks the MIDI 2.0 UMP protocol; false = MIDI 1.0.
+  /// Declares the port's WIRE PROTOCOL: true = MIDI 2.0 channel-voice UMP,
+  /// false = MIDI 1.0. This is not merely informational — emission is gated on
+  /// it via @ref destination_emits_midi2 / @ref convert_for_destination, which
+  /// down-convert a MIDI 2.0 event to MIDI 1.0 for a 1.0 port (and up-convert a
+  /// 1.0 event to 2.0 for a 2.0 port) so the bytes actually sent match what the
+  /// device speaks. A kHostInstrument / kNull destination always emits MIDI 2.0
+  /// (the internal representation), since no external wire is involved.
   bool is_midi2 = false;
 
   bool operator==(const ExternalPortDescriptor& o) const noexcept {
@@ -90,6 +98,44 @@ struct SoundDestination {
   }
   bool operator!=(const SoundDestination& o) const noexcept { return !(*this == o); }
 };
+
+/// Returns true if events for `destination` should be emitted as MIDI 2.0
+/// channel-voice UMP, false if they must be down-converted to MIDI 1.0. An
+/// external port follows its @ref ExternalPortDescriptor::is_midi2 flag; any
+/// other destination kind (host instrument / null) keeps the internal MIDI 2.0
+/// representation. RT-safe; no allocation.
+inline bool destination_emits_midi2(const SoundDestination& destination) noexcept {
+  if (destination.kind == DestinationKind::kExternalPort) {
+    return destination.external_port.is_midi2;
+  }
+  return true;
+}
+
+/// Converts `ump` to the wire protocol `destination` actually speaks: a MIDI 2.0
+/// channel-voice message is down-converted to MIDI 1.0 for a 1.0 port, and a
+/// MIDI 1.0 channel-voice message is up-converted to 2.0 for a 2.0 port. The
+/// group is forced to the external port's @ref ExternalPortDescriptor::group so
+/// the event lands on the configured group. Messages that are already in the
+/// target protocol (and non-channel-voice messages) pass through with only the
+/// group applied. A MIDI 2.0-only form (per-note / registered controller) that
+/// has no MIDI 1.0 equivalent yields an Ump with `word_count == 0` (caller
+/// drops it). RT-safe; no allocation.
+inline Ump convert_for_destination(const Ump& ump, const SoundDestination& destination) noexcept {
+  Ump out = ump;
+  const bool to_midi2 = destination_emits_midi2(destination);
+  if (to_midi2) {
+    if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) out = midi1_to_midi2(ump);
+  } else {
+    if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) out = midi2_to_midi1(ump);
+  }
+  if (destination.kind == DestinationKind::kExternalPort && out.word_count != 0) {
+    out.group = static_cast<uint8_t>(destination.external_port.group & 0x0Fu);
+    // Mirror the group nibble in word[0] (bits 24..27) so the serialized UMP and
+    // the convenience accessor agree.
+    out.words[0] = (out.words[0] & ~(0x0Fu << 24u)) | (static_cast<uint32_t>(out.group) << 24u);
+  }
+  return out;
+}
 
 /// Maps a stable `destination_id` (the id carried on a MidiClipSchedule and used
 /// by the sequencer) to a SoundDestination descriptor. CONTROL-thread owned;

@@ -21,6 +21,7 @@
 /// Determinism: quantization is pure integer/PPQ math (no clock / random); the
 /// same queued events with the same config always yield the same MidiClip.
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +35,7 @@ namespace sonare::midi {
 
 /// Optional quantize-on-capture settings.
 struct CaptureQuantize {
+  static constexpr size_t kMaxGrooveSteps = 16;
   /// When true, each captured event's PPQ is snapped to the nearest grid line.
   bool enabled = false;
   /// Grid step in quarter notes (e.g. 0.25 = sixteenth-note grid). Ignored when
@@ -42,6 +44,13 @@ struct CaptureQuantize {
   /// Strength 0..1: 0 leaves the event untouched, 1 snaps fully to the grid.
   /// Values in between interpolate toward the grid line.
   double strength = 1.0;
+  /// Swing amount 0..1. 0 is straight; values > 0 delay every odd grid line by
+  /// up to half `grid_ppq` while even lines remain fixed.
+  double swing = 0.0;
+  /// Optional repeating groove-template offsets, expressed as fractions of
+  /// `grid_ppq` per grid line. 0 disables the template.
+  size_t groove_steps = 0;
+  std::array<double, kMaxGrooveSteps> groove_offsets{};
 };
 
 /// Configuration for a capture drain pass.
@@ -84,6 +93,7 @@ class MidiCapture {
 
 /// Quantize a PPQ position to a grid. `grid_ppq` is the step in quarter notes,
 /// `strength` 0..1 interpolates toward the snapped line. Pure, deterministic.
-double quantize_ppq(double ppq, double grid_ppq, double strength) noexcept;
+double quantize_ppq(double ppq, double grid_ppq, double strength, double swing = 0.0) noexcept;
+double quantize_ppq(double ppq, const CaptureQuantize& quantize) noexcept;
 
 }  // namespace sonare::midi

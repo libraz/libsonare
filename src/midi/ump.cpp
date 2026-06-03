@@ -446,4 +446,39 @@ Ump midi2_to_midi1(const Ump& ump) noexcept {
   }
 }
 
+Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept {
+  Midi1MessageList out;
+  if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice && ump.word_count != 0) {
+    out.messages[0] = ump;
+    out.count = 1;
+    return out;
+  }
+  if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) {
+    return out;
+  }
+
+  const uint8_t status = ump.status_nibble();
+  const uint8_t channel = ump.channel();
+  if (status == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
+    const bool bank_valid = (ump.words[0] & 0x01u) != 0;
+    const uint8_t program = static_cast<uint8_t>((ump.words[1] >> 24u) & 0x7Fu);
+    if (bank_valid) {
+      const uint8_t bank_msb = static_cast<uint8_t>((ump.words[1] >> 8u) & 0x7Fu);
+      const uint8_t bank_lsb = static_cast<uint8_t>(ump.words[1] & 0x7Fu);
+      out.messages[0] = make_midi1_control_change(ump.group, channel, 0, bank_msb);
+      out.messages[1] = make_midi1_control_change(ump.group, channel, 32, bank_lsb);
+      out.messages[2] = make_midi1_program_change(ump.group, channel, program);
+      out.count = 3;
+      return out;
+    }
+  }
+
+  const Ump single = midi2_to_midi1(ump);
+  if (single.message_type() == UmpMessageType::kMidi1ChannelVoice && single.word_count != 0) {
+    out.messages[0] = single;
+    out.count = 1;
+  }
+  return out;
+}
+
 }  // namespace sonare::midi

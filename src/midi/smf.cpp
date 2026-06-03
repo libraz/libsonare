@@ -4,7 +4,9 @@
 #include <array>
 #include <cmath>
 
+#include "midi/tick_conversion.h"
 #include "midi/ump.h"
+#include "util/constants.h"
 
 namespace sonare::midi {
 namespace {
@@ -29,7 +31,7 @@ constexpr uint8_t kMetaTimeSignature = 0x58u;
 // quarter note, so BPM = (us-per-minute) / (us-per-quarter). This is an SMF
 // domain constant, not a universal numeric constant.
 constexpr double kMicrosPerMinute = 60000000.0;
-constexpr double kDefaultBpm = 120.0;
+constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
 
 // ---------------------------------------------------------------------------
 // Byte-buffer reader with bounds checking. All reads validate remaining length
@@ -136,19 +138,6 @@ void put_vlq(std::vector<uint8_t>* out, uint32_t value) {
   for (int i = n - 1; i >= 0; --i) out->push_back(buf[i]);
 }
 
-// Converts SMF ticks to PPQ (quarter-note units) matching MidiClipEvent::ppq.
-double ticks_to_ppq(uint32_t ticks, uint16_t ppqn) noexcept {
-  if (ppqn == 0) return 0.0;
-  return static_cast<double>(ticks) / static_cast<double>(ppqn);
-}
-
-// Converts PPQ (quarter notes) to SMF ticks (rounded to nearest).
-int64_t ppq_to_ticks(double ppq, uint16_t ppqn) noexcept {
-  const double t = ppq * static_cast<double>(ppqn);
-  if (!std::isfinite(t) || t <= 0.0) return 0;
-  return static_cast<int64_t>(std::llround(t));
-}
-
 // Decodes how many data bytes a MIDI 1.0 channel-voice status carries.
 int channel_voice_data_count(uint8_t status) noexcept {
   switch (status & 0xF0u) {
@@ -166,6 +155,22 @@ int channel_voice_data_count(uint8_t status) noexcept {
   }
 }
 
+int system_common_data_count(uint8_t status) noexcept {
+  switch (status) {
+    case 0xF1u:  // MIDI time-code quarter-frame.
+    case 0xF3u:  // Song select.
+      return 1;
+    case 0xF2u:  // Song position pointer.
+      return 2;
+    case 0xF6u:  // Tune request.
+      return 0;
+    default:
+      return -1;
+  }
+}
+
+bool is_system_realtime(uint8_t status) noexcept { return status >= 0xF8u && status <= 0xFEu; }
+
 // Imports a single MTrk chunk body of `length` bytes starting at the reader's
 // current position. Appends parsed channel-voice events to `clip` (PPQ-timed),
 // captures track name / markers / tempo / time-sig into the out params, and
@@ -173,6 +178,7 @@ int channel_voice_data_count(uint8_t status) noexcept {
 struct TrackParseState {
   MidiClip clip;
   std::string name;
+  double length_ppq = 0.0;
   bool has_midi_events = false;
 };
 
@@ -186,17 +192,20 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   uint32_t tick = 0;
   uint8_t running_status = 0;
   bool saw_end_of_track = false;
+  std::vector<uint8_t> pending_sysex;
+  double pending_sysex_ppq = 0.0;
 
   while (reader->pos() < end_pos && !reader->overflow()) {
     const uint32_t delta = reader->vlq();
     if (reader->overflow()) return false;
     tick += delta;
-    const double ppq = ticks_to_ppq(tick, ppqn);
+    const double ppq = smf_ticks_to_ppq(tick, ppqn);
 
     uint8_t status = reader->u8();
     if (reader->overflow()) return false;
 
     if (status == kMetaPrefix) {
+      running_status = 0;
       const uint8_t meta_type = reader->u8();
       const uint32_t meta_len = reader->vlq();
       if (reader->overflow()) return false;
@@ -228,6 +237,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             seg.time_sig.numerator = static_cast<int>(payload[0]);
             // SMF stores the denominator as a power of two (2 => 2^2 = 4).
             seg.time_sig.denominator = 1 << payload[1];
+            if (meta_len >= 4) {
+              seg.clocks_per_metronome_click = payload[2];
+              seg.thirty_seconds_per_quarter = payload[3];
+            }
             time_sigs->push_back(seg);
           } else {
             ++(*skipped);
@@ -246,6 +259,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
           break;
         }
         case kMetaEndOfTrack:
+          track->length_ppq = ppq;
           saw_end_of_track = true;
           break;
         default:
@@ -257,22 +271,53 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     }
 
     if (status == kSysExStart || status == kSysExEscape) {
+      running_status = 0;
       const uint32_t sysex_len = reader->vlq();
       if (reader->overflow()) return false;
       const uint8_t* payload = reader->take(sysex_len);
       if (payload == nullptr) return false;
 
+      if (status == kSysExStart) {
+        pending_sysex.assign(payload, payload + sysex_len);
+        pending_sysex_ppq = ppq;
+      } else if (!pending_sysex.empty()) {
+        pending_sysex.insert(pending_sysex.end(), payload, payload + sysex_len);
+      } else {
+        pending_sysex.assign(payload, payload + sysex_len);
+        pending_sysex_ppq = ppq;
+      }
+
+      const bool complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
+      if (!complete) {
+        continue;
+      }
+
       const SysExHandle handle =
-          sysex_store != nullptr ? sysex_store->add(payload, sysex_len) : SysExHandle{0};
+          sysex_store != nullptr ? sysex_store->add(pending_sysex) : SysExHandle{0};
+      pending_sysex.clear();
       if (handle == 0) {
         ++(*skipped);
         continue;
       }
       MidiClipEvent ev;
-      ev.ppq = ppq;
+      ev.ppq = pending_sysex_ppq;
       ev.ump = make_sysex_handle(/*group=*/0, handle);
       track->clip.add_event(ev);
       track->has_midi_events = true;
+      continue;
+    }
+
+    if ((status & 0xF0u) == 0xF0u) {
+      const int system_data = system_common_data_count(status);
+      if (system_data > 0) {
+        if (reader->take(static_cast<size_t>(system_data)) == nullptr) return false;
+        running_status = 0;
+      } else if (system_data == 0) {
+        running_status = 0;
+      } else if (!is_system_realtime(status)) {
+        running_status = 0;
+      }
+      ++(*skipped);
       continue;
     }
 
@@ -326,6 +371,12 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   }
 
   if (reader->overflow()) return false;
+  if (!pending_sysex.empty()) {
+    ++(*skipped);
+  }
+  if (!saw_end_of_track) {
+    track->length_ppq = smf_ticks_to_ppq(tick, ppqn);
+  }
   // Resynchronize to the declared chunk end (skips any trailing bytes after an
   // explicit end-of-track meta, or unconsumed padding).
   if (reader->pos() < end_pos) {
@@ -423,6 +474,7 @@ SmfImportResult import_smf(const uint8_t* data, size_t size) {
       track.clip.sort_stable();
       result.clips.push_back(std::move(track.clip));
       result.clip_names.push_back(std::move(track.name));
+      result.clip_lengths_ppq.push_back(track.length_ppq);
     }
   }
 
@@ -505,19 +557,37 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     // Merge tempo + time-sig events sorted by tick so delta times are correct.
     struct MetaItem {
       int64_t tick;
-      int kind;  // 0 = tempo, 1 = time-sig.
+      int kind;  // 0 = tempo, 1 = time-sig, 2 = marker.
       double bpm;
       int numerator;
       int denominator;
+      uint8_t clocks_per_metronome_click;
+      uint8_t thirty_seconds_per_quarter;
+      std::string text;
     };
     std::vector<MetaItem> items;
     for (const auto& seg : tempo_segments) {
-      items.push_back(
-          {ppq_to_ticks(seg.start_ppq, ppqn), 0, seg.bpm > 0.0 ? seg.bpm : kDefaultBpm, 0, 0});
+      items.push_back({smf_ppq_to_ticks(seg.start_ppq, ppqn),
+                       0,
+                       seg.bpm > 0.0 ? seg.bpm : kDefaultBpm,
+                       0,
+                       0,
+                       24,
+                       8,
+                       {}});
     }
     for (const auto& seg : time_signatures) {
-      items.push_back({ppq_to_ticks(seg.start_ppq, ppqn), 1, 0.0, seg.time_sig.numerator,
-                       seg.time_sig.denominator});
+      items.push_back({smf_ppq_to_ticks(seg.start_ppq, ppqn),
+                       1,
+                       0.0,
+                       seg.time_sig.numerator,
+                       seg.time_sig.denominator,
+                       seg.clocks_per_metronome_click,
+                       seg.thirty_seconds_per_quarter,
+                       {}});
+    }
+    for (const auto& marker : options.markers) {
+      items.push_back({smf_ppq_to_ticks(marker.ppq, ppqn), 2, 0.0, 0, 0, 24, 8, marker.text});
     }
     std::stable_sort(items.begin(), items.end(),
                      [](const MetaItem& a, const MetaItem& b) { return a.tick < b.tick; });
@@ -534,13 +604,18 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                                     static_cast<uint8_t>((us_per_quarter >> 8) & 0xFFu),
                                     static_cast<uint8_t>(us_per_quarter & 0xFFu)};
         put_meta(&body, delta, kMetaSetTempo, payload, 3);
-      } else {
+      } else if (item.kind == 1) {
         // Encode denominator as a power of two.
         uint8_t dd = 0;
         int den = item.denominator > 0 ? item.denominator : 4;
         while ((1 << dd) < den && dd < 7) ++dd;
-        const uint8_t payload[4] = {static_cast<uint8_t>(item.numerator), dd, 24, 8};
+        const uint8_t payload[4] = {static_cast<uint8_t>(item.numerator), dd,
+                                    item.clocks_per_metronome_click,
+                                    item.thirty_seconds_per_quarter};
         put_meta(&body, delta, kMetaTimeSignature, payload, 4);
+      } else if (!item.text.empty()) {
+        put_meta(&body, delta, kMetaMarker, reinterpret_cast<const uint8_t*>(item.text.data()),
+                 item.text.size());
       }
     }
     // End-of-track.
@@ -562,7 +637,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
 
     int64_t prev_tick = 0;
     for (const MidiClipEvent& ev : clip.events()) {
-      const int64_t tick = ppq_to_ticks(ev.ppq, ppqn);
+      const int64_t tick = smf_ppq_to_ticks(ev.ppq, ppqn);
 
       if (ev.ump.sysex_handle != 0 || ev.ump.message_type() == UmpMessageType::kData64 ||
           ev.ump.message_type() == UmpMessageType::kData128) {
@@ -570,6 +645,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                                                   ? options.sysex_store->lookup(ev.ump.sysex_handle)
                                                   : nullptr;
         if (payload == nullptr) {
+          ++result.skipped_events;
           continue;
         }
         const uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, tick - prev_tick));
@@ -578,25 +654,36 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         continue;
       }
 
-      // Down-convert MIDI 2.0 events to MIDI 1.0 before serialization. MIDI 1.0
-      // events pass through unchanged; per-note controllers yield word_count 0.
-      Ump ump = ev.ump;
-      if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-        ump = midi2_to_midi1(ump);
-      }
-      if (ump.message_type() != UmpMessageType::kMidi1ChannelVoice || ump.word_count == 0) {
+      // Down-convert MIDI 2.0 events to MIDI 1.0 before serialization. Banked
+      // MIDI 2.0 program changes lower to CC#0, CC#32, then Program Change at
+      // the same tick; MIDI 1.0 events pass through unchanged; 2.0-only
+      // controller forms yield count 0.
+      const Midi1MessageList lowered = midi2_to_midi1_messages(ev.ump);
+      if (lowered.count == 0) {
+        ++result.skipped_events;
         continue;  // Unresolved SysEx / dropped 2.0-only messages are not emitted.
       }
-      std::array<uint8_t, 3> raw{};
-      const size_t n = ump_to_midi1_bytes(ump, raw.data(), raw.size());
-      if (n == 0) continue;
+      uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, tick - prev_tick));
+      for (uint8_t mi = 0; mi < lowered.count; ++mi) {
+        const Ump& ump = lowered.messages[mi];
+        if (ump.message_type() != UmpMessageType::kMidi1ChannelVoice || ump.word_count == 0) {
+          ++result.skipped_events;
+          continue;
+        }
+        std::array<uint8_t, 3> raw{};
+        const size_t n = ump_to_midi1_bytes(ump, raw.data(), raw.size());
+        if (n == 0) {
+          ++result.skipped_events;
+          continue;
+        }
 
-      const uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, tick - prev_tick));
+        put_vlq(&body, delta);
+        // Always write an explicit status byte (no running-status compression)
+        // so the output is unambiguous and simple to re-import.
+        body.insert(body.end(), raw.begin(), raw.begin() + n);
+        delta = 0;
+      }
       prev_tick = tick;
-      put_vlq(&body, delta);
-      // Always write an explicit status byte (no running-status compression) so
-      // the output is unambiguous and simple to re-import.
-      body.insert(body.end(), raw.begin(), raw.begin() + n);
     }
     put_meta(&body, 0, kMetaEndOfTrack, nullptr, 0);
     append_track_chunk(&result.bytes, body);

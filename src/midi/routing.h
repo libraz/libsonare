@@ -22,12 +22,12 @@
 ///    bumped; the output is never grown.
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "rt/overflow_counter.h"
 
 namespace sonare::midi {
 
@@ -86,22 +86,43 @@ class MidiRouter {
   size_t process(const MidiEvent* input, size_t count, MidiRouteOutput* out) noexcept;
 
   /// Total events dropped due to output overflow since construction / reset.
-  uint32_t overflow_count() const noexcept {
-    return overflow_count_.load(std::memory_order_relaxed);
-  }
+  uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
 
   /// AUDIO/CONTROL thread: clear the overflow telemetry counter.
-  void reset_telemetry() noexcept { overflow_count_.store(0, std::memory_order_relaxed); }
+  void reset_telemetry() noexcept { overflow_count_.reset(); }
+
+  /// AUDIO/CONTROL thread: forget all sounding-note remap state. Use when the
+  /// route is flushed (e.g. all-notes-off / transport stop) so a subsequent
+  /// note-off is not matched against a stale pre-flush note-on.
+  void reset_active_notes() noexcept { active_count_ = 0; }
 
  private:
+  // Tracks the remapped channel chosen for a currently-sounding note so its
+  // matching note-off lands on the SAME channel as its note-on even if the
+  // remap config changes mid-note (otherwise the note hangs on the synth).
+  // Keyed by the note's ORIGINAL (pre-remap) identity.
+  struct ActiveRemap {
+    uint8_t group = 0;
+    uint8_t src_channel = 0;
+    uint8_t note = 0;
+    uint8_t out_channel = 0;
+  };
+  static constexpr size_t kMaxActiveRemaps = 256;
+
   // Returns true if `ump` passes the configured group/channel filter.
   bool passes_filter(const Ump& ump) const noexcept;
   // Applies channel remap to a channel-voice UMP (returns a possibly-rewritten
-  // copy). Non-channel-voice messages are returned unchanged.
-  Ump apply_remap(const Ump& ump) const noexcept;
+  // copy). Non-channel-voice messages are returned unchanged. Note-on records
+  // the chosen channel; note-off reuses the recorded channel for a stable pair.
+  Ump apply_remap(const Ump& ump) noexcept;
+  // Rewrites the channel nibble of a channel-voice UMP to `channel`.
+  static Ump with_channel(const Ump& ump, uint8_t channel) noexcept;
+  size_t find_active_remap(uint8_t group, uint8_t src_channel, uint8_t note) const noexcept;
 
   MidiRouteConfig config_{};
-  std::atomic<uint32_t> overflow_count_{0};
+  std::array<ActiveRemap, kMaxActiveRemaps> active_remaps_{};
+  size_t active_count_ = 0;
+  rt::OverflowCounter overflow_count_{};
 };
 
 }  // namespace sonare::midi

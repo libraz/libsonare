@@ -3,6 +3,8 @@
 
 #include "serialize/project_serializer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -15,12 +17,6 @@
 #include "mixing/api/scene.h"
 #include "transport/tempo_map.h"
 #include "util/json.h"
-
-#if defined(SONARE_WITH_MIXING)
-// scene_to_json / scene_from_json live in sonare_mixing (BUILD_MIXING). When the
-// mixer is built, embed the Scene through the tested serializer (single source
-// of truth). Otherwise serialize the always-present Scene struct fields directly.
-#endif
 
 namespace sonare::serialize {
 namespace {
@@ -147,6 +143,27 @@ bool bool_or(const Value& obj, const char* key, bool fallback) {
   return (v && v->is_bool()) ? v->as_bool() : fallback;
 }
 
+// Reads a UMP data word (full uint32_t range). A present-but-out-of-range value
+// (negative, non-finite, or above the uint32_t maximum) is clamped deterministically
+// to 0 / 0xFFFFFFFF and recorded as a warning, instead of being silently zeroed.
+// Absent / non-numeric (the forward-compatible default) stays a silent 0.
+uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
+                           std::vector<Diagnostic>* diagnostics) {
+  const auto* v = obj.find(key);
+  if (!v || !v->is_number()) return 0;
+  const double d = v->as_number();
+  constexpr double kMaxWord = 4294967295.0;  // 2^32 - 1
+  if (!std::isfinite(d) || d < 0.0 || d > kMaxWord) {
+    const uint32_t clamped = (!std::isfinite(d) || d < 0.0) ? 0u : static_cast<uint32_t>(kMaxWord);
+    diagnostics->push_back({DiagnosticSeverity::kWarning, "midi_word_out_of_range",
+                            "MIDI event field \"" + std::string(key) + "\" on clip " +
+                                std::to_string(clip_id) + " is out of range; clamped to " +
+                                std::to_string(clamped)});
+    return clamped;
+  }
+  return static_cast<uint32_t>(d);
+}
+
 const Array* array_at(const Value& obj, const char* key) {
   const auto* v = obj.find(key);
   return (v && v->is_array()) ? &v->as_array() : nullptr;
@@ -202,6 +219,7 @@ Value track_to_json(const arrangement::Track& t) {
   o["kind"] = static_cast<int>(t.kind);
   o["channel_strip_ref"] = t.channel_strip_ref;
   o["output_target"] = t.output_target;
+  o["midi_destination_id"] = static_cast<double>(t.midi_destination_id);
   Array lanes;
   for (const auto& lane : t.automation_lanes) {
     lanes.push_back(automation_lane_to_json(lane));
@@ -234,6 +252,21 @@ Value clip_to_json(const arrangement::EditClip& c) {
   return o;
 }
 
+Value warp_map_to_json(const arrangement::WarpMapRef& map) {
+  Object o;
+  o["id"] = static_cast<double>(map.id);
+  o["name"] = map.name;
+  Array anchors;
+  for (const auto& anchor : map.anchors) {
+    Object ao;
+    ao["warp_sample"] = anchor.warp_sample;
+    ao["source_sample"] = anchor.source_sample;
+    anchors.push_back(std::move(ao));
+  }
+  o["anchors"] = std::move(anchors);
+  return o;
+}
+
 Value source_to_json(const arrangement::ClipSource& src) {
   Object o;
   if (const auto* audio = std::get_if<arrangement::AudioSourceRef>(&src)) {
@@ -246,6 +279,11 @@ Value source_to_json(const arrangement::ClipSource& src) {
     o["channel_count"] = static_cast<double>(audio->channel_count);
     o["sample_rate_hint"] = audio->sample_rate_hint;
     o["storage_handle_id"] = static_cast<double>(audio->storage_handle_id);
+    // Additive + optional: only emit when set so existing projects without a
+    // content hash serialize byte-for-byte identically (no golden churn).
+    if (!audio->content_hash.empty()) {
+      o["content_hash"] = audio->content_hash;
+    }
   } else {
     const auto& m = std::get<arrangement::MidiSourceRef>(src);
     o["kind"] = static_cast<int>(arrangement::SourceKind::kMidi);
@@ -358,13 +396,6 @@ Value midi_content_to_json(const arrangement::MidiContentStore& midi) {
   return o;
 }
 
-#if defined(SONARE_WITH_MIXING)
-// Embed the mixer Scene through the tested mixer serializer, then re-parse so it
-// nests as structured JSON (rather than an escaped string) for stable key order.
-Value scene_to_value(const mixing::api::Scene& scene) {
-  return json::parse(mixing::api::scene_to_json(scene));
-}
-#else
 Value insert_to_json(const mixing::api::Insert& ins) {
   Object o;
   o["slot"] = ins.slot == mixing::api::InsertSlot::PreFader ? "pre" : "post";
@@ -374,9 +405,9 @@ Value insert_to_json(const mixing::api::Insert& ins) {
   return o;
 }
 
-// Mixing-OFF fallback: serialize the always-present Scene struct fields directly
-// with util::json, mirroring scene_json.cpp's key names so the structure stays
-// stable in both build paths.
+// Serialize the always-present Scene struct fields directly with the same
+// camelCase keys used by mixing::api::scene_to_json. Keeping this walker local
+// avoids BUILD_MIXING ON/OFF changing project JSON shape.
 Value scene_to_value(const mixing::api::Scene& scene) {
   Object o;
   o["version"] = scene.version;
@@ -384,20 +415,20 @@ Value scene_to_value(const mixing::api::Scene& scene) {
   for (const auto& s : scene.strips) {
     Object so;
     so["id"] = s.id;
-    so["input_trim_db"] = s.input_trim_db;
-    so["fader_db"] = s.fader_db;
+    so["inputTrimDb"] = s.input_trim_db;
+    so["faderDb"] = s.fader_db;
     so["pan"] = s.pan;
     so["width"] = s.width;
     so["muted"] = s.muted;
     so["soloed"] = s.soloed;
-    so["solo_safe"] = s.solo_safe;
-    so["pan_mode"] = s.pan_mode;
-    so["dual_pan_left"] = s.dual_pan_left;
-    so["dual_pan_right"] = s.dual_pan_right;
-    so["polarity_invert_left"] = s.polarity_invert_left;
-    so["polarity_invert_right"] = s.polarity_invert_right;
-    so["pan_law"] = s.pan_law;
-    so["channel_delay_samples"] = s.channel_delay_samples;
+    so["soloSafe"] = s.solo_safe;
+    so["panMode"] = s.pan_mode;
+    so["dualPanLeft"] = s.dual_pan_left;
+    so["dualPanRight"] = s.dual_pan_right;
+    so["polarityInvertLeft"] = s.polarity_invert_left;
+    so["polarityInvertRight"] = s.polarity_invert_right;
+    so["panLaw"] = s.pan_law;
+    so["channelDelaySamples"] = s.channel_delay_samples;
     Array inserts;
     for (const auto& ins : s.inserts) inserts.push_back(insert_to_json(ins));
     so["inserts"] = std::move(inserts);
@@ -405,8 +436,8 @@ Value scene_to_value(const mixing::api::Scene& scene) {
     for (const auto& sd : s.sends) {
       Object sdo;
       sdo["id"] = sd.id;
-      sdo["destination_bus_id"] = sd.destination_bus_id;
-      sdo["send_db"] = sd.send_db;
+      sdo["destinationBusId"] = sd.destination_bus_id;
+      sdo["sendDb"] = sd.send_db;
       sdo["timing"] = sd.timing == mixing::api::SendTiming::PreFader ? "pre" : "post";
       sends.push_back(std::move(sdo));
     }
@@ -429,13 +460,13 @@ Value scene_to_value(const mixing::api::Scene& scene) {
   for (const auto& v : scene.vca_groups) {
     Object vo;
     vo["id"] = v.id;
-    vo["gain_db"] = v.gain_db;
+    vo["gainDb"] = v.gain_db;
     Array members;
     for (const auto& m : v.members) members.push_back(m);
     vo["members"] = std::move(members);
     vcas.push_back(std::move(vo));
   }
-  o["vca_groups"] = std::move(vcas);
+  o["vcaGroups"] = std::move(vcas);
   Array connections;
   for (const auto& c : scene.connections) {
     Object co;
@@ -446,7 +477,6 @@ Value scene_to_value(const mixing::api::Scene& scene) {
   o["connections"] = std::move(connections);
   return o;
 }
-#endif
 
 // ===========================================================================
 // Decode helpers: util::json::Value -> arrangement model
@@ -494,6 +524,7 @@ arrangement::Track track_from_json(const Value& v) {
   t.kind = static_cast<arrangement::Track::Kind>(uint_or(v, "kind", 0));
   t.channel_strip_ref = str_or(v, "channel_strip_ref", "");
   t.output_target = str_or(v, "output_target", "");
+  t.midi_destination_id = uint_or(v, "midi_destination_id", 0);
   if (const auto* arr = array_at(v, "automation_lanes")) {
     for (const auto& lv : *arr) {
       if (lv.is_object()) t.automation_lanes.push_back(automation_lane_from_json(lv));
@@ -526,6 +557,22 @@ arrangement::EditClip clip_from_json(const Value& v) {
   return c;
 }
 
+arrangement::WarpMapRef warp_map_from_json(const Value& v) {
+  arrangement::WarpMapRef map;
+  map.id = uint_or(v, "id", 0);
+  map.name = str_or(v, "name", "");
+  if (const auto* arr = array_at(v, "anchors")) {
+    for (const auto& av : *arr) {
+      if (!av.is_object()) continue;
+      arrangement::WarpAnchorRef anchor;
+      anchor.warp_sample = num_or(av, "warp_sample", 0.0);
+      anchor.source_sample = num_or(av, "source_sample", 0.0);
+      map.anchors.push_back(anchor);
+    }
+  }
+  return map;
+}
+
 arrangement::ClipSource source_from_json(const Value& v) {
   const auto kind = static_cast<arrangement::SourceKind>(uint_or(v, "kind", 0));
   if (kind == arrangement::SourceKind::kMidi) {
@@ -541,6 +588,8 @@ arrangement::ClipSource source_from_json(const Value& v) {
   a.channel_count = uint_or(v, "channel_count", 0);
   a.sample_rate_hint = num_or(v, "sample_rate_hint", 0.0);
   a.storage_handle_id = uint_or(v, "storage_handle_id", 0);
+  // Gated read: absent content_hash (older documents) loads as empty.
+  a.content_hash = str_or(v, "content_hash", "");
   return a;
 }
 
@@ -617,12 +666,6 @@ bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out) {
   return base64_decode(b64, &out->payload);
 }
 
-#if defined(SONARE_WITH_MIXING)
-mixing::api::Scene scene_from_value(const Value& v) {
-  // Re-serialize the embedded subtree and hand it to the tested mixer parser.
-  return mixing::api::scene_from_json(json::dump(v));
-}
-#else
 mixing::api::Insert insert_from_json(const Value& v) {
   mixing::api::Insert ins;
   ins.slot = str_or(v, "slot", "pre") == "post" ? mixing::api::InsertSlot::PostFader
@@ -633,6 +676,25 @@ mixing::api::Insert insert_from_json(const Value& v) {
   return ins;
 }
 
+double num_or_any(const Value& obj, const char* primary, const char* legacy, double fallback) {
+  const auto* v = obj.find(primary);
+  if (v && v->is_number()) return v->as_number();
+  return num_or(obj, legacy, fallback);
+}
+
+std::string str_or_any(const Value& obj, const char* primary, const char* legacy,
+                       const std::string& fallback) {
+  const auto* v = obj.find(primary);
+  if (v && v->is_string()) return v->as_string();
+  return str_or(obj, legacy, fallback);
+}
+
+bool bool_or_any(const Value& obj, const char* primary, const char* legacy, bool fallback) {
+  const auto* v = obj.find(primary);
+  if (v && v->is_bool()) return v->as_bool();
+  return bool_or(obj, legacy, fallback);
+}
+
 mixing::api::Scene scene_from_value(const Value& v) {
   mixing::api::Scene scene;
   scene.version = static_cast<int>(num_or(v, "version", 1.0));
@@ -641,20 +703,22 @@ mixing::api::Scene scene_from_value(const Value& v) {
       if (!sv.is_object()) continue;
       mixing::api::Strip s;
       s.id = str_or(sv, "id", "");
-      s.input_trim_db = static_cast<float>(num_or(sv, "input_trim_db", 0.0));
-      s.fader_db = static_cast<float>(num_or(sv, "fader_db", 0.0));
+      s.input_trim_db = static_cast<float>(num_or_any(sv, "inputTrimDb", "input_trim_db", 0.0));
+      s.fader_db = static_cast<float>(num_or_any(sv, "faderDb", "fader_db", 0.0));
       s.pan = static_cast<float>(num_or(sv, "pan", 0.0));
       s.width = static_cast<float>(num_or(sv, "width", 1.0));
       s.muted = bool_or(sv, "muted", false);
       s.soloed = bool_or(sv, "soloed", false);
-      s.solo_safe = bool_or(sv, "solo_safe", false);
-      s.pan_mode = static_cast<int>(num_or(sv, "pan_mode", 0.0));
-      s.dual_pan_left = static_cast<float>(num_or(sv, "dual_pan_left", -1.0));
-      s.dual_pan_right = static_cast<float>(num_or(sv, "dual_pan_right", 1.0));
-      s.polarity_invert_left = bool_or(sv, "polarity_invert_left", false);
-      s.polarity_invert_right = bool_or(sv, "polarity_invert_right", false);
-      s.pan_law = static_cast<int>(num_or(sv, "pan_law", 0.0));
-      s.channel_delay_samples = static_cast<int>(num_or(sv, "channel_delay_samples", 0.0));
+      s.solo_safe = bool_or_any(sv, "soloSafe", "solo_safe", false);
+      s.pan_mode = static_cast<int>(num_or_any(sv, "panMode", "pan_mode", 0.0));
+      s.dual_pan_left = static_cast<float>(num_or_any(sv, "dualPanLeft", "dual_pan_left", -1.0));
+      s.dual_pan_right = static_cast<float>(num_or_any(sv, "dualPanRight", "dual_pan_right", 1.0));
+      s.polarity_invert_left = bool_or_any(sv, "polarityInvertLeft", "polarity_invert_left", false);
+      s.polarity_invert_right =
+          bool_or_any(sv, "polarityInvertRight", "polarity_invert_right", false);
+      s.pan_law = static_cast<int>(num_or_any(sv, "panLaw", "pan_law", 0.0));
+      s.channel_delay_samples =
+          static_cast<int>(num_or_any(sv, "channelDelaySamples", "channel_delay_samples", 0.0));
       if (const auto* iarr = array_at(sv, "inserts")) {
         for (const auto& iv : *iarr) {
           if (iv.is_object()) s.inserts.push_back(insert_from_json(iv));
@@ -665,8 +729,8 @@ mixing::api::Scene scene_from_value(const Value& v) {
           if (!dv.is_object()) continue;
           mixing::api::Send sd;
           sd.id = str_or(dv, "id", "");
-          sd.destination_bus_id = str_or(dv, "destination_bus_id", "");
-          sd.send_db = static_cast<float>(num_or(dv, "send_db", 0.0));
+          sd.destination_bus_id = str_or_any(dv, "destinationBusId", "destination_bus_id", "");
+          sd.send_db = static_cast<float>(num_or_any(dv, "sendDb", "send_db", 0.0));
           sd.timing = str_or(dv, "timing", "post") == "pre" ? mixing::api::SendTiming::PreFader
                                                             : mixing::api::SendTiming::PostFader;
           s.sends.push_back(std::move(sd));
@@ -689,12 +753,14 @@ mixing::api::Scene scene_from_value(const Value& v) {
       scene.buses.push_back(std::move(b));
     }
   }
-  if (const auto* arr = array_at(v, "vca_groups")) {
-    for (const auto& vv : *arr) {
+  const Array* vca_groups = array_at(v, "vcaGroups");
+  if (vca_groups == nullptr) vca_groups = array_at(v, "vca_groups");
+  if (vca_groups != nullptr) {
+    for (const auto& vv : *vca_groups) {
       if (!vv.is_object()) continue;
       mixing::api::VcaGroup g;
       g.id = str_or(vv, "id", "");
-      g.gain_db = static_cast<float>(num_or(vv, "gain_db", 0.0));
+      g.gain_db = static_cast<float>(num_or_any(vv, "gainDb", "gain_db", 0.0));
       if (const auto* marr = array_at(vv, "members")) {
         for (const auto& mv : *marr) {
           if (mv.is_string()) g.members.push_back(mv.as_string());
@@ -714,7 +780,6 @@ mixing::api::Scene scene_from_value(const Value& v) {
   }
   return scene;
 }
-#endif
 
 // ===========================================================================
 // Migration hook. The current serializer knows schema version 1. A document with the same
@@ -756,6 +821,10 @@ std::string project_to_json(const arrangement::Project& project,
   Array clips;
   for (const auto& c : project.clips()) clips.push_back(clip_to_json(c));
   root["clips"] = std::move(clips);
+
+  Array warp_maps;
+  for (const auto& map : project.warp_maps()) warp_maps.push_back(warp_map_to_json(map));
+  root["warp_maps"] = std::move(warp_maps);
 
   Array markers;
   for (const auto& m : project.markers()) markers.push_back(marker_to_json(m));
@@ -825,12 +894,62 @@ DeserializeResult project_from_json(const std::string& json_text) {
     project.set_overlap_policy(
         static_cast<arrangement::OverlapPolicy>(uint_or(root, "overlap_policy", 0)));
 
-    // Tempo / time signature.
+    // Tempo / time signature. Segments are validated (finite, positive BPM and
+    // start_ppq) and normalized on load: a segment with NaN/Inf or non-positive
+    // BPM, or a non-finite start_ppq, is rejected with a diagnostic rather than
+    // propagated; the surviving segments are sorted by start_ppq and de-duped on
+    // start_ppq (last writer wins) so the in-memory map is well-ordered.
     std::vector<transport::TempoSegment> tempo;
     if (const auto* arr = array_at(root, "tempo_segments")) {
+      size_t index = 0;
       for (const auto& sv : *arr) {
-        if (sv.is_object()) tempo.push_back(tempo_segment_from_json(sv));
+        if (!sv.is_object()) {
+          ++index;
+          continue;
+        }
+        transport::TempoSegment s = tempo_segment_from_json(sv);
+        if (!std::isfinite(s.start_ppq)) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "invalid_tempo_start_ppq",
+               "tempo segment " + std::to_string(index) + " has non-finite start_ppq"});
+          return result;
+        }
+        if (!std::isfinite(s.bpm) || s.bpm <= 0.0) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "invalid_tempo_bpm",
+               "tempo segment " + std::to_string(index) + " has non-finite or non-positive bpm"});
+          return result;
+        }
+        // end_bpm == 0 means "constant tempo"; any explicit end_bpm must be a
+        // finite positive ramp target.
+        if (s.end_bpm != 0.0 && (!std::isfinite(s.end_bpm) || s.end_bpm < 0.0)) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "invalid_tempo_end_bpm",
+               "tempo segment " + std::to_string(index) + " has invalid end_bpm"});
+          return result;
+        }
+        if (!std::isfinite(s.start_sample)) s.start_sample = 0.0;
+        tempo.push_back(s);
+        ++index;
       }
+    }
+    // Stable sort by start_ppq, then drop earlier duplicates sharing a start_ppq
+    // (last segment for a tick wins) so the map has a single segment per tick.
+    std::stable_sort(tempo.begin(), tempo.end(),
+                     [](const transport::TempoSegment& a, const transport::TempoSegment& b) {
+                       return a.start_ppq < b.start_ppq;
+                     });
+    if (tempo.size() > 1) {
+      std::vector<transport::TempoSegment> deduped;
+      deduped.reserve(tempo.size());
+      for (auto& s : tempo) {
+        if (!deduped.empty() && deduped.back().start_ppq == s.start_ppq) {
+          deduped.back() = s;  // Same tick: keep the later (last-writer) segment.
+        } else {
+          deduped.push_back(s);
+        }
+      }
+      tempo = std::move(deduped);
     }
     project.set_tempo_segments(std::move(tempo));
 
@@ -880,6 +999,50 @@ DeserializeResult project_from_json(const std::string& json_text) {
       }
     }
     if (max_clip_id > 0) project.ensure_next_clip_id(max_clip_id);
+
+    // Warp maps (plain project metadata referenced by EditClip::warp_ref_id).
+    if (const auto* arr = array_at(root, "warp_maps")) {
+      for (const auto& wv : *arr) {
+        if (!wv.is_object()) continue;
+        arrangement::WarpMapRef map = warp_map_from_json(wv);
+        project.set_warp_map(std::move(map));
+      }
+    }
+
+    // Referential integrity (warnings, non-fatal): the saved arrangement is
+    // preserved verbatim, but dangling clip references and clip/source-kind
+    // mismatches are surfaced as diagnostics so a host can repair them. Sources
+    // and tracks are fully loaded above, so lookups here see the whole project.
+    for (const auto& c : project.clips()) {
+      const arrangement::ClipSource* src = project.find_source(c.source_id);
+      if (src == nullptr) {
+        result.diagnostics.push_back({DiagnosticSeverity::kWarning, "dangling_clip_source",
+                                      "clip " + std::to_string(c.id) +
+                                          " references missing source " +
+                                          std::to_string(c.source_id)});
+      }
+      const arrangement::Track* track = project.find_track(c.track_id);
+      if (track == nullptr) {
+        result.diagnostics.push_back({DiagnosticSeverity::kWarning, "dangling_clip_track",
+                                      "clip " + std::to_string(c.id) +
+                                          " references missing track " +
+                                          std::to_string(c.track_id)});
+      }
+      if (src != nullptr && track != nullptr) {
+        const arrangement::SourceKind sk = arrangement::source_kind(*src);
+        const bool audio_ok = track->kind == arrangement::Track::Kind::kAudio &&
+                              sk == arrangement::SourceKind::kAudio;
+        const bool midi_ok =
+            track->kind == arrangement::Track::Kind::kMidi && sk == arrangement::SourceKind::kMidi;
+        // kAux tracks hold no clip sources; any source kind on one is a mismatch.
+        if (!audio_ok && !midi_ok) {
+          result.diagnostics.push_back({DiagnosticSeverity::kWarning, "clip_source_kind_mismatch",
+                                        "clip " + std::to_string(c.id) +
+                                            " source kind does not match track " +
+                                            std::to_string(c.track_id) + " kind"});
+        }
+      }
+    }
 
     // Markers.
     uint32_t max_marker_id = 0;
@@ -955,8 +1118,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
           if (!ev.is_object()) continue;
           arrangement::MidiClipEvent e;
           e.ppq = num_or(ev, "ppq", 0.0);
-          e.data0 = uint_or(ev, "data0", 0);
-          e.data1 = uint_or(ev, "data1", 0);
+          e.data0 = midi_word_or_warn(ev, "data0", clip_id, &result.diagnostics);
+          e.data1 = midi_word_or_warn(ev, "data1", clip_id, &result.diagnostics);
           e.sysex_handle = uint_or(ev, "sysex_handle", 0);
           events.push_back(e);
         }

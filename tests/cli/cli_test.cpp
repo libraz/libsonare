@@ -17,6 +17,7 @@
 
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "sonare_c_project.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -908,7 +909,7 @@ TEST_CASE("CLI project command group", "[cli]") {
   SECTION("abi prints the project ABI version") {
     auto [code, output] = exec_command(CLI + " project abi");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("1"));
+    REQUIRE_THAT(output, ContainsSubstring(std::to_string(SONARE_PROJECT_ABI_VERSION)));
   }
 
   SECTION("new -> validate -> compile round-trips through the C ABI") {
@@ -924,6 +925,28 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE(cc == 0);
 
     std::remove(proj.c_str());
+  }
+
+  SECTION("export-midi2 -> import-midi2 is wired through the C ABI") {
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string midi2 = unique_temp_path("_clip.midi2");
+    const std::string imported = unique_temp_path("_imported.json");
+
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [ec, eo] = exec_command(CLI + " project export-midi2 --in " + proj + " -o " + midi2);
+    REQUIRE(ec == 0);
+    REQUIRE_THAT(eo, ContainsSubstring("Exported MIDI2 Clip File"));
+
+    auto [ic, io] =
+        exec_command(CLI + " project import-midi2 --midi2 " + midi2 + " -o " + imported);
+    REQUIRE(ic == 0);
+    REQUIRE_THAT(io, ContainsSubstring("Imported MIDI2 Clip File"));
+
+    std::remove(proj.c_str());
+    std::remove(midi2.c_str());
+    std::remove(imported.c_str());
   }
 
   SECTION("malformed project json fails cleanly (non-zero, no crash)") {

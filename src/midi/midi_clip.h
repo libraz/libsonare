@@ -24,8 +24,14 @@ struct MidiClipEvent {
   /// Position within the clip's source timeline (PPQ, quarter notes).
   double ppq = 0.0;
   Ump ump{};
+  /// Optional control-thread-resolved payload view for SysEx-handle UMPs.
+  const uint8_t* sysex_payload = nullptr;
+  size_t sysex_payload_size = 0;
 
-  bool operator==(const MidiClipEvent& o) const noexcept { return ppq == o.ppq && ump == o.ump; }
+  bool operator==(const MidiClipEvent& o) const noexcept {
+    return ppq == o.ppq && ump == o.ump && sysex_payload == o.sysex_payload &&
+           sysex_payload_size == o.sysex_payload_size;
+  }
 };
 
 /// Result of validating a clip's note pairing.

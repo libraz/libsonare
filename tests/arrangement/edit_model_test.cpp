@@ -39,8 +39,36 @@ TEST_CASE("Project constructs with deterministic defaults", "[arrangement]") {
   CHECK(p.sources().empty());
   CHECK(p.markers().empty());
   CHECK(p.assist_sidecars().empty());
+  CHECK(p.warp_maps().empty());
   // The mixer scene is held as pure data even with mixing runtime disabled.
   CHECK(p.scene().version == 1);
+}
+
+TEST_CASE("Project stores first-class warp maps by stable id", "[arrangement]") {
+  Project p;
+
+  WarpMapRef invalid;
+  invalid.id = 0;
+  CHECK_FALSE(p.set_warp_map(invalid));
+
+  WarpMapRef map;
+  map.id = 5;
+  map.name = "manual";
+  map.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+  REQUIRE(p.set_warp_map(map));
+  REQUIRE(p.find_warp_map(5) != nullptr);
+  CHECK(p.find_warp_map(5)->name == "manual");
+
+  map.name = "edited";
+  map.anchors.push_back({96000.0, 90000.0});
+  REQUIRE(p.set_warp_map(map));
+  REQUIRE(p.warp_maps().size() == 1);
+  CHECK(p.find_warp_map(5)->anchors.size() == 3);
+
+  auto removed = p.remove_warp_map(5);
+  CHECK(removed.second);
+  CHECK(removed.first.name == "edited");
+  CHECK_FALSE(p.has_warp_map(5));
 }
 
 TEST_CASE("Ids are unique and monotonic across tracks, clips, sources", "[arrangement]") {

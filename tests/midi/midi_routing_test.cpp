@@ -37,6 +37,7 @@ using sonare::midi::MidiEvent;
 using sonare::midi::MidiRouteConfig;
 using sonare::midi::MidiRouteOutput;
 using sonare::midi::MidiRouter;
+using sonare::midi::MtcQuarterFrameGenerator;
 using sonare::midi::MtcTime;
 using sonare::test::AllocationGuard;
 using sonare::transport::TempoMap;
@@ -211,6 +212,59 @@ TEST_CASE("CcMap MIDI learn binds next observed CC", "[midi]") {
   REQUIRE(param == 77);
 }
 
+TEST_CASE("CcMap MIDI learn assembles 14-bit CC pairs", "[midi]") {
+  CcMap map;
+  map.begin_learn(88, -1.0f, 1.0f);
+
+  CcBinding learned;
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 2, 1, 64), &learned));
+  REQUIRE(map.is_learning());
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 2, 33, 12), &learned));
+  REQUIRE_FALSE(map.is_learning());
+
+  REQUIRE(learned.kind == sonare::midi::CcBindingKind::kControlChange14);
+  REQUIRE(learned.cc_number == 1);
+  REQUIRE(learned.cc_lsb_number == 33);
+  REQUIRE(learned.channel == 2);
+  REQUIRE(learned.param_id == 88);
+  REQUIRE(learned.min_value == -1.0f);
+  REQUIRE(learned.max_value == 1.0f);
+}
+
+TEST_CASE("CcMap MIDI learn assembles RPN and NRPN selectors", "[midi]") {
+  CcMap map;
+
+  SECTION("RPN") {
+    map.begin_learn(90);
+    CcBinding learned;
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 3, 101, 0), &learned));
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 3, 100, 1), &learned));
+    REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 3, 6, 64), &learned));
+
+    REQUIRE(learned.kind == sonare::midi::CcBindingKind::kRpn);
+    REQUIRE(learned.cc_number == 6);
+    REQUIRE(learned.channel == 3);
+    REQUIRE(learned.selector_msb == 0);
+    REQUIRE(learned.selector_lsb == 1);
+    REQUIRE(learned.param_id == 90);
+  }
+
+  SECTION("NRPN") {
+    map.begin_learn(91);
+    CcBinding learned;
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 4, 99, 12), &learned));
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 4, 98, 34), &learned));
+    REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 4, 38, 5), &learned));
+
+    REQUIRE(learned.kind == sonare::midi::CcBindingKind::kNrpn);
+    REQUIRE(learned.cc_number == 38);
+    REQUIRE(learned.channel == 4);
+    REQUIRE(learned.selector_msb == 12);
+    REQUIRE(learned.selector_lsb == 34);
+    REQUIRE(learned.param_id == 91);
+  }
+}
+
 TEST_CASE("CcMap param_to_cc round-trips value", "[midi]") {
   CcMap map;
   map.bind(CcBinding{10, 2, 55, 0.0f, 1.0f});
@@ -312,6 +366,150 @@ TEST_CASE("MTC quarter-frame generate and parse round-trip", "[midi]") {
   REQUIRE(parser.mtc_time() == t);
 }
 
+TEST_CASE("MTC quarter-frame stream generator advances after one full cycle", "[midi]") {
+  MtcTime t;
+  t.hours = 1;
+  t.minutes = 23;
+  t.seconds = 45;
+  t.frames = 12;
+  t.rate = sonare::midi::MtcFrameRate::kFps25;
+
+  MtcQuarterFrameGenerator gen;
+  REQUIRE(gen.reset(t));
+  REQUIRE(gen.next_piece() == 0);
+
+  ClockParser parser;
+  parser.reset();
+  for (int piece = 0; piece < 8; ++piece) {
+    uint8_t bytes[2] = {};
+    REQUIRE(gen.next(bytes, sizeof(bytes)) == 2);
+    REQUIRE(bytes[0] == sonare::midi::kStatusMtcQuarterFrame);
+    REQUIRE(((bytes[1] >> 4u) & 0x07u) == static_cast<uint8_t>(piece));
+    parser.parse_byte(bytes[0]);
+    parser.parse_byte(bytes[1]);
+  }
+  REQUIRE(parser.has_mtc());
+  REQUIRE(parser.mtc_time() == t);
+  REQUIRE(gen.next_piece() == 0);
+  REQUIRE(gen.time().frames == 14);
+
+  MtcTime near_wrap;
+  near_wrap.hours = 23;
+  near_wrap.minutes = 59;
+  near_wrap.seconds = 59;
+  near_wrap.frames = 24;
+  near_wrap.rate = sonare::midi::MtcFrameRate::kFps25;
+  REQUIRE(gen.reset(near_wrap));
+  for (int piece = 0; piece < 8; ++piece) {
+    uint8_t bytes[2] = {};
+    REQUIRE(gen.next(bytes, sizeof(bytes)) == 2);
+  }
+  REQUIRE(gen.time().hours == 0);
+  REQUIRE(gen.time().minutes == 0);
+  REQUIRE(gen.time().seconds == 0);
+  REQUIRE(gen.time().frames == 1);
+
+  near_wrap.frames = 25;
+  REQUIRE_FALSE(gen.reset(near_wrap));
+}
+
+TEST_CASE("MTC full-frame encodes universal SysEx", "[midi]") {
+  MtcTime t;
+  t.hours = 1;
+  t.minutes = 23;
+  t.seconds = 45;
+  t.frames = 12;
+  t.rate = sonare::midi::MtcFrameRate::kFps25;
+
+  uint8_t bytes[10] = {};
+  REQUIRE(sonare::midi::encode_mtc_full_frame(t, /*device_id=*/0x7F, bytes, sizeof(bytes)) == 10);
+  REQUIRE(bytes[0] == 0xF0u);
+  REQUIRE(bytes[1] == 0x7Fu);
+  REQUIRE(bytes[2] == 0x7Fu);
+  REQUIRE(bytes[3] == 0x01u);
+  REQUIRE(bytes[4] == 0x01u);
+  REQUIRE(bytes[5] == static_cast<uint8_t>((1u << 5u) | 1u));  // 25 fps + hour 1.
+  REQUIRE(bytes[6] == 23u);
+  REQUIRE(bytes[7] == 45u);
+  REQUIRE(bytes[8] == 12u);
+  REQUIRE(bytes[9] == 0xF7u);
+
+  t.frames = 30;  // Invalid for 25 fps.
+  REQUIRE(sonare::midi::encode_mtc_full_frame(t, 0x7F, bytes, sizeof(bytes)) == 0);
+}
+
+TEST_CASE("MTC quarter-frame rejects invalid timecode ranges", "[midi]") {
+  MtcTime invalid;
+  invalid.hours = 1;
+  invalid.minutes = 23;
+  invalid.seconds = 63;
+  invalid.frames = 12;
+  invalid.rate = sonare::midi::MtcFrameRate::kFps25;
+  uint8_t bytes[2] = {0, 0};
+  REQUIRE(sonare::midi::encode_mtc_quarter_frame(invalid, 0, bytes, sizeof(bytes)) == 0);
+
+  ClockParser parser;
+  parser.reset();
+  // Manually feed an invalid seconds value (0x3f) while keeping the other pieces
+  // syntactically complete. The parser must not expose a complete MTC frame.
+  const uint8_t pieces[8] = {
+      0x00,  // frames low
+      0x10,  // frames high
+      0x2F,  // seconds low = 15
+      0x33,  // seconds high = 3 => 63 seconds, invalid
+      0x40,  // minutes low
+      0x50,  // minutes high
+      0x60,  // hours low
+      0x72,  // hours high + 25 fps
+  };
+  for (uint8_t data : pieces) {
+    REQUIRE_FALSE(parser.parse_byte(sonare::midi::kStatusMtcQuarterFrame));
+    parser.parse_byte(data);
+  }
+  REQUIRE_FALSE(parser.has_mtc());
+}
+
+TEST_CASE("MIDI transport command encoder emits start continue stop only", "[midi]") {
+  uint8_t byte = 0;
+  REQUIRE(sonare::midi::encode_transport_command(sonare::midi::kStatusStart, &byte, 1) == 1);
+  REQUIRE(byte == sonare::midi::kStatusStart);
+  REQUIRE(sonare::midi::encode_transport_command(sonare::midi::kStatusContinue, &byte, 1) == 1);
+  REQUIRE(byte == sonare::midi::kStatusContinue);
+  REQUIRE(sonare::midi::encode_transport_command(sonare::midi::kStatusStop, &byte, 1) == 1);
+  REQUIRE(byte == sonare::midi::kStatusStop);
+  REQUIRE(sonare::midi::encode_transport_command(sonare::midi::kStatusClock, &byte, 1) == 0);
+  REQUIRE(sonare::midi::encode_transport_command(sonare::midi::kStatusStart, nullptr, 1) == 0);
+}
+
+TEST_CASE("MTC quarter-frame piece zero starts a fresh assembly", "[midi]") {
+  MtcTime first;
+  first.hours = 1;
+  first.minutes = 2;
+  first.seconds = 3;
+  first.frames = 4;
+  first.rate = sonare::midi::MtcFrameRate::kFps25;
+
+  MtcTime second = first;
+  second.seconds = 8;
+
+  ClockParser parser;
+  parser.reset();
+  for (int piece = 0; piece < 8; ++piece) {
+    uint8_t bytes[2] = {0, 0};
+    REQUIRE(sonare::midi::encode_mtc_quarter_frame(first, piece, bytes, sizeof(bytes)) == 2);
+    parser.parse_byte(bytes[0]);
+    parser.parse_byte(bytes[1]);
+  }
+  REQUIRE(parser.has_mtc());
+  REQUIRE(parser.mtc_time() == first);
+
+  uint8_t piece0[2] = {0, 0};
+  REQUIRE(sonare::midi::encode_mtc_quarter_frame(second, 0, piece0, sizeof(piece0)) == 2);
+  parser.parse_byte(piece0[0]);
+  parser.parse_byte(piece0[1]);
+  REQUIRE_FALSE(parser.has_mtc());
+}
+
 TEST_CASE("ClockGenerator block generation performs no allocation", "[midi][rt]") {
   TempoMap map;
   configure_tempo_map(&map, 120.0);
@@ -386,6 +584,97 @@ TEST_CASE("MidiCapture clip_start_ppq offset and quantize", "[midi]") {
   REQUIRE(events.size() == 2);
   REQUIRE(events[0].ppq == 0.0);  // 0.05 snapped to grid 0.0
   REQUIRE(events[1].ppq == 0.5);  // 0.5 already on grid
+}
+
+TEST_CASE("MidiCapture quantize supports swung odd grid lines", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  // 120 BPM at 48 kHz: 24000 frames per quarter.
+  // With grid 0.25 PPQ and full swing, odd grid lines move by 0.125 PPQ:
+  // line 1 -> 0.375, line 2 -> 0.5.
+  capture.push(note_on_event(7200, 0, 0, 60));   // 0.30 PPQ -> 0.375
+  capture.push(note_on_event(12480, 0, 0, 61));  // 0.52 PPQ -> 0.5
+
+  MidiClip clip;
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.25;
+  cfg.quantize.strength = 1.0;
+  cfg.quantize.swing = 1.0;
+  const size_t drained = capture.drain(cfg, &clip);
+  REQUIRE(drained == 2);
+
+  const auto& events = clip.events();
+  REQUIRE(events.size() == 2);
+  REQUIRE(events[0].ppq > 0.374);
+  REQUIRE(events[0].ppq < 0.376);
+  REQUIRE(events[1].ppq > 0.499);
+  REQUIRE(events[1].ppq < 0.501);
+}
+
+TEST_CASE("MidiCapture quantize supports repeating groove templates", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  capture.push(note_on_event(6600, 0, 0, 60));   // 0.275 PPQ -> line 1 + 0.025
+  capture.push(note_on_event(11280, 0, 0, 61));  // 0.47 PPQ -> line 2 - 0.025
+  capture.push(note_on_event(18600, 0, 0, 62));  // 0.775 PPQ -> line 3 + 0.0625
+
+  MidiClip clip;
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.25;
+  cfg.quantize.strength = 1.0;
+  cfg.quantize.groove_steps = 4;
+  cfg.quantize.groove_offsets = {0.0, 0.10, -0.10, 0.25};
+  const size_t drained = capture.drain(cfg, &clip);
+  REQUIRE(drained == 3);
+
+  const auto& events = clip.events();
+  REQUIRE(events.size() == 3);
+  REQUIRE(events[0].ppq > 0.274);
+  REQUIRE(events[0].ppq < 0.276);
+  REQUIRE(events[1].ppq > 0.474);
+  REQUIRE(events[1].ppq < 0.476);
+  REQUIRE(events[2].ppq > 0.812);
+  REQUIRE(events[2].ppq < 0.813);
+}
+
+TEST_CASE("MidiCapture quantize preserves note length", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  // 120 BPM at 48 kHz: 24000 frames per quarter. Note-on 0.45 PPQ snaps to 0.5;
+  // the note-off keeps the same +0.05 PPQ shift instead of independently
+  // snapping to 0.5 and collapsing the note.
+  capture.push(note_on_event(10800, 0, 2, 67));
+  MidiEvent off;
+  off.render_frame = 13200;  // 0.55 PPQ
+  off.ump = make_midi1_note_off(0, 2, 67, 0);
+  capture.push(off);
+
+  MidiClip clip;
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.5;
+  cfg.quantize.strength = 1.0;
+  const size_t drained = capture.drain(cfg, &clip);
+  REQUIRE(drained == 2);
+
+  const auto& events = clip.events();
+  REQUIRE(events.size() == 2);
+  REQUIRE(events[0].ump.is_note_on());
+  REQUIRE(events[1].ump.is_note_off());
+  REQUIRE(events[0].ppq == 0.5);
+  REQUIRE(events[1].ppq > 0.59);
+  REQUIRE(events[1].ppq < 0.61);
 }
 
 TEST_CASE("MidiCapture push drop telemetry on full queue", "[midi]") {

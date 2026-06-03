@@ -19,7 +19,7 @@ void CaptureSink::set_punch(int64_t start_sample, int64_t end_sample, bool enabl
 
 void CaptureSink::reset() noexcept {
   captured_frames_ = 0;
-  overflow_count_ = 0;
+  overflow_count_.reset();
 }
 
 void CaptureSink::process(const float* const* input, int num_channels, int num_frames,
@@ -36,7 +36,7 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
       continue;
     }
     if (captured_frames_ >= segment_.capacity_frames) {
-      ++overflow_count_;
+      overflow_count_.bump();
       continue;
     }
     for (int ch = 0; ch < channels; ++ch) {

@@ -79,6 +79,10 @@ set(SONARE_SOURCES
   analysis/chord_templates.cpp
   analysis/progression_patterns.cpp
   analysis/acoustic_analyzer.cpp
+  analysis/acoustic/common.cpp
+  analysis/acoustic/decay.cpp
+  analysis/acoustic/ir.cpp
+  analysis/acoustic/subband.cpp
   analysis/bpm_analyzer.cpp
   analysis/key_analyzer.cpp
   analysis/onset_analyzer.cpp
@@ -95,17 +99,47 @@ set(SONARE_SOURCES
   analysis/section_analyzer.cpp
   analysis/music_analyzer.cpp
   streaming/stream_analyzer.cpp
+  streaming/stream_analyzer_features.cpp
   streaming/stream_analyzer_output.cpp
+  streaming/stream_analyzer_processing.cpp
+  streaming/stream_analyzer_progression.cpp
   streaming/stream_analyzer_utils.cpp
   streaming/stream_resampler.cpp
   quick.cpp
   sonare_c.cpp
+  c_api/core_analysis.cpp
+  c_api/core_audio.cpp
+  c_api/core_common.cpp
+  c_api/core_cqt.cpp
+  c_api/core_quick.cpp
   sonare_c_effects.cpp
   sonare_c_features.cpp
+  c_api/features_common.cpp
+  c_api/features_inverse.cpp
+  c_api/features_music.cpp
+  c_api/features_spectrogram_mel.cpp
+  c_api/features_spectral_pitch.cpp
+  c_api/features_streaming.cpp
   sonare_c_compat.cpp
   sonare_c_editing.cpp
   sonare_c_internal.cpp
   sonare_c_memory.cpp
+)
+
+set(SONARE_C_MIXING_SOURCES
+  sonare_c_mixing.cpp
+  c_api/mixing_graph.cpp
+  c_api/mixing_mixer.cpp
+  c_api/mixing_strip.cpp
+)
+
+set(SONARE_C_PROJECT_SOURCES
+  sonare_c_project.cpp
+  c_api/project_bounce.cpp
+  c_api/project_core.cpp
+  c_api/project_edit.cpp
+  c_api/project_midi.cpp
+  c_api/project_mir.cpp
 )
 
 # Decide whether to enable FFmpeg integration.
@@ -557,6 +591,8 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer/formant_warp.cpp
     editing/voice_changer/isp_limiter.cpp
     editing/voice_changer/realtime_voice_changer.cpp
+    editing/voice_changer/realtime/config.cpp
+    editing/voice_changer/realtime/processing.cpp
     editing/voice_changer/streaming_formant.cpp
     editing/voice_changer/streaming_retune.cpp
     editing/voice_changer/streaming_reverb.cpp
@@ -595,6 +631,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi_clip.cpp
     midi/sequencer.cpp
     midi/smf.cpp
+    midi/smf2.cpp
     midi/midi_fx.cpp
     midi/program_map.cpp
     midi/sound_destination.cpp
@@ -719,7 +756,7 @@ if(BUILD_SHARED)
          sonare_c_mastering_streaming.cpp)
   endif()
   if(BUILD_MIXING)
-    list(APPEND SONARE_SHARED_SOURCES sonare_c_mixing.cpp)
+    list(APPEND SONARE_SHARED_SOURCES ${SONARE_C_MIXING_SOURCES})
   endif()
   # Always compile the acoustic C ABI translation unit so the public header's
   # symbols exist in feature-off shared builds; it returns NOT_SUPPORTED unless
@@ -728,10 +765,10 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_engine.cpp)
   list(APPEND SONARE_SHARED_SOURCES sonare_c_voice_changer.cpp)
-  # The project (arrangement) C ABI translation unit is always compiled so its
+  # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
   # unless the arrangement subsystem is linked (see the BUILD_ARRANGEMENT block).
-  list(APPEND SONARE_SHARED_SOURCES sonare_c_project.cpp)
+  list(APPEND SONARE_SHARED_SOURCES ${SONARE_C_PROJECT_SOURCES})
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
@@ -769,7 +806,7 @@ if(BUILD_SHARED)
   if(BUILD_MIXING)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING=1)
     if(BUILD_GRAPH)
-      # sonare_c_mixing.cpp routes the mixer through the routing graph.
+      # The mixing C ABI routes the mixer through the routing graph.
       target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_GRAPH=1)
     endif()
   endif()
@@ -854,7 +891,34 @@ if(BUILD_WASM)
     target_compile_options(sonare_voice_changer PUBLIC -matomics -mbulk-memory)
   endif()
 
-  add_executable(sonare wasm/bindings.cpp)
+  set(SONARE_WASM_BINDING_SOURCES
+    wasm/bindings.cpp
+    wasm/bindings/common.cpp
+    wasm/bindings/effects_audio.cpp
+    wasm/bindings/feature_core.cpp
+    wasm/bindings/feature_music.cpp
+    wasm/bindings/feature_pitch.cpp
+    wasm/bindings/feature_spectral.cpp
+    wasm/bindings/feature_spectrogram.cpp
+    wasm/bindings/metering.cpp
+    wasm/bindings/mixing.cpp
+    wasm/bindings/mastering_api.cpp
+    wasm/bindings/mastering_chain.cpp
+    wasm/bindings/offline.cpp
+    wasm/bindings/offline_dynamics_editing.cpp
+    wasm/bindings/project.cpp
+    wasm/bindings/quick_analysis.cpp
+    wasm/bindings/quick_analysis_detailed.cpp
+    wasm/bindings/repair.cpp
+    wasm/bindings/realtime_voice_changer.cpp
+    wasm/bindings/realtime_engine.cpp
+    wasm/bindings/stream_analyzer.cpp
+    wasm/bindings/streaming_equalizer.cpp
+    wasm/bindings/streaming_mastering_chain.cpp
+    wasm/bindings/streaming_retune.cpp
+  )
+
+  add_executable(sonare ${SONARE_WASM_BINDING_SOURCES})
   target_link_libraries(sonare PRIVATE sonare_core sonare_engine)
   if(BUILD_PITCH_EDITOR)
     target_link_libraries(sonare PRIVATE sonare_pitch_editor)
@@ -874,12 +938,12 @@ if(BUILD_WASM)
     target_link_libraries(sonare PRIVATE sonare_mixing)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING=1)
     if(BUILD_GRAPH)
-      # The mixer C API (sonare_c_mixing.cpp) routes strips through the routing
+      # The mixer C API routes strips through the routing
       # graph, so the WASM MixerWasm binding needs sonare_graph linked and the
       # C API translation unit compiled in.
       target_link_libraries(sonare PRIVATE sonare_graph)
       target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
-      target_sources(sonare PRIVATE sonare_c_mixing.cpp)
+      target_sources(sonare PRIVATE ${SONARE_C_MIXING_SOURCES})
     endif()
   endif()
   if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
@@ -888,13 +952,12 @@ if(BUILD_WASM)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
   endif()
   if(BUILD_ARRANGEMENT)
-    # Headless DAW project. The WASM Project binding wraps the C-ABI
-    # keystone sonare_c_project.cpp, so compile that translation unit into the
-    # target and link the arrangement control-plane libraries (serializer / MIR /
-    # MIDI / project model). sonare_c_memory.cpp (sonare_free_string / _floats) is
-    # already compiled into sonare_core via sonare_core_objects, so it is NOT
-    # added here. sonare_free_bytes is provided by sonare_c_project.cpp itself.
-    target_sources(sonare PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sonare_c_project.cpp)
+    # Headless DAW project. The WASM Project binding wraps the C-ABI project
+    # sources, so compile them into the target and link the arrangement
+    # control-plane libraries (serializer / MIR / MIDI / project model).
+    # sonare_c_memory.cpp (sonare_free_string / _floats) is already compiled into
+    # sonare_core via sonare_core_objects, so it is NOT added here.
+    target_sources(sonare PRIVATE ${SONARE_C_PROJECT_SOURCES})
     target_link_libraries(sonare PRIVATE
       sonare_arrangement sonare_serialize sonare_midi sonare_mir)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)

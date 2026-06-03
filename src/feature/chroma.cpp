@@ -334,14 +334,19 @@ Chroma chroma_cens(const Audio& audio, const ChromaCensConfig& config) {
   std::vector<float> data(cq.data(), cq.data() + static_cast<size_t>(n_chroma) * n_frames);
   data = normalize_matrix(data.data(), n_chroma, n_frames, /*axis=*/0, NormType::L1);
 
-  // Step 3: quantize using librosa thresholds and weights.
-  const float kThresholds[5] = {0.0f, 0.05f, 0.1f, 0.2f, 0.4f};
-  const float kWeights[5] = {0.25f, 0.25f, 0.25f, 0.25f, 0.0f};
+  // Step 3: quantize using librosa's "log-like" amplitude thresholds. librosa
+  // (chroma_cens) adds 0.25 for EACH of the four thresholds {0.4, 0.2, 0.1,
+  // 0.05} that the value strictly exceeds, so the quantized value lands in
+  // {0, 0.25, 0.5, 0.75, 1.0}. (The previous table inserted a spurious 0.0
+  // threshold and dropped the 0.4 threshold, over-counting small magnitudes and
+  // under-counting magnitudes in [0.2, 0.4].)
+  const float kThresholds[4] = {0.4f, 0.2f, 0.1f, 0.05f};
+  const float kWeight = 0.25f;
   for (size_t i = 0; i < data.size(); ++i) {
-    float v = data[i];
+    const float v = data[i];
     float q = 0.0f;
-    for (int s = 0; s < 5; ++s) {
-      if (v > kThresholds[s]) q += kWeights[s];
+    for (int s = 0; s < 4; ++s) {
+      if (v > kThresholds[s]) q += kWeight;
     }
     data[i] = q;
   }

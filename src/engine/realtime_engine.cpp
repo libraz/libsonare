@@ -30,6 +30,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   clip_player_.set_tempo_map(&tempo_map_);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
+  midi_clock_.prepare(&tempo_map_);
   // Pre-size the host-instrument render scratch (channel-planar) so the audio
   // path never allocates when an instrument is registered. Re-prepare an
   // already-registered instrument so it matches the new block size.
@@ -39,9 +40,26 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
     midi_instrument_channels_[ch] =
         midi_instrument_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
-  if (midi_instrument_ != nullptr) {
-    midi_instrument_->prepare(sample_rate_, max_block_size_);
+  // PDC clip-bus scratch: the clip player renders here first when an instrument
+  // reports latency, so the clip bus can be delayed (phase-aligned with the
+  // instruments) before being summed into the source layer.
+  clip_scratch_storage_.assign(static_cast<size_t>(max_block_size_) * clip_scratch_channels_.size(),
+                               0.0f);
+  for (size_t ch = 0; ch < clip_scratch_channels_.size(); ++ch) {
+    clip_scratch_channels_[ch] =
+        clip_scratch_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
+  // The dispatch tee is the sequencer's permanent sink: it demuxes events to
+  // the instrument rack and optionally mirrors them to a live MIDI output seam.
+  // Re-prepare every already-registered instrument to the new block size.
+  midi_dispatch_sink_.rack = &instrument_rack_;
+  midi_sequencer_.set_sink(&midi_dispatch_sink_);
+  instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) {
+    instrument->prepare(sample_rate_, max_block_size_);
+  });
+  // Size the PDC delays from whatever instruments are already bound (their
+  // latency is known now that they have been prepared).
+  recompute_pdc();
 #endif
   metronome_.prepare(sample_rate, &tempo_map_);
 #if defined(SONARE_WITH_MIXING)
@@ -119,6 +137,20 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   automation_.acquire_lanes();
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.acquire_midi_clips();
+  live_midi_input_count_ = midi_input_source_ != nullptr
+                               ? midi_input_source_->drain_block(live_midi_input_events_.data(),
+                                                                 live_midi_input_events_.size(),
+                                                                 state.render_frame, frames)
+                               : 0;
+  for (size_t i = 1; i < live_midi_input_count_; ++i) {
+    midi::MidiEvent value = live_midi_input_events_[i];
+    size_t j = i;
+    while (j > 0 && live_midi_input_events_[j - 1].render_frame > value.render_frame) {
+      live_midi_input_events_[j] = live_midi_input_events_[j - 1];
+      --j;
+    }
+    live_midi_input_events_[j] = value;
+  }
 #endif
   drain_commands(state.render_frame, frames);
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
@@ -248,6 +280,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   midi_sequencer_.collect_boundaries(state.sample_position, frames, &midi_boundaries);
   for (size_t i = 0; i < midi_boundaries.size; ++i) {
     boundary_splitter_.add_midi(midi_boundaries.offsets[i]);
+  }
+  for (size_t i = 0; i < live_midi_input_count_; ++i) {
+    const int64_t event_frame = live_midi_input_events_[i].render_frame;
+    if (event_frame >= state.render_frame && event_frame < state.render_frame + frames) {
+      boundary_splitter_.add_midi(static_cast<int>(event_frame - state.render_frame));
+    }
   }
 #endif
 
@@ -485,16 +523,103 @@ void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
   midi_sequencer_.set_midi_clips(std::move(clips));
 }
 
+bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {
+  return midi_sequencer_.set_midi_fx(destination_id, chain);
+}
+
+void RealtimeEngine::clear_midi_fx(uint32_t destination_id) noexcept {
+  midi_sequencer_.clear_midi_fx(destination_id);
+}
+
+void RealtimeEngine::emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept {
+  if (midi_sync_sink_ == nullptr) return;
+  uint8_t byte = 0;
+  if (midi::encode_transport_command(status, &byte, 1) != 1) return;
+  midi_sync_sink_->on_midi_sync_byte(render_frame, byte);
+}
+
+void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
+                                           int64_t render_start_frame, int num_frames) noexcept {
+  if (midi_sync_sink_ == nullptr || num_frames <= 0) return;
+  const int64_t block_end_sample = timeline_start_sample + num_frames;
+  for (int64_t tick = midi_clock_.first_tick_at_or_after(timeline_start_sample);
+       midi_clock_.frame_of_tick(tick) < block_end_sample; ++tick) {
+    const int64_t timeline_tick_frame = midi_clock_.frame_of_tick(tick);
+    if (timeline_tick_frame < timeline_start_sample) continue;
+    const int64_t render_frame = render_start_frame + (timeline_tick_frame - timeline_start_sample);
+    midi_sync_sink_->on_midi_sync_byte(render_frame, midi::kStatusClock);
+  }
+}
+
+void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept {
+  if (num_frames <= 0) return;
+  const int64_t render_end_frame = render_start_frame + num_frames;
+  for (size_t i = 0; i < live_midi_input_count_; ++i) {
+    const midi::MidiEvent& event = live_midi_input_events_[i];
+    if (event.render_frame < render_start_frame) continue;
+    if (event.render_frame >= render_end_frame) break;
+    midi_sequencer_.inject_event(midi_input_destination_id_, event.render_frame, event.ump);
+  }
+}
+
 void RealtimeEngine::set_midi_instrument(midi::MidiInstrument* instrument) noexcept {
-  midi_instrument_ = instrument;
-  // The instrument IS-A MidiEventSink: route dispatched events to it (or detach
-  // by restoring a null sink). The sequencer holds a borrowed pointer only.
-  midi_sequencer_.set_sink(instrument);
-  // If the engine is already prepared, prepare the freshly-registered instrument
-  // to the engine's sample rate / block size. prepare() may allocate, so this is
-  // a control-thread operation (set_midi_instrument is control-thread only).
+  set_midi_instrument(0, instrument);
+}
+
+bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
+                                         midi::MidiInstrument* instrument) noexcept {
+  // Hang-note safety on swap/clear: if this destination currently has a bound
+  // instrument that is about to be replaced or removed, release every note
+  // sounding on it first. The note-offs route through the rack to the OUTGOING
+  // instrument (still bound at this point) before the binding changes, so it
+  // does not leave a hanging note. set_midi_instrument is control-thread only
+  // and called between blocks, matching the sequencer's mutation contract.
+  midi::MidiInstrument* const previous = instrument_rack_.get(destination_id);
+  if (previous != nullptr && previous != instrument) {
+    midi_sequencer_.all_notes_off_for_destination(destination_id, transport_.render_frame());
+  }
+  if (!instrument_rack_.set(destination_id, instrument)) {
+    return false;  // rack full: leave existing bindings untouched
+  }
+  // The sequencer's sink is the rack itself (set in prepare); no per-instrument
+  // sink wiring is needed. Prepare the freshly-registered instrument to the
+  // engine's sample rate / block size. prepare() may allocate, so this stays a
+  // control-thread operation.
   if (instrument != nullptr && max_block_size_ > 0) {
     instrument->prepare(sample_rate_, max_block_size_);
+  }
+  // The bound set (and thus the maximum instrument latency) changed: refresh the
+  // PDC delays so clip + instrument audio stays phase-aligned. Control-thread
+  // only, matching the delay lines' reallocation contract.
+  recompute_pdc();
+  return true;
+}
+
+void RealtimeEngine::recompute_pdc() noexcept {
+  // The whole project's reported latency is the slowest bound instrument: every
+  // source must be delayed to meet it. Clip audio (zero latency) is delayed by
+  // the full total; an instrument that already self-delays by L_i needs only the
+  // remaining (total - L_i). After both, all sources coincide at +total. Tracked
+  // in Q8.8 so an instrument's sub-sample latency is compensated too (M-45).
+  pdc_total_q8_ = instrument_rack_.max_latency_samples_q8();
+  clip_pdc_delay_.set_delay_q8(pdc_total_q8_);
+  pdc_instrument_count_ = 0;
+  instrument_rack_.for_each([&](uint32_t destination_id, midi::MidiInstrument* instrument) {
+    if (pdc_instrument_count_ >= instrument_pdc_delays_.size()) return;
+    const size_t slot = pdc_instrument_count_++;
+    instrument_pdc_dest_[slot] = destination_id;
+    instrument_pdc_delays_[slot].set_delay_q8(pdc_total_q8_ - instrument->latency_samples_q8());
+  });
+  // Surface the applied compensation as the engine's graph latency so transport
+  // telemetry (audible_timeline_sample) reflects the real output delay.
+  set_graph_latency_samples_q8(pdc_total_q8_);
+}
+
+void RealtimeEngine::flush_pdc_delays() noexcept {
+  if (pdc_total_q8_ == 0) return;
+  clip_pdc_delay_.reset();
+  for (size_t i = 0; i < pdc_instrument_count_; ++i) {
+    instrument_pdc_delays_[i].reset();
   }
 }
 #endif
@@ -638,21 +763,54 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       start_smoothed_param(command.target_id, command.arg.f);
       break;
     case rt::CommandType::kTransportPlay:
+      emit_midi_transport_command(
+          transport_.sample_position() <= 0 ? midi::kStatusStart : midi::kStatusContinue,
+          command.sample_time);
       transport_.play();
       break;
     case rt::CommandType::kTransportStop:
       transport_.stop();
+      emit_midi_transport_command(midi::kStatusStop, command.sample_time);
+      // Hang-note safety: stopping is a playback discontinuity. Release every
+      // sounding note at the stop frame so a sustained note does not hang (the
+      // playhead freezes on stop, so a scheduled note-off would never arrive),
+      // and the active-note table is cleared. RT-safe (no alloc). The note-offs
+      // reach the instrument even though sub-block dispatch/render is gated off
+      // while stopped, so the instrument falls silent on the next render.
+#if defined(SONARE_WITH_ARRANGEMENT)
+      midi_sequencer_.all_notes_off(command.sample_time);
+      // Flush PDC delay tails: their buffered audio belongs to the pre-stop
+      // position and must not ring out across the discontinuity.
+      flush_pdc_delays();
+#endif
       break;
     case rt::CommandType::kTransportSeekSample:
       transport_.seek_sample(command.arg.i);
+      // Hang-note safety: a seek jumps the playhead, so notes sounding before
+      // the jump must be released at the seek frame rather than left to a
+      // note-off that the new position will never reach.
+#if defined(SONARE_WITH_ARRANGEMENT)
+      midi_sequencer_.all_notes_off(command.sample_time);
+      flush_pdc_delays();
+#endif
       break;
     case rt::CommandType::kTransportSeekPpq:
       transport_.seek_ppq(command.arg.d);
+#if defined(SONARE_WITH_ARRANGEMENT)
+      midi_sequencer_.all_notes_off(command.sample_time);
+      flush_pdc_delays();
+#endif
       break;
     case rt::CommandType::kSeekMarker:
       if (!seek_marker(command.target_id)) {
         enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                       transport_.sample_position(), command.target_id);
+      } else {
+        // Successful marker seek is a playhead jump: same hang-note release.
+#if defined(SONARE_WITH_ARRANGEMENT)
+        midi_sequencer_.all_notes_off(command.sample_time);
+        flush_pdc_delays();
+#endif
       }
       break;
     case rt::CommandType::kMidiCcImmediate: {
@@ -819,9 +977,43 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     for (int ch = 0; ch < channels; ++ch) {
       sub_channels[static_cast<size_t>(ch)] = io[ch] ? io[ch] + offset : nullptr;
     }
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (pdc_total_q8_ > 0) {
+      // PDC active: render the clip bus into scratch, delay it by the project's
+      // total instrument latency so it lands phase-aligned with the
+      // (internally-delayed) instruments, then sum it into the source layer.
+      // Mirrors the additive-into-io contract of the direct path below.
+      for (int ch = 0; ch < channels; ++ch) {
+        if (clip_scratch_channels_[static_cast<size_t>(ch)]) {
+          std::fill(clip_scratch_channels_[static_cast<size_t>(ch)],
+                    clip_scratch_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+        }
+      }
+      clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
+                              transport_.sample_position());
+      clip_pdc_delay_.process(clip_scratch_channels_.data(), channels, num_frames);
+      for (int ch = 0; ch < channels; ++ch) {
+        float* out = sub_channels[static_cast<size_t>(ch)];
+        const float* clip = clip_scratch_channels_[static_cast<size_t>(ch)];
+        if (!out) continue;
+        for (int i = 0; i < num_frames; ++i) out[i] += clip[i];
+      }
+    } else {
+      clip_player_.process_at(sub_channels.data(), channels, num_frames,
+                              transport_.sample_position());
+    }
+#else
     clip_player_.process_at(sub_channels.data(), channels, num_frames,
                             transport_.sample_position());
+#endif
 #if defined(SONARE_WITH_ARRANGEMENT)
+    // Sequenced MIDI playback is gated on the transport rolling. While stopped,
+    // advance() freezes sample_position, so scanning the same window every block
+    // would re-dispatch the same note-ons (saturating the active-note table and
+    // re-triggering the instrument) and capture a sustained note with no choke.
+    // A stopped transport therefore dispatches nothing and renders no instrument
+    // audio; kTransportStop already released sounding notes via all_notes_off.
+    const bool transport_rolling = transport_.playing();
     // Dispatch the MIDI events whose render frame falls in this sub-block. The
     // sequencer scans [block_start, block_start + num_frames); using the
     // sub-block's timeline sample position keeps dispatch sample-accurate and
@@ -832,7 +1024,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // frames (event.render_frame relative to this sub-block's first frame). The
     // instrument buffers them; rendering happens immediately below so the events
     // and the audio they drive stay in the same sub-block.
-    midi_sequencer_.process_block(transport_.sample_position(), num_frames);
+    if (transport_rolling) {
+      emit_midi_clock_block(transport_.sample_position(), transport_.render_frame(), num_frames);
+      midi_sequencer_.process_block(transport_.sample_position(), num_frames);
+    }
+    dispatch_live_midi_input(transport_.render_frame(), num_frames);
     // Host-instrument audio injection: sum the instrument's render into the
     // SAME source layer as the clip player, AFTER clip playback + MIDI dispatch
     // and BEFORE the metronome / mixing-strip / monitor / graph stages. This is
@@ -841,20 +1037,43 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // audio, and PDC/latency matches clips. Opt-in: nullptr leaves the chain and
     // the output bit-identical to the no-instrument path. RT-safe: the scratch
     // is sized in prepare(); the audio thread only zero-fills and sums it.
-    if (midi_instrument_ != nullptr) {
-      for (int ch = 0; ch < channels; ++ch) {
-        std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
-                  midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
-      }
-      midi_instrument_->process(midi_instrument_channels_.data(), channels, num_frames);
-      for (int ch = 0; ch < channels; ++ch) {
-        float* out = sub_channels[static_cast<size_t>(ch)];
-        const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
-        if (!out) continue;
-        for (int i = 0; i < num_frames; ++i) {
-          out[i] += inst[i];
-        }
-      }
+    if (!instrument_rack_.empty() &&
+        (transport_rolling || midi_sequencer_.active_note_count() > 0)) {
+      // Per-block transport snapshot pushed to each instrument before it renders
+      // (H-4): a tempo-synced delay / arpeggiator / LFO follows the host
+      // transport instead of free-running. Each instrument renders into the
+      // shared scratch (zero, set_transport, process) and is summed into the
+      // sub-block, so multitrack MIDI routed to distinct destinations mixes here.
+      const transport::TransportState inst_state = transport_.snapshot();
+      instrument_rack_.for_each(
+          [&](uint32_t destination_id, midi::MidiInstrument* instrument) noexcept {
+            for (int ch = 0; ch < channels; ++ch) {
+              std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
+                        midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+            }
+            instrument->set_transport(inst_state);
+            instrument->process(midi_instrument_channels_.data(), channels, num_frames);
+            // PDC: an instrument faster than the project's slowest is delayed by the
+            // remainder (total - its own latency) so it stays aligned with the clip
+            // bus and the other instruments. The slowest instrument's delay is 0.
+            if (pdc_total_q8_ > 0) {
+              for (size_t k = 0; k < pdc_instrument_count_; ++k) {
+                if (instrument_pdc_dest_[k] == destination_id) {
+                  instrument_pdc_delays_[k].process(midi_instrument_channels_.data(), channels,
+                                                    num_frames);
+                  break;
+                }
+              }
+            }
+            for (int ch = 0; ch < channels; ++ch) {
+              float* out = sub_channels[static_cast<size_t>(ch)];
+              const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
+              if (!out) continue;
+              for (int i = 0; i < num_frames; ++i) {
+                out[i] += inst[i];
+              }
+            }
+          });
     }
 #endif
     metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());

@@ -23,6 +23,7 @@ namespace {
 using sonare::midi::MidiClipSchedule;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiEventSink;
+using sonare::midi::MidiFxChain;
 using sonare::midi::MidiSequencer;
 using sonare::test::AllocationGuard;
 
@@ -74,4 +75,47 @@ TEST_CASE("MidiSequencer audio path performs no heap allocation after prepare", 
 
   REQUIRE(guard.count() == 0);
   REQUIRE(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer live MIDI FX path performs no heap allocation after prepare",
+          "[midi][rt]") {
+  MidiSequencer seq;
+  CounterSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::ChordConfig chord;
+  chord.enabled = true;
+  chord.count = 3;
+  chord.intervals[0] = 0;
+  chord.intervals[1] = 4;
+  chord.intervals[2] = 7;
+  fx.set_chord(chord);
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 64;
+  arp.gate_frames = 24;
+  fx.set_arpeggiator(arp);
+  REQUIRE(seq.set_midi_fx(5, fx));
+
+  MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 5;
+  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {256, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({clip});  // control thread, may allocate.
+  seq.acquire_midi_clips();
+
+  AllocationGuard guard;
+  seq.process_block(0, 64);
+  seq.process_block(64, 64);
+  seq.all_notes_off(128);
+
+  REQUIRE(guard.count() == 0);
+  REQUIRE(seq.active_note_count() == 0);
+  REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
 }
