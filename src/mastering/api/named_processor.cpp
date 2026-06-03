@@ -81,7 +81,6 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
-#include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 
@@ -121,56 +120,6 @@ void run_processor_stereo(Processor& processor, std::vector<float>& left, std::v
 
 float lufs_for(const std::vector<float>& samples, int sample_rate) {
   return common::measure_lufs(samples.data(), samples.size(), sample_rate);
-}
-
-// Active-range detection mirroring repair::trim_silence(), operating on a mono
-// detection signal. Returns the half-open [first, last+1) sample range to keep,
-// or an empty range (first == size) when no sample is active. Used by the
-// stereo-native trimSilence path so both channels are sliced by the *same*
-// (union) range and therefore stay equal length — the previous per-channel
-// trim could pick different ranges and throw on the length mismatch.
-struct TrimRange {
-  std::size_t first = 0;
-  std::size_t last_exclusive = 0;
-};
-
-float trim_sample_loudness_db(const std::vector<float>& mono, std::size_t center,
-                              std::size_t radius) {
-  const std::size_t begin = center > radius ? center - radius : 0;
-  const std::size_t end = std::min(mono.size(), center + radius + 1);
-  const float window_rms = rms(mono.data() + begin, std::max<std::size_t>(1, end - begin));
-  return window_rms <= 1.0e-12f ? constants::kFloorDb
-                                : static_cast<float>(20.0 * std::log10(window_rms));
-}
-
-bool trim_is_active(const std::vector<float>& mono, std::size_t index,
-                    const repair::TrimSilenceConfig& config, std::size_t loudness_radius) {
-  if (config.mode == repair::TrimSilenceMode::Peak) {
-    return std::abs(mono[index]) > config.threshold;
-  }
-  return trim_sample_loudness_db(mono, index, loudness_radius) > config.gate_lufs;
-}
-
-TrimRange detect_trim_range(const std::vector<float>& mono, int sample_rate,
-                            const repair::TrimSilenceConfig& config) {
-  TrimRange range;
-  if (mono.empty()) return range;
-  const std::size_t loudness_radius =
-      std::max<std::size_t>(1, static_cast<std::size_t>(sample_rate * config.window_ms * 0.0005f));
-  std::size_t first = 0;
-  while (first < mono.size() && !trim_is_active(mono, first, config, loudness_radius)) ++first;
-  if (first == mono.size()) {
-    range.first = mono.size();
-    range.last_exclusive = mono.size();
-    return range;
-  }
-  std::size_t last = mono.size() - 1;
-  while (last > first && !trim_is_active(mono, last, config, loudness_radius)) --last;
-  first = first > config.padding_samples ? first - config.padding_samples : 0;
-  last = std::min(mono.size() - 1, last + config.padding_samples);
-  range.first = first;
-  range.last_exclusive = last + 1;
-  return range;
 }
 
 // Per-channel decorrelation offset XORed into the dither RNG seed. Without this,
@@ -579,7 +528,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     config.gate_lufs = f(map, "gateLufs", config.gate_lufs);
     config.window_ms = f(map, "windowMs", config.window_ms);
     const std::vector<float> mono = detail::mono_mix(result.left, result.right);
-    const TrimRange range = detect_trim_range(mono, sample_rate, config);
+    const repair::TrimRange range =
+        repair::detect_trim_range(mono.data(), mono.size(), sample_rate, config);
     if (range.first >= range.last_exclusive) {
       result.left.clear();
       result.right.clear();
