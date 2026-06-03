@@ -115,6 +115,19 @@ typedef struct {
   int16_t* spectral_flatness;
 } SonareStreamFramesI16;
 
+/* Quantization ranges for the u8/i16 bandwidth-reduction read paths. Mirrors
+   sonare::QuantizeConfig. Populate with sonare_stream_quantize_config_default,
+   then widen any range whose source values exceed the defaults: the quantizers
+   clamp normalized values to [0,1], so a stream louder/quieter than these
+   ranges otherwise saturates silently to the endpoints. */
+typedef struct {
+  float mel_db_min;   /* dB floor for mel quantization (default -80) */
+  float mel_db_max;   /* dB ceiling for mel quantization (default 0) */
+  float onset_max;    /* max expected onset strength (default 50) */
+  float rms_max;      /* max expected RMS energy (default 1) */
+  float centroid_max; /* max expected spectral centroid Hz (default 11025) */
+} SonareStreamQuantizeConfig;
+
 /* Progressive estimate + counters snapshot. Mirrors the scalar fields of
    sonare::AnalyzerStats and ProgressiveEstimate. Variable-length progression
    arrays are intentionally omitted from this fixed-size struct; query the SOA
@@ -182,13 +195,31 @@ SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyz
 SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                SonareStreamFrames* out);
 
-/// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer.
+/// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
+///        using the default quantization ranges.
 SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                   SonareStreamFramesU8* out);
 
-/// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer.
+/// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
+///        using the default quantization ranges.
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
                                                    size_t max_frames, SonareStreamFramesI16* out);
+
+/// @brief Fills @p config with the default quantization ranges.
+SonareError sonare_stream_quantize_config_default(SonareStreamQuantizeConfig* config);
+
+/// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
+///        using caller-supplied quantization ranges (NULL @p config = defaults).
+SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analyzer,
+                                                     const SonareStreamQuantizeConfig* config,
+                                                     size_t max_frames, SonareStreamFramesU8* out);
+
+/// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
+///        using caller-supplied quantization ranges (NULL @p config = defaults).
+SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* analyzer,
+                                                      const SonareStreamQuantizeConfig* config,
+                                                      size_t max_frames,
+                                                      SonareStreamFramesI16* out);
 
 /// @brief Resets analyzer state for a new stream.
 SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer, size_t base_sample_offset);

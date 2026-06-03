@@ -308,6 +308,59 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
 
     sonare_stream_analyzer_destroy(analyzer);
   }
+
+  SECTION("quantize-config override widens the saturating range") {
+    SonareStreamQuantizeConfig qdefault = {};
+    REQUIRE(sonare_stream_quantize_config_default(&qdefault) == SONARE_OK);
+    REQUIRE(qdefault.onset_max == Catch::Approx(50.0f));
+    REQUIRE(qdefault.rms_max == Catch::Approx(1.0f));
+    REQUIRE(qdefault.centroid_max == Catch::Approx(11025.0f));
+
+    auto samples = generate_sine(440.0f, config.sample_rate, 0.25f);
+
+    // A tiny centroid_max forces the (positive) spectral centroid to saturate
+    // to the u8 maximum; a huge centroid_max collapses it toward zero. The two
+    // reads of identical audio must therefore differ, proving the supplied
+    // config actually reaches the quantizer.
+    SonareStreamAnalyzer* tight = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &tight) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(tight, samples.data(), samples.size()) == SONARE_OK);
+    SonareStreamQuantizeConfig narrow = qdefault;
+    narrow.centroid_max = 1.0f;
+    SonareStreamFramesU8 tight_frames = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(tight, &narrow, 4, &tight_frames) ==
+            SONARE_OK);
+    REQUIRE(tight_frames.n_frames > 0);
+
+    SonareStreamAnalyzer* wide = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &wide) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_process(wide, samples.data(), samples.size()) == SONARE_OK);
+    SonareStreamQuantizeConfig broad = qdefault;
+    broad.centroid_max = 1.0e9f;
+    SonareStreamFramesU8 wide_frames = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(wide, &broad, 4, &wide_frames) == SONARE_OK);
+    REQUIRE(wide_frames.n_frames == tight_frames.n_frames);
+
+    bool centroid_differs = false;
+    for (int f = 0; f < tight_frames.n_frames; ++f) {
+      if (tight_frames.spectral_centroid[f] != wide_frames.spectral_centroid[f]) {
+        centroid_differs = true;
+        break;
+      }
+    }
+    REQUIRE(centroid_differs);
+    REQUIRE(tight_frames.spectral_centroid[0] == 255);  // saturated by the narrow range
+
+    // A null config is identical to the default-range read.
+    SonareStreamFramesU8 null_frames = {};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(wide, nullptr, 4, &null_frames) == SONARE_OK);
+    sonare_free_stream_frames_u8(&null_frames);
+
+    sonare_free_stream_frames_u8(&tight_frames);
+    sonare_free_stream_frames_u8(&wide_frames);
+    sonare_stream_analyzer_destroy(tight);
+    sonare_stream_analyzer_destroy(wide);
+  }
 }
 
 TEST_CASE("sonare_detect_beats", "[c_api]") {

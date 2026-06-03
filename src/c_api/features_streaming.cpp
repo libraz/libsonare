@@ -219,15 +219,50 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   SONARE_C_CATCH
 }
 
+namespace {
+
+// Maps the flat C quantization config onto the C++ QuantizeConfig. A null
+// pointer yields the library defaults (matching the no-arg read path).
+QuantizeConfig to_quantize_config(const SonareStreamQuantizeConfig* config) {
+  QuantizeConfig q;
+  if (config) {
+    q.mel_db_min = config->mel_db_min;
+    q.mel_db_max = config->mel_db_max;
+    q.onset_max = config->onset_max;
+    q.rms_max = config->rms_max;
+    q.centroid_max = config->centroid_max;
+  }
+  return q;
+}
+
+}  // namespace
+
+SonareError sonare_stream_quantize_config_default(SonareStreamQuantizeConfig* config) {
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  const QuantizeConfig q;
+  config->mel_db_min = q.mel_db_min;
+  config->mel_db_max = q.mel_db_max;
+  config->onset_max = q.onset_max;
+  config->rms_max = q.rms_max;
+  config->centroid_max = q.centroid_max;
+  return SONARE_OK;
+}
+
 SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                   SonareStreamFramesU8* out) {
+  return sonare_stream_analyzer_read_frames_u8_ex(analyzer, nullptr, max_frames, out);
+}
+
+SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analyzer,
+                                                     const SonareStreamQuantizeConfig* config,
+                                                     size_t max_frames, SonareStreamFramesU8* out) {
   if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
 
   SONARE_C_TRY
   QuantizedFrameBufferU8 buffer;
-  analyzer->analyzer->read_frames_quantized_u8(max_frames, buffer);
+  analyzer->analyzer->read_frames_quantized_u8(max_frames, buffer, to_quantize_config(config));
 
   out->n_frames = static_cast<int>(buffer.n_frames);
   out->n_mels = buffer.n_mels;
@@ -244,13 +279,20 @@ SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer
 
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
                                                    size_t max_frames, SonareStreamFramesI16* out) {
+  return sonare_stream_analyzer_read_frames_i16_ex(analyzer, nullptr, max_frames, out);
+}
+
+SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* analyzer,
+                                                      const SonareStreamQuantizeConfig* config,
+                                                      size_t max_frames,
+                                                      SonareStreamFramesI16* out) {
   if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
 
   SONARE_C_TRY
   QuantizedFrameBufferI16 buffer;
-  analyzer->analyzer->read_frames_quantized_i16(max_frames, buffer);
+  analyzer->analyzer->read_frames_quantized_i16(max_frames, buffer, to_quantize_config(config));
 
   out->n_frames = static_cast<int>(buffer.n_frames);
   out->n_mels = buffer.n_mels;
