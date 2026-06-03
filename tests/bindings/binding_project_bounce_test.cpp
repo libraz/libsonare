@@ -67,6 +67,106 @@ TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI"
   sonare_project_destroy(project);
 }
 
+TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed MIDI",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  SonareMidiEventPod events[2];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20903C40u;  // note-on, note 60, vel 64
+  events[0].data1 = 0u;
+  events[1].ppq = 2.0;
+  events[1].data0 = 0x20803C00u;  // note-off, note 60
+  events[1].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 12000;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.config.waveform = SONARE_SYNTH_WAVEFORM_SAW;  // any patch (zero-init => sine)
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                         &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2);
+  float peak = 0.0f;
+  for (size_t i = 0; i < out_len; ++i) peak = std::max(peak, std::abs(out[i]));
+  REQUIRE(peak > 0.0f);
+  sonare_free_floats(out);
+
+  // Determinism: an identical bounce yields bit-identical output.
+  float* out2 = nullptr;
+  size_t out2_len = 0;
+  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out2,
+                                                         &out2_len) == SONARE_OK);
+  REQUIRE(out2_len == out_len);
+  sonare_free_floats(out2);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20903C40u;
+  events[0].data1 = 0u;
+  events[1].ppq = 2.0;
+  events[1].data0 = 0x20803C00u;
+  events[1].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 0) == SONARE_OK);
+
+  // total_frames omitted (0) => auto-derived from the compiled timeline. This
+  // previously returned INVALID_PARAMETER, breaking the documented quick-start.
+  SonareProjectBounceOptions options{};
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 0;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                         &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  // A 4-quarter clip at the default tempo spans well over a second of audio.
+  REQUIRE(out_len >= 48000u * 2u);
+  float peak = 0.0f;
+  for (size_t i = 0; i < out_len; ++i) peak = std::max(peak, std::abs(out[i]));
+  REQUIRE(peak > 0.0f);
+  sonare_free_floats(out);
+
+  // The plain (silent) bounce also accepts an omitted length now (no throw).
+  float* silent = nullptr;
+  size_t silent_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &silent, &silent_len) == SONARE_OK);
+  REQUIRE(silent_len >= 48000u * 2u);
+  sonare_free_floats(silent);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

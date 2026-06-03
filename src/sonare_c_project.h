@@ -450,6 +450,58 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
                                                    size_t* out_len);
 
 // ============================================================================
+// Built-in instrument (minimal polyphonic oscillator synth)
+// ============================================================================
+
+/// @brief Oscillator waveform for the built-in synth (see
+///        @ref SonareBuiltinSynthConfig). Out-of-range values fall back to sine.
+typedef enum {
+  SONARE_SYNTH_WAVEFORM_SINE = 0,
+  SONARE_SYNTH_WAVEFORM_SAW = 1,
+  SONARE_SYNTH_WAVEFORM_SQUARE = 2,
+  SONARE_SYNTH_WAVEFORM_TRIANGLE = 3,
+} SonareSynthWaveform;
+
+/// @brief Patch for the built-in minimal synth. Zero-initialize then override:
+///        a zero-init config is sanitized into a usable sine patch (every field
+///        is clamped to an audible range), so callers may fill only what they
+///        need. This is a deliberately plain electronic sound source so MIDI
+///        arrangements bounce to audio instead of silence; a richer instrument
+///        bank is planned (see backup/builtin-instrument-plan.md).
+/// Every numeric field uses "0 (or non-positive) => default", so a zero-init
+/// config is the default sine patch and callers override only what they need.
+typedef struct {
+  int waveform;     /* SonareSynthWaveform; 0 = sine */
+  float gain;       /* master output gain (linear); 0 => 0.2 */
+  float attack_ms;  /* ADSR attack in ms; 0 => 5 */
+  float decay_ms;   /* ADSR decay in ms; 0 => 60 */
+  float sustain;    /* ADSR sustain level [0,1]; 0 => 0.7 */
+  float release_ms; /* ADSR release in ms; 0 => 120 */
+  int polyphony;    /* max simultaneous voices; 0 => 16, clamped to [1, 64] */
+} SonareBuiltinSynthConfig;
+
+/// @brief Binds a built-in synth patch to a MIDI destination id (the value set
+///        by @ref sonare_project_set_track_midi_destination). The default
+///        destination is 0.
+typedef struct {
+  uint32_t destination_id;
+  SonareBuiltinSynthConfig config;
+} SonareBuiltinInstrumentBinding;
+
+/// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to the
+///        given destinations through the built-in oscillator synth, so a
+///        MIDI-only arrangement bounces to audible output without the caller
+///        supplying its own instrument callbacks. @p instruments points to
+///        @p instrument_count bindings (may be NULL / 0 for a silent bounce).
+///        When @p options->total_frames <= 0 the render length is auto-derived
+///        from the arrangement (musical end + the synth's release tail).
+///        Deterministic for a fixed project + options + patch.
+SonareError sonare_project_bounce_with_builtin_instruments(
+    SonareProject* project, const SonareProjectBounceOptions* options,
+    const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
+    float** out_interleaved, size_t* out_len);
+
+// ============================================================================
 // Edit (all mutation routes through EditHistory commands)
 // ============================================================================
 
