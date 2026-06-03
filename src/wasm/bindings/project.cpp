@@ -508,6 +508,315 @@ struct ProjectWasm {
     return vectorToFloat32Array(samples);
   }
 
+  // --------------------------------------------------------------------------
+  // Edit operations (undoable; route through EditHistory commands)
+  // --------------------------------------------------------------------------
+
+  void removeClip(uint32_t clip_id) {
+    const SonareError err = sonare_project_remove_clip(project_.get(), clip_id);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to remove clip");
+    }
+  }
+
+  void setClipGain(uint32_t clip_id, float gain) {
+    const SonareError err = sonare_project_set_clip_gain(project_.get(), clip_id, gain);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip gain");
+    }
+  }
+
+  // Reads a { lengthPpq?, curve? } fade descriptor; curve accepts the ordinal or
+  // a string ("linear"/"equalPower"/"exponential"/"logarithmic").
+  static SonareProjectClipFade clipFadeFromVal(val desc) {
+    SonareProjectClipFade fade{};
+    if (desc.isUndefined() || desc.isNull()) {
+      return fade;
+    }
+    if (hasProperty(desc, "lengthPpq")) {
+      fade.length_ppq = desc["lengthPpq"].as<double>();
+    }
+    if (hasProperty(desc, "curve")) {
+      val curve = desc["curve"];
+      if (curve.typeOf().as<std::string>() == "string") {
+        const std::string s = curve.as<std::string>();
+        fade.curve = s == "equalPower"    ? SONARE_FADE_CURVE_EQUAL_POWER
+                     : s == "exponential" ? SONARE_FADE_CURVE_EXPONENTIAL
+                     : s == "logarithmic" ? SONARE_FADE_CURVE_LOGARITHMIC
+                                          : SONARE_FADE_CURVE_LINEAR;
+      } else {
+        fade.curve = curve.as<uint32_t>();
+      }
+    }
+    return fade;
+  }
+
+  void setClipFade(uint32_t clip_id, val fade_in, val fade_out) {
+    SonareProjectClipFade in = clipFadeFromVal(fade_in);
+    SonareProjectClipFade out = clipFadeFromVal(fade_out);
+    const SonareError err = sonare_project_set_clip_fade(project_.get(), clip_id, &in, &out);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip fade");
+    }
+  }
+
+  void setClipLoop(uint32_t clip_id, int loop_mode, double loop_length_ppq) {
+    const SonareError err =
+        sonare_project_set_clip_loop(project_.get(), clip_id, loop_mode, loop_length_ppq);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip loop");
+    }
+  }
+
+  void setClipSource(uint32_t clip_id, uint32_t source_id) {
+    const SonareError err = sonare_project_set_clip_source(project_.get(), clip_id, source_id);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set clip source");
+    }
+  }
+
+  uint32_t duplicateClip(uint32_t clip_id, double new_start_ppq) {
+    uint32_t out = 0;
+    const SonareError err =
+        sonare_project_duplicate_clip(project_.get(), clip_id, new_start_ppq, &out);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to duplicate clip");
+    }
+    return out;
+  }
+
+  void removeTrack(uint32_t track_id) {
+    const SonareError err = sonare_project_remove_track(project_.get(), track_id);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to remove track");
+    }
+  }
+
+  void renameTrack(uint32_t track_id, const std::string& name) {
+    const SonareError err = sonare_project_rename_track(project_.get(), track_id,
+                                                        name.empty() ? nullptr : name.c_str());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to rename track");
+    }
+  }
+
+  void setTrackRoute(uint32_t track_id, const std::string& channel_strip_ref,
+                     const std::string& output_target) {
+    const SonareError err = sonare_project_set_track_route(
+        project_.get(), track_id, channel_strip_ref.empty() ? nullptr : channel_strip_ref.c_str(),
+        output_target.empty() ? nullptr : output_target.c_str());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set track route");
+    }
+  }
+
+  // Reads a JS array of { ppq, value, curve? } automation breakpoints into the
+  // shared SonareAutomationPoint POD. `curve` accepts the ordinal or a string
+  // ("linear"/"exponential"/"hold"/"scurve"). The points are stored verbatim.
+  static std::vector<SonareAutomationPoint> automationPointsFromVal(val points) {
+    std::vector<SonareAutomationPoint> out;
+    if (points.isUndefined() || points.isNull()) {
+      return out;
+    }
+    if (!val::global("Array").call<bool>("isArray", points)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "automation points must be an array");
+    }
+    const size_t count = points["length"].as<size_t>();
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      val point = points[i];
+      SonareAutomationPoint p{};
+      p.ppq = hasProperty(point, "ppq") ? point["ppq"].as<double>() : 0.0;
+      p.value = hasProperty(point, "value") ? point["value"].as<float>() : 0.0f;
+      if (hasProperty(point, "curve")) {
+        val curve = point["curve"];
+        if (curve.typeOf().as<std::string>() == "string") {
+          const std::string s = curve.as<std::string>();
+          p.curve_to_next = s == "exponential" ? SONARE_CURVE_EXPONENTIAL
+                            : s == "hold"      ? SONARE_CURVE_HOLD
+                            : s == "scurve"    ? SONARE_CURVE_SCURVE
+                                               : SONARE_CURVE_LINEAR;
+        } else {
+          p.curve_to_next = curve.as<int>();
+        }
+      } else {
+        p.curve_to_next = SONARE_CURVE_LINEAR;
+      }
+      out.push_back(p);
+    }
+    return out;
+  }
+
+  static SonareAutomationLaneDesc automationLaneDescFromVal(
+      val desc, std::vector<SonareAutomationPoint>* storage) {
+    SonareAutomationLaneDesc d{};
+    if (desc.isUndefined() || desc.isNull()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "automation lane descriptor required");
+    }
+    d.target_param_id =
+        hasProperty(desc, "targetParamId") ? desc["targetParamId"].as<uint32_t>() : 0;
+    *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());
+    d.points = storage->empty() ? nullptr : storage->data();
+    d.point_count = storage->size();
+    return d;
+  }
+
+  double addAutomationLane(uint32_t track_id, val desc) {
+    std::vector<SonareAutomationPoint> storage;
+    SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
+    size_t out = 0;
+    const SonareError err = sonare_project_add_automation_lane(project_.get(), track_id, &d, &out);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to add automation lane");
+    }
+    return static_cast<double>(out);
+  }
+
+  void editAutomationLane(uint32_t track_id, double lane_index, val desc) {
+    std::vector<SonareAutomationPoint> storage;
+    SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
+    const SonareError err = sonare_project_edit_automation_lane(
+        project_.get(), track_id, static_cast<size_t>(lane_index), &d);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to edit automation lane");
+    }
+  }
+
+  void removeAutomationLane(uint32_t track_id, double lane_index) {
+    const SonareError err = sonare_project_remove_automation_lane(project_.get(), track_id,
+                                                                  static_cast<size_t>(lane_index));
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to remove automation lane");
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // MIR annotation streams (undoable)
+  // --------------------------------------------------------------------------
+
+  void annotateKeys(val keys) {
+    std::vector<SonareProjectKeySegment> segments;
+    if (!keys.isUndefined() && !keys.isNull()) {
+      const size_t count = keys["length"].as<size_t>();
+      segments.reserve(count);
+      for (size_t i = 0; i < count; ++i) {
+        val entry = keys[i];
+        SonareProjectKeySegment seg{};
+        seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
+        seg.end_ppq = hasProperty(entry, "endPpq") ? entry["endPpq"].as<double>() : 0.0;
+        seg.tonic_pc = hasProperty(entry, "tonicPc") ? entry["tonicPc"].as<uint32_t>() : 255u;
+        seg.mode = hasProperty(entry, "mode") ? entry["mode"].as<uint32_t>() : 0u;
+        segments.push_back(seg);
+      }
+    }
+    const SonareError err = sonare_project_annotate_keys(
+        project_.get(), segments.empty() ? nullptr : segments.data(), segments.size());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to annotate keys");
+    }
+  }
+
+  void annotateChords(val chords) {
+    std::vector<SonareProjectChordSymbol> symbols;
+    // Keep the per-chord extensions / roman-numeral storage alive until the C
+    // call returns (the POD holds borrowed pointers into these buffers).
+    std::vector<std::vector<uint8_t>> ext_storage;
+    std::vector<std::string> roman_storage;
+    if (!chords.isUndefined() && !chords.isNull()) {
+      const size_t count = chords["length"].as<size_t>();
+      symbols.reserve(count);
+      ext_storage.reserve(count);
+      roman_storage.reserve(count);
+      for (size_t i = 0; i < count; ++i) {
+        val entry = chords[i];
+        SonareProjectChordSymbol sym{};
+        sym.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
+        sym.end_ppq = hasProperty(entry, "endPpq") ? entry["endPpq"].as<double>() : 0.0;
+        sym.root_pc = hasProperty(entry, "rootPc") ? entry["rootPc"].as<uint32_t>() : 255u;
+        sym.quality = hasProperty(entry, "quality") ? entry["quality"].as<uint32_t>() : 0u;
+        sym.slash_bass_pc =
+            hasProperty(entry, "slashBassPc") ? entry["slashBassPc"].as<uint32_t>() : 255u;
+        sym.modulation_boundary =
+            hasProperty(entry, "modulationBoundary") && entry["modulationBoundary"].as<bool>() ? 1
+                                                                                               : 0;
+        std::vector<uint8_t> exts;
+        if (hasProperty(entry, "extensions")) {
+          val ext_arr = entry["extensions"];
+          if (val::global("Array").call<bool>("isArray", ext_arr)) {
+            const size_t ec = ext_arr["length"].as<size_t>();
+            exts.reserve(ec);
+            for (size_t e = 0; e < ec; ++e) {
+              exts.push_back(static_cast<uint8_t>(ext_arr[e].as<int>()));
+            }
+          }
+        }
+        ext_storage.push_back(std::move(exts));
+        sym.extensions = ext_storage.back().empty() ? nullptr : ext_storage.back().data();
+        sym.extension_count = ext_storage.back().size();
+        roman_storage.push_back(hasProperty(entry, "romanNumeral")
+                                    ? entry["romanNumeral"].as<std::string>()
+                                    : std::string());
+        sym.roman_numeral = roman_storage.back().empty() ? nullptr : roman_storage.back().c_str();
+        symbols.push_back(sym);
+      }
+    }
+    const SonareError err = sonare_project_annotate_chords(
+        project_.get(), symbols.empty() ? nullptr : symbols.data(), symbols.size());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to annotate chords");
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Assist sidecars (opaque module state)
+  // --------------------------------------------------------------------------
+
+  void setAssistSidecar(const std::string& module_id, uint32_t schema_version,
+                        uint32_t target_track_id, double region_start_ppq, double region_end_ppq,
+                        val payload) {
+    std::vector<uint8_t> bytes = uint8ArrayToVector(payload);
+    const SonareError err = sonare_project_set_assist_sidecar(
+        project_.get(), module_id.c_str(), schema_version, target_track_id, region_start_ppq,
+        region_end_ppq, bytes.empty() ? nullptr : bytes.data(), bytes.size());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set assist sidecar");
+    }
+  }
+
+  double assistSidecarCount() const {
+    return static_cast<double>(sonare_project_assist_sidecar_count(project_.get()));
+  }
+
+  val getAssistSidecar(double index) const {
+    SonareProjectAssistSidecar sidecar{};
+    const SonareError err =
+        sonare_project_get_assist_sidecar(project_.get(), static_cast<size_t>(index), &sidecar);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to read assist sidecar");
+    }
+    val out = val::object();
+    out.set("moduleId", std::string(sidecar.module_id != nullptr ? sidecar.module_id : ""));
+    out.set("schemaVersion", static_cast<double>(sidecar.schema_version));
+    out.set("targetTrackId", static_cast<double>(sidecar.target_track_id));
+    out.set("regionStartPpq", sidecar.region_start_ppq);
+    out.set("regionEndPpq", sidecar.region_end_ppq);
+    std::vector<uint8_t> payload(sidecar.payload, sidecar.payload + sidecar.payload_len);
+    out.set("payload", vectorToUint8Array(payload));
+    sonare_project_free_assist_sidecar(&sidecar);
+    return out;
+  }
+
   std::shared_ptr<SonareProject> project_;
 };
 
@@ -545,7 +854,24 @@ void registerProjectBindings() {
       .function("snapToGrid", &ProjectWasm::snapToGrid)
       .function("compile", &ProjectWasm::compile)
       .function("bounce", &ProjectWasm::bounce)
-      .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument);
+      .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument)
+      .function("removeClip", &ProjectWasm::removeClip)
+      .function("setClipGain", &ProjectWasm::setClipGain)
+      .function("setClipFade", &ProjectWasm::setClipFade)
+      .function("setClipLoop", &ProjectWasm::setClipLoop)
+      .function("setClipSource", &ProjectWasm::setClipSource)
+      .function("duplicateClip", &ProjectWasm::duplicateClip)
+      .function("removeTrack", &ProjectWasm::removeTrack)
+      .function("renameTrack", &ProjectWasm::renameTrack)
+      .function("setTrackRoute", &ProjectWasm::setTrackRoute)
+      .function("addAutomationLane", &ProjectWasm::addAutomationLane)
+      .function("editAutomationLane", &ProjectWasm::editAutomationLane)
+      .function("removeAutomationLane", &ProjectWasm::removeAutomationLane)
+      .function("annotateKeys", &ProjectWasm::annotateKeys)
+      .function("annotateChords", &ProjectWasm::annotateChords)
+      .function("setAssistSidecar", &ProjectWasm::setAssistSidecar)
+      .function("assistSidecarCount", &ProjectWasm::assistSidecarCount)
+      .function("getAssistSidecar", &ProjectWasm::getAssistSidecar);
   function("projectAbiVersion", &js_project_abi_version);
 #endif
 }

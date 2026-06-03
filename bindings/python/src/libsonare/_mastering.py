@@ -119,6 +119,19 @@ def mastering_stereo_analysis_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+def mastering_insert_names() -> list[str]:
+    """Return the mastering insert (FX) names shared by CLI/Node/WASM/Python.
+
+    The native layer returns a lifetime-owned, newline-joined static string the
+    caller must NOT free (same convention as the other ``*_names`` getters).
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_insert_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_insert_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
 def mastering_process(
     processor_name: str,
     samples: Sequence[float] | list[float],

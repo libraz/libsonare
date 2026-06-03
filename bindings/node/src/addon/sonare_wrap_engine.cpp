@@ -57,6 +57,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetry>("drainMeterTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
+          InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiCc>("pushMidiCc"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiPanic>("pushMidiPanic"),
           InstanceMethod<&RealtimeEngineWrap::GetTransportState>("getTransportState"),
           InstanceMethod<&RealtimeEngineWrap::Destroy>("destroy"),
       });
@@ -369,6 +372,34 @@ Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& i
   const float value = info.Length() > 1 ? info[1].As<Napi::Number>().FloatValue() : 0.0f;
   ThrowIfError(env, sonare_engine_set_parameter_smoothed(engine_, param_id, value,
                                                          OptionalInt64(info, 2, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClearParameters(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_clear_parameters(engine_));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint8_t group =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel =
+      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t controller =
+      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t value =
+      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0;
+  ThrowIfError(env, sonare_engine_push_midi_cc(engine_, destination_id, group, channel, controller,
+                                               value, OptionalInt64(info, 5, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_push_midi_panic(engine_, OptionalInt64(info, 0, -1)));
   return env.Undefined();
 }
 

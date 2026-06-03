@@ -64,8 +64,28 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
+// Methods added to the embind RealtimeEngine that the generated `sonare.js`
+// declarations only gain after a WASM rebuild. The native handle is cast to this
+// shape so the wrapper can reach them without a stale type error.
+interface WasmRealtimeEngineExt {
+  pushMidiCc: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiPanic: (renderFrame: number) => void;
+  clearParameters: () => void;
+}
+
 export class RealtimeEngine {
   private native: WasmRealtimeEngine;
+
+  private nativeExt(): WasmRealtimeEngineExt {
+    return this.native as unknown as WasmRealtimeEngineExt;
+  }
 
   constructor(
     sampleRate = 48000,
@@ -105,6 +125,39 @@ export class RealtimeEngine {
   /** Queue a smoothed parameter change (engine kSetParamSmoothed). */
   setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
     this.native.setParameterSmoothed(paramId, value, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI control change to a MIDI destination
+   * (engine kMidiCcImmediate). `group`/`channel` are 0..15; `controller`/`value`
+   * are 7-bit (0..127). `renderFrame` is the frame to fire at, or -1 for
+   * immediate. Mirrors the Node/Python/C-ABI `pushMidiCc`.
+   */
+  pushMidiCc(
+    destinationId: number,
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    renderFrame = -1,
+  ): void {
+    this.nativeExt().pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+  }
+
+  /**
+   * Queue a MIDI panic (all-notes-off) releasing every sounding note at
+   * `renderFrame` (-1 = immediate). Mirrors the C-ABI `pushMidiPanic`.
+   */
+  pushMidiPanic(renderFrame = -1): void {
+    this.nativeExt().pushMidiPanic(renderFrame);
+  }
+
+  /**
+   * Remove all registered parameters (and their automation lanes). Control-thread
+   * only; not realtime-safe. Mirrors the C-ABI `clearParameters`.
+   */
+  clearParameters(): void {
+    this.nativeExt().clearParameters();
   }
 
   /** Read back the current transport state snapshot. */

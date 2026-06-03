@@ -680,6 +680,16 @@ export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   return addon.masteringStereoAnalysisNames();
 }
 
+/**
+ * Returns the channel-strip insert / FX processor names that mixing scene
+ * inserts can build (includes the creative effects.* reverbs / modulation /
+ * delay when FX support is compiled in). Use these to discover valid insert
+ * names instead of hardcoding magic strings.
+ */
+export function masteringInsertNames(): string[] {
+  return addon.masteringInsertNames();
+}
+
 export function masteringPairProcess(
   processorName: PairProcessor,
   source: Float32Array,

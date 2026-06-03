@@ -9,11 +9,11 @@
 
 namespace {
 
-// Must match SONARE_PROJECT_ABI_VERSION (src/sonare_c_project.h) and the other
-// bindings' EXPECTED_PROJECT_ABI_VERSION. A mismatch means the loaded native
-// binary lays out the flat project PODs differently than this addon expects (or
-// arrangement support was compiled out, in which case the runtime version is 0).
-constexpr uint32_t kExpectedProjectAbiVersion = 3;
+// Derived from the canonical C macro (via sonare_c.h) so this addon can never
+// drift from SONARE_PROJECT_ABI_VERSION. A runtime mismatch means the loaded
+// native binary lays out the flat project PODs differently than this addon
+// expects (or arrangement support was compiled out -> runtime version 0).
+constexpr uint32_t kExpectedProjectAbiVersion = SONARE_PROJECT_ABI_VERSION;
 
 void ThrowIfError(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {
@@ -101,6 +101,51 @@ bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
   return true;
 }
 
+// Parses a JS automation-point array ([{ppq, value, curve}]) into the flat
+// SonareAutomationPoint vector marshalled by the lane edit commands. `curve`
+// (alias `curveToNext`) is the SonareProjectAutomationCurve ordinal, default 0
+// (Linear). Throws a JS exception (returns false) on a non-object entry.
+bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
+                           std::vector<SonareAutomationPoint>* points) {
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, "automation lane points must be an array")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  Napi::Array input = value.As<Napi::Array>();
+  points->reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "automation point must be an object").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Object obj = entry.As<Napi::Object>();
+    SonareAutomationPoint point{};
+    point.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
+    point.value = obj.Get("value").As<Napi::Number>().FloatValue();
+    Napi::Value curve = obj.Get("curve");
+    if (curve.IsUndefined()) curve = obj.Get("curveToNext");
+    point.curve_to_next = curve.IsUndefined() ? 0 : curve.As<Napi::Number>().Int32Value();
+    points->push_back(point);
+  }
+  return true;
+}
+
+// Fills a SonareAutomationLaneDesc from a JS object {targetParamId, points}.
+// The breakpoints are stored in `points` (which must outlive the C call).
+bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
+                            std::vector<SonareAutomationPoint>* points,
+                            SonareAutomationLaneDesc* desc) {
+  desc->target_param_id = static_cast<uint32_t>(IntProperty(obj, "targetParamId", 0));
+  if (!ParseAutomationPoints(env, obj.Get("points"), points)) {
+    return false;
+  }
+  desc->points = points->empty() ? nullptr : points->data();
+  desc->point_count = points->size();
+  return true;
+}
+
 }  // namespace
 
 Napi::FunctionReference ProjectWrap::constructor;
@@ -119,6 +164,18 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::MoveClip>("moveClip"),
           InstanceMethod<&ProjectWrap::SetClipWarpRef>("setClipWarpRef"),
           InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination"),
+          InstanceMethod<&ProjectWrap::RemoveClip>("removeClip"),
+          InstanceMethod<&ProjectWrap::SetClipGain>("setClipGain"),
+          InstanceMethod<&ProjectWrap::SetClipFade>("setClipFade"),
+          InstanceMethod<&ProjectWrap::SetClipLoop>("setClipLoop"),
+          InstanceMethod<&ProjectWrap::SetClipSource>("setClipSource"),
+          InstanceMethod<&ProjectWrap::DuplicateClip>("duplicateClip"),
+          InstanceMethod<&ProjectWrap::RemoveTrack>("removeTrack"),
+          InstanceMethod<&ProjectWrap::RenameTrack>("renameTrack"),
+          InstanceMethod<&ProjectWrap::SetTrackRoute>("setTrackRoute"),
+          InstanceMethod<&ProjectWrap::AddAutomationLane>("addAutomationLane"),
+          InstanceMethod<&ProjectWrap::EditAutomationLane>("editAutomationLane"),
+          InstanceMethod<&ProjectWrap::RemoveAutomationLane>("removeAutomationLane"),
           InstanceMethod<&ProjectWrap::Undo>("undo"),
           InstanceMethod<&ProjectWrap::Redo>("redo"),
           InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents"),
@@ -131,6 +188,12 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
           InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),
+          InstanceMethod<&ProjectWrap::AnnotateKeys>("annotateKeys"),
+          InstanceMethod<&ProjectWrap::AnnotateChords>("annotateChords"),
+          InstanceMethod<&ProjectWrap::SetAssistSidecar>("setAssistSidecar"),
+          InstanceMethod<&ProjectWrap::AssistSidecarCount>("assistSidecarCount"),
+          InstanceMethod<&ProjectWrap::GetAssistSidecar>("getAssistSidecar"),
+          InstanceMethod<&ProjectWrap::AssistSidecars>("assistSidecars"),
           InstanceMethod<&ProjectWrap::Compile>("compile"),
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
           InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
@@ -354,6 +417,150 @@ Napi::Value ProjectWrap::SetTrackMidiDestination(const Napi::CallbackInfo& info)
   return env.Undefined();
 }
 
+Napi::Value ProjectWrap::RemoveClip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_remove_clip(project_, Uint32Arg(info, 0, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipGain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_clip_gain(project_, Uint32Arg(info, 0, 0),
+                                                 static_cast<float>(NumberArg(info, 1, 1.0))));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  // fadeIn / fadeOut are optional {lengthPpq, curve} objects; NULL = unchanged.
+  SonareProjectClipFade fade_in{};
+  SonareProjectClipFade fade_out{};
+  const SonareProjectClipFade* fade_in_ptr = nullptr;
+  const SonareProjectClipFade* fade_out_ptr = nullptr;
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object obj = info[1].As<Napi::Object>();
+    fade_in.length_ppq = obj.Get("lengthPpq").As<Napi::Number>().DoubleValue();
+    fade_in.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
+    fade_in_ptr = &fade_in;
+  }
+  if (info.Length() > 2 && info[2].IsObject()) {
+    Napi::Object obj = info[2].As<Napi::Object>();
+    fade_out.length_ppq = obj.Get("lengthPpq").As<Napi::Number>().DoubleValue();
+    fade_out.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
+    fade_out_ptr = &fade_out;
+  }
+  ThrowIfError(env, sonare_project_set_clip_fade(project_, clip_id, fade_in_ptr, fade_out_ptr));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipLoop(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_clip_loop(project_, Uint32Arg(info, 0, 0),
+                                                 static_cast<int>(NumberArg(info, 1, 0.0)),
+                                                 NumberArg(info, 2, 0.0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(
+      env, sonare_project_set_clip_source(project_, Uint32Arg(info, 0, 0), Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::DuplicateClip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  uint32_t out_id = 0;
+  ThrowIfError(env, sonare_project_duplicate_clip(project_, Uint32Arg(info, 0, 0),
+                                                  NumberArg(info, 1, 0.0), &out_id));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, out_id);
+}
+
+Napi::Value ProjectWrap::RemoveTrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_remove_track(project_, Uint32Arg(info, 0, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::RenameTrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  std::string name;
+  const char* name_ptr = nullptr;
+  if (info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull()) {
+    name = info[1].As<Napi::String>().Utf8Value();
+    name_ptr = name.c_str();
+  }
+  ThrowIfError(env, sonare_project_rename_track(project_, track_id, name_ptr));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTrackRoute(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  std::string strip;
+  std::string output;
+  const char* strip_ptr = nullptr;
+  const char* output_ptr = nullptr;
+  if (info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull()) {
+    strip = info[1].As<Napi::String>().Utf8Value();
+    strip_ptr = strip.c_str();
+  }
+  if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
+    output = info[2].As<Napi::String>().Utf8Value();
+    output_ptr = output.c_str();
+  }
+  ThrowIfError(env, sonare_project_set_track_route(project_, track_id, strip_ptr, output_ptr));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "addAutomationLane expects a lane descriptor object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<SonareAutomationPoint> points;
+  SonareAutomationLaneDesc desc{};
+  if (!FillAutomationLaneDesc(env, info[1].As<Napi::Object>(), &points, &desc)) {
+    return env.Undefined();  // exception already pending
+  }
+  size_t out_index = 0;
+  ThrowIfError(env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_index));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out_index));
+}
+
+Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  const size_t lane_index = static_cast<size_t>(NumberArg(info, 1, 0.0));
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    Napi::TypeError::New(env, "editAutomationLane expects a lane descriptor object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<SonareAutomationPoint> points;
+  SonareAutomationLaneDesc desc{};
+  if (!FillAutomationLaneDesc(env, info[2].As<Napi::Object>(), &points, &desc)) {
+    return env.Undefined();  // exception already pending
+  }
+  ThrowIfError(env, sonare_project_edit_automation_lane(project_, track_id, lane_index, &desc));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::RemoveAutomationLane(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env,
+               sonare_project_remove_automation_lane(project_, Uint32Arg(info, 0, 0),
+                                                     static_cast<size_t>(NumberArg(info, 1, 0.0))));
+  return env.Undefined();
+}
+
 Napi::Value ProjectWrap::Undo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_project_undo(project_));
@@ -523,6 +730,172 @@ Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
                                                 NumberArg(info, 1, 1.0), &out_ppq));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_ppq);
+}
+
+Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::vector<SonareProjectKeySegment> keys;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array input = info[0].As<Napi::Array>();
+    keys.reserve(input.Length());
+    for (uint32_t i = 0; i < input.Length(); ++i) {
+      Napi::Value entry = input.Get(i);
+      if (!entry.IsObject()) {
+        Napi::TypeError::New(env, "key segment must be an object").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = entry.As<Napi::Object>();
+      SonareProjectKeySegment seg{};
+      seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+      seg.end_ppq = obj.Get("endPpq").As<Napi::Number>().DoubleValue();
+      seg.tonic_pc = static_cast<uint32_t>(IntProperty(obj, "tonicPc", 255));
+      seg.mode = static_cast<uint32_t>(IntProperty(obj, "mode", 0));
+      keys.push_back(seg);
+    }
+  }
+  ThrowIfError(env, sonare_project_annotate_keys(project_, keys.empty() ? nullptr : keys.data(),
+                                                 keys.size()));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::vector<SonareProjectChordSymbol> chords;
+  // The extension byte arrays and roman-numeral strings must outlive the C call;
+  // keep them in side buffers parallel to `chords` (pointers patched after fill).
+  std::vector<std::vector<uint8_t>> extensions;
+  std::vector<std::string> roman;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array input = info[0].As<Napi::Array>();
+    chords.reserve(input.Length());
+    extensions.resize(input.Length());
+    roman.resize(input.Length());
+    for (uint32_t i = 0; i < input.Length(); ++i) {
+      Napi::Value entry = input.Get(i);
+      if (!entry.IsObject()) {
+        Napi::TypeError::New(env, "chord symbol must be an object").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = entry.As<Napi::Object>();
+      SonareProjectChordSymbol chord{};
+      chord.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+      chord.end_ppq = obj.Get("endPpq").As<Napi::Number>().DoubleValue();
+      chord.root_pc = static_cast<uint32_t>(IntProperty(obj, "rootPc", 255));
+      chord.quality = static_cast<uint32_t>(IntProperty(obj, "quality", 0));
+      Napi::Value ext = obj.Get("extensions");
+      if (ext.IsArray()) {
+        Napi::Array arr = ext.As<Napi::Array>();
+        extensions[i].reserve(arr.Length());
+        for (uint32_t j = 0; j < arr.Length(); ++j) {
+          extensions[i].push_back(
+              static_cast<uint8_t>(arr.Get(j).As<Napi::Number>().Uint32Value()));
+        }
+      }
+      chord.extensions = extensions[i].empty() ? nullptr : extensions[i].data();
+      chord.extension_count = extensions[i].size();
+      chord.slash_bass_pc = static_cast<uint32_t>(IntProperty(obj, "slashBassPc", 255));
+      Napi::Value rn = obj.Get("romanNumeral");
+      if (!rn.IsUndefined() && !rn.IsNull()) {
+        roman[i] = rn.As<Napi::String>().Utf8Value();
+        chord.roman_numeral = roman[i].c_str();
+      }
+      Napi::Value mod = obj.Get("modulationBoundary");
+      chord.modulation_boundary = (!mod.IsUndefined() && mod.ToBoolean().Value()) ? 1 : 0;
+      chords.push_back(chord);
+    }
+  }
+  ThrowIfError(env, sonare_project_annotate_chords(
+                        project_, chords.empty() ? nullptr : chords.data(), chords.size()));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "setAssistSidecar expects a sidecar descriptor object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Object obj = info[0].As<Napi::Object>();
+  Napi::Value module_value = obj.Get("moduleId");
+  if (!module_value.IsString()) {
+    Napi::TypeError::New(env, "setAssistSidecar: moduleId must be a string")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string module_id = module_value.As<Napi::String>().Utf8Value();
+  const uint32_t schema_version = static_cast<uint32_t>(IntProperty(obj, "schemaVersion", 0));
+  const uint32_t target_track_id = static_cast<uint32_t>(IntProperty(obj, "targetTrackId", 0));
+  Napi::Value start_value = obj.Get("regionStartPpq");
+  Napi::Value end_value = obj.Get("regionEndPpq");
+  const double region_start_ppq =
+      start_value.IsUndefined() ? 0.0 : start_value.As<Napi::Number>().DoubleValue();
+  const double region_end_ppq =
+      end_value.IsUndefined() ? 0.0 : end_value.As<Napi::Number>().DoubleValue();
+  std::vector<uint8_t> payload;
+  Napi::Value payload_value = obj.Get("payload");
+  if (sonare_node::IsUint8Array(payload_value)) {
+    Napi::Uint8Array arr = payload_value.As<Napi::Uint8Array>();
+    payload.assign(arr.Data(), arr.Data() + arr.ByteLength());
+  } else if (payload_value.IsBuffer()) {
+    Napi::Buffer<uint8_t> buf = payload_value.As<Napi::Buffer<uint8_t>>();
+    payload.assign(buf.Data(), buf.Data() + buf.Length());
+  }
+  ThrowIfError(env,
+               sonare_project_set_assist_sidecar(
+                   project_, module_id.c_str(), schema_version, target_track_id, region_start_ppq,
+                   region_end_ppq, payload.empty() ? nullptr : payload.data(), payload.size()));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::AssistSidecarCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  return Napi::Number::New(env, static_cast<double>(sonare_project_assist_sidecar_count(project_)));
+}
+
+namespace {
+
+// Marshals one heap-owned SonareProjectAssistSidecar into a JS object and frees
+// its heap fields. The struct is consumed (zeroed) by the C free function.
+Napi::Object AssistSidecarToObject(Napi::Env env, SonareProjectAssistSidecar* sidecar) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("moduleId",
+          Napi::String::New(env, sidecar->module_id != nullptr ? sidecar->module_id : ""));
+  out.Set("schemaVersion", Napi::Number::New(env, sidecar->schema_version));
+  out.Set("targetTrackId", Napi::Number::New(env, sidecar->target_track_id));
+  out.Set("regionStartPpq", Napi::Number::New(env, sidecar->region_start_ppq));
+  out.Set("regionEndPpq", Napi::Number::New(env, sidecar->region_end_ppq));
+  Napi::Uint8Array payload = Napi::Uint8Array::New(env, sidecar->payload_len);
+  if (sidecar->payload_len > 0 && sidecar->payload != nullptr) {
+    std::memcpy(payload.Data(), sidecar->payload, sidecar->payload_len);
+  }
+  out.Set("payload", payload);
+  sonare_project_free_assist_sidecar(sidecar);
+  return out;
+}
+
+}  // namespace
+
+Napi::Value ProjectWrap::GetAssistSidecar(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const size_t index = static_cast<size_t>(NumberArg(info, 0, 0.0));
+  SonareProjectAssistSidecar sidecar{};
+  ThrowIfError(env, sonare_project_get_assist_sidecar(project_, index, &sidecar));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return AssistSidecarToObject(env, &sidecar);
+}
+
+Napi::Value ProjectWrap::AssistSidecars(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const size_t count = sonare_project_assist_sidecar_count(project_);
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    SonareProjectAssistSidecar sidecar{};
+    ThrowIfError(env, sonare_project_get_assist_sidecar(project_, i, &sidecar));
+    if (env.IsExceptionPending()) return env.Undefined();
+    out.Set(static_cast<uint32_t>(i), AssistSidecarToObject(env, &sidecar));
+  }
+  return out;
 }
 
 Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {

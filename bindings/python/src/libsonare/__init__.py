@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
-from ._project import BuiltinSynthConfig, Project, project_abi_version
+from ._project import AssistSidecar, BuiltinSynthConfig, Project, project_abi_version
 from .analyzer import (
     Mixer,
     RealtimeVoiceChanger,
@@ -66,6 +66,7 @@ from .analyzer import (
     mastering_dynamics_compressor,
     mastering_dynamics_gate,
     mastering_dynamics_transient_shaper,
+    mastering_insert_names,
     mastering_pair_analysis_names,
     mastering_pair_analyze,
     mastering_pair_process,
@@ -267,6 +268,7 @@ except PackageNotFoundError:
 __all__ = [
     "AcousticResult",
     "AnalysisResult",
+    "AssistSidecar",
     "Audio",
     "RirResult",
     "RoomEstimate",
@@ -416,6 +418,7 @@ __all__ = [
     "mastering_dynamics_compressor",
     "mastering_dynamics_gate",
     "mastering_dynamics_transient_shaper",
+    "mastering_insert_names",
     "mastering_pair_analysis_names",
     "mastering_pair_analyze",
     "mastering_pair_process",

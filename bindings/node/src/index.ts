@@ -54,9 +54,16 @@ import type {
   PitchResult,
   BuiltinInstrumentConfig,
   SynthWaveform,
+  ProjectAssistSidecar,
+  ProjectAssistSidecarInput,
+  ProjectAutomationLaneDesc,
   ProjectBounceOptions,
+  ProjectChordSymbol,
   ProjectClipDesc,
+  ProjectClipFade,
   ProjectCompileResult,
+  ProjectKeySegment,
+  ProjectLoopMode,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectTrackDesc,
@@ -787,6 +794,39 @@ export class RealtimeEngine {
     this.native.setParameterSmoothed(paramId, value, renderFrame);
   }
 
+  /**
+   * Remove all registered parameters and release their backing strings. Use
+   * before re-registering a parameter id (add() rejects duplicate ids). Not
+   * realtime-safe.
+   */
+  clearParameters(): void {
+    this.native.clearParameters();
+  }
+
+  /**
+   * Queue an immediate (live) MIDI control change to a MIDI destination. Values
+   * are 7-bit; channel 0..15, group 0..15. `renderFrame` is the render-frame
+   * time to apply, or -1 for immediate.
+   */
+  pushMidiCc(
+    destinationId: number,
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+  }
+
+  /**
+   * Queue a MIDI panic (all-notes-off) releasing every sounding note.
+   * `renderFrame` is the render-frame time to apply, or -1 for immediate.
+   */
+  pushMidiPanic(renderFrame = -1): void {
+    this.native.pushMidiPanic(renderFrame);
+  }
+
   /** Read the current engine transport state (playing/position/ppq/tempo). */
   getTransportState(): EngineTransportState {
     return this.native.getTransportState();
@@ -986,6 +1026,83 @@ export class Project {
     this.native.setTrackMidiDestination(trackId, destinationId);
   }
 
+  /** Remove a clip via an undoable edit (undo restores it + its MIDI content). */
+  removeClip(clipId: number): void {
+    this.native.removeClip(clipId);
+  }
+
+  /** Set a clip's linear playback gain (>= 0; 0 = muted) via an undoable edit. */
+  setClipGain(clipId: number, gain: number): void {
+    this.native.setClipGain(clipId, gain);
+  }
+
+  /**
+   * Set a clip's fade-in / fade-out regions via an undoable edit. Each fade is
+   * an optional `{ lengthPpq, curve? }` ({@link ProjectClipFade}); pass
+   * `undefined` to leave that side unchanged.
+   */
+  setClipFade(clipId: number, fadeIn?: ProjectClipFade, fadeOut?: ProjectClipFade): void {
+    this.native.setClipFade(clipId, fadeIn, fadeOut);
+  }
+
+  /**
+   * Set a clip's loop mode + loop length (PPQ) via an undoable edit.
+   * `loopMode` is a {@link ProjectLoopMode} ordinal (0 = off, 1 = loop). When
+   * looping, `loopLengthPpq` must be finite and > 0.
+   */
+  setClipLoop(clipId: number, loopMode: ProjectLoopMode, loopLengthPpq = 0): void {
+    this.native.setClipLoop(clipId, loopMode, loopLengthPpq);
+  }
+
+  /** Rebind a clip to a different already-registered source via an undoable edit. */
+  setClipSource(clipId: number, sourceId: number): void {
+    this.native.setClipSource(clipId, sourceId);
+  }
+
+  /**
+   * Duplicate a clip at `newStartPpq` (same track), copying any MIDI content,
+   * via an undoable edit; returns the new clip id.
+   */
+  duplicateClip(clipId: number, newStartPpq: number): number {
+    return this.native.duplicateClip(clipId, newStartPpq);
+  }
+
+  /** Remove a track (and its clips) via an undoable edit. */
+  removeTrack(trackId: number): void {
+    this.native.removeTrack(trackId);
+  }
+
+  /** Rename a track via an undoable edit (omit / null `name` = empty). */
+  renameTrack(trackId: number, name?: string): void {
+    this.native.renameTrack(trackId, name ?? null);
+  }
+
+  /**
+   * Set a track's mixer-strip binding + output target via an undoable edit.
+   * Pass `undefined`/empty to clear the respective field.
+   */
+  setTrackRoute(trackId: number, channelStripRef?: string, outputTarget?: string): void {
+    this.native.setTrackRoute(trackId, channelStripRef ?? null, outputTarget ?? null);
+  }
+
+  /**
+   * Append an automation lane to a track via an undoable edit; returns the
+   * appended lane's index within the track.
+   */
+  addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
+    return this.native.addAutomationLane(trackId, desc);
+  }
+
+  /** Replace an existing automation lane in place via an undoable edit. */
+  editAutomationLane(trackId: number, laneIndex: number, desc: ProjectAutomationLaneDesc): void {
+    this.native.editAutomationLane(trackId, laneIndex, desc);
+  }
+
+  /** Remove an automation lane from a track via an undoable edit. */
+  removeAutomationLane(trackId: number, laneIndex: number): void {
+    this.native.removeAutomationLane(trackId, laneIndex);
+  }
+
   /** Undo the most recent edit (throws when the undo stack is empty). */
   undo(): void {
     this.native.undo();
@@ -1075,6 +1192,44 @@ export class Project {
    */
   snapToGrid(ppq: number, strength = 1.0): number {
     return this.native.snapToGrid(ppq, strength);
+  }
+
+  /**
+   * Replace the project's key annotation stream via an undoable edit (existing
+   * chord / section / onset annotations are preserved).
+   */
+  annotateKeys(keys: ProjectKeySegment[]): void {
+    this.native.annotateKeys(keys);
+  }
+
+  /** Replace the project's chord-symbol annotation stream via an undoable edit. */
+  annotateChords(chords: ProjectChordSymbol[]): void {
+    this.native.annotateChords(chords);
+  }
+
+  // -- assist sidecars --
+
+  /**
+   * Add or update an opaque assist sidecar (keyed by module id + target scope)
+   * via an undoable edit. The payload bytes are copied.
+   */
+  setAssistSidecar(sidecar: ProjectAssistSidecarInput): void {
+    this.native.setAssistSidecar(sidecar);
+  }
+
+  /** Number of assist sidecars currently stored on the project. */
+  assistSidecarCount(): number {
+    return this.native.assistSidecarCount();
+  }
+
+  /** Read one assist sidecar by stable project order. */
+  getAssistSidecar(index: number): ProjectAssistSidecar {
+    return this.native.getAssistSidecar(index);
+  }
+
+  /** Read every stored assist sidecar as an array (stable project order). */
+  assistSidecars(): ProjectAssistSidecar[] {
+    return this.native.assistSidecars();
   }
 
   // -- compile / render --

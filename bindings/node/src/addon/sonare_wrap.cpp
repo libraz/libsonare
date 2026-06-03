@@ -236,6 +236,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringStereoAnalysisNames",
               Napi::Function::New(env, &SonareWrap::MasteringStereoAnalysisNames,
                                   "masteringStereoAnalysisNames"));
+  exports.Set("masteringInsertNames",
+              Napi::Function::New(env, &SonareWrap::MasteringInsertNames, "masteringInsertNames"));
   exports.Set("masteringPairProcess",
               Napi::Function::New(env, &SonareWrap::MasteringPairProcess, "masteringPairProcess"));
   exports.Set("masteringPairAnalyze",

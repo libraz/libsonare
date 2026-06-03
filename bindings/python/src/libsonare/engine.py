@@ -180,6 +180,18 @@ class RealtimeEngine:
         raw.default_curve = int(AutomationCurve(info.default_curve))
         _check(_get_lib().sonare_engine_add_parameter(self._require_handle(), ctypes.byref(raw)))
 
+    def clear_parameters(self) -> None:
+        """Remove all registered parameters and release their backing strings.
+
+        Use before re-registering a parameter id to change its metadata
+        (:meth:`add_parameter` rejects duplicate ids). Control-thread only; not
+        realtime-safe.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_clear_parameters"):
+            raise RuntimeError("libsonare was built without parameter-registry support")
+        _check(lib.sonare_engine_clear_parameters(self._require_handle()))
+
     def parameter_count(self) -> int:
         out = ctypes.c_size_t()
         _check(_get_lib().sonare_engine_parameter_count(self._require_handle(), ctypes.byref(out)))
@@ -544,6 +556,47 @@ class RealtimeEngine:
                 self._require_handle(), int(param_id), float(value), int(render_frame)
             )
         )
+
+    def push_midi_cc(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        controller: int,
+        value: int,
+        render_frame: int = -1,
+    ) -> None:
+        """Queue an immediate (live) MIDI control change to a MIDI destination.
+
+        Values are 7-bit (``controller`` / ``value`` in 0..127); ``channel`` and
+        ``group`` in 0..15. ``render_frame`` is the render-frame time to apply,
+        or ``-1`` for immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_cc"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_cc(
+                self._require_handle(),
+                int(destination_id),
+                int(group),
+                int(channel),
+                int(controller),
+                int(value),
+                int(render_frame),
+            )
+        )
+
+    def push_midi_panic(self, render_frame: int = -1) -> None:
+        """Queue a MIDI panic (all-notes-off) releasing every sounding note.
+
+        ``render_frame`` is the render-frame time to apply, or ``-1`` for
+        immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_panic"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(lib.sonare_engine_push_midi_panic(self._require_handle(), int(render_frame)))
 
     def transport_state(self) -> TransportState:
         """Read the current engine transport state (playing/position/ppq/tempo)."""

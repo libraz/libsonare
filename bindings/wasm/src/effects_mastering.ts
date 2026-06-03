@@ -276,6 +276,17 @@ export function masteringProcessorNames(): SoloProcessor[] {
   return requireModule().masteringProcessorNames() as SoloProcessor[];
 }
 
+/**
+ * Names of the insert processors the mastering chain can instantiate by name
+ * (`mastering::api::insert_factory_names`). Mirrors the C-ABI
+ * `sonare_mastering_insert_names` (which joins this list) as a `string[]`.
+ */
+export function masteringInsertNames(): string[] {
+  return (
+    requireModule() as unknown as { masteringInsertNames: () => string[] }
+  ).masteringInsertNames();
+}
+
 export function masteringPairProcessorNames(): PairProcessor[] {
   return requireModule().masteringPairProcessorNames() as PairProcessor[];
 }

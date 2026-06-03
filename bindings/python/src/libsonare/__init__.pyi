@@ -172,6 +172,9 @@ from .analyzer import (
     mastering_chain_stereo as mastering_chain_stereo,
 )
 from .analyzer import (
+    mastering_insert_names as mastering_insert_names,
+)
+from .analyzer import (
     mastering_pair_analysis_names as mastering_pair_analysis_names,
 )
 from .analyzer import (

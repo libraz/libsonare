@@ -57,6 +57,9 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value DrainMeterTelemetry(const Napi::CallbackInfo& info);
   Napi::Value SetParameter(const Napi::CallbackInfo& info);
   Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
+  Napi::Value ClearParameters(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiCc(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiPanic(const Napi::CallbackInfo& info);
   Napi::Value GetTransportState(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 

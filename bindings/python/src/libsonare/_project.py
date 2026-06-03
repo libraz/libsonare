@@ -27,14 +27,21 @@ from typing import SupportsFloat, cast
 import numpy as np
 
 from ._runtime import (
+    SonareAutomationLaneDesc,
+    SonareAutomationPoint,
     SonareBuiltinInstrumentBinding,
     SonareBuiltinSynthConfig,
     SonareMidiEventPod,
+    SonareProjectAssistSidecar,
     SonareProjectBounceOptions,
+    SonareProjectChordSymbol,
     SonareProjectClipDesc,
+    SonareProjectClipFade,
     SonareProjectCompileResult,
+    SonareProjectKeySegment,
     SonareProjectTrackDesc,
     _check,
+    _curve_value,
     _from_c_float_array,
     _get_lib,
     _to_c_float_array,
@@ -58,7 +65,7 @@ _SYNTH_WAVEFORM_NAMES = {
 # bindings' expected project ABI constant. A mismatch means the loaded native
 # binary lays out the flat project PODs differently than this wrapper expects,
 # or the arrangement subsystem was compiled out (runtime version 0).
-EXPECTED_PROJECT_ABI_VERSION = 3
+EXPECTED_PROJECT_ABI_VERSION = 1
 
 # Track kind ordinals (mirror SonareProjectTrackKind).
 TRACK_AUDIO = 0
@@ -70,6 +77,102 @@ _TRACK_KIND_NAMES = {
     "midi": TRACK_MIDI,
     "aux": TRACK_AUX,
 }
+
+# Clip fade-curve ordinals (mirror SonareProjectFadeCurve).
+FADE_CURVE_LINEAR = 0
+FADE_CURVE_EQUAL_POWER = 1
+FADE_CURVE_EXPONENTIAL = 2
+FADE_CURVE_LOGARITHMIC = 3
+
+_FADE_CURVE_NAMES = {
+    "linear": FADE_CURVE_LINEAR,
+    "equal-power": FADE_CURVE_EQUAL_POWER,
+    "equal_power": FADE_CURVE_EQUAL_POWER,
+    "exponential": FADE_CURVE_EXPONENTIAL,
+    "exp": FADE_CURVE_EXPONENTIAL,
+    "logarithmic": FADE_CURVE_LOGARITHMIC,
+    "log": FADE_CURVE_LOGARITHMIC,
+}
+
+# Clip loop-mode ordinals (mirror SonareProjectLoopMode).
+LOOP_MODE_OFF = 0
+LOOP_MODE_LOOP = 1
+
+_LOOP_MODE_NAMES = {
+    "off": LOOP_MODE_OFF,
+    "none": LOOP_MODE_OFF,
+    "loop": LOOP_MODE_LOOP,
+    "on": LOOP_MODE_LOOP,
+}
+
+
+def _fade_curve_value(curve: str | int) -> int:
+    if isinstance(curve, int):
+        return curve
+    key = curve.lower()
+    if key not in _FADE_CURVE_NAMES:
+        raise ValueError(f"unknown fade curve: {curve}")
+    return _FADE_CURVE_NAMES[key]
+
+
+def _loop_mode_value(mode: str | int) -> int:
+    if isinstance(mode, int):
+        return mode
+    key = mode.lower()
+    if key not in _LOOP_MODE_NAMES:
+        raise ValueError(f"unknown loop mode: {mode}")
+    return _LOOP_MODE_NAMES[key]
+
+
+def _automation_lane_desc(
+    target_param_id: int,
+    points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None,
+) -> tuple[SonareAutomationLaneDesc, object]:
+    """Marshal ``(ppq, value, curve)`` breakpoints into a SonareAutomationLaneDesc.
+
+    Returns ``(desc, backing)``; the caller must keep ``backing`` (the C point
+    array) alive for the duration of the native call.
+    """
+    rows = list(points) if points is not None else []
+    count = len(rows)
+    c_points = (SonareAutomationPoint * count)() if count else None
+    for i, pt in enumerate(rows):
+        seq = tuple(pt)
+        if len(seq) < 2:
+            raise ValueError(f"points[{i}] must contain at least (ppq, value)")
+        ppq = float(seq[0])
+        value = float(seq[1])
+        curve = _curve_value(seq[2]) if len(seq) >= 3 else 0
+        if not math.isfinite(ppq):
+            raise ValueError(f"points[{i}].ppq must be a finite number")
+        if not math.isfinite(value):
+            raise ValueError(f"points[{i}].value must be a finite number")
+        c_points[i].ppq = ppq
+        c_points[i].value = value
+        c_points[i].curve_to_next = int(curve)
+    desc = SonareAutomationLaneDesc(
+        target_param_id=int(target_param_id),
+        points=c_points,
+        point_count=ctypes.c_size_t(count),
+    )
+    return desc, c_points
+
+
+@dataclass(frozen=True)
+class AssistSidecar:
+    """One opaque assist sidecar stored on a :class:`Project`.
+
+    ``payload`` is module-owned opaque bytes; ``module_id`` identifies the
+    producing module. ``schema_version`` / ``target_track_id`` and the
+    ``region_*_ppq`` scope mirror the C ``SonareProjectAssistSidecar``.
+    """
+
+    module_id: str
+    schema_version: int
+    target_track_id: int
+    region_start_ppq: float
+    region_end_ppq: float
+    payload: bytes
 
 
 @dataclass(frozen=True)
@@ -453,6 +556,173 @@ class Project:
             )
         )
 
+    def remove_clip(self, clip_id: int) -> None:
+        """Remove a clip via an undoable edit command (undo restores it)."""
+        _check(_get_lib().sonare_project_remove_clip(self._require_handle(), int(clip_id)))
+
+    def set_clip_gain(self, clip_id: int, gain: float) -> None:
+        """Set a clip's linear playback gain (>= 0; 0 = muted) via an undoable edit."""
+        g = float(gain)
+        if not math.isfinite(g) or g < 0.0:
+            raise ValueError("gain must be a finite number >= 0")
+        _check(_get_lib().sonare_project_set_clip_gain(self._require_handle(), int(clip_id), g))
+
+    def set_clip_fade(
+        self,
+        clip_id: int,
+        fade_in_length_ppq: float = 0.0,
+        fade_out_length_ppq: float = 0.0,
+        *,
+        fade_in_curve: str | int = FADE_CURVE_LINEAR,
+        fade_out_curve: str | int = FADE_CURVE_LINEAR,
+    ) -> None:
+        """Set a clip's fade-in and fade-out regions via an undoable edit.
+
+        Each fade length (PPQ) must be finite and >= 0 (0 = no fade); each curve
+        is a :data:`FADE_CURVE_*` ordinal or name (``"linear"`` / ``"equal-power"``
+        / ``"exponential"`` / ``"logarithmic"``).
+        """
+        fin = float(fade_in_length_ppq)
+        fout = float(fade_out_length_ppq)
+        if not math.isfinite(fin) or fin < 0.0:
+            raise ValueError("fade_in_length_ppq must be a finite number >= 0")
+        if not math.isfinite(fout) or fout < 0.0:
+            raise ValueError("fade_out_length_ppq must be a finite number >= 0")
+        c_in = SonareProjectClipFade(length_ppq=fin, curve=_fade_curve_value(fade_in_curve))
+        c_out = SonareProjectClipFade(length_ppq=fout, curve=_fade_curve_value(fade_out_curve))
+        _check(
+            _get_lib().sonare_project_set_clip_fade(
+                self._require_handle(),
+                int(clip_id),
+                ctypes.byref(c_in),
+                ctypes.byref(c_out),
+            )
+        )
+
+    def set_clip_loop(
+        self, clip_id: int, loop_mode: str | int = LOOP_MODE_OFF, loop_length_ppq: float = 0.0
+    ) -> None:
+        """Set a clip's loop mode + loop length (PPQ) via an undoable edit.
+
+        ``loop_mode`` is a :data:`LOOP_MODE_*` ordinal or name. When looping,
+        ``loop_length_ppq`` must be finite and > 0; otherwise finite and >= 0.
+        """
+        mode = _loop_mode_value(loop_mode)
+        length = float(loop_length_ppq)
+        if not math.isfinite(length) or length < 0.0:
+            raise ValueError("loop_length_ppq must be a finite number >= 0")
+        if mode == LOOP_MODE_LOOP and length <= 0.0:
+            raise ValueError("loop_length_ppq must be > 0 when looping")
+        _check(
+            _get_lib().sonare_project_set_clip_loop(
+                self._require_handle(), int(clip_id), int(mode), length
+            )
+        )
+
+    def set_clip_source(self, clip_id: int, source_id: int) -> None:
+        """Rebind a clip to a different (already-registered) source via an undoable edit."""
+        _check(
+            _get_lib().sonare_project_set_clip_source(
+                self._require_handle(), int(clip_id), int(source_id)
+            )
+        )
+
+    def duplicate_clip(self, clip_id: int, new_start_ppq: float) -> int:
+        """Duplicate a clip at ``new_start_ppq`` (same track); return the new clip id."""
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_project_duplicate_clip(
+                self._require_handle(),
+                int(clip_id),
+                float(new_start_ppq),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def remove_track(self, track_id: int) -> None:
+        """Remove a track (and its clips) via an undoable edit command."""
+        _check(_get_lib().sonare_project_remove_track(self._require_handle(), int(track_id)))
+
+    def rename_track(self, track_id: int, name: str | None = None) -> None:
+        """Rename a track via an undoable edit command (``None`` = empty name)."""
+        _check(
+            _get_lib().sonare_project_rename_track(
+                self._require_handle(),
+                int(track_id),
+                name.encode("utf-8") if name is not None else None,
+            )
+        )
+
+    def set_track_route(
+        self, track_id: int, channel_strip_ref: str | None = None, output_target: str | None = None
+    ) -> None:
+        """Set a track's mixer-strip binding + output target via an undoable edit.
+
+        Pass ``None`` (or ``""``) for either field to clear it.
+        """
+        _check(
+            _get_lib().sonare_project_set_track_route(
+                self._require_handle(),
+                int(track_id),
+                channel_strip_ref.encode("utf-8") if channel_strip_ref is not None else None,
+                output_target.encode("utf-8") if output_target is not None else None,
+            )
+        )
+
+    def add_automation_lane(
+        self,
+        track_id: int,
+        target_param_id: int,
+        points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None = None,
+    ) -> int:
+        """Append an automation lane to a track; return its index within the track.
+
+        ``points`` is an optional list of ``(ppq, value, curve)`` breakpoints
+        (``curve`` is an :class:`AutomationCurve` ordinal / name; default linear).
+        """
+        desc, _backing = _automation_lane_desc(target_param_id, points)
+        out_index = ctypes.c_size_t()
+        _check(
+            _get_lib().sonare_project_add_automation_lane(
+                self._require_handle(),
+                int(track_id),
+                ctypes.byref(desc),
+                ctypes.byref(out_index),
+            )
+        )
+        del _backing
+        return int(out_index.value)
+
+    def edit_automation_lane(
+        self,
+        track_id: int,
+        lane_index: int,
+        target_param_id: int,
+        points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None = None,
+    ) -> None:
+        """Replace an existing automation lane in place via an undoable edit."""
+        desc, _backing = _automation_lane_desc(target_param_id, points)
+        _check(
+            _get_lib().sonare_project_edit_automation_lane(
+                self._require_handle(),
+                int(track_id),
+                ctypes.c_size_t(int(lane_index)),
+                ctypes.byref(desc),
+            )
+        )
+        del _backing
+
+    def remove_automation_lane(self, track_id: int, lane_index: int) -> None:
+        """Remove an automation lane from a track via an undoable edit command."""
+        _check(
+            _get_lib().sonare_project_remove_automation_lane(
+                self._require_handle(),
+                int(track_id),
+                ctypes.c_size_t(int(lane_index)),
+            )
+        )
+
     def undo(self) -> None:
         """Undo the most recent edit (raises when the undo stack is empty)."""
         _check(_get_lib().sonare_project_undo(self._require_handle()))
@@ -689,6 +959,142 @@ class Project:
             )
         )
         return float(out_ppq.value)
+
+    def annotate_keys(
+        self, keys: Sequence[tuple[float, float, int, int]] | Sequence[Sequence[float]]
+    ) -> None:
+        """Replace the project's key annotation stream via an undoable command.
+
+        Each key is ``(start_ppq, end_ppq, tonic_pc, mode)`` where ``tonic_pc``
+        is 0..11 (C=0) or 255 unknown and ``mode`` is the KeyMode ordinal
+        (0 unknown, 1 major, 2 minor, 3 dorian, 4 phrygian, 5 lydian,
+        6 mixolydian, 7 locrian). Pass an empty sequence to clear.
+        """
+        rows = list(keys)
+        count = len(rows)
+        c_keys = (SonareProjectKeySegment * count)() if count else None
+        for i, k in enumerate(rows):
+            seq = tuple(k)
+            if len(seq) < 4:
+                raise ValueError(f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)")
+            c_keys[i].start_ppq = float(seq[0])
+            c_keys[i].end_ppq = float(seq[1])
+            c_keys[i].tonic_pc = int(seq[2])
+            c_keys[i].mode = int(seq[3])
+        _check(
+            _get_lib().sonare_project_annotate_keys(
+                self._require_handle(), c_keys, ctypes.c_size_t(count)
+            )
+        )
+
+    def annotate_chords(self, chords: Sequence[dict[str, object]]) -> None:
+        """Replace the project's chord-symbol annotation stream (undoable command).
+
+        Each chord is a mapping with keys ``start_ppq``, ``end_ppq``, ``root_pc``
+        (0..11 / 255), ``quality`` (ChordQuality ordinal), optional
+        ``extensions`` (iterable of semitone ints, up to 8), ``slash_bass_pc``
+        (default 255), ``roman_numeral`` (optional str) and ``modulation_boundary``
+        (bool). Pass an empty sequence to clear.
+        """
+        rows = list(chords)
+        count = len(rows)
+        c_chords = (SonareProjectChordSymbol * count)() if count else None
+        # Keep extension arrays and roman-numeral byte strings alive for the call.
+        backing: list[object] = []
+        for i, c in enumerate(rows):
+            ext = list(c.get("extensions", []) or [])
+            ext_count = len(ext)
+            c_ext = (
+                (ctypes.c_uint8 * ext_count)(*[int(e) & 0xFF for e in ext]) if ext_count else None
+            )
+            backing.append(c_ext)
+            roman = c.get("roman_numeral")
+            roman_bytes = roman.encode("utf-8") if isinstance(roman, str) and roman else None
+            backing.append(roman_bytes)
+            c_chords[i].start_ppq = float(c["start_ppq"])
+            c_chords[i].end_ppq = float(c["end_ppq"])
+            c_chords[i].root_pc = int(c.get("root_pc", 255))
+            c_chords[i].quality = int(c.get("quality", 0))
+            c_chords[i].extensions = c_ext
+            c_chords[i].extension_count = ctypes.c_size_t(ext_count)
+            c_chords[i].slash_bass_pc = int(c.get("slash_bass_pc", 255))
+            c_chords[i].roman_numeral = roman_bytes
+            c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
+        _check(
+            _get_lib().sonare_project_annotate_chords(
+                self._require_handle(), c_chords, ctypes.c_size_t(count)
+            )
+        )
+        del backing
+
+    # -- assist sidecars ----------------------------------------------------
+
+    def set_assist_sidecar(
+        self,
+        module_id: str,
+        payload: bytes,
+        *,
+        schema_version: int = 0,
+        target_track_id: int = 0,
+        region_start_ppq: float = 0.0,
+        region_end_ppq: float = 0.0,
+    ) -> None:
+        """Add or update an opaque assist sidecar (undoable command).
+
+        Sidecars sharing ``module_id`` + ``target_track_id`` + region scope are
+        replaced; otherwise a new one is appended. ``module_id`` must be
+        non-empty and ``payload`` is copied opaque bytes.
+        """
+        if not module_id:
+            raise ValueError("module_id must be a non-empty string")
+        raw = bytes(payload)
+        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+        _check(
+            _get_lib().sonare_project_set_assist_sidecar(
+                self._require_handle(),
+                module_id.encode("utf-8"),
+                int(schema_version),
+                int(target_track_id),
+                float(region_start_ppq),
+                float(region_end_ppq),
+                buf,
+                ctypes.c_size_t(len(raw)),
+            )
+        )
+
+    def assist_sidecar_count(self) -> int:
+        """Number of assist sidecars currently stored on the project."""
+        return int(_get_lib().sonare_project_assist_sidecar_count(self._require_handle()))
+
+    def get_assist_sidecar(self, index: int) -> AssistSidecar:
+        """Read one assist sidecar by stable project order as an :class:`AssistSidecar`."""
+        lib = _get_lib()
+        raw = SonareProjectAssistSidecar()
+        _check(
+            lib.sonare_project_get_assist_sidecar(
+                self._require_handle(), int(index), ctypes.byref(raw)
+            )
+        )
+        try:
+            module_id = raw.module_id.decode("utf-8") if raw.module_id else ""
+            payload_len = int(raw.payload_len)
+            payload = (
+                ctypes.string_at(raw.payload, payload_len) if raw.payload and payload_len else b""
+            )
+            return AssistSidecar(
+                module_id=module_id,
+                schema_version=int(raw.schema_version),
+                target_track_id=int(raw.target_track_id),
+                region_start_ppq=float(raw.region_start_ppq),
+                region_end_ppq=float(raw.region_end_ppq),
+                payload=payload,
+            )
+        finally:
+            lib.sonare_project_free_assist_sidecar(ctypes.byref(raw))
+
+    def assist_sidecars(self) -> list[AssistSidecar]:
+        """Return all stored assist sidecars as a list of :class:`AssistSidecar`."""
+        return [self.get_assist_sidecar(i) for i in range(self.assist_sidecar_count())]
 
     # -- compile / render ---------------------------------------------------
 

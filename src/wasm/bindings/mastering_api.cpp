@@ -5,10 +5,23 @@
 #ifdef __EMSCRIPTEN__
 
 #include "common.h"
+#include "mastering/api/insert_factory.h"
 
 val js_mastering_processor_names() {
   val out = val::array();
   auto names = mastering::api::processor_names();
+  for (size_t index = 0; index < names.size(); ++index) {
+    out.call<void>("push", names[index]);
+  }
+  return out;
+}
+
+// Names of the insert processors the mastering chain can instantiate by name
+// (mastering::api::insert_factory_names). Mirrors the C ABI
+// sonare_mastering_insert_names (which joins this list) as a string[].
+val js_mastering_insert_names() {
+  val out = val::array();
+  auto names = mastering::api::insert_factory_names();
   for (size_t index = 0; index < names.size(); ++index) {
     out.call<void>("push", names[index]);
   }
@@ -298,6 +311,7 @@ std::string js_mastering_streaming_preview(val samples, int sample_rate, val pla
 
 void registerMasteringApiBindings() {
   function("masteringProcessorNames", &js_mastering_processor_names);
+  function("masteringInsertNames", &js_mastering_insert_names);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);
   function("masteringPairAnalysisNames", &js_mastering_pair_analysis_names);
   function("masteringStereoAnalysisNames", &js_mastering_stereo_analysis_names);

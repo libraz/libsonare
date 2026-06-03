@@ -1097,7 +1097,7 @@ export interface EqSpectrumSnapshot {
  * that differs means the native binary lays out the flat project PODs
  * differently than this binding expects (0 = arrangement support compiled out).
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 3;
+export const EXPECTED_PROJECT_ABI_VERSION = 1;
 
 /** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
@@ -1230,4 +1230,108 @@ export interface BuiltinInstrumentConfig {
   releaseMs?: number;
   /** Max simultaneous voices; 0 / omit => 16, clamped to [1, 64]. */
   polyphony?: number;
+}
+
+/** Clip fade-curve ordinals (mirror SonareProjectFadeCurve). */
+export type ProjectFadeCurve = 0 | 1 | 2 | 3;
+export const PROJECT_FADE_CURVE_LINEAR = 0;
+export const PROJECT_FADE_CURVE_EQUAL_POWER = 1;
+export const PROJECT_FADE_CURVE_EXPONENTIAL = 2;
+export const PROJECT_FADE_CURVE_LOGARITHMIC = 3;
+
+/** Clip loop-mode ordinals (mirror SonareProjectLoopMode). */
+export type ProjectLoopMode = 0 | 1;
+export const PROJECT_LOOP_MODE_OFF = 0;
+export const PROJECT_LOOP_MODE_LOOP = 1;
+
+/** One clip fade region for {@link Project.setClipFade}. */
+export interface ProjectClipFade {
+  /** Fade length in PPQ; finite and >= 0 (0 = no fade). */
+  lengthPpq: number;
+  /** Interpolation curve ({@link ProjectFadeCurve}); default linear (0). */
+  curve?: ProjectFadeCurve;
+}
+
+/**
+ * One automation breakpoint for {@link Project.addAutomationLane} /
+ * {@link Project.editAutomationLane}. `curve` (alias `curveToNext`) is the
+ * PPQ-domain curve to the next breakpoint (0 = Linear default, 1 = Exponential,
+ * 2 = Hold, 3 = SCurve).
+ */
+export interface ProjectAutomationPoint {
+  ppq: number;
+  value: number;
+  curve?: EngineAutomationPointCurve;
+  curveToNext?: EngineAutomationPointCurve;
+}
+
+/**
+ * Descriptor for {@link Project.addAutomationLane} /
+ * {@link Project.editAutomationLane}.
+ */
+export interface ProjectAutomationLaneDesc {
+  /** Host-defined target parameter id the lane drives. */
+  targetParamId: number;
+  /** Breakpoints (stored verbatim; need not be pre-sorted). */
+  points: ProjectAutomationPoint[];
+}
+
+/** One key segment for {@link Project.annotateKeys}. */
+export interface ProjectKeySegment {
+  startPpq: number;
+  endPpq: number;
+  /** Tonic pitch class 0..11 (C=0) or 255 for unknown. Default 255. */
+  tonicPc?: number;
+  /**
+   * KeyMode ordinal: 0 unknown, 1 major, 2 minor, 3 dorian, 4 phrygian,
+   * 5 lydian, 6 mixolydian, 7 locrian. Default 0.
+   */
+  mode?: number;
+}
+
+/** One chord symbol for {@link Project.annotateChords}. */
+export interface ProjectChordSymbol {
+  startPpq: number;
+  endPpq: number;
+  /** Root pitch class 0..11 (C=0) or 255 for unknown. Default 255. */
+  rootPc?: number;
+  /**
+   * ChordQuality ordinal: 0 unknown, 1 major, 2 minor, 3 diminished,
+   * 4 augmented, 5 dominant, 6 half-diminished, 7 suspended. Default 0.
+   */
+  quality?: number;
+  /** Extension semitone offsets (up to 8). */
+  extensions?: number[];
+  /** Slash-bass pitch class 0..11 or 255 for none. Default 255. */
+  slashBassPc?: number;
+  /** Optional roman-numeral label. */
+  romanNumeral?: string;
+  /** Marks a modulation boundary. Default false. */
+  modulationBoundary?: boolean;
+}
+
+/** Descriptor for {@link Project.setAssistSidecar}. */
+export interface ProjectAssistSidecarInput {
+  /** Non-empty module id key. */
+  moduleId: string;
+  /** Module-defined schema version. Default 0. */
+  schemaVersion?: number;
+  /** Target track id (0 = project scope). Default 0. */
+  targetTrackId?: number;
+  /** Region start in PPQ. Default 0. */
+  regionStartPpq?: number;
+  /** Region end in PPQ. Default 0. */
+  regionEndPpq?: number;
+  /** Opaque module-owned payload bytes. */
+  payload?: Uint8Array;
+}
+
+/** A stored assist sidecar returned by {@link Project.getAssistSidecar}. */
+export interface ProjectAssistSidecar {
+  moduleId: string;
+  schemaVersion: number;
+  targetTrackId: number;
+  regionStartPpq: number;
+  regionEndPpq: number;
+  payload: Uint8Array;
 }

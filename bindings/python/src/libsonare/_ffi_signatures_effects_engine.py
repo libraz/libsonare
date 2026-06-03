@@ -237,6 +237,9 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(SonareParameterInfo),
     ]
+    if hasattr(lib, "sonare_engine_clear_parameters"):
+        lib.sonare_engine_clear_parameters.restype = ctypes.c_int32
+        lib.sonare_engine_clear_parameters.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_parameter_count.restype = ctypes.c_int32
     lib.sonare_engine_parameter_count.argtypes = [
         ctypes.c_void_p,
@@ -433,6 +436,23 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_uint32,
             ctypes.c_float,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_push_midi_cc"):
+        lib.sonare_engine_push_midi_cc.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_cc.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_push_midi_panic"):
+        lib.sonare_engine_push_midi_panic.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_panic.argtypes = [
+            ctypes.c_void_p,
             ctypes.c_int64,
         ]
     if hasattr(lib, "sonare_engine_get_transport_state"):

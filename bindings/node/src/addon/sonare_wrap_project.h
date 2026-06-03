@@ -32,6 +32,18 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value MoveClip(const Napi::CallbackInfo& info);
   Napi::Value SetClipWarpRef(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMidiDestination(const Napi::CallbackInfo& info);
+  Napi::Value RemoveClip(const Napi::CallbackInfo& info);
+  Napi::Value SetClipGain(const Napi::CallbackInfo& info);
+  Napi::Value SetClipFade(const Napi::CallbackInfo& info);
+  Napi::Value SetClipLoop(const Napi::CallbackInfo& info);
+  Napi::Value SetClipSource(const Napi::CallbackInfo& info);
+  Napi::Value DuplicateClip(const Napi::CallbackInfo& info);
+  Napi::Value RemoveTrack(const Napi::CallbackInfo& info);
+  Napi::Value RenameTrack(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackRoute(const Napi::CallbackInfo& info);
+  Napi::Value AddAutomationLane(const Napi::CallbackInfo& info);
+  Napi::Value EditAutomationLane(const Napi::CallbackInfo& info);
+  Napi::Value RemoveAutomationLane(const Napi::CallbackInfo& info);
   Napi::Value Undo(const Napi::CallbackInfo& info);
   Napi::Value Redo(const Napi::CallbackInfo& info);
 
@@ -48,6 +60,14 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   // -- MIR --
   Napi::Value AutoTempo(const Napi::CallbackInfo& info);
   Napi::Value SnapToGrid(const Napi::CallbackInfo& info);
+  Napi::Value AnnotateKeys(const Napi::CallbackInfo& info);
+  Napi::Value AnnotateChords(const Napi::CallbackInfo& info);
+
+  // -- assist sidecars --
+  Napi::Value SetAssistSidecar(const Napi::CallbackInfo& info);
+  Napi::Value AssistSidecarCount(const Napi::CallbackInfo& info);
+  Napi::Value GetAssistSidecar(const Napi::CallbackInfo& info);
+  Napi::Value AssistSidecars(const Napi::CallbackInfo& info);
 
   // -- compile / render --
   Napi::Value Compile(const Napi::CallbackInfo& info);

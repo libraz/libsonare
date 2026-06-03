@@ -685,6 +685,31 @@ Napi::Value SonareWrap::MasteringStereoAnalysisNames(const Napi::CallbackInfo& i
   return out;
 }
 
+Napi::Value SonareWrap::MasteringInsertNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // sonare_mastering_insert_names() returns a program-lifetime '\n'-joined
+  // const char* (NOT to be freed); split it into a JS string[] like the other
+  // *_names getters. An empty string yields an empty array.
+  const char* joined = sonare_mastering_insert_names();
+  Napi::Array out = Napi::Array::New(env);
+  if (joined == nullptr || joined[0] == '\0') {
+    return out;
+  }
+  std::string names(joined);
+  uint32_t index = 0;
+  size_t start = 0;
+  while (start <= names.size()) {
+    size_t end = names.find('\n', start);
+    if (end == std::string::npos) {
+      out.Set(index++, Napi::String::New(env, names.substr(start)));
+      break;
+    }
+    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
+    start = end + 1;
+  }
+  return out;
+}
+
 Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||

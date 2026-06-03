@@ -9,7 +9,7 @@ import { getSonareModule } from './module_state';
  * `src/sonare_c_project.h`; checked against {@link projectAbiVersion} to detect
  * a WASM build whose flat project POD layout has drifted from this wrapper.
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 3;
+export const EXPECTED_PROJECT_ABI_VERSION = 1;
 
 /** Render options for {@link Project.bounce}. All fields are optional. */
 export interface ProjectBounceOptions {
@@ -52,6 +52,87 @@ export interface BuiltinSynthBinding {
   releaseMs?: number;
   /** Max simultaneous voices (0 => 16, clamped to [1, 64]). */
   polyphony?: number;
+}
+
+/** Clip fade-curve for {@link Project.setClipFade}. */
+export type ProjectFadeCurve =
+  | 'linear'
+  | 'equalPower'
+  | 'exponential'
+  | 'logarithmic'
+  | 0
+  | 1
+  | 2
+  | 3;
+
+/** One clip fade region for {@link Project.setClipFade}. */
+export interface ProjectClipFade {
+  /** Fade length in PPQ (>= 0; 0 = no fade). */
+  lengthPpq?: number;
+  /** Fade curve (default `'linear'`). */
+  curve?: ProjectFadeCurve;
+}
+
+/** Clip loop mode for {@link Project.setClipLoop}. */
+export type ProjectLoopMode = 'off' | 'loop' | 0 | 1;
+
+/** Automation breakpoint interpolation for {@link ProjectAutomationPoint}. */
+export type ProjectAutomationCurve = 'linear' | 'exponential' | 'hold' | 'scurve' | 0 | 1 | 2 | 3;
+
+/** One automation breakpoint accepted by the automation-lane edit ops. */
+export interface ProjectAutomationPoint {
+  /** Breakpoint position in PPQ. */
+  ppq: number;
+  /** Breakpoint value. */
+  value: number;
+  /** Curve to the next breakpoint (default `'linear'`). */
+  curve?: ProjectAutomationCurve;
+}
+
+/** Automation-lane descriptor for {@link Project.addAutomationLane}. */
+export interface ProjectAutomationLaneDesc {
+  /** Host-defined id of the parameter the lane drives. */
+  targetParamId: number;
+  /** Breakpoints (stored verbatim). */
+  points: ReadonlyArray<ProjectAutomationPoint>;
+}
+
+/** Key segment for {@link Project.annotateKeys}. */
+export interface ProjectKeySegment {
+  startPpq: number;
+  endPpq: number;
+  /** Tonic pitch class 0..11 (C=0) or 255 for unknown. */
+  tonicPc?: number;
+  /** KeyMode ordinal (0 unknown, 1 major, 2 minor, 3 dorian, ...). */
+  mode?: number;
+}
+
+/** Chord symbol for {@link Project.annotateChords}. */
+export interface ProjectChordSymbol {
+  startPpq: number;
+  endPpq: number;
+  /** Root pitch class 0..11 (C=0) or 255 for unknown. */
+  rootPc?: number;
+  /** ChordQuality ordinal (0 unknown, 1 major, 2 minor, ...). */
+  quality?: number;
+  /** Extension semitone offsets (up to 8). */
+  extensions?: ReadonlyArray<number>;
+  /** Slash-bass pitch class 0..11 or 255 for none. */
+  slashBassPc?: number;
+  /** Optional roman-numeral label. */
+  romanNumeral?: string;
+  /** True at a modulation boundary. */
+  modulationBoundary?: boolean;
+}
+
+/** Assist sidecar snapshot returned by {@link Project.getAssistSidecar}. */
+export interface ProjectAssistSidecar {
+  moduleId: string;
+  schemaVersion: number;
+  targetTrackId: number;
+  regionStartPpq: number;
+  regionEndPpq: number;
+  payload: Uint8Array;
 }
 
 /** Track kind for {@link Project.addTrack}. */
@@ -151,6 +232,37 @@ interface WasmProject {
     bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,
     options: ProjectBounceOptions,
   ) => Float32Array;
+  removeClip: (clipId: number) => void;
+  setClipGain: (clipId: number, gain: number) => void;
+  setClipFade: (clipId: number, fadeIn: ProjectClipFade, fadeOut: ProjectClipFade) => void;
+  setClipLoop: (clipId: number, loopMode: number, loopLengthPpq: number) => void;
+  setClipSource: (clipId: number, sourceId: number) => void;
+  duplicateClip: (clipId: number, newStartPpq: number) => number;
+  removeTrack: (trackId: number) => void;
+  renameTrack: (trackId: number, name: string) => void;
+  setTrackRoute: (trackId: number, channelStripRef: string, outputTarget: string) => void;
+  addAutomationLane: (
+    trackId: number,
+    desc: { targetParamId: number; points: ReadonlyArray<ProjectAutomationPoint> },
+  ) => number;
+  editAutomationLane: (
+    trackId: number,
+    laneIndex: number,
+    desc: { targetParamId: number; points: ReadonlyArray<ProjectAutomationPoint> },
+  ) => void;
+  removeAutomationLane: (trackId: number, laneIndex: number) => void;
+  annotateKeys: (keys: ReadonlyArray<ProjectKeySegment>) => void;
+  annotateChords: (chords: ReadonlyArray<ProjectChordSymbol>) => void;
+  setAssistSidecar: (
+    moduleId: string,
+    schemaVersion: number,
+    targetTrackId: number,
+    regionStartPpq: number,
+    regionEndPpq: number,
+    payload: Uint8Array,
+  ) => void;
+  assistSidecarCount: () => number;
+  getAssistSidecar: (index: number) => ProjectAssistSidecar;
   delete: () => void;
 }
 
@@ -575,6 +687,111 @@ export class Project {
     return this.native.bounceWithBuiltinInstrument(instrument, options);
   }
 
+  /** Remove a clip (undoable). */
+  removeClip(clipId: number): void {
+    this.native.removeClip(clipId);
+  }
+
+  /** Set a clip's linear playback gain (>= 0; undoable). */
+  setClipGain(clipId: number, gain: number): void {
+    this.native.setClipGain(clipId, gain);
+  }
+
+  /** Set a clip's fade-in / fade-out regions (undoable). */
+  setClipFade(clipId: number, fadeIn: ProjectClipFade = {}, fadeOut: ProjectClipFade = {}): void {
+    this.native.setClipFade(clipId, fadeIn, fadeOut);
+  }
+
+  /** Set a clip's loop mode + loop length in PPQ (undoable). */
+  setClipLoop(clipId: number, loopMode: ProjectLoopMode, loopLengthPpq = 0): void {
+    this.native.setClipLoop(clipId, projectLoopModeValue(loopMode), loopLengthPpq);
+  }
+
+  /** Rebind a clip to a different (already-registered) source (undoable). */
+  setClipSource(clipId: number, sourceId: number): void {
+    this.native.setClipSource(clipId, sourceId);
+  }
+
+  /** Duplicate a clip at `newStartPpq` (same track); returns the new clip id. */
+  duplicateClip(clipId: number, newStartPpq: number): number {
+    return this.native.duplicateClip(clipId, newStartPpq);
+  }
+
+  /** Remove a track and its clips (undoable). */
+  removeTrack(trackId: number): void {
+    this.native.removeTrack(trackId);
+  }
+
+  /** Rename a track (undoable). */
+  renameTrack(trackId: number, name: string): void {
+    this.native.renameTrack(trackId, name);
+  }
+
+  /** Set a track's mixer-strip binding + output target (undoable; omit / '' clears). */
+  setTrackRoute(trackId: number, channelStripRef?: string, outputTarget?: string): void {
+    this.native.setTrackRoute(trackId, channelStripRef ?? '', outputTarget ?? '');
+  }
+
+  /** Append an automation lane to a track; returns the lane index (undoable). */
+  addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
+    return this.native.addAutomationLane(trackId, {
+      targetParamId: desc.targetParamId,
+      points: desc.points,
+    });
+  }
+
+  /** Replace an existing automation lane in place (undoable). */
+  editAutomationLane(trackId: number, laneIndex: number, desc: ProjectAutomationLaneDesc): void {
+    this.native.editAutomationLane(trackId, laneIndex, {
+      targetParamId: desc.targetParamId,
+      points: desc.points,
+    });
+  }
+
+  /** Remove an automation lane from a track (undoable). */
+  removeAutomationLane(trackId: number, laneIndex: number): void {
+    this.native.removeAutomationLane(trackId, laneIndex);
+  }
+
+  /** Replace the project's key annotation stream (undoable). */
+  annotateKeys(keys: ReadonlyArray<ProjectKeySegment>): void {
+    this.native.annotateKeys(keys);
+  }
+
+  /** Replace the project's chord-symbol annotation stream (undoable). */
+  annotateChords(chords: ReadonlyArray<ProjectChordSymbol>): void {
+    this.native.annotateChords(chords);
+  }
+
+  /** Add or update an opaque assist sidecar by module id + target scope (undoable). */
+  setAssistSidecar(
+    moduleId: string,
+    schemaVersion: number,
+    targetTrackId: number,
+    regionStartPpq: number,
+    regionEndPpq: number,
+    payload: Uint8Array,
+  ): void {
+    this.native.setAssistSidecar(
+      moduleId,
+      schemaVersion,
+      targetTrackId,
+      regionStartPpq,
+      regionEndPpq,
+      payload,
+    );
+  }
+
+  /** Number of assist sidecars currently stored on the project. */
+  assistSidecarCount(): number {
+    return this.native.assistSidecarCount();
+  }
+
+  /** Read one assist sidecar by stable project order. */
+  getAssistSidecar(index: number): ProjectAssistSidecar {
+    return this.native.getAssistSidecar(index);
+  }
+
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.native.delete();
@@ -597,4 +814,14 @@ function projectTrackKindValue(kind: ProjectTrackKind | undefined): number {
     return 2;
   }
   return kind;
+}
+
+function projectLoopModeValue(mode: ProjectLoopMode | undefined): number {
+  if (mode === undefined || mode === 'off') {
+    return 0;
+  }
+  if (mode === 'loop') {
+    return 1;
+  }
+  return mode;
 }

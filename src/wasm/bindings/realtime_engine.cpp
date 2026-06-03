@@ -250,6 +250,57 @@ class RealtimeEngineWasm {
     }
   }
 
+  // Queues an immediate (live) MIDI control change to a MIDI destination. Mirrors
+  // the C ABI sonare_engine_push_midi_cc: the synthesized MIDI 1.0 CC reaches the
+  // registered host instrument at @p render_frame (-1 = immediate). Values are
+  // 7-bit; channel 0..15, group 0..15. The scalar fields are packed into arg.i
+  // using the encoding documented in rt/command.h (kMidiCcImmediate).
+  void pushMidiCc(uint32_t destination_id, int group, int channel, int controller, int value,
+                  int64_t render_frame) {
+    if (group < 0 || group > 15 || channel < 0 || channel > 15 || controller < 0 ||
+        controller > 127 || value < 0 || value > 127) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "pushMidiCc: group/channel in [0,15], controller/value in [0,127]");
+    }
+    const uint64_t packed =
+        static_cast<uint64_t>(value) | (static_cast<uint64_t>(controller) << 8) |
+        (static_cast<uint64_t>(channel) << 16) | (static_cast<uint64_t>(group) << 24);
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kMidiCcImmediate;
+    command.target_id = destination_id;
+    command.sample_time = render_frame;
+    command.arg.i = static_cast<int64_t>(packed);
+    if (!engine_.push_command(command)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue MIDI CC command");
+    }
+  }
+
+  // Queues a MIDI panic (all-notes-off) releasing every sounding note at
+  // @p render_frame (-1 = immediate). Mirrors the C ABI
+  // sonare_engine_push_midi_panic.
+  void pushMidiPanic(int64_t render_frame) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kMidiAllNotesOff;
+    command.target_id = 0;
+    command.sample_time = render_frame;
+    if (!engine_.push_command(command)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue MIDI panic command");
+    }
+  }
+
+  // Removes all registered parameters and releases their backing strings (plus
+  // the mirrored automation lanes). Control-thread only; not realtime-safe.
+  // Mirrors the C ABI sonare_engine_clear_parameters.
+  void clearParameters() {
+    parameters_.clear();
+    parameter_strings_.clear();
+    automation_lanes_.clear();
+    engine_.automation().set_lanes(automation_lanes_);
+  }
+
   val getTransportState() const {
     const sonare::transport::TransportState state = engine_.transport().snapshot();
     val out = val::object();
@@ -876,6 +927,9 @@ void registerRealtimeEngineBindings() {
       .function("prepare", &RealtimeEngineWasm::prepare)
       .function("setParameter", &RealtimeEngineWasm::setParameter)
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
+      .function("pushMidiCc", &RealtimeEngineWasm::pushMidiCc)
+      .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
+      .function("clearParameters", &RealtimeEngineWasm::clearParameters)
       .function("getTransportState", &RealtimeEngineWasm::getTransportState)
       .function("play", &RealtimeEngineWasm::play)
       .function("stop", &RealtimeEngineWasm::stop)

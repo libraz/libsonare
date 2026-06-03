@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ctypes
 
+from ._ffi_types_core import SonareAutomationPoint
+
 
 class SonareMasteringConfig(ctypes.Structure):
     """Maps to SonareMasteringConfig in sonare_c.h."""
@@ -235,6 +237,77 @@ class SonareBuiltinInstrumentBinding(ctypes.Structure):
     _fields_ = [
         ("destination_id", ctypes.c_uint32),
         ("config", SonareBuiltinSynthConfig),
+    ]
+
+
+# Clip fade-curve ordinals (mirror SonareProjectFadeCurve).
+SONARE_FADE_CURVE_LINEAR = 0
+SONARE_FADE_CURVE_EQUAL_POWER = 1
+SONARE_FADE_CURVE_EXPONENTIAL = 2
+SONARE_FADE_CURVE_LOGARITHMIC = 3
+
+# Clip loop-mode ordinals (mirror SonareProjectLoopMode).
+SONARE_LOOP_MODE_OFF = 0
+SONARE_LOOP_MODE_LOOP = 1
+
+
+class SonareProjectClipFade(ctypes.Structure):
+    """Maps to SonareProjectClipFade in sonare_c_project.h."""
+
+    _fields_ = [
+        ("length_ppq", ctypes.c_double),
+        ("curve", ctypes.c_uint32),
+    ]
+
+
+class SonareAutomationLaneDesc(ctypes.Structure):
+    """Maps to SonareAutomationLaneDesc in sonare_c_project.h."""
+
+    _fields_ = [
+        ("target_param_id", ctypes.c_uint32),
+        ("points", ctypes.POINTER(SonareAutomationPoint)),
+        ("point_count", ctypes.c_size_t),
+    ]
+
+
+class SonareProjectKeySegment(ctypes.Structure):
+    """Maps to SonareProjectKeySegment in sonare_c_project.h."""
+
+    _fields_ = [
+        ("start_ppq", ctypes.c_double),
+        ("end_ppq", ctypes.c_double),
+        ("tonic_pc", ctypes.c_uint32),
+        ("mode", ctypes.c_uint32),
+    ]
+
+
+class SonareProjectChordSymbol(ctypes.Structure):
+    """Maps to SonareProjectChordSymbol in sonare_c_project.h."""
+
+    _fields_ = [
+        ("start_ppq", ctypes.c_double),
+        ("end_ppq", ctypes.c_double),
+        ("root_pc", ctypes.c_uint32),
+        ("quality", ctypes.c_uint32),
+        ("extensions", ctypes.POINTER(ctypes.c_uint8)),
+        ("extension_count", ctypes.c_size_t),
+        ("slash_bass_pc", ctypes.c_uint32),
+        ("roman_numeral", ctypes.c_char_p),
+        ("modulation_boundary", ctypes.c_int),
+    ]
+
+
+class SonareProjectAssistSidecar(ctypes.Structure):
+    """Maps to SonareProjectAssistSidecar in sonare_c_project.h."""
+
+    _fields_ = [
+        ("module_id", ctypes.c_char_p),
+        ("schema_version", ctypes.c_uint32),
+        ("target_track_id", ctypes.c_uint32),
+        ("region_start_ppq", ctypes.c_double),
+        ("region_end_ppq", ctypes.c_double),
+        ("payload", ctypes.POINTER(ctypes.c_uint8)),
+        ("payload_len", ctypes.c_size_t),
     ]
 
 
