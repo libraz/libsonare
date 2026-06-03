@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._project import Project as Project
+from ._project import project_abi_version as project_abi_version
 from .analyzer import (
     Mixer as Mixer,
 )

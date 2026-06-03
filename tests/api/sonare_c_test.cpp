@@ -2497,6 +2497,25 @@ TEST_CASE("sonare_version", "[c_api]") {
   SECTION("returns engine ABI version") { REQUIRE(sonare_engine_abi_version() > 0); }
 }
 
+TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 74, 100, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_panic(engine, -1) == SONARE_OK);
+#else
+  REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 74, 100, -1) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_panic(engine, -1) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  REQUIRE(sonare_engine_push_midi_cc(engine, 0, 16, 0, 74, 100, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
 #ifdef SONARE_WITH_VOICE_CHANGER
 TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   auto samples = generate_sine(440.0f, 22050, 0.25f);
@@ -2530,8 +2549,8 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
           "[c_api][voice_changer]") {
   std::vector<float> mono(384);
   for (size_t i = 0; i < mono.size(); ++i) {
-    mono[i] = 0.05f *
-              std::sin(2.0f * 3.14159265358979323846f * 220.0f * static_cast<float>(i) / 48000.0f);
+    mono[i] =
+        0.05f * std::sin(sonare::constants::kTwoPi * 220.0f * static_cast<float>(i) / 48000.0f);
   }
 
   float* out = nullptr;

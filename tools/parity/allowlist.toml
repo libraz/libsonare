@@ -54,7 +54,13 @@ wasm = [
   "analyze_with_progress",
 ]
 
-python = []
+python = [
+  # Deprecated Python-only alias for `realtime_voice_changer_preset_config`
+  # (which wraps C `sonare_realtime_voice_changer_preset_config`); kept for
+  # backward compatibility, no C counterpart of its own. See
+  # bindings/python/src/libsonare/_effects.py:1040.
+  "realtime_voice_changer_preset_pod",
+]
 
 # ---------------------------------------------------------------------------
 # [coverage] — canonical C functions allowed to be ABSENT on a surface.
@@ -279,7 +285,13 @@ keys = ["mel_to_stft", "mel_to_audio", "mfcc_to_mel", "mfcc_to_audio"]
 # type declaration is a real TS break worth surfacing.
 # ---------------------------------------------------------------------------
 [wasm_internal]
-names = []
+# projectAbiVersion: the embind free function is reachable from TypeScript via
+# the `ProjectModule` cast in index.ts (projectModule().projectAbiVersion(),
+# guarded by a runtime `typeof candidate.projectAbiVersion !== 'function'`
+# check). The generated `SonareModule` type only gains `projectAbiVersion` /
+# `Project` after a WASM rebuild regenerates sonare.js.d.ts, so the facade
+# deliberately does not depend on that type for the arrangement surface.
+names = ["projectAbiVersion"]
 
 # ---------------------------------------------------------------------------
 # [tuning] — central knobs. Leave empty to use the built-in defaults in

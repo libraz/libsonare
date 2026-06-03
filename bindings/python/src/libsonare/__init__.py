@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
+from ._project import Project, project_abi_version
 from .analyzer import (
     Mixer,
     RealtimeVoiceChanger,
@@ -323,6 +324,7 @@ __all__ = [
     "PhaseScopeReport",
     "PitchClass",
     "PitchResult",
+    "Project",
     "RealtimeEngine",
     "RhythmResult",
     "Section",
@@ -374,6 +376,7 @@ __all__ = [
     "detect_onsets",
     "ebur128_loudness_range",
     "engine_abi_version",
+    "project_abi_version",
     "estimate_tuning",
     "voice_changer_abi_version",
     "fix_frames",

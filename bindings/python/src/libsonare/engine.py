@@ -58,7 +58,7 @@ from ._runtime import (
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
 # binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 # binary lays out engine structs differently than this wrapper expects.
-EXPECTED_ENGINE_ABI_VERSION = 2
+EXPECTED_ENGINE_ABI_VERSION = 3
 
 
 class RealtimeEngine:

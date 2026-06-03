@@ -12,7 +12,7 @@ namespace {
 // Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
 // binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 // binary lays out engine structs differently than this addon expects.
-constexpr uint32_t kExpectedEngineAbiVersion = 2;
+constexpr uint32_t kExpectedEngineAbiVersion = 3;
 
 void ThrowIfError(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {

@@ -4,8 +4,13 @@ We parse the type stubs (``analyzer.pyi``, ``audio.pyi``, ``engine.pyi``) which
 carry the real signatures (names, annotations, defaults). The ``__init__.pyi``
 is just re-exports, so it is parsed only to know the public symbol set.
 
-Methods on classes (``Audio``, ``Mixer``, ...) are emitted too; their ``self``
-parameter is marked structural.
+The headless-arrangement ``Project`` surface lives in ``_project.py`` (an inline
+type-annotated module with no separate ``.pyi`` stub), so that module is parsed
+too. ``ast`` reads signatures only — function bodies are ignored — so reading the
+implementation ``.py`` yields the same surface a stub would.
+
+Methods on classes (``Audio``, ``Mixer``, ``Project``, ...) are emitted too;
+their ``self`` parameter is marked structural.
 """
 
 from __future__ import annotations
@@ -105,7 +110,7 @@ def _walk(node: ast.AST, ex: Extraction, file: str, class_prefix: str = "") -> N
 def extract(root: Path) -> Extraction:
     ex = Extraction(surface="python")
     base = root / "bindings" / "python" / "src" / "libsonare"
-    for fname in ("analyzer.pyi", "audio.pyi", "engine.pyi"):
+    for fname in ("analyzer.pyi", "audio.pyi", "engine.pyi", "_project.py"):
         path = base / fname
         if not path.exists():
             continue

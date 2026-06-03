@@ -17,9 +17,9 @@ import {
   chordFunctionalAnalysis,
   hasFfmpegSupport,
   init,
+  Mode,
   masterAudioStereoWithProgress,
   masterAudioWithProgress,
-  Mode,
   PitchClass,
 } from '../src/index';
 

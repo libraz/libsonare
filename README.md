@@ -602,14 +602,15 @@ Full docs and browser-local demos: **[libsonare.libraz.net](https://libsonare.li
 libsonare intentionally does **not** include:
 
 - **Plugin-grade creative instruments/effects** — use Tone.js, a plugin host, or your DAW
-- **Audio synthesis** (oscillators, samplers, MIDI playback) — out of scope
+- **Built-in audio synthesis** (oscillators, samplers, instrument DSP) — out of scope
 - **Real-time I/O abstraction** (PortAudio/JACK wrappers) — callers handle I/O
-- **DAW workflow** (plugin host, automation, MIDI editing) — different product category
+- **Full DAW application workflow** (UI, device setup, plugin hosting implementation) —
+  callers provide those layers; libsonare focuses on the headless arrangement/runtime core
 - **Deep-learning models** (no bundled weights, no inference runtime) — keeps the
   library dependency-free and Apache-2.0 pure
 
-These boundaries keep the library focused on **analysis + mastering + mixer DSP**
-and allow us to maintain the dependency-free property.
+These boundaries keep the library focused on **analysis + mastering + mixer DSP +
+headless arrangement runtime** and allow us to maintain the dependency-free property.
 
 ## License
 

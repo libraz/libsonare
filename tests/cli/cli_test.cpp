@@ -899,3 +899,42 @@ TEST_CASE("CLI global options", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"n_mels\": 64"));
   }
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+// project CLI parity: the `project` command group wraps the sonare_project_* C ABI
+// (headless arrangement). These shell out to the same binary as the other CLI
+// tests via get_cli_path().
+TEST_CASE("CLI project command group", "[cli]") {
+  SECTION("abi prints the project ABI version") {
+    auto [code, output] = exec_command(CLI + " project abi");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("1"));
+  }
+
+  SECTION("new -> validate -> compile round-trips through the C ABI") {
+    const std::string proj = unique_temp_path("_proj.json");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [vc, vo] = exec_command(CLI + " project validate --in " + proj);
+    REQUIRE(vc == 0);
+    REQUIRE_THAT(vo, ContainsSubstring("valid"));
+
+    auto [cc, co] = exec_command(CLI + " project compile --in " + proj);
+    REQUIRE(cc == 0);
+
+    std::remove(proj.c_str());
+  }
+
+  SECTION("malformed project json fails cleanly (non-zero, no crash)") {
+    const std::string bad = unique_temp_path("_bad.json");
+    {
+      std::ofstream f(bad);
+      f << "{ this is not valid json ";
+    }
+    auto [code, output] = exec_command(CLI + " project validate --in " + bad);
+    REQUIRE(code != 0);
+    std::remove(bad.c_str());
+  }
+}
+#endif  // SONARE_WITH_ARRANGEMENT

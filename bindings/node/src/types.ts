@@ -1086,3 +1086,112 @@ export interface EqSpectrumSnapshot {
   lastAutoGainDb: number;
   seq: number;
 }
+
+// ============================================================================
+// Headless arrangement / DAW project (sonare_project_* C ABI)
+// ============================================================================
+
+/**
+ * Expected project ABI version, mirroring `SONARE_PROJECT_ABI_VERSION`
+ * (src/sonare_c_project.h) and the other bindings' constant. A `projectAbiVersion()`
+ * that differs means the native binary lays out the flat project PODs
+ * differently than this binding expects (0 = arrangement support compiled out).
+ */
+export const EXPECTED_PROJECT_ABI_VERSION = 1;
+
+/** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
+export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
+
+/** Track-kind ordinals (mirror SonareProjectTrackKind). */
+export const PROJECT_TRACK_AUDIO = 0;
+export const PROJECT_TRACK_MIDI = 1;
+export const PROJECT_TRACK_AUX = 2;
+
+/** Descriptor for {@link Project.addTrack}. */
+export interface ProjectTrackDesc {
+  /** Track kind: `'audio'` | `'midi'` | `'aux'` or the ordinal 0/1/2. */
+  kind?: ProjectTrackKind;
+  /** Optional track name. */
+  name?: string;
+}
+
+/**
+ * Descriptor for {@link Project.addClip}. All musical positions are PPQ
+ * (quarter notes); `lengthPpq` must be > 0.
+ */
+export interface ProjectClipDesc {
+  /** Owning track id (from {@link Project.addTrack}). */
+  trackId: number;
+  /** `true` for a MIDI clip, `false`/omitted for an audio clip. */
+  isMidi?: boolean;
+  /** Clip start position in PPQ (default 0). */
+  startPpq?: number;
+  /** Clip length in PPQ (must be > 0). */
+  lengthPpq: number;
+  /** Offset into the source content in PPQ (default 0). */
+  sourceOffsetPpq?: number;
+  /** Linear clip gain (default 1). */
+  gain?: number;
+  /**
+   * Decoded interleaved audio for an audio clip. When provided, the clip is
+   * bound to a fresh renderable audio source; omit for a metadata-only source.
+   */
+  audio?: Float32Array;
+  /** Channel count of `audio` (default 1). */
+  audioChannels?: number;
+  /** Sample rate of `audio` in Hz (default 0 = the project's). */
+  audioSampleRate?: number;
+  /** Optional host-local source reference for a metadata-only audio source. */
+  sourceUri?: string;
+}
+
+/** `(trackId, clipId)` returned by {@link Project.addMidiClip}. */
+export interface ProjectMidiClipResult {
+  trackId: number;
+  clipId: number;
+}
+
+/**
+ * A flat MIDI event accepted by {@link Project.setMidiEvents}. `data0` / `data1`
+ * are the first two UMP words of a channel-voice message (stored opaquely).
+ * `data1` defaults to 0. SysEx imported from SMF is preserved by the native
+ * project side store; it is not constructible through this flat event object.
+ * The tuple form `[ppq, data0, data1]` is also accepted.
+ */
+export interface ProjectMidiEvent {
+  ppq: number;
+  data0: number;
+  data1?: number;
+}
+
+/** One compile diagnostic (mirrors SonareProjectDiagnostic). */
+export interface ProjectDiagnostic {
+  code: number;
+  /** 0 = error, 1 = warning. */
+  severity: number;
+  /** Affected clip / track / source id (0 = n/a). */
+  targetId: number;
+}
+
+/** Result of {@link Project.compile}. */
+export interface ProjectCompileResult {
+  /** `true` when compilation produced a renderable timeline (no error diagnostics). */
+  hasTimeline: boolean;
+  /** Newline-joined human-readable diagnostic detail. */
+  messages: string;
+  diagnostics: ProjectDiagnostic[];
+}
+
+/** Options for {@link Project.bounce}. Zero / omitted fields take native defaults. */
+export interface ProjectBounceOptions {
+  /** Render length in frames at the output sample rate. */
+  totalFrames?: number;
+  /** Render block size; <= 0 / omit => 128. */
+  blockSize?: number;
+  /** Output channel count; <= 0 / omit => 2. */
+  numChannels?: number;
+  /** Output sample rate; <= 0 / omit => the project's. */
+  sampleRate?: number;
+  /** Host-instrument PDC (samples) fed to the compiler. */
+  instrumentLatencySamples?: number;
+}

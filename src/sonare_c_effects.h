@@ -375,6 +375,22 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 /// @brief Pushes a live parameter value to the engine using a smoothed ramp.
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
+/// @brief Queues an immediate (live) MIDI control change to a MIDI destination.
+/// @details Routed through the engine's queueable scalar MIDI command path; the
+///          synthesized MIDI 1.0 CC reaches the registered host instrument at
+///          @p render_frame. Values are 7-bit; channel 0..15, group 0..15.
+/// @param destination_id MIDI destination id (clip/instrument destination).
+/// @param group UMP group (0..15).
+/// @param channel MIDI channel (0..15).
+/// @param controller Controller number (0..127).
+/// @param value 7-bit controller value (0..127).
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                       uint8_t group, uint8_t channel, uint8_t controller,
+                                       uint8_t value, int64_t render_frame);
+/// @brief Queues a MIDI panic (all-notes-off) releasing every sounding note.
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame);
 /// @brief Reads the current engine transport state (playing/position/ppq/tempo).
 SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
                                               SonareTransportState* out);

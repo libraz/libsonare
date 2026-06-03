@@ -850,6 +850,46 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
+SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                       uint8_t group, uint8_t channel, uint8_t controller,
+                                       uint8_t value, int64_t render_frame) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (group > 15 || channel > 15 || controller > 127 || value > 127) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  // Pack the scalar MIDI fields into arg.i using the encoding documented in
+  // rt/command.h and decoded by RealtimeEngine::apply_command.
+  const uint64_t packed = static_cast<uint64_t>(value) | (static_cast<uint64_t>(controller) << 8) |
+                          (static_cast<uint64_t>(channel) << 16) |
+                          (static_cast<uint64_t>(group) << 24);
+  rt::Command command{};
+  command.type = rt::CommandType::kMidiCcImmediate;
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  command.arg.i = static_cast<int64_t>(packed);
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  rt::Command command{};
+  command.type = rt::CommandType::kMidiAllNotesOff;
+  command.target_id = 0;
+  command.sample_time = render_frame;
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
 SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
                                               SonareTransportState* out) {
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;

@@ -53,6 +53,12 @@ import type {
   PanLaw,
   PanMode,
   PitchResult,
+  ProjectBounceOptions,
+  ProjectClipDesc,
+  ProjectCompileResult,
+  ProjectMidiClipResult,
+  ProjectMidiEvent,
+  ProjectTrackDesc,
   RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerOptions,
@@ -80,8 +86,13 @@ import type {
   VoicePresetId,
 } from './types.js';
 
+// Runtime value re-exported from types (the rest of `./types.js` is type-only).
+import { EXPECTED_PROJECT_ABI_VERSION } from './types.js';
+
 const require = createRequire(import.meta.url);
 const addon = require('../build/Release/sonare-node.node');
+
+export { EXPECTED_PROJECT_ABI_VERSION };
 
 /**
  * Per-call validation options accepted by guarded wrappers. Empty-buffer
@@ -133,6 +144,82 @@ function assertFiniteScalar(fnName: string, value: number, argName: string): voi
   if (!Number.isFinite(value)) {
     throw new RangeError(`${fnName}: ${argName} must be a finite number`);
   }
+}
+
+function assertU7(fnName: string, value: number, argName: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 127) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 127]`);
+  }
+  return value;
+}
+
+function assertNibble(fnName: string, value: number, argName: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 15) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 15]`);
+  }
+  return value;
+}
+
+function midi1Event(
+  fnName: string,
+  ppq: number,
+  group: number,
+  status: number,
+  channel: number,
+  data1: number,
+  data2 = 0,
+): ProjectMidiEvent {
+  assertFiniteScalar(fnName, ppq, 'ppq');
+  if (ppq < 0) {
+    throw new RangeError(`${fnName}: ppq must be non-negative`);
+  }
+  const g = assertNibble(fnName, group, 'group');
+  const ch = assertNibble(fnName, channel, 'channel');
+  const d1 = assertU7(fnName, data1, 'data1');
+  const d2 = assertU7(fnName, data2, 'data2');
+  const word = ((0x2 << 28) | (g << 24) | (status << 20) | (ch << 16) | (d1 << 8) | d2) >>> 0;
+  return { ppq, data0: word, data1: 0 };
+}
+
+function assertU32(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 4294967295]`);
+  }
+}
+
+function assertProjectMidiEvents(
+  fnName: string,
+  events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
+): void {
+  if (!Array.isArray(events)) {
+    throw new TypeError(`${fnName}: events must be an array`);
+  }
+  events.forEach((event, index) => {
+    const prefix = `events[${index}]`;
+    if (Array.isArray(event)) {
+      if (event.length < 3) {
+        throw new TypeError(`${fnName}: ${prefix} must contain [ppq, data0, data1]`);
+      }
+      assertFiniteScalar(fnName, event[0], `${prefix}.ppq`);
+      if (event[0] < 0) {
+        throw new RangeError(`${fnName}: ${prefix}.ppq must be non-negative`);
+      }
+      assertU32(fnName, event[1], `${prefix}.data0`);
+      assertU32(fnName, event[2], `${prefix}.data1`);
+      return;
+    }
+    if (event === null || typeof event !== 'object') {
+      throw new TypeError(`${fnName}: ${prefix} must be a MIDI event object or tuple`);
+    }
+    assertFiniteScalar(fnName, event.ppq, `${prefix}.ppq`);
+    if (event.ppq < 0) {
+      throw new RangeError(`${fnName}: ${prefix}.ppq must be non-negative`);
+    }
+    assertU32(fnName, event.data0, `${prefix}.data0`);
+    if (event.data1 !== undefined) {
+      assertU32(fnName, event.data1, `${prefix}.data1`);
+    }
+  });
 }
 
 /**
@@ -881,6 +968,292 @@ export function engineAbiVersion(): number {
 
 export function voiceChangerAbiVersion(): number {
   return addon.voiceChangerAbiVersion();
+}
+
+/**
+ * Returns the runtime project ABI version of the loaded native binding.
+ *
+ * Equals {@link EXPECTED_PROJECT_ABI_VERSION} when the arrangement subsystem is
+ * compiled in, `0` when the native library was built without it.
+ */
+export function projectAbiVersion(): number {
+  return addon.projectAbiVersion();
+}
+
+/**
+ * Headless arrangement / DAW project (the curated `sonare_project_*` C ABI).
+ *
+ * Wraps an opaque native project handle over the arrangement control plane
+ * (EditHistory + the offline compiler/bounce, serializer, and MIR tempo/grid
+ * bridges). Every method is control-thread-only and performs no file or device
+ * I/O: project JSON and SMF bytes are exchanged in memory. All mutation routes
+ * through the native EditHistory, so {@link undo} / {@link redo} work, and
+ * serialization is deterministic (`toJson` is byte-stable for a given project
+ * state within one build). Musical positions are PPQ (quarter notes).
+ *
+ * @example
+ * ```typescript
+ * const project = new Project();
+ * const track = project.addTrack({ kind: 'audio', name: 'lead' });
+ * const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
+ * const json = project.toJson();
+ * project.destroy();
+ * ```
+ */
+export class Project {
+  private native: InstanceType<typeof addon.Project>;
+
+  private constructor(native: InstanceType<typeof addon.Project>) {
+    this.native = native;
+  }
+
+  /** Create a new empty project (throws on a project ABI mismatch). */
+  static create(): Project {
+    return new Project(new addon.Project());
+  }
+
+  /** Pack a MIDI 1.0 note-on event accepted by {@link setMidiEvents}. */
+  static midiNoteOn(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+  ): ProjectMidiEvent {
+    return midi1Event('Project.midiNoteOn', ppq, group, 0x9, channel, note, velocity);
+  }
+
+  /** Pack a MIDI 1.0 note-off event accepted by {@link setMidiEvents}. */
+  static midiNoteOff(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+  ): ProjectMidiEvent {
+    return midi1Event('Project.midiNoteOff', ppq, group, 0x8, channel, note, velocity);
+  }
+
+  /** Pack a MIDI 1.0 control-change event. */
+  static midiCc(
+    ppq: number,
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+  ): ProjectMidiEvent {
+    return midi1Event('Project.midiCc', ppq, group, 0xb, channel, controller, value);
+  }
+
+  /** Pack a MIDI 1.0 poly-pressure event. */
+  static midiPolyPressure(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+  ): ProjectMidiEvent {
+    return midi1Event('Project.midiPolyPressure', ppq, group, 0xa, channel, note, pressure);
+  }
+
+  /** Pack a MIDI 1.0 program-change event. */
+  static midiProgram(
+    ppq: number,
+    group: number,
+    channel: number,
+    program: number,
+  ): ProjectMidiEvent {
+    return midi1Event('Project.midiProgram', ppq, group, 0xc, channel, program, 0);
+  }
+
+  /** Pack a MIDI 1.0 channel-pressure event. */
+  static midiChannelPressure(
+    ppq: number,
+    group: number,
+    channel: number,
+    pressure: number,
+  ): ProjectMidiEvent {
+    return midi1Event('Project.midiChannelPressure', ppq, group, 0xd, channel, pressure, 0);
+  }
+
+  /** Pack a MIDI 1.0 pitch-bend event (`bend` is unsigned 14-bit, center = 8192). */
+  static midiPitchBend(
+    ppq: number,
+    group: number,
+    channel: number,
+    bend: number,
+  ): ProjectMidiEvent {
+    if (!Number.isInteger(bend) || bend < 0 || bend > 0x3fff) {
+      throw new RangeError('Project.midiPitchBend: bend must be an integer in [0, 16383]');
+    }
+    return midi1Event('Project.midiPitchBend', ppq, group, 0xe, channel, bend & 0x7f, bend >> 7);
+  }
+
+  /**
+   * Deserialize project JSON into a new project. Throws cleanly (with the joined
+   * native diagnostic messages) on malformed input.
+   */
+  static fromJson(json: string): Project {
+    return new Project(addon.Project.fromJson(json));
+  }
+
+  // -- serialization --
+
+  /** Serialize the project to deterministic JSON. */
+  toJson(): string {
+    return this.native.toJson();
+  }
+
+  /** Set the project sample rate in Hz (must be > 0). */
+  setSampleRate(sampleRate: number): void {
+    this.native.setSampleRate(sampleRate);
+  }
+
+  // -- edit --
+
+  /** Add a track and return its allocated stable id. */
+  addTrack(desc: ProjectTrackDesc = {}): number {
+    return this.native.addTrack({ ...desc, kind: trackKindValue(desc.kind) });
+  }
+
+  /** Add an audio or MIDI clip and return its allocated clip id. */
+  addClip(desc: ProjectClipDesc): number {
+    return this.native.addClip(desc);
+  }
+
+  /** Create a MIDI track + clip; returns `{ trackId, clipId }`. */
+  addMidiClip(startPpq: number, lengthPpq: number): ProjectMidiClipResult {
+    return this.native.addMidiClip(startPpq, lengthPpq);
+  }
+
+  /** Split a clip at `splitPpq` (absolute PPQ); returns the new (right-hand) clip id. */
+  splitClip(clipId: number, splitPpq: number): number {
+    return this.native.splitClip(clipId, splitPpq);
+  }
+
+  /** Trim a clip's start / length (PPQ). */
+  trimClip(clipId: number, newStartPpq: number, newLengthPpq: number): void {
+    this.native.trimClip(clipId, newStartPpq, newLengthPpq);
+  }
+
+  /** Move a clip to `newStartPpq` (and optionally `newTrackId`; 0 = keep track). */
+  moveClip(clipId: number, newStartPpq: number, newTrackId = 0): void {
+    this.native.moveClip(clipId, newStartPpq, newTrackId);
+  }
+
+  /** Undo the most recent edit (throws when the undo stack is empty). */
+  undo(): void {
+    this.native.undo();
+  }
+
+  /** Redo the most recently undone edit (throws when the redo stack is empty). */
+  redo(): void {
+    this.native.redo();
+  }
+
+  // -- MIDI --
+
+  /**
+   * Replace a MIDI clip's entire event list. Each event is
+   * `{ ppq, data0, data1? }` (or a `[ppq, data0, data1]` tuple); pass an empty
+   * array to clear. `data0`/`data1` are the first two UMP-1.0 words of a
+   * channel-voice message (stored opaquely).
+   */
+  setMidiEvents(
+    clipId: number,
+    events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
+  ): void {
+    assertProjectMidiEvents('Project.setMidiEvents', events);
+    this.native.setMidiEvents(clipId, events);
+  }
+
+  /** Import an in-memory SMF buffer; returns the first added clip id. */
+  importSmf(data: Buffer | Uint8Array): number {
+    return this.native.importSmf(data);
+  }
+
+  /** Export the project's tempo map + MIDI clips to an SMF byte buffer. */
+  exportSmf(): Buffer {
+    return this.native.exportSmf();
+  }
+
+  /** Set a MIDI clip's channel-0 program / bank at source PPQ 0. */
+  setProgram(clipId: number, program: number, bank = 0): void {
+    this.native.setProgram(clipId, program, bank);
+  }
+
+  /** Set a MIDI clip's program / bank for one UMP group and channel. */
+  setProgramOnChannel(
+    clipId: number,
+    group: number,
+    channel: number,
+    program: number,
+    bank = -1,
+  ): void {
+    this.native.setProgramOnChannel(clipId, group, channel, program, bank);
+  }
+
+  /** Configure and apply a clip's MIDI-FX chain from JSON. */
+  setMidiFx(clipId: number, configJson: string): void {
+    this.native.setMidiFx(clipId, configJson);
+  }
+
+  // -- MIR --
+
+  /** Detect tempo from a mono buffer and install it (undoable); returns the primary BPM. */
+  autoTempo(audio: Float32Array, sampleRate: number): number {
+    return this.native.autoTempo(audio, sampleRate);
+  }
+
+  /**
+   * Snap a PPQ coordinate to the nearest beat of the project grid. `strength`
+   * in `[0, 1]` (0 = no snap, 1 = exact grid line).
+   */
+  snapToGrid(ppq: number, strength = 1.0): number {
+    return this.native.snapToGrid(ppq, strength);
+  }
+
+  // -- compile / render --
+
+  /** Compile the project into an RT-readable timeline, surfacing diagnostics. */
+  compile(): ProjectCompileResult {
+    return this.native.compile();
+  }
+
+  /**
+   * Compile + render the project offline to an interleaved float buffer
+   * (`totalFrames * channels` samples). Deterministic: the same project +
+   * options yields a bit-identical array within one build.
+   */
+  bounce(options: ProjectBounceOptions = {}): Float32Array {
+    return this.native.bounce(options);
+  }
+
+  /** Release the underlying native project. Safe to call only once. */
+  destroy(): void {
+    this.native.destroy();
+  }
+
+  /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
+  delete(): void {
+    this.destroy();
+  }
+}
+
+function trackKindValue(kind: ProjectTrackDesc['kind']): number {
+  if (kind === undefined || kind === 'audio') {
+    return 0;
+  }
+  if (kind === 'midi') {
+    return 1;
+  }
+  if (kind === 'aux') {
+    return 2;
+  }
+  if (typeof kind === 'number') {
+    return kind;
+  }
+  throw new Error(`Invalid track kind: ${kind}`);
 }
 
 // ============================================================================
@@ -3395,6 +3768,14 @@ export type {
   PanLaw,
   PanMode,
   PitchResult,
+  ProjectBounceOptions,
+  ProjectClipDesc,
+  ProjectCompileResult,
+  ProjectDiagnostic,
+  ProjectMidiClipResult,
+  ProjectMidiEvent,
+  ProjectTrackDesc,
+  ProjectTrackKind,
   RhythmResult,
   RirResult,
   RirSynthOptions,

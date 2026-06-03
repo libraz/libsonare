@@ -33,6 +33,7 @@ set(BUILD_FX ON CACHE BOOL "" FORCE)
 set(BUILD_PITCH_EDITOR ON CACHE BOOL "" FORCE)
 set(BUILD_VOICE_CHANGER ON CACHE BOOL "" FORCE)
 set(BUILD_ACOUSTIC_SIM ON CACHE BOOL "" FORCE)
+set(BUILD_ARRANGEMENT ON CACHE BOOL "" FORCE)
 
 # Optional: enable FFmpeg-backed decoding (M4A/AAC/FLAC/OGG/Opus/...). Forwarded
 # from the npm build via SONARE_FFMPEG (handled in scripts/build-native.mjs):
@@ -48,6 +49,7 @@ add_subdirectory(${SONARE_ROOT} ${CMAKE_BINARY_DIR}/libsonare)
 set(ADDON_SOURCES
   src/addon/addon.cpp
   src/addon/sonare_wrap_engine.cpp
+  src/addon/sonare_wrap_project.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_acoustic.cpp
   src/addon/sonare_wrap_analysis.cpp
@@ -70,6 +72,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/sonare_c_daw.cpp
   ${SONARE_ROOT}/src/sonare_c_engine.cpp
   ${SONARE_ROOT}/src/sonare_c_voice_changer.cpp
+  ${SONARE_ROOT}/src/sonare_c_project.cpp
 )
 
 add_library(${PROJECT_NAME} SHARED
@@ -94,6 +97,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   sonare_engine
   sonare_voice_changer
   sonare_acoustic
+  # Headless-project C ABI (sonare_c_project.cpp) wraps the arrangement control
+  # plane: EditHistory + the compiler/offline bounce, the serializer, and
+  # the MIR tempo/grid bridges. sonare_engine already PUBLIC-links sonare_midi
+  # (and PUBLIC-defines SONARE_WITH_ARRANGEMENT), but the project ABI also needs
+  # the arrangement / serialize / mir static libs to resolve.
+  sonare_arrangement
+  sonare_serialize
+  sonare_mir
+  sonare_midi
   ${CMAKE_JS_LIB}
 )
 
@@ -105,6 +117,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   SONARE_WITH_PITCH_EDITOR=1
   SONARE_WITH_VOICE_CHANGER=1
   SONARE_WITH_ACOUSTIC_SIM=1
+  SONARE_WITH_ARRANGEMENT=1
 )
 
 if(MSVC)

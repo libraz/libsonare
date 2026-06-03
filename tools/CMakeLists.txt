@@ -26,6 +26,20 @@ if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
   target_link_libraries(sonare PRIVATE sonare_acoustic sonare_fx)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
 endif()
+if(BUILD_ARRANGEMENT)
+  # The `project` command group wraps the sonare_project_* C ABI. That C-API
+  # translation unit (and the sonare_free_* helpers it returns through) are not
+  # part of any static lib the CLI links, so compile them directly here, and
+  # link the arrangement subsystem libs the C ABI resolves against.
+  target_sources(sonare PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp
+    ${PROJECT_SOURCE_DIR}/src/sonare_c_memory.cpp
+  )
+  target_link_libraries(sonare PRIVATE
+    sonare_arrangement sonare_serialize sonare_midi sonare_mir
+  )
+  target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
+endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 
 target_include_directories(sonare PRIVATE
