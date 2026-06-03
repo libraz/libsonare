@@ -22,6 +22,7 @@ import type {
   StreamFramesI16,
   StreamFramesSoa,
   StreamFramesU8,
+  StreamQuantizeConfig,
   StreamingPlatform,
   VoicePresetId,
 } from './types.js';
@@ -461,14 +462,22 @@ export class StreamAnalyzer {
     return this.readFramesSoa(maxFrames);
   }
 
-  /** Drain up to `maxFrames` frames as uint8-quantized arrays. */
-  readFramesU8(maxFrames: number): StreamFramesU8 {
-    return this.native.readFramesU8(maxFrames);
+  /**
+   * Drain up to `maxFrames` frames as uint8-quantized arrays. Pass
+   * `quantizeConfig` to widen the quantization ranges for a stream louder or
+   * quieter than the defaults (omitted keeps the defaults).
+   */
+  readFramesU8(maxFrames: number, quantizeConfig?: StreamQuantizeConfig): StreamFramesU8 {
+    return this.native.readFramesU8(maxFrames, quantizeConfig);
   }
 
-  /** Drain up to `maxFrames` frames as int16-quantized arrays. */
-  readFramesI16(maxFrames: number): StreamFramesI16 {
-    return this.native.readFramesI16(maxFrames);
+  /**
+   * Drain up to `maxFrames` frames as int16-quantized arrays. Pass
+   * `quantizeConfig` to widen the quantization ranges for a stream louder or
+   * quieter than the defaults (omitted keeps the defaults).
+   */
+  readFramesI16(maxFrames: number, quantizeConfig?: StreamQuantizeConfig): StreamFramesI16 {
+    return this.native.readFramesI16(maxFrames, quantizeConfig);
   }
 
   /** Reset analyzer state; optionally re-anchor to a base sample offset. */

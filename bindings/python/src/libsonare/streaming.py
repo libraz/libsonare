@@ -9,10 +9,12 @@ from typing import Any, cast
 import numpy as np
 
 from ._runtime import (
+    QuantizeConfig,
     SonareStreamConfig,
     SonareStreamFrames,
     SonareStreamFramesI16,
     SonareStreamFramesU8,
+    SonareStreamQuantizeConfig,
     SonareStreamStats,
     StreamBarChord,
     StreamChordChange,
@@ -28,6 +30,25 @@ from ._runtime import (
     _get_lib,
     _to_c_float_array,
 )
+
+
+def _quantize_config_to_c(
+    config: QuantizeConfig | None,
+) -> SonareStreamQuantizeConfig | None:
+    """Marshal a :class:`QuantizeConfig` to a C struct (``None`` stays ``None`` = defaults).
+
+    The caller keeps the returned struct alive and passes ``ctypes.byref`` of it
+    (or ``None`` for the default ranges) to the native ``*_ex`` entry point.
+    """
+    if config is None:
+        return None
+    raw = SonareStreamQuantizeConfig()
+    raw.mel_db_min = float(config.mel_db_min)
+    raw.mel_db_max = float(config.mel_db_max)
+    raw.onset_max = float(config.onset_max)
+    raw.rms_max = float(config.rms_max)
+    raw.centroid_max = float(config.centroid_max)
+    return raw
 
 
 class StreamAnalyzer:
@@ -142,13 +163,23 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames(ctypes.byref(raw))
 
-    def read_frames_u8(self, max_frames: int) -> StreamFramesU8:
-        """Read up to ``max_frames`` frames as 8-bit quantized arrays."""
+    def read_frames_u8(
+        self, max_frames: int, quantize_config: QuantizeConfig | None = None
+    ) -> StreamFramesU8:
+        """Read up to ``max_frames`` frames as 8-bit quantized arrays.
+
+        Pass ``quantize_config`` to widen the quantization ranges for a stream
+        louder or quieter than the defaults (``None`` keeps the defaults).
+        """
         lib = _get_lib()
         raw = SonareStreamFramesU8()
+        qconfig = _quantize_config_to_c(quantize_config)
         _check(
-            lib.sonare_stream_analyzer_read_frames_u8(
-                self._require_handle(), ctypes.c_size_t(int(max_frames)), ctypes.byref(raw)
+            lib.sonare_stream_analyzer_read_frames_u8_ex(
+                self._require_handle(),
+                ctypes.byref(qconfig) if qconfig is not None else None,
+                ctypes.c_size_t(int(max_frames)),
+                ctypes.byref(raw),
             )
         )
         try:
@@ -156,13 +187,23 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames_u8(ctypes.byref(raw))
 
-    def read_frames_i16(self, max_frames: int) -> StreamFramesI16:
-        """Read up to ``max_frames`` frames as 16-bit quantized arrays."""
+    def read_frames_i16(
+        self, max_frames: int, quantize_config: QuantizeConfig | None = None
+    ) -> StreamFramesI16:
+        """Read up to ``max_frames`` frames as 16-bit quantized arrays.
+
+        Pass ``quantize_config`` to widen the quantization ranges for a stream
+        louder or quieter than the defaults (``None`` keeps the defaults).
+        """
         lib = _get_lib()
         raw = SonareStreamFramesI16()
+        qconfig = _quantize_config_to_c(quantize_config)
         _check(
-            lib.sonare_stream_analyzer_read_frames_i16(
-                self._require_handle(), ctypes.c_size_t(int(max_frames)), ctypes.byref(raw)
+            lib.sonare_stream_analyzer_read_frames_i16_ex(
+                self._require_handle(),
+                ctypes.byref(qconfig) if qconfig is not None else None,
+                ctypes.c_size_t(int(max_frames)),
+                ctypes.byref(raw),
             )
         )
         try:

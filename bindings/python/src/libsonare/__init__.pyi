@@ -605,6 +605,9 @@ from .types import (
     PitchResult as PitchResult,
 )
 from .types import (
+    QuantizeConfig as QuantizeConfig,
+)
+from .types import (
     RhythmResult as RhythmResult,
 )
 from .types import (

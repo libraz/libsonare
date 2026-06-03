@@ -35,6 +35,25 @@ val vectorToInt16Array(const std::vector<int16_t>& vec) {
   return result;
 }
 
+/// @brief Reads an optional quantization-range config from a JS value.
+/// @details An undefined/null value (or a missing field) keeps the library
+///          default for that range, so a partial object overrides only the
+///          ranges the caller supplied.
+QuantizeConfig quantizeConfigFromVal(const val& config) {
+  QuantizeConfig qconfig;
+  if (config.isUndefined() || config.isNull()) return qconfig;
+  const auto read = [&](const char* key, float& field) {
+    const val value = config[key];
+    if (!value.isUndefined() && !value.isNull()) field = value.as<float>();
+  };
+  read("melDbMin", qconfig.mel_db_min);
+  read("melDbMax", qconfig.mel_db_max);
+  read("onsetMax", qconfig.onset_max);
+  read("rmsMax", qconfig.rms_max);
+  read("centroidMax", qconfig.centroid_max);
+  return qconfig;
+}
+
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
@@ -109,9 +128,11 @@ class StreamAnalyzerWrapper {
   }
 
   /// @brief Reads frames in quantized Uint8 format (4x bandwidth reduction).
-  val readFramesU8(size_t max_frames) {
+  /// @param quantize_config Optional quantization ranges (undefined = defaults);
+  ///        widen these for a stream louder/quieter than the default ranges.
+  val readFramesU8(size_t max_frames, val quantize_config) {
     QuantizedFrameBufferU8 buffer;
-    QuantizeConfig qconfig;
+    QuantizeConfig qconfig = quantizeConfigFromVal(quantize_config);
     analyzer_->read_frames_quantized_u8(max_frames, buffer, qconfig);
 
     val out = val::object();
@@ -128,9 +149,11 @@ class StreamAnalyzerWrapper {
   }
 
   /// @brief Reads frames in quantized Int16 format (2x bandwidth reduction).
-  val readFramesI16(size_t max_frames) {
+  /// @param quantize_config Optional quantization ranges (undefined = defaults);
+  ///        widen these for a stream louder/quieter than the default ranges.
+  val readFramesI16(size_t max_frames, val quantize_config) {
     QuantizedFrameBufferI16 buffer;
-    QuantizeConfig qconfig;
+    QuantizeConfig qconfig = quantizeConfigFromVal(quantize_config);
     analyzer_->read_frames_quantized_i16(max_frames, buffer, qconfig);
 
     val out = val::object();

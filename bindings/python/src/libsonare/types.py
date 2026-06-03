@@ -1248,6 +1248,23 @@ class InverseResult:
 
 
 @dataclass(frozen=True, slots=True)
+class QuantizeConfig:
+    """Quantization ranges for the u8/i16 bandwidth-reduction read paths.
+
+    Defaults mirror ``sonare_stream_quantize_config_default``. Widen any range
+    whose source values exceed the defaults: the quantizers clamp normalized
+    values to ``[0, 1]``, so a stream louder or quieter than these ranges
+    otherwise saturates silently to the endpoints.
+    """
+
+    mel_db_min: float = -80.0
+    mel_db_max: float = 0.0
+    onset_max: float = 50.0
+    rms_max: float = 1.0
+    centroid_max: float = 11025.0
+
+
+@dataclass(frozen=True, slots=True)
 class StreamConfig:
     """Construction config for :class:`StreamAnalyzer`.
 

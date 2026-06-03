@@ -173,6 +173,26 @@ def test_stream_analyzer_quantized_python_api():
         assert all(-32768 <= value <= 32767 for value in frames16.chroma)
 
 
+def test_stream_analyzer_quantize_config_override():
+    sr = 22050
+    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window=1)
+
+    # A tiny centroid_max saturates the (positive) spectral centroid to the u8
+    # maximum; a huge centroid_max collapses it toward zero. Reading identical
+    # audio with the two configs must differ, proving the override reaches the
+    # native quantizer.
+    with ls.StreamAnalyzer(cfg) as tight:
+        tight.process(_sine(sr // 2, 440.0, sr))
+        narrow = tight.read_frames_u8(4, ls.QuantizeConfig(centroid_max=1.0))
+    with ls.StreamAnalyzer(cfg) as wide:
+        wide.process(_sine(sr // 2, 440.0, sr))
+        broad = wide.read_frames_u8(4, ls.QuantizeConfig(centroid_max=1.0e9))
+
+    assert narrow.n_frames == broad.n_frames
+    assert narrow.spectral_centroid[0] == 255  # saturated by the narrow range
+    assert narrow.spectral_centroid != broad.spectral_centroid
+
+
 def test_stream_analyzer_reset():
     sr = 22050
     cfg = ls.StreamConfig(sample_rate=sr)

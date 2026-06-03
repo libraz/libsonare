@@ -544,6 +544,27 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(SonareStreamFramesI16),
             ]
+        if hasattr(lib, "sonare_stream_quantize_config_default"):
+            lib.sonare_stream_quantize_config_default.restype = ctypes.c_int32
+            lib.sonare_stream_quantize_config_default.argtypes = [
+                ctypes.POINTER(SonareStreamQuantizeConfig),
+            ]
+        if hasattr(lib, "sonare_stream_analyzer_read_frames_u8_ex"):
+            lib.sonare_stream_analyzer_read_frames_u8_ex.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_read_frames_u8_ex.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareStreamQuantizeConfig),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamFramesU8),
+            ]
+        if hasattr(lib, "sonare_stream_analyzer_read_frames_i16_ex"):
+            lib.sonare_stream_analyzer_read_frames_i16_ex.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_read_frames_i16_ex.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareStreamQuantizeConfig),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamFramesI16),
+            ]
         lib.sonare_stream_analyzer_reset.restype = ctypes.c_int32
         lib.sonare_stream_analyzer_reset.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
         lib.sonare_stream_analyzer_stats.restype = ctypes.c_int32

@@ -38,6 +38,22 @@ bool BoolKey(const Napi::Object& object, const char* key, bool fallback) {
   return value.As<Napi::Boolean>().Value();
 }
 
+// Reads an optional quantization-range config from a JS value (null/undefined or
+// a non-object yields the library defaults). Each field defaults to the
+// corresponding sonare::QuantizeConfig default, so a partial object only
+// overrides the ranges the caller supplied.
+sonare::QuantizeConfig QuantizeConfigFromValue(const Napi::Value& value) {
+  sonare::QuantizeConfig qconfig;
+  if (!value.IsObject()) return qconfig;
+  Napi::Object object = value.As<Napi::Object>();
+  qconfig.mel_db_min = static_cast<float>(NumberKey(object, "melDbMin", qconfig.mel_db_min));
+  qconfig.mel_db_max = static_cast<float>(NumberKey(object, "melDbMax", qconfig.mel_db_max));
+  qconfig.onset_max = static_cast<float>(NumberKey(object, "onsetMax", qconfig.onset_max));
+  qconfig.rms_max = static_cast<float>(NumberKey(object, "rmsMax", qconfig.rms_max));
+  qconfig.centroid_max = static_cast<float>(NumberKey(object, "centroidMax", qconfig.centroid_max));
+  return qconfig;
+}
+
 Napi::Float32Array Float32FromVec(Napi::Env env, const std::vector<float>& vec) {
   Napi::Float32Array out = Napi::Float32Array::New(env, vec.size());
   if (!vec.empty()) {
@@ -239,7 +255,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   size_t max_frames = static_cast<size_t>(info[0].As<Napi::Number>().Int64Value());
   sonare::QuantizedFrameBufferU8 buffer;
-  sonare::QuantizeConfig qconfig;
+  sonare::QuantizeConfig qconfig =
+      QuantizeConfigFromValue(info.Length() > 1 ? info[1] : env.Null());
   analyzer_->read_frames_quantized_u8(max_frames, buffer, qconfig);
 
   Napi::Object out = Napi::Object::New(env);
@@ -269,7 +286,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   size_t max_frames = static_cast<size_t>(info[0].As<Napi::Number>().Int64Value());
   sonare::QuantizedFrameBufferI16 buffer;
-  sonare::QuantizeConfig qconfig;
+  sonare::QuantizeConfig qconfig =
+      QuantizeConfigFromValue(info.Length() > 1 ? info[1] : env.Null());
   analyzer_->read_frames_quantized_i16(max_frames, buffer, qconfig);
 
   Napi::Object out = Napi::Object::New(env);

@@ -1910,8 +1910,8 @@ export interface WasmStreamAnalyzer {
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
   availableFrames: () => number;
   readFramesSoa: (maxFrames: number) => WasmFrameBuffer;
-  readFramesU8: (maxFrames: number) => WasmStreamFramesU8;
-  readFramesI16: (maxFrames: number) => WasmStreamFramesI16;
+  readFramesU8: (maxFrames: number, quantizeConfig?: unknown) => WasmStreamFramesU8;
+  readFramesI16: (maxFrames: number, quantizeConfig?: unknown) => WasmStreamFramesI16;
   reset: (baseSampleOffset?: number) => void;
   stats: () => WasmAnalyzerStats;
   frameCount: () => number;

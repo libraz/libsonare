@@ -7,6 +7,7 @@ import type {
   StreamConfig,
   StreamFramesI16,
   StreamFramesU8,
+  StreamQuantizeConfig,
 } from './stream_types';
 
 // ============================================================================
@@ -102,12 +103,26 @@ export class StreamAnalyzer {
     return this.analyzer.readFramesSoa(maxFrames);
   }
 
-  readFramesU8(maxFrames: number): StreamFramesU8 {
-    return this.analyzer.readFramesU8(maxFrames) as StreamFramesU8;
+  /**
+   * Read frames as uint8-quantized arrays.
+   *
+   * @param maxFrames - Maximum number of frames to read
+   * @param quantizeConfig - Optional quantization ranges; widen these for a
+   *   stream louder or quieter than the defaults (omitted keeps the defaults)
+   */
+  readFramesU8(maxFrames: number, quantizeConfig?: StreamQuantizeConfig): StreamFramesU8 {
+    return this.analyzer.readFramesU8(maxFrames, quantizeConfig) as StreamFramesU8;
   }
 
-  readFramesI16(maxFrames: number): StreamFramesI16 {
-    return this.analyzer.readFramesI16(maxFrames) as StreamFramesI16;
+  /**
+   * Read frames as int16-quantized arrays.
+   *
+   * @param maxFrames - Maximum number of frames to read
+   * @param quantizeConfig - Optional quantization ranges; widen these for a
+   *   stream louder or quieter than the defaults (omitted keeps the defaults)
+   */
+  readFramesI16(maxFrames: number, quantizeConfig?: StreamQuantizeConfig): StreamFramesI16 {
+    return this.analyzer.readFramesI16(maxFrames, quantizeConfig) as StreamFramesI16;
   }
 
   /**

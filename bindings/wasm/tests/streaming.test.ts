@@ -849,4 +849,42 @@ describe('StreamAnalyzer', () => {
       analyzer.dispose();
     });
   });
+
+  describe('quantize-config override', () => {
+    it('widens the saturating quantization range', () => {
+      const sampleRate = 22050;
+      const config = { sampleRate, nFft: 1024, hopLength: 256, nMels: 32 };
+      const sine = (freq: number, n: number): Float32Array => {
+        const out = new Float32Array(n);
+        for (let i = 0; i < n; i++) out[i] = Math.sin((2 * Math.PI * freq * i) / sampleRate) * 0.3;
+        return out;
+      };
+
+      // A tiny centroidMax saturates the (positive) spectral centroid to the u8
+      // maximum; a huge centroidMax collapses it toward zero. Reading identical
+      // audio with the two configs must differ, proving the override reaches the
+      // native quantizer.
+      const tight = new StreamAnalyzer(config);
+      const wide = new StreamAnalyzer(config);
+      try {
+        tight.process(sine(440, sampleRate));
+        const narrow = tight.readFramesU8(4, { centroidMax: 1.0 });
+
+        wide.process(sine(440, sampleRate));
+        const broad = wide.readFramesU8(4, { centroidMax: 1e9 });
+
+        expect(narrow.nFrames).toBe(broad.nFrames);
+        expect(narrow.nFrames).toBeGreaterThan(0);
+        expect(narrow.spectralCentroid[0]).toBe(255); // saturated by the narrow range
+        expect(Array.from(narrow.spectralCentroid)).not.toEqual(Array.from(broad.spectralCentroid));
+
+        // Omitting the config keeps the default ranges (no throw, same shape).
+        const fallback = wide.readFramesU8(4);
+        expect(fallback.nMels).toBe(32);
+      } finally {
+        tight.dispose();
+        wide.dispose();
+      }
+    });
+  });
 });

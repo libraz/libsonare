@@ -86,6 +86,25 @@ export interface FrameBuffer {
   chordConfidence: Float32Array;
 }
 
+/**
+ * Quantization ranges for the uint8/int16 bandwidth-reduction read paths
+ * (`StreamAnalyzer.readFramesU8` / `readFramesI16`). Omitted fields fall back to
+ * the library defaults shown below; widen any range whose source values exceed
+ * the defaults, otherwise a louder/quieter stream saturates to the endpoints.
+ */
+export interface StreamQuantizeConfig {
+  /** dB floor for mel quantization (default -80). */
+  melDbMin?: number;
+  /** dB ceiling for mel quantization (default 0). */
+  melDbMax?: number;
+  /** Max expected onset strength (default 50). */
+  onsetMax?: number;
+  /** Max expected RMS energy (default 1). */
+  rmsMax?: number;
+  /** Max expected spectral centroid in Hz (default 11025). */
+  centroidMax?: number;
+}
+
 export interface StreamFramesU8 {
   nFrames: number;
   nMels: number;

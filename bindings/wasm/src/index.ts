@@ -373,6 +373,7 @@ export type {
   StreamConfig,
   StreamFramesI16,
   StreamFramesU8,
+  StreamQuantizeConfig,
 } from './stream_types';
 
 /** Row-major 2-D matrix as a flat buffer plus its dimensions. */

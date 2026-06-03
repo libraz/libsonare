@@ -236,6 +236,18 @@ class SonareStreamConfig(ctypes.Structure):
     ]
 
 
+class SonareStreamQuantizeConfig(ctypes.Structure):
+    """Maps to SonareStreamQuantizeConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("mel_db_min", ctypes.c_float),
+        ("mel_db_max", ctypes.c_float),
+        ("onset_max", ctypes.c_float),
+        ("rms_max", ctypes.c_float),
+        ("centroid_max", ctypes.c_float),
+    ]
+
+
 class SonareStreamChordChange(ctypes.Structure):
     _fields_ = [
         ("root", ctypes.c_int32),
