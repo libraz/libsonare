@@ -11,6 +11,7 @@ import type {
   Key,
   KeyCandidate,
   KeyDetectionOptions,
+  MelodyOptions,
   MelodyResult,
   RhythmResult,
   RirResult,
@@ -127,7 +128,16 @@ export function analyzeSections(
   return addon.analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec);
 }
 
-/** Extract the melody contour from monophonic audio via YIN. */
+/**
+ * Extract the melody contour from monophonic audio.
+ *
+ * By default this uses plain per-frame YIN. Pass `{ usePyin: true }` for the
+ * Viterbi-smoothed pYIN tracker (less prone to octave jumps), or supply
+ * `usePyin` / `center` positionally. When pYIN is active, `center` (default
+ * `true`) reflect-pads by `frameLength / 2` so frame `i` is centered at
+ * `i * hopLength` (matching `librosa.pyin(center=True)`); `center` is ignored
+ * for plain YIN.
+ */
 export function analyzeMelody(
   samples: Float32Array,
   sampleRate = 22050,
@@ -136,8 +146,24 @@ export function analyzeMelody(
   frameLength = 2048,
   hopLength = 256,
   threshold = 0.1,
+  usePyinOrOptions: boolean | MelodyOptions = false,
+  center = true,
 ): MelodyResult {
-  return addon.analyzeMelody(samples, sampleRate, fmin, fmax, frameLength, hopLength, threshold);
+  const usePyin =
+    typeof usePyinOrOptions === 'object' ? (usePyinOrOptions.usePyin ?? false) : usePyinOrOptions;
+  const centerResolved =
+    typeof usePyinOrOptions === 'object' ? (usePyinOrOptions.center ?? true) : center;
+  return addon.analyzeMelody(
+    samples,
+    sampleRate,
+    fmin,
+    fmax,
+    frameLength,
+    hopLength,
+    threshold,
+    usePyin,
+    centerResolved,
+  );
 }
 
 export function analyzeBpm(

@@ -6,6 +6,15 @@ import ctypes
 
 from ._ffi_types_core import SonareTimeSignature
 
+# Progress callback: void(float progress, const char* stage, void* user_data).
+# Maps to SonareAnalyzeProgressCallback in sonare_c.h.
+SonareAnalyzeProgressCallback = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_float,
+    ctypes.c_char_p,
+    ctypes.c_void_p,
+)
+
 
 class SonareLufsResult(ctypes.Structure):
     """Maps to SonareLufsResult in sonare_c.h."""

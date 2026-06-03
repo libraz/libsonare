@@ -173,4 +173,72 @@ Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysi
   return result;
 }
 
+Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,
+                                     int sample_rate) {
+  char* json_str = nullptr;
+  SonareError err = sonare_analyze_json(data, length, sample_rate, &json_str);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  // Parse the JSON on the main thread using the JS engine's built-in parser.
+  Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
+  Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
+  Napi::Value parsed =
+      json_parse.Call({Napi::String::New(env, json_str != nullptr ? json_str : "")});
+  sonare_free_string(json_str);
+
+  if (env.IsExceptionPending() || !parsed.IsObject()) {
+    if (!env.IsExceptionPending()) {
+      Napi::Error::New(env, "Failed to parse analysis JSON").ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+  }
+
+  Napi::Object result = parsed.As<Napi::Object>();
+
+  // Inject legacy beatTimes Float32Array derived from beats[].time so callers
+  // that relied on the old Float32Array field continue to work.
+  Napi::Value beats_val = result.Get("beats");
+  if (beats_val.IsArray()) {
+    Napi::Array beats_arr = beats_val.As<Napi::Array>();
+    uint32_t n = beats_arr.Length();
+    auto beat_times = Napi::Float32Array::New(env, n);
+    for (uint32_t i = 0; i < n; ++i) {
+      Napi::Value beat = beats_arr.Get(i);
+      if (beat.IsObject()) {
+        Napi::Value t = beat.As<Napi::Object>().Get("time");
+        beat_times[i] =
+            t.IsNumber() ? static_cast<float>(t.As<Napi::Number>().DoubleValue()) : 0.0f;
+      }
+    }
+    result.Set("beatTimes", beat_times);
+  } else {
+    result.Set("beatTimes", Napi::Float32Array::New(env, 0));
+  }
+
+  // The JSON `key` carries root/mode as integer ordinals, but the Node Key
+  // convention (matching detectKey) exposes them as note/mode-name strings.
+  // Rebuild the key via KeyToObject so root/mode stay strings.
+  Napi::Value key_val = result.Get("key");
+  if (key_val.IsObject()) {
+    Napi::Object key_obj = key_val.As<Napi::Object>();
+    Napi::Value root = key_obj.Get("root");
+    Napi::Value mode = key_obj.Get("mode");
+    Napi::Value confidence = key_obj.Get("confidence");
+    if (root.IsNumber() && mode.IsNumber()) {
+      result.Set(
+          "key",
+          KeyToObject(env, static_cast<SonarePitchClass>(root.As<Napi::Number>().Int32Value()),
+                      static_cast<SonareMode>(mode.As<Napi::Number>().Int32Value()),
+                      confidence.IsNumber()
+                          ? static_cast<float>(confidence.As<Napi::Number>().DoubleValue())
+                          : 0.0f));
+    }
+  }
+
+  return result;
+}
+
 }  // namespace sonare_node

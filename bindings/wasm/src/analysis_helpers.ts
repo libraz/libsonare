@@ -146,6 +146,7 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
     timbre: wasm.timbre,
     dynamics: wasm.dynamics,
     rhythm: wasm.rhythm,
+    melody: wasm.melody,
     form: wasm.form,
   };
 }

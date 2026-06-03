@@ -440,6 +440,24 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out);
 
+/* Progress callback for the JSON analysis variants: progress in [0,1] plus a
+   stage label. user_data is the opaque pointer passed to the analyze call. */
+typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage, void* user_data);
+
+/* Full analysis serialized to a camelCase JSON object. Unlike sonare_analyze
+   (which fills only the flat bpm/key/beats struct), this returns the complete
+   result: chords, sections, timbre, dynamics, rhythm, melody and form, with
+   per-beat strength. *out_json is heap-allocated and MUST be released with
+   sonare_free_string. */
+SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
+                                char** out_json);
+
+/* Same as sonare_analyze_json but reports per-stage progress. A null callback
+   runs silently. The callback fires on the calling thread before return. */
+SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
+                                              SonareAnalyzeProgressCallback callback,
+                                              void* user_data, char** out_json);
+
 // Memory management
 void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);

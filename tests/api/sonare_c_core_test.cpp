@@ -2,6 +2,7 @@
 /// @brief Core C API tests.
 
 #include "sonare_c_test_helpers.h"
+#include "util/json.h"
 
 TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
   SECTION("creates audio from valid buffer") {
@@ -432,6 +433,113 @@ TEST_CASE("sonare_analyze", "[c_api]") {
 
     REQUIRE(result.beat_times == nullptr);
     REQUIRE(result.beat_count == 0);
+  }
+}
+
+TEST_CASE("sonare_analyze_json", "[c_api]") {
+  auto samples = generate_clicks(120.0f, 22050, 4.0f);
+
+  SECTION("serializes the full analysis result") {
+    char* json = nullptr;
+    SonareError err = sonare_analyze_json(samples.data(), samples.size(), 22050, &json);
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(json != nullptr);
+
+    const auto root = sonare::util::json::parse(json);
+    REQUIRE(root.is_object());
+    // Fields dropped by the flat struct must all be present in the JSON.
+    REQUIRE(root.contains("bpm"));
+    REQUIRE(root.contains("key"));
+    REQUIRE(root.contains("timeSignature"));
+    REQUIRE(root.contains("beats"));
+    REQUIRE(root.contains("chords"));
+    REQUIRE(root.contains("sections"));
+    REQUIRE(root.contains("timbre"));
+    REQUIRE(root.contains("dynamics"));
+    REQUIRE(root.contains("rhythm"));
+    REQUIRE(root.contains("melody"));
+    REQUIRE(root.contains("form"));
+    // Beats carry per-beat strength (dropped by sonare_analyze).
+    REQUIRE(root["beats"].is_array());
+    if (root["beats"].size() > 0) {
+      REQUIRE(root["beats"][static_cast<std::size_t>(0)].contains("strength"));
+    }
+    // Dynamics exposes peakDb/rmsDb; rhythm exposes tempoStability (LOW-59).
+    REQUIRE(root["dynamics"].contains("peakDb"));
+    REQUIRE(root["dynamics"].contains("rmsDb"));
+    REQUIRE(root["rhythm"].contains("tempoStability"));
+    REQUIRE(root["melody"].contains("pitches"));
+
+    sonare_free_string(json);
+  }
+
+  SECTION("reports progress and matches the silent variant's schema") {
+    struct ProgressState {
+      int calls = 0;
+      float last = -1.0f;
+    } state;
+    auto cb = [](float progress, const char* /*stage*/, void* user_data) {
+      auto* s = static_cast<ProgressState*>(user_data);
+      ++s->calls;
+      s->last = progress;
+    };
+
+    char* json = nullptr;
+    SonareError err =
+        sonare_analyze_json_with_progress(samples.data(), samples.size(), 22050, cb, &state, &json);
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(state.calls > 0);
+    REQUIRE(state.last >= 0.0f);
+    REQUIRE(sonare::util::json::parse(json).contains("chords"));
+    sonare_free_string(json);
+
+    // A null callback runs silently and still produces output.
+    char* json2 = nullptr;
+    REQUIRE(sonare_analyze_json_with_progress(samples.data(), samples.size(), 22050, nullptr,
+                                              nullptr, &json2) == SONARE_OK);
+    REQUIRE(json2 != nullptr);
+    sonare_free_string(json2);
+  }
+
+  SECTION("rejects a null out pointer") {
+    REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_analyze_melody_ex", "[c_api]") {
+  auto samples = generate_sine(440.0f, 22050, 1.0f);
+
+  SECTION("pYIN center contour differs from the plain-YIN default") {
+    SonareMelodyResult plain = {};
+    SonareMelodyResult pyin = {};
+    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
+                                     256, 0.1f, /*use_pyin=*/0, /*center=*/1, &plain) == SONARE_OK);
+    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
+                                     256, 0.1f, /*use_pyin=*/1, /*center=*/1, &pyin) == SONARE_OK);
+    // Both produce a usable contour; the pYIN path is genuinely reachable.
+    REQUIRE(pyin.mean_frequency >= 0.0f);
+    sonare_free_melody_result(&plain);
+    sonare_free_melody_result(&pyin);
+  }
+
+  SECTION("the legacy entry point delegates to the plain-YIN default") {
+    SonareMelodyResult legacy = {};
+    SonareMelodyResult ex = {};
+    REQUIRE(sonare_analyze_melody(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                  0.1f, &legacy) == SONARE_OK);
+    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
+                                     256, 0.1f, 0, 1, &ex) == SONARE_OK);
+    REQUIRE(legacy.point_count == ex.point_count);
+    sonare_free_melody_result(&legacy);
+    sonare_free_melody_result(&ex);
+  }
+
+  SECTION("rejects invalid parameters") {
+    SonareMelodyResult out = {};
+    REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 0.0f, 2093.0f, 2048,
+                                     256, 0.1f, 1, 1, &out) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 

@@ -286,24 +286,16 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
     sample_rate = info[1].As<Napi::Number>().Int32Value();
   }
 
-  SonareAnalysisResult analysis{};
-  SonareError err = sonare_analyze(data, length, sample_rate, &analysis);
-  if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  Napi::Object result = AnalysisToObject(env, analysis);
-  sonare_free_result(&analysis);
-
-  return result;
+  return FullAnalysisJsonToObject(env, data, length, sample_rate);
 }
 
 namespace {
 
 // Off-main-thread analyze. The worker copies the input Float32Array into its
 // own std::vector<float> (so the JS thread is free to release the typed array
-// view) and runs sonare_analyze inside Execute(). On completion the analysis
-// is marshalled into a JS object on the main thread and the Promise resolves.
+// view) and runs sonare_analyze_json inside Execute() to get a JSON string.
+// On completion the JSON string is parsed on the main thread (required because
+// JSON.parse touches the V8 heap) and the Promise resolves with the full result.
 class AnalyzeAsyncWorker : public Napi::AsyncWorker {
  public:
   AnalyzeAsyncWorker(Napi::Env env, std::vector<float> samples, int sample_rate)
@@ -313,17 +305,59 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
         sample_rate_(sample_rate) {}
 
   void Execute() override {
-    SonareError err = sonare_analyze(samples_.data(), samples_.size(), sample_rate_, &analysis_);
+    char* json_ptr = nullptr;
+    SonareError err =
+        sonare_analyze_json(samples_.data(), samples_.size(), sample_rate_, &json_ptr);
     if (err != SONARE_OK) {
       SetError(ErrorMessageForCode(err));
+      return;
+    }
+    if (json_ptr != nullptr) {
+      json_string_ = std::string(json_ptr);
+      sonare_free_string(json_ptr);
     }
   }
 
   void OnOK() override {
     Napi::HandleScope scope(Env());
-    Napi::Object obj = AnalysisToObject(Env(), analysis_);
-    sonare_free_result(&analysis_);
-    deferred_.Resolve(obj);
+    Napi::Env env = Env();
+
+    // JSON.parse on the main thread (V8 is not thread-safe).
+    Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
+    Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
+    Napi::Value parsed = json_parse.Call({Napi::String::New(env, json_string_)});
+
+    if (env.IsExceptionPending() || !parsed.IsObject()) {
+      if (!env.IsExceptionPending()) {
+        deferred_.Reject(Napi::Error::New(env, "Failed to parse analysis JSON").Value());
+      } else {
+        deferred_.Reject(env.GetAndClearPendingException().Value());
+      }
+      return;
+    }
+
+    Napi::Object result = parsed.As<Napi::Object>();
+
+    // Inject legacy beatTimes Float32Array.
+    Napi::Value beats_val = result.Get("beats");
+    if (beats_val.IsArray()) {
+      Napi::Array beats_arr = beats_val.As<Napi::Array>();
+      uint32_t n = beats_arr.Length();
+      auto beat_times = Napi::Float32Array::New(env, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        Napi::Value beat = beats_arr.Get(i);
+        if (beat.IsObject()) {
+          Napi::Value t = beat.As<Napi::Object>().Get("time");
+          beat_times[i] =
+              t.IsNumber() ? static_cast<float>(t.As<Napi::Number>().DoubleValue()) : 0.0f;
+        }
+      }
+      result.Set("beatTimes", beat_times);
+    } else {
+      result.Set("beatTimes", Napi::Float32Array::New(env, 0));
+    }
+
+    deferred_.Resolve(result);
   }
 
   void OnError(const Napi::Error& error) override {
@@ -337,7 +371,7 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
   Napi::Promise::Deferred deferred_;
   std::vector<float> samples_;
   int sample_rate_;
-  SonareAnalysisResult analysis_{};
+  std::string json_string_;
 };
 
 }  // namespace

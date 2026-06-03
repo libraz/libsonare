@@ -95,20 +95,25 @@ val js_analyze_sections(val samples, int sample_rate, int n_fft = 2048, int hop_
 // contour via YIN and returns { points: [{ time, frequency, confidence }],
 // pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
 val js_analyze_melody(val samples, int sample_rate, float fmin = 65.0f, float fmax = 2093.0f,
-                      int frame_length = 2048, int hop_length = 256, float threshold = 0.1f) {
+                      int frame_length = 2048, int hop_length = 256, float threshold = 0.1f,
+                      bool use_pyin = false, bool center = true) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   // Fall back to the struct defaults when raw emscripten passes 0 for a
   // missing argument, so the JS-facing defaults stay consistent with the
   // C ABI / Node bindings (fmin=65, fmax=2093, frame_length=2048,
-  // hop_length=256, threshold=0.1).
+  // hop_length=256, threshold=0.1). use_pyin/center are plain bools (default
+  // use_pyin=false, center=true) selecting the pYIN tracker and frame
+  // centering, matching MelodyConfig::use_pyin / MelodyConfig::center.
   MelodyConfig config;
   if (fmin > 0.0f) config.fmin = fmin;
   if (fmax > 0.0f) config.fmax = fmax;
   if (frame_length > 0) config.frame_length = frame_length;
   if (hop_length > 0) config.hop_length = hop_length;
   if (threshold > 0.0f) config.threshold = threshold;
+  config.use_pyin = use_pyin;
+  config.center = center;
 
   MelodyAnalyzer analyzer(audio, config);
   const MelodyContour& contour = analyzer.contour();

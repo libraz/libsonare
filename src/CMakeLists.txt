@@ -98,6 +98,7 @@ set(SONARE_SOURCES
   analysis/melody_analyzer.cpp
   analysis/section_analyzer.cpp
   analysis/music_analyzer.cpp
+  analysis/analysis_json.cpp
   streaming/stream_analyzer.cpp
   streaming/stream_analyzer_features.cpp
   streaming/stream_analyzer_output.cpp

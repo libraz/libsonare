@@ -134,17 +134,140 @@ export interface TimeSignature {
   confidence: number;
 }
 
+/** A single detected beat in {@link AnalysisResult.beats}. */
+export interface AnalysisBeat {
+  /** Beat time in seconds. */
+  time: number;
+  /** Relative beat strength / salience. */
+  strength: number;
+}
+
+/**
+ * One chord in {@link AnalysisResult.chords}. Mirrors the camelCase JSON emitted
+ * by the full-analysis pipeline. Unlike the standalone {@link Chord} (whose
+ * `root`/`bass`/`quality` are string labels), the full-analysis chord encodes
+ * `root`/`bass` as pitch-class ordinals (0..11, C=0) and `quality` as a
+ * ChordQuality ordinal, and carries a human-readable `name` (e.g. `'Cmaj7'`).
+ */
+export interface AnalysisChord {
+  /** Root pitch class ordinal (0..11, C=0). */
+  root: number;
+  /** Bass pitch class ordinal (0..11, C=0). */
+  bass: number;
+  /** ChordQuality ordinal. */
+  quality: number;
+  start: number;
+  end: number;
+  confidence: number;
+  /** Human-readable chord name (e.g. `'Cmaj7'`). */
+  name: string;
+}
+
+/** One song-structure section in {@link AnalysisResult.sections}. */
+export interface AnalysisSection {
+  /** Section type ordinal (0=Intro, 1=Verse, ... 7=Unknown). */
+  type: SectionTypeOrdinal;
+  start: number;
+  end: number;
+  /** Relative energy level in `[0, 1]`. */
+  energyLevel: number;
+  /** Detection confidence in `[0, 1]`. */
+  confidence: number;
+  /** Human-readable section name (e.g. `'Chorus'`). */
+  name: string;
+}
+
+/** Aggregate timbre summary in {@link AnalysisResult.timbre}. */
+export interface AnalysisTimbre {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+}
+
+/** Aggregate dynamics summary in {@link AnalysisResult.dynamics}. */
+export interface AnalysisDynamics {
+  dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
+  crestFactor: number;
+  loudnessRangeDb: number;
+  isCompressed: boolean;
+}
+
+/** Aggregate rhythm summary in {@link AnalysisResult.rhythm}. */
+export interface AnalysisRhythm {
+  timeSignature: TimeSignature;
+  syncopation: number;
+  grooveType: string;
+  patternRegularity: number;
+  tempoStability: number;
+}
+
+/** One melody pitch sample in {@link AnalysisMelody.pitches}. */
+export interface AnalysisPitchPoint {
+  /** Frame time in seconds. */
+  time: number;
+  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
+  frequency: number;
+  /** Voicing confidence in `[0, 1]`. */
+  confidence: number;
+}
+
+/** Melody-contour summary in {@link AnalysisResult.melody}. */
+export interface AnalysisMelody {
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+  pitches: AnalysisPitchPoint[];
+}
+
 export interface AnalysisResult {
   bpm: number;
   bpmConfidence: number;
   key: Key;
   timeSignature: TimeSignature;
+  /**
+   * Beat times as a `Float32Array` for backward compatibility. Derived from
+   * `beats[].time`.
+   */
   beatTimes: Float32Array;
-  beats: Array<{ time: number }>;
+  beats: AnalysisBeat[];
+  /** Detected chord progression. */
+  chords: AnalysisChord[];
+  /** Detected song-structure sections. */
+  sections: AnalysisSection[];
+  /** Aggregate timbre summary. */
+  timbre: AnalysisTimbre;
+  /** Aggregate dynamics summary. */
+  dynamics: AnalysisDynamics;
+  /** Aggregate rhythm summary. */
+  rhythm: AnalysisRhythm;
+  /** Melody-contour summary. */
+  melody: AnalysisMelody;
+  /** Human-readable musical form label (e.g. `'AABA'`). */
+  form: string;
 }
 
 /** Progress callback for {@link analyzeWithProgress}. */
 export type AnalysisProgressCallback = (progress: number, stage: string) => void;
+
+/**
+ * Options-object form for {@link analyzeMelody}'s tracker selection. Mirrors the
+ * trailing positional `usePyin` / `center` arguments.
+ */
+export interface MelodyOptions {
+  /** Select the Viterbi-smoothed pYIN tracker instead of plain YIN. Default false. */
+  usePyin?: boolean;
+  /**
+   * When pYIN is active, reflect-pad by `frameLength / 2` so frame `i` is
+   * centered at `i * hopLength` (matches `librosa.pyin(center=True)`). Ignored
+   * for plain YIN. Default true.
+   */
+  center?: boolean;
+}
 
 /** Song-structure section type ordinal (mirrors the C `SonareSectionType`). */
 export type SectionTypeOrdinal = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;

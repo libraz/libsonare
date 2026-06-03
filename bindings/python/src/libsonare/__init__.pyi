@@ -52,6 +52,9 @@ from .analyzer import (
     analyze_timbre as analyze_timbre,
 )
 from .analyzer import (
+    analyze_with_progress as analyze_with_progress,
+)
+from .analyzer import (
     chord_functional_analysis as chord_functional_analysis,
 )
 from .analyzer import (
@@ -439,7 +442,19 @@ from .types import (
     AcousticResult as AcousticResult,
 )
 from .types import (
+    AnalysisDynamics as AnalysisDynamics,
+)
+from .types import (
+    AnalysisMelody as AnalysisMelody,
+)
+from .types import (
     AnalysisResult as AnalysisResult,
+)
+from .types import (
+    AnalysisRhythm as AnalysisRhythm,
+)
+from .types import (
+    AnalysisTimbre as AnalysisTimbre,
 )
 from .types import (
     AutomationCurve as AutomationCurve,

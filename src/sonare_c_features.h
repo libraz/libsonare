@@ -55,10 +55,23 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float min_section_sec,
                                     SonareSectionResult* out);
-/// @brief Extracts the melody contour from monophonic audio via YIN.
+/// @brief Extracts the melody contour from monophonic audio via plain YIN
+///   (left-aligned, no Viterbi smoothing). Shorthand for sonare_analyze_melody_ex
+///   with use_pyin=0.
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out);
+/// @brief Extracts the melody contour with selectable tracker.
+/// @param use_pyin Non-zero selects the pYIN tracker (Viterbi-smoothed, less
+///   octave-jumpy) instead of plain per-frame YIN.
+/// @param center When use_pyin is set, non-zero reflect-pads by frame_length/2
+///   so frame i is centered at i*hop_length (matches librosa.pyin(center=True));
+///   zero left-aligns. Ignored when use_pyin is 0 (plain YIN is always
+///   left-aligned).
+SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sample_rate,
+                                     float fmin, float fmax, int frame_length, int hop_length,
+                                     float threshold, int use_pyin, int center,
+                                     SonareMelodyResult* out);
 void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* result);
 void sonare_free_acoustic_result(SonareAcousticResult* result);
 void sonare_free_rhythm_result(SonareRhythmResult* result);

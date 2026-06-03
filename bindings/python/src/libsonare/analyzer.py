@@ -17,6 +17,7 @@ from ._analysis import (
     analyze_rhythm,
     analyze_sections,
     analyze_timbre,
+    analyze_with_progress,
     chord_functional_analysis,
     detect_acoustic,
     detect_beats,
@@ -187,6 +188,7 @@ from ._mixing import (
 __all__ = [
     "analyze",
     "analyze_bpm",
+    "analyze_with_progress",
     "estimate_room",
     "room_morph",
     "synthesize_rir",

@@ -88,7 +88,25 @@ export function analyzeSections(
 }
 
 /**
- * Extract the melody contour from monophonic audio via YIN.
+ * Options selecting the melody tracker. Both default to the historical
+ * behaviour for backward compatibility.
+ */
+export interface MelodyOptions {
+  /**
+   * Use the pYIN tracker (Viterbi-smoothed) instead of plain per-frame YIN.
+   * Produces a less octave-jumpy contour. Defaults to `false`.
+   */
+  usePyin?: boolean;
+  /**
+   * When {@link usePyin} is `true`, reflect-pad by `frameLength / 2` so frame
+   * `i` is centered at `i * hopLength` (matches `librosa.pyin(center=True)`).
+   * Ignored by the plain-YIN path. Defaults to `true`.
+   */
+  center?: boolean;
+}
+
+/**
+ * Extract the melody contour from monophonic audio via YIN (or pYIN).
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
@@ -97,6 +115,7 @@ export function analyzeSections(
  * @param frameLength - Frame length in samples (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param threshold - YIN threshold; lower is stricter (default: 0.1)
+ * @param options - Tracker options ({@link MelodyOptions.usePyin} / {@link MelodyOptions.center})
  * @returns Melody contour with per-frame pitch points and summary stats
  */
 export function analyzeMelody(
@@ -107,6 +126,7 @@ export function analyzeMelody(
   frameLength = 2048,
   hopLength = 256,
   threshold = 0.1,
+  options: MelodyOptions = {},
 ): MelodyResult {
   return requireModule().analyzeMelody(
     samples,
@@ -116,6 +136,8 @@ export function analyzeMelody(
     frameLength,
     hopLength,
     threshold,
+    options.usePyin ?? false,
+    options.center ?? true,
   );
 }
 

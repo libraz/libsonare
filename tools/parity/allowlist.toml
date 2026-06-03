@@ -72,6 +72,10 @@ python = [
   # backward compatibility, no C counterpart of its own. See
   # bindings/python/src/libsonare/_effects.py:1040.
   "realtime_voice_changer_preset_pod",
+  # Progress-callback variant of analyze(), named without the C `_json_` infix
+  # (it wraps C sonare_analyze_json_with_progress). Node/WASM expose the same
+  # ergonomic name (see their surface_only blocks above).
+  "analyze_with_progress",
 ]
 
 # ---------------------------------------------------------------------------
@@ -141,6 +145,13 @@ node = [
   "decompose_with_init",
   "metering_phase_scope_decimated",
   "metering_vectorscope_decimated",
+  # Unified-analysis variants folded into the base facade `analyze` (the rich
+  # result IS what analyze() returns, serialized via sonare_analyze_json) and
+  # `analyzeWithProgress` (the progress-callback variant). analyze_melody_ex is
+  # folded into analyzeMelody's usePyin/center options.
+  "analyze_json",
+  "analyze_json_with_progress",
+  "analyze_melody_ex",
   # C-ABI-internal length-checked inverse variants: bindings build their own
   # arrays with known lengths and call the base function, so the explicit-length
   # guards are not part of the binding surface.
@@ -172,6 +183,11 @@ wasm = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  # Unified-analysis variants folded into the base facade analyze /
+  # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
+  "analyze_json",
+  "analyze_json_with_progress",
+  "analyze_melody_ex",
   # Aggregate ABI-version accessor: exposed on Node/Python; the WASM module
   # reports versions through its own module metadata.
   "abi_version",
@@ -201,6 +217,11 @@ python = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  # Unified-analysis variants folded into the base facade `analyze` /
+  # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
+  "analyze_json",
+  "analyze_json_with_progress",
+  "analyze_melody_ex",
 ]
 
 # ---------------------------------------------------------------------------
@@ -234,6 +255,10 @@ python = [
 # put (key_root, key_mode) first and INLINE the SonareChordDetectionOptions
 # fields after them — the same ergonomic options-inlining + key-first shape
 # already used for detect_chords. Remapped internally; not order drift.
+# analyze_melody (node/python): the facade appends the extended use_pyin/center
+# params that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks
+# them. Folded extended-facade params, not order drift. (WASM passes them via an
+# options object, so it is not flagged here.)
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -243,6 +268,7 @@ node = [
   "strip_meter",
   "lufs_interleaved",
   "chord_functional_analysis",
+  "analyze_melody",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -270,6 +296,7 @@ python = [
   "scale_correction_semitones",
   "lufs_interleaved",
   "chord_functional_analysis",
+  "analyze_melody",
 ]
 
 # ---------------------------------------------------------------------------

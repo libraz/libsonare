@@ -762,17 +762,8 @@ Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  SonareAnalysisResult analysis{};
-  SonareError err = sonare_analyze(sonare_audio_data(audio_), sonare_audio_length(audio_),
-                                   sonare_audio_sample_rate(audio_), &analysis);
-  if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  Napi::Object result = AnalysisToObject(env, analysis);
-  sonare_free_result(&analysis);
-  return result;
+  return FullAnalysisJsonToObject(env, sonare_audio_data(audio_), sonare_audio_length(audio_),
+                                  sonare_audio_sample_rate(audio_));
 }
 
 void SonareWrap::Destroy(const Napi::CallbackInfo& /*info*/) {

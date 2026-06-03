@@ -1,13 +1,7 @@
-#include <algorithm>
-#include <cctype>
 #include <cstring>
 #include <string>
-#include <vector>
 
-#include "analysis/music_analyzer.h"
-#include "core/audio.h"
 #include "sonare_wrap.h"
-#include "sonare_wrap_key_options.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
@@ -49,43 +43,67 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
   const int sample_rate = info[1].As<Napi::Number>().Int32Value();
   Napi::Function js_cb = info[2].As<Napi::Function>();
 
-  try {
-    // analyze() is synchronous, so js_cb (referenced by info[2]) outlives the call.
-    sonare::Audio audio =
-        sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate);
-    sonare::MusicAnalyzer analyzer(audio);
-    analyzer.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
-      js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
-    });
-    sonare::AnalysisResult analysis = analyzer.analyze();
+  // The C-ABI progress callback cannot hold a Napi reference (it is called
+  // synchronously on the same thread, so the stack is still valid).
+  struct ProgressCtx {
+    Napi::Env env;
+    Napi::Function cb;
+  } ctx{env, js_cb};
 
-    // Reuse the C-ABI result shape so the output matches analyze().
-    std::vector<float> beat_times;
-    beat_times.reserve(analysis.beats.size());
-    for (const auto& beat : analysis.beats) {
-      beat_times.push_back(beat.time);
-    }
+  auto c_progress = [](float progress, const char* stage, void* user_data) {
+    auto* c = static_cast<ProgressCtx*>(user_data);
+    c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
+                Napi::String::New(c->env, stage != nullptr ? stage : "")});
+  };
 
-    SonareAnalysisResult c_result{};
-    c_result.bpm = analysis.bpm;
-    c_result.bpm_confidence = analysis.bpm_confidence;
-    c_result.key.root = static_cast<SonarePitchClass>(static_cast<int>(analysis.key.root));
-    c_result.key.mode = static_cast<SonareMode>(static_cast<int>(analysis.key.mode));
-    c_result.key.confidence = analysis.key.confidence;
-    c_result.time_signature.numerator = analysis.time_signature.numerator;
-    c_result.time_signature.denominator = analysis.time_signature.denominator;
-    c_result.time_signature.confidence = analysis.time_signature.confidence;
-    c_result.beat_times = beat_times.empty() ? nullptr : beat_times.data();
-    c_result.beat_count = beat_times.size();
-
-    return AnalysisToObject(env, c_result);
-  } catch (const std::exception& e) {
-    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+  char* json_str = nullptr;
+  SonareError err =
+      sonare_analyze_json_with_progress(data, length, sample_rate, c_progress, &ctx, &json_str);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
+
+  // Parse JSON and inject beatTimes on the main thread.
+  Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
+  Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
+  Napi::Value parsed =
+      json_parse.Call({Napi::String::New(env, json_str != nullptr ? json_str : "")});
+  sonare_free_string(json_str);
+
+  if (env.IsExceptionPending() || !parsed.IsObject()) {
+    if (!env.IsExceptionPending()) {
+      Napi::Error::New(env, "Failed to parse analysis JSON").ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+  }
+
+  Napi::Object result = parsed.As<Napi::Object>();
+
+  Napi::Value beats_val = result.Get("beats");
+  if (beats_val.IsArray()) {
+    Napi::Array beats_arr = beats_val.As<Napi::Array>();
+    uint32_t n = beats_arr.Length();
+    auto beat_times = Napi::Float32Array::New(env, n);
+    for (uint32_t i = 0; i < n; ++i) {
+      Napi::Value beat = beats_arr.Get(i);
+      if (beat.IsObject()) {
+        Napi::Value t = beat.As<Napi::Object>().Get("time");
+        beat_times[i] =
+            t.IsNumber() ? static_cast<float>(t.As<Napi::Number>().DoubleValue()) : 0.0f;
+      }
+    }
+    result.Set("beatTimes", beat_times);
+  } else {
+    result.Set("beatTimes", Napi::Float32Array::New(env, 0));
+  }
+
+  return result;
 }
 
 Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
@@ -151,10 +169,17 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
   const float threshold =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.1f;
+  const int use_pyin =
+      info.Length() >= 8 && info[7].IsBoolean() && info[7].As<Napi::Boolean>().Value() ? 1 : 0;
+  // center defaults to true (matches librosa.pyin(center=True)); only honored
+  // when use_pyin is set.
+  const int center =
+      info.Length() >= 9 && info[8].IsBoolean() ? (info[8].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
 
   SonareMelodyResult result{};
-  SonareError err = sonare_analyze_melody(typed.Data(), typed.ElementLength(), sample_rate, fmin,
-                                          fmax, frame_length, hop_length, threshold, &result);
+  SonareError err =
+      sonare_analyze_melody_ex(typed.Data(), typed.ElementLength(), sample_rate, fmin, fmax,
+                               frame_length, hop_length, threshold, use_pyin, center, &result);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();

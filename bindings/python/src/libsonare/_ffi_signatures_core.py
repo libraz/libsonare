@@ -658,3 +658,53 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     # with FFmpeg-backed decoding for M4A/AAC/FLAC/OGG, 0 otherwise.
     lib.sonare_has_ffmpeg_support.restype = ctypes.c_int
     lib.sonare_has_ffmpeg_support.argtypes = []
+
+    # --- Full analysis JSON ---
+
+    # sonare_analyze_json: full analysis serialized to a heap-allocated camelCase
+    # JSON string. Free *out_json with sonare_free_string.
+    if hasattr(lib, "sonare_analyze_json"):
+        lib.sonare_analyze_json.restype = ctypes.c_int32
+        lib.sonare_analyze_json.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
+
+    # sonare_analyze_json_with_progress: same as sonare_analyze_json but emits
+    # progress callbacks. The callback signature is:
+    #   void (*)(float progress, const char* stage, void* user_data)
+    if hasattr(lib, "sonare_analyze_json_with_progress"):
+        lib.sonare_analyze_json_with_progress.restype = ctypes.c_int32
+        lib.sonare_analyze_json_with_progress.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            SonareAnalyzeProgressCallback,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
+
+    # sonare_analyze_melody_ex: melody contour with selectable tracker (YIN/pYIN)
+    # and center-padding option.
+    if hasattr(lib, "sonare_analyze_melody_ex"):
+        lib.sonare_analyze_melody_ex.restype = ctypes.c_int32
+        lib.sonare_analyze_melody_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMelodyResult),
+        ]
+
+    # sonare_free_string: free a heap-allocated C string (e.g. JSON output).
+    if hasattr(lib, "sonare_free_string"):
+        lib.sonare_free_string.restype = None
+        lib.sonare_free_string.argtypes = [ctypes.c_char_p]

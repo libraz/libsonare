@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
+import json
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from ._ffi import (
     SonareAcousticResult,
     SonareAnalysisResult,
+    SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
     SonareChordAnalysisResult,
     SonareChordDetectionOptions,
@@ -31,7 +34,11 @@ from ._runtime import (
 )
 from .types import (
     AcousticResult,
+    AnalysisDynamics,
+    AnalysisMelody,
     AnalysisResult,
+    AnalysisRhythm,
+    AnalysisTimbre,
     BpmAnalysisResult,
     BpmCandidate,
     Chord,
@@ -298,11 +305,201 @@ def detect_onsets(
             lib.sonare_free_floats(out_times)
 
 
+# camelCase → snake_case quality name table (mirrors detect_chords).
+_QUALITY_NAMES: dict[int, str] = {
+    0: "major",
+    1: "minor",
+    2: "diminished",
+    3: "augmented",
+    4: "dominant7",
+    5: "major7",
+    6: "minor7",
+    7: "sus2",
+    8: "sus4",
+    9: "unknown",
+    10: "add9",
+    11: "minorAdd9",
+    12: "dim7",
+    13: "halfDim7",
+    14: "major9",
+    15: "dominant9",
+    16: "sus2Add4",
+}
+
+
+def _parse_analysis_json(data: dict) -> AnalysisResult:
+    """Parse the camelCase JSON dict returned by ``sonare_analyze_json`` into
+    an :class:`AnalysisResult`.
+
+    This is an internal helper shared by :func:`analyze` and
+    :func:`analyze_with_progress`.
+    """
+    # Key
+    key_d = data.get("key", {})
+    key = Key(
+        root=PitchClass(int(key_d.get("root", 0))),
+        mode=Mode(int(key_d.get("mode", 0))),
+        confidence=float(key_d.get("confidence", 0.0)),
+    )
+
+    # Time signature (top-level)
+    ts_d = data.get("timeSignature", {})
+    time_signature = TimeSignature(
+        numerator=int(ts_d.get("numerator", 4)),
+        denominator=int(ts_d.get("denominator", 4)),
+        confidence=float(ts_d.get("confidence", 0.0)),
+    )
+
+    # Beats (list of {time, strength})
+    beats_raw = data.get("beats", [])
+    beat_times = [float(b.get("time", 0.0)) for b in beats_raw]
+    beat_strengths = [float(b.get("strength", 0.0)) for b in beats_raw]
+
+    # Chords
+    chord_quality_str: dict[str, str] = {
+        "major": "major",
+        "minor": "minor",
+        "diminished": "diminished",
+        "augmented": "augmented",
+        "dominant7": "dominant7",
+        "major7": "major7",
+        "minor7": "minor7",
+        "sus2": "sus2",
+        "sus4": "sus4",
+        "unknown": "unknown",
+        "add9": "add9",
+        "minorAdd9": "minorAdd9",
+        "dim7": "dim7",
+        "halfDim7": "halfDim7",
+        "major9": "major9",
+        "dominant9": "dominant9",
+        "sus2Add4": "sus2Add4",
+    }
+    chords: list[Chord] = []
+    for c in data.get("chords", []):
+        q_raw = c.get("quality", 9)
+        # quality field may be int (enum value) or str (name from JSON)
+        if isinstance(q_raw, int):
+            quality_str = _QUALITY_NAMES.get(q_raw, "unknown")
+        else:
+            quality_str = chord_quality_str.get(str(q_raw), "unknown")
+        chords.append(
+            Chord(
+                root=PitchClass(int(c.get("root", 0))),
+                bass=PitchClass(int(c.get("bass", c.get("root", 0)))),
+                quality=quality_str,
+                start=float(c.get("start", 0.0)),
+                end=float(c.get("end", 0.0)),
+                confidence=float(c.get("confidence", 0.0)),
+            )
+        )
+
+    # Sections
+    sections: list[Section] = []
+    for s in data.get("sections", []):
+        sections.append(
+            Section(
+                type=SectionType(int(s.get("type", 7))),
+                start=float(s.get("start", 0.0)),
+                end=float(s.get("end", 0.0)),
+                energy_level=float(s.get("energyLevel", 0.0)),
+                confidence=float(s.get("confidence", 0.0)),
+            )
+        )
+
+    # Timbre
+    timbre_d = data.get("timbre", {})
+    timbre = (
+        AnalysisTimbre(
+            brightness=float(timbre_d.get("brightness", 0.0)),
+            warmth=float(timbre_d.get("warmth", 0.0)),
+            density=float(timbre_d.get("density", 0.0)),
+            roughness=float(timbre_d.get("roughness", 0.0)),
+            complexity=float(timbre_d.get("complexity", 0.0)),
+        )
+        if timbre_d
+        else None
+    )
+
+    # Dynamics
+    dyn_d = data.get("dynamics", {})
+    dynamics = (
+        AnalysisDynamics(
+            dynamic_range_db=float(dyn_d.get("dynamicRangeDb", 0.0)),
+            peak_db=float(dyn_d.get("peakDb", 0.0)),
+            rms_db=float(dyn_d.get("rmsDb", 0.0)),
+            crest_factor=float(dyn_d.get("crestFactor", 0.0)),
+            loudness_range_db=float(dyn_d.get("loudnessRangeDb", 0.0)),
+            is_compressed=bool(dyn_d.get("isCompressed", False)),
+        )
+        if dyn_d
+        else None
+    )
+
+    # Rhythm
+    rhy_d = data.get("rhythm", {})
+    if rhy_d:
+        rts_d = rhy_d.get("timeSignature", ts_d)
+        rhythm = AnalysisRhythm(
+            time_signature=TimeSignature(
+                numerator=int(rts_d.get("numerator", 4)),
+                denominator=int(rts_d.get("denominator", 4)),
+                confidence=float(rts_d.get("confidence", 0.0)),
+            ),
+            syncopation=float(rhy_d.get("syncopation", 0.0)),
+            groove_type=str(rhy_d.get("grooveType", "straight")),
+            pattern_regularity=float(rhy_d.get("patternRegularity", 0.0)),
+            tempo_stability=float(rhy_d.get("tempoStability", 0.0)),
+        )
+    else:
+        rhythm = None
+
+    # Melody
+    mel_d = data.get("melody", {})
+    if mel_d:
+        pitches = [
+            MelodyPoint(
+                time=float(p.get("time", 0.0)),
+                frequency=float(p.get("frequency", 0.0)),
+                confidence=float(p.get("confidence", 0.0)),
+            )
+            for p in mel_d.get("pitches", [])
+        ]
+        melody = AnalysisMelody(
+            pitch_range_octaves=float(mel_d.get("pitchRangeOctaves", 0.0)),
+            pitch_stability=float(mel_d.get("pitchStability", 0.0)),
+            mean_frequency=float(mel_d.get("meanFrequency", 0.0)),
+            vibrato_rate=float(mel_d.get("vibratoRate", 0.0)),
+            pitches=pitches,
+        )
+    else:
+        melody = None
+
+    return AnalysisResult(
+        bpm=float(data.get("bpm", 0.0)),
+        bpm_confidence=float(data.get("bpmConfidence", 0.0)),
+        key=key,
+        time_signature=time_signature,
+        beat_times=beat_times,
+        beat_strengths=beat_strengths,
+        chords=chords,
+        sections=sections,
+        timbre=timbre,
+        dynamics=dynamics,
+        rhythm=rhythm,
+        melody=melody,
+        form=str(data.get("form", "")),
+    )
+
+
 def analyze(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
+
+    Calls ``sonare_analyze_json`` when available to return the complete
+    analysis result; falls back to ``sonare_analyze`` for older builds.
 
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
@@ -310,16 +507,44 @@ def analyze(
         sample_rate: Sample rate in Hz (default 22050).
 
     Returns:
-        :class:`libsonare.AnalysisResult` with ``bpm`` (``float``),
-        ``bpm_confidence`` (``float`` in ``[0, 1]``), ``key``
-        (:class:`Key`), ``time_signature`` (:class:`TimeSignature`),
-        and ``beat_times`` (``list[float]`` in seconds).
+        :class:`libsonare.AnalysisResult` with all fields:
+
+        - ``bpm`` (``float``) and ``bpm_confidence`` (``float`` in ``[0, 1]``)
+        - ``key`` (:class:`Key`), ``time_signature`` (:class:`TimeSignature`)
+        - ``beat_times`` (``list[float]`` in seconds)
+        - ``beat_strengths`` (``list[float]``) — per-beat strength values
+        - ``chords`` (``list[Chord]``) — detected chord segments
+        - ``sections`` (``list[Section]``) — detected structural sections
+        - ``timbre`` (:class:`AnalysisTimbre`) — spectral character summary
+        - ``dynamics`` (:class:`AnalysisDynamics`) — loudness/dynamics summary
+        - ``rhythm`` (:class:`AnalysisRhythm`) — groove/syncopation summary
+        - ``melody`` (:class:`AnalysisMelody`) — melody contour and statistics
+        - ``form`` (``str``) — overall form classification
 
     Raises:
         RuntimeError: If analysis fails.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
+
+    if hasattr(lib, "sonare_analyze_json"):
+        out_json = ctypes.c_char_p()
+        rc = lib.sonare_analyze_json(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.byref(out_json),
+        )
+        _check(rc)
+        try:
+            raw = out_json.value
+            data = json.loads(raw.decode("utf-8") if raw else "{}")
+        finally:
+            if out_json.value and hasattr(lib, "sonare_free_string"):
+                lib.sonare_free_string(out_json)
+        return _parse_analysis_json(data)
+
+    # Fallback for builds that only have the older flat struct API.
     out = SonareAnalysisResult()
     rc = lib.sonare_analyze(
         c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out)
@@ -327,7 +552,6 @@ def analyze(
     _check(rc)
     try:
         beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
-
         return AnalysisResult(
             bpm=float(out.bpm),
             bpm_confidence=float(out.bpm_confidence),
@@ -345,6 +569,83 @@ def analyze(
         )
     finally:
         lib.sonare_free_result(ctypes.byref(out))
+
+
+def _make_analyze_progress_trampoline(
+    on_progress: Callable[[float, str], None],
+) -> Any:
+    """Wrap a Python callback for use as a C SonareAnalyzeProgressCallback.
+
+    The returned object MUST be kept alive across the C call to avoid GC
+    collecting the underlying ctypes closure.
+    """
+
+    def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
+        try:
+            stage = stage_cstr.decode("utf-8") if stage_cstr else ""
+            on_progress(float(progress), stage)
+        except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
+            pass
+
+    return SonareAnalyzeProgressCallback(_trampoline)
+
+
+def analyze_with_progress(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    on_progress: Callable[[float, str], None] | None = None,
+) -> AnalysisResult:
+    """Run full audio analysis with optional progress callbacks.
+
+    Calls ``sonare_analyze_json_with_progress``. The ``on_progress`` callable
+    is invoked periodically during analysis with a progress fraction ``[0, 1]``
+    and a stage name string. Falls back to :func:`analyze` if the extended
+    symbol is absent in the loaded library.
+
+    Args:
+        samples: Mono audio samples (1D float). See :func:`detect_bpm` for
+            accepted types.
+        sample_rate: Sample rate in Hz (default 22050).
+        on_progress: Optional callable ``(progress: float, stage: str) -> None``
+            invoked during analysis. Progress is in ``[0, 1]``. If ``None``,
+            no callback is registered.
+
+    Returns:
+        Same rich :class:`libsonare.AnalysisResult` as :func:`analyze`.
+
+    Raises:
+        RuntimeError: If analysis fails.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_analyze_json_with_progress"):
+        return analyze(samples, sample_rate=sample_rate)
+
+    c_array, length = _to_c_float_array(samples)
+
+    if on_progress is not None:
+        # The trampoline must stay alive across the C call so the ctypes
+        # closure is not garbage-collected mid-analysis.
+        c_cb = _make_analyze_progress_trampoline(on_progress)
+    else:
+        c_cb = SonareAnalyzeProgressCallback(0)  # null callback
+
+    out_json = ctypes.c_char_p()
+    rc = lib.sonare_analyze_json_with_progress(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        c_cb,
+        None,
+        ctypes.byref(out_json),
+    )
+    _check(rc)
+    try:
+        raw = out_json.value
+        data = json.loads(raw.decode("utf-8") if raw else "{}")
+    finally:
+        if out_json.value and hasattr(lib, "sonare_free_string"):
+            lib.sonare_free_string(out_json)
+    return _parse_analysis_json(data)
 
 
 def analyze_bpm(
@@ -839,8 +1140,10 @@ def analyze_melody(
     frame_length: int = 2048,
     hop_length: int = 256,
     threshold: float = 0.1,
+    use_pyin: bool = False,
+    center: bool = True,
 ) -> MelodyResult:
-    """Extract the melody contour from monophonic audio via YIN.
+    """Extract the melody contour from monophonic audio.
 
     Args:
         samples: Mono audio samples (1D float).
@@ -849,12 +1152,59 @@ def analyze_melody(
         fmax: Maximum detectable frequency in Hz.
         frame_length: Analysis frame length in samples.
         hop_length: Hop length in samples.
-        threshold: YIN absolute threshold.
+        threshold: YIN/pYIN absolute threshold.
+        use_pyin: When ``True``, use pYIN (probabilistic YIN with Viterbi
+            smoothing) instead of plain YIN. Requires
+            ``sonare_analyze_melody_ex`` in the loaded library; falls back to
+            plain YIN on older builds.
+        center: When ``True`` (default), apply librosa-style center padding
+            so the first frame is centred on sample 0. Requires
+            ``sonare_analyze_melody_ex``; older builds ignore this flag.
 
     Returns:
         A :class:`MelodyResult` with the contour points and summary stats.
     """
     lib = _get_lib()
+
+    # Prefer the extended function when use_pyin or center flags are needed,
+    # or when it is the only melody entry point available.
+    if hasattr(lib, "sonare_analyze_melody_ex"):
+        if not hasattr(lib, "sonare_analyze_melody"):
+            pass  # fall through to _ex path below
+        c_array, length = _to_c_float_array(samples)
+        out = SonareMelodyResult()
+        rc = lib.sonare_analyze_melody_ex(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.c_int(frame_length),
+            ctypes.c_int(hop_length),
+            ctypes.c_float(threshold),
+            ctypes.c_int(1 if use_pyin else 0),
+            ctypes.c_int(1 if center else 0),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        try:
+            return MelodyResult(
+                points=[
+                    MelodyPoint(
+                        time=float(out.points[i].time),
+                        frequency=float(out.points[i].frequency),
+                        confidence=float(out.points[i].confidence),
+                    )
+                    for i in range(out.point_count)
+                ],
+                pitch_range_octaves=float(out.pitch_range_octaves),
+                pitch_stability=float(out.pitch_stability),
+                mean_frequency=float(out.mean_frequency),
+                vibrato_rate=float(out.vibrato_rate),
+            )
+        finally:
+            lib.sonare_free_melody_result(ctypes.byref(out))
+
     if not hasattr(lib, "sonare_analyze_melody"):
         raise RuntimeError("libsonare was built without melody-analysis support")
     c_array, length = _to_c_float_array(samples)

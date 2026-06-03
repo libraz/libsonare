@@ -21,6 +21,7 @@ from .analyzer import (
     analyze_rhythm,
     analyze_sections,
     analyze_timbre,
+    analyze_with_progress,
     chord_functional_analysis,
     chroma,
     cqt,
@@ -178,7 +179,11 @@ from .engine import RealtimeEngine
 from .streaming import StreamAnalyzer
 from .types import (
     AcousticResult,
+    AnalysisDynamics,
+    AnalysisMelody,
     AnalysisResult,
+    AnalysisRhythm,
+    AnalysisTimbre,
     AutomationCurve,
     AutomationPoint,
     BpmAnalysisResult,
@@ -268,7 +273,11 @@ except PackageNotFoundError:
 
 __all__ = [
     "AcousticResult",
+    "AnalysisDynamics",
+    "AnalysisMelody",
     "AnalysisResult",
+    "AnalysisRhythm",
+    "AnalysisTimbre",
     "AssistSidecar",
     "Audio",
     "RirResult",
@@ -367,6 +376,7 @@ __all__ = [
     "analyze_rhythm",
     "analyze_sections",
     "analyze_timbre",
+    "analyze_with_progress",
     "amplitude_to_db",
     "chord_functional_analysis",
     "chroma",

@@ -33,6 +33,15 @@ const char* ChordQualityName(SonareChordQuality quality);
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence);
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis);
 
+/// @brief Run sonare_analyze_json, parse the result with JSON.parse, inject a
+/// legacy `beatTimes` Float32Array derived from `beats[].time`, and return the
+/// enriched object. Frees the heap-allocated JSON string. Throws a JS error on
+/// C-ABI failure or JSON parse failure.
+///
+/// @return The enriched JS object or env.Undefined() (exception already thrown).
+Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,
+                                     int sample_rate);
+
 /// @brief Convert a JS object of {name -> number|boolean} into mastering API params.
 std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object);
 

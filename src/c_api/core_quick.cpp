@@ -1,3 +1,4 @@
+#include "analysis/analysis_json.h"
 #include "c_api/core_internal.h"
 
 // Quick detection functions
@@ -231,6 +232,46 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
       }
     }
 
+    return SONARE_OK;
+  });
+}
+
+// Full analysis serialized to a camelCase JSON object (chords, sections,
+// timbre, dynamics, rhythm, melody, form) — the rich counterpart to
+// sonare_analyze, which only fills the flat bpm/key/beats struct. The schema is
+// the single source of truth in analysis_result_to_json and is mirrored by the
+// WASM native object. *out_json is heap-allocated; free with sonare_free_string.
+SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
+                                char** out_json) {
+  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_json = nullptr;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    MusicAnalyzer analyzer(audio);
+    AnalysisResult result = analyzer.analyze();
+    *out_json = copy_string(analysis_result_to_json(result));
+    return SONARE_OK;
+  });
+}
+
+// Same as sonare_analyze_json but reports per-stage progress through @p callback
+// (progress in [0,1] plus a stage label). A null callback runs silently. The
+// callback is invoked on the calling thread before the function returns.
+SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
+                                              SonareAnalyzeProgressCallback callback,
+                                              void* user_data, char** out_json) {
+  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_json = nullptr;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    MusicAnalyzer analyzer(audio);
+    if (callback != nullptr) {
+      analyzer.set_progress_callback([callback, user_data](float progress, const char* stage) {
+        callback(progress, stage, user_data);
+      });
+    }
+    AnalysisResult result = analyzer.analyze();
+    *out_json = copy_string(analysis_result_to_json(result));
     return SONARE_OK;
   });
 }

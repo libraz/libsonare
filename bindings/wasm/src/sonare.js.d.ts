@@ -98,6 +98,8 @@ export interface WasmTimbreResult {
 
 export interface WasmDynamicsResult {
   dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
   loudnessRangeDb: number;
   crestFactor: number;
   isCompressed: boolean;
@@ -107,12 +109,22 @@ export interface WasmRhythmResult {
   syncopation: number;
   grooveType: string;
   patternRegularity: number;
+  tempoStability: number;
+  timeSignature: WasmTimeSignatureResult;
 }
 
 export interface WasmTimeSignatureResult {
   numerator: number;
   denominator: number;
   confidence: number;
+}
+
+export interface WasmMelodyContourResult {
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+  pitches: WasmMelodyPoint[];
 }
 
 export interface WasmAnalysisResult {
@@ -126,6 +138,7 @@ export interface WasmAnalysisResult {
   timbre: WasmTimbreResult;
   dynamics: WasmDynamicsResult;
   rhythm: WasmRhythmResult;
+  melody: WasmMelodyContourResult;
   form: string;
 }
 
@@ -1494,6 +1507,8 @@ export interface SonareModule {
     frameLength: number,
     hopLength: number,
     threshold: number,
+    usePyin: boolean,
+    center: boolean,
   ) => WasmMelodyResult;
   onsetEnvelope: (
     samples: Float32Array,

@@ -209,6 +209,11 @@ def detect_beats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]
 def detect_downbeats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def detect_onsets(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def analyze(samples: FloatSamples, sample_rate: int = 22050) -> AnalysisResult: ...
+def analyze_with_progress(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    on_progress: ProgressCallback | None = None,
+) -> AnalysisResult: ...
 def analyze_bpm(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -345,6 +350,8 @@ def analyze_melody(
     frame_length: int = 2048,
     hop_length: int = 256,
     threshold: float = 0.1,
+    use_pyin: bool = False,
+    center: bool = True,
 ) -> MelodyResult: ...
 def cqt(
     samples: FloatSamples,

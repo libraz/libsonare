@@ -363,6 +363,8 @@ export interface Timbre {
  */
 export interface Dynamics {
   dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
   loudnessRangeDb: number;
   crestFactor: number;
   isCompressed: boolean;
@@ -384,6 +386,19 @@ export interface RhythmFeatures {
   syncopation: number;
   grooveType: string;
   patternRegularity: number;
+  tempoStability: number;
+  timeSignature: TimeSignature;
+}
+
+/**
+ * Melody contour from the unified analysis (pitch trajectory + summary stats).
+ */
+export interface MelodyContour {
+  pitchRangeOctaves: number;
+  pitchStability: number;
+  meanFrequency: number;
+  vibratoRate: number;
+  pitches: MelodyPoint[];
 }
 
 /**
@@ -401,6 +416,7 @@ export interface AnalysisResult {
   timbre: Timbre;
   dynamics: Dynamics;
   rhythm: RhythmFeatures;
+  melody: MelodyContour;
   form: string;
 }
 

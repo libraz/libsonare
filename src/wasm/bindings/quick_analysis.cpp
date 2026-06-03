@@ -43,6 +43,25 @@ KeyProfileType keyProfileFromInt(int profile_type) {
   }
 }
 
+// Rejects an out-of-range chroma_method, mirroring the C ABI (only 0 = STFT and
+// 1 = NNLS are defined) instead of silently treating any non-1 value as STFT.
+void validateChromaMethod(int chroma_method) {
+  if (chroma_method != 0 && chroma_method != 1) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid chromaMethod (expected 0 = STFT or 1 = NNLS)");
+  }
+}
+
+// Rejects an out-of-range key root / mode, mirroring the C ABI's range checks
+// (PitchClass::C..B = [0, 11], Mode::Major..Locrian = [0, 6]) instead of
+// silently clamping garbage to C / Major via static_cast.
+void validateKey(int key_root, int key_mode) {
+  if (key_root < static_cast<int>(PitchClass::C) || key_root > static_cast<int>(PitchClass::B) ||
+      key_mode < static_cast<int>(Mode::Major) || key_mode > static_cast<int>(Mode::Locrian)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid key root or mode");
+  }
+}
+
 // Module-local mono/stereo runners. They delegate to the shared latency-
 // compensating helpers in `mastering::api::internal` so the WASM bridge,
 // `MasteringChain`, and `apply_named_processor` all go through the same
@@ -147,6 +166,8 @@ val analysisResultToVal(const AnalysisResult& result) {
   // Dynamics
   val dynamics = val::object();
   dynamics.set("dynamicRangeDb", result.dynamics.dynamic_range_db);
+  dynamics.set("peakDb", result.dynamics.peak_db);
+  dynamics.set("rmsDb", result.dynamics.rms_db);
   dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
   dynamics.set("crestFactor", result.dynamics.crest_factor);
   dynamics.set("isCompressed", result.dynamics.is_compressed);
@@ -157,7 +178,30 @@ val analysisResultToVal(const AnalysisResult& result) {
   rhythm.set("syncopation", result.rhythm.syncopation);
   rhythm.set("grooveType", result.rhythm.groove_type);
   rhythm.set("patternRegularity", result.rhythm.pattern_regularity);
+  rhythm.set("tempoStability", result.rhythm.tempo_stability);
+  val rhythmTimeSig = val::object();
+  rhythmTimeSig.set("numerator", result.rhythm.time_signature.numerator);
+  rhythmTimeSig.set("denominator", result.rhythm.time_signature.denominator);
+  rhythmTimeSig.set("confidence", result.rhythm.time_signature.confidence);
+  rhythm.set("timeSignature", rhythmTimeSig);
   out.set("rhythm", rhythm);
+
+  // Melody
+  val melody = val::object();
+  melody.set("pitchRangeOctaves", result.melody.pitch_range_octaves);
+  melody.set("pitchStability", result.melody.pitch_stability);
+  melody.set("meanFrequency", result.melody.mean_frequency);
+  melody.set("vibratoRate", result.melody.vibrato_rate);
+  val melodyPitches = val::array();
+  for (size_t i = 0; i < result.melody.pitches.size(); ++i) {
+    val pitch = val::object();
+    pitch.set("time", result.melody.pitches[i].time);
+    pitch.set("frequency", result.melody.pitches[i].frequency);
+    pitch.set("confidence", result.melody.pitches[i].confidence);
+    melodyPitches.call<void>("push", pitch);
+  }
+  melody.set("pitches", melodyPitches);
+  out.set("melody", melody);
 
   // Form
   out.set("form", result.form);
@@ -272,6 +316,14 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
                      float threshold, bool use_triads_only, int n_fft, int hop_length,
                      bool use_beat_sync, bool use_hmm, int hmm_beam_width, bool use_key_context,
                      int key_root, int key_mode, bool detect_inversions, int chroma_method) {
+  // Reject out-of-range enum-like fields up front, matching the C ABI's
+  // sonare_detect_chords_ex: chroma_method must be 0/1, and when key context is
+  // enabled the key root/mode must be in range (otherwise they are unused).
+  validateChromaMethod(chroma_method);
+  if (use_key_context) {
+    validateKey(key_root, key_mode);
+  }
+
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
@@ -301,6 +353,13 @@ val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sa
                                  bool use_triads_only, int n_fft, int hop_length,
                                  bool use_beat_sync, bool use_hmm, int hmm_beam_width,
                                  bool use_key_context, bool detect_inversions, int chroma_method) {
+  // Mirror the C ABI's sonare_chord_functional_analysis: chroma_method must be
+  // 0/1, and key_root/key_mode are range-checked unconditionally because they
+  // both drive the Roman-numeral labelling and (when use_key_context is set)
+  // the chord-detection key context, which share the same parameters here.
+  validateChromaMethod(chroma_method);
+  validateKey(key_root, key_mode);
+
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 

@@ -455,6 +455,16 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out) {
+  // Preserve the historical default contour: plain per-frame YIN, left-aligned
+  // (use_pyin = 0). center is irrelevant when use_pyin is 0.
+  return sonare_analyze_melody_ex(samples, length, sample_rate, fmin, fmax, frame_length,
+                                  hop_length, threshold, /*use_pyin=*/0, /*center=*/1, out);
+}
+
+SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sample_rate,
+                                     float fmin, float fmax, int frame_length, int hop_length,
+                                     float threshold, int use_pyin, int center,
+                                     SonareMelodyResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (fmin <= 0.0f || fmax <= fmin || frame_length <= 0 || hop_length <= 0 || threshold <= 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -469,6 +479,8 @@ SonareError sonare_analyze_melody(const float* samples, size_t length, int sampl
     config.frame_length = frame_length;
     config.hop_length = hop_length;
     config.threshold = threshold;
+    config.use_pyin = use_pyin != 0;
+    config.center = center != 0;
     MelodyAnalyzer analyzer(audio, config);
     const MelodyContour& contour = analyzer.contour();
     out->pitch_range_octaves = contour.pitch_range_octaves;

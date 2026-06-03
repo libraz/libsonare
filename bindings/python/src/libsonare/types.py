@@ -6,6 +6,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -222,6 +223,107 @@ class Beat:
 
 
 @dataclass(frozen=True, slots=True)
+class AnalysisDynamics:
+    """Dynamics summary embedded in :class:`AnalysisResult`."""
+
+    dynamic_range_db: float
+    peak_db: float
+    rms_db: float
+    crest_factor: float
+    loudness_range_db: float
+    is_compressed: bool
+
+    @property
+    def dynamicRangeDb(self) -> float:  # noqa: N802
+        return self.dynamic_range_db
+
+    @property
+    def peakDb(self) -> float:  # noqa: N802
+        return self.peak_db
+
+    @property
+    def rmsDb(self) -> float:  # noqa: N802
+        return self.rms_db
+
+    @property
+    def crestFactor(self) -> float:  # noqa: N802
+        return self.crest_factor
+
+    @property
+    def loudnessRangeDb(self) -> float:  # noqa: N802
+        return self.loudness_range_db
+
+    @property
+    def isCompressed(self) -> bool:  # noqa: N802
+        return self.is_compressed
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisTimbre:
+    """Timbre summary embedded in :class:`AnalysisResult`."""
+
+    brightness: float
+    warmth: float
+    density: float
+    roughness: float
+    complexity: float
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisRhythm:
+    """Rhythm summary embedded in :class:`AnalysisResult`."""
+
+    time_signature: TimeSignature
+    syncopation: float
+    groove_type: str
+    pattern_regularity: float
+    tempo_stability: float
+
+    @property
+    def timeSignature(self) -> TimeSignature:  # noqa: N802
+        return self.time_signature
+
+    @property
+    def grooveType(self) -> str:  # noqa: N802
+        return self.groove_type
+
+    @property
+    def patternRegularity(self) -> float:  # noqa: N802
+        return self.pattern_regularity
+
+    @property
+    def tempoStability(self) -> float:  # noqa: N802
+        return self.tempo_stability
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisMelody:
+    """Melody summary embedded in :class:`AnalysisResult`."""
+
+    pitch_range_octaves: float
+    pitch_stability: float
+    mean_frequency: float
+    vibrato_rate: float
+    pitches: list[MelodyPoint]
+
+    @property
+    def pitchRangeOctaves(self) -> float:  # noqa: N802
+        return self.pitch_range_octaves
+
+    @property
+    def pitchStability(self) -> float:  # noqa: N802
+        return self.pitch_stability
+
+    @property
+    def meanFrequency(self) -> float:  # noqa: N802
+        return self.mean_frequency
+
+    @property
+    def vibratoRate(self) -> float:  # noqa: N802
+        return self.vibrato_rate
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisResult:
     """Full audio analysis result."""
 
@@ -230,6 +332,15 @@ class AnalysisResult:
     key: Key
     time_signature: TimeSignature
     beat_times: list[float]
+    # Extended fields (populated when sonare_analyze_json is available).
+    beat_strengths: list[float] = dataclasses.field(default_factory=list)
+    chords: list[Chord] = dataclasses.field(default_factory=list)
+    sections: list[Section] = dataclasses.field(default_factory=list)
+    timbre: AnalysisTimbre | None = None
+    dynamics: AnalysisDynamics | None = None
+    rhythm: AnalysisRhythm | None = None
+    melody: AnalysisMelody | None = None
+    form: str = ""
 
     @property
     def bpmConfidence(self) -> float:  # noqa: N802
@@ -244,7 +355,16 @@ class AnalysisResult:
         return self.beat_times
 
     @property
+    def beatStrengths(self) -> list[float]:  # noqa: N802
+        return self.beat_strengths
+
+    @property
     def beats(self) -> list[Beat]:
+        if self.beat_strengths:
+            return [
+                Beat(time=t, strength=s)
+                for t, s in zip(self.beat_times, self.beat_strengths, strict=False)
+            ]
         return [Beat(time=t) for t in self.beat_times]
 
 
