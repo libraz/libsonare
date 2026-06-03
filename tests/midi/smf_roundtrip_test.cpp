@@ -1,0 +1,363 @@
+/// @file smf_roundtrip_test.cpp
+/// @brief MIDI core: Standard MIDI File import / export round-trip,
+///        running-status + meta-event coverage and malformed-input safety.
+
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "midi/midi_clip.h"
+#include "midi/smf.h"
+#include "midi/ump.h"
+#include "transport/tempo_map.h"
+
+namespace {
+
+using sonare::midi::export_smf;
+using sonare::midi::import_smf;
+using sonare::midi::MidiClip;
+using sonare::midi::SmfExportOptions;
+using sonare::midi::SmfImportResult;
+using sonare::midi::SmfStatus;
+using sonare::midi::Ump;
+
+// Appends a big-endian 32-bit value.
+void push_u32(std::vector<uint8_t>* v, uint32_t x) {
+  v->push_back(static_cast<uint8_t>((x >> 24) & 0xFF));
+  v->push_back(static_cast<uint8_t>((x >> 16) & 0xFF));
+  v->push_back(static_cast<uint8_t>((x >> 8) & 0xFF));
+  v->push_back(static_cast<uint8_t>(x & 0xFF));
+}
+
+void push_u16(std::vector<uint8_t>* v, uint16_t x) {
+  v->push_back(static_cast<uint8_t>((x >> 8) & 0xFF));
+  v->push_back(static_cast<uint8_t>(x & 0xFF));
+}
+
+void push_tag(std::vector<uint8_t>* v, const char* tag) {
+  for (int i = 0; i < 4; ++i) v->push_back(static_cast<uint8_t>(tag[i]));
+}
+
+void push_vlq(std::vector<uint8_t>* v, uint32_t value) {
+  uint8_t buf[5]{};
+  int n = 0;
+  buf[n++] = static_cast<uint8_t>(value & 0x7Fu);
+  while ((value >>= 7) != 0) {
+    buf[n++] = static_cast<uint8_t>((value & 0x7Fu) | 0x80u);
+  }
+  for (int i = n - 1; i >= 0; --i) v->push_back(buf[i]);
+}
+
+// Builds a known-good format-0 SMF with 480 PPQN containing:
+//   - set-tempo 500000 us/quarter (= 120 BPM)
+//   - time-signature 3/4
+//   - track name "lead"
+//   - a marker "verse"
+//   - note-on C4 (vel 100) at tick 0, note-off at tick 480 (= 1 quarter / 1 PPQ)
+//   - a control change exercising running status
+std::vector<uint8_t> make_known_smf() {
+  std::vector<uint8_t> body;
+  // delta 0, set-tempo 0xFF 0x51 0x03 07 A1 20 (500000).
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x51);
+  body.push_back(0x03);
+  body.push_back(0x07);
+  body.push_back(0xA1);
+  body.push_back(0x20);
+  // delta 0, time-signature 3/4: numerator 3, denom-power 2, clocks 24, 32nds 8.
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x58);
+  body.push_back(0x04);
+  body.push_back(0x03);
+  body.push_back(0x02);
+  body.push_back(0x18);
+  body.push_back(0x08);
+  // delta 0, track name "lead".
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x03);
+  body.push_back(0x04);
+  body.push_back('l');
+  body.push_back('e');
+  body.push_back('a');
+  body.push_back('d');
+  // delta 0, marker "verse".
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x06);
+  body.push_back(0x05);
+  body.push_back('v');
+  body.push_back('e');
+  body.push_back('r');
+  body.push_back('s');
+  body.push_back('e');
+  // delta 0, note-on ch0 note 60 vel 100 (0x90 0x3C 0x64).
+  body.push_back(0x00);
+  body.push_back(0x90);
+  body.push_back(0x3C);
+  body.push_back(0x64);
+  // delta 0, control change ch0 cc7 val 90 (0xB0 0x07 0x5A).
+  body.push_back(0x00);
+  body.push_back(0xB0);
+  body.push_back(0x07);
+  body.push_back(0x5A);
+  // delta 0, running-status CC cc10 val 64 (no status byte: 0x0A 0x40).
+  body.push_back(0x00);
+  body.push_back(0x0A);
+  body.push_back(0x40);
+  // delta 480 (VLQ 0x83 0x60), note-off ch0 note 60 vel 0 (0x80 0x3C 0x00).
+  body.push_back(0x83);
+  body.push_back(0x60);
+  body.push_back(0x80);
+  body.push_back(0x3C);
+  body.push_back(0x00);
+  // delta 0, end-of-track.
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);    // Format 0.
+  push_u16(&smf, 1);    // One track.
+  push_u16(&smf, 480);  // 480 PPQN.
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+std::vector<uint8_t> make_sysex_smf(const std::vector<uint8_t>& payload, uint32_t delta = 0) {
+  std::vector<uint8_t> body;
+  push_vlq(&body, delta);
+  body.push_back(0xF0);
+  push_vlq(&body, static_cast<uint32_t>(payload.size()));
+  body.insert(body.end(), payload.begin(), payload.end());
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+}  // namespace
+
+TEST_CASE("SMF import parses tempo, time-signature, names, markers and notes", "[midi]") {
+  const std::vector<uint8_t> smf = make_known_smf();
+  const SmfImportResult r = import_smf(smf);
+
+  REQUIRE(r.ok());
+  REQUIRE(r.format == 0);
+  REQUIRE(r.ticks_per_quarter == 480);
+
+  // Tempo: 500000 us/quarter -> 120 BPM.
+  REQUIRE(r.tempo_segments.size() == 1);
+  REQUIRE(r.tempo_segments[0].start_ppq == 0.0);
+  REQUIRE(r.tempo_segments[0].bpm > 119.9);
+  REQUIRE(r.tempo_segments[0].bpm < 120.1);
+
+  // Time signature 3/4.
+  REQUIRE(r.time_signatures.size() == 1);
+  REQUIRE(r.time_signatures[0].time_sig.numerator == 3);
+  REQUIRE(r.time_signatures[0].time_sig.denominator == 4);
+
+  // One clip with a track name and a marker.
+  REQUIRE(r.clips.size() == 1);
+  REQUIRE(r.clip_names.size() == 1);
+  REQUIRE(r.clip_names[0] == "lead");
+  REQUIRE(r.markers.size() == 1);
+  REQUIRE(r.markers[0].text == "verse");
+  REQUIRE(r.markers[0].ppq == 0.0);
+
+  // Events: note-on, 2 CC (one via running status), note-off = 4 channel events.
+  const auto& events = r.clips[0].events();
+  REQUIRE(events.size() == 4);
+
+  // The note-on sits at ppq 0 (alongside the two control changes, which
+  // MidiClip::sort_stable orders before the note-on at the same timestamp).
+  bool found_note_on_at_0 = false;
+  for (const auto& e : events) {
+    if (e.ump.is_note_on() && e.ump.note_number() == 60) {
+      REQUIRE(e.ppq == 0.0);
+      found_note_on_at_0 = true;
+    }
+  }
+  REQUIRE(found_note_on_at_0);
+
+  // Note-off appears at ppq 1.0 (480 ticks / 480 PPQN).
+  bool found_note_off_at_1 = false;
+  for (const auto& e : events) {
+    if (e.ump.is_note_off() && e.ump.note_number() == 60) {
+      REQUIRE(e.ppq == 1.0);
+      found_note_off_at_1 = true;
+    }
+  }
+  REQUIRE(found_note_off_at_1);
+
+  // Running status produced a second control-change event.
+  int cc_count = 0;
+  for (const auto& e : events) {
+    if (e.ump.status_nibble() == static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange)) {
+      ++cc_count;
+    }
+  }
+  REQUIRE(cc_count == 2);
+}
+
+TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
+  const std::vector<uint8_t> smf = make_known_smf();
+  const SmfImportResult imported = import_smf(smf);
+  REQUIRE(imported.ok());
+
+  // Export back to bytes (480 PPQN preserves the 480-tick note length exactly).
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf(imported.clips, imported.tempo_segments,
+                                   imported.time_signatures, imported.clip_names, opts);
+  REQUIRE(exported.ok());
+  REQUIRE_FALSE(exported.bytes.empty());
+
+  // Re-import the exported bytes.
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.format == 1);  // Export always writes format 1.
+  REQUIRE(round.ticks_per_quarter == 480);
+
+  // Tempo / time-signature survive.
+  REQUIRE(round.tempo_segments.size() == 1);
+  REQUIRE(round.tempo_segments[0].bpm > 119.9);
+  REQUIRE(round.tempo_segments[0].bpm < 120.1);
+  REQUIRE(round.time_signatures[0].time_sig.numerator == 3);
+  REQUIRE(round.time_signatures[0].time_sig.denominator == 4);
+
+  // Clip events match the original import exactly (UMP equality + ppq).
+  REQUIRE(round.clips.size() == imported.clips.size());
+  REQUIRE(round.clip_names.size() == imported.clip_names.size());
+  REQUIRE(round.clip_names[0] == "lead");
+
+  const auto& a = imported.clips[0].events();
+  const auto& b = round.clips[0].events();
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i].ppq == b[i].ppq);
+    REQUIRE(a[i].ump == b[i].ump);
+  }
+}
+
+TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]") {
+  const std::vector<uint8_t> payload = {0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  const SmfImportResult imported = import_smf(make_sysex_smf(payload, /*delta=*/240));
+
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 0);
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  REQUIRE(imported.clips[0].events()[0].ppq == 0.5);
+
+  const Ump& imported_ump = imported.clips[0].events()[0].ump;
+  REQUIRE(imported_ump.sysex_handle != 0);
+  REQUIRE(imported.sysex_store.size() == 1);
+  const std::vector<uint8_t>* imported_payload =
+      imported.sysex_store.lookup(imported_ump.sysex_handle);
+  REQUIRE(imported_payload != nullptr);
+  REQUIRE(*imported_payload == payload);
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  opts.sysex_store = &imported.sysex_store;
+  const auto exported = export_smf(imported.clips, imported.tempo_segments,
+                                   imported.time_signatures, imported.clip_names, opts);
+  REQUIRE(exported.ok());
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.skipped_events == 0);
+  REQUIRE(round.clips.size() == 1);
+  REQUIRE(round.clips[0].events().size() == 1);
+  REQUIRE(round.clips[0].events()[0].ppq == 0.5);
+
+  const Ump& round_ump = round.clips[0].events()[0].ump;
+  REQUIRE(round_ump.sysex_handle != 0);
+  const std::vector<uint8_t>* round_payload = round.sysex_store.lookup(round_ump.sysex_handle);
+  REQUIRE(round_payload != nullptr);
+  REQUIRE(*round_payload == payload);
+}
+
+TEST_CASE("SMF import rejects malformed and truncated input without crashing", "[midi]") {
+  SECTION("empty input") {
+    const SmfImportResult r = import_smf(nullptr, 0);
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(r.status == SmfStatus::kInvalidArgument);
+  }
+
+  SECTION("bad magic") {
+    std::vector<uint8_t> junk = {'X', 'X', 'X', 'X', 0, 0, 0, 6};
+    const SmfImportResult r = import_smf(junk);
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(r.status == SmfStatus::kBadHeader);
+  }
+
+  SECTION("format 2 unsupported") {
+    std::vector<uint8_t> smf;
+    push_tag(&smf, "MThd");
+    push_u32(&smf, 6);
+    push_u16(&smf, 2);  // Format 2.
+    push_u16(&smf, 1);
+    push_u16(&smf, 480);
+    const SmfImportResult r = import_smf(smf);
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(r.status == SmfStatus::kUnsupportedFormat);
+  }
+
+  SECTION("truncated header fields") {
+    std::vector<uint8_t> smf;
+    push_tag(&smf, "MThd");
+    push_u32(&smf, 6);
+    smf.push_back(0x00);  // Only one byte of the format word.
+    const SmfImportResult r = import_smf(smf);
+    REQUIRE_FALSE(r.ok());
+    // Either truncated or bad-header is acceptable; must not crash.
+    REQUIRE_FALSE(r.ok());
+  }
+
+  SECTION("truncated track body") {
+    std::vector<uint8_t> smf;
+    push_tag(&smf, "MThd");
+    push_u32(&smf, 6);
+    push_u16(&smf, 0);
+    push_u16(&smf, 1);
+    push_u16(&smf, 480);
+    push_tag(&smf, "MTrk");
+    push_u32(&smf, 100);  // Claims 100 bytes but provides none.
+    const SmfImportResult r = import_smf(smf);
+    REQUIRE_FALSE(r.ok());
+    REQUIRE(r.status == SmfStatus::kTruncated);
+  }
+
+  SECTION("fuzzy prefix bytes never crash") {
+    // Walk a few truncations of the known-good buffer; none may crash / OOB.
+    const std::vector<uint8_t> good = make_known_smf();
+    for (size_t cut = 0; cut < good.size(); cut += 3) {
+      std::vector<uint8_t> partial(good.begin(), good.begin() + cut);
+      const SmfImportResult r = import_smf(partial);
+      // No assertion on status — only that the call returns (no crash / OOB).
+      (void)r;
+    }
+    SUCCEED();
+  }
+}
