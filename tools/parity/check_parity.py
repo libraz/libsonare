@@ -50,6 +50,32 @@ def _repo_root() -> Path:
     return _HERE.parent.parent
 
 
+def run(
+    root: Path | None = None,
+    allowlist_path: Path | None = None,
+    core_map_path: Path | None = None,
+    selected: list[str] | None = None,
+):
+    """Build and return the parity :class:`compare.Report` for ``root``.
+
+    The reusable core of :func:`main` (no argv parsing / no printing), so callers
+    and tests can inspect findings directly. C is always included; surface order
+    is canonicalized.
+    """
+    root = root or _repo_root()
+    allow = allowlist_mod.load(allowlist_path or (_HERE / "allowlist.toml"))
+    core_configs = core_defaults.load(core_map_path or (_HERE / "core_map.toml"), root)
+
+    selected = list(selected or SURFACES)
+    if "c" not in selected:
+        selected = ["c", *selected]
+    selected = [s for s in SURFACES if s in selected]
+
+    extractions = {s: _EXTRACTORS[s](root) for s in selected}
+    wasm_int = wasm_internal.extract(root) if "wasm" in selected else None
+    return compare.build_report(extractions, allow, selected, core_configs, wasm_int)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
@@ -89,19 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     # Preserve canonical surface order.
     selected = [s for s in SURFACES if s in selected]
 
-    allow = allowlist_mod.load(args.allowlist)
-    core_configs = core_defaults.load(args.core_map, args.root)
-
-    extractions = {}
-    for s in selected:
-        extractions[s] = _EXTRACTORS[s](args.root)
-
-    # The WASM-internal consistency check cross-validates the WASM binding's own
-    # three files (embind -> SonareModule type -> index.ts facade); only run it
-    # when the WASM surface is in scope.
-    wasm_int = wasm_internal.extract(args.root) if "wasm" in selected else None
-
-    rep = compare.build_report(extractions, allow, selected, core_configs, wasm_int)
+    rep = run(args.root, args.allowlist, args.core_map, selected)
 
     if args.json:
         print(report_mod.to_json(rep))

@@ -164,6 +164,18 @@ node = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  # --- Internal default-struct seeders (no public facade member) ---
+  # *_default fns fill a C options/config POD with the documented defaults. The
+  # facades apply the identical defaults inline (or via a typed config object /
+  # dataclass) and never call the seeder, so there is no 1:1 facade member.
+  "engine_bounce_options_default",
+  "stream_analyzer_config_default",
+  "stream_quantize_config_default",
+  # External-instrument bounce is deliberately Python-only: Node batch jobs never
+  # play instruments, and a synchronous JS render callback fired from deep in the
+  # offline graph overflows V8's shared C++/JS stack. The interactive/native path
+  # is served by built-in instruments, not host callbacks. (See _project.py.)
+  "project_bounce_with_instruments",
 ]
 wasm = [
   "detect_chords_ex",
@@ -200,6 +212,29 @@ wasm = [
   # Aggregate ABI-version accessor: exposed on Node/Python; the WASM module
   # reports versions through its own module metadata.
   "abi_version",
+  # --- Internal default-struct seeders (see node note above) ---
+  "engine_bounce_options_default",
+  "stream_analyzer_config_default",
+  "stream_quantize_config_default",
+  # --- WASM platform / API-shape differences ---
+  # No host filesystem and no compressed-audio decoder in the WASM build: the
+  # WASM Audio class is a pure-JS sample wrapper constructed via Audio.fromBuffer.
+  # (sonare_audio_from_file is #ifndef __EMSCRIPTEN__-excluded in core_audio.cpp.)
+  "audio_from_file",
+  "audio_from_memory",
+  # Audio data/length/duration ARE exposed as WASM `get data/length/duration`
+  # accessors (audio.ts); the WASM TS extractor does not parse get-accessor
+  # syntax, so they read as missing. Capability is present.
+  "audio_data",
+  "audio_length",
+  "audio_duration",
+  # External-instrument bounce is Python-only by design (see node note); WASM is
+  # additionally single-threaded and cannot host a synchronous render callback.
+  "project_bounce_with_instruments",
+  # WASM exposes a zero-copy planar realtime path (getPlanarChannelBuffer +
+  # processPreparedPlanar) suited to AudioWorklet instead of a copy-in
+  # process_planar_stereo(left, right); same capability, AudioWorklet-shaped API.
+  "realtime_voice_changer_process_planar_stereo",
 ]
 python = [
   "detect_chords_ex",
@@ -235,6 +270,12 @@ python = [
   "analyze_json",
   "analyze_json_with_progress",
   "analyze_melody_ex",
+  # --- Internal default-struct seeders (see node note above) ---
+  # The Python facade calls these inside its constructors/dataclasses to seed
+  # defaults; they are not re-exposed as standalone public methods.
+  "engine_bounce_options_default",
+  "stream_analyzer_config_default",
+  "stream_quantize_config_default",
 ]
 
 # ---------------------------------------------------------------------------

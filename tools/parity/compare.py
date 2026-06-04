@@ -121,10 +121,69 @@ _HANDLE_FULL_PREFIXES = (
     "audio_",
     # SonareProject handle: e.g. ``project_split_clip`` -> facade ``Project``
     # method ``split_clip`` / ``splitClip``. Ops renamed on the facade
-    # (serialize -> to_json, deserialize -> from_json, create -> ctor) stay
-    # uncredited but remain informational via the ``project`` handle prefix.
+    # (serialize -> to_json, deserialize -> from_json, create -> ctor) are
+    # credited via ``_ALIAS_COVERAGE`` / ``_is_lifecycle_key`` below.
     "project_",
 )
+
+
+def _is_lifecycle_key(key: str) -> bool:
+    """A C op every facade expresses through its OBJECT MODEL, not a free fn.
+
+    Constructors (``*_create`` / ``*_create_json``), destructors (``*_destroy``)
+    and heap/buffer release helpers (``free_*`` / ``*_free`` / ``*_free_*``) have
+    no free-function facade counterpart by design — the facades construct via a
+    class constructor and release via GC / RAII. These are reported
+    informationally, never gated (a "missing" one is not a coverage bug).
+    """
+    return (
+        key.startswith("free_")
+        or key.endswith("_free")
+        or "_free_" in key
+        or key.endswith("_create")
+        or key.endswith("_create_json")
+        or key.endswith("_destroy")
+    )
+
+
+# Explicit alias map for handle ops whose capability IS exposed on the facades
+# under a DIFFERENT canonical name (an idiomatic rename, NOT an omission). Each
+# C key maps to the facade canonical key(s) delivering the same capability;
+# coverage is credited when ANY listed alias is present as a method / free
+# function on the surface. Kept EXPLICIT (not a fuzzy ``get_``/``set_``/``_json``
+# transform) so a getter is never silently matched to a setter — every entry is
+# anchored to a verified facade member. canonical_key folds camelCase to snake,
+# so one alias serves Python (``data``), Node (``getData``->``get_data``) and
+# WASM (``setConfig``->``set_config``) alike.
+_ALIAS_COVERAGE = {
+    # Accessors exposed as bare properties or get-prefixed getters.
+    "audio_data": ("data", "get_data"),
+    "audio_length": ("length", "get_length"),
+    "audio_duration": ("duration", "get_duration"),
+    "engine_get_transport_state": ("transport_state",),
+    "mixer_get_strip_count": ("strip_count",),
+    "realtime_voice_changer_get_config": ("config", "config_json", "config_pod"),
+    # Whole-object JSON serialize/deserialize -> to_json / from_json.
+    "project_serialize": ("to_json",),
+    "project_deserialize": ("from_json",),
+    # JSON-config setter -> the typed set_config the facades expose.
+    "realtime_voice_changer_set_config_json": ("set_config",),
+    # Standalone preset validator (the facade reorders the name to lead with the
+    # verb): validate_realtime_voice_changer_preset_json.
+    "realtime_voice_changer_validate_preset_json": (
+        "validate_realtime_voice_changer_preset_json",
+    ),
+    # Quantized read _ex variants -> the public read_frames_{i16,u8}.
+    "stream_analyzer_read_frames_i16_ex": ("read_frames_i16",),
+    "stream_analyzer_read_frames_u8_ex": ("read_frames_u8",),
+    # Progress-callback mastering variants -> base fn with an optional callback.
+    "master_audio_with_progress": ("master_audio",),
+    "master_audio_stereo_with_progress": ("master_audio_stereo",),
+    # Sidechain EQ -> the mono/stereo-specific setters the facades expose.
+    "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
+    # Plural builtin-instrument bounce -> singular facade method (one or many).
+    "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
+}
 
 
 @dataclass
@@ -264,26 +323,39 @@ def build_report(
                 stripped in method_keys.get(s, set()) or stripped in indexed.get(s, {})
             ):
                 continue
+            # Idiomatic rename: the capability is exposed under a different
+            # canonical name (verified alias). Credit it when any listed alias is
+            # present as a method / free function on this surface.
+            aliases = _ALIAS_COVERAGE.get(key)
+            if aliases and any(
+                a in method_keys.get(s, set()) or a in indexed.get(s, {})
+                for a in aliases
+            ):
+                continue
             if allow.coverage_ok(key, s):
                 rep.findings.append(Finding("coverage", key, s, "", allowlisted=True))
                 continue
-            # C memory-management helper (``free_floats`` / ``free_*_result`` /
-            # ``free_stream_*``): a heap-result / buffer release helper with NO
-            # facade counterpart by design (the facades free via GC / RAII).
-            # Report it as informational, never an active gap.
-            is_free_helper = key.startswith("free_")
-            # Informational when: handle/class API (matched as methods elsewhere),
-            # a memory-management helper, or the CLI surface (curated subset).
-            informational = is_handle or is_free_helper or s == "cli"
-            if is_free_helper:
+            # Constructors / destructors / heap-release helpers are handled by the
+            # facade object model (ctor / GC / RAII), not a free function. Report
+            # them informationally, never as an active gap.
+            is_lifecycle = _is_lifecycle_key(key)
+            # GATING: a handle/class op that is neither aliased, lifecycle, nor
+            # allowlisted is a REAL cross-binding gap and counts toward failure --
+            # this is what catches a new C op wired on some facades but not others.
+            # Lifecycle helpers and the curated CLI surface stay informational.
+            informational = is_lifecycle or s == "cli"
+            if is_lifecycle:
                 msg = (
-                    f"C memory-management helper '{key}' not exposed in {s} "
-                    "(facade uses GC/RAII)"
+                    f"C lifecycle/memory helper '{key}' has no free-function "
+                    f"counterpart in {s} (facade uses constructor / GC / RAII)"
                 )
-            elif is_handle:
-                msg = f"C handle/class function '{key}' not exposed as {s} method/function"
             elif s == "cli":
                 msg = f"C function '{key}' not exposed by the (curated) CLI"
+            elif is_handle:
+                msg = (
+                    f"C handle/class op '{key}' is not exposed on the {s} facade "
+                    "(no method, prefix-strip, or alias match)"
+                )
             else:
                 msg = f"C function '{key}' is not exposed in {s}"
             rep.findings.append(

@@ -1,13 +1,20 @@
-"""Extract the Python surface from .pyi stubs via the stdlib ``ast`` module.
+"""Extract the Python surface from .pyi stubs / .py modules via stdlib ``ast``.
 
 We parse the type stubs (``analyzer.pyi``, ``audio.pyi``, ``engine.pyi``) which
-carry the real signatures (names, annotations, defaults). The ``__init__.pyi``
-is just re-exports, so it is parsed only to know the public symbol set.
+carry the richest signatures (Literal enums, documented defaults), then parse the
+matching implementation modules (``analyzer.py``, ``audio.py``, ``engine.py``)
+and the facade modules that have no ``.pyi`` at all (``streaming.py``,
+``_effects.py``, ``_mixing.py``, ``_mastering.py``, ``_analysis.py``,
+``_features.py``, ``_acoustic.py``, ``_conversions.py``, ``_project.py``).
 
-The headless-arrangement ``Project`` surface lives in ``_project.py`` (an inline
-type-annotated module with no separate ``.pyi`` stub), so that module is parsed
-too. ``ast`` reads signatures only — function bodies are ignored — so reading the
-implementation ``.py`` yields the same surface a stub would.
+Order matters: stubs are listed FIRST so their signatures win the index for keys
+they cover, and the ``.py`` implementations are listed AFTER to backfill members
+the stubs lag on (the hand-written stubs drift from the inline-typed
+implementations — e.g. ``engine.pyi`` long missed ``push_midi_cc`` /
+``clear_parameters``). ``ast`` reads signatures only (bodies are ignored), so
+reading a ``.py`` yields the same surface a stub would; without these modules the
+checker was blind to whole facade classes (the StreamAnalyzer / mixing / effects
+method sets), reporting them as phantom handle-coverage gaps.
 
 Methods on classes (``Audio``, ``Mixer``, ``Project``, ...) are emitted too;
 their ``self`` parameter is marked structural.
@@ -110,7 +117,27 @@ def _walk(node: ast.AST, ex: Extraction, file: str, class_prefix: str = "") -> N
 def extract(root: Path) -> Extraction:
     ex = Extraction(surface="python")
     base = root / "bindings" / "python" / "src" / "libsonare"
-    for fname in ("analyzer.pyi", "audio.pyi", "engine.pyi", "_project.py"):
+    for fname in (
+        # .pyi stubs are parsed FIRST so their richer signatures (Literal enums,
+        # documented defaults) win the index for shared keys; the matching .py
+        # implementations are parsed AFTER to backfill methods the stubs lag on
+        # (the stubs drift from the inline-typed implementations over time).
+        "analyzer.pyi",
+        "audio.pyi",
+        "engine.pyi",
+        "analyzer.py",
+        "audio.py",
+        "engine.py",
+        "_project.py",
+        "streaming.py",
+        "_effects.py",
+        "_mixing.py",
+        "_mastering.py",
+        "_analysis.py",
+        "_features.py",
+        "_acoustic.py",
+        "_conversions.py",
+    ):
         path = base / fname
         if not path.exists():
             continue
