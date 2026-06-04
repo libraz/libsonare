@@ -641,6 +641,7 @@ if(BUILD_ARRANGEMENT)
     midi/clock_sync.cpp
     midi/capture.cpp
     midi/builtin_synth.cpp
+    midi/synth/envelope.cpp
   )
   target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
