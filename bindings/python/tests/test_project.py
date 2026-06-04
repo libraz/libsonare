@@ -14,7 +14,13 @@ import math
 import numpy as np
 import pytest
 
-from libsonare import BuiltinSynthConfig, ExternalInstrument, Project, project_abi_version
+from libsonare import (
+    BuiltinSynthConfig,
+    ExternalInstrument,
+    Project,
+    SonareError,
+    project_abi_version,
+)
 from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
 from libsonare._runtime import _get_lib
 
@@ -362,8 +368,10 @@ def test_undo_restores_serialized_bytes_and_redo_reapplies() -> None:
 def test_undo_on_empty_stack_raises() -> None:
     project = Project()
     try:
-        with pytest.raises(RuntimeError):
+        with pytest.raises(SonareError) as exc:
             project.undo()
+        assert exc.value.code != 0
+        assert str(exc.value).startswith(f"[{exc.value.code}] ")
     finally:
         project.close()
 

@@ -20,7 +20,7 @@ def test_mel_inverse_roundtrip():
     n_fft = 2048
     hop = 512
     n_mels = 128
-    audio = _sine(sr, 440.0, sr)  # 1 second
+    audio = _sine(sr // 4, 440.0, sr)  # 0.25 s — Griffin-Lim cost scales with frames
 
     mel = ls.mel_spectrogram(audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels)
     n_frames = mel.n_frames
@@ -45,7 +45,7 @@ def test_mfcc_inverse_roundtrip():
     n_fft = 2048
     hop = 512
     n_mels = 128
-    audio = _sine(sr, 220.0, sr)
+    audio = _sine(sr // 4, 220.0, sr)  # 0.25 s — see mel roundtrip above
 
     mf = ls.mfcc(audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mfcc=20)
     n_frames = mf.n_frames

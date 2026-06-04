@@ -81,7 +81,32 @@ def _generate_test_signal(sample_rate: int = 22050, duration: float = 4.0) -> li
     return out
 
 
-def test_analyze_returns_extended_fields() -> None:
+@pytest.fixture(scope="module")
+def analyze_result():
+    """One full analyze() pass shared by every shape/type assertion below.
+
+    The full pipeline takes seconds even on a 4 s signal; the tests in this
+    module only inspect different facets of the same deterministic result, so
+    computing it once keeps the default suite fast.
+    """
+    return libsonare.analyze(_generate_test_signal(), sample_rate=22050)
+
+
+@pytest.fixture(scope="module")
+def progress_result():
+    """One analyze_with_progress() pass plus its recorded callback calls."""
+    calls: list[tuple[float, str]] = []
+
+    def _on_progress(progress: float, stage: str) -> None:
+        calls.append((progress, stage))
+
+    result = libsonare.analyze_with_progress(
+        _generate_test_signal(), sample_rate=22050, on_progress=_on_progress
+    )
+    return result, calls
+
+
+def test_analyze_returns_extended_fields(analyze_result) -> None:
     """analyze() returns the full set of fields with correct types."""
     from libsonare import (
         AnalysisDynamics,
@@ -94,8 +119,7 @@ def test_analyze_returns_extended_fields() -> None:
     )
     from libsonare.types import Mode, PitchClass
 
-    samples = _generate_test_signal()
-    result = libsonare.analyze(samples, sample_rate=22050)
+    result = analyze_result
 
     assert isinstance(result, AnalysisResult)
 
@@ -124,22 +148,20 @@ def test_analyze_returns_extended_fields() -> None:
 
 
 @requires_json
-def test_analyze_beat_strengths_align_with_beat_times() -> None:
+def test_analyze_beat_strengths_align_with_beat_times(analyze_result) -> None:
     """beat_strengths has the same length as beat_times (JSON path)."""
-    samples = _generate_test_signal()
-    result = libsonare.analyze(samples, sample_rate=22050)
+    result = analyze_result
     assert len(result.beat_strengths) == len(result.beat_times)
     assert all(isinstance(s, float) for s in result.beat_strengths)
 
 
 @requires_json
-def test_analyze_sub_result_types() -> None:
+def test_analyze_sub_result_types(analyze_result) -> None:
     """The JSON-decoded sub-results expose the expected scalar fields."""
     from libsonare import Chord, Section
     from libsonare.types import PitchClass, SectionType
 
-    samples = _generate_test_signal()
-    result = libsonare.analyze(samples, sample_rate=22050)
+    result = analyze_result
 
     # Timbre / dynamics / rhythm scalar shapes.
     assert isinstance(result.timbre.brightness, float)
@@ -201,17 +223,11 @@ def test_analyze_melody_center_flag_runs() -> None:
 
 
 @requires_json_progress
-def test_analyze_with_progress_invokes_callback() -> None:
+def test_analyze_with_progress_invokes_callback(progress_result) -> None:
     """analyze_with_progress fires the callback and returns a rich result."""
     from libsonare import AnalysisResult
 
-    samples = _generate_test_signal()
-    calls: list[tuple[float, str]] = []
-
-    def _on_progress(progress: float, stage: str) -> None:
-        calls.append((progress, stage))
-
-    result = libsonare.analyze_with_progress(samples, sample_rate=22050, on_progress=_on_progress)
+    result, calls = progress_result
 
     assert isinstance(result, AnalysisResult)
     assert len(calls) > 0
@@ -225,17 +241,17 @@ def test_analyze_with_progress_no_callback() -> None:
     """analyze_with_progress works with on_progress=None (null callback)."""
     from libsonare import AnalysisResult
 
-    samples = _generate_test_signal()
+    # A short signal suffices: only the NULL-callback code path is under test.
+    samples = _generate_test_signal(duration=1.0)
     result = libsonare.analyze_with_progress(samples, sample_rate=22050)
     assert isinstance(result, AnalysisResult)
 
 
 @requires_json_progress
-def test_analyze_with_progress_matches_analyze_shape() -> None:
+def test_analyze_with_progress_matches_analyze_shape(analyze_result, progress_result) -> None:
     """analyze_with_progress returns the same-shaped result as analyze()."""
-    samples = _generate_test_signal()
-    a = libsonare.analyze(samples, sample_rate=22050)
-    b = libsonare.analyze_with_progress(samples, sample_rate=22050)
+    a = analyze_result
+    b, _ = progress_result
 
     # Same field presence / list lengths align (deterministic on identical input).
     assert len(a.beat_times) == len(b.beat_times)

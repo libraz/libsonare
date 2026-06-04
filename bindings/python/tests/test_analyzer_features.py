@@ -290,6 +290,7 @@ def test_chroma() -> None:
     assert len(result.mean_energy) == 12
 
 
+@pytest.mark.slow  # bass_chroma's low-frequency CQT (~10 s); run via `make test-python-slow`
 def test_chroma_cens_and_bass_chroma() -> None:
     from libsonare import bass_chroma, chroma_cens
 

@@ -1352,12 +1352,6 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
 
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
-    if len(source) != len(reference):
-        # The library requires matching lengths; surface a clear error.
-        raise ValueError(
-            f"source ({len(source)}) and reference ({len(reference)}) "
-            "lengths must match for pair analysis"
-        )
     result_json = mastering_pair_analyze(args.analysis, source, reference, sample_rate=sr)
     # The library returns a JSON string regardless of --json; print it as-is.
     print(result_json)

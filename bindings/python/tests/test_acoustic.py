@@ -96,6 +96,7 @@ def test_estimate_room_round_trips_a_known_shoebox() -> None:
 
 
 @acoustic
+@pytest.mark.slow  # two full RIR syntheses (~10 s); run via `make test-python-slow`
 def test_room_morph_adds_a_target_tail_and_is_deterministic() -> None:
     # A short impulse-like recording morphed toward a live target room.
     samples = [0.0] * 4000

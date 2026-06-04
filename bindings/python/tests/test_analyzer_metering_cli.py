@@ -54,7 +54,8 @@ def test_nnls_chroma() -> None:
     """nnls_chroma returns a row-major 12 x n_frames matrix."""
     from libsonare import nnls_chroma
 
-    samples = _generate_sine(440, 22050, 2.0)
+    # 0.5 s keeps the NNLS solve (the dominant cost) fast without losing coverage.
+    samples = _generate_sine(440, 22050, 0.5)
     n_frames, data = nnls_chroma(samples, sample_rate=22050)
     assert n_frames > 0
     assert len(data) == 12 * n_frames
@@ -111,7 +112,8 @@ def test_audio_nnls_chroma() -> None:
     """Audio.nnls_chroma returns a row-major 12 x n_frames matrix."""
     from libsonare import Audio
 
-    audio = Audio.from_buffer(_generate_sine(440, 22050, 2.0), sample_rate=22050)
+    # Wrapper-only check — the algorithm itself is covered by test_nnls_chroma.
+    audio = Audio.from_buffer(_generate_sine(440, 22050, 0.5), sample_rate=22050)
     n_frames, data = audio.nnls_chroma()
     assert n_frames > 0
     assert len(data) == 12 * n_frames
@@ -173,7 +175,8 @@ def test_cli_new_commands_smoke(command: str) -> None:
     """New CLI subcommands run end-to-end on a synthetic WAV and emit JSON."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone.wav")
-        _write_test_wav(wav_path, _generate_sine(440, 22050, 2.0), 22050)
+        # Smoke only (exit code + JSON emitted); 0.5 s keeps nnls-chroma cheap.
+        _write_test_wav(wav_path, _generate_sine(440, 22050, 0.5), 22050)
 
         result = _run_cli([command, wav_path, "--json"])
         assert result.returncode == 0, result.stderr

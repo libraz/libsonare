@@ -133,12 +133,17 @@ def test_detect_onsets_function() -> None:
 ## Analyze with real signal
 
 
-def test_analyze_with_signal() -> None:
-    """analyze returns meaningful results for a real signal."""
+@pytest.fixture(scope="module")
+def analyze_sine_result():
+    """Full analyze() on a 4 s sine, shared by the result-shape tests below."""
     from libsonare import analyze
 
-    tone = _generate_sine(440, 22050, 4.0)
-    result = analyze(tone, sample_rate=22050)
+    return analyze(_generate_sine(440, 22050, 4.0), sample_rate=22050)
+
+
+def test_analyze_with_signal(analyze_sine_result) -> None:
+    """analyze returns meaningful results for a real signal."""
+    result = analyze_sine_result
     assert result.bpm > 0
     assert result.bpm_confidence >= 0.0
     assert result.bpm_confidence <= 1.0
@@ -397,13 +402,12 @@ def test_two_tone_chroma() -> None:
 ## Type validation
 
 
-def test_analysis_result_types() -> None:
+def test_analysis_result_types(analyze_sine_result) -> None:
     """AnalysisResult fields have correct types."""
-    from libsonare import PitchClass, analyze
+    from libsonare import PitchClass
     from libsonare.types import Mode
 
-    tone = _generate_sine(440, 22050, 4.0)
-    result = analyze(tone, sample_rate=22050)
+    result = analyze_sine_result
     assert isinstance(result.bpm, float)
     assert isinstance(result.bpm_confidence, float)
     assert isinstance(result.key.root, PitchClass)
