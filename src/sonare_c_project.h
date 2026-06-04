@@ -835,13 +835,15 @@ typedef struct {
 
 /// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
 ///        the given destinations through a GS-compatible SoundFont player fed
-///        by the project's loaded SoundFont (@ref sonare_project_load_soundfont
-///        must succeed first when @p instrument_count > 0; otherwise
-///        SONARE_ERROR_INVALID_STATE). Each bound player is multitimbral (16
-///        MIDI channels, channel 10 drums via bank 128, GS NRPN part edits and
-///        GS/GM SysEx resets honored); programs the SoundFont does not cover
-///        are silent (see @ref sonare_project_soundfont_manifest).
-///        Deterministic for a fixed project + options + SoundFont + patch.
+///        by the project's loaded SoundFont (@ref
+///        sonare_project_load_soundfont). Each bound player is multitimbral
+///        (16 MIDI channels, channel 10 drums via bank 128, GS NRPN part
+///        edits and GS/GM SysEx resets honored); programs the SoundFont does
+///        not cover — including bouncing with no SoundFont loaded at all —
+///        play through the built-in synthesizer GM fallback bank (the
+///        data-free floor; see @ref sonare_project_soundfont_manifest for the
+///        per-program backend). Deterministic for a fixed project + options +
+///        SoundFont + patch.
 SonareError sonare_project_bounce_with_sf2_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,

@@ -2118,10 +2118,12 @@ class Project:
 
         Like :meth:`bounce_with_builtin_instrument`, but each bound destination
         renders through a GS-compatible SoundFont player fed by the project's
-        loaded SoundFont (:meth:`load_soundfont` must succeed first): 16 MIDI
-        channels per player, channel 10 drums via bank 128, GS NRPN part edits
-        and GS/GM SysEx resets honored. Programs the SoundFont does not cover
-        are silent (see :meth:`soundfont_manifest`).
+        loaded SoundFont (:meth:`load_soundfont`): 16 MIDI channels per player,
+        channel 10 drums via bank 128, GS NRPN part edits and GS/GM SysEx
+        resets honored. Programs the SoundFont does not cover — including
+        bouncing with no SoundFont loaded at all — play through the built-in
+        synthesizer GM fallback bank (the data-free floor; see
+        :meth:`soundfont_manifest` for the per-program backend).
 
         Args:
             instrument: Patch bound to ``destination_id`` (default 0). Pass

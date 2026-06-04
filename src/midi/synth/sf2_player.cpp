@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "midi/builtin_synth.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/ump.h"
 
 namespace sonare::midi::synth {
@@ -60,33 +61,40 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
       }
     }
   }
-  if (prepared_) {
-    const float release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_));
-    tail_samples_ = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
+  if (prepared_) recompute_tail();
+}
+
+void Sf2Player::recompute_tail() noexcept {
+  const float release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_));
+  tail_samples_ = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
+  if (config_.synth_fallback) {
+    tail_samples_ = std::max(tail_samples_, DahdsrEnvelope::release_tail_samples(
+                                                sample_rate_, gm_fallback_max_release_ms()));
   }
+#if defined(SONARE_MIDI_WITH_FX)
+  // The note tail rings first, the effect tail decays after it.
+  if (effects_ != nullptr) tail_samples_ += effects_->tail_samples(sample_rate_);
+#endif
 }
 
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   pool_.prepare(config_.polyphony);
+  fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
   reset_all_state(/*reverb_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
-  const float release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_));
-  tail_samples_ = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
 #if defined(SONARE_MIDI_WITH_FX)
-  if (effects_ != nullptr) {
-    effects_->prepare(sample_rate_);
-    // The note tail rings first, the effect tail decays after it.
-    tail_samples_ += effects_->tail_samples(sample_rate_);
-  }
+  if (effects_ != nullptr) effects_->prepare(sample_rate_);
 #endif
+  recompute_tail();
   prepared_ = true;
 }
 
 void Sf2Player::reset() {
   pool_.reset();
+  fallback_pool_.reset();
   reset_all_state(/*reverb_send_default=*/0);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
@@ -174,10 +182,15 @@ int Sf2Player::resolve_preset(uint16_t bank, uint8_t program) const noexcept {
 }
 
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
-  if (!prepared_ || soundfont_ == nullptr) return;
+  if (!prepared_) return;
   const ChannelState& ch = channels_[channel & 0x0Fu];
-  const int preset_idx = resolve_preset(effective_bank(channel), ch.program);
-  if (preset_idx < 0) return;
+  // No SoundFont / uncovered program -> the data-free synth floor.
+  const int preset_idx =
+      soundfont_ != nullptr ? resolve_preset(effective_bank(channel), ch.program) : -1;
+  if (preset_idx < 0) {
+    if (config_.synth_fallback) fallback_note_on(channel, note, velocity);
+    return;
+  }
   const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_idx)];
   const auto& instruments = soundfont_->instruments();
   const float* pool_data = soundfont_->sample_pool().data();
@@ -235,10 +248,26 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
   }
 }
 
+void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
+  const ChannelState& ch = channels_[channel & 0x0Fu];
+  const NativeSynthPatch& patch = ch.drums ? gm_fallback_drum_patch(note)
+                                           : gm_fallback_patch(effective_bank(channel), ch.program);
+  NativeSynthVoice* voice = fallback_pool_.allocate(channel & 0x0Fu, note);
+  if (voice == nullptr) return;
+  const uint32_t voice_index = static_cast<uint32_t>(voice - fallback_pool_.data());
+  voice->start(patch, sample_rate_, velocity, voice_index);
+}
+
 void Sf2Player::note_off(uint8_t channel, uint8_t note) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   for (Sf2Voice& v : pool_) {
+    if (v.active && v.note == note && v.channel == ch && v.key_down) {
+      v.key_down = false;
+      if (!channels_[ch].sustain) v.release();
+    }
+  }
+  for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.note == note && v.channel == ch && v.key_down) {
       v.key_down = false;
       if (!channels_[ch].sustain) v.release();
@@ -255,6 +284,9 @@ void Sf2Player::sustain_pedal(uint8_t channel, bool down) noexcept {
   for (Sf2Voice& v : pool_) {
     if (v.active && v.channel == ch && !v.key_down && !v.releasing) v.release();
   }
+  for (NativeSynthVoice& v : fallback_pool_) {
+    if (v.active && v.channel == ch && !v.key_down && !v.releasing) v.release();
+  }
 }
 
 void Sf2Player::all_notes_off(uint8_t channel) noexcept {
@@ -262,6 +294,12 @@ void Sf2Player::all_notes_off(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
   for (Sf2Voice& v : pool_) {
+    if (v.active && v.channel == ch && !v.releasing) {
+      v.key_down = false;
+      v.release();
+    }
+  }
+  for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
       v.release();
@@ -279,6 +317,9 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
       v.active = false;
       v.releasing = false;
     }
+  }
+  for (NativeSynthVoice& v : fallback_pool_) {
+    if (v.active && v.channel == ch) v.kill();
   }
 }
 
@@ -551,6 +592,40 @@ void Sf2Player::render_chunk(int n) noexcept {
         if (cs > 0.0f) {
           cho_l[i] += l * cs;
           cho_r[i] += r * cs;
+        }
+        if (mod.delay_send > 0.0f) {
+          dly_l[i] += l * mod.delay_send;
+          dly_r[i] += r * mod.delay_send;
+        }
+      }
+#endif
+    }
+    // Synth-fallback voices: same bus routing, channel-level (CC) sends only
+    // (no zone send generators).
+    for (NativeSynthVoice& v : fallback_pool_) {
+      if (!v.active) continue;
+      const uint8_t part = v.channel & 0x0Fu;
+      const Sf2ChannelMod& mod = channel_mods_[part];
+      const float s = v.render(mod);
+      const float l = s * v.gain_left;
+      const float r = s * v.gain_right;
+      if (any_insert_) {
+        float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+        bus[i] += l;
+        bus[kChunkFrames + i] += r;
+      } else {
+        mix_l_[static_cast<size_t>(i)] += l;
+        mix_r_[static_cast<size_t>(i)] += r;
+      }
+#if defined(SONARE_MIDI_WITH_FX)
+      if (rev_l != nullptr) {
+        if (mod.reverb_send > 0.0f) {
+          rev_l[i] += l * mod.reverb_send;
+          rev_r[i] += r * mod.reverb_send;
+        }
+        if (mod.chorus_send > 0.0f) {
+          cho_l[i] += l * mod.chorus_send;
+          cho_r[i] += r * mod.chorus_send;
         }
         if (mod.delay_send > 0.0f) {
           dly_l[i] += l * mod.delay_send;

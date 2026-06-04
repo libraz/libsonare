@@ -88,11 +88,12 @@ def test_soundfont_manifest_reports_backends() -> None:
 def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
     project = _build_midi_only_project()
     try:
-        # Binding an SF2 instrument without a loaded SoundFont is an error.
-        with pytest.raises(SonareError):
-            project.bounce_with_sf2_instrument(
-                total_frames=2048, block_size=128, num_channels=2, sample_rate=48000
-            )
+        # Without a loaded SoundFont the bounce still sounds: the built-in
+        # synthesizer GM fallback is the data-free floor.
+        fallback = project.bounce_with_sf2_instrument(
+            total_frames=4096, block_size=128, num_channels=2, sample_rate=48000
+        )
+        assert float(np.max(np.abs(fallback))) > 0.01
 
         project.load_soundfont(_SF2_BYTES)
         audio = project.bounce_with_sf2_instrument(
@@ -131,9 +132,14 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
 def test_engine_sf2_instrument_renders_live_midi() -> None:
     engine = RealtimeEngine(48000.0, 128)
     try:
-        # Binding before a SoundFont is loaded is an error.
-        with pytest.raises(SonareError):
-            engine.set_sf2_instrument(destination_id=7)
+        # Binding before a SoundFont is loaded is allowed: live MIDI plays
+        # through the built-in synthesizer GM fallback (the data-free floor).
+        engine.set_sf2_instrument(destination_id=7)
+        engine.push_midi_note_on(7, 0, 0, 60, 100)
+        out = engine.process([[0.0] * 128, [0.0] * 128])
+        assert max(max(abs(s) for s in ch) for ch in out) > 0.0
+        engine.clear_midi_instrument(7)
+
         with pytest.raises(SonareError):
             engine.load_soundfont(b"bad!")
 

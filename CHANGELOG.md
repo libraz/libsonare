@@ -4,6 +4,25 @@
 
 ### New features
 
+- Added a NativeSynth virtual-analog engine and made it the data-free floor of
+  the SoundFont player — MIDI never renders silent for lack of data:
+  - Antialiased PolyBLEP oscillators (sine / saw / square / triangle plus a
+    seeded deterministic noise source), unison stacking up to 7 oscillators
+    with seeded detune and per-voice pitch drift, a TPT state-variable filter
+    (low/band/highpass) with cutoff envelope, velocity-to-brightness and
+    keyboard tracking, and exponential DAHDSR amplitude/filter envelopes.
+  - A patch-driven `NativeSynth` MidiInstrument (16 channels, sustain /
+    channel-mode CCs, CC1 vibrato, CC7/11 gain, CC10 pan, pitch bend) built on
+    the shared voice pool; rendering is deterministic (seeded per-voice
+    variation, no RNG).
+  - A GM fallback bank covering all 128 programs by family plus the GM drum
+    map (one-shot kick / snare / hats / toms / cymbals / percussion), used by
+    the SF2 player whenever a program is not covered by the loaded SoundFont —
+    or no SoundFont is loaded at all. `bounce_with_sf2_instruments` and the
+    realtime engine's `set_sf2_instrument` therefore no longer require a prior
+    SoundFont load; the manifest keeps reporting the honest per-program
+    backend (`sf2` vs `synth`).
+
 - Added a GS-compatible SoundFont 2 instrument so MIDI arrangements render with
   real sampled sounds (the SF2 file is host-supplied data; nothing is baked into
   the binaries):

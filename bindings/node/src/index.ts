@@ -717,10 +717,12 @@ export class RealtimeEngine {
 
   /**
    * Bind a GS-compatible SoundFont player to a realtime MIDI destination, fed
-   * by the engine's loaded SoundFont ({@link loadSoundFont} must succeed
-   * first). Live note/CC commands and scheduled MIDI clips routed to that
-   * destination render through the SoundFont (16 MIDI channels, channel 10
-   * drums, GS NRPN part edits, GS/GM SysEx resets).
+   * by the engine's loaded SoundFont ({@link loadSoundFont}). Live note/CC
+   * commands and scheduled MIDI clips routed to that destination render
+   * through the player (16 MIDI channels, channel 10 drums, GS NRPN part
+   * edits, GS/GM SysEx resets). Without a loaded SoundFont — or for programs
+   * the SoundFont does not cover — notes play through the built-in
+   * synthesizer GM fallback bank (the data-free floor).
    */
   setSf2Instrument(
     config: Sf2InstrumentConfig = {},
@@ -1582,10 +1584,12 @@ export class Project {
   /**
    * Like {@link bounceWithBuiltinInstruments}, but each bound destination
    * renders through a GS-compatible SoundFont player fed by the project's
-   * loaded SoundFont ({@link loadSoundFont} must succeed first): 16 MIDI
-   * channels per player, channel 10 drums via bank 128, GS NRPN part edits and
-   * GS/GM SysEx resets honored. Programs the SoundFont does not cover render
-   * silent (see {@link soundFontManifest}). An empty array renders silence.
+   * loaded SoundFont ({@link loadSoundFont}): 16 MIDI channels per player,
+   * channel 10 drums via bank 128, GS NRPN part edits and GS/GM SysEx resets
+   * honored. Programs the SoundFont does not cover — including bouncing with
+   * no SoundFont loaded at all — play through the built-in synthesizer GM
+   * fallback bank (the data-free floor; see {@link soundFontManifest} for the
+   * per-program backend). An empty array renders silence.
    *
    * Argument order is instrument-first to match the WASM and Python bindings.
    */

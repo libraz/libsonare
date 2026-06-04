@@ -643,6 +643,9 @@ if(BUILD_ARRANGEMENT)
     midi/capture.cpp
     midi/builtin_synth.cpp
     midi/synth/envelope.cpp
+    midi/synth/oscillator.cpp
+    midi/synth/native_synth.cpp
+    midi/synth/gm_fallback_map.cpp
     midi/synth/sf2_file.cpp
     midi/synth/sf2_voice.cpp
     midi/synth/sf2_player.cpp

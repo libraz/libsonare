@@ -198,11 +198,21 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   SonareSf2InstrumentBinding binding{};
   binding.destination_id = 5;
 
-  // Binding an SF2 instrument without a loaded soundfont is an invalid state.
+  // Without a loaded soundfont the bounce still sounds: the NativeSynth GM
+  // fallback is the data-free floor.
   float* out = nullptr;
   size_t out_len = 0;
   REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                     &out_len) == SONARE_ERROR_INVALID_STATE);
+                                                     &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  {
+    float fallback_peak = 0.0f;
+    for (size_t i = 0; i < out_len; ++i) fallback_peak = std::max(fallback_peak, std::abs(out[i]));
+    REQUIRE(fallback_peak > 0.01f);
+  }
+  sonare_free_floats(out);
+  out = nullptr;
+  out_len = 0;
 
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
   REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
@@ -253,8 +263,21 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
   SonareEngineSf2InstrumentConfig config{};
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-  // Binding before a soundfont is loaded is an invalid state.
-  REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_STATE);
+  // Binding before a soundfont is loaded is allowed: live MIDI plays through
+  // the NativeSynth GM fallback (the data-free floor).
+  REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+  {
+    REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) == SONARE_OK);
+    std::vector<float> fb_left(128, 0.0f);
+    std::vector<float> fb_right(128, 0.0f);
+    float* fb_channels[] = {fb_left.data(), fb_right.data()};
+    REQUIRE(sonare_engine_process(engine, fb_channels, 2, 128) == SONARE_OK);
+    float fb_peak = 0.0f;
+    for (float s : fb_left) fb_peak = std::max(fb_peak, std::abs(s));
+    for (float s : fb_right) fb_peak = std::max(fb_peak, std::abs(s));
+    REQUIRE(fb_peak > 0.0f);
+    REQUIRE(sonare_engine_clear_midi_instrument(engine, 7) == SONARE_OK);
+  }
 
   const uint8_t garbage[4] = {'b', 'a', 'd', '!'};
   REQUIRE(sonare_engine_load_soundfont(engine, garbage, sizeof(garbage)) ==

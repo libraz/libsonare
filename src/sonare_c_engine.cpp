@@ -979,7 +979,8 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   if (config->struct_version > 1) return SONARE_ERROR_INVALID_PARAMETER;
-  if (engine->soundfont == nullptr) return SONARE_ERROR_INVALID_STATE;
+  // A missing SoundFont is allowed: the player's NativeSynth GM fallback is
+  // the data-free floor, so live MIDI stays audible with zero data.
   SONARE_C_TRY
   sonare::midi::synth::Sf2PlayerConfig cfg;
   if (config->gain > 0.0f) cfg.gain = config->gain;

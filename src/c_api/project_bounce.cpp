@@ -533,7 +533,9 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   if (out_len) *out_len = 0;
   if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  if (instrument_count > 0 && project->soundfont == nullptr) return SONARE_ERROR_INVALID_STATE;
+  // No loaded SoundFont is allowed: the player's NativeSynth GM fallback is
+  // the data-free floor (every program still sounds; the manifest reports the
+  // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
     if (instruments[i].config.struct_version > 1) return SONARE_ERROR_INVALID_PARAMETER;
   }

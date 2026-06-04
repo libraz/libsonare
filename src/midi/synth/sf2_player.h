@@ -10,6 +10,9 @@
 ///
 /// One Sf2Player instance receives all 16 MIDI channels (GS multitimbral
 /// convention); channel 10 (index 9) resolves percussion via bank 128.
+/// Programs no SoundFont preset covers — including the no-SoundFont case —
+/// fall back to the NativeSynth GM bank (the data-free floor), so an
+/// arrangement never bounces silent because of missing data.
 /// Internally process() runs a 16-part bus graph in fixed-size chunks:
 /// voices accumulate into their part bus (insert processing) and into the
 /// system effect send buses (CC91/93/94 + zone send generators); the wet
@@ -32,6 +35,7 @@
 
 #include "midi/instrument.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
@@ -67,6 +71,10 @@ struct Sf2PlayerConfig {
   /// Voice pool size. GS playback layers zones across 16 parts + drums, so the
   /// default is far above BuiltinSynth's 16 (clamped to [1, kMaxSynthVoices]).
   int polyphony = 48;
+  /// Data-free floor: notes whose program no SoundFont preset covers (or with
+  /// no SoundFont loaded at all) play through the NativeSynth GM fallback
+  /// bank instead of dropping silent.
+  bool synth_fallback = true;
   /// Per-part (MIDI channel) insert slot.
   std::array<Sf2PartInsert, 16> part_inserts{};
 #if defined(SONARE_MIDI_WITH_FX)
@@ -108,8 +116,10 @@ class Sf2Player final : public MidiInstrument {
   /// (GM Level 1 mandates no effects).
   void gm_reset() noexcept;
 
-  /// Currently sounding voices (test/diagnostic).
-  int active_voice_count() const noexcept { return pool_.active_count(); }
+  /// Currently sounding voices, SF2 + synth fallback (test/diagnostic).
+  int active_voice_count() const noexcept {
+    return pool_.active_count() + fallback_pool_.active_count();
+  }
 
  private:
   struct ChannelState {
@@ -141,6 +151,8 @@ class Sf2Player final : public MidiInstrument {
   };
 
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
+  /// Data-free floor: plays the note through the GM fallback synth bank.
+  void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
   void note_off(uint8_t channel, uint8_t note) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
@@ -157,6 +169,9 @@ class Sf2Player final : public MidiInstrument {
   uint16_t effective_bank(uint8_t channel) const noexcept;
   /// Preset index for (bank, program) with GS-style fallbacks, or -1.
   int resolve_preset(uint16_t bank, uint8_t program) const noexcept;
+  /// Recompute tail_samples_ from the SoundFont release scan, the synth
+  /// fallback bank and the effect units (requires prepared_).
+  void recompute_tail() noexcept;
 
   Sf2PlayerConfig config_{};
   std::shared_ptr<const Sf2File> soundfont_;
@@ -178,6 +193,8 @@ class Sf2Player final : public MidiInstrument {
   /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per channel.
   std::array<std::array<GsDrumNoteParams, 128>, 16> drum_params_{};
   VoicePool<Sf2Voice> pool_;
+  /// Synth-fallback voices (programs no SoundFont preset covers).
+  VoicePool<NativeSynthVoice> fallback_pool_;
 
   // Chunk scratch (prepared on the control thread).
   std::vector<float> mix_l_;

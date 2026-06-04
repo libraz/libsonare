@@ -210,10 +210,12 @@ export class RealtimeEngine {
 
   /**
    * Bind a GS-compatible SoundFont player to a realtime MIDI destination, fed
-   * by the engine's loaded SoundFont ({@link loadSoundFont} must succeed
-   * first). Live note/CC commands and scheduled MIDI clips routed to that
-   * destination render through the SoundFont (16 MIDI channels, channel 10
-   * drums, GS NRPN part edits, GS/GM SysEx resets).
+   * by the engine's loaded SoundFont ({@link loadSoundFont}). Live note/CC
+   * commands and scheduled MIDI clips routed to that destination render
+   * through the player (16 MIDI channels, channel 10 drums, GS NRPN part
+   * edits, GS/GM SysEx resets). Without a loaded SoundFont — or for programs
+   * the SoundFont does not cover — notes play through the built-in
+   * synthesizer GM fallback bank (the data-free floor).
    */
   setSf2Instrument(
     config: { destinationId?: number; gain?: number; polyphony?: number } = {},

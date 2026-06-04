@@ -447,14 +447,12 @@ class RealtimeEngineWasm {
   }
 
   // Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
-  // destination, fed by the engine's loaded SoundFont (loadSoundFont must
-  // succeed first). config is { gain?, polyphony? } ("0 / omit => default").
+  // destination, fed by the engine's loaded SoundFont. Without a loaded
+  // SoundFont the player's NativeSynth GM fallback is the data-free floor
+  // (live MIDI stays audible). config is { gain?, polyphony? }
+  // ("0 / omit => default").
   void setSf2Instrument(uint32_t destination_id, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-    if (soundfont_ == nullptr) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                    "no SoundFont loaded (call loadSoundFont first)");
-    }
     sonare::midi::synth::Sf2PlayerConfig cfg;
     if (!config.isUndefined() && !config.isNull()) {
       const float gain = floatProperty(config, "gain", 0.0f);

@@ -328,6 +328,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/c_abi_edit_ops_test.cpp
     midi/midi_ump_test.cpp
     midi/builtin_synth_test.cpp
+    midi/native_synth_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp
     midi/sf2_player_test.cpp

@@ -668,7 +668,9 @@ struct ProjectWasm {
 
   // Like bounceWithBuiltinInstrument, but each bound destination renders
   // through a GS-compatible SoundFont player fed by the project's loaded
-  // SoundFont (loadSoundFont must succeed first). Accepts an array of binding
+  // SoundFont. Programs the SoundFont does not cover — including bouncing
+  // with no SoundFont loaded at all — play through the built-in synthesizer
+  // GM fallback bank (the data-free floor). Accepts an array of binding
   // objects, a single object, or null/undefined (zero bindings -> silence).
   val bounceWithSf2Instrument(val bindings, val options) {
     std::vector<SonareSf2InstrumentBinding> players;

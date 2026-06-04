@@ -1079,12 +1079,13 @@ export class Project {
   /**
    * Like {@link bounceWithBuiltinInstrument}, but each bound destination
    * renders through a GS-compatible SoundFont player fed by the project's
-   * loaded SoundFont ({@link loadSoundFont} must succeed first): 16 MIDI
-   * channels per player, channel 10 drums via bank 128, GS NRPN part edits and
-   * GS/GM SysEx resets honored. Programs the SoundFont does not cover render
-   * silent (see {@link soundFontManifest}). An explicitly empty array `[]` (or
-   * `undefined` / `null`) produces zero bindings, so MIDI tracks render
-   * silently.
+   * loaded SoundFont ({@link loadSoundFont}): 16 MIDI channels per player,
+   * channel 10 drums via bank 128, GS NRPN part edits and GS/GM SysEx resets
+   * honored. Programs the SoundFont does not cover — including bouncing with
+   * no SoundFont loaded at all — play through the built-in synthesizer GM
+   * fallback bank (the data-free floor; see {@link soundFontManifest} for the
+   * per-program backend). An explicitly empty array `[]` (or `undefined` /
+   * `null`) produces zero bindings, so MIDI tracks render silently.
    */
   bounceWithSf2Instrument(
     instrument: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> = {},

@@ -504,12 +504,14 @@ typedef struct {
 
 /// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
 ///        destination, fed by the engine's loaded SoundFont
-///        (@ref sonare_engine_load_soundfont must succeed first; otherwise
-///        SONARE_ERROR_INVALID_STATE). Control-thread API; the engine owns the
-///        player. Live MIDI input (`sonare_engine_push_midi_input_*` /
-///        `sonare_engine_push_midi_note_*`) and scheduled MIDI clips routed to
-///        @p destination_id render through the SoundFont (16 MIDI channels,
-///        channel 10 drums, GS NRPN part edits, GS/GM SysEx resets).
+///        (@ref sonare_engine_load_soundfont). Without a loaded SoundFont —
+///        or for programs the SoundFont does not cover — notes play through
+///        the built-in synthesizer GM fallback bank (the data-free floor).
+///        Control-thread API; the engine owns the player. Live MIDI input
+///        (`sonare_engine_push_midi_input_*` / `sonare_engine_push_midi_note_*`)
+///        and scheduled MIDI clips routed to @p destination_id render through
+///        the player (16 MIDI channels, channel 10 drums, GS NRPN part edits,
+///        GS/GM SysEx resets).
 SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
                                              const SonareEngineSf2InstrumentConfig* config);
 

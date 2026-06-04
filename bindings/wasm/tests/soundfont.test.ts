@@ -77,10 +77,13 @@ describe('Sonare WASM SoundFont (SF2)', () => {
 
   it('bounces MIDI through the SoundFont player to non-silent audio', () => {
     const project = buildMidiOnlyProject();
-    // Binding an SF2 instrument without a loaded SoundFont is an error.
-    expect(() =>
-      project.bounceWithSf2Instrument({}, { totalFrames: 2048, numChannels: 2, sampleRate: 48000 }),
-    ).toThrow();
+    // Without a loaded SoundFont the bounce still sounds: the built-in
+    // synthesizer GM fallback is the data-free floor.
+    const fallback = project.bounceWithSf2Instrument(
+      {},
+      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+    );
+    expect(peak(fallback)).toBeGreaterThan(0.01);
 
     project.loadSoundFont(sf2Bytes);
     const audio = project.bounceWithSf2Instrument(
@@ -109,8 +112,14 @@ describe('Sonare WASM SoundFont (SF2)', () => {
 
   it('renders live MIDI input through an engine-bound SF2 instrument', () => {
     const engine = new RealtimeEngine(48000, 128);
-    // Binding before a SoundFont is loaded is an error.
-    expect(() => engine.setSf2Instrument({}, 7)).toThrow();
+    // Binding before a SoundFont is loaded is allowed: live MIDI plays through
+    // the built-in synthesizer GM fallback (the data-free floor).
+    engine.setSf2Instrument({}, 7);
+    engine.pushMidiNoteOn(7, 0, 0, 60, 100);
+    const fb = engine.process([new Float32Array(128), new Float32Array(128)]);
+    expect(Math.max(peak(fb[0]), peak(fb[1]))).toBeGreaterThan(0);
+    engine.clearMidiInstrument(7);
+
     expect(() => engine.loadSoundFont(new Uint8Array([9, 9, 9]))).toThrow();
 
     engine.loadSoundFont(sf2Bytes);

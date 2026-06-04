@@ -646,11 +646,13 @@ class RealtimeEngine:
     ) -> None:
         """Bind a GS-compatible SoundFont player to ``destination_id`` (default 0).
 
-        Requires :meth:`load_soundfont` first. ``config`` is an
-        :class:`Sf2InstrumentConfig` patch; ``None`` installs the defaults.
-        After binding, live MIDI input and scheduled MIDI clips routed to that
-        destination render through the SoundFont (16 MIDI channels, channel 10
-        drums, GS NRPN part edits, GS/GM SysEx resets).
+        ``config`` is an :class:`Sf2InstrumentConfig` patch; ``None`` installs
+        the defaults. After binding, live MIDI input and scheduled MIDI clips
+        routed to that destination render through the player (16 MIDI
+        channels, channel 10 drums, GS NRPN part edits, GS/GM SysEx resets).
+        Without a loaded SoundFont (:meth:`load_soundfont`) — or for programs
+        the SoundFont does not cover — notes play through the built-in
+        synthesizer GM fallback bank (the data-free floor).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_sf2_instrument"):
