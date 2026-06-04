@@ -18,6 +18,7 @@ struct LoudnessOptimizeResult {
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
   float applied_gain_db = 0.0f;
+  int latency_samples = 0;
 };
 
 LoudnessOptimizeResult loudness_optimize(const Audio& audio,

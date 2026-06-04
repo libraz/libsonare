@@ -64,6 +64,7 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   result.input_lufs = input_lufs;
   result.output_lufs = common::measure_lufs(result.audio);
   result.applied_gain_db = linear_to_db(gain);
+  result.latency_samples = latency;
   return result;
 }
 

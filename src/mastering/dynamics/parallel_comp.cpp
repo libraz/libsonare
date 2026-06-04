@@ -34,6 +34,9 @@ void ParallelComp::prepare(double sample_rate, int max_block_size) {
   if (followers_.size() < kRealtimePreparedChannels) {
     followers_.resize(kRealtimePreparedChannels);
   }
+  if (limiter_gains_.size() < kRealtimePreparedChannels) {
+    limiter_gains_.assign(kRealtimePreparedChannels, 1.0f);
+  }
   update_coefficients(config_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -104,7 +107,9 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
         const float dry = channels[ch][i];
         const float compressed = dry * db_to_linear(reduction_db + cfg.makeup_gain_db);
         float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
-        if (cfg.output_limiter && std::abs(out) > ceiling) out = std::copysign(ceiling, out);
+        if (cfg.output_limiter) {
+          out = limit_output_sample(out, static_cast<size_t>(ch), ceiling, cfg);
+        }
         channels[ch][i] = out;
       }
       max_reduction = std::min(max_reduction, reduction_db);
@@ -118,7 +123,9 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
         const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);
         const float compressed = dry * db_to_linear(reduction_db + cfg.makeup_gain_db);
         float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
-        if (cfg.output_limiter && std::abs(out) > ceiling) out = std::copysign(ceiling, out);
+        if (cfg.output_limiter) {
+          out = limit_output_sample(out, static_cast<size_t>(ch), ceiling, cfg);
+        }
         channels[ch][i] = out;
         max_reduction = std::min(max_reduction, reduction_db);
       }
@@ -132,6 +139,7 @@ void ParallelComp::reset() {
   for (auto& follower : followers_) {
     follower.reset();
   }
+  std::fill(limiter_gains_.begin(), limiter_gains_.end(), 1.0f);
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -192,11 +200,34 @@ float ParallelComp::gain_reduction_db(float input_db, const ParallelCompConfig& 
   return -over_db * (1.0f - 1.0f / config.ratio);
 }
 
+float ParallelComp::limit_output_sample(float sample, size_t channel_index, float ceiling,
+                                        const ParallelCompConfig& config) noexcept {
+  if (channel_index >= limiter_gains_.size() || !(ceiling > 0.0f)) {
+    return sample;
+  }
+  float& gain = limiter_gains_[channel_index];
+  const float magnitude = std::abs(sample);
+  if (magnitude > ceiling) {
+    gain = std::min(gain, ceiling / magnitude);
+  } else if (gain < 1.0f) {
+    if (config.release_ms <= 0.0f) {
+      gain = 1.0f;
+    } else {
+      const float coeff =
+          std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate_)));
+      gain = 1.0f - (1.0f - gain) * coeff;
+      if (gain > 1.0f) gain = 1.0f;
+    }
+  }
+  return sample * gain;
+}
+
 void ParallelComp::ensure_followers(int num_channels) {
   // Followers are preallocated to kRealtimePreparedChannels in prepare(); never
   // grow the vector on the audio thread (emplace_back would malloc). Reject
   // blocks wider than the prepared state (matches the established pattern).
-  if (followers_.size() >= static_cast<size_t>(num_channels)) {
+  if (followers_.size() >= static_cast<size_t>(num_channels) &&
+      limiter_gains_.size() >= static_cast<size_t>(num_channels)) {
     return;
   }
 

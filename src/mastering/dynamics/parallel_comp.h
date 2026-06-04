@@ -71,6 +71,8 @@ class ParallelComp : public rt::ProcessorBase {
  private:
   static void validate_config(const ParallelCompConfig& config);
   static float gain_reduction_db(float input_db, const ParallelCompConfig& config);
+  float limit_output_sample(float sample, size_t channel_index, float ceiling,
+                            const ParallelCompConfig& config) noexcept;
   void ensure_followers(int num_channels);
   /// @brief Recomputes scalar derived coefficients (envelope follower
   ///        attack/release) from @p config. RT-safe: scalar math only, no
@@ -103,6 +105,7 @@ class ParallelComp : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
   std::vector<sonare::rt::EnvelopeFollower> followers_;
+  std::vector<float> limiter_gains_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

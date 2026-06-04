@@ -280,7 +280,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   std::vector<float> left(left_in, left_in + length);
   std::vector<float> right(right_in, right_in + length);
 
-  result.input_lufs = integrated_lufs(detail::mono_mix(left, right), sample_rate);
+  result.input_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
   float applied_gain_db = 0.0f;
 
   const int total = count_enabled_stereo_stages(config_);
@@ -464,7 +464,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("loudness.optimize");
   }
 
-  result.output_lufs = integrated_lufs(detail::mono_mix(left, right), sample_rate);
+  result.output_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
   result.applied_gain_db = applied_gain_db;
   {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);

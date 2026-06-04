@@ -43,6 +43,14 @@ float measure_lufs(const Audio& audio);
 /// @param sample_rate Sample rate in Hz; must be positive.
 float measure_lufs(const float* samples, std::size_t length, int sample_rate);
 
+/// @brief Integrated LUFS of an interleaved multi-channel buffer.
+/// @param samples Pointer to `frames * channels` interleaved samples.
+/// @param frames Number of sample frames.
+/// @param channels Channel count; must be positive.
+/// @param sample_rate Sample rate in Hz; must be positive.
+float measure_lufs_interleaved(const float* samples, std::size_t frames, int channels,
+                               int sample_rate);
+
 /// @brief Loudness range (LRA) in LU. Forwards to
 ///        `metering::lufs(audio).loudness_range`.
 float measure_lra(const Audio& audio);

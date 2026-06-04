@@ -70,6 +70,12 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   linked_abs_.assign(max_oversampled_samples, 0.0f);
   input_rate_gain_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 1.0f);
   downsampled_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
+  // Drop the per-channel delay lines before re-creating them: prepare_buffers
+  // is grow-only (it is also the RT channel-growth path), so a re-prepare with
+  // a different lookahead / oversample factor would otherwise keep the old
+  // delay-line lengths and misalign the gain envelope against the signal.
+  lookahead_.clear();
+  oversampled_lookahead_.clear();
   prepare_buffers(kDefaultPreparedChannels);
   prepared_ = true;
   reset();
@@ -260,8 +266,23 @@ void TruePeakLimiter::reset() {
 
 void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
   validate_config(config);
+  // Mirror BrickwallLimiter::set_config: only a structural change (lookahead
+  // length / oversample factor, which size the delay lines and polyphase
+  // filters) requires a full re-prepare. prepare() ends in reset(), wiping all
+  // running state (filter histories, gain envelope) — audible mid-stream — so
+  // scalar changes (ceiling, release, gain-application mode) are applied in
+  // place instead. The re-prepare branch is control-thread-only and MUST NOT
+  // race with process().
+  const bool structural = config.lookahead_ms != config_.lookahead_ms ||
+                          config.oversample_factor != config_.oversample_factor;
   config_ = config;
-  if (prepared_) prepare(sample_rate_, max_block_size_);
+  if (!prepared_) return;
+  if (structural) {
+    prepare(sample_rate_, max_block_size_);
+    return;
+  }
+  update_time_constants();
+  limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
 }
 
 void TruePeakLimiter::set_release_ms(float release_ms) {

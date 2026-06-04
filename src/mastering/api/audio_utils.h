@@ -26,6 +26,27 @@ inline std::vector<float> mono_mix(const std::vector<float>& left,
   return mono;
 }
 
+inline std::vector<float> interleave_stereo(const std::vector<float>& left,
+                                            const std::vector<float>& right) {
+  if (left.size() != right.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
+  }
+  std::vector<float> interleaved(left.size() * 2);
+  for (std::size_t index = 0; index < left.size(); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+  }
+  return interleaved;
+}
+
+inline float stereo_integrated_lufs(const std::vector<float>& left, const std::vector<float>& right,
+                                    int sample_rate) {
+  const std::vector<float> interleaved = interleave_stereo(left, right);
+  return sonare::mastering::common::measure_lufs_interleaved(interleaved.data(), left.size(), 2,
+                                                             sample_rate);
+}
+
 inline void apply_gain_db(std::vector<float>& samples, float gain_db) {
   const float gain = db_to_linear(gain_db);
   for (float& sample : samples) {
@@ -74,15 +95,13 @@ inline float loudness_gain_db_with_ceiling(const std::vector<float>& samples, in
   return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db);
 }
 
-// Stereo convenience wrapper: measures LUFS on the mono mix and the true peak as
-// the max across the two channels (mirrors the chain's per-channel max metric).
+// Stereo convenience wrapper: measures LUFS with BS.1770 channel summing and the
+// true peak as the max across the two channels.
 inline float loudness_gain_db_with_ceiling(const std::vector<float>& left,
                                            const std::vector<float>& right, int sample_rate,
                                            float target_lufs, float ceiling_db,
                                            int true_peak_oversample) {
-  std::vector<float> mono = mono_mix(left, right);
-  const float current_lufs =
-      sonare::mastering::common::measure_lufs(mono.data(), mono.size(), sample_rate);
+  const float current_lufs = stereo_integrated_lufs(left, right, sample_rate);
   Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
   Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
   const float peak_db = std::max(
@@ -114,7 +133,9 @@ inline void apply_shared_mono_transfer_repair(std::vector<float>& left, std::vec
     if (std::abs(in) > kEpsilon) {
       gain = out / in;
     }
-    gain = std::clamp(gain, 0.0f, 1.0f);
+    if (!std::isfinite(gain)) {
+      gain = 1.0f;
+    }
     left[index] *= gain;
     right[index] *= gain;
   }

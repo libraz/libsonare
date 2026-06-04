@@ -5,10 +5,13 @@
 
 #include "mastering/stereo/mid_side.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::stereo {
+
+using sonare::constants::kPi;
 
 float Imager::Allpass::process(float input) noexcept {
   const float output = -coefficient * input + x1 + coefficient * y1;
@@ -31,10 +34,19 @@ void Imager::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
-  allpass_[0].coefficient = 0.63f;
-  allpass_[1].coefficient = -0.51f;
-  allpass_[2].coefficient = 0.42f;
-  allpass_[3].coefficient = -0.34f;
+  // Decorrelator tuning. The four first-order allpass break frequencies are
+  // anchored at the historical 48 kHz coefficients (0.63 / -0.51 / 0.42 /
+  // -0.34) and re-derived for the prepared rate via
+  //   c = (1 - tan(pi*f/sr)) / (1 + tan(pi*f/sr)),
+  // so the decorrelation timbre no longer depends on the sample rate. At
+  // 48 kHz this reproduces the historical coefficients (within float rounding).
+  static constexpr float kBreakHz[4] = {3410.4f, 19206.0f, 5924.7f, 17007.6f};
+  for (size_t i = 0; i < 4; ++i) {
+    // Clamp just below Nyquist so tan() stays finite at low sample rates.
+    const double f = std::min(static_cast<double>(kBreakHz[i]), 0.497 * sample_rate);
+    const double t = std::tan(static_cast<double>(kPi) * f / sample_rate);
+    allpass_[i].coefficient = static_cast<float>((1.0 - t) / (1.0 + t));
+  }
   prepared_ = true;
   reset();
 }

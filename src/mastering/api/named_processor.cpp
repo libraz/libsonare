@@ -486,7 +486,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   result.left.assign(left, left + length);
   result.right.assign(right, right + length);
   result.sample_rate = sample_rate;
-  result.input_lufs = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);
+  result.input_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
   auto map = make_map(params);
 
   if (try_run_effects_insert_stereo(name, params, result.left, result.right, sample_rate,
@@ -666,7 +666,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     result.applied_gain_db += 0.5f * (left_gain_db + right_gain_db);
   }
 
-  result.output_lufs = lufs_for(detail::mono_mix(result.left, result.right), sample_rate);
+  result.output_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
   return result;
 }
 

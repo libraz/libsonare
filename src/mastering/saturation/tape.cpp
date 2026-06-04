@@ -19,6 +19,7 @@ namespace {
 constexpr float kMs = 1.0f;        // saturation magnetization
 constexpr float kAlpha = 1.6e-3f;  // inter-domain mean-field coupling
 constexpr float kC = 0.4f;         // reversibility ratio in [0, 1]
+constexpr int kPreparedChannels = 2;
 
 }  // namespace
 
@@ -45,6 +46,9 @@ void Tape::prepare(double sample_rate, int max_block_size) {
                          static_cast<size_t>(std::max(1, config_.oversample_factor));
   up_scratch_.assign(scratch, 0.0f);
   down_scratch_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
+  states_.assign(static_cast<size_t>(kPreparedChannels), common::JilesAthertonState{});
+  head_bump_.assign(static_cast<size_t>(kPreparedChannels), head_bump_coeffs_);
+  gap_state_.assign(static_cast<size_t>(kPreparedChannels), 0.0f);
   prepared_ = true;
   reset();
 }
@@ -197,10 +201,8 @@ float Tape::process_sample(common::JilesAthertonState& state, float input) const
 }
 
 void Tape::ensure_state(int num_channels) {
-  if (states_.size() != static_cast<size_t>(num_channels)) {
-    states_.assign(static_cast<size_t>(num_channels), common::JilesAthertonState{});
-    head_bump_.assign(static_cast<size_t>(num_channels), head_bump_coeffs_);
-    gap_state_.assign(static_cast<size_t>(num_channels), 0.0f);
+  if (static_cast<size_t>(num_channels) > states_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tape state");
   }
 }
 

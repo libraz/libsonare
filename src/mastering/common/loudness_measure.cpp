@@ -27,6 +27,19 @@ float measure_lufs(const float* samples, std::size_t length, int sample_rate) {
   return metering::lufs(audio).integrated_lufs;
 }
 
+float measure_lufs_interleaved(const float* samples, std::size_t frames, int channels,
+                               int sample_rate) {
+  if (frames == 0) {
+    return metering::lufs_interleaved(nullptr, 0, channels, sample_rate).integrated_lufs;
+  }
+  if (samples == nullptr) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_lufs_interleaved: samples pointer is null with non-zero frame count");
+  }
+  return metering::lufs_interleaved(samples, frames, channels, sample_rate).integrated_lufs;
+}
+
 float measure_lra(const Audio& audio) { return metering::lufs(audio).loudness_range; }
 
 float measure_true_peak_dbtp(const Audio& audio, int oversample_factor) {
