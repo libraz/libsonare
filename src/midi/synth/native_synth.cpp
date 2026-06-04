@@ -80,6 +80,36 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.ks.exc_brightness = std::clamp(sanitize(p.ks.exc_brightness, 0.85f), 0.0f, 1.0f);
   p.ks.vel_to_brightness = std::clamp(sanitize(p.ks.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.ks.release_damp_s = std::clamp(sanitize(p.ks.release_damp_s, 0.08f), 0.01f, 10.0f);
+  p.modal.num_modes = std::clamp(p.modal.num_modes, 0, kMaxModalModes);
+  for (ModalMode& mode : p.modal.modes) {
+    mode.ratio = std::clamp(sanitize(mode.ratio, 1.0f), 0.01f, 64.0f);
+    mode.gain = std::clamp(sanitize(mode.gain, 1.0f), 0.0f, 4.0f);
+    mode.decay_scale = std::clamp(sanitize(mode.decay_scale, 1.0f), 0.01f, 4.0f);
+  }
+  p.modal.decay_s = std::clamp(sanitize(p.modal.decay_s, 2.0f), 0.01f, 60.0f);
+  p.modal.decay_stretch = std::clamp(sanitize(p.modal.decay_stretch, 0.3f), 0.0f, 1.0f);
+  p.modal.strike_brightness = std::clamp(sanitize(p.modal.strike_brightness, 0.7f), 0.0f, 1.0f);
+  p.modal.vel_to_brightness = std::clamp(sanitize(p.modal.vel_to_brightness, 0.6f), 0.0f, 1.0f);
+  p.modal.release_damp_s = std::clamp(sanitize(p.modal.release_damp_s, 0.15f), 0.01f, 10.0f);
+  for (float& level : p.additive.drawbars) level = std::clamp(sanitize(level, 0.0f), 0.0f, 8.0f);
+  p.additive.key_click = std::clamp(sanitize(p.additive.key_click, 0.4f), 0.0f, 1.0f);
+  p.additive.click_decay_ms = std::clamp(sanitize(p.additive.click_decay_ms, 6.0f), 0.5f, 100.0f);
+  p.percussion.num_modes = std::clamp(p.percussion.num_modes, 0, kMaxPercussionModes);
+  for (float& ratio : p.percussion.mode_ratios) {
+    ratio = std::clamp(sanitize(ratio, 0.0f), 0.0f, 64.0f);
+  }
+  p.percussion.mode_decay_s = std::clamp(sanitize(p.percussion.mode_decay_s, 0.3f), 0.005f, 30.0f);
+  p.percussion.tone_gain = std::clamp(sanitize(p.percussion.tone_gain, 1.0f), 0.0f, 4.0f);
+  p.percussion.base_freq_hz = std::clamp(sanitize(p.percussion.base_freq_hz, 0.0f), 0.0f, 20000.0f);
+  p.percussion.pitch_drop = std::clamp(sanitize(p.percussion.pitch_drop, 0.0f), 0.0f, 8.0f);
+  p.percussion.pitch_drop_ms =
+      std::clamp(sanitize(p.percussion.pitch_drop_ms, 40.0f), 1.0f, 2000.0f);
+  p.percussion.noise_gain = std::clamp(sanitize(p.percussion.noise_gain, 0.0f), 0.0f, 4.0f);
+  p.percussion.noise_decay_ms =
+      std::clamp(sanitize(p.percussion.noise_decay_ms, 150.0f), 1.0f, 20000.0f);
+  p.percussion.noise_cutoff_hz =
+      std::clamp(sanitize(p.percussion.noise_cutoff_hz, 2500.0f), 20.0f, 20000.0f);
+  p.percussion.noise_q = std::clamp(sanitize(p.percussion.noise_q, 1.0f), 0.5f, 30.0f);
   return p;
 }
 
@@ -98,12 +128,21 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
 
   base_freq_hz = synth_note_to_hz(static_cast<float>(note & 0x7Fu) + p.pitch_offset_cents / 100.0f);
 
-  const bool osc_less = p.mode == SynthEngineMode::kFm || p.mode == SynthEngineMode::kKarplusStrong;
+  const bool osc_less = p.mode != SynthEngineMode::kSubtractive;
   unison = osc_less ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
   osc_norm = unison > 0 ? 1.0f / std::sqrt(static_cast<float>(unison)) : 1.0f;
   if (p.mode == SynthEngineMode::kFm) fm.start(p.fm, sample_rate, note, velocity);
   if (p.mode == SynthEngineMode::kKarplusStrong) {
     ks.start(p.ks, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kModal) {
+    modal.start(p.modal, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kAdditive) {
+    additive.start(p.additive, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kPercussion) {
+    percussion.start(p.percussion, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -232,6 +271,12 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
     sample = fm.render(common);
   } else if (patch->mode == SynthEngineMode::kKarplusStrong) {
     sample = ks.render(common);
+  } else if (patch->mode == SynthEngineMode::kModal) {
+    sample = modal.render(common);
+  } else if (patch->mode == SynthEngineMode::kAdditive) {
+    sample = additive.render(common);
+  } else if (patch->mode == SynthEngineMode::kPercussion) {
+    sample = percussion.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -267,6 +312,7 @@ void NativeSynthVoice::release() noexcept {
   filter_env.note_off();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFm) fm.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kKarplusStrong) ks.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kModal) modal.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -274,6 +320,9 @@ void NativeSynthVoice::kill() noexcept {
   filter_env.kill();
   fm.kill();
   ks.kill();
+  modal.kill();
+  additive.kill();
+  percussion.kill();
   active = false;
   releasing = false;
 }

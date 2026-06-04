@@ -4,6 +4,23 @@
 
 ### New features
 
+- Added modal, additive and percussion synthesis modes to the NativeSynth
+  voice, completing the mallet / organ / drum coverage of the data-free GM
+  floor:
+  - Modal resonator bank with physical mode-ratio data (uniform-bar
+    glockenspiel 1:2.756:5.404:8.933, deep-arch marimba/vibraphone 1:4:10),
+    mallet-hardness velocity weighting, per-mode decay scaling, decay
+    stretching and note-off damping; the chromatic-percussion mallets
+    (glockenspiel, vibraphone, marimba, xylophone) now ring as modal bars.
+  - Additive drawbar organ: the nine Hammond drawbar pitches with stepped
+    stop levels, seeded free-running partial phases and the key-click
+    contact transient; the GM organ family plays a drawbar registration.
+  - Membrane percussion: Rayleigh circular-membrane modes
+    (1:1.59:2.14:2.30:2.65) with a descending strike-pitch envelope layered
+    under seeded filtered noise; the GM drum kit (kick, snare shell + wires,
+    toms, hats, cymbals with inharmonic ring modes) is rebuilt on it, still
+    one-shot and bit-deterministic.
+
 - Added a Karplus-Strong plucked-string mode to the NativeSynth voice (the
   guitar / harp / banjo family): a fractional-delay waveguide loop with
   phase-exact tuning compensation, plus the Jaffe-Smith realism extensions —

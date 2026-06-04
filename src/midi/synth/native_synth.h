@@ -28,28 +28,30 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "midi/synth/additive_voice.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/fm_voice.h"
 #include "midi/synth/ks_voice.h"
 #include "midi/synth/mod_matrix.h"
+#include "midi/synth/modal_voice.h"
 #include "midi/synth/oscillator.h"
+#include "midi/synth/percussion_voice.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 
 namespace sonare::midi::synth {
 
-/// Synthesis method tag. kSubtractive, kFm and kKarplusStrong are
-/// implemented; the remaining values reserve their slots so voice dispatch
-/// (and later the versioned ABI struct) never needs a layout change when
-/// they land.
+/// Synthesis method tag. All but kPiano are implemented; kPiano reserves its
+/// slot so voice dispatch (and later the versioned ABI struct) never needs a
+/// layout change when it lands.
 enum class SynthEngineMode : int {
   kSubtractive = 0,
   kFm = 1,             // operator-stack FM (fm_voice.h)
   kKarplusStrong = 2,  // plucked-string waveguide (ks_voice.h)
-  kModal = 3,          // reserved (resonator-bank mallets/bells)
-  kAdditive = 4,       // reserved (drawbar organ)
-  kPercussion = 5,     // reserved (membrane modal + filtered noise)
+  kModal = 3,          // resonator-bank mallets/bells (modal_voice.h)
+  kAdditive = 4,       // drawbar organ (additive_voice.h)
+  kPercussion = 5,     // membrane modal + filtered noise (percussion_voice.h)
   kPiano = 6,          // reserved (extended waveguide piano)
 };
 
@@ -126,6 +128,15 @@ struct NativeSynthPatch {
   /// Karplus-Strong string (used when mode == kKarplusStrong; like FM, the
   /// oscillator section is ignored while the wrapper sections still apply).
   KsPatchParams ks;
+
+  /// Modal resonator bank (used when mode == kModal).
+  ModalPatchParams modal;
+
+  /// Drawbar-organ partials (used when mode == kAdditive).
+  AdditivePatchParams additive;
+
+  /// Membrane + noise kit piece (used when mode == kPercussion).
+  PercussionPatchParams percussion;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -152,6 +163,9 @@ struct NativeSynthVoice : VoiceState {
   /// KS string core; the host attach()es its delay span before start() (the
   /// slab is owned by the instrument and allocated in prepare()).
   KsVoiceCore ks;
+  ModalVoiceCore modal;
+  AdditiveVoiceCore additive;
+  PercussionVoiceCore percussion;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;

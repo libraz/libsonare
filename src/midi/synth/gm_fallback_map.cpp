@@ -51,14 +51,14 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[1].fm.ops[1].key_rate_scale = 0.5f;
   t[1].gain = 0.6f;
 
-  // 16-23 organ: steady detuned squares, no filter envelope.
-  t[2].waveform = VaWaveform::kSquare;
-  t[2].unison = 2;
-  t[2].detune_cents = 4.0f;
-  t[2].drift_cents = 2.0f;
-  t[2].amp_env = env(5.0f, 60.0f, 1.0f, 80.0f);
-  t[2].cutoff_hz = 5000.0f;
-  t[2].key_track = 0.3f;
+  // 16-23 organ: additive drawbar partials with key click (method (5));
+  // the 88 8000 000 base registration, fast gate envelope.
+  t[2].mode = SynthEngineMode::kAdditive;
+  t[2].amp_env = env(2.0f, 0.0f, 1.0f, 60.0f);
+  t[2].cutoff_hz = 20000.0f;
+  t[2].additive.drawbars = {8.0f, 8.0f, 8.0f, 4.0f, 0.0f, 2.0f, 0.0f, 0.0f, 1.0f};
+  t[2].additive.key_click = 0.4f;
+  t[2].gain = 0.7f;
 
   // 24-31 guitar: Karplus-Strong steel-string pluck (method (3)); the string
   // itself decays, so the amp envelope just gates note-off. Program-level
@@ -205,6 +205,10 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
 struct ProgramOverrides {
   NativeSynthPatch e_piano;          // programs 4-5 (Electric Piano 1/2)
   NativeSynthPatch clav;             // programs 6-7 (Harpsichord / Clavi)
+  NativeSynthPatch glockenspiel;     // program 9 (uniform-bar modal)
+  NativeSynthPatch vibraphone;       // program 11 (tuned-bar modal, long)
+  NativeSynthPatch marimba;          // program 12 (tuned-bar modal, woody)
+  NativeSynthPatch xylophone;        // program 13 (quint-tuned modal, dry)
   NativeSynthPatch nylon_guitar;     // program 24
   NativeSynthPatch electric_guitar;  // programs 26-27 (jazz / clean)
   NativeSynthPatch muted_guitar;     // program 28 (palm mute)
@@ -258,6 +262,60 @@ ProgramOverrides build_program_overrides() noexcept {
   cl.fm.ops[1].vel_to_level = 0.6f;
   cl.fm.ops[1].key_rate_scale = 0.5f;
   cl.gain = 0.6f;
+
+  // Modal mallets: the realism is the mode-ratio data — uniform bar
+  // (glockenspiel) 1:2.756:5.404:8.933 vs deep-arch tuned bar (marimba /
+  // vibraphone) 1:4:10. All ring as one-shot-ish bars gated by note-off.
+  NativeSynthPatch bar{};
+  bar.mode = SynthEngineMode::kModal;
+  bar.amp_env = env(0.5f, 0.0f, 1.0f, 350.0f);
+  bar.cutoff_hz = 20000.0f;
+  bar.gain = 0.7f;
+
+  NativeSynthPatch& gl = o.glockenspiel;
+  gl = bar;
+  gl.modal.num_modes = 4;
+  gl.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  gl.modal.modes[1] = {2.756f, 0.7f, 0.6f};
+  gl.modal.modes[2] = {5.404f, 0.45f, 0.4f};
+  gl.modal.modes[3] = {8.933f, 0.25f, 0.3f};
+  gl.modal.decay_s = 3.5f;
+  gl.modal.decay_stretch = 0.3f;
+  gl.modal.strike_brightness = 0.85f;
+  gl.amp_env.release_ms = 600.0f;
+
+  NativeSynthPatch& vb = o.vibraphone;
+  vb = bar;
+  vb.modal.num_modes = 3;
+  vb.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  vb.modal.modes[1] = {4.0f, 0.5f, 0.5f};
+  vb.modal.modes[2] = {10.0f, 0.25f, 0.3f};
+  vb.modal.decay_s = 5.0f;
+  vb.modal.decay_stretch = 0.4f;
+  vb.modal.strike_brightness = 0.6f;
+  vb.amp_env.release_ms = 700.0f;
+
+  NativeSynthPatch& mr = o.marimba;
+  mr = bar;
+  mr.modal.num_modes = 3;
+  mr.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  mr.modal.modes[1] = {4.0f, 0.6f, 0.35f};
+  mr.modal.modes[2] = {10.0f, 0.35f, 0.2f};
+  mr.modal.decay_s = 0.45f;
+  mr.modal.decay_stretch = 0.6f;
+  mr.modal.strike_brightness = 0.7f;
+  mr.amp_env.release_ms = 250.0f;
+
+  NativeSynthPatch& xy = o.xylophone;
+  xy = bar;
+  xy.modal.num_modes = 3;
+  xy.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  xy.modal.modes[1] = {3.0f, 0.65f, 0.4f};
+  xy.modal.modes[2] = {6.0f, 0.4f, 0.25f};
+  xy.modal.decay_s = 0.3f;
+  xy.modal.decay_stretch = 0.5f;
+  xy.modal.strike_brightness = 0.9f;
+  xy.amp_env.release_ms = 200.0f;
 
   // KS guitar variants: all share the family-3 steel string and differ in
   // pick position / loop brightness / decay (the Jaffe-Smith knobs).
@@ -321,6 +379,10 @@ ProgramOverrides build_program_overrides() noexcept {
 
   o.e_piano = clamp_synth_patch(o.e_piano);
   o.clav = clamp_synth_patch(o.clav);
+  o.glockenspiel = clamp_synth_patch(o.glockenspiel);
+  o.vibraphone = clamp_synth_patch(o.vibraphone);
+  o.marimba = clamp_synth_patch(o.marimba);
+  o.xylophone = clamp_synth_patch(o.xylophone);
   o.nylon_guitar = clamp_synth_patch(o.nylon_guitar);
   o.electric_guitar = clamp_synth_patch(o.electric_guitar);
   o.muted_guitar = clamp_synth_patch(o.muted_guitar);
@@ -351,54 +413,92 @@ struct DrumPatches {
 DrumPatches build_drum_patches() noexcept {
   DrumPatches d{};
 
-  // Kick: low sine thump (note 35/36 ~= 61/65 Hz).
-  d.kick.waveform = VaWaveform::kSine;
-  d.kick.one_shot = true;
-  d.kick.amp_env = env(1.0f, 180.0f, 0.0f, 60.0f);
-  d.kick.cutoff_hz = 400.0f;
-  d.kick.gain = 0.9f;
+  // Common kit-piece scaffolding: membrane-modal + noise voices (method
+  // (6)), one-shot, wrapper filter bypassed (the percussion core owns its
+  // own noise band).
+  NativeSynthPatch piece{};
+  piece.mode = SynthEngineMode::kPercussion;
+  piece.one_shot = true;
+  piece.cutoff_hz = 20000.0f;
 
-  // Snare: band-passed noise crack.
-  d.snare.waveform = VaWaveform::kNoise;
-  d.snare.one_shot = true;
-  d.snare.filter_output = SynthFilterOutput::kBandpass;
-  d.snare.amp_env = env(1.0f, 200.0f, 0.0f, 80.0f);
-  d.snare.cutoff_hz = 1800.0f;
-  d.snare.resonance_q = 1.2f;
+  // Kick: membrane fundamental + first ring mode at the struck key
+  // (~61/65 Hz) with the tension-release pitch drop, plus a low beater thud.
+  d.kick = piece;
+  d.kick.amp_env = env(0.5f, 220.0f, 0.0f, 60.0f);
+  d.kick.percussion.num_modes = 2;
+  d.kick.percussion.mode_decay_s = 0.22f;
+  d.kick.percussion.pitch_drop = 1.5f;
+  d.kick.percussion.pitch_drop_ms = 45.0f;
+  d.kick.percussion.noise_gain = 0.35f;
+  d.kick.percussion.noise_decay_ms = 20.0f;
+  d.kick.percussion.noise_cutoff_hz = 900.0f;
+  d.kick.percussion.noise_output = SynthFilterOutput::kLowpass;
+  d.kick.gain = 1.1f;
+
+  // Snare: fixed 185 Hz shell (Rayleigh modes) + the wire crack band.
+  d.snare = piece;
+  d.snare.amp_env = env(0.5f, 250.0f, 0.0f, 80.0f);
+  d.snare.percussion.num_modes = 5;
+  d.snare.percussion.base_freq_hz = 185.0f;
+  d.snare.percussion.mode_decay_s = 0.12f;
+  d.snare.percussion.tone_gain = 0.7f;
+  d.snare.percussion.pitch_drop = 0.4f;
+  d.snare.percussion.pitch_drop_ms = 25.0f;
+  d.snare.percussion.noise_gain = 1.1f;
+  d.snare.percussion.noise_decay_ms = 160.0f;
+  d.snare.percussion.noise_cutoff_hz = 1800.0f;
+  d.snare.percussion.noise_q = 0.9f;
   d.snare.gain = 0.8f;
 
-  // Hi-hats: high-passed noise, closed short / open ringing.
-  d.closed_hat.waveform = VaWaveform::kNoise;
-  d.closed_hat.one_shot = true;
-  d.closed_hat.filter_output = SynthFilterOutput::kHighpass;
-  d.closed_hat.amp_env = env(1.0f, 60.0f, 0.0f, 40.0f);
-  d.closed_hat.cutoff_hz = 7000.0f;
+  // Hi-hats: high-passed noise shimmer, closed short / open ringing.
+  d.closed_hat = piece;
+  d.closed_hat.amp_env = env(0.5f, 90.0f, 0.0f, 40.0f);
+  d.closed_hat.percussion.noise_gain = 1.0f;
+  d.closed_hat.percussion.noise_decay_ms = 35.0f;
+  d.closed_hat.percussion.noise_cutoff_hz = 7500.0f;
+  d.closed_hat.percussion.noise_output = SynthFilterOutput::kHighpass;
   d.closed_hat.gain = 0.5f;
   d.open_hat = d.closed_hat;
-  d.open_hat.amp_env = env(1.0f, 450.0f, 0.0f, 150.0f);
+  d.open_hat.amp_env = env(0.5f, 550.0f, 0.0f, 150.0f);
+  d.open_hat.percussion.noise_decay_ms = 350.0f;
 
-  // Toms: pitched triangle knock at the struck key.
-  d.tom.waveform = VaWaveform::kTriangle;
-  d.tom.one_shot = true;
-  d.tom.amp_env = env(1.0f, 300.0f, 0.0f, 120.0f);
-  d.tom.cutoff_hz = 1200.0f;
-  d.tom.gain = 0.9f;
+  // Toms: note-tracked membrane (full Rayleigh set) with a pitch drop.
+  d.tom = piece;
+  d.tom.amp_env = env(0.5f, 400.0f, 0.0f, 120.0f);
+  d.tom.percussion.num_modes = 5;
+  d.tom.percussion.mode_decay_s = 0.3f;
+  d.tom.percussion.pitch_drop = 0.6f;
+  d.tom.percussion.pitch_drop_ms = 55.0f;
+  d.tom.percussion.noise_gain = 0.25f;
+  d.tom.percussion.noise_decay_ms = 30.0f;
+  d.tom.percussion.noise_cutoff_hz = 1500.0f;
+  d.tom.gain = 1.0f;
 
-  // Cymbals: long high-passed noise shimmer.
-  d.cymbal.waveform = VaWaveform::kNoise;
-  d.cymbal.one_shot = true;
-  d.cymbal.filter_output = SynthFilterOutput::kHighpass;
-  d.cymbal.amp_env = env(1.0f, 1200.0f, 0.0f, 400.0f);
-  d.cymbal.cutoff_hz = 6000.0f;
+  // Cymbals: long high-passed noise + a sparse inharmonic ring-mode bell.
+  d.cymbal = piece;
+  d.cymbal.amp_env = env(0.5f, 1400.0f, 0.0f, 400.0f);
+  d.cymbal.percussion.num_modes = 4;
+  d.cymbal.percussion.mode_ratios = {1.0f, 1.34f, 1.72f, 2.15f, 0.0f, 0.0f};
+  d.cymbal.percussion.base_freq_hz = 3600.0f;
+  d.cymbal.percussion.mode_decay_s = 1.1f;
+  d.cymbal.percussion.tone_gain = 0.25f;
+  d.cymbal.percussion.noise_gain = 0.9f;
+  d.cymbal.percussion.noise_decay_ms = 900.0f;
+  d.cymbal.percussion.noise_cutoff_hz = 5500.0f;
+  d.cymbal.percussion.noise_output = SynthFilterOutput::kHighpass;
   d.cymbal.gain = 0.5f;
 
-  // Everything else (claps, shakers, latin percussion): short noise burst.
-  d.percussion.waveform = VaWaveform::kNoise;
-  d.percussion.one_shot = true;
-  d.percussion.filter_output = SynthFilterOutput::kBandpass;
-  d.percussion.amp_env = env(1.0f, 150.0f, 0.0f, 80.0f);
-  d.percussion.cutoff_hz = 2500.0f;
-  d.percussion.resonance_q = 1.5f;
+  // Everything else (claps, shakers, latin percussion): short noise burst
+  // with a faint note-tracked knock.
+  d.percussion = piece;
+  d.percussion.amp_env = env(0.5f, 200.0f, 0.0f, 80.0f);
+  d.percussion.percussion.num_modes = 1;
+  d.percussion.percussion.mode_decay_s = 0.08f;
+  d.percussion.percussion.tone_gain = 0.4f;
+  d.percussion.percussion.noise_gain = 0.9f;
+  d.percussion.percussion.noise_decay_ms = 110.0f;
+  d.percussion.percussion.noise_cutoff_hz = 2500.0f;
+  d.percussion.percussion.noise_q = 1.5f;
   d.percussion.gain = 0.7f;
 
   d.kick = clamp_synth_patch(d.kick);
@@ -433,6 +533,14 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
     case 6:  // Harpsichord
     case 7:  // Clavi
       return program_overrides().clav;
+    case 9:  // Glockenspiel
+      return program_overrides().glockenspiel;
+    case 11:  // Vibraphone
+      return program_overrides().vibraphone;
+    case 12:  // Marimba
+      return program_overrides().marimba;
+    case 13:  // Xylophone
+      return program_overrides().xylophone;
     case 24:  // Acoustic Guitar (nylon)
       return program_overrides().nylon_guitar;
     case 26:  // Electric Guitar (jazz)
@@ -498,8 +606,9 @@ float gm_fallback_max_release_ms() noexcept {
     const ProgramOverrides& o = program_overrides();
     for (const NativeSynthPatch* p :
          {&d.kick, &d.snare, &d.closed_hat, &d.open_hat, &d.tom, &d.cymbal, &d.percussion,
-          &o.e_piano, &o.clav, &o.nylon_guitar, &o.electric_guitar, &o.muted_guitar, &o.overdriven,
-          &o.distortion, &o.harp}) {
+          &o.e_piano, &o.clav, &o.glockenspiel, &o.vibraphone, &o.marimba, &o.xylophone,
+          &o.nylon_guitar, &o.electric_guitar, &o.muted_guitar, &o.overdriven, &o.distortion,
+          &o.harp}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;
