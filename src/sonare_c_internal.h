@@ -15,7 +15,8 @@
 #include "engine/realtime_engine.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "host/midi_io.h"
-#include "midi/builtin_synth.h"
+#include "midi/instrument.h"
+#include "midi/synth/sf2_file.h"
 #endif
 #include "sonare_c.h"
 #include "util/exception.h"
@@ -35,7 +36,12 @@ struct SonareRealtimeEngine {
   std::deque<std::string> marker_strings;
   std::vector<sonare::automation::AutomationLane> automation_lanes;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::BuiltinSynth>>> builtin_instruments;
+  /// Engine-owned instrument per destination (built-in synth or SF2 player).
+  std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::MidiInstrument>>>
+      builtin_instruments;
+  /// Loaded SoundFont (sonare_engine_load_soundfont); shared read-only with the
+  /// SF2 players bound through sonare_engine_set_sf2_instrument.
+  std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
   sonare::host::FixedMidiInputSource<512> midi_input_source;
   bool midi_input_source_enabled = false;
 #endif

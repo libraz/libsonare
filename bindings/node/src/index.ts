@@ -91,6 +91,8 @@ import type {
   ProjectTrackDesc,
   RhythmResult,
   SendTiming,
+  Sf2InstrumentConfig,
+  Sf2ProgramStatus,
   SoloProcessor,
   StftDbResult,
   StftResult,
@@ -701,6 +703,30 @@ export class RealtimeEngine {
     destinationId = config.destinationId ?? 0,
   ): void {
     this.native.setBuiltinInstrument(destinationId, config);
+  }
+
+  /**
+   * Load (parse) SoundFont 2 bytes into the engine so SF2 instruments can be
+   * bound with {@link setSf2Instrument}. Replaces any previously loaded
+   * SoundFont (already-bound SF2 instruments keep the SoundFont they were
+   * created with); the input buffer is not referenced after the call.
+   */
+  loadSoundFont(data: Uint8Array): void {
+    this.native.loadSoundFont(data);
+  }
+
+  /**
+   * Bind a GS-compatible SoundFont player to a realtime MIDI destination, fed
+   * by the engine's loaded SoundFont ({@link loadSoundFont} must succeed
+   * first). Live note/CC commands and scheduled MIDI clips routed to that
+   * destination render through the SoundFont (16 MIDI channels, channel 10
+   * drums, GS NRPN part edits, GS/GM SysEx resets).
+   */
+  setSf2Instrument(
+    config: Sf2InstrumentConfig = {},
+    destinationId = config.destinationId ?? 0,
+  ): void {
+    this.native.setSf2Instrument(destinationId, config);
   }
 
   clearMidiInstrument(destinationId = 0): void {
@@ -1522,6 +1548,65 @@ export class Project {
     return this.native.bounceWithBuiltinInstruments([config], options);
   }
 
+  /**
+   * Load (parse) SoundFont 2 bytes into the project: presets / instruments /
+   * sample headers plus the sample PCM decoded to a float pool. Replaces any
+   * previously loaded SoundFont; the input buffer is not referenced after the
+   * call. Throws on malformed input (the previous SoundFont is kept).
+   */
+  loadSoundFont(data: Uint8Array): void {
+    this.native.loadSoundFont(data);
+  }
+
+  /** Release the project's loaded SoundFont (no-op when none is loaded). */
+  clearSoundFont(): void {
+    this.native.clearSoundFont();
+  }
+
+  /** Number of presets in the loaded SoundFont (0 when none is loaded). */
+  soundFontPresetCount(): number {
+    return this.native.soundFontPresetCount();
+  }
+
+  /**
+   * Enumerate every (channel, bank, program) combination the arrangement plays
+   * a note through, in first-use order, reporting whether each resolves in the
+   * loaded SoundFont (`'sf2'`, GS variation/drum fallbacks included) or would
+   * fall back to the built-in synth (`'synth'`). Without a loaded SoundFont
+   * every entry is a synth fallback.
+   */
+  soundFontManifest(): Sf2ProgramStatus[] {
+    return this.native.soundFontManifest();
+  }
+
+  /**
+   * Like {@link bounceWithBuiltinInstruments}, but each bound destination
+   * renders through a GS-compatible SoundFont player fed by the project's
+   * loaded SoundFont ({@link loadSoundFont} must succeed first): 16 MIDI
+   * channels per player, channel 10 drums via bank 128, GS NRPN part edits and
+   * GS/GM SysEx resets honored. Programs the SoundFont does not cover render
+   * silent (see {@link soundFontManifest}). An empty array renders silence.
+   *
+   * Argument order is instrument-first to match the WASM and Python bindings.
+   */
+  bounceWithSf2Instruments(
+    instruments: Sf2InstrumentConfig[] = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSf2Instruments(instruments, options);
+  }
+
+  /**
+   * Convenience wrapper over {@link bounceWithSf2Instruments} for the common
+   * single-instrument case.
+   */
+  bounceWithSf2Instrument(
+    instrument: Sf2InstrumentConfig = {},
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSf2Instruments([instrument], options);
+  }
+
   /** Release the underlying native project. Idempotent. */
   destroy(): void {
     if (this.disposed) {
@@ -2157,6 +2242,9 @@ export type {
   Section,
   SectionTypeOrdinal,
   SendTiming,
+  Sf2InstrumentConfig,
+  Sf2ProgramStatus,
+  SourceBackend,
   StftDbResult,
   StftResult,
   StreamAnalyzerConfig,

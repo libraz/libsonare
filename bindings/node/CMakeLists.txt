@@ -94,6 +94,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_edit.cpp
   ${SONARE_ROOT}/src/c_api/project_midi.cpp
   ${SONARE_ROOT}/src/c_api/project_mir.cpp
+  ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
 )
 
 add_library(${PROJECT_NAME} SHARED

@@ -195,6 +195,17 @@ _ALIAS_COVERAGE = {
     "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
     # Plural builtin-instrument bounce -> singular facade method (one or many).
     "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
+    # Plural SF2-instrument bounce -> singular facade method (one or many).
+    "project_bounce_with_sf2_instruments": ("bounce_with_sf2_instrument",),
+    # SoundFont ops: the C symbols spell "soundfont" as one word while the
+    # Node/WASM camelCase methods (`loadSoundFont`) fold to `load_sound_font`.
+    # An idiomatic spelling difference shared by both JS facades (Python matches
+    # the C spelling directly), not an omission.
+    "project_load_soundfont": ("load_sound_font",),
+    "project_clear_soundfont": ("clear_sound_font",),
+    "project_soundfont_preset_count": ("sound_font_preset_count",),
+    "project_soundfont_manifest": ("sound_font_manifest",),
+    "engine_load_soundfont": ("load_sound_font",),
     # GM / GM2 naming helpers: every facade (Python `gm_instrument_name`, Node
     # `gmInstrumentName`, WASM `gmInstrumentName`) drops the `midi_` prefix the C
     # symbol carries. An idiomatic rename shared by all three facades, not an

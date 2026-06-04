@@ -5,6 +5,9 @@
 
 #include "common.h"
 #include "midi/midi_fx.h"
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "midi/synth/sf2_player.h"
+#endif
 #include "util/json.h"
 
 namespace wasm_json = sonare::util::json;
@@ -412,24 +415,7 @@ class RealtimeEngineWasm {
     }
     auto synth =
         std::make_unique<sonare::midi::BuiltinSynth>(sonare::midi::clamp_synth_config(cfg));
-    for (auto& entry : builtin_instruments_) {
-      if (entry.first == destination_id) {
-        sonare::midi::BuiltinSynth* raw = synth.get();
-        if (!engine_.set_midi_instrument(destination_id, raw)) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                        "failed to bind built-in MIDI instrument");
-        }
-        entry.second = std::move(synth);
-        return;
-      }
-    }
-    builtin_instruments_.emplace_back(destination_id, std::move(synth));
-    sonare::midi::BuiltinSynth* raw = builtin_instruments_.back().second.get();
-    if (!engine_.set_midi_instrument(destination_id, raw)) {
-      builtin_instruments_.pop_back();
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                    "failed to bind built-in MIDI instrument");
-    }
+    bindInstrument(destination_id, std::move(synth));
 #else
     (void)destination_id;
     (void)config;
@@ -437,6 +423,82 @@ class RealtimeEngineWasm {
                                   "arrangement/MIDI engine is not available in this build");
 #endif
   }
+
+  // Loads (parses) SoundFont 2 bytes into the engine so SF2 instruments can be
+  // bound with setSf2Instrument. The host copies the .sf2 bytes into linear
+  // memory as a Uint8Array; they are not referenced after the call. Replaces
+  // any previously loaded SoundFont (already-bound SF2 players keep the
+  // SoundFont they were created with).
+  void loadSoundFont(val data) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+    auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
+    std::string error;
+    if (bytes.empty() || !soundfont->parse(bytes.data(), bytes.size(), &error)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "failed to load SoundFont: " + error);
+    }
+    soundfont_ = std::move(soundfont);
+#else
+    (void)data;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  // Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
+  // destination, fed by the engine's loaded SoundFont (loadSoundFont must
+  // succeed first). config is { gain?, polyphony? } ("0 / omit => default").
+  void setSf2Instrument(uint32_t destination_id, val config) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (soundfont_ == nullptr) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "no SoundFont loaded (call loadSoundFont first)");
+    }
+    sonare::midi::synth::Sf2PlayerConfig cfg;
+    if (!config.isUndefined() && !config.isNull()) {
+      const float gain = floatProperty(config, "gain", 0.0f);
+      if (gain > 0.0f) cfg.gain = gain;
+      const int polyphony = intProperty(config, "polyphony", 0);
+      if (polyphony > 0) cfg.polyphony = polyphony;
+    }
+    auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
+    player->set_soundfont(soundfont_);
+    bindInstrument(destination_id, std::move(player));
+#else
+    (void)destination_id;
+    (void)config;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Binds (or replaces) an engine-owned instrument on a destination, keeping
+  // the ownership table and the engine's instrument rack in sync. Shared by
+  // the built-in synth and SF2 instrument entries.
+  void bindInstrument(uint32_t destination_id,
+                      std::unique_ptr<sonare::midi::MidiInstrument> instrument) {
+    for (auto& entry : builtin_instruments_) {
+      if (entry.first == destination_id) {
+        sonare::midi::MidiInstrument* raw = instrument.get();
+        if (!engine_.set_midi_instrument(destination_id, raw)) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                        "failed to bind MIDI instrument");
+        }
+        entry.second = std::move(instrument);
+        return;
+      }
+    }
+    builtin_instruments_.emplace_back(destination_id, std::move(instrument));
+    sonare::midi::MidiInstrument* raw = builtin_instruments_.back().second.get();
+    if (!engine_.set_midi_instrument(destination_id, raw)) {
+      builtin_instruments_.pop_back();
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to bind MIDI instrument");
+    }
+  }
+#endif
 
   void clearMidiInstrument(uint32_t destination_id) {
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1252,8 +1314,14 @@ class RealtimeEngineWasm {
   }
 
   sonare::engine::RealtimeEngine engine_{};
-  std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::BuiltinSynth>>>
+  /// Engine-owned instrument per destination (built-in synth or SF2 player).
+  std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::MidiInstrument>>>
       builtin_instruments_{};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// Loaded SoundFont (loadSoundFont); shared read-only with the SF2 players
+  /// bound through setSf2Instrument.
+  std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont_;
+#endif
   sonare::host::FixedMidiInputSource<512> midi_input_source_{};
   bool midi_input_source_enabled_ = false;
   sonare::automation::ParameterRegistry parameters_{};
@@ -1332,6 +1400,8 @@ void registerRealtimeEngineBindings() {
       .function("setParameter", &RealtimeEngineWasm::setParameter)
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
       .function("setBuiltinInstrument", &RealtimeEngineWasm::setBuiltinInstrument)
+      .function("loadSoundFont", &RealtimeEngineWasm::loadSoundFont)
+      .function("setSf2Instrument", &RealtimeEngineWasm::setSf2Instrument)
       .function("clearMidiInstrument", &RealtimeEngineWasm::clearMidiInstrument)
       .function("midiInstrumentCount", &RealtimeEngineWasm::midiInstrumentCount)
       .function("bindMidiCc", &RealtimeEngineWasm::bindMidiCc)

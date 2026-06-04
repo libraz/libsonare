@@ -93,6 +93,13 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value Bounce(const Napi::CallbackInfo& info);
   Napi::Value BounceWithBuiltinInstruments(const Napi::CallbackInfo& info);
 
+  // -- SoundFont (SF2) instrument --
+  void LoadSoundFont(const Napi::CallbackInfo& info);
+  void ClearSoundFont(const Napi::CallbackInfo& info);
+  Napi::Value SoundFontPresetCount(const Napi::CallbackInfo& info);
+  Napi::Value SoundFontManifest(const Napi::CallbackInfo& info);
+  Napi::Value BounceWithSf2Instruments(const Napi::CallbackInfo& info);
+
   void Destroy(const Napi::CallbackInfo& info);
 
   SonareProject* project_ = nullptr;

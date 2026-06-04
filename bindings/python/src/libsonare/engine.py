@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ._project import BuiltinSynthConfig
+from ._project import BuiltinSynthConfig, Sf2InstrumentConfig
 from ._runtime import (
     AutomationCurve,
     AutomationPoint,
@@ -616,6 +616,48 @@ class RealtimeEngine:
         cfg = (config if config is not None else BuiltinSynthConfig())._to_c()
         _check(
             lib.sonare_engine_set_builtin_instrument(
+                self._require_handle(), int(destination_id), ctypes.byref(cfg)
+            )
+        )
+
+    def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
+        """Load (parse) SoundFont 2 bytes into the engine.
+
+        Replaces any previously loaded SoundFont (already-bound SF2 instruments
+        keep the SoundFont they were created with); the input buffer is not
+        referenced after the call. Raises :class:`SonareError` on malformed
+        input.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_load_soundfont"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        buf = bytes(data)
+        if not buf:
+            raise ValueError("SoundFont data must not be empty")
+        c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
+        _check(
+            lib.sonare_engine_load_soundfont(
+                self._require_handle(), c_data, ctypes.c_size_t(len(buf))
+            )
+        )
+
+    def set_sf2_instrument(
+        self, config: Sf2InstrumentConfig | None = None, destination_id: int = 0
+    ) -> None:
+        """Bind a GS-compatible SoundFont player to ``destination_id`` (default 0).
+
+        Requires :meth:`load_soundfont` first. ``config`` is an
+        :class:`Sf2InstrumentConfig` patch; ``None`` installs the defaults.
+        After binding, live MIDI input and scheduled MIDI clips routed to that
+        destination render through the SoundFont (16 MIDI channels, channel 10
+        drums, GS NRPN part edits, GS/GM SysEx resets).
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_sf2_instrument"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        cfg = (config if config is not None else Sf2InstrumentConfig())._to_c()
+        _check(
+            lib.sonare_engine_set_sf2_instrument(
                 self._require_handle(), int(destination_id), ctypes.byref(cfg)
             )
         )

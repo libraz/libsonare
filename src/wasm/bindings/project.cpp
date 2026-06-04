@@ -582,6 +582,123 @@ struct ProjectWasm {
     return vectorToFloat32Array(samples);
   }
 
+  // Loads (parses) SoundFont 2 bytes into the project (presets / sample PCM),
+  // replacing any previously loaded SoundFont. The host copies the .sf2 bytes
+  // into linear memory as a Uint8Array (same convention as importSmf); they are
+  // not referenced after the call. Throws on malformed input (the previous
+  // SoundFont is kept).
+  void loadSoundFont(val data) {
+    std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+    const SonareError err = sonare_project_load_soundfont(
+        project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "failed to load SoundFont");
+    }
+  }
+
+  // Releases the project's loaded SoundFont (no-op when none is loaded).
+  void clearSoundFont() {
+    const SonareError err = sonare_project_clear_soundfont(project_.get());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to clear SoundFont");
+    }
+  }
+
+  // Number of presets in the loaded SoundFont (0 when none is loaded).
+  size_t soundFontPresetCount() {
+    size_t count = 0;
+    const SonareError err = sonare_project_soundfont_preset_count(project_.get(), &count);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to query SoundFont preset count");
+    }
+    return count;
+  }
+
+  // Enumerates every (channel, bank, program) combination the arrangement
+  // plays a note through, in first-use order, as an array of { channel, bank,
+  // program, backend: 'sf2'|'synth', presetName } objects (matching Node).
+  val soundFontManifest() {
+    size_t total = 0;
+    SonareError err = sonare_project_soundfont_manifest(project_.get(), nullptr, 0, &total);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to build SoundFont manifest");
+    }
+    std::vector<SonareSf2ProgramStatus> entries(total);
+    if (total > 0) {
+      err = sonare_project_soundfont_manifest(project_.get(), entries.data(), total, &total);
+      if (err != SONARE_OK) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                      "failed to build SoundFont manifest");
+      }
+    }
+    val out = val::array();
+    for (size_t i = 0; i < entries.size(); ++i) {
+      val entry = val::object();
+      entry.set("channel", entries[i].channel);
+      entry.set("bank", entries[i].bank);
+      entry.set("program", entries[i].program);
+      entry.set("backend",
+                std::string(entries[i].backend == SONARE_SOURCE_BACKEND_SF2 ? "sf2" : "synth"));
+      entry.set("presetName", std::string(entries[i].preset_name));
+      out.set(i, entry);
+    }
+    return out;
+  }
+
+  // Reads a single { destinationId?, gain?, polyphony? } object into an SF2
+  // instrument binding ("0 / omit => default" per the C ABI).
+  static SonareSf2InstrumentBinding sf2BindingFromVal(val desc) {
+    SonareSf2InstrumentBinding binding{};
+    if (desc.isUndefined() || desc.isNull()) {
+      return binding;
+    }
+    if (hasProperty(desc, "destinationId")) {
+      binding.destination_id = desc["destinationId"].as<uint32_t>();
+    }
+    if (hasProperty(desc, "gain")) {
+      binding.config.gain = desc["gain"].as<float>();
+    }
+    if (hasProperty(desc, "polyphony")) {
+      binding.config.polyphony = desc["polyphony"].as<int>();
+    }
+    return binding;
+  }
+
+  // Like bounceWithBuiltinInstrument, but each bound destination renders
+  // through a GS-compatible SoundFont player fed by the project's loaded
+  // SoundFont (loadSoundFont must succeed first). Accepts an array of binding
+  // objects, a single object, or null/undefined (zero bindings -> silence).
+  val bounceWithSf2Instrument(val bindings, val options) {
+    std::vector<SonareSf2InstrumentBinding> players;
+    if (!bindings.isUndefined() && !bindings.isNull()) {
+      if (val::global("Array").call<bool>("isArray", bindings)) {
+        const size_t count = bindings["length"].as<size_t>();
+        players.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+          players.push_back(sf2BindingFromVal(bindings[i]));
+        }
+      } else {
+        players.push_back(sf2BindingFromVal(bindings));
+      }
+    }
+    SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
+    float* interleaved = nullptr;
+    size_t len = 0;
+    const SonareError err = sonare_project_bounce_with_sf2_instruments(
+        project_.get(), &opts, players.empty() ? nullptr : players.data(), players.size(),
+        &interleaved, &len);
+    if (err != SONARE_OK) {
+      sonare_free_floats(interleaved);
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to bounce project with SF2 instrument");
+    }
+    std::vector<float> samples(interleaved, interleaved + len);
+    sonare_free_floats(interleaved);
+    return vectorToFloat32Array(samples);
+  }
+
   // --------------------------------------------------------------------------
   // Edit operations (undoable; route through EditHistory commands)
   // --------------------------------------------------------------------------
@@ -1319,6 +1436,11 @@ void registerProjectBindings() {
       .function("compile", &ProjectWasm::compile)
       .function("bounce", &ProjectWasm::bounce)
       .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument)
+      .function("loadSoundFont", &ProjectWasm::loadSoundFont)
+      .function("clearSoundFont", &ProjectWasm::clearSoundFont)
+      .function("soundFontPresetCount", &ProjectWasm::soundFontPresetCount)
+      .function("soundFontManifest", &ProjectWasm::soundFontManifest)
+      .function("bounceWithSf2Instrument", &ProjectWasm::bounceWithSf2Instrument)
       .function("removeClip", &ProjectWasm::removeClip)
       .function("setClipGain", &ProjectWasm::setClipGain)
       .function("setClipFade", &ProjectWasm::setClipFade)

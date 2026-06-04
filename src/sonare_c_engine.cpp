@@ -16,6 +16,7 @@
 #include "c_api/midi_fx_json.h"
 #include "midi/builtin_synth.h"
 #include "midi/midi_fx.h"
+#include "midi/synth/sf2_player.h"
 #include "util/json.h"
 #endif
 #if defined(SONARE_WITH_MASTERING)
@@ -190,6 +191,30 @@ sonare::midi::BuiltinSynthConfig engine_synth_config_from_c(
   cfg.release_ms = c.release_ms;
   cfg.polyphony = c.polyphony;
   return sonare::midi::clamp_synth_config(cfg);
+}
+
+// Binds (or replaces) an engine-owned instrument on a destination, keeping the
+// ownership table and the engine's instrument rack in sync. Shared by the
+// built-in synth and SF2 instrument entries.
+SonareError bind_engine_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                   std::unique_ptr<sonare::midi::MidiInstrument> instrument) {
+  for (auto& entry : engine->builtin_instruments) {
+    if (entry.first == destination_id) {
+      sonare::midi::MidiInstrument* raw = instrument.get();
+      if (!engine->engine.set_midi_instrument(destination_id, raw)) {
+        return SONARE_ERROR_OUT_OF_MEMORY;
+      }
+      entry.second = std::move(instrument);
+      return SONARE_OK;
+    }
+  }
+  engine->builtin_instruments.emplace_back(destination_id, std::move(instrument));
+  sonare::midi::MidiInstrument* raw = engine->builtin_instruments.back().second.get();
+  if (!engine->engine.set_midi_instrument(destination_id, raw)) {
+    engine->builtin_instruments.pop_back();
+    return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+  return SONARE_OK;
 }
 
 uint64_t pack_midi_note(uint8_t group, uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
@@ -922,23 +947,46 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 #else
   SONARE_C_TRY
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(engine_synth_config_from_c(*config));
-  for (auto& entry : engine->builtin_instruments) {
-    if (entry.first == destination_id) {
-      sonare::midi::BuiltinSynth* raw = synth.get();
-      if (!engine->engine.set_midi_instrument(destination_id, raw)) {
-        return SONARE_ERROR_OUT_OF_MEMORY;
-      }
-      entry.second = std::move(synth);
-      return SONARE_OK;
-    }
+  return bind_engine_instrument(engine, destination_id, std::move(synth));
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uint8_t* data,
+                                         size_t size) {
+  if (!engine || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
+  std::string error;
+  if (!soundfont->parse(data, size, &error)) {
+    set_last_error(error.c_str());
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  engine->builtin_instruments.emplace_back(destination_id, std::move(synth));
-  sonare::midi::BuiltinSynth* raw = engine->builtin_instruments.back().second.get();
-  if (!engine->engine.set_midi_instrument(destination_id, raw)) {
-    engine->builtin_instruments.pop_back();
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  }
+  engine->soundfont = std::move(soundfont);
   return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                             const SonareEngineSf2InstrumentConfig* config) {
+  if (!engine || !config) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (config->struct_version > 1) return SONARE_ERROR_INVALID_PARAMETER;
+  if (engine->soundfont == nullptr) return SONARE_ERROR_INVALID_STATE;
+  SONARE_C_TRY
+  sonare::midi::synth::Sf2PlayerConfig cfg;
+  if (config->gain > 0.0f) cfg.gain = config->gain;
+  if (config->polyphony > 0) cfg.polyphony = config->polyphony;
+  auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
+  player->set_soundfont(engine->soundfont);
+  return bind_engine_instrument(engine, destination_id, std::move(player));
   SONARE_C_CATCH
 #endif
 }

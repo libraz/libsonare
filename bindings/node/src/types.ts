@@ -1649,6 +1649,45 @@ export interface BuiltinInstrumentConfig {
  */
 export type BuiltinSynthConfig = BuiltinInstrumentConfig;
 
+/**
+ * Patch for the GS-compatible SoundFont player used by
+ * {@link Project.bounceWithSf2Instrument} /
+ * {@link Project.bounceWithSf2Instruments} and
+ * {@link RealtimeEngine.setSf2Instrument}. Every field uses
+ * "0 / omit => sensible default".
+ */
+export interface Sf2InstrumentConfig {
+  /**
+   * MIDI destination id this player renders (the value set by
+   * {@link Project.setTrackMidiDestination}). Defaults to `0`.
+   */
+  destinationId?: number;
+  /** Master output gain (linear); 0 / omit => 0.5. */
+  gain?: number;
+  /** Max simultaneous voices; 0 / omit => 48, clamped to [1, 64]. */
+  polyphony?: number;
+}
+
+/** Source backend a resolved MIDI program renders through. */
+export type SourceBackend = 'sf2' | 'synth';
+
+/**
+ * One {@link Project.soundFontManifest} entry: a (channel, bank, program)
+ * combination the arrangement plays, with the backend it resolves to.
+ */
+export interface Sf2ProgramStatus {
+  /** MIDI channel (0-15). */
+  channel: number;
+  /** Effective SF2 bank (drum channels report 128). */
+  bank: number;
+  /** Program number (0-127). */
+  program: number;
+  /** `'sf2'` when the loaded SoundFont covers the program, else `'synth'`. */
+  backend: SourceBackend;
+  /** Resolved SF2 preset name (GS fallback included); empty for `'synth'`. */
+  presetName: string;
+}
+
 /** Clip fade-curve ordinals (mirror SonareProjectFadeCurve). */
 export type ProjectFadeCurve = 0 | 1 | 2 | 3;
 export const PROJECT_FADE_CURVE_LINEAR = 0;

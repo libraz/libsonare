@@ -151,22 +151,26 @@ uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
   return channels_[channel & 0x0Fu].bank_msb;
 }
 
-int Sf2Player::resolve_preset(uint16_t bank, uint8_t program) const noexcept {
-  if (soundfont_ == nullptr) return -1;
+int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) noexcept {
   // Exact (bank, program).
-  int idx = soundfont_->find_preset(bank, program);
+  int idx = soundfont.find_preset(bank, program);
   if (idx >= 0) return idx;
   // GS variation fallback: unknown variation banks fall back to the capital
   // tone (bank 0); drum banks fall back to the standard kit (program 0).
   if (bank == kDrumBank) {
-    idx = soundfont_->find_preset(kDrumBank, 0);
+    idx = soundfont.find_preset(kDrumBank, 0);
     return idx;
   }
   if (bank != 0) {
-    idx = soundfont_->find_preset(0, program);
+    idx = soundfont.find_preset(0, program);
     if (idx >= 0) return idx;
   }
   return -1;
+}
+
+int Sf2Player::resolve_preset(uint16_t bank, uint8_t program) const noexcept {
+  if (soundfont_ == nullptr) return -1;
+  return resolve_gs_preset(*soundfont_, bank, program);
 }
 
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
@@ -454,6 +458,12 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
   const Ump& u = event.ump;
   if (u.message_type() != UmpMessageType::kMidi1ChannelVoice &&
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {
+    // SysEx events arrive with a control-thread-resolved payload view (the UMP
+    // itself only carries a handle): feed the GS layer so GS Reset / GM System
+    // On / "use for rhythm part" inside an arrangement take effect.
+    if (event.sysex_payload != nullptr && event.sysex_payload_size > 0) {
+      handle_sysex(event.sysex_payload, event.sysex_payload_size);
+    }
     return;
   }
   if (u.is_note_on()) {

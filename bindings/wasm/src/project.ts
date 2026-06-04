@@ -70,6 +70,41 @@ export interface BuiltinSynthBinding {
  */
 export type BuiltinSynthConfig = BuiltinSynthBinding;
 
+/**
+ * SoundFont (SF2) player patch + MIDI routing for
+ * {@link Project.bounceWithSf2Instrument}. Every field is optional; a
+ * non-positive (or omitted) numeric field falls back to the C-ABI default
+ * (gain 0.5, 48 voices), so `{}` is a usable default patch.
+ */
+export interface Sf2InstrumentConfig {
+  /** MIDI destination id this player answers to (default 0; see {@link Project.setTrackMidiDestination}). */
+  destinationId?: number;
+  /** Master output gain, linear (0 => 0.5). */
+  gain?: number;
+  /** Max simultaneous voices (0 => 48, clamped to [1, 64]). */
+  polyphony?: number;
+}
+
+/** Source backend a resolved MIDI program renders through. */
+export type SourceBackend = 'sf2' | 'synth';
+
+/**
+ * One {@link Project.soundFontManifest} entry: a (channel, bank, program)
+ * combination the arrangement plays, with the backend it resolves to.
+ */
+export interface Sf2ProgramStatus {
+  /** MIDI channel (0-15). */
+  channel: number;
+  /** Effective SF2 bank (drum channels report 128). */
+  bank: number;
+  /** Program number (0-127). */
+  program: number;
+  /** `'sf2'` when the loaded SoundFont covers the program, else `'synth'`. */
+  backend: SourceBackend;
+  /** Resolved SF2 preset name (GS fallback included); empty for `'synth'`. */
+  presetName: string;
+}
+
 /** Clip fade-curve for {@link Project.setClipFade}. */
 export type ProjectFadeCurve =
   | 'linear'
@@ -336,6 +371,14 @@ interface WasmProject {
   bounce: (options: ProjectBounceOptions) => Float32Array;
   bounceWithBuiltinInstrument: (
     bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,
+    options: ProjectBounceOptions,
+  ) => Float32Array;
+  loadSoundFont: (data: Uint8Array) => void;
+  clearSoundFont: () => void;
+  soundFontPresetCount: () => number;
+  soundFontManifest: () => Sf2ProgramStatus[];
+  bounceWithSf2Instrument: (
+    bindings: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> | undefined,
     options: ProjectBounceOptions,
   ) => Float32Array;
   removeClip: (clipId: number) => void;
@@ -998,6 +1041,56 @@ export class Project {
     options: ProjectBounceOptions = {},
   ): Float32Array {
     return this.native.bounceWithBuiltinInstrument(instrument, options);
+  }
+
+  /**
+   * Load (parse) SoundFont 2 bytes into the project: presets / instruments /
+   * sample headers plus the sample PCM decoded to a float pool. The host
+   * fetches the `.sf2` and passes the raw bytes; they are copied into linear
+   * memory for the call and not referenced afterwards. Replaces any previously
+   * loaded SoundFont; throws on malformed input (the previous SoundFont is
+   * kept).
+   */
+  loadSoundFont(data: Uint8Array): void {
+    this.native.loadSoundFont(data);
+  }
+
+  /** Release the project's loaded SoundFont (no-op when none is loaded). */
+  clearSoundFont(): void {
+    this.native.clearSoundFont();
+  }
+
+  /** Number of presets in the loaded SoundFont (0 when none is loaded). */
+  soundFontPresetCount(): number {
+    return this.native.soundFontPresetCount();
+  }
+
+  /**
+   * Enumerate every (channel, bank, program) combination the arrangement plays
+   * a note through, in first-use order, reporting whether each resolves in the
+   * loaded SoundFont (`'sf2'`, GS variation/drum fallbacks included) or would
+   * fall back to the built-in synth (`'synth'`). Without a loaded SoundFont
+   * every entry is a synth fallback.
+   */
+  soundFontManifest(): Sf2ProgramStatus[] {
+    return this.native.soundFontManifest();
+  }
+
+  /**
+   * Like {@link bounceWithBuiltinInstrument}, but each bound destination
+   * renders through a GS-compatible SoundFont player fed by the project's
+   * loaded SoundFont ({@link loadSoundFont} must succeed first): 16 MIDI
+   * channels per player, channel 10 drums via bank 128, GS NRPN part edits and
+   * GS/GM SysEx resets honored. Programs the SoundFont does not cover render
+   * silent (see {@link soundFontManifest}). An explicitly empty array `[]` (or
+   * `undefined` / `null`) produces zero bindings, so MIDI tracks render
+   * silently.
+   */
+  bounceWithSf2Instrument(
+    instrument: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> = {},
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSf2Instrument(instrument, options);
   }
 
   /** Remove a clip (undoable). */

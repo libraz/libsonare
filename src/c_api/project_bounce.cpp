@@ -5,6 +5,7 @@
 #include <set>
 
 #include "midi/builtin_synth.h"
+#include "midi/synth/sf2_player.h"
 #if defined(SONARE_WITH_MIXING)
 #include "c_api/mixing_internal.h"
 #include "engine/mixing_runtime.h"
@@ -441,6 +442,17 @@ sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthCon
   return sonare::midi::clamp_synth_config(cfg);
 }
 
+// Maps the public versioned SF2 patch to the player config ("0 => default";
+// struct_version 0/1 are the current layout, anything newer is rejected by the
+// caller). The player clamps polyphony itself.
+sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
+    const SonareSf2InstrumentConfig& c) noexcept {
+  sonare::midi::synth::Sf2PlayerConfig cfg;
+  if (c.gain > 0.0f) cfg.gain = c.gain;
+  if (c.polyphony > 0) cfg.polyphony = c.polyphony;
+  return cfg;
+}
+
 }  // namespace
 #endif
 
@@ -501,6 +513,39 @@ SonareError sonare_project_bounce_with_builtin_instruments(
   for (size_t i = 0; i < instrument_count; ++i) {
     owned.push_back(
         std::make_unique<sonare::midi::BuiltinSynth>(synth_config_from_c(instruments[i].config)));
+    hosted.push_back({instruments[i].destination_id, owned.back().get()});
+  }
+  return do_project_bounce(project, options, hosted, out_interleaved, out_len);
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
+                              out_len);
+#endif
+}
+
+SonareError sonare_project_bounce_with_sf2_instruments(
+    SonareProject* project, const SonareProjectBounceOptions* options,
+    const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
+    size_t* out_len) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
+  if (out_interleaved) *out_interleaved = nullptr;
+  if (out_len) *out_len = 0;
+  if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  if (instrument_count > 0 && project->soundfont == nullptr) return SONARE_ERROR_INVALID_STATE;
+  for (size_t i = 0; i < instrument_count; ++i) {
+    if (instruments[i].config.struct_version > 1) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
+  std::vector<HostedInstrument> hosted;
+  owned.reserve(instrument_count);
+  hosted.reserve(instrument_count);
+  for (size_t i = 0; i < instrument_count; ++i) {
+    auto player =
+        std::make_unique<sonare::midi::synth::Sf2Player>(sf2_config_from_c(instruments[i].config));
+    player->set_soundfont(project->soundfont);
+    owned.push_back(std::move(player));
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);

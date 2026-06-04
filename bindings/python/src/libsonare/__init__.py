@@ -11,6 +11,8 @@ from ._project import (
     MidiRouteResult,
     NotePairValidation,
     Project,
+    Sf2InstrumentConfig,
+    Sf2ProgramStatus,
     project_abi_version,
 )
 from ._runtime import SonareError
@@ -371,6 +373,8 @@ __all__ = [
     "SectionResult",
     "SectionType",
     "SendTiming",
+    "Sf2InstrumentConfig",
+    "Sf2ProgramStatus",
     "SonareError",
     "SpectrumReport",
     "StftResult",

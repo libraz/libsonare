@@ -223,6 +223,11 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
           InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
               "bounceWithBuiltinInstruments"),
+          InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont"),
+          InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont"),
+          InstanceMethod<&ProjectWrap::SoundFontPresetCount>("soundFontPresetCount"),
+          InstanceMethod<&ProjectWrap::SoundFontManifest>("soundFontManifest"),
+          InstanceMethod<&ProjectWrap::BounceWithSf2Instruments>("bounceWithSf2Instruments"),
           InstanceMethod<&ProjectWrap::GetSampleRate>("getSampleRate"),
           InstanceMethod<&ProjectWrap::SetOverlapPolicy>("setOverlapPolicy"),
           InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy"),
@@ -1204,6 +1209,106 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
   float* interleaved = nullptr;
   size_t len = 0;
   ThrowIfError(env, sonare_project_bounce_with_builtin_instruments(
+                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
+                        bindings.size(), &interleaved, &len));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Float32Array out = Napi::Float32Array::New(env, len);
+  if (len > 0 && interleaved != nullptr) {
+    std::memcpy(out.Data(), interleaved, len * sizeof(float));
+  }
+  if (interleaved != nullptr) sonare_free_floats(interleaved);
+  return out;
+}
+
+void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t* bytes = nullptr;
+  size_t len = 0;
+  if (info.Length() > 0 && info[0].IsBuffer()) {
+    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
+    bytes = buf.Data();
+    len = buf.Length();
+  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
+    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
+    bytes = arr.Data();
+    len = arr.ByteLength();
+  } else {
+    Napi::TypeError::New(env, "loadSoundFont expects a Buffer or Uint8Array")
+        .ThrowAsJavaScriptException();
+    return;
+  }
+  ThrowIfError(env, sonare_project_load_soundfont(project_, bytes, len));
+}
+
+void ProjectWrap::ClearSoundFont(const Napi::CallbackInfo& info) {
+  ThrowIfError(info.Env(), sonare_project_clear_soundfont(project_));
+}
+
+Napi::Value ProjectWrap::SoundFontPresetCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_soundfont_preset_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t total = 0;
+  ThrowIfError(env, sonare_project_soundfont_manifest(project_, nullptr, 0, &total));
+  if (env.IsExceptionPending()) return env.Undefined();
+  std::vector<SonareSf2ProgramStatus> entries(total);
+  if (total > 0) {
+    ThrowIfError(env, sonare_project_soundfont_manifest(project_, entries.data(), total, &total));
+    if (env.IsExceptionPending()) return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, entries.size());
+  for (size_t i = 0; i < entries.size(); ++i) {
+    Napi::Object entry = Napi::Object::New(env);
+    entry.Set("channel", Napi::Number::New(env, entries[i].channel));
+    entry.Set("bank", Napi::Number::New(env, entries[i].bank));
+    entry.Set("program", Napi::Number::New(env, entries[i].program));
+    entry.Set(
+        "backend",
+        Napi::String::New(env, entries[i].backend == SONARE_SOURCE_BACKEND_SF2 ? "sf2" : "synth"));
+    entry.Set("presetName", Napi::String::New(env, entries[i].preset_name));
+    out.Set(static_cast<uint32_t>(i), entry);
+  }
+  return out;
+}
+
+Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // Argument order is instrument-first to match bounceWithBuiltinInstruments:
+  //   bounceWithSf2Instruments(instruments, options?)
+  SonareProjectBounceOptions options{};
+  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
+    FillBounceOptions(info[1].As<Napi::Object>(), &options);
+  }
+  std::vector<SonareSf2InstrumentBinding> bindings;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array arr = info[0].As<Napi::Array>();
+    bindings.reserve(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      Napi::Value element = arr.Get(i);
+      if (!element.IsObject()) {
+        Napi::TypeError::New(env, "bounceWithSf2Instruments: instrument bindings must be objects")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = element.As<Napi::Object>();
+      SonareSf2InstrumentBinding binding{};
+      binding.destination_id = obj.Get("destinationId").IsUndefined()
+                                   ? 0u
+                                   : obj.Get("destinationId").As<Napi::Number>().Uint32Value();
+      binding.config.gain = FloatProperty(obj, "gain", 0.0f);
+      binding.config.polyphony = IntProperty(obj, "polyphony", 0);
+      bindings.push_back(binding);
+    }
+  }
+  float* interleaved = nullptr;
+  size_t len = 0;
+  ThrowIfError(env, sonare_project_bounce_with_sf2_instruments(
                         project_, &options, bindings.empty() ? nullptr : bindings.data(),
                         bindings.size(), &interleaved, &len));
   if (env.IsExceptionPending()) return env.Undefined();

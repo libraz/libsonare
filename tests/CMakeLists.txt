@@ -353,6 +353,7 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_project_bounce_test.cpp
     bindings/binding_project_editing_test.cpp
     bindings/binding_project_midi_test.cpp
+    bindings/binding_project_soundfont_test.cpp
   )
   # The headless-project C ABI sources are compiled into the test binary so the
   # parity test drives the real C surface, like the engine/voice-changer TUs.
@@ -363,6 +364,7 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
   )
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ARRANGEMENT=1)

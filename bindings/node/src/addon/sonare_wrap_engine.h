@@ -59,6 +59,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
   Napi::Value ClearParameters(const Napi::CallbackInfo& info);
   Napi::Value SetBuiltinInstrument(const Napi::CallbackInfo& info);
+  Napi::Value LoadSoundFont(const Napi::CallbackInfo& info);
+  Napi::Value SetSf2Instrument(const Napi::CallbackInfo& info);
   Napi::Value ClearMidiInstrument(const Napi::CallbackInfo& info);
   Napi::Value MidiInstrumentCount(const Napi::CallbackInfo& info);
   Napi::Value BindMidiCc(const Napi::CallbackInfo& info);

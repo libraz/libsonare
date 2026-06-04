@@ -4,6 +4,28 @@
 
 ### New features
 
+- Added a GS-compatible SoundFont 2 instrument so MIDI arrangements render with
+  real sampled sounds (the SF2 file is host-supplied data; nothing is baked into
+  the binaries):
+  - SF2 parsing and a 16-part multitimbral player: preset/instrument zone
+    layering with generator/modulator semantics (volume + modulation DAHDSR
+    envelopes, vibrato/mod LFOs, low-pass filter with velocity tracking,
+    exclusive classes, loop modes), the SF2 default modulator set (velocity /
+    CC7 / CC11 square-law gain, CC1 vibrato, CC91/93 sends), pitch bend with
+    RPN 0 bend range, and deterministic voice stealing.
+  - GS architecture on top: variation-bank fallback to the capital tone,
+    bank-128 drum kits on channel 10, NRPN part edits (TVF cutoff/resonance,
+    TVA envelope, vibrato) and per-note drum NRPNs, GS Reset / GM System On /
+    "use for rhythm part" SysEx (recognised both from hosts and from SysEx
+    events inside an arrangement), and reverb / chorus / delay send-return
+    effects with a per-part drive insert.
+  - New C ABI: `sonare_project_load_soundfont` (+ clear / preset count),
+    `sonare_project_soundfont_manifest` (reports per-program source backend:
+    SF2 or synthesizer fallback), `sonare_project_bounce_with_sf2_instruments`,
+    and the realtime-engine pair `sonare_engine_load_soundfont` /
+    `sonare_engine_set_sf2_instrument` so live MIDI input plays through the
+    SoundFont. Exposed across the Python, Node, and WASM bindings.
+
 - Added a headless DAW / arrangement runtime, exposed through a new project C ABI
   and across the Python, Node, WASM, and CLI bindings:
   - Author projects with audio and MIDI tracks and clips. Clip edits (add /

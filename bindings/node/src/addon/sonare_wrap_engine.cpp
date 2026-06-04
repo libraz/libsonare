@@ -98,6 +98,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
           InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
           InstanceMethod<&RealtimeEngineWrap::SetBuiltinInstrument>("setBuiltinInstrument"),
+          InstanceMethod<&RealtimeEngineWrap::LoadSoundFont>("loadSoundFont"),
+          InstanceMethod<&RealtimeEngineWrap::SetSf2Instrument>("setSf2Instrument"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiInstrument>("clearMidiInstrument"),
           InstanceMethod<&RealtimeEngineWrap::MidiInstrumentCount>("midiInstrumentCount"),
           InstanceMethod<&RealtimeEngineWrap::BindMidiCc>("bindMidiCc"),
@@ -445,6 +447,41 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
     if (!ReadEngineBuiltinSynthConfig(env, obj, &config)) return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_builtin_instrument(engine_, destination_id, &config));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t* bytes = nullptr;
+  size_t len = 0;
+  if (info.Length() > 0 && info[0].IsBuffer()) {
+    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
+    bytes = buf.Data();
+    len = buf.Length();
+  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
+    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
+    bytes = arr.Data();
+    len = arr.ByteLength();
+  } else {
+    Napi::TypeError::New(env, "loadSoundFont expects a Buffer or Uint8Array")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_load_soundfont(engine_, bytes, len));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  SonareEngineSf2InstrumentConfig config{};
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object obj = info[1].As<Napi::Object>();
+    if (obj.Has("gain")) config.gain = obj.Get("gain").As<Napi::Number>().FloatValue();
+    if (obj.Has("polyphony"))
+      config.polyphony = obj.Get("polyphony").As<Napi::Number>().Int32Value();
+  }
+  ThrowIfError(env, sonare_engine_set_sf2_instrument(engine_, destination_id, &config));
   return env.Undefined();
 }
 

@@ -141,6 +141,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_edit.cpp
   c_api/project_midi.cpp
   c_api/project_mir.cpp
+  c_api/project_soundfont.cpp
 )
 
 # Decide whether to enable FFmpeg integration.

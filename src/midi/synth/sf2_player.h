@@ -54,6 +54,13 @@ struct Sf2PartInsert {
   float amount = 0.0f;
 };
 
+/// GS-style preset lookup on a parsed SoundFont: exact (bank, program) first,
+/// then the GS fallbacks (unknown variation bank -> capital tone bank 0; drum
+/// bank 128 -> standard kit program 0). Returns the preset index or -1. This is
+/// the resolution rule Sf2Player uses for note-on, exposed so hosts can report
+/// which programs a SoundFont covers (the bounce manifest) without a player.
+int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) noexcept;
+
 struct Sf2PlayerConfig {
   /// Master output gain applied to the summed voices (linear).
   float gain = 0.5f;

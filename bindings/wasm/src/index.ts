@@ -229,6 +229,9 @@ export type {
   ProjectTrackKind,
   ProjectWarpAnchor,
   ProjectWarpMapDesc,
+  Sf2InstrumentConfig,
+  Sf2ProgramStatus,
+  SourceBackend,
 } from './project';
 export { EXPECTED_PROJECT_ABI_VERSION, Project, projectAbiVersion } from './project';
 export type {

@@ -479,6 +479,20 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
             ctypes.POINTER(SonareBuiltinSynthConfig),
         ]
+    if hasattr(lib, "sonare_engine_load_soundfont"):
+        lib.sonare_engine_load_soundfont.restype = ctypes.c_int32
+        lib.sonare_engine_load_soundfont.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t,
+        ]
+    if hasattr(lib, "sonare_engine_set_sf2_instrument"):
+        lib.sonare_engine_set_sf2_instrument.restype = ctypes.c_int32
+        lib.sonare_engine_set_sf2_instrument.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareSf2InstrumentConfig),
+        ]
     if hasattr(lib, "sonare_engine_clear_midi_instrument"):
         lib.sonare_engine_clear_midi_instrument.restype = ctypes.c_int32
         lib.sonare_engine_clear_midi_instrument.argtypes = [

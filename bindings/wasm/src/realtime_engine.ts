@@ -77,6 +77,8 @@ export function engineCapabilities(): EngineCapabilities {
 // shape so the wrapper can reach them without a stale type error.
 interface WasmRealtimeEngineExt {
   setBuiltinInstrument: (destinationId: number, config: object) => void;
+  loadSoundFont: (data: Uint8Array) => void;
+  setSf2Instrument: (destinationId: number, config: object) => void;
   clearMidiInstrument: (destinationId: number) => void;
   midiInstrumentCount: () => number;
   bindMidiCc: (
@@ -194,6 +196,30 @@ export class RealtimeEngine {
     destinationId = config.destinationId ?? 0,
   ): void {
     this.nativeExt().setBuiltinInstrument(destinationId, config);
+  }
+
+  /**
+   * Load (parse) SoundFont 2 bytes into the engine so SF2 instruments can be
+   * bound with {@link setSf2Instrument}. The host fetches the `.sf2` and
+   * passes the raw bytes; they are copied into linear memory for the call and
+   * not referenced afterwards. Replaces any previously loaded SoundFont.
+   */
+  loadSoundFont(data: Uint8Array): void {
+    this.nativeExt().loadSoundFont(data);
+  }
+
+  /**
+   * Bind a GS-compatible SoundFont player to a realtime MIDI destination, fed
+   * by the engine's loaded SoundFont ({@link loadSoundFont} must succeed
+   * first). Live note/CC commands and scheduled MIDI clips routed to that
+   * destination render through the SoundFont (16 MIDI channels, channel 10
+   * drums, GS NRPN part edits, GS/GM SysEx resets).
+   */
+  setSf2Instrument(
+    config: { destinationId?: number; gain?: number; polyphony?: number } = {},
+    destinationId = config.destinationId ?? 0,
+  ): void {
+    this.nativeExt().setSf2Instrument(destinationId, config);
   }
 
   clearMidiInstrument(destinationId = 0): void {

@@ -766,6 +766,88 @@ SonareError sonare_project_bounce_with_builtin_instruments(
     float** out_interleaved, size_t* out_len);
 
 // ============================================================================
+// SoundFont (SF2) instrument: host-supplied sample data, GS-compatible player
+// ============================================================================
+
+/// @brief Loads (parses) SF2 bytes into the project: presets / instruments /
+///        sample headers plus the sample PCM converted to a float pool.
+///        Replaces any previously loaded SoundFont. CONTROL thread; the bytes
+///        are copied/decoded, so @p data may be freed after the call. On a
+///        malformed file the project's SoundFont is left unchanged and
+///        SONARE_ERROR_INVALID_PARAMETER is returned (sonare_last_error_message
+///        carries the parser detail).
+SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t* data, size_t size);
+
+/// @brief Releases the project's loaded SoundFont (no-op when none is loaded).
+SonareError sonare_project_clear_soundfont(SonareProject* project);
+
+/// @brief Number of presets in the project's loaded SoundFont (0 when none).
+SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t* out_count);
+
+/// @brief Source backend a resolved MIDI program renders through: the loaded
+///        SoundFont (kSf2) or the built-in synthesizer fallback (kSynth).
+typedef enum {
+  SONARE_SOURCE_BACKEND_SYNTH = 0,
+  SONARE_SOURCE_BACKEND_SF2 = 1,
+} SonareSourceBackend;
+
+/// @brief One bounce-manifest entry: a (channel, bank, program) combination the
+///        arrangement actually plays, with the backend it resolves to.
+///        `bank` is the effective SF2 bank (drum channels report 128, melodic
+///        channels the CC0 variation bank). `preset_name` is the resolved SF2
+///        preset name (GS fallback included), empty for SONARE_SOURCE_BACKEND_SYNTH.
+typedef struct {
+  uint8_t channel; /* MIDI channel 0-15 */
+  uint8_t program; /* program number 0-127 */
+  uint16_t bank;   /* effective SF2 bank (128 = drums) */
+  int backend;     /* SonareSourceBackend */
+  char preset_name[64];
+} SonareSf2ProgramStatus;
+
+/// @brief Enumerates every (channel, bank, program) combination the compiled
+///        arrangement plays a note through, in first-use order, and reports
+///        whether each resolves in the loaded SoundFont (GS variation/drum
+///        fallbacks included) or would fall back to the built-in synth.
+///        Bank select (CC0) and program-change events are tracked per
+///        (destination, channel) in event order; channel 10 resolves drums via
+///        bank 128. @p out may be NULL when @p max_entries is 0 to query the
+///        count: @p out_count always receives the TOTAL entry count and at most
+///        @p max_entries entries are written.
+SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
+                                              size_t max_entries, size_t* out_count);
+
+/// @brief Versioned SF2 player patch for @ref
+///        sonare_project_bounce_with_sf2_instruments. Zero-initialize then
+///        override: every field uses "0 => default" (struct_version 0 is
+///        treated as the current version 1).
+typedef struct {
+  int struct_version; /* 0 or 1 => version 1 */
+  float gain;         /* master output gain (linear); 0 => 0.5 */
+  int polyphony;      /* max simultaneous voices; 0 => 48, clamped to [1, 64] */
+} SonareSf2InstrumentConfig;
+
+/// @brief Binds an SF2 player patch to a MIDI destination id (the value set by
+///        @ref sonare_project_set_track_midi_destination; default 0).
+typedef struct {
+  uint32_t destination_id;
+  SonareSf2InstrumentConfig config;
+} SonareSf2InstrumentBinding;
+
+/// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
+///        the given destinations through a GS-compatible SoundFont player fed
+///        by the project's loaded SoundFont (@ref sonare_project_load_soundfont
+///        must succeed first when @p instrument_count > 0; otherwise
+///        SONARE_ERROR_INVALID_STATE). Each bound player is multitimbral (16
+///        MIDI channels, channel 10 drums via bank 128, GS NRPN part edits and
+///        GS/GM SysEx resets honored); programs the SoundFont does not cover
+///        are silent (see @ref sonare_project_soundfont_manifest).
+///        Deterministic for a fixed project + options + SoundFont + patch.
+SonareError sonare_project_bounce_with_sf2_instruments(
+    SonareProject* project, const SonareProjectBounceOptions* options,
+    const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
+    size_t* out_len);
+
+// ============================================================================
 // Edit (all mutation routes through EditHistory commands)
 // ============================================================================
 

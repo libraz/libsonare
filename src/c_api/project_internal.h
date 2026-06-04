@@ -30,6 +30,7 @@
 #include "midi/routing.h"
 #include "midi/smf.h"
 #include "midi/smf2.h"
+#include "midi/synth/sf2_file.h"
 #include "midi/ump.h"
 #include "mir/grid_snap.h"
 #include "mir/tempo_estimator_bridge.h"
@@ -58,6 +59,9 @@ struct SonareProject {
   arr::EditHistory history;
   arr::AudioContentStore audio;
   std::vector<arr::Diagnostic> last_bounce_diagnostics;
+  /// Loaded SoundFont (sonare_project_load_soundfont); shared read-only with
+  /// the SF2 players a bounce creates. Null until a load succeeds.
+  std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
 };
 
 #if defined(__clang__)

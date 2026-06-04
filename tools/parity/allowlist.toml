@@ -394,8 +394,11 @@ python = [
 # Python takes it as a separate `destination_id=0` keyword arg (the dataclass
 # config is the synth patch; the routing target is a distinct concern). Same
 # default, idiomatic representation difference — not behavioural drift.
+# set_sf2_instrument.destination_id: identical situation for the SF2 player
+# entry (same 0 default, same config-object vs keyword-arg representation).
 params = [
   "set_builtin_instrument.destination_id",
+  "set_sf2_instrument.destination_id",
 ]
 
 # ---------------------------------------------------------------------------

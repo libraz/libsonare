@@ -323,6 +323,51 @@ class SonareBuiltinInstrumentBinding(ctypes.Structure):
     ]
 
 
+# Source backend ordinals (mirror SonareSourceBackend).
+SONARE_SOURCE_BACKEND_SYNTH = 0
+SONARE_SOURCE_BACKEND_SF2 = 1
+
+
+class SonareSf2ProgramStatus(ctypes.Structure):
+    """Maps to SonareSf2ProgramStatus in sonare_c_project.h."""
+
+    _fields_ = [
+        ("channel", ctypes.c_uint8),
+        ("program", ctypes.c_uint8),
+        ("bank", ctypes.c_uint16),
+        ("backend", ctypes.c_int),
+        ("preset_name", ctypes.c_char * 64),
+    ]
+
+
+class SonareSf2InstrumentConfig(ctypes.Structure):
+    """Maps to SonareSf2InstrumentConfig in sonare_c_project.h.
+
+    Versioned struct: struct_version 0 is treated as the current version 1;
+    every other field uses "0 => default".
+    """
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int),
+        ("gain", ctypes.c_float),
+        ("polyphony", ctypes.c_int),
+    ]
+
+
+class SonareSf2InstrumentBinding(ctypes.Structure):
+    """Maps to SonareSf2InstrumentBinding in sonare_c_project.h."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("config", SonareSf2InstrumentConfig),
+    ]
+
+
+# The engine-side SonareEngineSf2InstrumentConfig has the identical layout;
+# the SonareSf2InstrumentConfig mirror is reused for both (same convention as
+# SonareBuiltinSynthConfig / SonareEngineBuiltinSynthConfig).
+
+
 # External-instrument host shim callbacks (sonare_c_project.h
 # SonareInstrumentCallbacks). All run synchronously on the bounce's calling
 # thread, so the ctypes callbacks hold the GIL for their duration.

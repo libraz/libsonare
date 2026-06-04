@@ -484,6 +484,35 @@ typedef struct {
 SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config);
+/// @brief Loads (parses) SF2 bytes into the realtime engine so SoundFont
+///        instruments can be bound to destinations with
+///        @ref sonare_engine_set_sf2_instrument. Control-thread API; replaces
+///        any previously loaded SoundFont (already-bound SF2 instruments keep
+///        the SoundFont they were created with). The bytes are copied/decoded,
+///        so @p data may be freed after the call.
+SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uint8_t* data,
+                                         size_t size);
+
+/// @brief Versioned SF2 player patch for @ref sonare_engine_set_sf2_instrument.
+/// @details Same zero-init contract as the project-bounce SF2 instruments:
+///          every field uses "0 => default" (struct_version 0 => version 1).
+typedef struct {
+  int struct_version; /* 0 or 1 => version 1 */
+  float gain;         /* master output gain (linear); 0 => 0.5 */
+  int polyphony;      /* max simultaneous voices; 0 => 48, clamped to [1, 64] */
+} SonareEngineSf2InstrumentConfig;
+
+/// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
+///        destination, fed by the engine's loaded SoundFont
+///        (@ref sonare_engine_load_soundfont must succeed first; otherwise
+///        SONARE_ERROR_INVALID_STATE). Control-thread API; the engine owns the
+///        player. Live MIDI input (`sonare_engine_push_midi_input_*` /
+///        `sonare_engine_push_midi_note_*`) and scheduled MIDI clips routed to
+///        @p destination_id render through the SoundFont (16 MIDI channels,
+///        channel 10 drums, GS NRPN part edits, GS/GM SysEx resets).
+SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                             const SonareEngineSf2InstrumentConfig* config);
+
 /// @brief Clears any realtime instrument bound to @p destination_id.
 SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id);

@@ -69,6 +69,41 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
             ]
 
+        if hasattr(lib, "sonare_project_load_soundfont"):
+            lib.sonare_project_load_soundfont.restype = ctypes.c_int32
+            lib.sonare_project_load_soundfont.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_uint8),
+                ctypes.c_size_t,
+            ]
+
+            lib.sonare_project_clear_soundfont.restype = ctypes.c_int32
+            lib.sonare_project_clear_soundfont.argtypes = [ctypes.c_void_p]
+
+            lib.sonare_project_soundfont_preset_count.restype = ctypes.c_int32
+            lib.sonare_project_soundfont_preset_count.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+
+            lib.sonare_project_soundfont_manifest.restype = ctypes.c_int32
+            lib.sonare_project_soundfont_manifest.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareSf2ProgramStatus),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+
+            lib.sonare_project_bounce_with_sf2_instruments.restype = ctypes.c_int32
+            lib.sonare_project_bounce_with_sf2_instruments.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareProjectBounceOptions),
+                ctypes.POINTER(SonareSf2InstrumentBinding),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+
         if hasattr(lib, "sonare_project_bounce_with_instruments"):
             lib.sonare_project_bounce_with_instruments.restype = ctypes.c_int32
             lib.sonare_project_bounce_with_instruments.argtypes = [

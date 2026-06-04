@@ -52,6 +52,9 @@ from ._runtime import (
     SonareProjectTrackDesc,
     SonareProjectWarpAnchor,
     SonareProjectWarpMapDesc,
+    SonareSf2InstrumentBinding,
+    SonareSf2InstrumentConfig,
+    SonareSf2ProgramStatus,
     _check,
     _curve_value,
     _from_c_float_array,
@@ -330,6 +333,46 @@ class BuiltinSynthConfig:
             release_ms=float(self.release_ms),
             polyphony=int(self.polyphony),
         )
+
+
+# Source backend ordinals (mirror SonareSourceBackend).
+SOURCE_BACKEND_SYNTH = 0
+SOURCE_BACKEND_SF2 = 1
+
+
+@dataclass(frozen=True)
+class Sf2InstrumentConfig:
+    """Patch for the SoundFont (SF2) player (see
+    :meth:`Project.bounce_with_sf2_instrument`).
+
+    Every field uses "0 (or non-positive) => sensible default" (gain 0.5,
+    polyphony 48); override only what you need.
+    """
+
+    gain: float = 0.0
+    polyphony: int = 0
+
+    def _to_c(self) -> SonareSf2InstrumentConfig:
+        return SonareSf2InstrumentConfig(
+            struct_version=0,
+            gain=float(self.gain),
+            polyphony=int(self.polyphony),
+        )
+
+
+@dataclass(frozen=True)
+class Sf2ProgramStatus:
+    """One :meth:`Project.soundfont_manifest` entry: a (channel, bank, program)
+    combination the arrangement plays, with the backend it resolves to
+    (:data:`SOURCE_BACKEND_SF2` or :data:`SOURCE_BACKEND_SYNTH`) and the
+    resolved SF2 preset name (GS fallback included; empty for the synth
+    fallback)."""
+
+    channel: int
+    bank: int
+    program: int
+    backend: int
+    preset_name: str
 
 
 def _synth_waveform_value(waveform: str | int) -> int:
@@ -1966,6 +2009,159 @@ class Project:
         out_len = ctypes.c_size_t()
         _check(
             lib.sonare_project_bounce_with_builtin_instruments(
+                self._require_handle(),
+                ctypes.byref(options),
+                c_bindings if count else None,
+                ctypes.c_size_t(count),
+                ctypes.byref(out),
+                ctypes.byref(out_len),
+            )
+        )
+        try:
+            interleaved = _from_c_float_array(out, int(out_len.value))
+        finally:
+            # Free unconditionally: the C ABI returns a non-null sentinel buffer
+            # even when out_len == 0, so a `> 0` guard would leak it.
+            if out:
+                lib.sonare_free_floats(out)
+        channels = num_channels if num_channels > 0 else 2
+        if channels > 0 and interleaved.size % channels == 0:
+            return interleaved.reshape(-1, channels)
+        return interleaved.reshape(-1, 1)
+
+    def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
+        """Load (parse) SoundFont 2 bytes into the project.
+
+        The presets / instruments / sample headers and the sample PCM (decoded
+        to a float pool) replace any previously loaded SoundFont; the input
+        buffer is not referenced after the call. Raises :class:`SonareError`
+        on malformed input (the previous SoundFont is kept).
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_load_soundfont"):
+            raise RuntimeError("libsonare was built without the SoundFont ABI")
+        buf = bytes(data)
+        if not buf:
+            raise ValueError("SoundFont data must not be empty")
+        c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
+        _check(
+            lib.sonare_project_load_soundfont(
+                self._require_handle(), c_data, ctypes.c_size_t(len(buf))
+            )
+        )
+
+    def clear_soundfont(self) -> None:
+        """Release the project's loaded SoundFont (no-op when none is loaded)."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_clear_soundfont"):
+            raise RuntimeError("libsonare was built without the SoundFont ABI")
+        _check(lib.sonare_project_clear_soundfont(self._require_handle()))
+
+    def soundfont_preset_count(self) -> int:
+        """Number of presets in the loaded SoundFont (0 when none is loaded)."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_soundfont_preset_count"):
+            raise RuntimeError("libsonare was built without the SoundFont ABI")
+        out = ctypes.c_size_t()
+        _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
+        return int(out.value)
+
+    def soundfont_manifest(self) -> list[Sf2ProgramStatus]:
+        """Enumerate the programs the arrangement plays and their backends.
+
+        Returns one :class:`Sf2ProgramStatus` per (channel, bank, program)
+        combination a note actually plays through, in first-use order. Each
+        entry reports whether it resolves in the loaded SoundFont
+        (:data:`SOURCE_BACKEND_SF2`, GS variation/drum fallbacks included) or
+        would fall back to the built-in synth (:data:`SOURCE_BACKEND_SYNTH`).
+        Without a loaded SoundFont every entry is a synth fallback.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_soundfont_manifest"):
+            raise RuntimeError("libsonare was built without the SoundFont ABI")
+        handle = self._require_handle()
+        total = ctypes.c_size_t()
+        _check(lib.sonare_project_soundfont_manifest(handle, None, 0, ctypes.byref(total)))
+        count = int(total.value)
+        if count == 0:
+            return []
+        entries = (SonareSf2ProgramStatus * count)()
+        _check(
+            lib.sonare_project_soundfont_manifest(
+                handle, entries, ctypes.c_size_t(count), ctypes.byref(total)
+            )
+        )
+        return [
+            Sf2ProgramStatus(
+                channel=int(e.channel),
+                bank=int(e.bank),
+                program=int(e.program),
+                backend=int(e.backend),
+                preset_name=e.preset_name.decode("utf-8", errors="replace"),
+            )
+            for e in entries[: min(count, int(total.value))]
+        ]
+
+    def bounce_with_sf2_instrument(
+        self,
+        instrument: Sf2InstrumentConfig | None = None,
+        *,
+        destination_id: int = 0,
+        instruments: Sequence[tuple[int, Sf2InstrumentConfig]] | None = None,
+        total_frames: int = 0,
+        block_size: int = 0,
+        num_channels: int = 0,
+        sample_rate: int = 0,
+        instrument_latency_samples: int = 0,
+    ) -> np.ndarray:
+        """Compile + render the project, driving MIDI tracks through the SF2 player.
+
+        Like :meth:`bounce_with_builtin_instrument`, but each bound destination
+        renders through a GS-compatible SoundFont player fed by the project's
+        loaded SoundFont (:meth:`load_soundfont` must succeed first): 16 MIDI
+        channels per player, channel 10 drums via bank 128, GS NRPN part edits
+        and GS/GM SysEx resets honored. Programs the SoundFont does not cover
+        are silent (see :meth:`soundfont_manifest`).
+
+        Args:
+            instrument: Patch bound to ``destination_id`` (default 0). Pass
+                ``None`` for the default patch. Ignored when ``instruments`` is
+                given.
+            destination_id: Destination id for ``instrument`` (matches
+                :meth:`set_track_midi_destination`; default 0).
+            instruments: Optional explicit list of ``(destination_id, patch)``
+                bindings, overriding ``instrument`` / ``destination_id``.
+            total_frames / block_size / num_channels / sample_rate /
+                instrument_latency_samples: As :meth:`bounce` (0 takes native
+                defaults).
+
+        Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
+        fixed project + options + SoundFont + patch.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_bounce_with_sf2_instruments"):
+            raise RuntimeError("libsonare was built without the SoundFont ABI")
+        if instruments is None:
+            patch = instrument if instrument is not None else Sf2InstrumentConfig()
+            bindings = [(int(destination_id), patch)]
+        else:
+            bindings = [(int(dst), patch) for dst, patch in instruments]
+        count = len(bindings)
+        c_bindings = (SonareSf2InstrumentBinding * count)()
+        for i, (dst, patch) in enumerate(bindings):
+            c_bindings[i].destination_id = dst
+            c_bindings[i].config = patch._to_c()
+        options = SonareProjectBounceOptions(
+            total_frames=int(total_frames),
+            block_size=int(block_size),
+            num_channels=int(num_channels),
+            sample_rate=int(sample_rate),
+            instrument_latency_samples=int(instrument_latency_samples),
+        )
+        out = ctypes.POINTER(ctypes.c_float)()
+        out_len = ctypes.c_size_t()
+        _check(
+            lib.sonare_project_bounce_with_sf2_instruments(
                 self._require_handle(),
                 ctypes.byref(options),
                 c_bindings if count else None,
