@@ -644,7 +644,7 @@ val js_analyze_with_progress(val samples, int sample_rate, val progress_callback
   // Set progress callback if provided
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage));
+      progress_callback(progress, std::string(stage ? stage : ""));
     });
   }
 

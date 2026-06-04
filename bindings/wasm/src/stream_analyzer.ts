@@ -252,10 +252,13 @@ export class StreamAnalyzer {
     this.analyzer.setTuningRefHz(refHz);
   }
 
-  /**
-   * Release resources. Call when done using the analyzer.
-   */
-  dispose(): void {
+  /** Release the underlying WASM object. Safe to call only once. */
+  delete(): void {
     this.analyzer.delete();
+  }
+
+  /** Alias for {@link delete}, kept for backward compatibility (historical name). */
+  dispose(): void {
+    this.delete();
   }
 }

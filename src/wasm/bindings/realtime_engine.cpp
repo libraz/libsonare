@@ -95,9 +95,8 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
     }
     sonare::midi::QuantizeConfig quantize;
     quantize.enabled = true;
-    constexpr int64_t kPpqFxScale = 960000;
-    quantize.grid_frames =
-        std::max<int64_t>(1, static_cast<int64_t>(std::llround(grid_ppq * kPpqFxScale)));
+    quantize.grid_frames = std::max<int64_t>(
+        1, static_cast<int64_t>(std::llround(grid_ppq * sonare::midi::kMidiFxPpqScale)));
     quantize.strength = static_cast<float>(strength);
     chain->set_quantize(quantize);
   }
@@ -140,8 +139,8 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
     sonare::midi::HumanizeConfig humanize;
     humanize.enabled = true;
     humanize.seed = static_cast<uint32_t>(seed);
-    constexpr int64_t kPpqFxScale = 960000;
-    humanize.timing_frames = static_cast<int64_t>(std::llround(timing_ppq * kPpqFxScale));
+    humanize.timing_frames =
+        static_cast<int64_t>(std::llround(timing_ppq * sonare::midi::kMidiFxPpqScale));
     humanize.velocity_amount = velocity_amount;
     chain->set_humanize(humanize);
   }

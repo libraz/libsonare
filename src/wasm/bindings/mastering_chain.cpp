@@ -291,7 +291,7 @@ val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     chain.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage));
+      progress_callback(progress, std::string(stage ? stage : ""));
     });
   }
   auto result = chain.process_mono(data.data(), data.size(), sample_rate);
@@ -323,7 +323,7 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     chain.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage));
+      progress_callback(progress, std::string(stage ? stage : ""));
     });
   }
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);

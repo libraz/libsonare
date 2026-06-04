@@ -10,6 +10,15 @@ describe('StreamAnalyzer', () => {
     await init();
   });
 
+  describe('lifecycle', () => {
+    it('exposes delete() like every other WASM wrapper, with dispose() as alias', () => {
+      const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
+      expect(typeof analyzer.delete).toBe('function');
+      expect(typeof analyzer.dispose).toBe('function');
+      analyzer.delete();
+    });
+  });
+
   describe('chord progression', () => {
     it('should detect chord changes over time', () => {
       const sampleRate = 22050;

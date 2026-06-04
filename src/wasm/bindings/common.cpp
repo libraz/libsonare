@@ -44,7 +44,17 @@ val vectorToInt32Array(const std::vector<int>& vec) {
   return result;
 }
 
-val vectorToUint8Array(const std::vector<uint8_t>& vec);
+// Uint8 sibling, declared in common.h. Defined here with the other
+// vectorTo*Array helpers (it used to live in stream_analyzer.cpp, leaving
+// project.cpp linking against another TU's definition).
+val vectorToUint8Array(const std::vector<uint8_t>& vec) {
+  const size_t n = vec.size();
+  val result = val::global("Uint8Array").new_(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, vec.data()));
+  result.call<void>("set", view);
+  return result;
+}
 
 // Bulk-copy a JS Float32Array (or any array-like with numeric `.length`) into
 // a freshly-allocated std::vector<float>. The single boundary crossing is

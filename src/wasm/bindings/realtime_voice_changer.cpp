@@ -53,7 +53,8 @@ class RealtimeVoiceChangerWrapper {
     copyFloat32Array(samples, mono_input_, static_cast<size_t>(length));
     changer_.process_block(mono_input_.data(), mono_output_.data(), length);
     val output = val::global("Float32Array").new_(length);
-    for (int i = 0; i < length; ++i) output.set(i, mono_output_[static_cast<size_t>(i)]);
+    val view = val(typed_memory_view(static_cast<size_t>(length), mono_output_.data()));
+    output.call<void>("set", view);
     return output;
   }
 
@@ -67,7 +68,8 @@ class RealtimeVoiceChangerWrapper {
     ensure_mono_capacity(static_cast<size_t>(length));
     copyFloat32Array(samples, mono_input_, static_cast<size_t>(length));
     changer_.process_block(mono_input_.data(), mono_output_.data(), length);
-    for (int i = 0; i < length; ++i) output.set(i, mono_output_[static_cast<size_t>(i)]);
+    val view = val(typed_memory_view(static_cast<size_t>(length), mono_output_.data()));
+    output.call<void>("set", view);
   }
 
   val processInterleaved(val samples, int channels) {
