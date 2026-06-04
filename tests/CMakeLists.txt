@@ -329,6 +329,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi_ump_test.cpp
     midi/builtin_synth_test.cpp
     midi/synth_toolkit_test.cpp
+    midi/sf2_file_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp
