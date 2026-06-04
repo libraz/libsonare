@@ -646,6 +646,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/oscillator.cpp
     midi/synth/filter_models.cpp
     midi/synth/mod_matrix.cpp
+    midi/synth/fm_voice.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/sf2_file.cpp

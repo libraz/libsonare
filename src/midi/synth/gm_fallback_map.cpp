@@ -35,13 +35,21 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[0].key_track = 0.5f;
   t[0].vel_to_cutoff_cents = 1800.0f;
 
-  // 8-15 chromatic percussion: bright triangle, fast decay.
-  t[1].waveform = VaWaveform::kTriangle;
-  t[1].amp_env = env(1.0f, 600.0f, 0.0f, 400.0f);
-  t[1].cutoff_hz = 6000.0f;
-  t[1].filter_env = env(1.0f, 400.0f, 0.2f, 400.0f);
-  t[1].env_to_cutoff_cents = 1200.0f;
-  t[1].key_track = 0.6f;
+  // 8-15 chromatic percussion: FM bell (inharmonic 3.5 ratio, long
+  // key-rate-scaled decay).
+  t[1].mode = SynthEngineMode::kFm;
+  t[1].amp_env = env(1.0f, 2500.0f, 0.0f, 600.0f);
+  t[1].fm.algorithm = FmAlgorithm::kStack2;
+  t[1].fm.ops[0].ratio = 1.0f;
+  t[1].fm.ops[0].level = 1.0f;
+  t[1].fm.ops[0].env = env(1.0f, 2500.0f, 0.0f, 600.0f);
+  t[1].fm.ops[0].key_rate_scale = 0.4f;
+  t[1].fm.ops[1].ratio = 3.5f;  // inharmonic bell partials
+  t[1].fm.ops[1].level = 3.0f;
+  t[1].fm.ops[1].env = env(1.0f, 900.0f, 0.0f, 400.0f);
+  t[1].fm.ops[1].vel_to_level = 0.6f;
+  t[1].fm.ops[1].key_rate_scale = 0.5f;
+  t[1].gain = 0.6f;
 
   // 16-23 organ: steady detuned squares, no filter envelope.
   t[2].waveform = VaWaveform::kSquare;
@@ -91,17 +99,22 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[6].amp_env = env(200.0f, 400.0f, 0.8f, 500.0f);
   t[6].cutoff_hz = 3200.0f;
 
-  // 56-63 brass: driven ladder saw with an opening filter swell.
-  t[7].waveform = VaWaveform::kSaw;
-  t[7].unison = 2;
-  t[7].detune_cents = 6.0f;
-  t[7].filter_model = SynthFilterModel::kMoogLadder;
-  t[7].drive = 0.2f;
+  // 56-63 brass: 3-op FM stack with a feedback operator (the DX brass
+  // recipe), index swelling in through the modulator envelope.
+  t[7].mode = SynthEngineMode::kFm;
   t[7].amp_env = env(40.0f, 200.0f, 0.85f, 200.0f);
-  t[7].cutoff_hz = 1500.0f;
-  t[7].filter_env = env(60.0f, 300.0f, 0.6f, 200.0f);
-  t[7].env_to_cutoff_cents = 1800.0f;
-  t[7].vel_to_cutoff_cents = 1500.0f;
+  t[7].fm.algorithm = FmAlgorithm::kStack3;
+  t[7].fm.ops[0].ratio = 1.0f;
+  t[7].fm.ops[0].level = 1.0f;
+  t[7].fm.ops[0].env = env(40.0f, 200.0f, 0.85f, 200.0f);
+  t[7].fm.ops[1].ratio = 1.0f;
+  t[7].fm.ops[1].level = 1.6f;
+  t[7].fm.ops[1].env = env(80.0f, 300.0f, 0.7f, 200.0f);  // brightness swell
+  t[7].fm.ops[1].vel_to_level = 0.5f;
+  t[7].fm.ops[2].ratio = 1.0f;
+  t[7].fm.ops[2].level = 0.8f;
+  t[7].fm.ops[2].feedback = 1.2f;  // feedback op: saw-like brass spectrum
+  t[7].fm.ops[2].env = env(80.0f, 400.0f, 0.6f, 200.0f);
 
   // 64-71 reed: hollow square, light vibrato.
   t[8].waveform = VaWaveform::kSquare;
@@ -172,6 +185,70 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
 
   for (NativeSynthPatch& p : t) p = clamp_synth_patch(p);
   return t;
+}
+
+/// Program-level overrides inside a family: the electric pianos and
+/// clavi/harpsichord are FM instruments (method (2)) while the rest of the
+/// piano family stays subtractive.
+struct ProgramOverrides {
+  NativeSynthPatch e_piano;  // programs 4-5 (Electric Piano 1/2)
+  NativeSynthPatch clav;     // programs 6-7 (Harpsichord / Clavi)
+};
+
+ProgramOverrides build_program_overrides() noexcept {
+  ProgramOverrides o{};
+
+  // FM e-piano (Rhodes/Wurli sketch): body pair at 1:1 with a velocity-driven
+  // index plus a fast-decaying 14:1 "tine" pair — the exponential index
+  // fall-off is what reads as an electric piano.
+  NativeSynthPatch& ep = o.e_piano;
+  ep.mode = SynthEngineMode::kFm;
+  ep.amp_env = env(1.0f, 3000.0f, 0.0f, 250.0f);
+  ep.fm.algorithm = FmAlgorithm::kPair2x2;
+  ep.fm.ops[0].ratio = 1.0f;  // body carrier
+  ep.fm.ops[0].level = 1.0f;
+  ep.fm.ops[0].env = env(1.0f, 3000.0f, 0.0f, 250.0f);
+  ep.fm.ops[0].key_rate_scale = 0.4f;
+  ep.fm.ops[1].ratio = 1.0f;  // body modulator (warmth -> velocity)
+  ep.fm.ops[1].level = 0.9f;
+  ep.fm.ops[1].env = env(1.0f, 1200.0f, 0.0f, 250.0f);
+  ep.fm.ops[1].vel_to_level = 0.7f;
+  ep.fm.ops[1].key_rate_scale = 0.5f;
+  ep.fm.ops[2].ratio = 1.0f;  // tine carrier (quiet sparkle)
+  ep.fm.ops[2].level = 0.3f;
+  ep.fm.ops[2].env = env(1.0f, 600.0f, 0.0f, 150.0f);
+  ep.fm.ops[2].key_rate_scale = 0.5f;
+  ep.fm.ops[3].ratio = 14.0f;  // tine "ping"
+  ep.fm.ops[3].level = 1.2f;
+  ep.fm.ops[3].env = env(1.0f, 120.0f, 0.0f, 80.0f);
+  ep.fm.ops[3].vel_to_level = 0.8f;
+  ep.fm.ops[3].key_rate_scale = 0.6f;
+  ep.gain = 0.6f;
+
+  // FM clavi / harpsichord: bright high-ratio pluck with a fast index decay.
+  NativeSynthPatch& cl = o.clav;
+  cl.mode = SynthEngineMode::kFm;
+  cl.amp_env = env(1.0f, 1000.0f, 0.0f, 120.0f);
+  cl.fm.algorithm = FmAlgorithm::kStack2;
+  cl.fm.ops[0].ratio = 1.0f;
+  cl.fm.ops[0].level = 1.0f;
+  cl.fm.ops[0].env = env(1.0f, 1000.0f, 0.0f, 120.0f);
+  cl.fm.ops[0].key_rate_scale = 0.4f;
+  cl.fm.ops[1].ratio = 7.0f;
+  cl.fm.ops[1].level = 2.0f;
+  cl.fm.ops[1].env = env(1.0f, 150.0f, 0.0f, 100.0f);
+  cl.fm.ops[1].vel_to_level = 0.6f;
+  cl.fm.ops[1].key_rate_scale = 0.5f;
+  cl.gain = 0.6f;
+
+  o.e_piano = clamp_synth_patch(o.e_piano);
+  o.clav = clamp_synth_patch(o.clav);
+  return o;
+}
+
+const ProgramOverrides& program_overrides() noexcept {
+  static const ProgramOverrides kTable = build_program_overrides();
+  return kTable;
 }
 
 /// GM drum-note categories -> one-shot patches. Pitched pieces (kick / toms)
@@ -265,6 +342,16 @@ const DrumPatches& drum_patches() noexcept {
 const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) noexcept {
   // GS variation banks fall back to their capital tone's family (same rule as
   // resolve_gs_preset: the variation differs in character, not family).
+  switch (program & 0x7Fu) {
+    case 4:  // Electric Piano 1
+    case 5:  // Electric Piano 2
+      return program_overrides().e_piano;
+    case 6:  // Harpsichord
+    case 7:  // Clavi
+      return program_overrides().clav;
+    default:
+      break;
+  }
   return family_patches()[static_cast<size_t>((program & 0x7Fu) >> 3)];
 }
 
@@ -311,8 +398,9 @@ float gm_fallback_max_release_ms() noexcept {
       max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
     }
     const DrumPatches& d = drum_patches();
-    for (const NativeSynthPatch* p :
-         {&d.kick, &d.snare, &d.closed_hat, &d.open_hat, &d.tom, &d.cymbal, &d.percussion}) {
+    const ProgramOverrides& o = program_overrides();
+    for (const NativeSynthPatch* p : {&d.kick, &d.snare, &d.closed_hat, &d.open_hat, &d.tom,
+                                      &d.cymbal, &d.percussion, &o.e_piano, &o.clav}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;

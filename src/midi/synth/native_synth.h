@@ -29,6 +29,7 @@
 #include "midi/instrument.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
+#include "midi/synth/fm_voice.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/sf2_voice.h"
@@ -36,12 +37,12 @@
 
 namespace sonare::midi::synth {
 
-/// Synthesis method tag. Only kSubtractive is implemented in this phase; the
-/// remaining values reserve their slots so voice dispatch (and later the
-/// versioned ABI struct) never needs a layout change when they land.
+/// Synthesis method tag. kSubtractive and kFm are implemented; the remaining
+/// values reserve their slots so voice dispatch (and later the versioned ABI
+/// struct) never needs a layout change when they land.
 enum class SynthEngineMode : int {
   kSubtractive = 0,
-  kFm = 1,             // reserved (operator-stack FM)
+  kFm = 1,             // operator-stack FM (fm_voice.h)
   kKarplusStrong = 2,  // reserved (plucked-string waveguide)
   kModal = 3,          // reserved (resonator-bank mallets/bells)
   kAdditive = 4,       // reserved (drawbar organ)
@@ -113,6 +114,11 @@ struct NativeSynthPatch {
 
   /// Free-form modulation routings on top of the hardwired patch modulations.
   ModMatrix mod_matrix;
+
+  /// FM operator stack (used when mode == kFm; the subtractive oscillator
+  /// section is ignored in that mode, while amp envelope / filter / matrix /
+  /// glide still apply around the FM core).
+  FmPatchParams fm;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -135,6 +141,7 @@ struct NativeSynthVoice : VoiceState {
   DahdsrEnvelope amp_env;
   DahdsrEnvelope filter_env;
   SynthFilter filter;
+  FmVoiceCore fm;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;

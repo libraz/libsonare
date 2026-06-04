@@ -64,6 +64,15 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }
+  for (FmOperatorParams& op : p.fm.ops) {
+    op.ratio = std::clamp(sanitize(op.ratio, 1.0f), 0.0f, 64.0f);
+    op.detune_cents = std::clamp(sanitize(op.detune_cents, 0.0f), -1200.0f, 1200.0f);
+    op.level = std::clamp(sanitize(op.level, 0.0f), 0.0f, 16.0f);
+    op.env = clamp_env(op.env);
+    op.vel_to_level = std::clamp(sanitize(op.vel_to_level, 0.0f), 0.0f, 1.0f);
+    op.key_rate_scale = std::clamp(sanitize(op.key_rate_scale, 0.0f), 0.0f, 1.0f);
+    op.feedback = std::clamp(sanitize(op.feedback, 0.0f), 0.0f, 4.0f);
+  }
   return p;
 }
 
@@ -82,8 +91,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
 
   base_freq_hz = synth_note_to_hz(static_cast<float>(note & 0x7Fu) + p.pitch_offset_cents / 100.0f);
 
-  unison = std::clamp(p.unison, 1, kMaxUnisonOscs);
-  osc_norm = 1.0f / std::sqrt(static_cast<float>(unison));
+  unison = p.mode == SynthEngineMode::kFm ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
+  osc_norm = unison > 0 ? 1.0f / std::sqrt(static_cast<float>(unison)) : 1.0f;
+  if (p.mode == SynthEngineMode::kFm) fm.start(p.fm, sample_rate, note, velocity);
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
     // the stack never phase-locks; oscillator 0 of a single-osc patch stays
@@ -207,12 +217,16 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
   const float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
 
   float sample = 0.0f;
-  for (int k = 0; k < unison; ++k) {
-    auto& osc = oscs[static_cast<size_t>(k)];
-    osc.set_frequency(base_freq_hz * common * detune_ratio[static_cast<size_t>(k)]);
-    sample += osc.next();
+  if (patch->mode == SynthEngineMode::kFm) {
+    sample = fm.render(common);
+  } else {
+    for (int k = 0; k < unison; ++k) {
+      auto& osc = oscs[static_cast<size_t>(k)];
+      osc.set_frequency(base_freq_hz * common * detune_ratio[static_cast<size_t>(k)]);
+      sample += osc.next();
+    }
+    sample *= osc_norm;
   }
-  sample *= osc_norm;
 
   // --- pre-filter drive (gain-compensated tanh) ---
   if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
@@ -238,11 +252,13 @@ void NativeSynthVoice::release() noexcept {
   releasing = true;
   amp_env.note_off();
   filter_env.note_off();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kFm) fm.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
   amp_env.kill();
   filter_env.kill();
+  fm.kill();
   active = false;
   releasing = false;
 }

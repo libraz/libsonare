@@ -4,6 +4,14 @@
 
 ### New features
 
+- Added an FM synthesis mode to the NativeSynth voice (the e-piano / bell /
+  brass / clav family): a 2-4 operator phase-modulation stack with a small
+  algorithm table, exponential operator envelopes, a feedback operator,
+  velocity-to-index (brightness) scaling and key-rate scaling (higher notes
+  decay faster). The GM fallback bank now plays electric pianos,
+  clavi/harpsichord, the chromatic-percussion bells and the brass family
+  through FM patches.
+
 - Added a modulation matrix, a second LFO and glide/portamento to the
   NativeSynth voice: up to 8 free-form routings from envelopes / LFOs /
   velocity / key tracking / mod wheel / seeded per-voice random to pitch,

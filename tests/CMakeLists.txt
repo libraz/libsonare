@@ -331,6 +331,7 @@ if(BUILD_ARRANGEMENT)
     midi/native_synth_test.cpp
     midi/filter_models_test.cpp
     midi/mod_matrix_test.cpp
+    midi/fm_voice_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp
     midi/sf2_player_test.cpp
