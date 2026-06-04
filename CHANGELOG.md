@@ -4,6 +4,16 @@
 
 ### New features
 
+- Added selectable virtual-analog filter models to the NativeSynth voice — the
+  core of each classic synth "character": TPT state-variable (SEM family),
+  4-pole transistor ladder (ZDF, saturating loop, self-oscillates), diode
+  ladder (VCS3 / TB-303 family, coupled-stage ZDF, self-oscillates) and Korg35
+  Sallen-Key lowpass (MS-10 / early MS-20, self-oscillates) — plus a
+  gain-compensated pre-filter drive stage per patch. All models stay stable
+  and zipper-free under per-sample cutoff/resonance modulation and
+  self-oscillation is deterministic; the GM fallback bank routes bass, brass
+  and synth-lead families through the transistor ladder.
+
 - Added a NativeSynth virtual-analog engine and made it the data-free floor of
   the SoundFont player — MIDI never renders silent for lack of data:
   - Antialiased PolyBLEP oscillators (sine / saw / square / triangle plus a

@@ -28,9 +28,9 @@
 
 #include "midi/instrument.h"
 #include "midi/synth/envelope.h"
+#include "midi/synth/filter_models.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/sf2_voice.h"
-#include "midi/synth/svf.h"
 #include "midi/synth/voice_pool.h"
 
 namespace sonare::midi::synth {
@@ -46,13 +46,6 @@ enum class SynthEngineMode : int {
   kAdditive = 4,       // reserved (drawbar organ)
   kPercussion = 5,     // reserved (membrane modal + filtered noise)
   kPiano = 6,          // reserved (extended waveguide piano)
-};
-
-/// Which TPT SVF output the voice mixes (highpass enables noise hats/cymbals).
-enum class SynthFilterOutput : int {
-  kLowpass = 0,
-  kBandpass = 1,
-  kHighpass = 2,
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -86,9 +79,16 @@ struct NativeSynthPatch {
   bool one_shot = false;
 
   // --- filter section ---
+  /// Filter model (the "character" core; see filter_models.h).
+  SynthFilterModel filter_model = SynthFilterModel::kSvf;
   SynthFilterOutput filter_output = SynthFilterOutput::kLowpass;
   float cutoff_hz = 12000.0f;
+  /// Resonance Q. The ladder / Sallen-Key models map it to their normalized
+  /// feedback; Q >= kSelfOscQ reaches self-oscillation on those models.
   float resonance_q = 0.707f;
+  /// Pre-filter drive in [0,1]: gain-compensated tanh saturation on the
+  /// oscillator mix (0 = clean).
+  float drive = 0.0f;
   DahdsrConfig filter_env;
   /// Filter envelope -> cutoff offset at full envelope (cents).
   float env_to_cutoff_cents = 0.0f;
@@ -117,9 +117,12 @@ struct NativeSynthVoice : VoiceState {
   /// Static cutoff offset precomputed at start (velocity + key tracking).
   float static_cutoff_cents = 0.0f;
   bool filter_bypass = false;
+  /// Pre-filter drive gain / makeup (precomputed from patch->drive; 0 = off).
+  float drive_gain = 0.0f;
+  float drive_makeup = 1.0f;
   DahdsrEnvelope amp_env;
   DahdsrEnvelope filter_env;
-  TptSvf filter;
+  SynthFilter filter;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo drift_lfo;
   float drift_depth_cents = 0.0f;

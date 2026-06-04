@@ -52,6 +52,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.amp_env = clamp_env(p.amp_env);
   p.cutoff_hz = std::clamp(sanitize(p.cutoff_hz, 12000.0f), 10.0f, 22000.0f);
   p.resonance_q = std::clamp(sanitize(p.resonance_q, 0.707f), 0.5f, 30.0f);
+  p.drive = std::clamp(sanitize(p.drive, 0.0f), 0.0f, 1.0f);
   p.filter_env = clamp_env(p.filter_env);
   p.env_to_cutoff_cents = std::clamp(sanitize(p.env_to_cutoff_cents, 0.0f), -9600.0f, 9600.0f);
   p.key_track = std::clamp(sanitize(p.key_track, 0.0f), 0.0f, 1.0f);
@@ -100,9 +101,18 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
       p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f);
-  filter_bypass = p.filter_output == SynthFilterOutput::kLowpass && p.cutoff_hz >= 18000.0f &&
+  filter_bypass = p.filter_model == SynthFilterModel::kSvf &&
+                  p.filter_output == SynthFilterOutput::kLowpass && p.cutoff_hz >= 18000.0f &&
                   p.env_to_cutoff_cents == 0.0f && static_cutoff_cents >= 0.0f &&
                   p.resonance_q <= 0.71f;
+  if (p.drive > 0.0f) {
+    // Gain-compensated tanh drive (same law as the Sf2 part insert).
+    drive_gain = 1.0f + 9.0f * p.drive;
+    drive_makeup = 1.0f / std::tanh(drive_gain);
+  } else {
+    drive_gain = 0.0f;
+    drive_makeup = 1.0f;
+  }
 
   amp_env.configure(sample_rate, p.amp_env);
   amp_env.kill();
@@ -111,6 +121,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   filter_env.kill();
   filter_env.note_on();
   filter.prepare(sample_rate);
+  filter.set_model(p.filter_model);
 
   vibrato_lfo.start(sample_rate, 0.0f, p.lfo_rate_hz);
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
@@ -146,24 +157,16 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
   }
   sample *= osc_norm;
 
+  // --- pre-filter drive (gain-compensated tanh) ---
+  if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
+
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
   const float fenv = filter_env.next();
   if (!filter_bypass) {
     const float fc_cents = fenv * patch->env_to_cutoff_cents + static_cutoff_cents;
     const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));
     filter.set(fc, patch->resonance_q);
-    const TptSvf::Outputs out = filter.process(sample);
-    switch (patch->filter_output) {
-      case SynthFilterOutput::kLowpass:
-        sample = out.lp;
-        break;
-      case SynthFilterOutput::kBandpass:
-        sample = out.bp;
-        break;
-      case SynthFilterOutput::kHighpass:
-        sample = out.hp;
-        break;
-    }
+    sample = filter.process(sample, patch->filter_output);
   }
 
   // --- amplitude ---

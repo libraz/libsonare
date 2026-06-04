@@ -61,8 +61,11 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[3].key_track = 0.5f;
   t[3].vel_to_cutoff_cents = 1500.0f;
 
-  // 32-39 bass: single dark saw, punchy filter envelope.
+  // 32-39 bass: single dark saw through the transistor ladder, punchy
+  // filter envelope and a touch of drive.
   t[4].waveform = VaWaveform::kSaw;
+  t[4].filter_model = SynthFilterModel::kMoogLadder;
+  t[4].drive = 0.15f;
   t[4].amp_env = env(3.0f, 350.0f, 0.7f, 150.0f);
   t[4].cutoff_hz = 900.0f;
   t[4].filter_env = env(1.0f, 250.0f, 0.3f, 150.0f);
@@ -88,10 +91,12 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[6].amp_env = env(200.0f, 400.0f, 0.8f, 500.0f);
   t[6].cutoff_hz = 3200.0f;
 
-  // 56-63 brass: saw with an opening filter swell.
+  // 56-63 brass: driven ladder saw with an opening filter swell.
   t[7].waveform = VaWaveform::kSaw;
   t[7].unison = 2;
   t[7].detune_cents = 6.0f;
+  t[7].filter_model = SynthFilterModel::kMoogLadder;
+  t[7].drive = 0.2f;
   t[7].amp_env = env(40.0f, 200.0f, 0.85f, 200.0f);
   t[7].cutoff_hz = 1500.0f;
   t[7].filter_env = env(60.0f, 300.0f, 0.6f, 200.0f);
@@ -112,10 +117,12 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[9].key_track = 0.5f;
   t[9].lfo_to_pitch_cents = 7.0f;
 
-  // 80-87 synth lead: classic 3-osc detuned saw lead.
+  // 80-87 synth lead: classic 3-osc detuned saw lead through the ladder.
   t[10].waveform = VaWaveform::kSaw;
   t[10].unison = 3;
   t[10].detune_cents = 12.0f;
+  t[10].filter_model = SynthFilterModel::kMoogLadder;
+  t[10].drive = 0.1f;
   t[10].amp_env = env(5.0f, 200.0f, 0.8f, 150.0f);
   t[10].cutoff_hz = 3500.0f;
   t[10].filter_env = env(1.0f, 350.0f, 0.4f, 150.0f);
