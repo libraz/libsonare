@@ -50,14 +50,21 @@ def _summary(rep: Report) -> dict:
         by_cat_active[f.category] = by_cat_active.get(f.category, 0) + 1
     for f in info:
         by_cat_info[f.category] = by_cat_info.get(f.category, 0) + 1
-    allow = len(rep.findings) - len(rep.reported())
+    allowlisted = [f for f in rep.findings if f.allowlisted]
+    allow_by_cat = {c: 0 for c in _CATEGORIES}
+    allow_by_surface: dict[str, int] = {}
+    for f in allowlisted:
+        allow_by_cat[f.category] = allow_by_cat.get(f.category, 0) + 1
+        allow_by_surface[f.surface] = allow_by_surface.get(f.surface, 0) + 1
     return {
         "total_findings": len(rep.findings),
         "active_findings": len(active),
         "informational_findings": len(info),
-        "allowlisted": allow,
+        "allowlisted": len(allowlisted),
         "by_category_active": by_cat_active,
         "by_category_informational": by_cat_info,
+        "allowlisted_by_category": allow_by_cat,
+        "allowlisted_by_surface": allow_by_surface,
     }
 
 
@@ -97,14 +104,29 @@ def to_markdown(rep: Report) -> str:
         f"informational: {summary['informational_findings']} | "
         f"allowlisted (suppressed): {summary['allowlisted']}\n"
     )
-    out.append("| category | active | informational |")
-    out.append("|---|---|---|")
+    out.append("| category | active | informational | allowlisted |")
+    out.append("|---|---|---|---|")
     for c in _CATEGORIES:
         out.append(
             f"| {_CAT_TITLE[c]} | {summary['by_category_active'][c]} "
-            f"| {summary['by_category_informational'][c]} |"
+            f"| {summary['by_category_informational'][c]} "
+            f"| {summary['allowlisted_by_category'][c]} |"
         )
     out.append("")
+
+    # Intentional exclusions (allowlisted) per surface: these are the divergences
+    # the allowlist deliberately suppresses (each with a documented reason in
+    # allowlist.toml). Surfaced so the suppressed total stays auditable, not a
+    # silent number.
+    by_surface = summary["allowlisted_by_surface"]
+    out.append(
+        "Intentional exclusions (allowlisted, suppressed) by surface: "
+        + (
+            ", ".join(f"{s} {by_surface[s]}" for s in rep.surfaces if by_surface.get(s))
+            or "_none_"
+        )
+        + "\n"
+    )
 
     reported = rep.reported()
 
