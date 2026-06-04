@@ -68,6 +68,9 @@ inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 1;
 ///   this layer never exposes the numeric ordinal across a boundary — so the
 ///   `static_assert`s below merely FREEZE the historical values and document
 ///   the divergence so it can never drift silently into a wire mismatch.
+///   Consequently: never order-compare these values ("severity >= kError"
+///   style) or cast them into another Severity enum — compare against the
+///   enumerators by equality only, and map per-value when converting.
 enum class DiagnosticSeverity : uint32_t {
   kWarning = 0,
   kError = 1,

@@ -93,7 +93,7 @@ void ClipPlayer::process_at(float* const* channels, int num_channels, int num_sa
       const int64_t position = timeline_sample + i - clip.start_sample;
       int64_t local = local_position(clip, timeline_sample + i);
       if (local < 0 || local >= clip.buffer.num_samples) continue;
-      const float gain = clip.gain * fade_gain(clip, position, clip.fade_curve);
+      const float gain = clip.gain * fade_gain(clip, position);
       for (int ch = 0; ch < channels_to_copy; ++ch) {
         if (!channels[ch] || !clip.buffer.channels[ch]) continue;
         channels[ch][i] += clip.buffer.channels[ch][local] * gain;
@@ -149,8 +149,7 @@ float curve_gain(float fraction, FadeCurve curve) noexcept {
   }
 }
 
-float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position,
-                            FadeCurve /*curve*/) noexcept {
+float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position) noexcept {
   float gain = 1.0f;
   if (clip.fade_in_samples > 0 && position < clip.fade_in_samples) {
     const float fraction = static_cast<float>(position) / static_cast<float>(clip.fade_in_samples);

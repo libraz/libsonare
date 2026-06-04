@@ -444,6 +444,32 @@ TEST_CASE("sonare_engine_bounce_offline NULLs the owned result on validation fai
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the default",
+          "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 4800;
+  options.normalize_lufs = 1;
+  options.target_lufs = std::numeric_limits<float>::quiet_NaN();
+
+  // A garbage (NaN) target must behave like the 0.0f "use default" sentinel
+  // instead of propagating NaN into the normalisation gain.
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  bool all_finite = true;
+  for (size_t i = 0; i < result.sample_count; ++i) {
+    all_finite = all_finite && std::isfinite(result.interleaved[i]);
+  }
+  REQUIRE(all_finite);
+  sonare_free_bounce_result(&result);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

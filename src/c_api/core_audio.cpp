@@ -97,14 +97,7 @@ SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_time
   SONARE_C_TRY
   std::vector<float> beats =
       quick::detect_beats(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
-  *out_count = beats.size();
-  if (beats.empty()) {
-    *out_times = nullptr;
-  } else {
-    *out_times = new float[beats.size()];
-    std::memcpy(*out_times, beats.data(), beats.size() * sizeof(float));
-  }
-  return SONARE_OK;
+  return copy_vector(beats, out_times, out_count);
   SONARE_C_CATCH
 }
 
@@ -117,14 +110,7 @@ SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_
   SONARE_C_TRY
   std::vector<float> downbeats =
       quick::detect_downbeats(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
-  *out_count = downbeats.size();
-  if (downbeats.empty()) {
-    *out_times = nullptr;
-  } else {
-    *out_times = new float[downbeats.size()];
-    std::memcpy(*out_times, downbeats.data(), downbeats.size() * sizeof(float));
-  }
-  return SONARE_OK;
+  return copy_vector(downbeats, out_times, out_count);
   SONARE_C_CATCH
 }
 
@@ -137,14 +123,7 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
   SONARE_C_TRY
   std::vector<float> onsets =
       quick::detect_onsets(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
-  *out_count = onsets.size();
-  if (onsets.empty()) {
-    *out_times = nullptr;
-  } else {
-    *out_times = new float[onsets.size()];
-    std::memcpy(*out_times, onsets.data(), onsets.size() * sizeof(float));
-  }
-  return SONARE_OK;
+  return copy_vector(onsets, out_times, out_count);
   SONARE_C_CATCH
 }
 

@@ -855,6 +855,14 @@ std::string project_to_json(const arrangement::Project& project,
   for (const auto& m : project.markers()) markers.push_back(marker_to_json(m));
   root["markers"] = std::move(markers);
 
+  // The next_*_id counters are deliberately NOT serialized: serialization must
+  // be a pure function of the user-visible arrangement so that an edit + undo
+  // round-trip restores the exact bytes (the cross-binding undo contract,
+  // pinned by the binding parity tests) even though the counters stay bumped.
+  // Consequence (documented trade-off): a reload derives the counters from the
+  // live max-id scan below, so an id that was allocated and deleted before the
+  // save can be re-allocated after a load. Hosts must not key external state
+  // by project ids across save/load boundaries.
   root["annotation"] = annotation_to_json(project.annotation());
   root["midi_content"] = midi_content_to_json(midi);
   root["scene"] = scene_to_value(project.scene());

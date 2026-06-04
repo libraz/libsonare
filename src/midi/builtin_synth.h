@@ -16,6 +16,7 @@
 /// bit-identical audio within one build (voice stealing is deterministic:
 /// prefer a free voice, else the oldest voice).
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -80,11 +81,13 @@ class BuiltinSynth final : public MidiInstrument {
     float velocity = 0.0f;   // [0,1]
     float env = 0.0f;        // current envelope level
     Stage stage = Stage::kIdle;
+    bool key_down = false;
     uint64_t age = 0;  // start order, for deterministic voice stealing
   };
 
   void note_on(uint8_t channel, uint8_t note, float velocity) noexcept;
   void note_off(uint8_t channel, uint8_t note) noexcept;
+  void sustain_pedal(uint8_t channel, bool down) noexcept;
   // Channel-mode "All Notes Off" (CC#123): release every sounding voice on the
   // channel (graceful, honours the release tail). `all_sound_off` (CC#120)
   // silences them immediately, bypassing the release stage.
@@ -103,6 +106,7 @@ class BuiltinSynth final : public MidiInstrument {
   float decay_inc_ = 1.0f;
   float release_inc_ = 1.0f;
 
+  std::array<bool, 16> sustain_down_{};
   std::vector<Voice> voices_;
 };
 

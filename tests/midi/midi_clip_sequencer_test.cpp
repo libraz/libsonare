@@ -311,6 +311,132 @@ TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", 
   REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
 }
 
+TEST_CASE("MidiSequencer clamps overdue pending MIDI FX events to block start", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 40;
+  arp.gate_frames = 10;
+  fx.set_arpeggiator(arp);
+  REQUIRE(seq.set_midi_fx(9, fx));
+
+  MidiClipSchedule clip;
+  clip.id = 121;
+  clip.destination_id = 9;
+  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  seq.process_block(0, 32);
+  REQUIRE(sink.events.size() == 2);
+
+  sink.events.clear();
+  seq.process_block(64, 32);
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.render_frame == 64);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.ump.note_number() == 72);
+  REQUIRE(sink.events[1].event.render_frame == 64);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+}
+
+TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 30;
+  arp.gate_frames = 5;
+  fx.set_arpeggiator(arp);
+  REQUIRE(seq.set_midi_fx(9, fx));
+
+  MidiClipSchedule clip;
+  clip.id = 101;
+  clip.start_sample = 0;
+  clip.length_samples = 60;
+  clip.loop_mode = sonare::midi::MidiLoopMode::kLoop;
+  clip.loop_length_samples = 20;
+  clip.destination_id = 9;
+  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  seq.process_block(0, 20);
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.render_frame == 0);
+  REQUIRE(sink.events[1].event.render_frame == 5);
+
+  sink.events.clear();
+  seq.process_block(20, 20);
+
+  bool saw_carried_arp_note = false;
+  for (const auto& cap : sink.events) {
+    if (cap.event.render_frame == 30 && cap.event.ump.is_note_on() &&
+        cap.event.ump.note_number() == 72) {
+      saw_carried_arp_note = true;
+    }
+  }
+  REQUIRE(saw_carried_arp_note);
+  REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
+}
+
+TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain transpose_up;
+  sonare::midi::TransposeConfig up;
+  up.enabled = true;
+  up.semitones = 12;
+  transpose_up.set_transpose(up);
+  REQUIRE(seq.set_midi_fx(7, transpose_up));
+
+  MidiClipSchedule clip;
+  clip.id = 111;
+  clip.destination_id = 7;
+  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 64);
+
+  REQUIRE(seq.active_note_count() == 1);
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].event.ump.note_number() == 72);
+
+  MidiFxChain bypass;
+  sink.events.clear();
+  REQUIRE(seq.set_midi_fx(7, bypass, 64));
+
+  REQUIRE(seq.active_note_count() == 0);
+  REQUIRE_FALSE(sink.events.empty());
+  bool saw_old_pitch_release = false;
+  for (const auto& cap : sink.events) {
+    if (cap.event.render_frame == 64 && cap.event.ump.is_note_off() &&
+        cap.event.ump.note_number() == 72) {
+      saw_old_pitch_release = true;
+    }
+  }
+  REQUIRE(saw_old_pitch_release);
+}
+
 TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety)", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;

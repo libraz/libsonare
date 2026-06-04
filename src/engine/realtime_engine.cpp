@@ -528,7 +528,7 @@ void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
 }
 
 bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {
-  return midi_sequencer_.set_midi_fx(destination_id, chain);
+  return midi_sequencer_.set_midi_fx(destination_id, chain, transport_.render_frame());
 }
 
 void RealtimeEngine::clear_midi_fx(uint32_t destination_id) noexcept {

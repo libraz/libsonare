@@ -21,6 +21,7 @@
 #include "arrangement/edit_history.h"
 #include "arrangement/edit_model.h"
 #include "arrangement/edit_source.h"
+#include "c_api/midi_fx_json.h"
 #include "core/audio.h"
 #include "engine/realtime_engine.h"
 #include "midi/cc_map.h"
@@ -202,119 +203,14 @@ bool is_bank_or_program_event_for(const arr::MidiClipEvent& event, uint8_t group
   return cc == 0 || cc == 32;
 }
 
-double json_number_or(const json::Value& obj, const char* key, double fallback) {
-  const json::Value* value = obj.find(key);
-  return value != nullptr && value->is_number() ? value->as_number() : fallback;
-}
-
-bool json_has_number(const json::Value& obj, const char* key) {
-  const json::Value* value = obj.find(key);
-  return value != nullptr && value->is_number();
-}
-
-int json_int_or(const json::Value& obj, const char* key, int fallback) {
-  const double value = json_number_or(obj, key, static_cast<double>(fallback));
-  if (!std::isfinite(value)) return fallback;
-  return static_cast<int>(std::lround(value));
-}
-
-SonareError midi_fx_chain_from_json(const char* config_json, sonare::midi::MidiFxChain* chain) {
-  if (config_json == nullptr || chain == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  json::Value root;
-  try {
-    root = json::parse_strict(config_json);
-  } catch (const json::JsonError&) {
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  if (!root.is_object()) return SONARE_ERROR_INVALID_PARAMETER;
-
-  sonare::midi::TransposeConfig transpose;
-  if (json_has_number(root, "transpose_semitones")) {
-    transpose.enabled = true;
-    transpose.semitones = json_int_or(root, "transpose_semitones", 0);
-    chain->set_transpose(transpose);
-  }
-
-  sonare::midi::VelocityCurveConfig velocity;
-  const bool has_velocity = json_has_number(root, "velocity_scale") ||
-                            json_has_number(root, "velocity_offset") ||
-                            json_has_number(root, "velocity_gamma");
-  if (has_velocity) {
-    velocity.enabled = true;
-    velocity.scale = static_cast<float>(json_number_or(root, "velocity_scale", 1.0));
-    velocity.offset = static_cast<float>(json_number_or(root, "velocity_offset", 0.0));
-    velocity.gamma = static_cast<float>(json_number_or(root, "velocity_gamma", 1.0));
-    if (!std::isfinite(velocity.scale) || !std::isfinite(velocity.offset) ||
-        !std::isfinite(velocity.gamma) || velocity.gamma <= 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    chain->set_velocity_curve(velocity);
-  }
-
-  if (json_has_number(root, "quantize_ppq")) {
-    const double grid_ppq = json_number_or(root, "quantize_ppq", 0.0);
-    const double strength = json_number_or(root, "quantize_strength", 1.0);
-    if (!finite_positive(grid_ppq) || !std::isfinite(strength) || strength < 0.0 ||
-        strength > 1.0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    sonare::midi::QuantizeConfig quantize;
-    quantize.enabled = true;
-    constexpr int64_t kPpqFxScale = 960000;
-    quantize.grid_frames =
-        std::max<int64_t>(1, static_cast<int64_t>(std::llround(grid_ppq * kPpqFxScale)));
-    quantize.strength = static_cast<float>(strength);
-    chain->set_quantize(quantize);
-  }
-
-  if (const json::Value* intervals = root.find("chord_intervals")) {
-    if (!intervals->is_array()) return SONARE_ERROR_INVALID_PARAMETER;
-    sonare::midi::ChordConfig chord;
-    chord.enabled = true;
-    const auto& values = intervals->as_array();
-    if (values.empty() || values.size() > sonare::midi::ChordConfig::kMaxChordNotes) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    chord.count = values.size();
-    for (size_t i = 0; i < values.size(); ++i) {
-      if (!values[i].is_number()) return SONARE_ERROR_INVALID_PARAMETER;
-      chord.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
-    }
-    chain->set_chord(chord);
-  }
-
-  const bool has_humanize = json_has_number(root, "humanize_ppq") ||
-                            json_has_number(root, "humanize_velocity") ||
-                            json_has_number(root, "seed");
-  if (has_humanize) {
-    const double timing_ppq = json_number_or(root, "humanize_ppq", 0.0);
-    const int velocity_amount = json_int_or(root, "humanize_velocity", 0);
-    const int seed = json_int_or(root, "seed", 0);
-    if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||
-        velocity_amount > 127 || seed < 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    sonare::midi::HumanizeConfig humanize;
-    humanize.enabled = true;
-    humanize.seed = static_cast<uint32_t>(seed);
-    constexpr int64_t kPpqFxScale = 960000;
-    humanize.timing_frames = static_cast<int64_t>(std::llround(timing_ppq * kPpqFxScale));
-    humanize.velocity_amount = velocity_amount;
-    chain->set_humanize(humanize);
-  }
-
-  chain->prepare();
-  return SONARE_OK;
-}
-
 arr::MidiClipEventList apply_midi_fx_to_events(const arr::MidiClipEventList& events,
                                                sonare::midi::MidiFxChain* chain) {
-  constexpr int64_t kPpqFxScale = 960000;
   std::vector<sonare::midi::MidiEvent> in;
   in.reserve(events.size());
   for (const arr::MidiClipEvent& event : events) {
     sonare::midi::MidiEvent midi_event;
-    midi_event.render_frame = static_cast<int64_t>(std::llround(event.ppq * kPpqFxScale));
+    midi_event.render_frame =
+        static_cast<int64_t>(std::llround(event.ppq * sonare::midi::kMidiFxPpqScale));
     midi_event.ump.words[0] = event.data0;
     midi_event.ump.words[1] = event.data1;
     midi_event.ump.word_count = ump_word_count_from_word0(event.data0);
@@ -329,7 +225,8 @@ arr::MidiClipEventList apply_midi_fx_to_events(const arr::MidiClipEventList& eve
   transformed.reserve(out.size);
   for (size_t i = 0; i < out.size; ++i) {
     arr::MidiClipEvent event;
-    event.ppq = static_cast<double>(out.events[i].render_frame) / static_cast<double>(kPpqFxScale);
+    event.ppq = static_cast<double>(out.events[i].render_frame) /
+                static_cast<double>(sonare::midi::kMidiFxPpqScale);
     event.data0 = out.events[i].ump.words[0];
     event.data1 = out.events[i].ump.words[1];
     event.sysex_handle = out.events[i].ump.sysex_handle;

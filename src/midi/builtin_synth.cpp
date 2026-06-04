@@ -83,6 +83,7 @@ void BuiltinSynth::prepare(double sample_rate, int /*max_block_size*/) {
 
 void BuiltinSynth::reset() {
   for (auto& v : voices_) v = Voice{};
+  sustain_down_ = {};
   next_age_ = 1;
 }
 
@@ -111,6 +112,7 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexce
   target->velocity = clampf(velocity, 0.0f, 1.0f);
   target->env = 0.0f;
   target->stage = Stage::kAttack;
+  target->key_down = true;
   target->age = next_age_++;
 }
 
@@ -118,6 +120,22 @@ void BuiltinSynth::note_off(uint8_t channel, uint8_t note) noexcept {
   if (!prepared_) return;
   for (auto& v : voices_) {
     if (v.active && v.note == note && v.channel == channel && v.stage != Stage::kRelease) {
+      v.key_down = false;
+      if (!sustain_down_[channel & 0x0Fu]) {
+        v.stage = Stage::kRelease;
+      }
+    }
+  }
+}
+
+void BuiltinSynth::sustain_pedal(uint8_t channel, bool down) noexcept {
+  if (!prepared_) return;
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
+  if (sustain_down_[ch] == down) return;
+  sustain_down_[ch] = down;
+  if (down) return;
+  for (auto& v : voices_) {
+    if (v.active && v.channel == ch && !v.key_down && v.stage != Stage::kRelease) {
       v.stage = Stage::kRelease;
     }
   }
@@ -125,13 +143,18 @@ void BuiltinSynth::note_off(uint8_t channel, uint8_t note) noexcept {
 
 void BuiltinSynth::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
+  sustain_down_[channel & 0x0Fu] = false;
   for (auto& v : voices_) {
-    if (v.active && v.channel == channel && v.stage != Stage::kRelease) v.stage = Stage::kRelease;
+    if (v.active && v.channel == channel && v.stage != Stage::kRelease) {
+      v.key_down = false;
+      v.stage = Stage::kRelease;
+    }
   }
 }
 
 void BuiltinSynth::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
+  sustain_down_[channel & 0x0Fu] = false;
   for (auto& v : voices_) {
     if (v.active && v.channel == channel) v = Voice{};
   }
@@ -160,9 +183,18 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
     // both protocols (same slot as a note number).
     const uint8_t controller = u.note_number();
     const uint8_t channel = u.channel();
+    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                               ? u.data2_7bit()
+                               : scale_cc_32_to_7(u.words[1]);
     switch (controller) {
+      case 64:  // Damper/sustain pedal: >=64 holds released keys.
+        sustain_pedal(channel, value7 >= 64);
+        break;
       case 120:  // All Sound Off — immediate silence.
         all_sound_off(channel);
+        break;
+      case 121:  // Reset All Controllers — lift damper and release sustained keys.
+        sustain_pedal(channel, false);
         break;
       case 123:  // All Notes Off — graceful release.
       case 124:  // Omni Off / On and Mono/Poly mode changes also imply notes-off.
@@ -172,8 +204,8 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
         all_notes_off(channel);
         break;
       default:
-        // Other controllers (sustain, RPN/NRPN, etc.) have no effect on this
-        // deliberately minimal synth.
+        // Other controllers (RPN/NRPN, etc.) have no effect on this deliberately
+        // minimal synth.
         break;
     }
   }

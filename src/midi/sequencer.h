@@ -77,7 +77,8 @@ class MidiSequencer {
   /// the sink, so scheduled clips stay unmodified and the insert can be changed
   /// independently of clip content. Returns false when the fixed destination
   /// insert table is full. Not RT-safe.
-  bool set_midi_fx(uint32_t destination_id, const MidiFxChain& chain) noexcept;
+  bool set_midi_fx(uint32_t destination_id, const MidiFxChain& chain,
+                   int64_t render_frame = 0) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
 
   /// AUDIO thread: adopt the latest published clip set. Call once at block
@@ -188,7 +189,8 @@ class MidiSequencer {
   void dispatch_pending(int64_t block_start_frame, int64_t block_end_frame) noexcept;
   void clear_pending_for_destination(uint32_t destination_id) noexcept;
   void clear_pending_for_clip(uint32_t clip_id) noexcept;
-  void release_notes_for_clip(uint32_t clip_id, int64_t render_frame) noexcept;
+  void release_notes_for_clip(uint32_t clip_id, int64_t render_frame,
+                              bool clear_pending = true) noexcept;
 
   double sample_rate_ = constants::kDefaultDawSampleRate;
   MidiEventSink* sink_ = nullptr;

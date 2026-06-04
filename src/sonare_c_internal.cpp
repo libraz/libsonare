@@ -35,6 +35,7 @@ SonareError map_sonare_exception(const SonareException& e) {
 }
 
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) {
+  clear_last_error();
   if (samples == nullptr || length == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;

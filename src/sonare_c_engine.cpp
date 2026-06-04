@@ -13,6 +13,7 @@
 #include "metering/lufs.h"
 #include "metering/normalize.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/midi_fx_json.h"
 #include "midi/builtin_synth.h"
 #include "midi/midi_fx.h"
 #include "util/json.h"
@@ -200,111 +201,6 @@ bool valid_midi_note_args(uint8_t group, uint8_t channel, uint8_t note, uint8_t 
   return group <= 15 && channel <= 15 && note <= 127 && velocity <= 127;
 }
 
-double json_number_or(const json::Value& obj, const char* key, double fallback) {
-  const json::Value* value = obj.find(key);
-  return value != nullptr && value->is_number() ? value->as_number() : fallback;
-}
-
-bool json_has_number(const json::Value& obj, const char* key) {
-  const json::Value* value = obj.find(key);
-  return value != nullptr && value->is_number();
-}
-
-int json_int_or(const json::Value& obj, const char* key, int fallback) {
-  const double value = json_number_or(obj, key, static_cast<double>(fallback));
-  if (!std::isfinite(value)) return fallback;
-  return static_cast<int>(std::lround(value));
-}
-
-SonareError engine_midi_fx_chain_from_json(const char* config_json,
-                                           sonare::midi::MidiFxChain* chain) {
-  if (config_json == nullptr || chain == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  json::Value root;
-  try {
-    root = json::parse_strict(config_json);
-  } catch (const json::JsonError&) {
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  if (!root.is_object()) return SONARE_ERROR_INVALID_PARAMETER;
-
-  sonare::midi::TransposeConfig transpose;
-  if (json_has_number(root, "transpose_semitones")) {
-    transpose.enabled = true;
-    transpose.semitones = json_int_or(root, "transpose_semitones", 0);
-    chain->set_transpose(transpose);
-  }
-
-  sonare::midi::VelocityCurveConfig velocity;
-  const bool has_velocity = json_has_number(root, "velocity_scale") ||
-                            json_has_number(root, "velocity_offset") ||
-                            json_has_number(root, "velocity_gamma");
-  if (has_velocity) {
-    velocity.enabled = true;
-    velocity.scale = static_cast<float>(json_number_or(root, "velocity_scale", 1.0));
-    velocity.offset = static_cast<float>(json_number_or(root, "velocity_offset", 0.0));
-    velocity.gamma = static_cast<float>(json_number_or(root, "velocity_gamma", 1.0));
-    if (!std::isfinite(velocity.scale) || !std::isfinite(velocity.offset) ||
-        !std::isfinite(velocity.gamma) || velocity.gamma <= 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    chain->set_velocity_curve(velocity);
-  }
-
-  if (json_has_number(root, "quantize_ppq")) {
-    const double grid_ppq = json_number_or(root, "quantize_ppq", 0.0);
-    const double strength = json_number_or(root, "quantize_strength", 1.0);
-    if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !std::isfinite(strength) || strength < 0.0 ||
-        strength > 1.0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    sonare::midi::QuantizeConfig quantize;
-    quantize.enabled = true;
-    constexpr int64_t kPpqFxScale = 960000;
-    quantize.grid_frames =
-        std::max<int64_t>(1, static_cast<int64_t>(std::llround(grid_ppq * kPpqFxScale)));
-    quantize.strength = static_cast<float>(strength);
-    chain->set_quantize(quantize);
-  }
-
-  if (const json::Value* intervals = root.find("chord_intervals")) {
-    if (!intervals->is_array()) return SONARE_ERROR_INVALID_PARAMETER;
-    sonare::midi::ChordConfig chord;
-    chord.enabled = true;
-    const auto& values = intervals->as_array();
-    if (values.empty() || values.size() > sonare::midi::ChordConfig::kMaxChordNotes) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    chord.count = values.size();
-    for (size_t i = 0; i < values.size(); ++i) {
-      if (!values[i].is_number()) return SONARE_ERROR_INVALID_PARAMETER;
-      chord.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
-    }
-    chain->set_chord(chord);
-  }
-
-  const bool has_humanize = json_has_number(root, "humanize_ppq") ||
-                            json_has_number(root, "humanize_velocity") ||
-                            json_has_number(root, "seed");
-  if (has_humanize) {
-    const double timing_ppq = json_number_or(root, "humanize_ppq", 0.0);
-    const int velocity_amount = json_int_or(root, "humanize_velocity", 0);
-    const int seed = json_int_or(root, "seed", 0);
-    if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||
-        velocity_amount > 127 || seed < 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    sonare::midi::HumanizeConfig humanize;
-    humanize.enabled = true;
-    humanize.seed = static_cast<uint32_t>(seed);
-    constexpr int64_t kPpqFxScale = 960000;
-    humanize.timing_frames = static_cast<int64_t>(std::llround(timing_ppq * kPpqFxScale));
-    humanize.velocity_amount = velocity_amount;
-    chain->set_humanize(humanize);
-  }
-
-  chain->prepare();
-  return SONARE_OK;
-}
 #endif
 
 }  // namespace
@@ -850,8 +746,14 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     static_assert(SONARE_DEFAULT_BOUNCE_TARGET_LUFS == -14.0f,
                   "SONARE_DEFAULT_BOUNCE_TARGET_LUFS must match the WASM/Node "
                   "facade default to keep cross-binding bounce behaviour identical");
+    // Non-finite targets (NaN/Inf) also fall back to the default so a
+    // garbage float can never propagate into the normalisation gain. Note the
+    // 0.0f sentinel makes an exact 0 LUFS target unrepresentable; that is an
+    // accepted trade-off documented on SonareEngineBounceOptions::target_lufs.
     const float effective_target_lufs =
-        options->target_lufs == 0.0f ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS : options->target_lufs;
+        (options->target_lufs == 0.0f || !std::isfinite(options->target_lufs))
+            ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS
+            : options->target_lufs;
     metering::normalize_interleaved_to_lufs(interleaved, channels[0].size(), options->num_channels,
                                             options->target_sample_rate, effective_target_lufs);
   }
@@ -1114,7 +1016,7 @@ SonareError sonare_engine_set_midi_fx(SonareRealtimeEngine* engine, uint32_t des
 #else
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
-  const SonareError parse_err = engine_midi_fx_chain_from_json(config_json, &chain);
+  const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);
   if (parse_err != SONARE_OK) return parse_err;
   return engine->engine.set_midi_fx(destination_id, chain) ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH

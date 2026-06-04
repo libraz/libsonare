@@ -751,3 +751,44 @@ TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", 
   }
   CHECK(kind_mismatch);
 }
+
+TEST_CASE("loader derives the id counters from the live max-id scan", "[serialize]") {
+  // The counters are deliberately not serialized (serialization is a pure
+  // function of the visible arrangement so edit+undo restores exact bytes);
+  // the loader re-derives them so a later add never collides with a LIVE id.
+  const std::string doc =
+      "{\"version\": 1, "
+      "\"sources\": [{\"kind\": 0, \"id\": 7}], "
+      "\"tracks\": [{\"id\": 3, \"kind\": 0}], "
+      "\"clips\": [{\"id\": 5, \"track_id\": 3, \"source_id\": 7, \"length_ppq\": 1.0}]}";
+  auto r = project_from_json(doc);
+  REQUIRE(r.ok());
+  CHECK(r.project->next_source_id() == 8);
+  CHECK(r.project->next_track_id() == 4);
+  CHECK(r.project->next_clip_id() == 6);
+}
+
+TEST_CASE("serialization is invariant under counter-only state (edit+undo byte equality)",
+          "[serialize]") {
+  Fixture f = make_fixture();
+  Project& p = f.project;
+  const auto before = project_to_json(p, f.midi);
+
+  // Allocate and delete a clip: only the monotonic counters change. The
+  // serialized bytes must be identical — this is the contract that keeps the
+  // cross-binding "undo restores serialized bytes" tests true.
+  AudioSourceRef extra_src;
+  extra_src.uri = "file:///extra.wav";
+  const SourceId sid = p.add_audio_source(extra_src);
+  EditClip extra;
+  extra.track_id = p.tracks().front().id;
+  extra.source_id = sid;
+  extra.start_ppq = 10000.0;
+  extra.length_ppq = 1.0;
+  const ClipId clip_id = p.add_clip(extra);
+  REQUIRE(clip_id != 0);
+  REQUIRE(p.remove_clip(clip_id).second);
+  REQUIRE(p.remove_source(sid).second);
+
+  CHECK(project_to_json(p, f.midi) == before);
+}

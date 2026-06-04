@@ -82,6 +82,42 @@ TEST_CASE("BuiltinSynth CC#120 (All Sound Off) silences voices immediately", "[m
   REQUIRE(render_peak(&synth, 256) == 0.0f);
 }
 
+TEST_CASE("BuiltinSynth CC#64 holds released notes until pedal is lifted", "[midi][synth]") {
+  BuiltinSynthConfig config;
+  config.release_ms = 5.0f;
+  BuiltinSynth synth(config);
+  synth.prepare(48000.0, 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(render_peak(&synth, 256) > 0.0f);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+
+  render_peak(&synth, 2048);
+  REQUIRE(render_peak(&synth, 256) > 0.0f);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 0)));
+  render_peak(&synth, 2048);
+  REQUIRE(render_peak(&synth, 256) == 0.0f);
+}
+
+TEST_CASE("BuiltinSynth Reset All Controllers lifts sustain pedal", "[midi][synth]") {
+  BuiltinSynthConfig config;
+  config.release_ms = 5.0f;
+  BuiltinSynth synth(config);
+  synth.prepare(48000.0, 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(render_peak(&synth, 256) > 0.0f);
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
+  render_peak(&synth, 2048);
+  REQUIRE(render_peak(&synth, 256) == 0.0f);
+}
+
 TEST_CASE("BuiltinSynth All Notes Off only affects the addressed channel", "[midi][synth]") {
   BuiltinSynthConfig config;
   config.release_ms = 5.0f;

@@ -128,7 +128,9 @@ class ClipPlayer final : public rt::ProcessorBase {
   size_t clip_count() const noexcept;
 
  private:
-  static float fade_gain(const ClipSchedule& clip, int64_t position, FadeCurve curve) noexcept;
+  // Curves come from the clip itself (fade_in_curve / fade_out_curve), so no
+  // curve parameter: the legacy single fade_curve field is not consulted here.
+  static float fade_gain(const ClipSchedule& clip, int64_t position) noexcept;
   static int64_t local_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
 
   double sample_rate_ = 48000.0;

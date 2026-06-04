@@ -38,6 +38,11 @@
 
 namespace sonare::midi {
 
+/// Shared fixed PPQ-to-frame scale used when MIDI FX are applied outside a real
+/// tempo map (C ABI project bake / realtime JSON config / WASM facade). High
+/// enough to preserve sub-tick PPQ edits while keeping int64 headroom.
+inline constexpr int64_t kMidiFxPpqScale = 960000;
+
 /// Fixed-capacity output buffer for MIDI FX. Lives on the caller's stack (or a
 /// pre-allocated member); process() only ever writes into `events[0..size)`.
 ///

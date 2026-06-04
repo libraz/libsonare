@@ -76,7 +76,8 @@ const MidiSequencer::DestinationFx* MidiSequencer::find_midi_fx(
   return nullptr;
 }
 
-bool MidiSequencer::set_midi_fx(uint32_t destination_id, const MidiFxChain& chain) noexcept {
+bool MidiSequencer::set_midi_fx(uint32_t destination_id, const MidiFxChain& chain,
+                                int64_t render_frame) noexcept {
   DestinationFx* slot = find_midi_fx(destination_id);
   if (slot == nullptr) {
     for (DestinationFx& candidate : midi_fx_) {
@@ -89,6 +90,7 @@ bool MidiSequencer::set_midi_fx(uint32_t destination_id, const MidiFxChain& chai
     }
   }
   if (slot == nullptr) return false;
+  all_notes_off_for_destination(destination_id, render_frame);
   slot->chain.set_transpose(chain.transpose());
   slot->chain.set_quantize(chain.quantize());
   slot->chain.set_velocity_curve(chain.velocity_curve());
@@ -140,13 +142,19 @@ void MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& ev
 }
 
 void MidiSequencer::dispatch_pending(int64_t block_start_frame, int64_t block_end_frame) noexcept {
-  (void)block_start_frame;
   size_t i = 0;
   while (i < pending_fx_count_) {
-    const PendingFxEvent pending = pending_fx_[i];
+    PendingFxEvent pending = pending_fx_[i];
     if (pending.event.render_frame >= block_end_frame) {
       ++i;
       continue;
+    }
+    // An event carried over from an earlier block still holds that block's
+    // render_frame; clamp it to the current block start so sample-accurate
+    // consumers never see a timestamp in the past. (BuiltinSynth ignores the
+    // frame, but external/sample-accurate instruments would mis-place it.)
+    if (pending.event.render_frame < block_start_frame) {
+      pending.event.render_frame = block_start_frame;
     }
     dispatch_transformed(pending.destination_id, pending.event, pending.from_clip, pending.clip_id);
     pending_fx_[i] = pending_fx_[pending_fx_count_ - 1];
@@ -178,7 +186,8 @@ void MidiSequencer::clear_pending_for_clip(uint32_t clip_id) noexcept {
   }
 }
 
-void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_frame) noexcept {
+void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_frame,
+                                           bool clear_pending) noexcept {
   size_t i = 0;
   while (i < active_count_) {
     if (!active_[i].from_clip || active_[i].clip_id != clip_id) {
@@ -193,7 +202,9 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_fram
     --active_count_;
     dispatch(note.destination_id, off);
   }
-  clear_pending_for_clip(clip_id);
+  if (clear_pending) {
+    clear_pending_for_clip(clip_id);
+  }
 }
 
 void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& event,
@@ -248,7 +259,7 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
         }
         if (iter_end > block_start_frame && iter_end <= block_end_frame &&
             iter_end <= clip_end_frame) {
-          release_notes_for_clip(clip.id, iter_end);
+          release_notes_for_clip(clip.id, iter_end, /*clear_pending=*/false);
         }
       }
       if (clip.length_samples > 0 && clip_end_frame > block_start_frame &&
