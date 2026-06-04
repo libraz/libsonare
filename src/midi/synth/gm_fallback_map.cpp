@@ -55,6 +55,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[2].cutoff_hz = 20000.0f;
   t[2].additive.drawbars = {8.0f, 8.0f, 8.0f, 4.0f, 0.0f, 2.0f, 0.0f, 0.0f, 1.0f};
   t[2].additive.key_click = 0.4f;
+  t[2].stereo_spread = 0.2f;
   t[2].gain = 0.7f;
 
   // 24-31 guitar: Karplus-Strong steel-string pluck (method (3)); the string
@@ -70,6 +71,8 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[3].ks.exc_brightness = 0.85f;
   t[3].ks.vel_to_brightness = 0.6f;
   t[3].ks.release_damp_s = 0.08f;
+  t[3].body = BodyType::kGuitar;
+  t[3].body_mix = 0.35f;
   t[3].gain = 0.8f;
 
   // 32-39 bass: single dark saw through the transistor ladder, punchy
@@ -93,6 +96,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[5].cutoff_hz = 4000.0f;
   t[5].key_track = 0.3f;
   t[5].lfo_to_pitch_cents = 5.0f;
+  t[5].stereo_spread = 0.3f;
 
   // 48-55 ensemble / choir: wide slow supersaw pad.
   t[6].waveform = VaWaveform::kSaw;
@@ -101,6 +105,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[6].drift_cents = 4.0f;
   t[6].amp_env = env(200.0f, 400.0f, 0.8f, 500.0f);
   t[6].cutoff_hz = 3200.0f;
+  t[6].stereo_spread = 0.35f;
 
   // 56-63 brass: 3-op FM stack with a feedback operator (the DX brass
   // recipe), index swelling in through the modulator envelope.
@@ -152,6 +157,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[11].drift_cents = 5.0f;
   t[11].amp_env = env(400.0f, 600.0f, 0.8f, 800.0f);
   t[11].cutoff_hz = 2800.0f;
+  t[11].stereo_spread = 0.4f;
 
   // 96-103 synth FX: drifting detuned triangles.
   t[12].waveform = VaWaveform::kTriangle;
@@ -302,6 +308,8 @@ ProgramOverrides build_program_overrides() noexcept {
   mr.modal.decay_stretch = 0.6f;
   mr.modal.strike_brightness = 0.7f;
   mr.amp_env.release_ms = 250.0f;
+  mr.body = BodyType::kWoodTube;
+  mr.body_mix = 0.4f;
 
   NativeSynthPatch& xy = o.xylophone;
   xy = bar;
@@ -313,6 +321,8 @@ ProgramOverrides build_program_overrides() noexcept {
   xy.modal.decay_stretch = 0.5f;
   xy.modal.strike_brightness = 0.9f;
   xy.amp_env.release_ms = 200.0f;
+  xy.body = BodyType::kWoodTube;
+  xy.body_mix = 0.3f;
 
   // KS guitar variants: all share the family-3 steel string and differ in
   // pick position / loop brightness / decay (the Jaffe-Smith knobs).
@@ -327,6 +337,8 @@ ProgramOverrides build_program_overrides() noexcept {
   steel.ks.exc_brightness = 0.85f;
   steel.ks.vel_to_brightness = 0.6f;
   steel.ks.release_damp_s = 0.08f;
+  steel.body = BodyType::kGuitar;
+  steel.body_mix = 0.35f;
   steel.gain = 0.8f;
 
   // Nylon: soft finger pluck near the middle of the string, dull loop.
@@ -335,6 +347,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.nylon_guitar.ks.exc_brightness = 0.55f;
   o.nylon_guitar.ks.pick_position = 0.27f;
   o.nylon_guitar.ks.decay_s = 2.2f;
+  o.nylon_guitar.body_mix = 0.45f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
   // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
@@ -344,6 +357,8 @@ ProgramOverrides build_program_overrides() noexcept {
   o.electric_guitar.ks.pick_position = 0.12f;
   o.electric_guitar.ks.exc_brightness = 0.9f;
   o.electric_guitar.cutoff_hz = 5500.0f;
+  o.electric_guitar.body = BodyType::kNone;
+  o.electric_guitar.body_mix = 0.0f;
   o.electric_guitar.gain = 0.7f;
 
   // Palm mute: same electric string, choked decay.
@@ -373,6 +388,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp.ks.pick_position = 0.3f;
   o.harp.ks.vel_to_brightness = 0.5f;
   o.harp.ks.release_damp_s = 1.0f;
+  o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
 
   o.e_piano = clamp_synth_patch(o.e_piano);
   o.clav = clamp_synth_patch(o.clav);

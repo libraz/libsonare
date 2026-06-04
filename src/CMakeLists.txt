@@ -502,6 +502,7 @@ if(BUILD_FX)
     effects/common/dc_blocker.cpp
     effects/delay/stereo_delay.cpp
     effects/modulation/chorus.cpp
+    effects/modulation/ensemble.cpp
     effects/modulation/flanger.cpp
     effects/modulation/mod_delay_line.cpp
     effects/modulation/phaser.cpp

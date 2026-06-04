@@ -4,6 +4,27 @@
 
 ### New features
 
+- Added the NativeSynth realism-polish layer:
+  - Body/formant resonance on every voice (the cheap end of commuted
+    synthesis): unit-peak-normalized low-Q bandpass mode banks voiced as a
+    guitar body, a violin body or the note-tracked wood tube under a
+    marimba/xylophone bar, mixed over the dry voice. The GM acoustic
+    guitars, harp and wooden mallets now carry their bodies (solid-body
+    electrics intentionally do not).
+  - Seeded per-voice stereo spread: a deterministic pan scatter per voice
+    (0 keeps every voice centre-panned bit-exactly); the GM string, choir,
+    organ and pad families spread into a section image.
+  - Mix-bus glue: an optional gain-neutral tanh bus drive plus an
+    always-on (config-defeatable) DC blocker that keeps the physical-model
+    voices' small DC components off the output bus.
+
+- Added a `effects.modulation.ensemble` insert — the Solina-style BBD
+  string-machine ensemble: three delay taps per channel swept by a slow and
+  a fast 3-phase LFO bank simultaneously, with the BBD bucket-bandwidth
+  lowpass on the wet path and inverted right-channel LFO polarity spreading
+  a mono source into stereo. Exposed through the insert factory and the
+  automatable set_parameter surface on every binding.
+
 - Added an extended-waveguide acoustic-piano mode to the NativeSynth voice —
   the no-SF2 data-free grand sketch. The four piano-defining elements are
   all present: stiff-string dispersion via an allpass cascade in each

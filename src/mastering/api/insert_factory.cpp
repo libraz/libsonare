@@ -72,6 +72,7 @@
 
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
+#include "effects/modulation/ensemble.h"
 #include "effects/modulation/flanger.h"
 #include "effects/modulation/phaser.h"
 #include "effects/reverb/convolution_reverb.h"
@@ -615,6 +616,17 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     return make<effects::modulation::Chorus>(config);
   }
+  if (name == "effects.modulation.ensemble") {
+    effects::modulation::EnsembleConfig config;
+    config.rate_slow_hz = f(params, "rateSlowHz", config.rate_slow_hz);
+    config.rate_fast_hz = f(params, "rateFastHz", config.rate_fast_hz);
+    config.depth_slow_ms = f(params, "depthSlowMs", config.depth_slow_ms);
+    config.depth_fast_ms = f(params, "depthFastMs", config.depth_fast_ms);
+    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
+    config.tone_hz = f(params, "toneHz", config.tone_hz);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::Ensemble>(config);
+  }
   if (name == "effects.modulation.flanger") {
     effects::modulation::FlangerConfig config;
     config.rate_hz = f(params, "rateHz", config.rate_hz);
@@ -776,6 +788,7 @@ std::vector<std::string> insert_factory_names() {
       "effects.acoustic.roomMorph",
 #endif
       "effects.modulation.chorus",
+      "effects.modulation.ensemble",
       "effects.modulation.flanger",
       "effects.modulation.phaser",
       "effects.delay.stereo",

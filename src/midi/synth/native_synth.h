@@ -29,6 +29,7 @@
 
 #include "midi/instrument.h"
 #include "midi/synth/additive_voice.h"
+#include "midi/synth/body_resonator.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/fm_voice.h"
@@ -116,6 +117,15 @@ struct NativeSynthPatch {
   /// target within ~5%; 0 = off).
   float glide_ms = 0.0f;
 
+  // --- realism polish ---
+  /// Body/formant resonance voicing applied to the voice output (commuted
+  /// synthesis, body_resonator.h) and its mix in [0,1].
+  BodyType body = BodyType::kNone;
+  float body_mix = 0.0f;
+  /// Per-voice seeded stereo pan scatter in [0,1] (0 keeps every voice
+  /// centre-relative, preserving bit-stable mono bounces).
+  float stereo_spread = 0.0f;
+
   /// Free-form modulation routings on top of the hardwired patch modulations.
   ModMatrix mod_matrix;
 
@@ -171,6 +181,7 @@ struct NativeSynthVoice : VoiceState {
   /// Piano string core; like KS, the host attach()es its delay slab before
   /// start().
   PianoVoiceCore piano;
+  BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;
@@ -183,6 +194,8 @@ struct NativeSynthVoice : VoiceState {
   // Glide: pitch offset in cents decaying to zero through a one-pole.
   float glide_cents = 0.0f;
   float glide_coeff = 0.0f;
+  /// Seeded per-voice pan scatter (patch stereo_spread; pan units).
+  float pan_spread_units = 0.0f;
   bool key_down = false;
   // Cached stereo gains for the channel pan; recomputed on change.
   float cached_pan_units = 1.0e9f;
@@ -209,6 +222,12 @@ struct NativeSynthConfig {
   float gain = 0.5f;
   /// Voice pool size (clamped to [1, kMaxSynthVoices]).
   int polyphony = 16;
+  /// Gentle gain-neutral tanh on the mix bus in [0,1] (0 = clean) — glues a
+  /// stack of voices together.
+  float bus_drive = 0.0f;
+  /// DC blocker on the mix bus (the physical-model voices can carry a small
+  /// DC component).
+  bool dc_block = true;
 };
 
 /// Standalone patch-driven MidiInstrument: all 16 channels play the same
@@ -257,6 +276,11 @@ class NativeSynth final : public MidiInstrument {
   int64_t tail_samples_ = 0;
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
+  /// Mix-bus polish state (per stereo leg): DC blocker + drive constants.
+  std::array<float, 2> dc_x1_{};
+  std::array<float, 2> dc_y1_{};
+  float dc_r_ = 0.999f;
+  float bus_drive_gain_ = 0.0f;
   VoicePool<NativeSynthVoice> pool_;
   /// KS delay slab: one ks_buffer_capacity() span per voice slot, allocated
   /// in prepare() only when the patch is a Karplus-Strong instrument.

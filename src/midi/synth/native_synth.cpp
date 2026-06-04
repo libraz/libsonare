@@ -122,6 +122,9 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.piano.hammer_contact_ms = std::clamp(sanitize(p.piano.hammer_contact_ms, 1.2f), 0.2f, 10.0f);
   p.piano.soundboard = std::clamp(sanitize(p.piano.soundboard, 0.25f), 0.0f, 1.0f);
   p.piano.release_damp_s = std::clamp(sanitize(p.piano.release_damp_s, 0.1f), 0.01f, 10.0f);
+  if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
+  p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
+  p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
   return p;
 }
 
@@ -216,6 +219,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   key_track_octaves = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);
 
+  // Body/formant resonance + seeded stereo scatter (realism polish).
+  body.start(p.body, sample_rate, base_freq_hz, p.body_mix);
+  pan_spread_units = 500.0f * p.stereo_spread * seq.bipolar_at(104);
+
   // Glide: start offset in cents from the previous note, decaying through a
   // one-pole sized so the pitch lands within ~5% in glide_ms.
   glide_cents = 0.0f;
@@ -259,7 +266,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
   }
 
   // Refresh the cached stereo pan gains when the effective pan changed.
-  const float pan_units = mod.pan_units + offsets.pan_units;
+  const float pan_units = mod.pan_units + offsets.pan_units + pan_spread_units;
   if (pan_units != cached_pan_units) {
     cached_pan_units = pan_units;
     const float angle = pan_angle(pan_units);
@@ -302,6 +309,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
     }
     sample *= osc_norm;
   }
+
+  // --- body/formant resonance (after the string/source, before the amp) ---
+  if (body.active()) sample = body.process(sample);
 
   // --- pre-filter drive (gain-compensated tanh) ---
   if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
@@ -355,6 +365,8 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
   if (!(config_.gain > 0.0f) || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 16;
+  config_.bus_drive =
+      std::isfinite(config_.bus_drive) ? std::clamp(config_.bus_drive, 0.0f, 1.0f) : 0.0f;
 }
 
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
@@ -379,11 +391,18 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
   tail_samples_ =
       DahdsrEnvelope::release_tail_samples(sample_rate_, config_.patch.amp_env.release_ms);
+  // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
+  dc_r_ = 1.0f - static_cast<float>(2.0 * 3.14159265358979 * 8.0 / sample_rate_);
+  dc_x1_ = {};
+  dc_y1_ = {};
+  bus_drive_gain_ = config_.bus_drive > 0.0f ? 1.0f + 3.0f * config_.bus_drive : 0.0f;
   prepared_ = true;
 }
 
 void NativeSynth::reset() {
   pool_.reset();
+  dc_x1_ = {};
+  dc_y1_ = {};
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
 }
@@ -460,6 +479,12 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   channels_[ch].sustain = false;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch) v.kill();
+  }
+  if (pool_.active_count() == 0) {
+    // All Sound Off means silence NOW: flush the bus DC blocker so its IIR
+    // tail cannot keep a residual trickling out.
+    dc_x1_ = {};
+    dc_y1_ = {};
   }
 }
 
@@ -568,6 +593,22 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
+    // Gentle gain-neutral bus saturation (glue), then the DC blocker — the
+    // physical-model voices can carry a small DC component.
+    if (bus_drive_gain_ > 0.0f) {
+      mix_l = std::tanh(bus_drive_gain_ * mix_l) / bus_drive_gain_;
+      mix_r = std::tanh(bus_drive_gain_ * mix_r) / bus_drive_gain_;
+    }
+    if (config_.dc_block) {
+      const float l = mix_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
+      dc_x1_[0] = mix_l;
+      dc_y1_[0] = l;
+      mix_l = l;
+      const float r = mix_r - dc_x1_[1] + dc_r_ * dc_y1_[1];
+      dc_x1_[1] = mix_r;
+      dc_y1_[1] = r;
+      mix_r = r;
+    }
     if (left != nullptr) {
       // Mono host: fold both pan legs so centre-panned voices keep level.
       left[i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;

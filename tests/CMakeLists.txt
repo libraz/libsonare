@@ -260,6 +260,7 @@ endif()
 
 if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/creative_fx_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/ensemble_test.cpp)
   target_sources(sonare_tests PRIVATE effects/fdn_reverb_test.cpp)
   if(NOT BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_fx)
@@ -336,6 +337,7 @@ if(BUILD_ARRANGEMENT)
     midi/ks_voice_test.cpp
     midi/modal_voice_test.cpp
     midi/piano_voice_test.cpp
+    midi/voice_polish_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp
     midi/sf2_player_test.cpp
