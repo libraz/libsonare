@@ -4,6 +4,18 @@
 
 ### New features
 
+- Added an extended-waveguide acoustic-piano mode to the NativeSynth voice —
+  the no-SF2 data-free grand sketch. The four piano-defining elements are
+  all present: stiff-string dispersion via an allpass cascade in each
+  waveguide loop (partials stretch sharp, the inharmonicity growing up the
+  keyboard, with the exact loop phase delay compensated so f0 tuning stays
+  accurate), a nonlinear felt hammer (Hertz-contact velocity scaling of
+  contact time and force plus a felt-stiffness lowpass — hard strikes are
+  shorter and brighter), 2-3 coupled micro-detuned unison strings with the
+  characteristic two-stage prompt-sound/aftersound decay, and a fixed
+  soundboard resonator bank that also radiates the immediate hammer knock.
+  The GM acoustic-piano programs play through it.
+
 - Added modal, additive and percussion synthesis modes to the NativeSynth
   voice, completing the mallet / organ / drum coverage of the data-free GM
   floor:

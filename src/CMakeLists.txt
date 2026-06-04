@@ -652,6 +652,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/modal_voice.cpp
     midi/synth/additive_voice.cpp
     midi/synth/percussion_voice.cpp
+    midi/synth/piano_voice.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/sf2_file.cpp

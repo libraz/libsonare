@@ -24,16 +24,13 @@ DahdsrConfig env(float attack_ms, float decay_ms, float sustain, float release_m
 std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   std::array<NativeSynthPatch, 16> t{};
 
-  // 0-7 piano: percussive saw pair, envelope-closed filter.
-  t[0].waveform = VaWaveform::kSaw;
-  t[0].unison = 2;
-  t[0].detune_cents = 5.0f;
-  t[0].amp_env = env(2.0f, 900.0f, 0.0f, 300.0f);
-  t[0].cutoff_hz = 2500.0f;
-  t[0].filter_env = env(1.0f, 700.0f, 0.25f, 300.0f);
-  t[0].env_to_cutoff_cents = 2400.0f;
-  t[0].key_track = 0.5f;
-  t[0].vel_to_cutoff_cents = 1800.0f;
+  // 0-7 piano: extended waveguide grand (stiff-string dispersion, felt
+  // hammer, coupled unison strings, soundboard bank); the e-piano / clavi
+  // programs override to FM.
+  t[0].mode = SynthEngineMode::kPiano;
+  t[0].amp_env = env(0.5f, 0.0f, 1.0f, 220.0f);
+  t[0].cutoff_hz = 20000.0f;
+  t[0].gain = 0.8f;
 
   // 8-15 chromatic percussion: FM bell (inharmonic 3.5 ratio, long
   // key-rate-scaled decay).

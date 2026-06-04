@@ -200,6 +200,11 @@ class Sf2Player final : public MidiInstrument {
   /// synth fallback is enabled.
   std::vector<float> fallback_ks_buffers_;
   int fallback_ks_capacity_ = 0;
+  /// Piano delay slab for the fallback voices (the acoustic-piano GM
+  /// programs), kMaxPianoStrings spans per slot; allocated in prepare()
+  /// when the synth fallback is enabled.
+  std::vector<float> fallback_piano_buffers_;
+  int fallback_piano_string_capacity_ = 0;
 
   // Chunk scratch (prepared on the control thread).
   std::vector<float> mix_l_;

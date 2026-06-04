@@ -1,12 +1,12 @@
 #pragma once
 
 /// @file native_synth.h
-/// @brief NativeSynth — the patch-driven virtual-analog engine: a mode-tagged
-///        patch POD (subtractive in this phase; FM / Karplus-Strong / modal /
-///        additive / percussion / piano reserve their enum slots now so the
-///        ABI struct never has to widen), the unison subtractive voice
-///        (PolyBLEP oscillators -> TPT SVF -> exponential DAHDSR VCA) and a
-///        16-channel MidiInstrument host around the shared voice pool.
+/// @brief NativeSynth — the patch-driven synthesis engine: a mode-tagged
+///        patch POD (subtractive / FM / Karplus-Strong / modal / additive /
+///        percussion / waveguide piano), the unison subtractive voice
+///        (PolyBLEP oscillators -> TPT SVF -> exponential DAHDSR VCA) with
+///        the per-mode cores embedded beside it, and a 16-channel
+///        MidiInstrument host around the shared voice pool.
 ///
 /// Two consumers share the voice:
 ///   - NativeSynth (this file): a standalone patch-driven instrument.
@@ -37,14 +37,13 @@
 #include "midi/synth/modal_voice.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/percussion_voice.h"
+#include "midi/synth/piano_voice.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 
 namespace sonare::midi::synth {
 
-/// Synthesis method tag. All but kPiano are implemented; kPiano reserves its
-/// slot so voice dispatch (and later the versioned ABI struct) never needs a
-/// layout change when it lands.
+/// Synthesis method tag. Every mode is implemented.
 enum class SynthEngineMode : int {
   kSubtractive = 0,
   kFm = 1,             // operator-stack FM (fm_voice.h)
@@ -52,7 +51,7 @@ enum class SynthEngineMode : int {
   kModal = 3,          // resonator-bank mallets/bells (modal_voice.h)
   kAdditive = 4,       // drawbar organ (additive_voice.h)
   kPercussion = 5,     // membrane modal + filtered noise (percussion_voice.h)
-  kPiano = 6,          // reserved (extended waveguide piano)
+  kPiano = 6,          // extended waveguide piano (piano_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -137,6 +136,9 @@ struct NativeSynthPatch {
 
   /// Membrane + noise kit piece (used when mode == kPercussion).
   PercussionPatchParams percussion;
+
+  /// Extended waveguide piano (used when mode == kPiano).
+  PianoPatchParams piano;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -166,6 +168,9 @@ struct NativeSynthVoice : VoiceState {
   ModalVoiceCore modal;
   AdditiveVoiceCore additive;
   PercussionVoiceCore percussion;
+  /// Piano string core; like KS, the host attach()es its delay slab before
+  /// start().
+  PianoVoiceCore piano;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;
@@ -257,6 +262,10 @@ class NativeSynth final : public MidiInstrument {
   /// in prepare() only when the patch is a Karplus-Strong instrument.
   std::vector<float> ks_buffers_;
   int ks_capacity_ = 0;
+  /// Piano delay slab: kMaxPianoStrings string spans per voice slot,
+  /// allocated in prepare() only when the patch is a piano.
+  std::vector<float> piano_buffers_;
+  int piano_string_capacity_ = 0;
 };
 
 /// Returns a copy of @p patch with every field clamped to a safe range.

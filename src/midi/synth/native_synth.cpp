@@ -110,6 +110,18 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.percussion.noise_cutoff_hz =
       std::clamp(sanitize(p.percussion.noise_cutoff_hz, 2500.0f), 20.0f, 20000.0f);
   p.percussion.noise_q = std::clamp(sanitize(p.percussion.noise_q, 1.0f), 0.5f, 30.0f);
+  p.piano.strings = std::clamp(p.piano.strings, 1, kMaxPianoStrings);
+  p.piano.detune_cents = std::clamp(sanitize(p.piano.detune_cents, 1.6f), 0.0f, 50.0f);
+  p.piano.decay_fast_s = std::clamp(sanitize(p.piano.decay_fast_s, 3.0f), 0.05f, 60.0f);
+  p.piano.decay_slow_s = std::clamp(sanitize(p.piano.decay_slow_s, 12.0f), 0.05f, 120.0f);
+  p.piano.decay_stretch = std::clamp(sanitize(p.piano.decay_stretch, 0.7f), 0.0f, 1.0f);
+  p.piano.brightness = std::clamp(sanitize(p.piano.brightness, 0.75f), 0.0f, 1.0f);
+  p.piano.dispersion = std::clamp(sanitize(p.piano.dispersion, 1.0f), 0.0f, 1.0f);
+  p.piano.strike_position = std::clamp(sanitize(p.piano.strike_position, 0.12f), 0.0f, 0.5f);
+  p.piano.hammer_exponent = std::clamp(sanitize(p.piano.hammer_exponent, 2.5f), 1.5f, 4.0f);
+  p.piano.hammer_contact_ms = std::clamp(sanitize(p.piano.hammer_contact_ms, 1.2f), 0.2f, 10.0f);
+  p.piano.soundboard = std::clamp(sanitize(p.piano.soundboard, 0.25f), 0.0f, 1.0f);
+  p.piano.release_damp_s = std::clamp(sanitize(p.piano.release_damp_s, 0.1f), 0.01f, 10.0f);
   return p;
 }
 
@@ -143,6 +155,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
   if (p.mode == SynthEngineMode::kPercussion) {
     percussion.start(p.percussion, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kPiano) {
+    piano.start(p.piano, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -277,6 +292,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
     sample = additive.render(common);
   } else if (patch->mode == SynthEngineMode::kPercussion) {
     sample = percussion.render(common);
+  } else if (patch->mode == SynthEngineMode::kPiano) {
+    sample = piano.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -313,6 +330,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kFm) fm.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kKarplusStrong) ks.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kModal) modal.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kPiano) piano.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -323,6 +341,7 @@ void NativeSynthVoice::kill() noexcept {
   modal.kill();
   additive.kill();
   percussion.kill();
+  piano.kill();
   active = false;
   releasing = false;
 }
@@ -348,6 +367,13 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_capacity_), 0.0f);
   } else {
     ks_buffers_.clear();
+  }
+  piano_string_capacity_ = piano_string_capacity(sample_rate_);
+  if (config_.patch.mode == SynthEngineMode::kPiano) {
+    piano_buffers_.assign(pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_)),
+                          0.0f);
+  } else {
+    piano_buffers_.clear();
   }
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
@@ -382,6 +408,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   if (!ks_buffers_.empty()) {
     voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * ks_capacity_,
                      ks_capacity_);
+  }
+  if (!piano_buffers_.empty()) {
+    voice->piano.attach(piano_buffers_.data() + static_cast<size_t>(voice_index) *
+                                                    kMaxPianoStrings * piano_string_capacity_,
+                        piano_string_capacity_);
   }
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = config_.patch.glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;

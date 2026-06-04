@@ -89,6 +89,12 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
       config_.synth_fallback ? fallback_pool_.size() * static_cast<size_t>(fallback_ks_capacity_)
                              : 0,
       0.0f);
+  fallback_piano_string_capacity_ = piano_string_capacity(sample_rate_);
+  fallback_piano_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_))
+          : 0,
+      0.0f);
   reset_all_state(/*reverb_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
@@ -268,6 +274,12 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
     voice->ks.attach(
         fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * fallback_ks_capacity_,
         fallback_ks_capacity_);
+  }
+  if (!fallback_piano_buffers_.empty()) {
+    voice->piano.attach(fallback_piano_buffers_.data() + static_cast<size_t>(voice_index) *
+                                                             kMaxPianoStrings *
+                                                             fallback_piano_string_capacity_,
+                        fallback_piano_string_capacity_);
   }
   voice->start(patch, sample_rate_, velocity, voice_index);
 }
